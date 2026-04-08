@@ -368,12 +368,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   align-items: center;
   padding: 14px;
 }
-.integration-overview, .integration-list, .extension-badges {
+.integration-overview, .integration-list {
   display: grid;
   gap: 12px;
 }
 .integration-overview {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.extension-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .integration-summary-card {
   display: grid;
