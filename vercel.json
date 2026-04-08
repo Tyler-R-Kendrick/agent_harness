@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd agent-browser && npm ci",
+  "buildCommand": "cd agent-browser && npm run build",
+  "outputDirectory": "agent-browser/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
