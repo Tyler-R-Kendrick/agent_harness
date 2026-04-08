@@ -204,7 +204,7 @@ function loadWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSu
           ? {
               ...integration,
               enabled: typeof stored.enabled === 'boolean' ? stored.enabled : integration.enabled,
-              badges: Array.isArray(stored.badges) ? stored.badges.filter((badge): badge is string => typeof badge === 'string') : integration.badges,
+              badges: Array.isArray(stored.badges) ? stored.badges.filter((badge: unknown): badge is string => typeof badge === 'string') : integration.badges,
               description: typeof stored.description === 'string' ? stored.description : integration.description,
               source: typeof stored.source === 'string' ? stored.source : integration.source,
               constraint: typeof stored.constraint === 'string' ? stored.constraint : integration.constraint,
