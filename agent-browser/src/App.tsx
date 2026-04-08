@@ -25,6 +25,7 @@ import {
 import './App.css';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
+import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
 import { createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
 import type { ChatMessage, Extension, HFModel, HistorySession, TreeNode } from './types';
 
@@ -323,7 +324,11 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
             tokenBuffer += token;
             updateMessage(assistantId, { streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(), status: 'streaming' });
           },
-          onDone: () => updateMessage(assistantId, { status: 'complete', streamedContent: tokenBuffer.trim(), loadingStatus: null }),
+          onDone: (result) => updateMessage(assistantId, {
+            status: 'complete',
+            streamedContent: (tokenBuffer.trim() || formatBrowserInferenceResult(result)).trim(),
+            loadingStatus: null,
+          }),
           onError: (error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
         },
       );
