@@ -9,13 +9,20 @@ test('captures the main workspace screen', async ({ page }) => {
 test('captures the settings screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Settings').click();
-  await expect(page.getByText('Browser model registry')).toBeVisible();
+  await expect(page.getByLabel('Hugging Face search')).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
 });
 
 test('captures the extensions screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Extensions').click();
-  await expect(page.getByText('Extensions')).toBeVisible();
+  await expect(page.getByText('Workspace tools')).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/extensions-screen.png', fullPage: true });
+});
+
+test('captures the history screen', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('History').click();
+  await expect(page.getByText('Recent sessions')).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/history-screen.png', fullPage: true });
 });
