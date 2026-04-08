@@ -27,17 +27,7 @@ describe('App', () => {
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
-    searchBrowserModelsMock.mockResolvedValue([{
-      id: 'hf-test-model',
-      name: 'Test Model',
-      author: 'Harness',
-      task: 'text-generation',
-      downloads: 42,
-      likes: 7,
-      tags: ['onnx'],
-      sizeMB: 64,
-      status: 'available',
-    }]);
+    searchBrowserModelsMock.mockResolvedValue([]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
   });
@@ -100,6 +90,17 @@ describe('App', () => {
 
   it('loads workspace file context into the assistant prompt', async () => {
     vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
     render(<App />);
 
     await act(async () => {
