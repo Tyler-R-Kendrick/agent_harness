@@ -17,8 +17,8 @@ test('captures the extensions screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Extensions').click();
   await expect(page.getByText('Agent harness support')).toBeVisible();
-  await expect(page.getByText('AGENTS.md')).toBeVisible();
-  await expect(page.getByText('marketplace.json')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'AGENTS.md' })).toBeVisible();
+  await expect(page.getByText('marketplace.json', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/extensions-screen.png', fullPage: true });
 });
 
