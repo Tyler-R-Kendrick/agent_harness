@@ -1,6 +1,7 @@
 import type { CopilotKitProps } from '@copilotkit/react-core';
 import type { UIMessage } from 'ai';
 import type { Message as ChatSdkMessage } from 'chat';
+import { COPILOT_RUNTIME_URL } from '../config';
 import type { ChatMessage } from '../types';
 
 export function toAiSdkMessages(messages: ChatMessage[]): UIMessage[] {
@@ -20,5 +21,5 @@ export function toChatSdkTranscript(messages: ChatMessage[]): Array<Partial<Chat
 }
 
 export function createCopilotBridgeSnapshot(messages: ChatMessage[]): Pick<CopilotKitProps, 'runtimeUrl'> & { messageCount: number } {
-  return { runtimeUrl: '/copilotkit', messageCount: messages.length };
+  return { runtimeUrl: COPILOT_RUNTIME_URL, messageCount: messages.length };
 }

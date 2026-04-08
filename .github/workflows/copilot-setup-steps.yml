@@ -12,6 +12,7 @@ on:
 jobs:
   copilot-setup-steps:
     runs-on: ubuntu-latest
+    # Keep this high because Copilot sessions have been timing out early when the GitHub backend is slow.
     timeout-minutes: 59
     permissions:
       contents: read

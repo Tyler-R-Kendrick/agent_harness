@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
@@ -16,6 +16,9 @@ const TIERS = {
 } as const;
 
 const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answering', 'feature-extraction', 'summarization'];
+const MAX_CONTEXT_MESSAGES = 7;
+const NEW_TAB_NAME_LENGTH = 32;
+const DEFAULT_NEW_TAB_MEMORY_MB = 96;
 
 const iconPaths = {
   layers: 'M12 2 2 7l10 5 10-5-10-5Zm0 10L2 7m10 5 10-5M2 17l10 5 10-5',
@@ -53,8 +56,8 @@ const mockExtensions: Extension[] = [
   { id: 3, name: 'Agent Notes', author: 'Agent Labs', rating: 4.5, users: '120K+', category: 'AI', description: 'Capture task notes inside the workspace.', enabled: false, color: '#a78bfa' },
 ];
 
-function makeId() {
-  return Math.random().toString(36).slice(2, 10);
+function createUniqueId() {
+  return crypto.randomUUID();
 }
 
 function createInitialRoot(): TreeNode {
@@ -72,8 +75,8 @@ function createInitialRoot(): TreeNode {
         activeMemory: true,
         color: '#60a5fa',
         children: [
-          { id: makeId(), name: 'Hugging Face', type: 'tab', url: 'https://huggingface.co/models?library=transformers.js', persisted: true, memoryTier: 'hot', memoryMB: 165 },
-          { id: makeId(), name: 'Transformers.js', type: 'tab', url: 'https://huggingface.co/docs/transformers.js', persisted: false, memoryTier: 'warm', memoryMB: 88 },
+          { id: createUniqueId(), name: 'Hugging Face', type: 'tab', url: 'https://huggingface.co/models?library=transformers.js', persisted: true, memoryTier: 'hot', memoryMB: 165 },
+          { id: createUniqueId(), name: 'Transformers.js', type: 'tab', url: 'https://huggingface.co/docs/transformers.js', persisted: false, memoryTier: 'warm', memoryMB: 88 },
         ],
       },
       {
@@ -84,7 +87,7 @@ function createInitialRoot(): TreeNode {
         activeMemory: true,
         color: '#34d399',
         children: [
-          { id: makeId(), name: 'CopilotKit docs', type: 'tab', url: 'https://docs.copilotkit.ai', persisted: false, memoryTier: 'cool', memoryMB: 44 },
+          { id: createUniqueId(), name: 'CopilotKit docs', type: 'tab', url: 'https://docs.copilotkit.ai', persisted: false, memoryTier: 'cool', memoryMB: 44 },
         ],
       },
     ],
@@ -223,7 +226,7 @@ function PageOverlay({ tab, onClose }: { tab: TreeNode; onClose: () => void }) {
 }
 
 function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }: { installedModels: HFModel[]; pendingSearch: string | null; onSearchConsumed: () => void; onToast: (toast: Exclude<ToastState, null>) => void }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ id: makeId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }]);
+  const [messages, setMessages] = useState<ChatMessage[]>([{ id: createUniqueId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }]);
   const [input, setInput] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -236,21 +239,15 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  useEffect(() => {
-    if (!pendingSearch) return;
-    void sendMessage(`Search the web for: ${pendingSearch}`);
-    onSearchConsumed();
-  }, [pendingSearch, onSearchConsumed]);
-
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
     setMessages((current) => current.map((message) => message.id === id ? { ...message, ...patch } : message));
   }
 
-  async function sendMessage(text: string) {
+  const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     const model = installedModels.find((entry) => entry.id === selectedModelId);
-    const assistantId = makeId();
-    const nextMessages: ChatMessage[] = [...messages, { id: makeId(), role: 'user', content: text }, { id: assistantId, role: 'assistant', content: '', status: 'thinking' }];
+    const assistantId = createUniqueId();
+    const nextMessages: ChatMessage[] = [...messages, { id: createUniqueId(), role: 'user', content: text }, { id: assistantId, role: 'assistant', content: '', status: 'thinking' }];
     setMessages(nextMessages);
     setInput('');
 
@@ -264,7 +261,7 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     const copilotBridge = createCopilotBridgeSnapshot(nextMessages);
     const prompt = [
       { role: 'system', content: 'You are a helpful agent-first browser assistant. Be concise and clear.' },
-      ...aiMessages.slice(-7).map((message) => ({ role: message.role, content: message.parts.map((part) => ('text' in part ? String(part.text) : '')).join('') })),
+      ...aiMessages.slice(-MAX_CONTEXT_MESSAGES).map((message) => ({ role: message.role, content: message.parts.map((part) => ('text' in part ? String(part.text) : '')).join('') })),
       { role: 'system', content: `Chat transcript length: ${chatTranscript.length}; Copilot bridge: ${copilotBridge.runtimeUrl}; messages: ${copilotBridge.messageCount}` },
     ];
 
@@ -315,7 +312,13 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     } catch (error) {
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
-  }
+  }, [installedModels, messages, onToast, selectedModelId]);
+
+  useEffect(() => {
+    if (!pendingSearch) return;
+    void sendMessage(`Search the web for: ${pendingSearch}`);
+    onSearchConsumed();
+  }, [pendingSearch, onSearchConsumed, sendMessage]);
 
   return (
     <section className="chat-panel" aria-label="Chat panel">
@@ -480,7 +483,14 @@ function AgentBrowserApp() {
     event.preventDefault();
     const result = classifyOmnibar(omnibar);
     if (result.intent === 'navigate') {
-      const tab: TreeNode = { id: makeId(), name: result.value.replace(/^https?:\/\//, '').slice(0, 32), type: 'tab', url: result.value, memoryTier: 'hot', memoryMB: 96 };
+      const tab: TreeNode = {
+        id: createUniqueId(),
+        name: result.value.replace(/^https?:\/\//, '').slice(0, NEW_TAB_NAME_LENGTH),
+        type: 'tab',
+        url: result.value,
+        memoryTier: 'hot',
+        memoryMB: DEFAULT_NEW_TAB_MEMORY_MB,
+      };
       setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, expanded: true, children: [...(node.children ?? []), tab] })));
       setOpenTabId(tab.id);
       setToast({ msg: `Opened ${result.value}`, type: 'success' });
