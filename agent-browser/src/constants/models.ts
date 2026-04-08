@@ -1,4 +1,4 @@
-import type { HFModel } from '@/types';
+import type { HFModel } from '../types';
 
 export const SEED_MODELS: HFModel[] = [
   {

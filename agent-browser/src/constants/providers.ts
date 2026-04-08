@@ -1,4 +1,4 @@
-import type { ModelProvider, ApiEndpoint } from '@/types';
+import type { ModelProvider, ApiEndpoint } from '../types';
 
 export const MODEL_PROVIDERS: ModelProvider[] = [
   {
