@@ -28,7 +28,19 @@ import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
 import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
 import { appendPendingLocalTurn, createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
-import type { ChatMessage, HFModel, HistorySession, IntegrationSurface, TreeNode } from './types';
+import {
+  buildWorkspacePromptContext,
+  createWorkspaceFileTemplate,
+  detectWorkspaceFileKind,
+  discoverWorkspaceCapabilities,
+  loadWorkspaceFiles,
+  removeWorkspaceFile,
+  upsertWorkspaceFile,
+  validateWorkspaceFile,
+  WORKSPACE_FILES_STORAGE_KEY,
+  WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
+} from './services/workspaceFiles';
+import type { ChatMessage, HFModel, HistorySession, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -44,8 +56,6 @@ const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answer
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
-const WORKSPACE_INTEGRATIONS_STORAGE_KEY = 'agent-browser.workspace-integrations';
-const WORKSPACE_INTEGRATIONS_STORAGE_DEBOUNCE_MS = 120;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Exploration'],
   ['history', 'clock', 'History'],
@@ -84,64 +94,6 @@ const mockHistory: HistorySession[] = [
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
 
-const defaultIntegrations: IntegrationSurface[] = [
-  {
-    id: 'agents-md',
-    name: 'AGENTS.md',
-    kind: 'agents',
-    source: 'Workspace instructions',
-    description: 'Load repository-scoped AGENTS.md files so the harness can inherit task guidance, safety notes, and delegation hints.',
-    enabled: true,
-    color: '#60a5fa',
-    badges: ['Repository rules', 'Nested overrides'],
-  },
-  {
-    id: 'agent-skills',
-    name: 'agent-skills',
-    kind: 'skills',
-    source: 'Reusable skill packs',
-    description: 'Expose skill bundles as first-class harness capabilities so agents can discover and invoke curated workflows.',
-    enabled: true,
-    color: '#a78bfa',
-    badges: ['Task routing', 'Reusable prompts'],
-  },
-  {
-    id: 'plugins',
-    name: 'Plugins',
-    kind: 'plugins',
-    source: 'Manifest + registry ingestion',
-    description: 'Accept direct plugin manifests and the marketplace.json catalog format for plugin discovery, enablement, and metadata.',
-    enabled: true,
-    color: '#f59e0b',
-    badges: ['marketplace.json', 'Plugin manifests'],
-  },
-  {
-    id: 'hooks',
-    name: 'Hooks',
-    kind: 'hooks',
-    source: 'Lifecycle automation',
-    description: 'Register pre-task, post-task, and validation hooks so harness automation can wrap execution without changing core flows.',
-    enabled: false,
-    color: '#34d399',
-    badges: ['Pre-task', 'Post-task'],
-  },
-  {
-    id: 'remote-mcps',
-    name: 'Remote MCPs',
-    kind: 'mcps',
-    source: 'Remote connections only',
-    description: 'Allow MCP servers over remote transports while intentionally rejecting local stdio-style MCP wiring in the harness.',
-    enabled: true,
-    color: '#f87171',
-    badges: ['Remote only', 'HTTP / SSE'],
-    constraint: 'Local MCP transports are blocked by policy.',
-  },
-];
-
-function cloneIntegrations(integrations = defaultIntegrations): IntegrationSurface[] {
-  return integrations.map((integration) => ({ ...integration, badges: [...integration.badges] }));
-}
-
 function createUniqueId() {
   return crypto.randomUUID();
 }
@@ -178,48 +130,6 @@ function createInitialRoot(): TreeNode {
       },
     ],
   };
-}
-
-function createDefaultWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSurface[]> {
-  return Object.fromEntries((root.children ?? []).map((workspace) => [workspace.id, cloneIntegrations()]));
-}
-
-function isStoredIntegration(value: unknown): value is Partial<IntegrationSurface> & { id: string } {
-  return Boolean(value && typeof value === 'object' && 'id' in value && typeof value.id === 'string');
-}
-
-function sanitizeBadges(value: unknown, fallback: string[]): string[] {
-  return Array.isArray(value) ? value.filter((badge: unknown): badge is string => typeof badge === 'string') : fallback;
-}
-
-function loadWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSurface[]> {
-  const fallback = createDefaultWorkspaceIntegrations(root);
-  if (typeof window === 'undefined') return fallback;
-
-  try {
-    const raw = window.localStorage.getItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-
-    return Object.fromEntries(Object.entries(fallback).map(([workspaceId, defaults]) => {
-      const storedItems = Array.isArray(parsed?.[workspaceId]) ? parsed[workspaceId] : [];
-      return [workspaceId, defaults.map((integration) => {
-        const stored = storedItems.find((item) => isStoredIntegration(item) && item.id === integration.id);
-        return stored
-          ? {
-              ...integration,
-              enabled: typeof stored.enabled === 'boolean' ? stored.enabled : integration.enabled,
-              badges: sanitizeBadges(stored.badges, integration.badges),
-              description: typeof stored.description === 'string' ? stored.description : integration.description,
-              source: typeof stored.source === 'string' ? stored.source : integration.source,
-              constraint: typeof stored.constraint === 'string' ? stored.constraint : integration.constraint,
-            }
-          : { ...integration, badges: [...integration.badges] };
-      })];
-    }));
-  } catch {
-    return fallback;
-  }
 }
 
 function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof icons; size?: number; color?: string; className?: string }) {
@@ -316,49 +226,157 @@ function MemBar({ root }: { root: TreeNode }) {
   );
 }
 
-function WorkspaceStoragePanel({ workspaceName, integrations, onToggle }: { workspaceName: string; integrations: IntegrationSurface[]; onToggle: (id: string) => void }) {
-  const enabledCount = integrations.filter((integration) => integration.enabled).length;
+function WorkspaceFileComposer({
+  draftName,
+  onDraftNameChange,
+  onAddFile,
+}: {
+  draftName: string;
+  onDraftNameChange: (value: string) => void;
+  onAddFile: (kind: WorkspaceFileKind) => void;
+}) {
+  return (
+    <div className="workspace-file-composer">
+      <label className="workspace-file-input">
+        <span className="sr-only">Capability name</span>
+        <input aria-label="Capability name" value={draftName} onChange={(event) => onDraftNameChange(event.target.value)} placeholder="Name new skill, plugin, or hook" />
+      </label>
+      <div className="workspace-file-actions">
+        <button type="button" className="secondary-button" onClick={() => onAddFile('agents')}>Add AGENTS.md</button>
+        <button type="button" className="secondary-button" onClick={() => onAddFile('skill')}>Add skill</button>
+        <button type="button" className="secondary-button" onClick={() => onAddFile('plugin')}>Add plugin</button>
+        <button type="button" className="secondary-button" onClick={() => onAddFile('hook')}>Add hook</button>
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceStoragePanel({
+  workspaceName,
+  files,
+  onSaveFile,
+  onDeleteFile,
+  onToast,
+}: {
+  workspaceName: string;
+  files: WorkspaceFile[];
+  onSaveFile: (nextFile: WorkspaceFile, previousPath?: string) => void;
+  onDeleteFile: (path: string) => void;
+  onToast: (toast: Exclude<ToastState, null>) => void;
+}) {
+  const capabilities = useMemo(() => discoverWorkspaceCapabilities(files), [files]);
+  const [selectedPath, setSelectedPath] = useState<string | null>(files[0]?.path ?? null);
+  const [draftName, setDraftName] = useState('');
+  const [editorPath, setEditorPath] = useState(files[0]?.path ?? '');
+  const [editorContent, setEditorContent] = useState(files[0]?.content ?? '');
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const selectedFile = files.find((file) => file.path === selectedPath) ?? null;
+
+  useEffect(() => {
+    if (!files.length) {
+      setSelectedPath(null);
+      return;
+    }
+    if (!selectedPath || !files.some((file) => file.path === selectedPath)) {
+      setSelectedPath(files[0].path);
+    }
+  }, [files, selectedPath]);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      setEditorPath('');
+      setEditorContent('');
+      setValidationMessage(null);
+      return;
+    }
+    setEditorPath(selectedFile.path);
+    setEditorContent(selectedFile.content);
+    setValidationMessage(null);
+  }, [selectedFile]);
+
+  const promptContext = useMemo(() => buildWorkspacePromptContext(files), [files]);
+
+  function handleAddFile(kind: WorkspaceFileKind) {
+    const nextFile = createWorkspaceFileTemplate(kind, draftName);
+    onSaveFile(nextFile);
+    setDraftName('');
+    setSelectedPath(nextFile.path);
+    onToast({ msg: `Added ${nextFile.path} to ${workspaceName}`, type: 'success' });
+  }
+
+  function handleSaveSelectedFile() {
+    if (!selectedFile) return;
+    const nextFile: WorkspaceFile = {
+      path: editorPath.trim(),
+      content: editorContent,
+      updatedAt: new Date().toISOString(),
+    };
+    const validationError = validateWorkspaceFile(nextFile);
+    if (validationError) {
+      setValidationMessage(validationError);
+      return;
+    }
+    onSaveFile(nextFile, selectedFile.path);
+    setSelectedPath(nextFile.path);
+    onToast({ msg: `Saved ${nextFile.path}`, type: 'success' });
+  }
+
   return (
     <section className="workspace-storage" aria-label="Workspace storage">
       <div className="panel-section-header">
-        <span>Workspace storage</span>
+        <span>Workspace files</span>
         <span className="muted">Persisted in local storage</span>
       </div>
       <div className="integration-overview">
         <div className="list-card integration-summary-card">
           <span className="badge">Active workspace</span>
           <strong>{workspaceName}</strong>
-          <p className="muted">{enabledCount} enabled · {integrations.length} stored support records</p>
+          <p className="muted">{files.length} files · {capabilities.skills.length} skills · {capabilities.plugins.length} plugin manifests</p>
         </div>
         <div className="list-card integration-summary-card">
-          <span className="badge">Persistence</span>
-          <strong>Browser local storage</strong>
-          <p className="muted">AGENTS.md, skills, plugins, hooks, and remote MCP settings are stored under this browser profile.</p>
+          <span className="badge">Loaded by assistant</span>
+          <strong>{capabilities.agents.length} AGENTS.md · {capabilities.hooks.length} hooks</strong>
+          <p className="muted">The assistant reads AGENTS.md, skill files, plugin manifests, and hooks from workspace storage before it composes a local prompt.</p>
         </div>
       </div>
-      <div className="integration-list">
-        {integrations.map((integration) => (
-          <article key={integration.id} className="list-card extension-card">
-            <div className="extension-icon" style={{ background: `linear-gradient(135deg, ${integration.color}33, rgba(15,23,42,.5))` }}>
-              <Icon name="puzzle" color={integration.color} />
-            </div>
-            <div className="extension-content">
-              <div className="extension-title-row">
-                <h3>{integration.name}</h3>
-                <span className="badge">{integration.source}</span>
+      <p className="muted">Store standards-based capability files in the active workspace: root-level AGENTS.md, `.agents/skill/.../SKILL.md`, `.agents/plugins/...`, and `.agents/hooks/...`.</p>
+      <WorkspaceFileComposer draftName={draftName} onDraftNameChange={setDraftName} onAddFile={handleAddFile} />
+      {!files.length ? <div className="list-card workspace-empty-state"><strong>No workspace capability files yet.</strong><p className="muted">Add AGENTS.md, a skill, a plugin manifest, or a hook to make this workspace behave differently.</p></div> : null}
+      {files.length ? (
+        <div className="workspace-file-grid">
+          <div className="workspace-file-list" aria-label="Workspace file list">
+            {files.map((file) => (
+              <button key={file.path} type="button" className={`list-card workspace-file-row ${selectedPath === file.path ? 'active' : ''}`} onClick={() => setSelectedPath(file.path)}>
+                <div>
+                  <strong>{file.path.split('/').pop()}</strong>
+                  <p className="muted">{file.path}</p>
+                </div>
+                <span className="badge">{detectWorkspaceFileKind(file.path) ?? 'file'}</span>
+              </button>
+            ))}
+          </div>
+          {selectedFile ? (
+            <div className="list-card workspace-file-editor">
+              <label className="workspace-file-field">
+                <span>Path</span>
+                <input aria-label="Workspace file path" value={editorPath} onChange={(event) => setEditorPath(event.target.value)} />
+              </label>
+              <label className="workspace-file-field">
+                <span>Content</span>
+                <textarea aria-label="Workspace file content" value={editorContent} onChange={(event) => setEditorContent(event.target.value)} rows={14} />
+              </label>
+              {validationMessage ? <p className="workspace-file-error">{validationMessage}</p> : null}
+              <div className="workspace-file-toolbar">
+                <button type="button" className="primary-button" onClick={handleSaveSelectedFile}>Save file</button>
+                <button type="button" className="secondary-button" onClick={() => { onDeleteFile(selectedFile.path); onToast({ msg: `Removed ${selectedFile.path}`, type: 'info' }); }}>Delete file</button>
               </div>
-              <div className="extension-badges">
-                {integration.badges.map((badge) => <span key={badge} className="chip mini">{badge}</span>)}
-              </div>
-              <p>{integration.description}</p>
-              {integration.constraint ? <p className="muted">{integration.constraint}</p> : null}
             </div>
-            <label className="switch">
-              <input type="checkbox" aria-label={`Enable ${integration.name}`} checked={integration.enabled} onChange={() => onToggle(integration.id)} />
-              <span />
-            </label>
-          </article>
-        ))}
+          ) : null}
+        </div>
+      ) : null}
+      <div className="list-card workspace-context-preview">
+        <span className="badge">Assistant context preview</span>
+        <pre>{promptContext}</pre>
       </div>
     </section>
   );
@@ -403,12 +421,29 @@ function PageOverlay({ tab, onClose }: { tab: TreeNode; onClose: () => void }) {
   );
 }
 
-function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }: { installedModels: HFModel[]; pendingSearch: string | null; onSearchConsumed: () => void; onToast: (toast: Exclude<ToastState, null>) => void }) {
+function ChatPanel({
+  installedModels,
+  pendingSearch,
+  onSearchConsumed,
+  onToast,
+  workspaceName,
+  workspaceFiles,
+  workspaceCapabilities,
+}: {
+  installedModels: HFModel[];
+  pendingSearch: string | null;
+  onSearchConsumed: () => void;
+  onToast: (toast: Exclude<ToastState, null>) => void;
+  workspaceName: string;
+  workspaceFiles: WorkspaceFile[];
+  workspaceCapabilities: WorkspaceCapabilities;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([{ id: createUniqueId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }]);
   const [input, setInput] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef(messages);
+  const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
 
   useEffect(() => {
     if (installedModels.length && !selectedModelId) setSelectedModelId(installedModels[0].id);
@@ -445,6 +480,8 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     const copilotBridge = createCopilotBridgeSnapshot(nextMessages);
     const prompt = [
       { role: 'system', content: 'You are a helpful agent-first browser assistant. Be concise and clear.' },
+      { role: 'system', content: `Active workspace: ${workspaceName}` },
+      { role: 'system', content: workspacePromptContext },
       ...aiMessages.slice(-MAX_CONTEXT_MESSAGES).map((message) => ({ role: message.role, content: message.parts.map((part) => ('text' in part ? String(part.text) : '')).join('') })),
       { role: 'system', content: `Chat transcript length: ${chatTranscript.length}; Copilot bridge: ${copilotBridge.runtimeUrl}; messages: ${copilotBridge.messageCount}` },
     ];
@@ -500,7 +537,7 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     } catch (error) {
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
-  }, [installedModels, onToast, selectedModelId]);
+  }, [installedModels, onToast, selectedModelId, workspaceName, workspacePromptContext]);
 
   useEffect(() => {
     if (!pendingSearch) return;
@@ -514,7 +551,7 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
         <div className="chat-heading">
           <span className="panel-eyebrow">Workspace assistant</span>
           <h2>Agent Chat</h2>
-          <p>I'm your workspace assistant with access to MCP apps, local models, and exploration context.</p>
+          <p>I'm your workspace assistant with access to local models, exploration context, and the capability files stored in {workspaceName}.</p>
         </div>
       </header>
       <div className="message-list" role="log" aria-live="polite">
@@ -525,7 +562,7 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
         {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
         <div ref={bottomRef} />
       </div>
-      <div className="context-strip">Context: {installedModels.length} active local models · {messages.length} chat messages · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
+      <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
       <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
         <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
         <div className="composer-toolbar">
@@ -588,19 +625,37 @@ function HistoryPanel() {
   return <section className="panel-scroll history-panel" aria-label="History"><span className="panel-eyebrow">History</span><h2>Recent sessions</h2><p className="muted">Pick up where you left off across research, build, and UX investigations.</p>{mockHistory.map((session) => <article key={session.id} className="list-card history-card"><div className="history-card-header"><div><h3>{session.title}</h3><p className="muted">{session.date}</p></div><span className="badge">{session.events.length} events</span></div><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
 }
 
-function ExtensionsPanel({ workspaceName }: { workspaceName: string }) {
+function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: string; capabilities: WorkspaceCapabilities }) {
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <span className="panel-eyebrow">Extensions</span>
-      <h2>Extension marketplace</h2>
-      <p className="muted">Workspace-scoped harness support now lives in Exploration so it can be stored with the active workspace.</p>
+      <h2>Workspace plugin manifests</h2>
+      <p className="muted">Plugin support is discovered from standards-based manifests stored in the active workspace.</p>
       <div className="integration-overview">
         <div className="list-card integration-summary-card">
-          <span className="badge">Moved</span>
-          <strong>Workspace-local support</strong>
-          <p className="muted">Open Exploration to manage AGENTS.md, agent-skills, plugins, hooks, and remote-only MCP settings for {workspaceName}.</p>
+          <span className="badge">Active workspace</span>
+          <strong>{workspaceName}</strong>
+          <p className="muted">{capabilities.plugins.length} plugin manifests · {capabilities.hooks.length} hooks discovered</p>
         </div>
       </div>
+      {capabilities.plugins.length ? (
+        <div className="integration-list">
+          {capabilities.plugins.map((plugin) => (
+            <article key={plugin.path} className="list-card extension-card">
+              <div className="extension-icon">
+                <Icon name="puzzle" color="#f59e0b" />
+              </div>
+              <div className="extension-content">
+                <div className="extension-title-row">
+                  <h3>{plugin.directory}</h3>
+                  <span className="badge">{plugin.manifestName}</span>
+                </div>
+                <p>{plugin.path}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : <p className="muted">No plugin manifests stored yet. Add one from Exploration to register a plugin bundle in this workspace.</p>}
     </section>
   );
 }
@@ -646,12 +701,13 @@ function AgentBrowserApp() {
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [workspaceIntegrations, setWorkspaceIntegrations] = useState<Record<string, IntegrationSurface[]>>(() => loadWorkspaceIntegrations(root));
+  const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles((root.children ?? []).map((workspace) => workspace.id)));
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const visibleItems = useMemo(() => flattenTree(activeWorkspace), [activeWorkspace]);
   const openTab = openTabId ? findNode(root, openTabId) : null;
-  const activeWorkspaceIntegrations = workspaceIntegrations[activeWorkspaceId] ?? cloneIntegrations();
+  const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
+  const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
 
   useCopilotReadable({
     description: 'Current agent browser workspace context',
@@ -661,8 +717,13 @@ function AgentBrowserApp() {
       openTab: openTab?.name ?? null,
       installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
       tabsInWorkspace: countTabs(activeWorkspace),
+      workspaceFiles: activeWorkspaceFiles.map((file) => file.path),
+      agentsInstructions: activeWorkspaceCapabilities.agents.map((file) => file.path),
+      skills: activeWorkspaceCapabilities.skills.map((skill) => skill.name),
+      plugins: activeWorkspaceCapabilities.plugins.map((plugin) => plugin.directory),
+      hooks: activeWorkspaceCapabilities.hooks.map((hook) => hook.name),
     },
-  }, [activePanel, activeWorkspace, installedModels, openTab]);
+  }, [activePanel, activeWorkspace, installedModels, openTab, activeWorkspaceCapabilities, activeWorkspaceFiles]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -684,10 +745,10 @@ function AgentBrowserApp() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      window.localStorage.setItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY, JSON.stringify(workspaceIntegrations));
-    }, WORKSPACE_INTEGRATIONS_STORAGE_DEBOUNCE_MS);
+      window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify(workspaceFilesByWorkspace));
+    }, WORKSPACE_FILE_STORAGE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [workspaceIntegrations]);
+  }, [workspaceFilesByWorkspace]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -771,17 +832,26 @@ function AgentBrowserApp() {
           }} />
           <WorkspaceStoragePanel
             workspaceName={activeWorkspace.name}
-            integrations={activeWorkspaceIntegrations}
-            onToggle={(id) => setWorkspaceIntegrations((current) => ({
+            files={activeWorkspaceFiles}
+            onSaveFile={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => {
+              const existing = current[activeWorkspaceId] ?? [];
+              const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing;
+              return {
+                ...current,
+                [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile),
+              };
+            })}
+            onDeleteFile={(path) => setWorkspaceFilesByWorkspace((current) => ({
               ...current,
-              [activeWorkspaceId]: (current[activeWorkspaceId] ?? cloneIntegrations()).map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry),
+              [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path),
             }))}
+            onToast={setToast}
           />
         </div>
       );
     }
     if (activePanel === 'history') return <HistoryPanel />;
-    if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} />;
+    if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
     if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
@@ -816,7 +886,7 @@ function AgentBrowserApp() {
           {renderSidebar()}
         </aside>
       ) : null}
-      <main className="content-area">{openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} />}</main>
+      <main className="content-area">{openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} workspaceName={activeWorkspace.name} workspaceFiles={activeWorkspaceFiles} workspaceCapabilities={activeWorkspaceCapabilities} />}</main>
       {showWorkspaces ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher"><div className="modal-card"><div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div><div className="workspace-grid">{(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { setActiveWorkspaceId(workspace.id); setShowWorkspaces(false); }}><span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} /><strong>{workspace.name}</strong><span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span></button>)}</div></div></div> : null}
       {showShortcuts ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"><div className="modal-card compact"><div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div><ul className="shortcut-list"><li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li><li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li><li><kbd>Enter</kbd><span>Open the selected tab</span></li><li><kbd>?</kbd><span>Open this overlay</span></li></ul></div></div> : null}
       <Toast toast={toast} />

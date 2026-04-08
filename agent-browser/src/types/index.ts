@@ -71,6 +71,8 @@ export interface HistorySession {
 
 export type IntegrationKind = 'agents' | 'skills' | 'plugins' | 'hooks' | 'mcps';
 
+export type WorkspaceFileKind = 'agents' | 'skill' | 'plugin' | 'hook';
+
 export interface IntegrationSurface {
   id: string;
   name: string;
@@ -81,6 +83,40 @@ export interface IntegrationSurface {
   description: string;
   badges: string[];
   constraint?: string;
+}
+
+export interface WorkspaceFile {
+  path: string;
+  content: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceSkill {
+  path: string;
+  directory: string;
+  name: string;
+  description: string;
+  content: string;
+}
+
+export interface WorkspacePlugin {
+  path: string;
+  directory: string;
+  manifestName: string;
+  content: string;
+}
+
+export interface WorkspaceHook {
+  path: string;
+  name: string;
+  content: string;
+}
+
+export interface WorkspaceCapabilities {
+  agents: WorkspaceFile[];
+  skills: WorkspaceSkill[];
+  plugins: WorkspacePlugin[];
+  hooks: WorkspaceHook[];
 }
 
 export interface BrowserInferenceRequest {

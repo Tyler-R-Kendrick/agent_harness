@@ -379,6 +379,101 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   gap: 12px;
   margin-top: 18px;
 }
+.workspace-file-composer {
+  display: grid;
+  gap: 10px;
+}
+.workspace-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.workspace-file-input input,
+.workspace-file-field input,
+.workspace-file-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255,255,255,.03);
+  color: inherit;
+  font: inherit;
+}
+.workspace-file-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 12px;
+}
+.workspace-file-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.workspace-file-row {
+  width: 100%;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.workspace-file-row.active {
+  border-color: rgba(96,165,250,.45);
+  box-shadow: inset 0 0 0 1px rgba(96,165,250,.18);
+}
+.workspace-file-editor,
+.workspace-empty-state,
+.workspace-context-preview {
+  padding: 14px;
+}
+.workspace-file-editor {
+  display: grid;
+  gap: 12px;
+}
+.workspace-file-field {
+  display: grid;
+  gap: 8px;
+}
+.workspace-file-field span {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d4d4d8;
+}
+.workspace-file-field textarea {
+  min-height: 280px;
+  resize: vertical;
+}
+.workspace-file-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.workspace-file-error {
+  margin: 0;
+  color: #fca5a5;
+  font-size: 12px;
+}
+.workspace-context-preview {
+  display: grid;
+  gap: 10px;
+}
+.workspace-context-preview pre {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.06);
+  background: rgba(9,9,11,.65);
+  color: #d4d4d8;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 280px;
+  overflow: auto;
+}
 .extension-badges {
   display: flex;
   flex-wrap: wrap;
@@ -541,6 +636,7 @@ kbd {
 
 @media (max-width: 1024px) {
   .app-shell { grid-template-columns: 56px minmax(0, 280px) 1fr; }
+  .workspace-file-grid { grid-template-columns: 1fr; }
   .page-body { grid-template-columns: 1fr; }
   .page-chat-panel { width: 100%; border-left: 0; border-top: 1px solid var(--panel-border); }
 }

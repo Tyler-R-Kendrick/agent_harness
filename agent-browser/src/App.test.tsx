@@ -27,7 +27,17 @@ describe('App', () => {
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
-    searchBrowserModelsMock.mockResolvedValue([]);
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
   });
@@ -62,33 +72,60 @@ describe('App', () => {
     expect(screen.getByLabelText('History')).toBeInTheDocument();
   });
 
-  it('renders workspace-local support in exploration and persists it to local storage', async () => {
+  it('adds workspace capability files and persists them to local storage', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.getByText('Workspace storage')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'AGENTS.md' })).toBeInTheDocument();
-    expect(screen.getByText('agent-skills')).toBeInTheDocument();
-    expect(screen.getByText('Plugins')).toBeInTheDocument();
-    expect(screen.getByText('Hooks')).toBeInTheDocument();
-    expect(screen.getByText('Remote MCPs')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.json', { exact: true })).toBeInTheDocument();
-    expect(screen.getByText('Local MCP transports are blocked by policy.')).toBeInTheDocument();
+    expect(screen.getByText('Workspace files')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-pr' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
 
-    const hooksToggle = screen.getByLabelText('Enable Hooks') as HTMLInputElement;
-    expect(hooksToggle.checked).toBe(false);
-
-    fireEvent.click(hooksToggle);
-
-    expect(hooksToggle.checked).toBe(true);
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
-    const storedIntegrations = JSON.parse(window.localStorage.getItem('agent-browser.workspace-integrations') ?? '{}') as Record<string, Array<{ id: string; enabled: boolean }>>;
-    expect(storedIntegrations['ws-research']).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'hooks', enabled: true })]));
+
+    expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
+    expect(screen.getByText('.agents/skill/review-pr/SKILL.md')).toBeInTheDocument();
+
+    const storedFiles = JSON.parse(window.localStorage.getItem('agent-browser.workspace-files') ?? '{}') as Record<string, Array<{ path: string }>>;
+    expect(storedFiles['ws-research']).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'AGENTS.md' }),
+      expect.objectContaining({ path: '.agents/skill/review-pr/SKILL.md' }),
+    ]));
+  });
+
+  it('loads workspace file context into the assistant prompt', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Workspace file content'), { target: { value: '# Rules\nAlways run workspace checks first.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save file' }));
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the workspace rules.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(generateMock).toHaveBeenCalledTimes(1);
+    const prompt = generateMock.mock.calls[0][0].prompt as Array<{ role: string; content: string }>;
+    expect(prompt).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('Active workspace: Research') }),
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('Always run workspace checks first.') }),
+    ]));
   });
 
   it('adds accessible labels to page overlay icon buttons', async () => {

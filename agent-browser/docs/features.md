@@ -13,7 +13,9 @@ How to interact:
 - Use the omnibar to search or navigate.
 - Switch workspaces with the pills under the omnibar.
 - Browse tabs and folders from the exploration tree.
-- Review workspace-scoped AGENTS.md, agent-skills, plugins, hooks, and remote MCP settings in the **Workspace storage** section.
+- Use the **Workspace files** section to add real AGENTS.md, skill, plugin, and hook files to the active workspace.
+- Edit file paths and contents in place, then save them back to browser storage.
+- Review the assistant context preview to confirm the harness is loading and using the stored capability files.
 - Use the activity bar to switch between exploration, history, extensions, and settings.
 - Send a prompt from the themed composer at the bottom using the model pill and green send button.
 
@@ -37,8 +39,8 @@ Playwright test: `captures the extensions screen`
 
 How to interact:
 - Open **Extensions** from the activity bar.
-- Use this panel as a redirect to the workspace-local storage controls in **Exploration**.
-- Return to the active workspace when you need to change AGENTS.md, agent-skills, plugins, hooks, or remote MCP settings.
+- Review which plugin manifests were discovered from the active workspace.
+- Return to **Exploration** when you need to add or edit plugin manifest files.
 
 ## History panel
 

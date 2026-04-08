@@ -3,8 +3,11 @@ import { expect, test } from '@playwright/test';
 test('captures the main workspace screen', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByLabel('Omnibar')).toBeVisible();
-  await expect(page.getByText('Workspace storage')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'AGENTS.md' })).toBeVisible();
+  await expect(page.getByText('Workspace files')).toBeVisible();
+  await page.getByRole('button', { name: 'Add AGENTS.md' }).click();
+  await page.getByLabel('Capability name').fill('review-pr');
+  await page.getByRole('button', { name: 'Add skill' }).click();
+  await expect(page.getByLabel('Workspace file path')).toHaveValue('.agents/skill/review-pr/SKILL.md');
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
 });
 
@@ -18,8 +21,8 @@ test('captures the settings screen', async ({ page }) => {
 test('captures the extensions screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Extensions').click();
-  await expect(page.getByText('Extension marketplace')).toBeVisible();
-  await expect(page.getByText('Workspace-scoped harness support now lives in Exploration')).toBeVisible();
+  await expect(page.getByText('Workspace plugin manifests')).toBeVisible();
+  await expect(page.getByText('No plugin manifests stored yet.')).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/extensions-screen.png', fullPage: true });
 });
 
