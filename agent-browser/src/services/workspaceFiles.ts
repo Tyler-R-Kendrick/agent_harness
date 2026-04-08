@@ -4,6 +4,8 @@ export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
 export const WORKSPACE_FILE_STORAGE_DEBOUNCE_MS = 120;
 export const WORKSPACE_SKILL_DIRECTORIES = ['.agents/skill/', '.agents/skills/'] as const;
 const PLUGIN_MANIFESTS = ['plugin.yaml', 'plugin.yml', 'plugin.json', 'manifest.json', 'marketplace.json'] as const;
+const KEBAB_CASE_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const HOOK_FILENAME = /^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+$/;
 
 function slugify(value: string) {
   return value
@@ -103,7 +105,15 @@ export function validateWorkspaceFile(file: WorkspaceFile): string | null {
     const [directoryName, maybeSkillFile, ...rest] = remainder.split('/');
     if (!directoryName || !maybeSkillFile || rest.length) return 'Skills must use <dir>/SKILL.md paths.';
     if (maybeSkillFile !== 'SKILL.md') return 'Skills must be stored in SKILL.md files.';
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(directoryName)) return 'Skill directories must be lowercase kebab-case.';
+    if (!KEBAB_CASE_SEGMENT.test(directoryName)) return 'Skill directories must be lowercase kebab-case.';
+    return null;
+  }
+
+  if (kind === 'hook') {
+    const remainder = file.path.replace(/^\.agents\/hooks\//, '');
+    const [fileName, ...rest] = remainder.split('/');
+    if (!fileName || rest.length) return 'Hooks must use .agents/hooks/<name>.<ext> paths.';
+    if (!HOOK_FILENAME.test(fileName)) return 'Hooks must be single lowercase kebab-case files with an extension.';
     return null;
   }
 
@@ -111,6 +121,7 @@ export function validateWorkspaceFile(file: WorkspaceFile): string | null {
     const remainder = file.path.replace(/^\.agents\/plugins\//, '');
     const [directoryName, manifestName, ...rest] = remainder.split('/');
     if (!directoryName || !manifestName || rest.length) return 'Plugins must use .agents/plugins/<plugin>/<manifest> paths.';
+    if (!KEBAB_CASE_SEGMENT.test(directoryName)) return 'Plugin directories must be lowercase kebab-case.';
     if (!PLUGIN_MANIFESTS.includes(manifestName as (typeof PLUGIN_MANIFESTS)[number])) return 'Plugins must use a supported manifest filename.';
     return null;
   }

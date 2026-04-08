@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
 
 const searchBrowserModelsMock = vi.fn();
 const loadModelMock = vi.fn();
@@ -34,6 +35,7 @@ describe('App', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('renders the agent browser shell', async () => {
@@ -81,11 +83,35 @@ describe('App', () => {
     expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
     expect(screen.getByText('.agents/skill/review-pr/SKILL.md')).toBeInTheDocument();
 
-    const storedFiles = JSON.parse(window.localStorage.getItem('agent-browser.workspace-files') ?? '{}') as Record<string, Array<{ path: string }>>;
+    const storedFiles = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, Array<{ path: string }>>;
     expect(storedFiles['ws-research']).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'AGENTS.md' }),
       expect.objectContaining({ path: '.agents/skill/review-pr/SKILL.md' }),
     ]));
+  });
+
+  it('shows a warning toast when workspace file persistence fails', async () => {
+    vi.useFakeTimers();
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add AGENTS.md' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
+    expect(setItemSpy).toHaveBeenCalled();
+    const warningToast = document.querySelector('.toast.warning');
+    expect(warningToast).not.toBeNull();
+    expect(warningToast?.textContent ?? '').toMatch(/quota|persist workspace files/i);
   });
 
   it('loads workspace file context into the assistant prompt', async () => {

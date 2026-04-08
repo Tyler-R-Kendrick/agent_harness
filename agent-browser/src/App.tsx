@@ -746,10 +746,17 @@ function AgentBrowserApp() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify(workspaceFilesByWorkspace));
+      try {
+        window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify(workspaceFilesByWorkspace));
+      } catch (error) {
+        setToast({
+          msg: error instanceof Error ? error.message : 'Failed to persist workspace files locally',
+          type: 'warning',
+        });
+      }
     }, WORKSPACE_FILE_STORAGE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [workspaceFilesByWorkspace]);
+  }, [setToast, workspaceFilesByWorkspace]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

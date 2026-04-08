@@ -60,8 +60,14 @@ describe('workspaceFiles', () => {
   it('validates file paths and supports both .agents/skill and .agents/skills roots', () => {
     expect(detectWorkspaceFileKind('.agents/skill/review-pr/SKILL.md')).toBe('skill');
     expect(detectWorkspaceFileKind('.agents/skills/review-pr/SKILL.md')).toBe('skill');
+    expect(detectWorkspaceFileKind('.agents/hooks/pre-task.sh')).toBe('hook');
+    expect(detectWorkspaceFileKind('.agents/plugins/review-tools/plugin.yaml')).toBe('plugin');
     expect(validateWorkspaceFile({ path: '.agents/skills/review-pr/SKILL.md', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toBeNull();
+    expect(validateWorkspaceFile({ path: '.agents/hooks/pre-task.sh', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toBeNull();
+    expect(validateWorkspaceFile({ path: '.agents/plugins/review-tools/plugin.yaml', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toBeNull();
     expect(validateWorkspaceFile({ path: '.agents/skill/Review PR/SKILL.md', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('kebab-case');
+    expect(validateWorkspaceFile({ path: '.agents/hooks/../plugins/x/plugin.yaml', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('.agents/hooks/<name>.<ext>');
+    expect(validateWorkspaceFile({ path: '.agents/plugins/../manifest.json', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('Plugin directories');
     expect(validateWorkspaceFile({ path: 'README.md', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('Unsupported');
   });
 
