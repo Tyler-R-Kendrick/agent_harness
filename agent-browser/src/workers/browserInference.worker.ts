@@ -1,4 +1,4 @@
-import { pipeline } from '@huggingface/transformers';
+import { pipeline, type PreTrainedTokenizer } from '@huggingface/transformers';
 import { buildPipelineLoadOptions, buildPipelineRunOptions } from '../services/browserInferenceRuntime';
 
 type WorkerRequest =
@@ -45,7 +45,7 @@ async function handleMessage(data: WorkerRequest) {
     const pipe = (await getPipeline(data.task, data.modelId, (phase) => postMessage({ type: 'phase', id: data.id, phase }))) as PipelineInstance;
     const result = await pipe(
       data.prompt,
-      buildPipelineRunOptions(data.task, data.options, pipe.tokenizer ?? null, (token) => {
+      buildPipelineRunOptions(data.task, data.options, (pipe.tokenizer as PreTrainedTokenizer | null | undefined) ?? null, (token) => {
         postMessage({ type: 'token', id: data.id, token });
       }),
     );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCopilotReadable } from '@copilotkit/react-core';
 import {
   ArrowLeft,
   ArrowRight,
@@ -43,6 +44,16 @@ const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answer
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
+const PRIMARY_NAV = [
+  ['workspaces', 'layers', 'Exploration'],
+  ['chat', 'messageSquare', 'Chat'],
+  ['history', 'clock', 'History'],
+  ['extensions', 'puzzle', 'Extensions'],
+] as const;
+const SECONDARY_NAV = [
+  ['settings', 'settings', 'Settings'],
+  ['account', 'user', 'Account'],
+] as const;
 
 const icons = {
   layers: Layers3,
@@ -346,25 +357,37 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
   return (
     <section className="chat-panel" aria-label="Chat panel">
       <header className="chat-header">
-        <div>
+        <div className="chat-heading">
+          <span className="panel-eyebrow">Workspace assistant</span>
           <h2>Agent Chat</h2>
-          <p>Composed with AI SDK message shapes and a local browser inference engine.</p>
+          <p>I&apos;m your workspace assistant with access to MCP apps, local models, and exploration context.</p>
         </div>
-        <label>
-          <span className="sr-only">Installed model</span>
-          <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)}>
-            <option value="">Choose an installed model</option>
-            {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-          </select>
-        </label>
+        <div className="chat-header-controls">
+          <button type="button" className="secondary-button">Create task board</button>
+          <button type="button" className="secondary-button">Open gallery</button>
+        </div>
       </header>
       <div className="message-list" role="log" aria-live="polite">
+        <div className="chat-empty-state">
+          <Icon name="sparkles" size={14} color="#d1fae5" />
+          <span>Ask about your workspace, browse the web, or run a task.</span>
+        </div>
         {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
         <div ref={bottomRef} />
       </div>
+      <div className="context-strip">Context: {installedModels.length} active local models · {messages.length} chat messages · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
       <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
         <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
-        <button type="submit" className="primary-button"><Icon name="send" size={14} color="#fff" />Send</button>
+        <div className="composer-toolbar">
+          <label className="model-pill">
+            <span className="sr-only">Installed model</span>
+            <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)}>
+              <option value="">Choose an installed model</option>
+              {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+            </select>
+          </label>
+          <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
+        </div>
       </form>
     </section>
   );
@@ -372,41 +395,51 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
 
 function SettingsPanel({ registryModels, installedModels, task, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
   return (
-    <section className="panel-scroll" aria-label="Settings">
-      <h2>Browser model registry</h2>
-      <p className="muted">Only ONNX-optimized models from the Hugging Face registry that can run in-browser are shown here.</p>
+    <section className="panel-scroll settings-panel" aria-label="Settings">
+      <span className="panel-eyebrow">Settings / Models</span>
+      <div className="settings-switcher">
+        <button type="button" className="activity-inline-button">Providers</button>
+        <button type="button" className="activity-inline-button active">Local</button>
+      </div>
       <div className="local-model-controls">
-        <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search Hugging Face ONNX registry" />
+        <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search local model registry" />
         <div className="chip-row">
           {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
         </div>
       </div>
-      <div className="model-section">
-        <h3>Installed models</h3>
-        {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card"><div><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
+      <div className="panel-section-header">
+        <span>Results ({registryModels.length})</span>
+        <span className="muted">{installedModels.length} models loaded</span>
       </div>
-      <div className="model-section">
-        <h3>Registry results</h3>
+      <div className="model-section settings-result-list">
         {registryModels.map((model) => (
           <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
-            <div>
+            <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
+            <div className="model-card-body">
               <strong>{model.name}</strong>
-              <p>{model.author} · {model.task}</p>
+              <span className="chip mini">{model.task}</span>
+              <p>{model.author}</p>
+              <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
             </div>
-            <span>{model.downloads.toLocaleString()} downloads</span>
+            <span className="secondary-button">Load</span>
           </button>
         ))}
+        {!registryModels.length ? <p className="muted">Search the local Hugging Face ONNX registry to populate the model drawer.</p> : null}
+      </div>
+      <div className="model-section">
+        <h3>Installed models</h3>
+        {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card installed"><div className="model-card-body"><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
       </div>
     </section>
   );
 }
 
 function HistoryPanel() {
-  return <section className="panel-scroll" aria-label="History"><h2>Session history</h2>{mockHistory.map((session) => <article key={session.id} className="list-card"><h3>{session.title}</h3><p className="muted">{session.date}</p><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
+  return <section className="panel-scroll history-panel" aria-label="History"><span className="panel-eyebrow">History</span><h2>Recent sessions</h2><p className="muted">Pick up where you left off across research, build, and UX investigations.</p>{mockHistory.map((session) => <article key={session.id} className="list-card history-card"><div className="history-card-header"><div><h3>{session.title}</h3><p className="muted">{session.date}</p></div><span className="badge">{session.events.length} events</span></div><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
 }
 
 function ExtensionsPanel({ extensions, onToggle }: { extensions: Extension[]; onToggle: (id: number) => void }) {
-  return <section className="panel-scroll" aria-label="Extensions"><h2>Extensions</h2>{extensions.map((extension) => <article key={extension.id} className="list-card extension-card"><div className="extension-icon" style={{ background: `${extension.color}22` }}><Icon name="puzzle" color={extension.color} /></div><div><h3>{extension.name}</h3><p className="muted">{extension.author} · {extension.rating}★ · {extension.users}</p><p>{extension.description}</p></div><label className="switch"><input type="checkbox" aria-label={`Enable ${extension.name}`} checked={extension.enabled} onChange={() => onToggle(extension.id)} /><span /></label></article>)}</section>;
+  return <section className="panel-scroll extensions-panel" aria-label="Extensions"><span className="panel-eyebrow">Extensions</span><h2>Workspace tools</h2><p className="muted">Curated extensions with a tighter marketplace presentation.</p>{extensions.map((extension) => <article key={extension.id} className="list-card extension-card"><div className="extension-icon" style={{ background: `linear-gradient(135deg, ${extension.color}33, rgba(15,23,42,.5))` }}><Icon name="puzzle" color={extension.color} /></div><div><div className="extension-title-row"><h3>{extension.name}</h3><span className="badge">{extension.category}</span></div><p className="muted">{extension.author} · {extension.rating}★ · {extension.users}</p><p>{extension.description}</p></div><label className="switch"><input type="checkbox" aria-label={`Enable ${extension.name}`} checked={extension.enabled} onChange={() => onToggle(extension.id)} /><span /></label></article>)}</section>;
 }
 
 function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void }) {
@@ -454,6 +487,17 @@ function AgentBrowserApp() {
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const visibleItems = useMemo(() => flattenTree(activeWorkspace), [activeWorkspace]);
   const openTab = openTabId ? findNode(root, openTabId) : null;
+
+  useCopilotReadable({
+    description: 'Current agent browser workspace context',
+    value: {
+      activePanel,
+      activeWorkspace: activeWorkspace.name,
+      openTab: openTab?.name ?? null,
+      installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
+      tabsInWorkspace: countTabs(activeWorkspace),
+    },
+  }, [activePanel, activeWorkspace, installedModels, openTab]);
 
   useEffect(() => {
     void searchBrowserModels('', registryTask).then(setRegistryModels).catch((error) => setToast({ msg: error instanceof Error ? error.message : 'Registry search failed', type: 'error' }));
@@ -529,6 +573,11 @@ function AgentBrowserApp() {
     if (activePanel === 'workspaces') {
       return (
         <div className="sidebar-content">
+          <div className="explore-hero">
+            <span className="panel-eyebrow">Exploration</span>
+            <h2>Workspace graph</h2>
+            <p className="muted">Browse directories, pinned tabs, and active memory from a single exploration surface.</p>
+          </div>
           <MemBar root={activeWorkspace} />
           <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} cursorId={cursorId} onCursorChange={setCursorId} onToggleFolder={(id) => setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded })))} onOpenTab={setOpenTabId} onCloseTab={(id) => {
             setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, children: (node.children ?? []).filter((child) => child.id !== id) })));
@@ -547,19 +596,21 @@ function AgentBrowserApp() {
   return (
     <div className="app-shell">
       <nav className="activity-bar" aria-label="Primary navigation">
-        {[
-          ['workspaces', 'layers', 'Workspaces'],
-          ['chat', 'messageSquare', 'Chat'],
-          ['history', 'clock', 'History'],
-          ['extensions', 'puzzle', 'Extensions'],
-          ['settings', 'settings', 'Settings'],
-          ['account', 'user', 'Account'],
-        ].map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#60a5fa' : '#71717a'} /></button>)}
+        <div className="activity-group">
+          {PRIMARY_NAV.map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+        </div>
+        <div className="activity-spacer" />
+        <div className="activity-group">
+          {SECONDARY_NAV.map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+        </div>
         <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
       {!collapsed ? (
         <aside className="sidebar">
           <header className="sidebar-header">
+            <div className="sidebar-title-row">
+              <span className="panel-eyebrow">{activePanel === 'settings' ? 'Settings / Models' : activePanel === 'history' ? 'History' : activePanel === 'extensions' ? 'Extensions' : activePanel === 'chat' ? 'Assistant' : 'Exploration'}</span>
+            </div>
             <form className="omnibar" onSubmit={handleOmnibarSubmit}>
               <Icon name="search" size={13} color="#71717a" />
               <input aria-label="Omnibar" value={omnibar} onChange={(event) => setOmnibar(event.target.value)} placeholder="Search or navigate…" />

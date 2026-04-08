@@ -1,5 +1,10 @@
+import { vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App from './App';
+
+vi.mock('@copilotkit/react-core', () => ({
+  useCopilotReadable: () => undefined,
+}));
 
 describe('App', () => {
   it('renders the agent browser shell', () => {
