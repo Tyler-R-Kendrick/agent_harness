@@ -45,7 +45,7 @@ const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
 const WORKSPACE_INTEGRATIONS_STORAGE_KEY = 'agent-browser.workspace-integrations';
-const STORAGE_DEBOUNCE_MS = 120;
+const WORKSPACE_INTEGRATIONS_STORAGE_DEBOUNCE_MS = 120;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Exploration'],
   ['history', 'clock', 'History'],
@@ -685,7 +685,7 @@ function AgentBrowserApp() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       window.localStorage.setItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY, JSON.stringify(workspaceIntegrations));
-    }, STORAGE_DEBOUNCE_MS);
+    }, WORKSPACE_INTEGRATIONS_STORAGE_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [workspaceIntegrations]);
 
