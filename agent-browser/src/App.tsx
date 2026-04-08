@@ -265,10 +265,15 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
   const [input, setInput] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef(messages);
 
   useEffect(() => {
     if (installedModels.length && !selectedModelId) setSelectedModelId(installedModels[0].id);
   }, [installedModels, selectedModelId]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -282,11 +287,9 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     if (!text.trim()) return;
     const model = installedModels.find((entry) => entry.id === selectedModelId);
     const assistantId = createUniqueId();
-    let nextMessages: ChatMessage[] = [];
-    setMessages((current) => {
-      nextMessages = appendPendingLocalTurn(current, text, { userId: createUniqueId(), assistantId });
-      return nextMessages;
-    });
+    const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId: createUniqueId(), assistantId });
+    messagesRef.current = nextMessages;
+    setMessages(nextMessages);
     setInput('');
 
     if (!model) {
@@ -528,10 +531,8 @@ function AgentBrowserApp() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) {
-        if (event.key === 'Escape') setShowShortcuts(false);
-        return;
-      }
+      if (event.key === 'Escape') { setShowShortcuts(false); return; }
+      if (event.defaultPrevented || isEditableTarget(event.target)) return;
       if (event.key === '?') { setShowShortcuts(true); return; }
       if (activePanel !== 'workspaces') return;
       const index = visibleItems.findIndex((item) => item.node.id === cursorId);
@@ -557,7 +558,6 @@ function AgentBrowserApp() {
         const node = findNode(root, cursorId);
         if (node?.type === 'tab') setOpenTabId(node.id);
       }
-      if (event.key === 'Escape') setShowShortcuts(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
