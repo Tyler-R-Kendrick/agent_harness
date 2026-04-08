@@ -1,0 +1,13 @@
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+  background: #09090b;
+}
+body {
+  min-width: 320px;
+  color: #d4d4d8;
+}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 999px; }
+a { color: inherit; }
