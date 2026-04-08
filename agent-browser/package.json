@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit"
+    "lint": "tsc -b --noEmit"
   },
   "dependencies": {
     "@copilotkit/react-core": "^1.54.1",

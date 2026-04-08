@@ -27,7 +27,7 @@ import './App.css';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
 import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
-import { createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
+import { appendPendingLocalTurn, createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
 import type { ChatMessage, Extension, HFModel, HistorySession, TreeNode } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
@@ -176,6 +176,11 @@ function classifyOmnibar(raw: string): { intent: 'navigate' | 'search'; value: s
   return { intent: 'search', value };
 }
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
 function useToast() {
   const [toast, setToast] = useState<ToastState>(null);
   useEffect(() => {
@@ -234,13 +239,13 @@ function PageOverlay({ tab, onClose }: { tab: TreeNode; onClose: () => void }) {
   return (
     <section className="page-overlay" aria-label="Page overlay">
       <header className="page-toolbar">
-        <button type="button" className="icon-button"><Icon name="arrowLeft" /></button>
-        <button type="button" className="icon-button"><Icon name="arrowRight" /></button>
-        <button type="button" className="icon-button"><Icon name="refresh" /></button>
+        <button type="button" className="icon-button" aria-label="Back"><Icon name="arrowLeft" /></button>
+        <button type="button" className="icon-button" aria-label="Forward"><Icon name="arrowRight" /></button>
+        <button type="button" className="icon-button" aria-label="Refresh"><Icon name="refresh" /></button>
         <label className="address-bar"><Icon name="globe" size={12} color="#71717a" /><input aria-label="Address" value={address} onChange={(event) => setAddress(event.target.value)} /></label>
-        <button type="button" className={`icon-button ${showInspector ? 'active' : ''}`} onClick={() => setShowInspector((current) => !current)}><Icon name="cpu" /></button>
-        <button type="button" className={`icon-button ${showChat ? 'active' : ''}`} onClick={() => setShowChat((current) => !current)}><Icon name="messageSquare" /></button>
-        <button type="button" className="icon-button" onClick={onClose}><Icon name="x" /></button>
+        <button type="button" className={`icon-button ${showInspector ? 'active' : ''}`} aria-label="Toggle inspector" onClick={() => setShowInspector((current) => !current)}><Icon name="cpu" /></button>
+        <button type="button" className={`icon-button ${showChat ? 'active' : ''}`} aria-label="Toggle page chat" onClick={() => setShowChat((current) => !current)}><Icon name="messageSquare" /></button>
+        <button type="button" className="icon-button" aria-label="Close page overlay" onClick={onClose}><Icon name="x" /></button>
       </header>
       <div className="page-body">
         <div className="page-canvas">
@@ -277,8 +282,11 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     if (!text.trim()) return;
     const model = installedModels.find((entry) => entry.id === selectedModelId);
     const assistantId = createUniqueId();
-    const nextMessages: ChatMessage[] = [...messages, { id: createUniqueId(), role: 'user', content: text }, { id: assistantId, role: 'assistant', content: '', status: 'thinking' }];
-    setMessages(nextMessages);
+    let nextMessages: ChatMessage[] = [];
+    setMessages((current) => {
+      nextMessages = appendPendingLocalTurn(current, text, { userId: createUniqueId(), assistantId });
+      return nextMessages;
+    });
     setInput('');
 
     if (!model) {
@@ -346,7 +354,7 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
     } catch (error) {
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
-  }, [installedModels, messages, onToast, selectedModelId]);
+  }, [installedModels, onToast, selectedModelId]);
 
   useEffect(() => {
     if (!pendingSearch) return;
@@ -474,6 +482,7 @@ function AgentBrowserApp() {
   const [activePanel, setActivePanel] = useState<'workspaces' | 'chat' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
   const [registryTask, setRegistryTask] = useState('text-generation');
+  const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
   const [omnibar, setOmnibar] = useState('');
@@ -500,11 +509,29 @@ function AgentBrowserApp() {
   }, [activePanel, activeWorkspace, installedModels, openTab]);
 
   useEffect(() => {
-    void searchBrowserModels('', registryTask).then(setRegistryModels).catch((error) => setToast({ msg: error instanceof Error ? error.message : 'Registry search failed', type: 'error' }));
-  }, [registryTask]);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void searchBrowserModels(registryQuery, registryTask, 12, controller.signal)
+        .then(setRegistryModels)
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+          if (error instanceof Error && error.name === 'AbortError') return;
+          setToast({ msg: error instanceof Error ? error.message : 'Registry search failed', type: 'error' });
+        });
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [registryQuery, registryTask, setToast]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) {
+        if (event.key === 'Escape') setShowShortcuts(false);
+        return;
+      }
       if (event.key === '?') { setShowShortcuts(true); return; }
       if (activePanel !== 'workspaces') return;
       const index = visibleItems.findIndex((item) => item.node.id === cursorId);
@@ -589,7 +616,7 @@ function AgentBrowserApp() {
     if (activePanel === 'chat') return <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} />;
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel extensions={extensions} onToggle={(id) => setExtensions((current) => current.map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry))} />;
-    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={(query) => { void searchBrowserModels(query, registryTask).then(setRegistryModels).catch((error) => setToast({ msg: error instanceof Error ? error.message : 'Registry search failed', type: 'error' })); }} onInstall={installModel} />;
+    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 

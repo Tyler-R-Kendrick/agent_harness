@@ -23,3 +23,15 @@ export function toChatSdkTranscript(messages: ChatMessage[]): Array<Partial<Chat
 export function createCopilotBridgeSnapshot(messages: ChatMessage[]): Pick<CopilotKitProps, 'runtimeUrl'> & { messageCount: number } {
   return { runtimeUrl: COPILOT_RUNTIME_URL, messageCount: messages.length };
 }
+
+export function appendPendingLocalTurn(
+  messages: ChatMessage[],
+  text: string,
+  ids: { userId: string; assistantId: string },
+): ChatMessage[] {
+  return [
+    ...messages,
+    { id: ids.userId, role: 'user', content: text },
+    { id: ids.assistantId, role: 'assistant', content: '', status: 'thinking' },
+  ];
+}

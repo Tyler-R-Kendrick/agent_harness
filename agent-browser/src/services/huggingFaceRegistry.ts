@@ -31,11 +31,11 @@ function toModel(entry: Record<string, unknown>): HFModel {
   };
 }
 
-export async function searchBrowserModels(search: string, task: string, limit = 12): Promise<HFModel[]> {
+export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
   const url = new URL(HUGGING_FACE_MODELS_API);
   if (search.trim()) url.searchParams.set('search', search.trim());
   url.searchParams.set('limit', String(limit * 3));
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { signal });
   if (!response.ok) {
     throw new Error(`Hugging Face registry error: ${response.status}`);
   }
