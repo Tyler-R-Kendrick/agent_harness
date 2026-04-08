@@ -56,6 +56,7 @@ const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answer
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
+const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Exploration'],
   ['history', 'clock', 'History'],
@@ -687,7 +688,7 @@ function Toast({ toast }: { toast: ToastState }) {
 
 function AgentBrowserApp() {
   const { toast, setToast } = useToast();
-  const [root, setRoot] = useState<TreeNode>(() => createInitialRoot());
+  const [root, setRoot] = useState<TreeNode>(createInitialRoot);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
   const [activePanel, setActivePanel] = useState<'workspaces' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
@@ -701,7 +702,7 @@ function AgentBrowserApp() {
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles((root.children ?? []).map((workspace) => workspace.id)));
+  const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const visibleItems = useMemo(() => flattenTree(activeWorkspace), [activeWorkspace]);
