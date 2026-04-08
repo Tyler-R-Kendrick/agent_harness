@@ -187,6 +187,10 @@ function isStoredIntegration(value: unknown): value is Partial<IntegrationSurfac
   return Boolean(value && typeof value === 'object' && 'id' in value && typeof (value as { id?: unknown }).id === 'string');
 }
 
+function sanitizeBadges(value: unknown, fallback: string[]): string[] {
+  return Array.isArray(value) ? value.filter((badge: unknown): badge is string => typeof badge === 'string') : fallback;
+}
+
 function loadWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSurface[]> {
   const fallback = createDefaultWorkspaceIntegrations(root);
   if (typeof window === 'undefined') return fallback;
@@ -204,7 +208,7 @@ function loadWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSu
           ? {
               ...integration,
               enabled: typeof stored.enabled === 'boolean' ? stored.enabled : integration.enabled,
-              badges: Array.isArray(stored.badges) ? stored.badges.filter((badge: unknown): badge is string => typeof badge === 'string') : integration.badges,
+              badges: sanitizeBadges(stored.badges, integration.badges),
               description: typeof stored.description === 'string' ? stored.description : integration.description,
               source: typeof stored.source === 'string' ? stored.source : integration.source,
               constraint: typeof stored.constraint === 'string' ? stored.constraint : integration.constraint,
@@ -678,7 +682,10 @@ function AgentBrowserApp() {
   }, [registryQuery, registryTask, setToast]);
 
   useEffect(() => {
-    window.localStorage.setItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY, JSON.stringify(workspaceIntegrations));
+    const timer = window.setTimeout(() => {
+      window.localStorage.setItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY, JSON.stringify(workspaceIntegrations));
+    }, 120);
+    return () => window.clearTimeout(timer);
   }, [workspaceIntegrations]);
 
   useEffect(() => {
@@ -766,7 +773,7 @@ function AgentBrowserApp() {
             integrations={activeWorkspaceIntegrations}
             onToggle={(id) => setWorkspaceIntegrations((current) => ({
               ...current,
-              [activeWorkspaceId]: (current[activeWorkspaceId] ?? cloneIntegrations()).map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : { ...entry, badges: [...entry.badges] }),
+              [activeWorkspaceId]: (current[activeWorkspaceId] ?? cloneIntegrations()).map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry),
             }))}
           />
         </div>
