@@ -84,8 +84,11 @@ describe('App', () => {
     fireEvent.click(hooksToggle);
 
     expect(hooksToggle.checked).toBe(true);
-    expect(window.localStorage.getItem('agent-browser.workspace-integrations')).toContain('"id":"hooks"');
-    expect(window.localStorage.getItem('agent-browser.workspace-integrations')).toContain('"enabled":true');
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    const storedIntegrations = JSON.parse(window.localStorage.getItem('agent-browser.workspace-integrations') ?? '{}') as Record<string, Array<{ id: string; enabled: boolean }>>;
+    expect(storedIntegrations['ws-research']).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'hooks', enabled: true })]));
   });
 
   it('adds accessible labels to page overlay icon buttons', async () => {

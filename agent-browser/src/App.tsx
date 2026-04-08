@@ -84,7 +84,7 @@ const mockHistory: HistorySession[] = [
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
 
-const mockIntegrations: IntegrationSurface[] = [
+const defaultIntegrations: IntegrationSurface[] = [
   {
     id: 'agents-md',
     name: 'AGENTS.md',
@@ -138,7 +138,7 @@ const mockIntegrations: IntegrationSurface[] = [
   },
 ];
 
-function cloneIntegrations(integrations = mockIntegrations): IntegrationSurface[] {
+function cloneIntegrations(integrations = defaultIntegrations): IntegrationSurface[] {
   return integrations.map((integration) => ({ ...integration, badges: [...integration.badges] }));
 }
 
