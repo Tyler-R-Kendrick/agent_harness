@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent Browser</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#09090b">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    /* Reset + base */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body,#root{height:100%;overflow:hidden}
+    body{background:#09090b;color:#d4d4d8;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;font-size:13px}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px}
+    /* Keyframes */
+    @keyframes ping{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.2);opacity:.8}}
+    @keyframes fade-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes slide-up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+    @keyframes slide-in-from-right{from{transform:translateX(100%)}to{transform:translateX(0)}}
+    @keyframes indeterminate{0%{left:-30%;width:30%}100%{left:100%;width:30%}}
+    @keyframes switch-tree{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes token-in{from{opacity:0}to{opacity:1}}
+    @keyframes thinking-pulse{0%,100%{opacity:.4}50%{opacity:.8}}
+    @keyframes reasoning-border{0%,100%{border-color:rgba(167,139,250,.3)}50%{border-color:rgba(167,139,250,.8)}}
+    .shimmer{background:linear-gradient(90deg,rgba(255,255,255,.03) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.03) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+    .typing-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:#a78bfa;animation:blink 1.2s ease-in-out infinite}
+    .typing-dot:nth-child(2){animation-delay:.2s}
+    .typing-dot:nth-child(3){animation-delay:.4s}
+    .thinking-indicator{animation:thinking-pulse 2s ease-in-out infinite}
+    .stream-cursor::after{content:'▌';animation:blink .7s step-end infinite;color:#60a5fa;font-size:14px}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useCallback,useMemo,useRef,useEffect}=React;
+
+// SVG Icon component
+function I({d,size=16,color="currentColor",fill="none",sw=1.5,style}){
+  const paths=Array.isArray(d)?d:[d];
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" style={style}>
+    {paths.map((p,i)=><path key={i} d={p}/>)}
+  </svg>;
+}
+
+// Icon paths from Lucide (24x24 viewBox, stroke-based)
+const ic={
+  chevron:"M9 18l6-6-6-6",
+  arrowRight:"M5 12h14M12 5l7 7-7 7",
+  arrowLeft:"M19 12H5M12 19l-7-7 7-7",
+  arrowDown:"M12 5v14M5 12l7 7 7-7",
+  folder:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+  folderOpen:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2zM2 10h20",
+  layers:"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5",
+  package:"M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12",
+  fileText:"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8",
+  plus:"M12 5v14M5 12h14",
+  x:"M18 6 6 18M6 6l12 12",
+  search:"M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z",
+  download:"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3",
+  link:"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
+  send:"M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z",
+  trash:"M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2",
+  checkCircle:"M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3",
+  check:"M20 6 9 17l-5-5",
+  loader:["M12 2v4","M12 18v4","M4.93 4.93l2.83 2.83","M16.24 16.24l2.83 2.83","M2 12h4","M18 12h4","M4.93 19.07l2.83-2.83","M16.24 7.76l2.83-2.83"],
+  refreshCw:"M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15",
+  eye:"M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  eyeOff:"M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22",
+  settings:"M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z",
+  user:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  shield:"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  palette:"M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zM8.56 2.75c4.37 6.03 6.02 9.42 8.03 17.72m2.54-15.38c-3.72 4.35-8.94 5.66-16.88 5.85m19.5 1.9c-3.5-.93-6.63-.82-8.94 0-2.58.92-5.01 2.86-7.44 6.32",
+  keyboard:"M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zM8 9h8M8 13h5M8 17h.01M12 17h.01M16 17h.01",
+  terminal:"M4 17l6-6-6-6M12 19h8",
+  messageSquare:"M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
+  panelRight:"M3 3h18v18H3V3zM15 3v18",
+  desktops:"M2 3h20a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM8 21h8M12 17v4",
+  mouse:"M12 2a8 8 0 0 1 8 8v4a8 8 0 0 1-16 0v-4a8 8 0 0 1 8-8zM12 2v6",
+  clock:"M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM12 6v6l4 2",
+  image:"M21 15l-5-5L5 21M21 3H3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zM9 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
+  code:"M16 18l6-6-6-6M8 6L2 12l6 6",
+  cloud:"M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 1 0 0-10z",
+  cpu:"M9 2H7a2 2 0 0 0-2 2v2M9 22H7a2 2 0 0 0-2-2v-2M15 2h2a2 2 0 0 1 2 2v2M15 22h2a2 2 0 0 0 2-2v-2M2 9v2M2 13v2M22 9v2M22 13v2M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM9 9h6v6H9z",
+  key:"M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4",
+  hardDrive:"M22 12H2M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 17.76 4H6.24a2 2 0 0 0-1.79 1.11zM6 16h.01M10 16h.01",
+  play:"M5 3l14 9-14 9V3z",
+  sparkles:["M5 3l.75 1.875L7.625 5.75 5.75 6.625 5 8.5 4.25 6.625 2.375 5.75 4.25 4.875z","M19 8l1.25 3.125L23.375 12.5 20.25 13.875 19 17l-1.25-3.125L14.625 12.5 17.75 11.125z","M9 12l1 2.5 2.5 1-2.5 1L9 19l-1-2.5L5.5 15.5l2.5-1z"],
+  zap:"M13 2L3 14h9l-1 8 10-12h-9l1-8z",
+  snowflake:"M2 12h20M12 2v20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07",
+  puzzle:"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01",
+  alertTriangle:"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
+  cornerDownRight:"M15 10l5 5-5 5M4 4v7a4 4 0 0 0 4 4h12",
+  externalLink:"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3",
+  crosshair:"M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM12 8v8M8 12h8",
+  globe:"M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z",
+  bookmark:"M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z",
+  heart:"M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z",
+  tag:"M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01",
+  grip:"M9 3h1v1H9zM9 7h1v1H9zM9 11h1v1H9zM14 3h1v1h-1zM14 7h1v1h-1zM14 11h1v1h-1z",
+  hash:"M4 9h16M4 15h16M10 3L8 21M16 3l-2 18",
+  sun:"M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z",
+  monitor:"M2 3h20a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM8 21h8M12 17v4",
+  megaphone:"M3 11l19-9-9 19-2-8-8-2zM22 2L11 13",
+};
+
+// ── Configuration Data ──────────────────────────────────────────────────────
+
+const MODEL_PROVIDERS=[
+  {id:"anthropic",name:"Anthropic",color:"#f97316",status:"not_configured",apiKey:"",models:[
+    {id:"claude-3-5-sonnet-20241022",name:"Claude 3.5 Sonnet",enabled:true},
+    {id:"claude-3-5-haiku-20241022",name:"Claude 3.5 Haiku",enabled:true},
+    {id:"claude-3-opus-20240229",name:"Claude 3 Opus",enabled:false},
+  ]},
+  {id:"openai",name:"OpenAI",color:"#22c55e",status:"not_configured",apiKey:"",models:[
+    {id:"gpt-4o",name:"GPT-4o",enabled:true},
+    {id:"gpt-4o-mini",name:"GPT-4o Mini",enabled:true},
+    {id:"o1-preview",name:"o1 Preview",enabled:false},
+  ]},
+  {id:"google",name:"Google",color:"#3b82f6",status:"not_configured",apiKey:"",models:[
+    {id:"gemini-1.5-pro",name:"Gemini 1.5 Pro",enabled:true},
+    {id:"gemini-1.5-flash",name:"Gemini 1.5 Flash",enabled:true},
+  ]},
+  {id:"openrouter",name:"OpenRouter",color:"#8b5cf6",status:"not_configured",apiKey:"",models:[
+    {id:"meta-llama/llama-3.1-70b-instruct",name:"Llama 3.1 70B",enabled:true},
+    {id:"mistralai/mistral-7b-instruct",name:"Mistral 7B",enabled:true},
+  ]},
+  {id:"ollama",name:"Ollama",color:"#6b7280",status:"not_configured",apiKey:"",models:[
+    {id:"llama3.2",name:"Llama 3.2",enabled:true},
+    {id:"mistral",name:"Mistral",enabled:true},
+  ]},
+];
+
+const API_ENDPOINTS={
+  anthropic:{url:"https://api.anthropic.com/v1/messages",header:"x-api-key",prefix:""},
+  openai:{url:"https://api.openai.com/v1/chat/completions",header:"Authorization",prefix:"Bearer "},
+  google:{url:"https://generativelanguage.googleapis.com/v1beta/models",header:"x-goog-api-key",prefix:""},
+  openrouter:{url:"https://openrouter.ai/api/v1/chat/completions",header:"Authorization",prefix:"Bearer "},
+  ollama:{url:"http://localhost:11434/api/chat",header:"",prefix:""},
+};
+
+const SEED_MODELS=[
+  {id:"onnx-community/Qwen3-0.6B-ONNX",name:"Qwen3 0.6B",author:"onnx-community",task:"text-generation",downloads:15234,likes:89,tags:["onnx","text-generation"],sizeMB:620,status:"available"},
+  {id:"onnx-community/Qwen2.5-0.5B-Instruct",name:"Qwen2.5 0.5B Instruct",author:"onnx-community",task:"text-generation",downloads:8921,likes:45,tags:["onnx","text-generation"],sizeMB:450,status:"available"},
+  {id:"Xenova/distilbert-base-uncased-finetuned-sst-2-english",name:"DistilBERT SST-2",author:"Xenova",task:"text-classification",downloads:234567,likes:312,tags:["onnx","text-classification"],sizeMB:67,status:"available"},
+  {id:"Xenova/all-MiniLM-L6-v2",name:"All-MiniLM-L6",author:"Xenova",task:"feature-extraction",downloads:567890,likes:890,tags:["onnx","feature-extraction"],sizeMB:23,status:"available"},
+];
+
+// ── TJS Web Worker System ───────────────────────────────────────────────────
+
+// Babel won't transform code inside new Function strings
+const _dynamicImport=new Function("url","return import(url)");
+
+const WORKER_SRC=`
+const _imp=new Function("url","return import(url)");
+let pipelines={};
+self.onmessage=async function(e){
+  const {type,id,task,modelId,prompt,options}=e.data;
+  if(type==='ping'){self.postMessage({type:'pong',id});return;}
+  if(type==='load'){
+    try{
+      self.postMessage({type:'status',id,msg:'Loading transformers.js...'});
+      const {pipeline,TextStreamer}=await _imp('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+      const key=task+'::'+modelId;
+      if(!pipelines[key]){
+        self.postMessage({type:'phase',id,phase:'Downloading model...'});
+        pipelines[key]=await pipeline(task,modelId,{dtype:'q4',device:'wasm'});
+      }
+      self.postMessage({type:'status',id,msg:'ready'});
+    }catch(err){self.postMessage({type:'error',id,msg:err.message});}
+    return;
+  }
+  if(type==='generate'){
+    try{
+      const {pipeline,TextStreamer}=await _imp('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+      const key=task+'::'+modelId;
+      if(!pipelines[key]){
+        self.postMessage({type:'phase',id,phase:'Loading model...'});
+        pipelines[key]=await pipeline(task,modelId,{dtype:'q4',device:'wasm'});
+      }
+      const streamer=new TextStreamer(pipelines[key].tokenizer,{
+        skip_prompt:true,
+        callback_function:(token)=>self.postMessage({type:'token',id,token})
+      });
+      const opts={...{max_new_tokens:256,temperature:0.7,do_sample:true,top_p:0.9},...(options||{}),streamer};
+      const result=await pipelines[key](prompt,opts);
+      self.postMessage({type:'done',id,result});
+    }catch(err){self.postMessage({type:'error',id,msg:err.message});}
+  }
+};
+`;
+
+let _worker=null;
+let _workerReady=false;
+const _pendingCbs={};
+let _msgId=0;
+
+function _getWorker(){
+  if(_worker)return Promise.resolve(_worker);
+  return new Promise((resolve,reject)=>{
+    try{
+      const blob=new Blob([WORKER_SRC],{type:'application/javascript'});
+      const url=URL.createObjectURL(blob);
+      const w=new Worker(url);
+      const tid=setTimeout(()=>{w.terminate();reject(new Error('Worker timeout'));},10000);
+      w.onmessage=(e)=>{
+        if(e.data.type==='pong'){clearTimeout(tid);_worker=w;_workerReady=true;resolve(w);}
+        const cb=_pendingCbs[e.data.id];
+        if(cb)cb(e.data);
+      };
+      w.onerror=(e)=>{clearTimeout(tid);reject(e);};
+      w.postMessage({type:'ping',id:'init'});
+    }catch(e){reject(e);}
+  });
+}
+
+const TJS={
+  async loadModel(task,modelId,onStatus){
+    try{
+      const w=await _getWorker();
+      const id='load_'+(++_msgId);
+      return new Promise((res,rej)=>{
+        _pendingCbs[id]=(msg)=>{
+          if(msg.type==='status'){onStatus&&onStatus(msg.msg);if(msg.msg==='ready'){delete _pendingCbs[id];res();}}
+          else if(msg.type==='phase'){onStatus&&onStatus(msg.phase);}
+          else if(msg.type==='error'){delete _pendingCbs[id];rej(new Error(msg.msg));}
+        };
+        w.postMessage({type:'load',id,task,modelId});
+      });
+    }catch(e){
+      onStatus&&onStatus('Worker unavailable, using main thread');
+      const {pipeline}=await _dynamicImport('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+      if(!TJS._pipes)TJS._pipes={};
+      const key=task+'::'+modelId;
+      if(!TJS._pipes[key]){onStatus&&onStatus('Downloading model...');TJS._pipes[key]=await pipeline(task,modelId,{dtype:'q4'});}
+      onStatus&&onStatus('ready');
+    }
+  },
+  async generate({task,modelId,prompt,options},{onStatus,onPhase,onToken,onDone,onError}){
+    try{
+      const w=await _getWorker();
+      const id='gen_'+(++_msgId);
+      _pendingCbs[id]=(msg)=>{
+        if(msg.type==='status')onStatus&&onStatus(msg.msg);
+        else if(msg.type==='phase')onPhase&&onPhase(msg.phase);
+        else if(msg.type==='token')onToken&&onToken(msg.token);
+        else if(msg.type==='done'){delete _pendingCbs[id];onDone&&onDone(msg.result);}
+        else if(msg.type==='error'){delete _pendingCbs[id];onError&&onError(new Error(msg.msg));}
+      };
+      w.postMessage({type:'generate',id,task,modelId,prompt,options});
+    }catch(e){
+      onError&&onError(e);
+    }
+  }
+};
+
+// ── Tree Helper Functions ───────────────────────────────────────────────────
+
+function deepUpdate(node,id,fn){
+  if(node.id===id)return fn(node);
+  if(!node.children)return node;
+  return {...node,children:node.children.map(c=>deepUpdate(c,id,fn))};
+}
+function findNode(node,id){
+  if(node.id===id)return node;
+  if(!node.children)return null;
+  for(const c of node.children){const r=findNode(c,id);if(r)return r;}
+  return null;
+}
+function cntTabs(node){
+  if(node.type==='tab')return 1;
+  return(node.children||[]).reduce((a,c)=>a+cntTabs(c),0);
+}
+function sumMem(node){
+  if(node.type==='tab')return node.memoryMB||0;
+  return(node.children||[]).reduce((a,c)=>a+sumMem(c),0);
+}
+function flattenTabs(node){
+  if(node.type==='tab')return[node];
+  return(node.children||[]).flatMap(flattenTabs);
+}
+function getParentPath(root,id,path=[]){
+  if(root.id===id)return path;
+  for(const c of root.children||[]){
+    const r=getParentPath(c,id,[...path,root]);
+    if(r)return r;
+  }
+  return null;
+}
+function flattenTree(root,filter=''){
+  const items=[];
+  function walk(node,depth){
+    if(filter&&!node.name.toLowerCase().includes(filter.toLowerCase())){}
+    else items.push({node,depth});
+    if(node.expanded&&node.children)node.children.forEach(c=>walk(c,depth+1));
+  }
+  (root.children||[]).forEach(c=>walk(c,0));
+  return items;
+}
+
+// ── MCP Apps System ─────────────────────────────────────────────────────────
+
+const MCP_APPS={
+  task_tracker:{name:"Task Tracker",icon:"checkCircle",description:"Manage tasks in kanban board",
+    parameters:{type:"object",properties:{tasks:{type:"array",items:{type:"object",properties:{title:{type:"string"},status:{type:"string",enum:["todo","in_progress","done"]},priority:{type:"string",enum:["low","medium","high"]}},required:["title","status"]}}},required:["tasks"]}},
+  image_viewer:{name:"Image Viewer",icon:"image",description:"Display an image with caption",
+    parameters:{type:"object",properties:{url:{type:"string"},caption:{type:"string"}},required:["url"]}},
+  gallery:{name:"Gallery",icon:"image",description:"Display multiple images",
+    parameters:{type:"object",properties:{images:{type:"array",items:{type:"object",properties:{url:{type:"string"},caption:{type:"string"}}}}},required:["images"]}},
+  video_player:{name:"Video Player",icon:"play",description:"Embed a video",
+    parameters:{type:"object",properties:{url:{type:"string"},title:{type:"string"}},required:["url"]}},
+  notes:{name:"Notes",icon:"fileText",description:"Markdown notes viewer",
+    parameters:{type:"object",properties:{content:{type:"string"},title:{type:"string"}},required:["content"]}},
+  data_table:{name:"Data Table",icon:"layers",description:"Display tabular data",
+    parameters:{type:"object",properties:{columns:{type:"array",items:{type:"string"}},rows:{type:"array",items:{type:"array"}}},required:["columns","rows"]}},
+};
+
+function buildMcpTools(format='anthropic'){
+  return Object.entries(MCP_APPS).map(([id,app])=>
+    format==='anthropic'
+      ?{name:id,description:app.description,input_schema:app.parameters}
+      :{name:id,description:app.description,parameters:app.parameters}
+  );
+}
+
+async function callLLM(provider,apiKey,model,messages){
+  const ep=API_ENDPOINTS[provider.id];
+  if(!ep)throw new Error('Unknown provider');
+  const headers={'Content-Type':'application/json'};
+  if(ep.header)headers[ep.header]=ep.prefix+apiKey;
+  let body;
+  if(provider.id==='anthropic'){
+    body={model,max_tokens:1024,messages,tools:buildMcpTools('anthropic')};
+  } else {
+    body={model,messages,functions:buildMcpTools('openai'),function_call:'auto'};
+  }
+  const r=await fetch(ep.url,{method:'POST',headers,body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(`API error ${r.status}`);
+  return r.json();
+}
+
+// ── Memory Tier Helpers ─────────────────────────────────────────────────────
+
+const TIERS={hot:{color:"#f87171",label:"Hot"},warm:{color:"#fbbf24",label:"Warm"},cool:{color:"#60a5fa",label:"Cool"},cold:{color:"#52525b",label:"Cold"}};
+
+function MemBar({root}){
+  const tabs=flattenTabs(root);
+  const total=Math.max(1,tabs.reduce((a,t)=>a+(t.memoryMB||0),0));
+  const buckets=Object.keys(TIERS).map(k=>({
+    tier:k,mb:tabs.filter(t=>t.memoryTier===k).reduce((a,t)=>a+(t.memoryMB||0),0),
+    color:TIERS[k].color
+  }));
+  return <div style={{display:'flex',height:4,borderRadius:2,overflow:'hidden',gap:1,background:'rgba(255,255,255,.06)'}}>
+    {buckets.map(b=>b.mb>0&&<div key={b.tier} style={{width:`${(b.mb/total)*100}%`,background:b.color,transition:'width .3s'}}/>)}
+  </div>;
+}
+
+// ── Omnibar Classification ──────────────────────────────────────────────────
+
+function classifyOmni(raw){
+  const s=raw.trim();
+  if(/^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(s))return{intent:'navigate',url:s,query:''};
+  if(/^localhost(:\d+)?(\/.*)?$/.test(s))return{intent:'navigate',url:'http://'+s,query:''};
+  if(/^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/.*)?$/.test(s))return{intent:'navigate',url:'https://'+s,query:''};
+  return{intent:'search',url:'',query:s};
+}
+
+// ── Initial Tree Data ───────────────────────────────────────────────────────
+
+function mkId(){return Math.random().toString(36).slice(2);}
+const INIT_TREE={
+  id:'root',type:'root',name:'Root',children:[
+    {id:mkId(),type:'workspace',name:'Research',expanded:true,color:'#60a5fa',activeMemory:true,children:[
+      {id:mkId(),type:'tab',name:'GitHub',url:'https://github.com',memoryTier:'hot',memoryMB:180,persisted:true},
+      {id:mkId(),type:'tab',name:'HuggingFace',url:'https://huggingface.co',memoryTier:'warm',memoryMB:90,persisted:false},
+    ]},
+    {id:mkId(),type:'workspace',name:'Dev',expanded:false,color:'#34d399',activeMemory:false,children:[
+      {id:mkId(),type:'tab',name:'Stack Overflow',url:'https://stackoverflow.com',memoryTier:'cool',memoryMB:40,persisted:false},
+    ]},
+  ]
+};
+
+// ── ThinkingBlock ───────────────────────────────────────────────────────────
+
+function ThinkingBlock({content,duration,isThinking}){
+  const [open,setOpen]=useState(isThinking);
+  useEffect(()=>{if(isThinking)setOpen(true);},[isThinking]);
+  const s={border:'1px solid',borderRadius:6,marginBottom:8,overflow:'hidden'};
+  if(isThinking)return<div style={{...s,borderColor:'rgba(167,139,250,.4)',background:'rgba(167,139,250,.05)'}}>
+    <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px'}}>
+      <I d={ic.loader} size={13} color="#a78bfa" style={{animation:'spin 1s linear infinite'}}/>
+      <span style={{fontSize:11,color:'#a78bfa',fontWeight:500}} className="thinking-indicator">Thinking</span>
+    </div>
+    {content&&<div style={{padding:'0 10px 8px',fontSize:11.5,color:'#a1a1aa',lineHeight:1.5,maxHeight:300,overflowY:'auto',borderTop:'1px solid rgba(167,139,250,.2)',paddingTop:6}}>
+      <span>{content}</span><span className="stream-cursor"/>
+    </div>}
+  </div>;
+  if(!content)return null;
+  return<div style={{...s,borderColor:'rgba(167,139,250,.2)',background:'rgba(167,139,250,.03)'}}>
+    <div onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',cursor:'pointer',userSelect:'none'}}>
+      <I d={ic.sparkles} size={13} color="#a78bfa"/>
+      <span style={{fontSize:11,color:'#a78bfa',flex:1}}>Thought for {duration||0}s</span>
+      <I d={ic.chevron} size={12} color="#a78bfa" style={{transform:open?'rotate(90deg)':'rotate(0deg)',transition:'transform .2s'}}/>
+    </div>
+    {open&&<div style={{padding:'0 10px 8px',fontSize:11.5,color:'#a1a1aa',lineHeight:1.6,maxHeight:400,overflowY:'auto',borderTop:'1px solid rgba(167,139,250,.15)',paddingTop:6}}>
+      {content}
+    </div>}
+  </div>;
+}
+
+// ── MCP Renderers ───────────────────────────────────────────────────────────
+
+function McpTaskTracker({tasks=[]}){
+  const cols=['todo','in_progress','done'];
+  const labels={todo:'To Do',in_progress:'In Progress',done:'Done'};
+  const priorityColor={low:'#34d399',medium:'#fbbf24',high:'#f87171'};
+  return<div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,padding:12}}>
+    {cols.map(col=><div key={col} style={{background:'rgba(255,255,255,.04)',borderRadius:6,padding:8}}>
+      <div style={{fontSize:10,fontWeight:600,color:'#a1a1aa',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>{labels[col]}</div>
+      {tasks.filter(t=>t.status===col).map((t,i)=><div key={i} style={{background:'rgba(255,255,255,.05)',borderRadius:4,padding:'6px 8px',marginBottom:6,borderLeft:`3px solid ${priorityColor[t.priority||'medium']}`}}>
+        <div style={{fontSize:12,color:'#d4d4d8'}}>{t.title}</div>
+      </div>)}
+    </div>)}
+  </div>;
+}
+function McpImageViewer({url,caption}){
+  return<div style={{padding:12,textAlign:'center'}}>
+    <img src={url} alt={caption||''} style={{maxWidth:'100%',maxHeight:300,borderRadius:6,objectFit:'contain'}}/>
+    {caption&&<div style={{fontSize:11,color:'#a1a1aa',marginTop:6}}>{caption}</div>}
+  </div>;
+}
+function McpGallery({images=[]}){
+  return<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:8,padding:12}}>
+    {images.map((img,i)=><div key={i} style={{borderRadius:6,overflow:'hidden'}}>
+      <img src={img.url} alt={img.caption||''} style={{width:'100%',height:100,objectFit:'cover'}}/>
+      {img.caption&&<div style={{fontSize:10,color:'#a1a1aa',padding:'3px 4px'}}>{img.caption}</div>}
+    </div>)}
+  </div>;
+}
+function McpVideoPlayer({url,title}){
+  const embedUrl=url.includes('youtube.com/watch?v=')?url.replace('watch?v=','embed/'):url.includes('youtu.be/')?url.replace('youtu.be/','youtube.com/embed/'):url;
+  return<div style={{padding:12}}>
+    {title&&<div style={{fontSize:12,color:'#d4d4d8',marginBottom:8,fontWeight:500}}>{title}</div>}
+    <iframe src={embedUrl} style={{width:'100%',height:200,border:'none',borderRadius:6}} allowFullScreen/>
+  </div>;
+}
+function McpNotes({content,title}){
+  function renderMd(text){
+    return text.split('\n').map((line,i)=>{
+      if(line.startsWith('## '))return<h3 key={i} style={{fontSize:13,fontWeight:600,color:'#e4e4e7',margin:'8px 0 4px'}}>{line.slice(3)}</h3>;
+      if(line.startsWith('# '))return<h2 key={i} style={{fontSize:14,fontWeight:700,color:'#e4e4e7',margin:'8px 0 4px'}}>{line.slice(2)}</h2>;
+      if(line.startsWith('- '))return<div key={i} style={{display:'flex',gap:6,marginBottom:3}}><span style={{color:'#60a5fa'}}>•</span><span style={{fontSize:12,color:'#d4d4d8'}}>{line.slice(2)}</span></div>;
+      if(!line.trim())return<div key={i} style={{height:8}}/>;
+      return<p key={i} style={{fontSize:12,color:'#d4d4d8',marginBottom:4,lineHeight:1.5}}>{line}</p>;
+    });
+  }
+  return<div style={{padding:12}}>
+    {title&&<div style={{fontSize:13,fontWeight:600,color:'#e4e4e7',marginBottom:10,borderBottom:'1px solid rgba(255,255,255,.08)',paddingBottom:8}}>{title}</div>}
+    <div style={{maxHeight:300,overflowY:'auto'}}>{renderMd(content)}</div>
+  </div>;
+}
+function McpDataTable({columns=[],rows=[]}){
+  return<div style={{padding:12,overflowX:'auto'}}>
+    <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+      <thead><tr>{columns.map((c,i)=><th key={i} style={{textAlign:'left',padding:'4px 8px',color:'#a1a1aa',fontWeight:500,borderBottom:'1px solid rgba(255,255,255,.1)'}}>{c}</th>)}</tr></thead>
+      <tbody>{rows.map((row,i)=><tr key={i} style={{background:i%2?'rgba(255,255,255,.02)':'transparent'}}>{row.map((cell,j)=><td key={j} style={{padding:'4px 8px',color:'#d4d4d8',borderBottom:'1px solid rgba(255,255,255,.06)'}}>{cell}</td>)}</tr>)}</tbody>
+    </table>
+  </div>;
+}
+const MCP_RENDERS={task_tracker:McpTaskTracker,image_viewer:McpImageViewer,gallery:McpGallery,video_player:McpVideoPlayer,notes:McpNotes,data_table:McpDataTable};
+
+// ── ChatMessage ─────────────────────────────────────────────────────────────
+
+function ChatMessage({msg}){
+  const isUser=msg.role==='user';
+  const isSys=msg.role==='system';
+  const bubbleStyle={
+    maxWidth:'80%',padding:'8px 12px',borderRadius:8,fontSize:13,lineHeight:1.6,
+    background:isUser?'#1e3a5f':isSys?'rgba(255,255,255,.04)':'rgba(255,255,255,.05)',
+    color:isUser?'#93c5fd':isSys?'#6b7280':'#d4d4d8',
+    alignSelf:isUser?'flex-end':'flex-start',
+    border:isUser?'1px solid rgba(96,165,250,.2)':'1px solid rgba(255,255,255,.06)',
+    animation:'fade-in .2s ease-out',
+  };
+  const content=msg.streamedContent||msg.content||'';
+  return<div style={{display:'flex',flexDirection:'column',alignItems:isUser?'flex-end':'flex-start',marginBottom:12,gap:4}}>
+    {msg.isThinking||msg.thinkingContent?<ThinkingBlock content={msg.thinkingContent} duration={msg.thinkingDuration} isThinking={msg.isThinking}/>:null}
+    {msg.status==='thinking'&&!msg.thinkingContent&&!msg.isThinking&&<div style={{display:'flex',gap:4,padding:'8px 12px',background:'rgba(255,255,255,.04)',borderRadius:8,alignSelf:'flex-start'}}>
+      <span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/>
+    </div>}
+    {content&&<div style={bubbleStyle}>
+      {content}
+      {msg.status==='streaming'&&!msg.isThinking&&<span className="stream-cursor"/>}
+    </div>}
+    {msg.statusText&&<div style={{fontSize:10,color:'#6b7280',alignSelf:'flex-start',paddingLeft:2}}>{msg.statusText}</div>}
+    {msg.loadingStatus&&<div style={{fontSize:10,color:'#a78bfa',alignSelf:'flex-start',display:'flex',alignItems:'center',gap:4}}>
+      <I d={ic.loader} size={10} color="#a78bfa" style={{animation:'spin 1s linear infinite'}}/>
+      {msg.loadingStatus}
+    </div>}
+    {msg.cards&&msg.cards.map((card,i)=>{
+      const Comp=MCP_RENDERS[card.app];
+      return Comp?<div key={i} style={{background:'rgba(255,255,255,.04)',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',width:'min(90%,400px)',alignSelf:'flex-start',overflow:'hidden',marginTop:4}}>
+        <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
+          <I d={ic[MCP_APPS[card.app]?.icon||'layers']} size={12} color="#60a5fa"/>
+          <span style={{fontSize:11,color:'#d4d4d8',fontWeight:500}}>{MCP_APPS[card.app]?.name||card.app}</span>
+          <span style={{fontSize:9,background:'rgba(96,165,250,.15)',color:'#60a5fa',borderRadius:3,padding:'1px 4px',marginLeft:'auto'}}>MCP</span>
+        </div>
+        <Comp {...card.args}/>
+      </div>:null;
+    })}
+  </div>;
+}
+
+// ── ChatInterface ───────────────────────────────────────────────────────────
+
+function ChatInterface({ws,providers,onTabCreate}){
+  const [msgs,setMsgs]=useState([{id:'s1',role:'system',content:'Agent browser ready. Ask me anything or navigate to a URL.'}]);
+  const [input,setInput]=useState('');
+  const [selProv,setSelProv]=useState('local');
+  const [selModel,setSelModel]=useState(SEED_MODELS[0]?.id||'');
+  const bottomRef=useRef(null);
+  const taRef=useRef(null);
+
+  useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:'smooth'});},[msgs]);
+
+  function updateMsg(id,patch){
+    setMsgs(m=>m.map(msg=>msg.id===id?{...msg,...patch}:msg));
+  }
+
+  async function doSend(text,isSearch=false){
+    if(!text.trim())return;
+    const userMsg={id:mkId(),role:'user',content:isSearch?`Search: ${text}`:text};
+    const asstId=mkId();
+    setMsgs(m=>[...m,userMsg,{id:asstId,role:'assistant',content:'',status:'thinking',streamedContent:''}]);
+    setInput('');
+
+    if(selProv==='local'){
+      let tokenBuf='',thinkingBuf='',inThink=false,thinkStart=0;
+      const chatMsgs=[
+        {role:'system',content:'You are a helpful AI assistant in an agent-first browser. Be concise and helpful.'},
+        ...msgs.filter(m=>m.role!=='system').slice(-6).map(m=>({role:m.role,content:m.content||m.streamedContent||''})),
+        {role:'user',content:text}
+      ];
+      try{
+        await TJS.generate({task:'text-generation',modelId:selModel,prompt:chatMsgs,options:{max_new_tokens:256}},{
+          onStatus:(s)=>updateMsg(asstId,{loadingStatus:s}),
+          onPhase:(p)=>updateMsg(asstId,{statusText:p}),
+          onToken:(token)=>{
+            if(!inThink&&token.includes('<think>')){
+              inThink=true;thinkStart=Date.now();
+              const after=token.split('<think>')[1]||'';
+              thinkingBuf+=after;
+              updateMsg(asstId,{isThinking:true,thinkingContent:thinkingBuf,status:'streaming'});
+            } else if(inThink){
+              const closeTag="<\/think>";
+              if(token.includes(closeTag)){
+                const parts=token.split(closeTag);
+                thinkingBuf+=parts[0];
+                inThink=false;
+                const dur=Math.round((Date.now()-thinkStart)/1000);
+                tokenBuf+=parts.slice(1).join('');
+                updateMsg(asstId,{isThinking:false,thinkingDuration:dur,thinkingContent:thinkingBuf,streamedContent:tokenBuf.replace(/<think>[\s\S]*?<\/think>/g,'').replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g,'').trim()});
+              } else {
+                thinkingBuf+=token;
+                updateMsg(asstId,{thinkingContent:thinkingBuf});
+              }
+            } else {
+              tokenBuf+=token;
+              updateMsg(asstId,{streamedContent:tokenBuf.replace(/<think>[\s\S]*?<\/think>/g,'').replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g,'').trim(),status:'streaming'});
+            }
+          },
+          onDone:()=>{
+            const final=tokenBuf.replace(/<think>[\s\S]*?<\/think>/g,'').replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g,'').trim();
+            updateMsg(asstId,{streamedContent:final,status:'complete',loadingStatus:null,statusText:null});
+          },
+          onError:(e)=>updateMsg(asstId,{content:'Error: '+e.message,status:'error',streamedContent:''})
+        });
+      }catch(e){updateMsg(asstId,{content:'Error: '+e.message,status:'error',streamedContent:''});}
+    } else {
+      const prov=providers.find(p=>p.id===selProv);
+      if(!prov?.apiKey){updateMsg(asstId,{content:'Please configure API key in Settings.',status:'error',streamedContent:''});return;}
+      const model=prov.models.find(m=>m.enabled)?.id||prov.models[0]?.id||'';
+      const chatMsgs=[
+        {role:'user',content:text}
+      ];
+      try{
+        updateMsg(asstId,{loadingStatus:'Calling API...'});
+        const resp=await callLLM(prov,prov.apiKey,model,chatMsgs);
+        let content='',cards=[];
+        if(prov.id==='anthropic'){
+          for(const blk of resp.content||[]){
+            if(blk.type==='text')content+=blk.text;
+            else if(blk.type==='tool_use'&&MCP_RENDERS[blk.name]){cards.push({app:blk.name,args:blk.input});}
+          }
+        } else {
+          const choice=resp.choices?.[0];
+          content=choice?.message?.content||'';
+          if(choice?.message?.function_call){
+            try{const args=JSON.parse(choice.message.function_call.arguments||'{}');cards.push({app:choice.message.function_call.name,args});}catch(e){}
+          }
+        }
+        updateMsg(asstId,{streamedContent:content,status:'complete',cards,loadingStatus:null});
+      }catch(e){updateMsg(asstId,{content:'API Error: '+e.message,status:'error',streamedContent:''});}
+    }
+  }
+
+  function handleKey(e){
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();doSend(input);}
+  }
+  function autoResize(e){
+    e.target.style.height='auto';
+    e.target.style.height=Math.min(e.target.scrollHeight,120)+'px';
+  }
+
+  const enabledProvs=providers.filter(p=>p.status==='connected');
+  return<div style={{display:'flex',flexDirection:'column',height:'100%',background:'#09090b'}}>
+    {/* Header */}
+    <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 16px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+      <I d={ic.messageSquare} size={14} color="#60a5fa"/>
+      <span style={{fontSize:12,fontWeight:600,color:'#e4e4e7',flex:1}}>Chat</span>
+      <select value={selProv} onChange={e=>setSelProv(e.target.value)} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:4,color:'#d4d4d8',fontSize:11,padding:'2px 6px',cursor:'pointer'}}>
+        <option value="local">🤖 Local</option>
+        {enabledProvs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      {selProv==='local'&&<select value={selModel} onChange={e=>setSelModel(e.target.value)} style={{background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:4,color:'#d4d4d8',fontSize:11,padding:'2px 6px',cursor:'pointer',maxWidth:160}}>
+        {SEED_MODELS.filter(m=>m.status==='installed').concat(SEED_MODELS).map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+      </select>}
+    </div>
+    {/* Messages */}
+    <div style={{flex:1,overflowY:'auto',padding:'16px',display:'flex',flexDirection:'column'}}>
+      {msgs.map(m=><ChatMessage key={m.id} msg={m}/>)}
+      <div ref={bottomRef}/>
+    </div>
+    {/* Input */}
+    <div style={{padding:'12px 16px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',gap:8,alignItems:'flex-end',flexShrink:0}}>
+      <textarea ref={taRef} value={input} onChange={e=>{setInput(e.target.value);autoResize(e);}} onKeyDown={handleKey}
+        placeholder="Message or navigate to URL..." rows={1}
+        style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:6,color:'#d4d4d8',fontSize:13,padding:'7px 10px',resize:'none',outline:'none',fontFamily:'inherit',lineHeight:1.5}}/>
+      <button onClick={()=>doSend(input)} style={{background:'#1d4ed8',border:'none',borderRadius:6,color:'white',padding:'7px 12px',cursor:'pointer',display:'flex',alignItems:'center',gap:4,fontSize:12,flexShrink:0}}>
+        <I d={ic.send} size={13} color="white"/>
+      </button>
+    </div>
+  </div>;
+}
+
+// ── TabRow ──────────────────────────────────────────────────────────────────
+
+function TabRow({tab,depth=0,isActive,isCursor,isSelected,onClick,onClose,onDragStart,onDragOver,onDrop}){
+  const tier=TIERS[tab.memoryTier]||TIERS.cold;
+  return<div
+    draggable
+    onDragStart={e=>onDragStart&&onDragStart(e,tab.id)}
+    onDragOver={e=>{e.preventDefault();onDragOver&&onDragOver(e,tab.id);}}
+    onDrop={e=>onDrop&&onDrop(e,tab.id)}
+    onClick={()=>onClick&&onClick(tab)}
+    style={{
+      display:'flex',alignItems:'center',gap:6,padding:`4px 8px 4px ${8+depth*16}px`,
+      cursor:'pointer',borderRadius:4,
+      background:isCursor?'rgba(96,165,250,.15)':isActive?'rgba(255,255,255,.08)':isSelected?'rgba(96,165,250,.08)':'transparent',
+      border:isCursor?'1px solid rgba(96,165,250,.3)':'1px solid transparent',
+      userSelect:'none',position:'relative',
+    }}>
+    <div style={{width:6,height:6,borderRadius:'50%',background:tier.color,flexShrink:0,boxShadow:`0 0 4px ${tier.color}60`}}/>
+    <span style={{fontSize:11,color:'#a1a1aa',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tab.name}</span>
+    {tab.memoryMB&&<span style={{fontSize:9,color:'#52525b',flexShrink:0}}>{tab.memoryMB}MB</span>}
+    <button onClick={e=>{e.stopPropagation();onClose&&onClose(tab.id);}} style={{background:'none',border:'none',padding:2,cursor:'pointer',color:'#52525b',display:'flex',opacity:.5,flexShrink:0}}>
+      <I d={ic.x} size={10} color="#a1a1aa"/>
+    </button>
+  </div>;
+}
+
+// ── WsFolder ────────────────────────────────────────────────────────────────
+
+function WsFolder({node,depth=0,cursorId,activeTabIds,selectedIds,onToggle,onTabClick,onTabClose,onDragStart,onDragOver,onDrop}){
+  const tabCount=cntTabs(node);
+  const memMB=sumMem(node);
+  return<div style={{animation:'switch-tree .15s ease-out'}}>
+    <div onClick={()=>onToggle&&onToggle(node.id)}
+      style={{display:'flex',alignItems:'center',gap:6,padding:`5px 8px 5px ${8+depth*16}px`,cursor:'pointer',borderRadius:4,userSelect:'none'}}
+      onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
+      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+      <I d={ic.chevron} size={12} color="#6b7280" style={{transform:node.expanded?'rotate(90deg)':'rotate(0deg)',transition:'transform .15s',flexShrink:0}}/>
+      <I d={node.expanded?ic.folderOpen:ic.folder} size={13} color={node.color||'#60a5fa'} fill={node.color?node.color+'20':'none'}/>
+      <span style={{fontSize:12,color:'#d4d4d8',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:500}}>{node.name}</span>
+      <span style={{fontSize:9,color:'#52525b',flexShrink:0}}>{tabCount}t</span>
+      {memMB>0&&<span style={{fontSize:9,color:'#52525b',flexShrink:0}}>{memMB}MB</span>}
+    </div>
+    {node.expanded&&<div>
+      {(node.children||[]).map(c=>c.type==='tab'
+        ?<TabRow key={c.id} tab={c} depth={depth+1} isActive={activeTabIds?.includes(c.id)} isCursor={cursorId===c.id} isSelected={selectedIds?.includes(c.id)} onClick={onTabClick} onClose={onTabClose} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}/>
+        :<WsFolder key={c.id} node={c} depth={depth+1} cursorId={cursorId} activeTabIds={activeTabIds} selectedIds={selectedIds} onToggle={onToggle} onTabClick={onTabClick} onTabClose={onTabClose} onDragStart={onDragStart} onDragOver={onDragOver} onDrop={onDrop}/>
+      )}
+    </div>}
+  </div>;
+}
+
+// ── Sidebar Panels ──────────────────────────────────────────────────────────
+
+function HFModelCard({model,onInstall,onDelete}){
+  const [loading,setLoading]=useState(false);
+  const [status,setStatus]=useState(model.status||'available');
+  async function install(){
+    setLoading(true);
+    try{await TJS.loadModel(model.task,model.id,(s)=>setStatus(s));}
+    catch(e){setStatus('error: '+e.message);}
+    finally{setLoading(false);setStatus('installed');}
+  }
+  return<div style={{background:'rgba(255,255,255,.04)',borderRadius:6,padding:10,border:'1px solid rgba(255,255,255,.08)',marginBottom:6}}>
+    <div style={{display:'flex',alignItems:'flex-start',gap:8}}>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12,color:'#d4d4d8',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{model.name}</div>
+        <div style={{fontSize:10,color:'#6b7280',marginTop:2}}>{model.author} · {model.task}</div>
+        <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
+          <span style={{fontSize:9,color:'#52525b'}}>⬇ {(model.downloads||0).toLocaleString()}</span>
+          <span style={{fontSize:9,color:'#52525b'}}>♥ {model.likes||0}</span>
+          {model.sizeMB&&<span style={{fontSize:9,color:'#52525b'}}>{model.sizeMB}MB</span>}
+        </div>
+      </div>
+      <button onClick={status==='installed'?()=>onDelete&&onDelete(model.id):install}
+        disabled={loading}
+        style={{background:status==='installed'?'rgba(248,113,113,.15)':'rgba(96,165,250,.15)',border:'none',borderRadius:4,color:status==='installed'?'#f87171':'#60a5fa',fontSize:10,padding:'3px 8px',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',gap:3}}>
+        {loading?<I d={ic.loader} size={10} color="#60a5fa" style={{animation:'spin 1s linear infinite'}}/>:
+          status==='installed'?<><I d={ic.trash} size={10}/> Delete</>:<><I d={ic.download} size={10}/> Install</>}
+      </button>
+    </div>
+    {loading&&status&&<div style={{fontSize:10,color:'#a78bfa',marginTop:6,display:'flex',alignItems:'center',gap:4}}>
+      <I d={ic.loader} size={9} style={{animation:'spin 1s linear infinite'}} color="#a78bfa"/>
+      {status}
+    </div>}
+  </div>;
+}
+
+function SettingsPanel({providers,setProviders}){
+  const [expanded,setExpanded]=useState(null);
+  const [showKeys,setShowKeys]=useState({});
+  const [hfSearch,setHfSearch]=useState('');
+  const [hfResults,setHfResults]=useState([]);
+  const [hfTask,setHfTask]=useState('text-generation');
+  const [installedModels,setInstalledModels]=useState([]);
+  const searchTimer=useRef(null);
+
+  function searchHF(q,task){
+    clearTimeout(searchTimer.current);
+    searchTimer.current=setTimeout(async()=>{
+      if(!q.trim()){setHfResults([]);return;}
+      try{
+        const r=await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(q)}&filter=onnx,${task}&limit=10`);
+        const data=await r.json();
+        setHfResults(data.map(m=>({id:m.modelId||m.id,name:m.id.split('/')[1]||m.id,author:m.id.split('/')[0],task:m.pipeline_tag||task,downloads:m.downloads||0,likes:m.likes||0,sizeMB:null,status:'available'})));
+      }catch(e){}
+    },350);
+  }
+
+  const tasks=['text-generation','text-classification','question-answering','feature-extraction','translation','summarization'];
+  return<div style={{padding:'12px',overflowY:'auto',flex:1}}>
+    <div style={{fontSize:11,fontWeight:600,color:'#a1a1aa',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:12}}>Cloud Providers</div>
+    {providers.map(prov=><div key={prov.id} style={{marginBottom:6,background:'rgba(255,255,255,.04)',borderRadius:6,border:'1px solid rgba(255,255,255,.08)',overflow:'hidden'}}>
+      <div onClick={()=>setExpanded(expanded===prov.id?null:prov.id)} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',cursor:'pointer'}}>
+        <div style={{width:8,height:8,borderRadius:'50%',background:prov.color,flexShrink:0}}/>
+        <span style={{fontSize:12,color:'#d4d4d8',flex:1,fontWeight:500}}>{prov.name}</span>
+        <span style={{fontSize:9,borderRadius:3,padding:'1px 5px',background:prov.status==='connected'?'rgba(52,211,153,.15)':'rgba(255,255,255,.08)',color:prov.status==='connected'?'#34d399':'#6b7280'}}>{prov.status==='connected'?'Connected':'Not configured'}</span>
+        <I d={ic.chevron} size={12} color="#6b7280" style={{transform:expanded===prov.id?'rotate(90deg)':'rotate(0)',transition:'transform .15s'}}/>
+      </div>
+      {expanded===prov.id&&<div style={{padding:'0 10px 10px',borderTop:'1px solid rgba(255,255,255,.06)'}}>
+        <div style={{display:'flex',gap:6,marginTop:8,marginBottom:8}}>
+          <input type={showKeys[prov.id]?'text':'password'} placeholder={`${prov.name} API key`}
+            value={prov.apiKey} onChange={e=>setProviders(ps=>ps.map(p=>p.id===prov.id?{...p,apiKey:e.target.value}:p))}
+            style={{flex:1,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:4,color:'#d4d4d8',fontSize:11,padding:'4px 8px',outline:'none'}}/>
+          <button onClick={()=>setShowKeys(k=>({...k,[prov.id]:!k[prov.id]}))} style={{background:'none',border:'1px solid rgba(255,255,255,.1)',borderRadius:4,color:'#6b7280',padding:'4px 6px',cursor:'pointer'}}>
+            <I d={showKeys[prov.id]?ic.eyeOff:ic.eye} size={12}/>
+          </button>
+        </div>
+        <div style={{marginBottom:8}}>
+          {prov.models.map(m=><label key={m.id} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4,cursor:'pointer'}}>
+            <input type="checkbox" checked={m.enabled} onChange={e=>setProviders(ps=>ps.map(p=>p.id===prov.id?{...p,models:p.models.map(mm=>mm.id===m.id?{...mm,enabled:e.target.checked}:mm)}:p))}/>
+            <span style={{fontSize:11,color:'#d4d4d8'}}>{m.name}</span>
+          </label>)}
+        </div>
+        <button onClick={()=>setProviders(ps=>ps.map(p=>p.id===prov.id?{...p,status:p.apiKey?'connected':'not_configured'}:p))}
+          style={{background:'rgba(96,165,250,.15)',border:'none',borderRadius:4,color:'#60a5fa',fontSize:11,padding:'4px 10px',cursor:'pointer',width:'100%'}}>
+          Save
+        </button>
+      </div>}
+    </div>)}
+    <div style={{fontSize:11,fontWeight:600,color:'#a1a1aa',textTransform:'uppercase',letterSpacing:'.5px',margin:'16px 0 8px'}}>Local Models</div>
+    <div style={{display:'flex',gap:6,marginBottom:8}}>
+      <div style={{flex:1,display:'flex',gap:4,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',borderRadius:4,padding:'4px 8px',alignItems:'center'}}>
+        <I d={ic.search} size={12} color="#6b7280"/>
+        <input value={hfSearch} onChange={e=>{setHfSearch(e.target.value);searchHF(e.target.value,hfTask);}} placeholder="Search HuggingFace..."
+          style={{flex:1,background:'none',border:'none',color:'#d4d4d8',fontSize:11,outline:'none'}}/>
+      </div>
+    </div>
+    <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:10}}>
+      {tasks.map(t=><button key={t} onClick={()=>{setHfTask(t);searchHF(hfSearch,t);}}
+        style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:'none',cursor:'pointer',background:hfTask===t?'rgba(96,165,250,.2)':'rgba(255,255,255,.06)',color:hfTask===t?'#60a5fa':'#6b7280'}}>
+        {t}
+      </button>)}
+    </div>
+    {hfResults.length>0&&<><div style={{fontSize:10,color:'#6b7280',marginBottom:6}}>Search Results</div>
+      {hfResults.map(m=><HFModelCard key={m.id} model={m}/>)}</>}
+    <div style={{fontSize:10,color:'#6b7280',marginBottom:6}}>Recommended</div>
+    {SEED_MODELS.map(m=><HFModelCard key={m.id} model={m}/>)}
+  </div>;
+}
+
+function WorkspacesPanel({workspaces,activeWsId,setActiveWsId,root,setRoot,activeTabs,setActiveTabs,cursorId,setCursorId,selectedIds,setSelectedIds}){
+  const [dragId,setDragId]=useState(null);
+  const ws=workspaces.find(w=>w.id===activeWsId)||workspaces[0];
+  function handleToggle(id){setRoot(r=>deepUpdate(r,id,n=>({...n,expanded:!n.expanded})));}
+  function handleTabClick(tab){setActiveTabs(t=>t.includes(tab.id)?t:t.concat(tab.id));setCursorId(tab.id);}
+  function handleTabClose(id){setActiveTabs(t=>t.filter(x=>x!==id));}
+  return<div style={{display:'flex',flexDirection:'column',height:'100%',overflowY:'auto'}}>
+    <div style={{padding:'8px 10px 4px',borderBottom:'1px solid rgba(255,255,255,.06)'}}>
+      <MemBar root={root}/>
+    </div>
+    <div style={{flex:1,overflowY:'auto',padding:'4px 0'}}>
+      {(root.children||[]).map(n=>n.type==='workspace'||n.type==='folder'
+        ?<WsFolder key={n.id} node={n} depth={0} cursorId={cursorId} activeTabIds={activeTabs} selectedIds={selectedIds} onToggle={handleToggle} onTabClick={handleTabClick} onTabClose={handleTabClose}/>
+        :<TabRow key={n.id} tab={n} depth={0} isActive={activeTabs?.includes(n.id)} isCursor={cursorId===n.id} isSelected={selectedIds?.includes(n.id)} onClick={handleTabClick} onClose={handleTabClose}/>
+      )}
+    </div>
+  </div>;
+}
+
+function HistoryPanel(){
+  const sessions=[
+    {id:1,title:'Research Session',date:'Today 2:15 PM',preview:'Explored transformers.js capabilities',events:['Navigated to github.com','Chat: "how does transformers.js work?"','Used MCP data_table']},
+    {id:2,title:'Dev Debugging',date:'Yesterday 4:30 PM',preview:'Debugging React performance issues',events:['Navigated to stackoverflow.com','Chat: "React memo vs useMemo"','Bookmarked 3 tabs']},
+  ];
+  return<div style={{padding:12,overflowY:'auto',flex:1}}>
+    <div style={{fontSize:11,fontWeight:600,color:'#a1a1aa',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:10}}>Session History</div>
+    {sessions.map(s=><div key={s.id} style={{background:'rgba(255,255,255,.04)',borderRadius:6,padding:10,marginBottom:8,border:'1px solid rgba(255,255,255,.08)'}}>
+      <div style={{fontSize:12,fontWeight:500,color:'#d4d4d8'}}>{s.title}</div>
+      <div style={{fontSize:10,color:'#6b7280',marginTop:2}}>{s.date}</div>
+      <div style={{fontSize:11,color:'#a1a1aa',marginTop:6,marginBottom:8}}>{s.preview}</div>
+      <div style={{borderTop:'1px solid rgba(255,255,255,.06)',paddingTop:6,marginBottom:8}}>
+        {s.events.map((ev,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+          <I d={ic.cornerDownRight} size={10} color="#52525b"/>
+          <span style={{fontSize:10,color:'#6b7280'}}>{ev}</span>
+        </div>)}
+      </div>
+      <button style={{background:'rgba(96,165,250,.1)',border:'1px solid rgba(96,165,250,.2)',borderRadius:4,color:'#60a5fa',fontSize:10,padding:'3px 10px',cursor:'pointer',width:'100%'}}>
+        Continue Session
+      </button>
+    </div>)}
+  </div>;
+}
+
+function ExtensionsPanel(){
+  const [exts,setExts]=useState([
+    {id:1,name:'uBlock Origin',author:'Raymond Hill',category:'Privacy',rating:4.9,users:'10M+',enabled:true,color:'#f87171',description:'Efficient ad blocker'},
+    {id:2,name:'React DevTools',author:'Meta',category:'Dev Tools',rating:4.8,users:'5M+',enabled:true,color:'#60a5fa',description:'Debug React apps'},
+    {id:3,name:'AI Summarizer',author:'AgentLabs',category:'AI',rating:4.5,users:'100K+',enabled:false,color:'#a78bfa',description:'AI-powered page summaries'},
+    {id:4,name:'Session Buddy',author:'Community',category:'Productivity',rating:4.6,users:'2M+',enabled:true,color:'#34d399',description:'Save and restore sessions'},
+  ]);
+  return<div style={{padding:12,overflowY:'auto',flex:1}}>
+    <div style={{fontSize:11,fontWeight:600,color:'#a1a1aa',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:10}}>Extensions</div>
+    {exts.map(ext=><div key={ext.id} style={{background:'rgba(255,255,255,.04)',borderRadius:6,padding:10,marginBottom:6,border:'1px solid rgba(255,255,255,.08)',display:'flex',alignItems:'center',gap:10}}>
+      <div style={{width:32,height:32,borderRadius:6,background:ext.color+'20',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <I d={ic.puzzle} size={16} color={ext.color}/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12,fontWeight:500,color:'#d4d4d8'}}>{ext.name}</div>
+        <div style={{fontSize:10,color:'#6b7280'}}>{ext.author} · {ext.rating}★ · {ext.users}</div>
+        <div style={{fontSize:10,color:'#a1a1aa',marginTop:2}}>{ext.description}</div>
+      </div>
+      <div onClick={()=>setExts(es=>es.map(e=>e.id===ext.id?{...e,enabled:!e.enabled}:e))}
+        style={{width:32,height:18,borderRadius:9,background:ext.enabled?'#1d4ed8':'rgba(255,255,255,.1)',cursor:'pointer',position:'relative',transition:'background .2s',flexShrink:0}}>
+        <div style={{position:'absolute',top:2,left:ext.enabled?16:2,width:14,height:14,borderRadius:'50%',background:'white',transition:'left .2s'}}/>
+      </div>
+    </div>)}
+  </div>;
+}
+
+// ── PageOverlay ─────────────────────────────────────────────────────────────
+
+function PageOverlay({tab,onClose}){
+  const [addr,setAddr]=useState(tab?.url||'');
+  const [showChat,setShowChat]=useState(false);
+  const [picking,setPicking]=useState(false);
+  if(!tab)return null;
+  return<div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',background:'#0c0c0f',zIndex:10}}>
+    {/* Browser chrome */}
+    <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',background:'rgba(255,255,255,.03)',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+      <button style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer',padding:4,display:'flex'}}><I d={ic.arrowLeft} size={14}/></button>
+      <button style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer',padding:4,display:'flex'}}><I d={ic.arrowRight} size={14}/></button>
+      <button style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer',padding:4,display:'flex'}}><I d={ic.refreshCw} size={14}/></button>
+      <div style={{flex:1,display:'flex',gap:4,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:6,padding:'4px 10px',alignItems:'center'}}>
+        <I d={ic.globe} size={12} color="#6b7280"/>
+        <input value={addr} onChange={e=>setAddr(e.target.value)} style={{flex:1,background:'none',border:'none',color:'#d4d4d8',fontSize:12,outline:'none'}}/>
+      </div>
+      <button onClick={()=>setPicking(p=>!p)} title="Element picker" style={{background:picking?'rgba(96,165,250,.15)':'none',border:'none',borderRadius:4,color:picking?'#60a5fa':'#6b7280',cursor:'pointer',padding:4,display:'flex'}}>
+        <I d={ic.crosshair} size={14}/>
+      </button>
+      <button onClick={()=>setShowChat(p=>!p)} title="Page chat" style={{background:showChat?'rgba(96,165,250,.15)':'none',border:'none',borderRadius:4,color:showChat?'#60a5fa':'#6b7280',cursor:'pointer',padding:4,display:'flex'}}>
+        <I d={ic.messageSquare} size={14}/>
+      </button>
+      <button onClick={onClose} style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer',padding:4,display:'flex'}}><I d={ic.x} size={14}/></button>
+    </div>
+    {/* Content area */}
+    <div style={{flex:1,display:'flex',overflow:'hidden',position:'relative'}}>
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#52525b',flexDirection:'column',gap:8}}>
+        <I d={ic.globe} size={32} color="#374151"/>
+        <div style={{fontSize:12,color:'#6b7280'}}>{addr}</div>
+        <div style={{fontSize:11,color:'#52525b'}}>Simulated page view</div>
+      </div>
+      {picking&&<div style={{position:'absolute',inset:0,cursor:'crosshair',background:'rgba(96,165,250,.05)',border:'2px dashed rgba(96,165,250,.3)',display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setPicking(false)}>
+        <div style={{background:'rgba(0,0,0,.8)',borderRadius:6,padding:'6px 12px',fontSize:11,color:'#60a5fa'}}>Click to inspect element</div>
+      </div>}
+      {showChat&&<div style={{width:320,borderLeft:'1px solid rgba(255,255,255,.06)',animation:'slide-in-from-right .2s ease-out',background:'#0c0c0f'}}>
+        <div style={{padding:'10px 12px',borderBottom:'1px solid rgba(255,255,255,.06)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{fontSize:12,fontWeight:500,color:'#d4d4d8'}}>Page Chat</span>
+          <button onClick={()=>setShowChat(false)} style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer'}}><I d={ic.x} size={12}/></button>
+        </div>
+        <div style={{padding:12,fontSize:11,color:'#6b7280'}}>Ask about this page...</div>
+      </div>}
+    </div>
+  </div>;
+}
+
+// ── WorkspaceOverlay ────────────────────────────────────────────────────────
+
+function WorkspaceOverlay({workspaces,activeWsId,onSwitch,onCreate,onDelete,onClose}){
+  return<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,backdropFilter:'blur(4px)'}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'#0c0c0f',border:'1px solid rgba(255,255,255,.12)',borderRadius:12,padding:24,width:480,maxWidth:'90vw'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+        <h2 style={{fontSize:14,fontWeight:600,color:'#e4e4e7'}}>Workspaces</h2>
+        <button onClick={onClose} style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer'}}><I d={ic.x} size={14}/></button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:8,marginBottom:16}}>
+        {workspaces.map(ws=><div key={ws.id} onClick={()=>{onSwitch(ws.id);onClose();}} style={{background:activeWsId===ws.id?'rgba(96,165,250,.1)':'rgba(255,255,255,.04)',border:`1px solid ${activeWsId===ws.id?'rgba(96,165,250,.3)':'rgba(255,255,255,.08)'}`,borderRadius:8,padding:12,cursor:'pointer',textAlign:'center'}}>
+          <div style={{width:24,height:24,borderRadius:6,background:ws.color||'#60a5fa',margin:'0 auto 8px'}}/>
+          <div style={{fontSize:12,fontWeight:500,color:'#d4d4d8',marginBottom:2}}>{ws.name}</div>
+          <div style={{fontSize:10,color:'#6b7280'}}>{cntTabs(ws)} tabs</div>
+        </div>)}
+        <div onClick={onCreate} style={{background:'rgba(255,255,255,.04)',border:'1px dashed rgba(255,255,255,.1)',borderRadius:8,padding:12,cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6}}>
+          <I d={ic.plus} size={20} color="#6b7280"/>
+          <div style={{fontSize:11,color:'#6b7280'}}>New</div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── ShortcutOverlay ─────────────────────────────────────────────────────────
+
+function ShortcutOverlay({onClose}){
+  const shortcuts=[
+    ['↑↓','Navigate tree'],['→','Expand/enter'],['←','Collapse/parent'],
+    ['Space','Toggle select'],['Enter','Open tab'],['Ctrl+X','Cut'],['Ctrl+V','Paste'],
+    ['a-z','Filter'],['Escape','Clear/exit'],['?','This overlay'],
+  ];
+  return<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:100,backdropFilter:'blur(4px)'}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'#0c0c0f',border:'1px solid rgba(255,255,255,.12)',borderRadius:12,padding:24,width:360}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+        <h2 style={{fontSize:14,fontWeight:600,color:'#e4e4e7'}}>Keyboard Shortcuts</h2>
+        <button onClick={onClose} style={{background:'none',border:'none',color:'#6b7280',cursor:'pointer'}}><I d={ic.x} size={14}/></button>
+      </div>
+      {shortcuts.map(([key,desc])=><div key={key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+        <code style={{fontSize:11,background:'rgba(255,255,255,.08)',borderRadius:3,padding:'2px 6px',color:'#d4d4d8',fontFamily:'monospace'}}>{key}</code>
+        <span style={{fontSize:11,color:'#a1a1aa'}}>{desc}</span>
+      </div>)}
+    </div>
+  </div>;
+}
+
+// ── Toast ───────────────────────────────────────────────────────────────────
+
+function Toast({toast,onDismiss}){
+  useEffect(()=>{
+    if(!toast)return;
+    const t=setTimeout(onDismiss,3000);
+    return()=>clearTimeout(t);
+  },[toast]);
+  if(!toast)return null;
+  const colors={success:'#34d399',error:'#f87171',info:'#60a5fa',warning:'#fbbf24'};
+  return<div style={{position:'fixed',bottom:20,left:'50%',transform:'translateX(-50%)',background:'rgba(12,12,15,.95)',backdropFilter:'blur(12px)',border:`1px solid ${colors[toast.type]||colors.info}40`,borderRadius:8,padding:'10px 16px',color:colors[toast.type]||colors.info,fontSize:12,zIndex:200,animation:'slide-up .2s ease-out',display:'flex',alignItems:'center',gap:8,boxShadow:'0 4px 20px rgba(0,0,0,.4)'}}>
+    <I d={ic.checkCircle} size={13} color={colors[toast.type]||colors.info}/>
+    {toast.msg}
+  </div>;
+}
+
+// ── ActivityBar ─────────────────────────────────────────────────────────────
+
+function ActivityBar({activePanel,setActivePanel,collapsed,setCollapsed}){
+  const items=[
+    {id:'workspaces',icon:'layers',label:'Workspaces'},
+    {id:'chat',icon:'messageSquare',label:'Chat'},
+    {id:'history',icon:'clock',label:'History'},
+    {id:'extensions',icon:'puzzle',label:'Extensions'},
+    {id:'settings',icon:'settings',label:'Settings'},
+    {id:'account',icon:'user',label:'Account'},
+  ];
+  return<div style={{width:48,display:'flex',flexDirection:'column',alignItems:'center',padding:'8px 0',background:'#0c0c0f',borderRight:'1px solid rgba(255,255,255,.06)',gap:2,flexShrink:0}}>
+    {items.map(item=><button key={item.id} title={item.label} onClick={()=>{setActivePanel(item.id);if(collapsed)setCollapsed(false);}}
+      style={{width:36,height:36,border:'none',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+        background:activePanel===item.id?'rgba(96,165,250,.15)':'transparent',
+        borderLeft:activePanel===item.id?'2px solid #60a5fa':'2px solid transparent',
+        color:activePanel===item.id?'#60a5fa':'#52525b',
+        transition:'all .15s'}}>
+      <I d={ic[item.icon]} size={16} color={activePanel===item.id?'#60a5fa':'#52525b'}/>
+    </button>)}
+    <div style={{flex:1}}/>
+    <button title={collapsed?"Expand":"Collapse"} onClick={()=>setCollapsed(c=>!c)}
+      style={{width:36,height:36,border:'none',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:'transparent',color:'#52525b'}}>
+      <I d={ic.panelRight} size={16} color="#52525b" style={{transform:collapsed?'scaleX(-1)':'none',transition:'transform .2s'}}/>
+    </button>
+  </div>;
+}
+
+// ── App ─────────────────────────────────────────────────────────────────────
+
+function App(){
+  const [workspaces,setWorkspaces]=useState([
+    {id:'ws1',name:'Research',color:'#60a5fa',expanded:true,type:'workspace',children:INIT_TREE.children[0].children},
+    {id:'ws2',name:'Dev',color:'#34d399',expanded:false,type:'workspace',children:INIT_TREE.children[1].children},
+  ]);
+  const [activeWsId,setActiveWsId]=useState('ws1');
+  const [root,setRoot]=useState(INIT_TREE);
+  const [activeTabs,setActiveTabs]=useState([]);
+  const [focusedTabId,setFocusedTabId]=useState(null);
+  const [cursorId,setCursorId]=useState(null);
+  const [selectedIds,setSelectedIds]=useState([]);
+  const [mcpPanes,setMcpPanes]=useState([]);
+
+  const [activePanel,setActivePanel]=useState('workspaces');
+  const [collapsed,setCollapsed]=useState(false);
+  const [providers,setProviders]=useState(MODEL_PROVIDERS);
+  const [toast,setToast]=useState(null);
+  const [showWsOverlay,setShowWsOverlay]=useState(false);
+  const [showShortcuts,setShowShortcuts]=useState(false);
+  const [omnibar,setOmnibar]=useState('');
+  const [pendingSearch,setPendingSearch]=useState('');
+  const omniRef=useRef(null);
+
+  const activeTab=focusedTabId?findNode(root,focusedTabId):null;
+
+  useEffect(()=>{
+    function handleKey(e){
+      if(e.key==='?'){setShowShortcuts(s=>!s);return;}
+      if(e.key==='Escape'){setShowShortcuts(false);setCursorId(null);setSelectedIds([]);}
+    }
+    window.addEventListener('keydown',handleKey);
+    return()=>window.removeEventListener('keydown',handleKey);
+  },[]);
+
+  function handleOmniSubmit(e){
+    e.preventDefault();
+    const {intent,url,query}=classifyOmni(omnibar);
+    if(intent==='navigate'){
+      const newTab={id:mkId(),type:'tab',name:url.replace(/^https?:\/\//,'').slice(0,30),url,memoryTier:'hot',memoryMB:Math.floor(80+Math.random()*200),persisted:false};
+      setRoot(r=>{
+        const ws=r.children[0];
+        return deepUpdate(r,ws.id,n=>({...n,children:[...(n.children||[]),newTab]}));
+      });
+      setActiveTabs(t=>[...t,newTab.id]);
+      setFocusedTabId(newTab.id);
+      setToast({msg:`Navigating to ${url}`,type:'info'});
+    } else {
+      setPendingSearch(query);
+      setActivePanel('chat');
+      setToast({msg:`Searching: ${query}`,type:'info'});
+    }
+    setOmnibar('');
+  }
+
+  function renderPanel(){
+    if(activePanel==='workspaces')return<WorkspacesPanel workspaces={workspaces} activeWsId={activeWsId} setActiveWsId={setActiveWsId} root={root} setRoot={setRoot} activeTabs={activeTabs} setActiveTabs={setActiveTabs} cursorId={cursorId} setCursorId={setCursorId} selectedIds={selectedIds} setSelectedIds={setSelectedIds}/>;
+    if(activePanel==='chat')return<ChatInterface ws={workspaces.find(w=>w.id===activeWsId)} providers={providers} onTabCreate={tab=>{setRoot(r=>deepUpdate(r,r.children[0].id,n=>({...n,children:[...(n.children||[]),tab]})));setActiveTabs(t=>[...t,tab.id]);setFocusedTabId(tab.id);}}/>;
+    if(activePanel==='history')return<HistoryPanel/>;
+    if(activePanel==='extensions')return<ExtensionsPanel/>;
+    if(activePanel==='settings')return<SettingsPanel providers={providers} setProviders={setProviders}/>;
+    if(activePanel==='account')return<div style={{padding:16}}><div style={{fontSize:12,color:'#6b7280'}}>Account features coming soon</div></div>;
+    return null;
+  }
+
+  return<div style={{display:'flex',height:'100vh',overflow:'hidden',background:'#09090b'}}>
+    <ActivityBar activePanel={activePanel} setActivePanel={setActivePanel} collapsed={collapsed} setCollapsed={setCollapsed}/>
+    {/* Sidebar */}
+    {!collapsed&&<div style={{width:260,display:'flex',flexDirection:'column',background:'#0c0c0f',borderRight:'1px solid rgba(255,255,255,.06)',flexShrink:0,overflow:'hidden'}}>
+      {/* Sidebar header */}
+      <div style={{padding:'10px 10px 6px',borderBottom:'1px solid rgba(255,255,255,.06)',flexShrink:0}}>
+        <form onSubmit={handleOmniSubmit} style={{display:'flex',gap:6,alignItems:'center',background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.08)',borderRadius:6,padding:'5px 8px'}}>
+          <I d={ic.search} size={12} color="#6b7280"/>
+          <input ref={omniRef} value={omnibar} onChange={e=>setOmnibar(e.target.value)} placeholder="Search or navigate…"
+            style={{flex:1,background:'none',border:'none',color:'#d4d4d8',fontSize:12,outline:'none'}}/>
+        </form>
+        {/* Workspace pills */}
+        <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
+          {workspaces.map(ws=><button key={ws.id} onClick={()=>setActiveWsId(ws.id)}
+            style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:`1px solid ${ws.id===activeWsId?ws.color+'80':'rgba(255,255,255,.08)'}`,background:ws.id===activeWsId?ws.color+'15':'transparent',color:ws.id===activeWsId?ws.color:'#6b7280',cursor:'pointer'}}>
+            {ws.name}
+          </button>)}
+          <button onClick={()=>setShowWsOverlay(true)} style={{fontSize:9,padding:'2px 6px',borderRadius:3,border:'1px dashed rgba(255,255,255,.08)',background:'transparent',color:'#52525b',cursor:'pointer'}}>
+            <I d={ic.plus} size={9} color="#52525b"/>
+          </button>
+        </div>
+      </div>
+      {/* Panel content */}
+      <div style={{flex:1,overflowY:'auto',display:'flex',flexDirection:'column'}}>
+        {renderPanel()}
+      </div>
+    </div>}
+    {/* Main content */}
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',position:'relative'}}>
+      {activeTab
+        ?<PageOverlay tab={activeTab} onClose={()=>setFocusedTabId(null)}/>
+        :<ChatInterface ws={workspaces.find(w=>w.id===activeWsId)} providers={providers} onTabCreate={tab=>{setRoot(r=>deepUpdate(r,r.children[0].id,n=>({...n,children:[...(n.children||[]),tab]})));setActiveTabs(t=>[...t,tab.id]);setFocusedTabId(tab.id);}}/>}
+    </div>
+    {/* Overlays */}
+    {showWsOverlay&&<WorkspaceOverlay workspaces={workspaces} activeWsId={activeWsId} onSwitch={setActiveWsId} onCreate={()=>{const colors=['#60a5fa','#34d399','#a78bfa','#fbbf24','#f87171'];setWorkspaces(ws=>[...ws,{id:mkId(),name:`Workspace ${ws.length+1}`,color:colors[ws.length%colors.length],expanded:false,type:'workspace',children:[]}]);}} onDelete={()=>{}} onClose={()=>setShowWsOverlay(false)}/>}
+    {showShortcuts&&<ShortcutOverlay onClose={()=>setShowShortcuts(false)}/>}
+    <Toast toast={toast} onDismiss={()=>setToast(null)}/>
+  </div>;
+}
+
+// ── Mount ───────────────────────────────────────────────────────────────────
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
