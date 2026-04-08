@@ -53,7 +53,7 @@ export function buildPipelineRunOptions(
   }
 
   if (!tokenizer) {
-    throw new Error('Text generation pipeline is missing a tokenizer required for Transformers v4 streaming.');
+    throw new Error('Text generation pipeline requires a tokenizer for Transformers v4 streaming. Ensure the pipeline is initialized with a valid tokenizer.');
   }
 
   return {

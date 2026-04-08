@@ -360,7 +360,7 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
         <div className="chat-heading">
           <span className="panel-eyebrow">Workspace assistant</span>
           <h2>Agent Chat</h2>
-          <p>I&apos;m your workspace assistant with access to MCP apps, local models, and exploration context.</p>
+          <p>I'm your workspace assistant with access to MCP apps, local models, and exploration context.</p>
         </div>
         <div className="chat-header-controls">
           <button type="button" className="secondary-button">Create task board</button>
