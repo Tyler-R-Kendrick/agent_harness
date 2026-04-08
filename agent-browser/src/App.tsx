@@ -44,9 +44,9 @@ const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answer
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
+const WORKSPACE_INTEGRATIONS_STORAGE_KEY = 'agent-browser.workspace-integrations';
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Exploration'],
-  ['chat', 'messageSquare', 'Chat'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
 ] as const;
@@ -137,6 +137,10 @@ const mockIntegrations: IntegrationSurface[] = [
   },
 ];
 
+function cloneIntegrations(integrations = mockIntegrations): IntegrationSurface[] {
+  return integrations.map((integration) => ({ ...integration, badges: [...integration.badges] }));
+}
+
 function createUniqueId() {
   return crypto.randomUUID();
 }
@@ -173,6 +177,44 @@ function createInitialRoot(): TreeNode {
       },
     ],
   };
+}
+
+function createDefaultWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSurface[]> {
+  return Object.fromEntries((root.children ?? []).map((workspace) => [workspace.id, cloneIntegrations()]));
+}
+
+function isStoredIntegration(value: unknown): value is Partial<IntegrationSurface> & { id: string } {
+  return Boolean(value && typeof value === 'object' && 'id' in value && typeof (value as { id?: unknown }).id === 'string');
+}
+
+function loadWorkspaceIntegrations(root: TreeNode): Record<string, IntegrationSurface[]> {
+  const fallback = createDefaultWorkspaceIntegrations(root);
+  if (typeof window === 'undefined') return fallback;
+
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    return Object.fromEntries(Object.entries(fallback).map(([workspaceId, defaults]) => {
+      const storedItems = Array.isArray(parsed?.[workspaceId]) ? parsed[workspaceId] : [];
+      return [workspaceId, defaults.map((integration) => {
+        const stored = storedItems.find((item) => isStoredIntegration(item) && item.id === integration.id);
+        return stored
+          ? {
+              ...integration,
+              enabled: typeof stored.enabled === 'boolean' ? stored.enabled : integration.enabled,
+              badges: Array.isArray(stored.badges) ? stored.badges.filter((badge): badge is string => typeof badge === 'string') : integration.badges,
+              description: typeof stored.description === 'string' ? stored.description : integration.description,
+              source: typeof stored.source === 'string' ? stored.source : integration.source,
+              constraint: typeof stored.constraint === 'string' ? stored.constraint : integration.constraint,
+            }
+          : { ...integration, badges: [...integration.badges] };
+      })];
+    }));
+  } catch {
+    return fallback;
+  }
 }
 
 function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof icons; size?: number; color?: string; className?: string }) {
@@ -266,6 +308,54 @@ function MemBar({ root }: { root: TreeNode }) {
         return memory ? <div key={tier} style={{ width: `${(memory / total) * 100}%`, background: meta.color }} title={`${meta.label}: ${memory}MB`} /> : null;
       })}
     </div>
+  );
+}
+
+function WorkspaceStoragePanel({ workspaceName, integrations, onToggle }: { workspaceName: string; integrations: IntegrationSurface[]; onToggle: (id: string) => void }) {
+  const enabledCount = integrations.filter((integration) => integration.enabled).length;
+  return (
+    <section className="workspace-storage" aria-label="Workspace storage">
+      <div className="panel-section-header">
+        <span>Workspace storage</span>
+        <span className="muted">Persisted in local storage</span>
+      </div>
+      <div className="integration-overview">
+        <div className="list-card integration-summary-card">
+          <span className="badge">Active workspace</span>
+          <strong>{workspaceName}</strong>
+          <p className="muted">{enabledCount} enabled · {integrations.length} stored support records</p>
+        </div>
+        <div className="list-card integration-summary-card">
+          <span className="badge">Persistence</span>
+          <strong>Browser local storage</strong>
+          <p className="muted">AGENTS.md, skills, plugins, hooks, and remote MCP settings are stored under this browser profile.</p>
+        </div>
+      </div>
+      <div className="integration-list">
+        {integrations.map((integration) => (
+          <article key={integration.id} className="list-card extension-card">
+            <div className="extension-icon" style={{ background: `linear-gradient(135deg, ${integration.color}33, rgba(15,23,42,.5))` }}>
+              <Icon name="puzzle" color={integration.color} />
+            </div>
+            <div className="extension-content">
+              <div className="extension-title-row">
+                <h3>{integration.name}</h3>
+                <span className="badge">{integration.source}</span>
+              </div>
+              <div className="extension-badges">
+                {integration.badges.map((badge) => <span key={badge} className="chip mini">{badge}</span>)}
+              </div>
+              <p>{integration.description}</p>
+              {integration.constraint ? <p className="muted">{integration.constraint}</p> : null}
+            </div>
+            <label className="switch">
+              <input type="checkbox" aria-label={`Enable ${integration.name}`} checked={integration.enabled} onChange={() => onToggle(integration.id)} />
+              <span />
+            </label>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -421,10 +511,6 @@ function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }
           <h2>Agent Chat</h2>
           <p>I'm your workspace assistant with access to MCP apps, local models, and exploration context.</p>
         </div>
-        <div className="chat-header-controls">
-          <button type="button" className="secondary-button">Create task board</button>
-          <button type="button" className="secondary-button">Open gallery</button>
-        </div>
       </header>
       <div className="message-list" role="log" aria-live="polite">
         <div className="chat-empty-state">
@@ -497,48 +583,18 @@ function HistoryPanel() {
   return <section className="panel-scroll history-panel" aria-label="History"><span className="panel-eyebrow">History</span><h2>Recent sessions</h2><p className="muted">Pick up where you left off across research, build, and UX investigations.</p>{mockHistory.map((session) => <article key={session.id} className="list-card history-card"><div className="history-card-header"><div><h3>{session.title}</h3><p className="muted">{session.date}</p></div><span className="badge">{session.events.length} events</span></div><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
 }
 
-function ExtensionsPanel({ integrations, onToggle }: { integrations: IntegrationSurface[]; onToggle: (id: string) => void }) {
-  const enabledCount = integrations.filter((integration) => integration.enabled).length;
+function ExtensionsPanel({ workspaceName }: { workspaceName: string }) {
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <span className="panel-eyebrow">Extensions</span>
-      <h2>Agent harness support</h2>
-      <p className="muted">Configure AGENTS.md, agent-skills, plugins, hooks, and remote-only MCP connectivity from one integrations surface.</p>
+      <h2>Extension marketplace</h2>
+      <p className="muted">Workspace-scoped harness support now lives in Exploration so it can be stored with the active workspace.</p>
       <div className="integration-overview">
         <div className="list-card integration-summary-card">
-          <span className="badge">Coverage</span>
-          <strong>{integrations.length} integration surfaces</strong>
-          <p className="muted">{enabledCount} enabled · marketplace.json supported · remote MCPs restricted</p>
+          <span className="badge">Moved</span>
+          <strong>Workspace-local support</strong>
+          <p className="muted">Open Exploration to manage AGENTS.md, agent-skills, plugins, hooks, and remote-only MCP settings for {workspaceName}.</p>
         </div>
-        <div className="list-card integration-summary-card">
-          <span className="badge">Policy</span>
-          <strong>Remote-only MCP policy</strong>
-          <p className="muted">The harness accepts remote HTTP/SSE MCP servers and rejects local transports.</p>
-        </div>
-      </div>
-      <div className="integration-list">
-        {integrations.map((integration) => (
-          <article key={integration.id} className="list-card extension-card">
-            <div className="extension-icon" style={{ background: `linear-gradient(135deg, ${integration.color}33, rgba(15,23,42,.5))` }}>
-              <Icon name="puzzle" color={integration.color} />
-            </div>
-            <div className="extension-content">
-              <div className="extension-title-row">
-                <h3>{integration.name}</h3>
-                <span className="badge">{integration.source}</span>
-              </div>
-              <div className="extension-badges">
-                {integration.badges.map((badge) => <span key={badge} className="chip mini">{badge}</span>)}
-              </div>
-              <p>{integration.description}</p>
-              {integration.constraint ? <p className="muted">{integration.constraint}</p> : null}
-            </div>
-            <label className="switch">
-              <input type="checkbox" aria-label={`Enable ${integration.name}`} checked={integration.enabled} onChange={() => onToggle(integration.id)} />
-              <span />
-            </label>
-          </article>
-        ))}
       </div>
     </section>
   );
@@ -571,9 +627,9 @@ function Toast({ toast }: { toast: ToastState }) {
 
 function AgentBrowserApp() {
   const { toast, setToast } = useToast();
-  const [root, setRoot] = useState<TreeNode>(createInitialRoot());
+  const [root, setRoot] = useState<TreeNode>(() => createInitialRoot());
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
-  const [activePanel, setActivePanel] = useState<'workspaces' | 'chat' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
+  const [activePanel, setActivePanel] = useState<'workspaces' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
   const [registryTask, setRegistryTask] = useState('text-generation');
   const [registryQuery, setRegistryQuery] = useState('');
@@ -585,11 +641,12 @@ function AgentBrowserApp() {
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [integrations, setIntegrations] = useState(mockIntegrations);
+  const [workspaceIntegrations, setWorkspaceIntegrations] = useState<Record<string, IntegrationSurface[]>>(() => loadWorkspaceIntegrations(root));
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const visibleItems = useMemo(() => flattenTree(activeWorkspace), [activeWorkspace]);
   const openTab = openTabId ? findNode(root, openTabId) : null;
+  const activeWorkspaceIntegrations = workspaceIntegrations[activeWorkspaceId] ?? cloneIntegrations();
 
   useCopilotReadable({
     description: 'Current agent browser workspace context',
@@ -619,6 +676,10 @@ function AgentBrowserApp() {
       controller.abort();
     };
   }, [registryQuery, registryTask, setToast]);
+
+  useEffect(() => {
+    window.localStorage.setItem(WORKSPACE_INTEGRATIONS_STORAGE_KEY, JSON.stringify(workspaceIntegrations));
+  }, [workspaceIntegrations]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -681,7 +742,6 @@ function AgentBrowserApp() {
       setToast({ msg: `Opened ${result.value}`, type: 'success' });
     } else {
       setPendingSearch(result.value);
-      setActivePanel('chat');
       setToast({ msg: `Queued search: ${result.value}`, type: 'info' });
     }
     setOmnibar('');
@@ -701,12 +761,19 @@ function AgentBrowserApp() {
             setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, children: (node.children ?? []).filter((child) => child.id !== id) })));
             if (openTabId === id) setOpenTabId(null);
           }} />
+          <WorkspaceStoragePanel
+            workspaceName={activeWorkspace.name}
+            integrations={activeWorkspaceIntegrations}
+            onToggle={(id) => setWorkspaceIntegrations((current) => ({
+              ...current,
+              [activeWorkspaceId]: (current[activeWorkspaceId] ?? cloneIntegrations()).map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : { ...entry, badges: [...entry.badges] }),
+            }))}
+          />
         </div>
       );
     }
-    if (activePanel === 'chat') return <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} />;
     if (activePanel === 'history') return <HistoryPanel />;
-    if (activePanel === 'extensions') return <ExtensionsPanel integrations={integrations} onToggle={(id) => setIntegrations((current) => current.map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry))} />;
+    if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} />;
     if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
@@ -727,7 +794,7 @@ function AgentBrowserApp() {
         <aside className="sidebar">
           <header className="sidebar-header">
             <div className="sidebar-title-row">
-              <span className="panel-eyebrow">{activePanel === 'settings' ? 'Settings / Models' : activePanel === 'history' ? 'History' : activePanel === 'extensions' ? 'Extensions' : activePanel === 'chat' ? 'Assistant' : 'Exploration'}</span>
+              <span className="panel-eyebrow">{activePanel === 'settings' ? 'Settings / Models' : activePanel === 'history' ? 'History' : activePanel === 'extensions' ? 'Extensions' : 'Exploration'}</span>
             </div>
             <form className="omnibar" onSubmit={handleOmnibarSubmit}>
               <Icon name="search" size={13} color="#71717a" />

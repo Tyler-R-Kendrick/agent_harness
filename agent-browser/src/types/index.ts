@@ -3,7 +3,7 @@ export type NodeType = 'root' | 'workspace' | 'folder' | 'tab';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ModelStatus = 'available' | 'installed' | 'loading';
-export type PanelId = 'workspaces' | 'chat' | 'history' | 'extensions' | 'settings' | 'account';
+export type PanelId = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 
 export interface TreeNode {
   id: string;

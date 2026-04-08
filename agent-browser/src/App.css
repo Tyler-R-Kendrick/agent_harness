@@ -196,7 +196,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: rgba(9, 9, 11, 0.92);
 }
 .chat-heading { display: grid; gap: 6px; max-width: 720px; }
-.chat-header-controls { margin-top: 0; }
 .message-list {
   flex: 1;
   overflow: auto;
@@ -374,6 +373,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .integration-overview {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.workspace-storage {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
 }
 .extension-badges {
   display: flex;

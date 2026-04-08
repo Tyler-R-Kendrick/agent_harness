@@ -13,7 +13,8 @@ How to interact:
 - Use the omnibar to search or navigate.
 - Switch workspaces with the pills under the omnibar.
 - Browse tabs and folders from the exploration tree.
-- Use the activity bar to switch between exploration, chat, history, extensions, and settings.
+- Review workspace-scoped AGENTS.md, agent-skills, plugins, hooks, and remote MCP settings in the **Workspace storage** section.
+- Use the activity bar to switch between exploration, history, extensions, and settings.
 - Send a prompt from the themed composer at the bottom using the model pill and green send button.
 
 ## Settings / model registry
@@ -36,9 +37,8 @@ Playwright test: `captures the extensions screen`
 
 How to interact:
 - Open **Extensions** from the activity bar.
-- Review the AGENTS.md, agent-skills, plugins, hooks, and remote MCP support cards.
-- Verify that plugins advertise `marketplace.json` support alongside direct manifests.
-- Confirm the remote-only MCP policy before toggling integration enablement on each card.
+- Use this panel as a redirect to the workspace-local storage controls in **Exploration**.
+- Return to the active workspace when you need to change AGENTS.md, agent-skills, plugins, hooks, or remote MCP settings.
 
 ## History panel
 

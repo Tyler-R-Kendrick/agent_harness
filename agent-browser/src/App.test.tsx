@@ -23,6 +23,7 @@ vi.mock('./services/browserInference', () => ({
 
 describe('App', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
@@ -44,7 +45,10 @@ describe('App', () => {
 
     expect(screen.getByLabelText('Primary navigation')).toBeInTheDocument();
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
     expect(screen.getAllByText('Agent Chat').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Create task board')).not.toBeInTheDocument();
+    expect(screen.queryByText('Open gallery')).not.toBeInTheDocument();
   });
 
   it('renders settings and history labels from the navigation', async () => {
@@ -58,23 +62,30 @@ describe('App', () => {
     expect(screen.getByLabelText('History')).toBeInTheDocument();
   });
 
-  it('renders AGENTS.md, skills, plugins, hooks, and remote-only MCP support in extensions', async () => {
+  it('renders workspace-local support in exploration and persists it to local storage', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Extensions'));
-
-    expect(screen.getByText('Agent harness support')).toBeInTheDocument();
-    expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
+    expect(screen.getByText('Workspace storage')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'AGENTS.md' })).toBeInTheDocument();
     expect(screen.getByText('agent-skills')).toBeInTheDocument();
     expect(screen.getByText('Plugins')).toBeInTheDocument();
     expect(screen.getByText('Hooks')).toBeInTheDocument();
     expect(screen.getByText('Remote MCPs')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.json')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.json', { exact: true })).toBeInTheDocument();
     expect(screen.getByText('Local MCP transports are blocked by policy.')).toBeInTheDocument();
+
+    const hooksToggle = screen.getByLabelText('Enable Hooks') as HTMLInputElement;
+    expect(hooksToggle.checked).toBe(false);
+
+    fireEvent.click(hooksToggle);
+
+    expect(hooksToggle.checked).toBe(true);
+    expect(window.localStorage.getItem('agent-browser.workspace-integrations')).toContain('"id":"hooks"');
+    expect(window.localStorage.getItem('agent-browser.workspace-integrations')).toContain('"enabled":true');
   });
 
   it('adds accessible labels to page overlay icon buttons', async () => {
