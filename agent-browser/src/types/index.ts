@@ -69,16 +69,18 @@ export interface HistorySession {
   events: string[];
 }
 
-export interface Extension {
-  id: number;
+export type IntegrationKind = 'agents' | 'skills' | 'plugins' | 'hooks' | 'mcps';
+
+export interface IntegrationSurface {
+  id: string;
   name: string;
-  author: string;
-  category: string;
-  rating: number;
-  users: string;
+  kind: IntegrationKind;
+  source: string;
   enabled: boolean;
   color: string;
   description: string;
+  badges: string[];
+  constraint?: string;
 }
 
 export interface BrowserInferenceRequest {

@@ -28,7 +28,7 @@ import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
 import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
 import { appendPendingLocalTurn, createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
-import type { ChatMessage, Extension, HFModel, HistorySession, TreeNode } from './types';
+import type { ChatMessage, HFModel, HistorySession, IntegrationSurface, TreeNode } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -83,10 +83,58 @@ const mockHistory: HistorySession[] = [
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
 
-const mockExtensions: Extension[] = [
-  { id: 1, name: 'uBlock Origin', author: 'Raymond Hill', rating: 4.9, users: '10M+', category: 'Privacy', description: 'Efficient network filtering.', enabled: true, color: '#f87171' },
-  { id: 2, name: 'React DevTools', author: 'Meta', rating: 4.8, users: '5M+', category: 'Dev Tools', description: 'Inspect component trees.', enabled: true, color: '#60a5fa' },
-  { id: 3, name: 'Agent Notes', author: 'Agent Labs', rating: 4.5, users: '120K+', category: 'AI', description: 'Capture task notes inside the workspace.', enabled: false, color: '#a78bfa' },
+const mockIntegrations: IntegrationSurface[] = [
+  {
+    id: 'agents-md',
+    name: 'AGENTS.md',
+    kind: 'agents',
+    source: 'Workspace instructions',
+    description: 'Load repository-scoped AGENTS.md files so the harness can inherit task guidance, safety notes, and delegation hints.',
+    enabled: true,
+    color: '#60a5fa',
+    badges: ['Repository rules', 'Nested overrides'],
+  },
+  {
+    id: 'agent-skills',
+    name: 'agent-skills',
+    kind: 'skills',
+    source: 'Reusable skill packs',
+    description: 'Expose skill bundles as first-class harness capabilities so agents can discover and invoke curated workflows.',
+    enabled: true,
+    color: '#a78bfa',
+    badges: ['Task routing', 'Reusable prompts'],
+  },
+  {
+    id: 'plugins',
+    name: 'Plugins',
+    kind: 'plugins',
+    source: 'Manifest + registry ingestion',
+    description: 'Accept direct plugin manifests and the marketplace.json catalog format for plugin discovery, enablement, and metadata.',
+    enabled: true,
+    color: '#f59e0b',
+    badges: ['marketplace.json', 'Plugin manifests'],
+  },
+  {
+    id: 'hooks',
+    name: 'Hooks',
+    kind: 'hooks',
+    source: 'Lifecycle automation',
+    description: 'Register pre-task, post-task, and validation hooks so harness automation can wrap execution without changing core flows.',
+    enabled: false,
+    color: '#34d399',
+    badges: ['Pre-task', 'Post-task'],
+  },
+  {
+    id: 'remote-mcps',
+    name: 'Remote MCPs',
+    kind: 'mcps',
+    source: 'Remote connections only',
+    description: 'Allow MCP servers over remote transports while intentionally rejecting local stdio-style MCP wiring in the harness.',
+    enabled: true,
+    color: '#f87171',
+    badges: ['Remote only', 'HTTP / SSE'],
+    constraint: 'Local MCP transports are blocked by policy.',
+  },
 ];
 
 function createUniqueId() {
@@ -449,8 +497,51 @@ function HistoryPanel() {
   return <section className="panel-scroll history-panel" aria-label="History"><span className="panel-eyebrow">History</span><h2>Recent sessions</h2><p className="muted">Pick up where you left off across research, build, and UX investigations.</p>{mockHistory.map((session) => <article key={session.id} className="list-card history-card"><div className="history-card-header"><div><h3>{session.title}</h3><p className="muted">{session.date}</p></div><span className="badge">{session.events.length} events</span></div><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
 }
 
-function ExtensionsPanel({ extensions, onToggle }: { extensions: Extension[]; onToggle: (id: number) => void }) {
-  return <section className="panel-scroll extensions-panel" aria-label="Extensions"><span className="panel-eyebrow">Extensions</span><h2>Workspace tools</h2><p className="muted">Curated extensions with a tighter marketplace presentation.</p>{extensions.map((extension) => <article key={extension.id} className="list-card extension-card"><div className="extension-icon" style={{ background: `linear-gradient(135deg, ${extension.color}33, rgba(15,23,42,.5))` }}><Icon name="puzzle" color={extension.color} /></div><div><div className="extension-title-row"><h3>{extension.name}</h3><span className="badge">{extension.category}</span></div><p className="muted">{extension.author} · {extension.rating}★ · {extension.users}</p><p>{extension.description}</p></div><label className="switch"><input type="checkbox" aria-label={`Enable ${extension.name}`} checked={extension.enabled} onChange={() => onToggle(extension.id)} /><span /></label></article>)}</section>;
+function ExtensionsPanel({ integrations, onToggle }: { integrations: IntegrationSurface[]; onToggle: (id: string) => void }) {
+  const enabledCount = integrations.filter((integration) => integration.enabled).length;
+  return (
+    <section className="panel-scroll extensions-panel" aria-label="Extensions">
+      <span className="panel-eyebrow">Extensions</span>
+      <h2>Agent harness support</h2>
+      <p className="muted">Configure AGENTS.md, agent-skills, plugins, hooks, and remote-only MCP connectivity from one integrations surface.</p>
+      <div className="integration-overview">
+        <div className="list-card integration-summary-card">
+          <span className="badge">Coverage</span>
+          <strong>{integrations.length} integration surfaces</strong>
+          <p className="muted">{enabledCount} enabled · marketplace.json supported · remote MCPs restricted</p>
+        </div>
+        <div className="list-card integration-summary-card">
+          <span className="badge">Policy</span>
+          <strong>Remote-only MCP policy</strong>
+          <p className="muted">The harness accepts remote HTTP/SSE MCP servers and rejects local transports.</p>
+        </div>
+      </div>
+      <div className="integration-list">
+        {integrations.map((integration) => (
+          <article key={integration.id} className="list-card extension-card">
+            <div className="extension-icon" style={{ background: `linear-gradient(135deg, ${integration.color}33, rgba(15,23,42,.5))` }}>
+              <Icon name="puzzle" color={integration.color} />
+            </div>
+            <div className="extension-content">
+              <div className="extension-title-row">
+                <h3>{integration.name}</h3>
+                <span className="badge">{integration.source}</span>
+              </div>
+              <div className="extension-badges">
+                {integration.badges.map((badge) => <span key={badge} className="chip mini">{badge}</span>)}
+              </div>
+              <p>{integration.description}</p>
+              {integration.constraint ? <p className="muted">{integration.constraint}</p> : null}
+            </div>
+            <label className="switch">
+              <input type="checkbox" aria-label={`Enable ${integration.name}`} checked={integration.enabled} onChange={() => onToggle(integration.id)} />
+              <span />
+            </label>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void }) {
@@ -494,7 +585,7 @@ function AgentBrowserApp() {
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [extensions, setExtensions] = useState(mockExtensions);
+  const [integrations, setIntegrations] = useState(mockIntegrations);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const visibleItems = useMemo(() => flattenTree(activeWorkspace), [activeWorkspace]);
@@ -615,7 +706,7 @@ function AgentBrowserApp() {
     }
     if (activePanel === 'chat') return <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} />;
     if (activePanel === 'history') return <HistoryPanel />;
-    if (activePanel === 'extensions') return <ExtensionsPanel extensions={extensions} onToggle={(id) => setExtensions((current) => current.map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry))} />;
+    if (activePanel === 'extensions') return <ExtensionsPanel integrations={integrations} onToggle={(id) => setIntegrations((current) => current.map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry))} />;
     if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }

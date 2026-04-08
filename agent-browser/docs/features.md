@@ -36,8 +36,9 @@ Playwright test: `captures the extensions screen`
 
 How to interact:
 - Open **Extensions** from the activity bar.
-- Review extension cards styled as marketplace entries.
-- Toggle extension enablement using the switch on each card.
+- Review the AGENTS.md, agent-skills, plugins, hooks, and remote MCP support cards.
+- Verify that plugins advertise `marketplace.json` support alongside direct manifests.
+- Confirm the remote-only MCP policy before toggling integration enablement on each card.
 
 ## History panel
 

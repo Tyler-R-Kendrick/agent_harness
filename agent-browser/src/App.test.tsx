@@ -58,6 +58,25 @@ describe('App', () => {
     expect(screen.getByLabelText('History')).toBeInTheDocument();
   });
 
+  it('renders AGENTS.md, skills, plugins, hooks, and remote-only MCP support in extensions', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+
+    expect(screen.getByText('Agent harness support')).toBeInTheDocument();
+    expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
+    expect(screen.getByText('agent-skills')).toBeInTheDocument();
+    expect(screen.getByText('Plugins')).toBeInTheDocument();
+    expect(screen.getByText('Hooks')).toBeInTheDocument();
+    expect(screen.getByText('Remote MCPs')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.json')).toBeInTheDocument();
+    expect(screen.getByText('Local MCP transports are blocked by policy.')).toBeInTheDocument();
+  });
+
   it('adds accessible labels to page overlay icon buttons', async () => {
     vi.useFakeTimers();
     render(<App />);

@@ -16,7 +16,9 @@ test('captures the settings screen', async ({ page }) => {
 test('captures the extensions screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Extensions').click();
-  await expect(page.getByText('Workspace tools')).toBeVisible();
+  await expect(page.getByText('Agent harness support')).toBeVisible();
+  await expect(page.getByText('AGENTS.md')).toBeVisible();
+  await expect(page.getByText('marketplace.json')).toBeVisible();
   await page.screenshot({ path: 'docs/screenshots/extensions-screen.png', fullPage: true });
 });
 

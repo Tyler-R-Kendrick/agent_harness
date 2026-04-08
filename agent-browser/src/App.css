@@ -368,6 +368,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   align-items: center;
   padding: 14px;
 }
+.integration-overview, .integration-list, .extension-badges {
+  display: grid;
+  gap: 12px;
+}
+.integration-overview {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+.integration-summary-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
 .extension-icon {
   width: 54px;
   height: 54px;
@@ -375,6 +387,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   place-items: center;
   border: 1px solid rgba(255,255,255,.06);
+}
+.extension-content {
+  display: grid;
+  gap: 8px;
 }
 .extension-title-row, .history-card-header {
   display: flex;
