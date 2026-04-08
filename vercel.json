@@ -3,10 +3,13 @@
   "installCommand": "cd agent-browser && npm ci",
   "buildCommand": "cd agent-browser && npm run build",
   "outputDirectory": "agent-browser/dist",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
     }
   ]
 }
