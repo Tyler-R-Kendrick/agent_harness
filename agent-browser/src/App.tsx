@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
-import { API_ENDPOINTS, MODEL_PROVIDERS } from './constants/providers';
-import { HF_TASKS, SEED_MODELS } from './constants/models';
-import type { ChatMessage, Extension, HistorySession, HFModel, ModelProvider, TreeNode } from './types';
+import { searchBrowserModels } from './services/huggingFaceRegistry';
+import { browserInferenceEngine } from './services/browserInference';
+import { createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
+import type { ChatMessage, Extension, HFModel, HistorySession, TreeNode } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
-type FlatTreeItem = { node: TreeNode; depth: number; parentId: string | null };
-
-type TjsCallbacks = {
-  onStatus?: (msg: string) => void;
-  onPhase?: (phase: string) => void;
-  onToken?: (token: string) => void;
-  onDone?: (result: unknown) => void;
-  onError?: (error: Error) => void;
-};
+type FlatTreeItem = { node: TreeNode; depth: number };
 
 const TIERS = {
   hot: { color: '#f87171', label: 'Hot' },
@@ -21,6 +14,8 @@ const TIERS = {
   cool: { color: '#60a5fa', label: 'Cool' },
   cold: { color: '#52525b', label: 'Cold' },
 } as const;
+
+const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answering', 'feature-extraction', 'summarization'];
 
 const iconPaths = {
   layers: 'M12 2 2 7l10 5 10-5-10-5Zm0 10L2 7m10 5 10-5M2 17l10 5 10-5',
@@ -31,7 +26,6 @@ const iconPaths = {
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
   panelRight: 'M3 3h18v18H3zM15 3v18',
   search: 'm21 21-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z',
-  chevron: 'm9 18 6-6-6-6',
   folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
   folderOpen: 'M3 7h18l-2 10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
   x: 'M18 6 6 18M6 6l12 12',
@@ -43,74 +37,23 @@ const iconPaths = {
   refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6',
   crosshair: 'M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4Z',
   sparkles: 'M5 3l.8 1.9L7.7 5.8 5.8 6.7 5 8.5l-.8-1.8L2.3 5.8l1.9-.9ZM18 7l1.2 3 3 1.2-3 1.2L18 15l-1.2-2.6-3-1.2 3-1.2ZM10 12l1 2.5 2.5 1-2.5 1L10 19l-1-2.5-2.5-1 2.5-1Z',
-  image: 'M21 15V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14M8.5 10.5h.01M21 15l-5-5L5 21',
-  play: 'm5 3 14 9-14 9V3Z',
-  fileText: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6M8 13h8M8 17h8M8 9h2',
-  download: 'M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2',
-  trash: 'M3 6h18M8 6V4h8v2m-1 0-1 14H10L9 6',
-  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
-  eyeOff: 'm2 2 20 20M10.6 10.7a3 3 0 0 0 4 4M9.9 4.2A11.6 11.6 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-3.2 4.3M6.3 6.3A18.7 18.7 0 0 0 2 12s3.5 8 10 8a11 11 0 0 0 5.2-1.3',
-  checkCircle: 'M22 12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3',
   plus: 'M12 5v14M5 12h14',
-  terminal: 'm4 17 6-6-6-6M12 19h8',
   cpu: 'M9 2H7v2H5a2 2 0 0 0-2 2v2H1v2h2v4H1v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h6v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-4h2V8h-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9Zm-2 6h10v8H7Z',
+  terminal: 'm4 17 6-6-6-6M12 19h8',
 } as const;
 
 const mockHistory: HistorySession[] = [
-  { id: 1, title: 'Research Session', date: 'Today · 2:15 PM', preview: 'Explored transformers.js capabilities', events: ['Navigated to github.com', 'Asked about local inference', 'Opened MCP task tracker'] },
-  { id: 2, title: 'Dev Debugging', date: 'Yesterday · 4:30 PM', preview: 'Investigated React worker rendering', events: ['Navigated to stackoverflow.com', 'Opened settings', 'Installed local model'] },
+  { id: 1, title: 'Research Session', date: 'Today · 2:15 PM', preview: 'Investigated browser-safe ONNX models', events: ['Opened Hugging Face registry', 'Installed an ONNX model', 'Streamed a local response'] },
+  { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
 
 const mockExtensions: Extension[] = [
   { id: 1, name: 'uBlock Origin', author: 'Raymond Hill', rating: 4.9, users: '10M+', category: 'Privacy', description: 'Efficient network filtering.', enabled: true, color: '#f87171' },
   { id: 2, name: 'React DevTools', author: 'Meta', rating: 4.8, users: '5M+', category: 'Dev Tools', description: 'Inspect component trees.', enabled: true, color: '#60a5fa' },
-  { id: 3, name: 'AI Summarizer', author: 'Agent Labs', rating: 4.5, users: '120K+', category: 'AI', description: 'Summarize pages without leaving context.', enabled: false, color: '#a78bfa' },
+  { id: 3, name: 'Agent Notes', author: 'Agent Labs', rating: 4.5, users: '120K+', category: 'AI', description: 'Capture task notes inside the workspace.', enabled: false, color: '#a78bfa' },
 ];
 
-const workerSource = `
-const _dynamicImport = new Function('url', 'return import(url)');
-const cache = {};
-self.onmessage = async (event) => {
-  const { type, id, task, modelId, prompt, options } = event.data;
-  try {
-    if (type === 'ping') {
-      self.postMessage({ type: 'pong', id });
-      return;
-    }
-    const mod = await _dynamicImport('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
-    const { pipeline, TextStreamer } = mod;
-    const key = task + '::' + modelId;
-    if (!cache[key]) {
-      self.postMessage({ type: 'phase', id, phase: 'Downloading model…' });
-      cache[key] = await pipeline(task, modelId, { dtype: 'q4', device: 'wasm' });
-    }
-    if (type === 'load') {
-      self.postMessage({ type: 'status', id, msg: 'ready' });
-      return;
-    }
-    if (type === 'generate') {
-      const streamer = new TextStreamer(cache[key].tokenizer, {
-        skip_prompt: true,
-        callback_function(token) {
-          self.postMessage({ type: 'token', id, token });
-        },
-      });
-      const result = await cache[key](prompt, {
-        max_new_tokens: 256,
-        temperature: 0.7,
-        do_sample: true,
-        top_p: 0.9,
-        ...options,
-        streamer,
-      });
-      self.postMessage({ type: 'done', id, result });
-    }
-  } catch (error) {
-    self.postMessage({ type: 'error', id, msg: error instanceof Error ? error.message : String(error) });
-  }
-};`;
-
-function makeId(): string {
+function makeId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
@@ -129,19 +72,19 @@ function createInitialRoot(): TreeNode {
         activeMemory: true,
         color: '#60a5fa',
         children: [
-          { id: makeId(), name: 'GitHub', type: 'tab', url: 'https://github.com', persisted: true, memoryTier: 'hot', memoryMB: 180 },
-          { id: makeId(), name: 'Hugging Face', type: 'tab', url: 'https://huggingface.co', persisted: false, memoryTier: 'warm', memoryMB: 96 },
+          { id: makeId(), name: 'Hugging Face', type: 'tab', url: 'https://huggingface.co/models?library=transformers.js', persisted: true, memoryTier: 'hot', memoryMB: 165 },
+          { id: makeId(), name: 'Transformers.js', type: 'tab', url: 'https://huggingface.co/docs/transformers.js', persisted: false, memoryTier: 'warm', memoryMB: 88 },
         ],
       },
       {
-        id: 'ws-dev',
-        name: 'Dev',
+        id: 'ws-build',
+        name: 'Build',
         type: 'workspace',
         expanded: true,
-        activeMemory: false,
+        activeMemory: true,
         color: '#34d399',
         children: [
-          { id: makeId(), name: 'Stack Overflow', type: 'tab', url: 'https://stackoverflow.com', persisted: false, memoryTier: 'cool', memoryMB: 42 },
+          { id: makeId(), name: 'CopilotKit docs', type: 'tab', url: 'https://docs.copilotkit.ai', persisted: false, memoryTier: 'cool', memoryMB: 44 },
         ],
       },
     ],
@@ -151,9 +94,7 @@ function createInitialRoot(): TreeNode {
 function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof iconPaths; size?: number; color?: string; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      {iconPaths[name].split('M').filter(Boolean).map((segment) => (
-        <path key={segment} d={`M${segment}`} />
-      ))}
+      <path d={iconPaths[name]} />
     </svg>
   );
 }
@@ -173,14 +114,8 @@ function findNode(node: TreeNode, id: string): TreeNode | null {
   return null;
 }
 
-function countTabs(node: TreeNode): number {
-  if (node.type === 'tab') return 1;
-  return (node.children ?? []).reduce((sum, child) => sum + countTabs(child), 0);
-}
-
-function sumMemory(node: TreeNode): number {
-  if (node.type === 'tab') return node.memoryMB ?? 0;
-  return (node.children ?? []).reduce((sum, child) => sum + sumMemory(child), 0);
+function flattenTree(node: TreeNode, depth = 0): FlatTreeItem[] {
+  return (node.children ?? []).flatMap((child) => [{ node: child, depth }, ...(child.expanded && child.children ? flattenTree(child, depth + 1) : [])]);
 }
 
 function flattenTabs(node: TreeNode): TreeNode[] {
@@ -188,132 +123,39 @@ function flattenTabs(node: TreeNode): TreeNode[] {
   return (node.children ?? []).flatMap(flattenTabs);
 }
 
-function flattenTree(node: TreeNode, parentId: string | null = null, depth = 0): FlatTreeItem[] {
-  const result: FlatTreeItem[] = [];
-  for (const child of node.children ?? []) {
-    result.push({ node: child, depth, parentId });
-    if (child.expanded && child.children?.length) result.push(...flattenTree(child, child.id, depth + 1));
-  }
-  return result;
+function countTabs(node: TreeNode): number {
+  return flattenTabs(node).length;
+}
+
+function sumMemory(node: TreeNode): number {
+  return flattenTabs(node).reduce((sum, tab) => sum + (tab.memoryMB ?? 0), 0);
 }
 
 function getWorkspace(root: TreeNode, workspaceId: string): TreeNode | null {
   return (root.children ?? []).find((node) => node.id === workspaceId) ?? null;
 }
 
-function classifyOmni(raw: string): { intent: 'navigate' | 'search'; url?: string; query?: string } {
+function classifyOmnibar(raw: string): { intent: 'navigate' | 'search'; value: string } {
   const value = raw.trim();
-  if (/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(value)) return { intent: 'navigate', url: value };
-  if (/^localhost(:\d+)?(\/.*)?$/.test(value)) return { intent: 'navigate', url: `http://${value}` };
-  if (/^([\w-]+\.)+[a-zA-Z]{2,}(\/.*)?$/.test(value)) return { intent: 'navigate', url: `https://${value}` };
-  return { intent: 'search', query: value };
-}
-
-function buildTools() {
-  return [
-    {
-      name: 'task_tracker',
-      description: 'Show a kanban board for tasks.',
-      parameters: {
-        type: 'object',
-        properties: {
-          tasks: {
-            type: 'array',
-            items: { type: 'object' },
-          },
-        },
-        required: ['tasks'],
-      },
-    },
-  ];
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(value)) return { intent: 'navigate', value };
+  if (/^localhost(:\d+)?(\/.*)?$/.test(value)) return { intent: 'navigate', value: `http://${value}` };
+  if (/^([\w-]+\.)+[a-zA-Z]{2,}(\/.*)?$/.test(value)) return { intent: 'navigate', value: `https://${value}` };
+  return { intent: 'search', value };
 }
 
 function useToast() {
   const [toast, setToast] = useState<ToastState>(null);
   useEffect(() => {
     if (!toast) return undefined;
-    const timeout = window.setTimeout(() => setToast(null), 3000);
-    return () => window.clearTimeout(timeout);
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
   }, [toast]);
   return { toast, setToast };
 }
 
-function useTjs() {
-  const workerRef = useRef<Worker | null>(null);
-  const pendingRef = useRef(new Map<string, (payload: Record<string, unknown>) => void>());
-
-  async function getWorker(): Promise<Worker> {
-    if (workerRef.current) return workerRef.current;
-    const blob = new Blob([workerSource], { type: 'application/javascript' });
-    const worker = new Worker(URL.createObjectURL(blob));
-    workerRef.current = worker;
-    worker.onmessage = (event) => {
-      const id = String(event.data.id ?? '');
-      const cb = pendingRef.current.get(id);
-      if (cb) cb(event.data as Record<string, unknown>);
-    };
-    const id = `ping-${makeId()}`;
-    await new Promise<void>((resolve, reject) => {
-      const timer = window.setTimeout(() => reject(new Error('Worker timeout')), 10_000);
-      pendingRef.current.set(id, (payload) => {
-        if (payload.type === 'pong') {
-          window.clearTimeout(timer);
-          pendingRef.current.delete(id);
-          resolve();
-        }
-      });
-      worker.postMessage({ type: 'ping', id });
-    });
-    return worker;
-  }
-
-  async function loadModel(task: string, modelId: string, onStatus?: (msg: string) => void) {
-    const worker = await getWorker();
-    const id = `load-${makeId()}`;
-    await new Promise<void>((resolve, reject) => {
-      pendingRef.current.set(id, (payload) => {
-        if (payload.type === 'phase' && typeof payload.phase === 'string') onStatus?.(payload.phase);
-        if (payload.type === 'status' && payload.msg === 'ready') {
-          pendingRef.current.delete(id);
-          onStatus?.('ready');
-          resolve();
-        }
-        if (payload.type === 'error') {
-          pendingRef.current.delete(id);
-          reject(new Error(String(payload.msg ?? 'Unknown worker error')));
-        }
-      });
-      worker.postMessage({ type: 'load', id, task, modelId });
-    });
-  }
-
-  async function generate(input: { task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> }, callbacks: TjsCallbacks) {
-    const worker = await getWorker();
-    const id = `gen-${makeId()}`;
-    pendingRef.current.set(id, (payload) => {
-      if (payload.type === 'phase' && typeof payload.phase === 'string') callbacks.onPhase?.(payload.phase);
-      if (payload.type === 'status' && typeof payload.msg === 'string') callbacks.onStatus?.(payload.msg);
-      if (payload.type === 'token' && typeof payload.token === 'string') callbacks.onToken?.(payload.token);
-      if (payload.type === 'done') {
-        pendingRef.current.delete(id);
-        callbacks.onDone?.(payload.result);
-      }
-      if (payload.type === 'error') {
-        pendingRef.current.delete(id);
-        callbacks.onError?.(new Error(String(payload.msg ?? 'Unknown worker error')));
-      }
-    });
-    worker.postMessage({ type: 'generate', id, ...input });
-  }
-
-  return { loadModel, generate };
-}
-
 function ThinkingBlock({ content, duration, isThinking }: { content?: string; duration?: number; isThinking?: boolean }) {
   const [open, setOpen] = useState(Boolean(isThinking));
-  useEffect(() => {
-    if (isThinking) setOpen(true);
-  }, [isThinking]);
+  useEffect(() => { if (isThinking) setOpen(true); }, [isThinking]);
   if (!content && !isThinking) return null;
   return (
     <div className={`thinking-block ${isThinking ? 'thinking-active' : ''}`}>
@@ -322,7 +164,6 @@ function ThinkingBlock({ content, duration, isThinking }: { content?: string; du
           <Icon name={isThinking ? 'loader' : 'sparkles'} size={13} color="#a78bfa" className={isThinking ? 'spin' : ''} />
           {isThinking ? 'Thinking' : `Thought for ${duration ?? 0}s`}
         </span>
-        {!isThinking && <Icon name="chevron" size={12} color="#a78bfa" className={open ? 'rotated' : ''} />}
       </button>
       {open && <div className={`thinking-content ${isThinking ? 'stream-cursor' : ''}`}>{content}</div>}
     </div>
@@ -336,45 +177,8 @@ function MemBar({ root }: { root: TreeNode }) {
     <div className="mem-bar" aria-label="Memory distribution">
       {Object.entries(TIERS).map(([tier, meta]) => {
         const memory = tabs.filter((tab) => tab.memoryTier === tier).reduce((sum, tab) => sum + (tab.memoryMB ?? 0), 0);
-        if (!memory) return null;
-        return <div key={tier} style={{ width: `${(memory / total) * 100}%`, background: meta.color }} title={`${meta.label}: ${memory}MB`} />;
+        return memory ? <div key={tier} style={{ width: `${(memory / total) * 100}%`, background: meta.color }} title={`${meta.label}: ${memory}MB`} /> : null;
       })}
-    </div>
-  );
-}
-
-function TaskTrackerCard() {
-  const lanes = {
-    todo: ['Map user requirements', 'Search models'],
-    progress: ['Implement worker streaming'],
-    done: ['Create PWA shell'],
-  };
-  return (
-    <div className="mcp-card task-grid">
-      {Object.entries(lanes).map(([lane, tasks]) => (
-        <div key={lane} className="mcp-pane">
-          <h4>{lane === 'todo' ? 'To Do' : lane === 'progress' ? 'In Progress' : 'Done'}</h4>
-          {tasks.map((task) => (
-            <div key={task} className="mcp-pill">{task}</div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DataTableCard() {
-  return (
-    <div className="mcp-card">
-      <table>
-        <thead>
-          <tr><th>Model</th><th>Provider</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Qwen3 0.6B</td><td>Local</td><td>Installed</td></tr>
-          <tr><td>Claude 3.5 Sonnet</td><td>Anthropic</td><td>Ready</td></tr>
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -383,35 +187,25 @@ function ChatMessageView({ message }: { message: ChatMessage }) {
   const content = message.streamedContent || message.content;
   return (
     <div className={`message ${message.role}`}>
-      {(message.thinkingContent || message.isThinking) && (
-        <ThinkingBlock content={message.thinkingContent} duration={message.thinkingDuration} isThinking={message.isThinking} />
-      )}
-      {content && <div className="message-bubble">{content}{message.status === 'streaming' && !message.isThinking && <span className="stream-cursor" />}</div>}
-      {message.loadingStatus && <div className="message-status">{message.loadingStatus}</div>}
-      {message.cards?.map((card) => (
-        <div key={`${message.id}-${card.app}`}>
-          {card.app === 'task_tracker' ? <TaskTrackerCard /> : <DataTableCard />}
-        </div>
-      ))}
+      {(message.thinkingContent || message.isThinking) && <ThinkingBlock content={message.thinkingContent} duration={message.thinkingDuration} isThinking={message.isThinking} />}
+      {content ? <div className="message-bubble">{content}{message.status === 'streaming' && !message.isThinking && <span className="stream-cursor" />}</div> : null}
+      {message.loadingStatus ? <div className="message-status">{message.loadingStatus}</div> : null}
     </div>
   );
 }
 
 function PageOverlay({ tab, onClose }: { tab: TreeNode; onClose: () => void }) {
   const [address, setAddress] = useState(tab.url ?? '');
+  const [showInspector, setShowInspector] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [picking, setPicking] = useState(false);
   return (
     <section className="page-overlay" aria-label="Page overlay">
       <header className="page-toolbar">
         <button type="button" className="icon-button"><Icon name="arrowLeft" /></button>
         <button type="button" className="icon-button"><Icon name="arrowRight" /></button>
         <button type="button" className="icon-button"><Icon name="refresh" /></button>
-        <label className="address-bar">
-          <Icon name="globe" size={12} color="#6b7280" />
-          <input aria-label="Address" value={address} onChange={(event) => setAddress(event.target.value)} />
-        </label>
-        <button type="button" className={`icon-button ${picking ? 'active' : ''}`} onClick={() => setPicking((current) => !current)}><Icon name="crosshair" /></button>
+        <label className="address-bar"><Icon name="globe" size={12} color="#71717a" /><input aria-label="Address" value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+        <button type="button" className={`icon-button ${showInspector ? 'active' : ''}`} onClick={() => setShowInspector((current) => !current)}><Icon name="cpu" /></button>
         <button type="button" className={`icon-button ${showChat ? 'active' : ''}`} onClick={() => setShowChat((current) => !current)}><Icon name="messageSquare" /></button>
         <button type="button" className="icon-button" onClick={onClose}><Icon name="x" /></button>
       </header>
@@ -419,25 +213,24 @@ function PageOverlay({ tab, onClose }: { tab: TreeNode; onClose: () => void }) {
         <div className="page-canvas">
           <Icon name="globe" size={32} color="#3f3f46" />
           <p>{tab.url}</p>
-          <span>Simulated browser view</span>
+          <span>Simulated page content with browser chrome</span>
         </div>
-        {picking && <div className="picker-overlay">Click anywhere to inspect</div>}
-        {showChat && <aside className="page-chat-panel"><h3>Page Chat</h3><p>Use the main assistant to reason about this page.</p></aside>}
+        {showInspector ? <div className="picker-overlay">Element picker active</div> : null}
+        {showChat ? <aside className="page-chat-panel"><h3>Page Chat</h3><p>Use the main assistant to reason about the currently open page.</p></aside> : null}
       </div>
     </section>
   );
 }
 
-function ChatPanel({ providers, pendingSearch, onConsumedSearch, onToast }: { providers: ModelProvider[]; pendingSearch: string | null; onConsumedSearch: () => void; onToast: (toast: Exclude<ToastState, null>) => void }) {
-  const tjs = useTjs();
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: makeId(), role: 'system', content: 'Agent browser ready. Ask me anything or navigate to a URL.' },
-  ]);
+function ChatPanel({ installedModels, pendingSearch, onSearchConsumed, onToast }: { installedModels: HFModel[]; pendingSearch: string | null; onSearchConsumed: () => void; onToast: (toast: Exclude<ToastState, null>) => void }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([{ id: makeId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }]);
   const [input, setInput] = useState('');
-  const [providerId, setProviderId] = useState<'local' | string>('local');
-  const [localModels, setLocalModels] = useState<HFModel[]>(SEED_MODELS);
-  const [localModelId, setLocalModelId] = useState(SEED_MODELS[0]?.id ?? '');
+  const [selectedModelId, setSelectedModelId] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (installedModels.length && !selectedModelId) setSelectedModelId(installedModels[0].id);
+  }, [installedModels, selectedModelId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -445,138 +238,82 @@ function ChatPanel({ providers, pendingSearch, onConsumedSearch, onToast }: { pr
 
   useEffect(() => {
     if (!pendingSearch) return;
-    void sendMessage(pendingSearch, true);
-    onConsumedSearch();
-  }, [pendingSearch]);
+    void sendMessage(`Search the web for: ${pendingSearch}`);
+    onSearchConsumed();
+  }, [pendingSearch, onSearchConsumed]);
 
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
-    setMessages((current) => current.map((message) => (message.id === id ? { ...message, ...patch } : message)));
+    setMessages((current) => current.map((message) => message.id === id ? { ...message, ...patch } : message));
   }
 
-  async function installLocalModel(modelId: string) {
-    const model = localModels.find((entry) => entry.id === modelId);
-    if (!model) return;
-    setLocalModels((current) => current.map((entry) => (entry.id === modelId ? { ...entry, status: 'loading' } : entry)));
-    try {
-      await tjs.loadModel(model.task, model.id, (msg) => onToast({ msg, type: 'info' }));
-      setLocalModels((current) => current.map((entry) => (entry.id === modelId ? { ...entry, status: 'installed' } : entry)));
-      onToast({ msg: `${model.name} installed`, type: 'success' });
-    } catch (error) {
-      setLocalModels((current) => current.map((entry) => (entry.id === modelId ? { ...entry, status: 'available' } : entry)));
-      onToast({ msg: error instanceof Error ? error.message : 'Model install failed', type: 'error' });
-    }
-  }
-
-  async function callCloudProvider(provider: ModelProvider, content: string) {
-    const endpoint = API_ENDPOINTS[provider.id];
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (endpoint.header) headers[endpoint.header] = `${endpoint.prefix}${provider.apiKey}`;
-    const body = provider.id === 'anthropic'
-      ? {
-          model: provider.models.find((model) => model.enabled)?.id,
-          max_tokens: 1024,
-          messages: [{ role: 'user', content }],
-          tools: buildTools().map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })),
-        }
-      : {
-          model: provider.models.find((model) => model.enabled)?.id,
-          messages: [{ role: 'user', content }],
-          functions: buildTools(),
-          function_call: 'auto',
-        };
-    const response = await fetch(endpoint.url, { method: 'POST', headers, body: JSON.stringify(body) });
-    if (!response.ok) throw new Error(`Provider request failed: ${response.status}`);
-    return response.json();
-  }
-
-  async function sendMessage(text: string, isSearch = false) {
+  async function sendMessage(text: string) {
     if (!text.trim()) return;
+    const model = installedModels.find((entry) => entry.id === selectedModelId);
     const assistantId = makeId();
-    const userText = isSearch ? `Search the web for: ${text}` : text;
-    setMessages((current) => [...current, { id: makeId(), role: 'user', content: userText }, { id: assistantId, role: 'assistant', content: '', status: 'thinking' }]);
+    const nextMessages: ChatMessage[] = [...messages, { id: makeId(), role: 'user', content: text }, { id: assistantId, role: 'assistant', content: '', status: 'thinking' }];
+    setMessages(nextMessages);
     setInput('');
 
-    if (providerId === 'local') {
-      const installedModel = localModels.find((model) => model.id === localModelId)?.status === 'installed';
-      if (!installedModel) {
-        updateMessage(assistantId, {
-          status: 'complete',
-          content: 'Install a local model from Settings before using on-device inference.',
-          cards: [{ app: 'task_tracker', args: {} }, { app: 'data_table', args: {} }],
-        });
-        return;
-      }
-      let tokenBuffer = '';
-      let thinkingBuffer = '';
-      let inThinking = false;
-      let thinkingStart = 0;
-      try {
-        await tjs.generate(
-          {
-            task: 'text-generation',
-            modelId: localModelId,
-            prompt: [
-              { role: 'system', content: 'You are a helpful assistant in an agent-first browser.' },
-              ...messages.slice(-6).map((message) => ({ role: message.role, content: message.content || message.streamedContent || '' })),
-              { role: 'user', content: text },
-            ],
-          },
-          {
-            onPhase: (phase) => updateMessage(assistantId, { loadingStatus: phase }),
-            onToken: (token) => {
-              if (!inThinking && token.includes('<think>')) {
-                inThinking = true;
-                thinkingStart = Date.now();
-                thinkingBuffer += token.split('<think>')[1] ?? '';
-                updateMessage(assistantId, { isThinking: true, thinkingContent: thinkingBuffer, status: 'streaming' });
-                return;
-              }
-              if (inThinking && token.includes('</think>')) {
-                const [before, after = ''] = token.split('</think>');
-                thinkingBuffer += before;
-                tokenBuffer += after;
-                inThinking = false;
-                updateMessage(assistantId, {
-                  isThinking: false,
-                  thinkingContent: thinkingBuffer,
-                  thinkingDuration: Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)),
-                  streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(),
-                  status: 'streaming',
-                });
-                return;
-              }
-              if (inThinking) {
-                thinkingBuffer += token;
-                updateMessage(assistantId, { isThinking: true, thinkingContent: thinkingBuffer, status: 'streaming' });
-                return;
-              }
-              tokenBuffer += token;
-              updateMessage(assistantId, { streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(), status: 'streaming' });
-            },
-            onDone: () => updateMessage(assistantId, { status: 'complete', streamedContent: tokenBuffer.trim(), loadingStatus: null, cards: [{ app: 'data_table', args: {} }] }),
-            onError: (error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
-          },
-        );
-      } catch (error) {
-        updateMessage(assistantId, { status: 'error', content: error instanceof Error ? error.message : 'Local generation failed' });
-      }
+    if (!model) {
+      updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model from Settings before sending a prompt.' });
       return;
     }
 
-    const provider = providers.find((entry) => entry.id === providerId);
-    if (!provider?.apiKey) {
-      updateMessage(assistantId, { status: 'error', content: 'Configure an API key in Settings first.' });
-      return;
-    }
+    const aiMessages = toAiSdkMessages(nextMessages);
+    const chatTranscript = toChatSdkTranscript(nextMessages);
+    const copilotBridge = createCopilotBridgeSnapshot(nextMessages);
+    const prompt = [
+      { role: 'system', content: 'You are a helpful agent-first browser assistant. Be concise and clear.' },
+      ...aiMessages.slice(-7).map((message) => ({ role: message.role, content: message.parts.map((part) => ('text' in part ? String(part.text) : '')).join('') })),
+      { role: 'system', content: `Chat transcript length: ${chatTranscript.length}; Copilot bridge: ${copilotBridge.runtimeUrl}; messages: ${copilotBridge.messageCount}` },
+    ];
+
+    let tokenBuffer = '';
+    let thinkingBuffer = '';
+    let inThinking = false;
+    let thinkingStart = 0;
+
     try {
-      updateMessage(assistantId, { loadingStatus: 'Calling provider…' });
-      const response = await callCloudProvider(provider, text);
-      const content = provider.id === 'anthropic'
-        ? (response.content ?? []).filter((block: { type: string }) => block.type === 'text').map((block: { text: string }) => block.text).join('')
-        : response.choices?.[0]?.message?.content ?? '';
-      updateMessage(assistantId, { status: 'complete', streamedContent: content || 'No text returned.', loadingStatus: null, cards: [{ app: 'task_tracker', args: {} }] });
+      await browserInferenceEngine.generate(
+        { task: model.task, modelId: model.id, prompt },
+        {
+          onPhase: (phase) => updateMessage(assistantId, { loadingStatus: phase }),
+          onToken: (token) => {
+            if (!inThinking && token.includes('<think>')) {
+              inThinking = true;
+              thinkingStart = Date.now();
+              thinkingBuffer += token.split('<think>')[1] ?? '';
+              updateMessage(assistantId, { isThinking: true, thinkingContent: thinkingBuffer, status: 'streaming' });
+              return;
+            }
+            if (inThinking && token.includes('</think>')) {
+              const [before, after = ''] = token.split('</think>');
+              thinkingBuffer += before;
+              tokenBuffer += after;
+              inThinking = false;
+              updateMessage(assistantId, {
+                isThinking: false,
+                thinkingContent: thinkingBuffer,
+                thinkingDuration: Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)),
+                streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(),
+                status: 'streaming',
+              });
+              return;
+            }
+            if (inThinking) {
+              thinkingBuffer += token;
+              updateMessage(assistantId, { isThinking: true, thinkingContent: thinkingBuffer, status: 'streaming' });
+              return;
+            }
+            tokenBuffer += token;
+            updateMessage(assistantId, { streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(), status: 'streaming' });
+          },
+          onDone: () => updateMessage(assistantId, { status: 'complete', streamedContent: tokenBuffer.trim(), loadingStatus: null }),
+          onError: (error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
+        },
+      );
     } catch (error) {
-      updateMessage(assistantId, { status: 'error', content: error instanceof Error ? error.message : 'Provider request failed', loadingStatus: null });
+      onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
   }
 
@@ -585,64 +322,81 @@ function ChatPanel({ providers, pendingSearch, onConsumedSearch, onToast }: { pr
       <header className="chat-header">
         <div>
           <h2>Agent Chat</h2>
-          <p>Switch between local and cloud inference without blocking the UI thread.</p>
+          <p>Composed with AI SDK message shapes and a local browser inference engine.</p>
         </div>
-        <div className="chat-header-controls">
-          <label>
-            <span className="sr-only">Model provider</span>
-            <select aria-label="Model provider" value={providerId} onChange={(event) => setProviderId(event.target.value)}>
-              <option value="local">Local model</option>
-              {providers.filter((provider) => provider.status === 'connected').map((provider) => (
-                <option key={provider.id} value={provider.id}>{provider.name}</option>
-              ))}
-            </select>
-          </label>
-          {providerId === 'local' && (
-            <label>
-              <span className="sr-only">Local model</span>
-              <select aria-label="Local model" value={localModelId} onChange={(event) => setLocalModelId(event.target.value)}>
-                {localModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-            </label>
-          )}
-        </div>
+        <label>
+          <span className="sr-only">Installed model</span>
+          <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)}>
+            <option value="">Choose an installed model</option>
+            {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+        </label>
       </header>
       <div className="message-list" role="log" aria-live="polite">
         {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
         <div ref={bottomRef} />
       </div>
-      <div className="quick-actions">
-        {localModels.slice(0, 2).map((model) => (
-          <button key={model.id} type="button" className="secondary-button" onClick={() => void installLocalModel(model.id)} disabled={model.status === 'loading'}>
-            {model.status === 'installed' ? `${model.name} installed` : `Install ${model.name}`}
-          </button>
-        ))}
-      </div>
       <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
-        <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the agent, or use the omnibar to navigate…" rows={2} />
+        <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
         <button type="submit" className="primary-button"><Icon name="send" size={14} color="#fff" />Send</button>
       </form>
     </section>
   );
 }
 
-function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorChange, onWorkspaceToggle, onSelectTab, onCloseTab }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onWorkspaceToggle: (workspaceId: string) => void; onSelectTab: (tabId: string) => void; onCloseTab: (tabId: string) => void }) {
-  const workspace = getWorkspace(root, activeWorkspaceId) ?? root;
-  const items = useMemo(() => flattenTree(workspace), [workspace]);
+function SettingsPanel({ registryModels, installedModels, task, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
+  return (
+    <section className="panel-scroll" aria-label="Settings">
+      <h2>Browser model registry</h2>
+      <p className="muted">Only ONNX-optimized models from the Hugging Face registry that can run in-browser are shown here.</p>
+      <div className="local-model-controls">
+        <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search Hugging Face ONNX registry" />
+        <div className="chip-row">
+          {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
+        </div>
+      </div>
+      <div className="model-section">
+        <h3>Installed models</h3>
+        {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card"><div><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
+      </div>
+      <div className="model-section">
+        <h3>Registry results</h3>
+        {registryModels.map((model) => (
+          <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
+            <div>
+              <strong>{model.name}</strong>
+              <p>{model.author} · {model.task}</p>
+            </div>
+            <span>{model.downloads.toLocaleString()} downloads</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
 
+function HistoryPanel() {
+  return <section className="panel-scroll" aria-label="History"><h2>Session history</h2>{mockHistory.map((session) => <article key={session.id} className="list-card"><h3>{session.title}</h3><p className="muted">{session.date}</p><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
+}
+
+function ExtensionsPanel({ extensions, onToggle }: { extensions: Extension[]; onToggle: (id: number) => void }) {
+  return <section className="panel-scroll" aria-label="Extensions"><h2>Extensions</h2>{extensions.map((extension) => <article key={extension.id} className="list-card extension-card"><div className="extension-icon" style={{ background: `${extension.color}22` }}><Icon name="puzzle" color={extension.color} /></div><div><h3>{extension.name}</h3><p className="muted">{extension.author} · {extension.rating}★ · {extension.users}</p><p>{extension.description}</p></div><label className="switch"><input type="checkbox" aria-label={`Enable ${extension.name}`} checked={extension.enabled} onChange={() => onToggle(extension.id)} /><span /></label></article>)}</section>;
+}
+
+function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void }) {
+  const items = flattenTree(getWorkspace(root, activeWorkspaceId) ?? root);
   return (
     <div className="tree-panel">
       {items.map(({ node, depth }) => {
         const isFolder = node.type !== 'tab';
         return (
           <div key={node.id} className={`tree-row ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${12 + depth * 18}px` }}>
-            <button type="button" className="tree-button" onClick={() => (isFolder ? onWorkspaceToggle(node.id) : onSelectTab(node.id))} onFocus={() => onCursorChange(node.id)}>
+            <button type="button" className="tree-button" onFocus={() => onCursorChange(node.id)} onClick={() => isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
               {isFolder ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={14} color={node.color ?? '#60a5fa'} /> : <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />}
               <span>{node.name}</span>
-              {node.type === 'tab' && <span className="tree-meta">{node.memoryMB ?? 0}MB</span>}
-              {isFolder && <span className="tree-meta">{countTabs(node)} tabs</span>}
+              <span className="tree-meta">{node.type === 'tab' ? `${node.memoryMB ?? 0}MB` : `${countTabs(node)} tabs`}</span>
             </button>
-            {node.type === 'tab' && <button type="button" className="icon-button subtle" onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button>}
+            {node.type === 'tab' ? <button type="button" className="icon-button subtle" onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
           </div>
         );
       })}
@@ -650,154 +404,19 @@ function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorCha
   );
 }
 
-function SettingsPanel({ providers, onProvidersChange, installedModels, onInstallLocalModel }: { providers: ModelProvider[]; onProvidersChange: (providers: ModelProvider[]) => void; installedModels: HFModel[]; onInstallLocalModel: (id: string) => Promise<void> }) {
-  const [expandedProviderId, setExpandedProviderId] = useState<string | null>(providers[0]?.id ?? null);
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
-  const [query, setQuery] = useState('');
-  const [task, setTask] = useState<string>('text-generation');
-  const [results, setResults] = useState<HFModel[]>([]);
-
-  useEffect(() => {
-    const timeout = window.setTimeout(async () => {
-      if (!query.trim()) {
-        setResults([]);
-        return;
-      }
-      const response = await fetch(`https://huggingface.co/api/models?search=${encodeURIComponent(query)}&filter=onnx,${task}&limit=8`);
-      if (!response.ok) return;
-      const payload = (await response.json()) as Array<{ id: string; downloads?: number; likes?: number; pipeline_tag?: string }>;
-      setResults(payload.map((entry) => ({
-        id: entry.id,
-        name: entry.id.split('/').slice(-1)[0] ?? entry.id,
-        author: entry.id.split('/')[0] ?? 'unknown',
-        task: entry.pipeline_tag ?? task,
-        downloads: entry.downloads ?? 0,
-        likes: entry.likes ?? 0,
-        tags: ['onnx'],
-        sizeMB: null,
-        status: 'available',
-      })));
-    }, 350);
-    return () => window.clearTimeout(timeout);
-  }, [query, task]);
-
-  return (
-    <section className="panel-scroll" aria-label="Settings">
-      <h2>Provider settings</h2>
-      <div className="provider-list">
-        {providers.map((provider) => (
-          <article key={provider.id} className="provider-card">
-            <button type="button" className="provider-header" onClick={() => setExpandedProviderId((current) => (current === provider.id ? null : provider.id))}>
-              <span className="provider-name"><span className="provider-dot" style={{ background: provider.color }} />{provider.name}</span>
-              <span className={`badge ${provider.status === 'connected' ? 'connected' : ''}`}>{provider.status === 'connected' ? 'Connected' : 'Not configured'}</span>
-            </button>
-            {expandedProviderId === provider.id && (
-              <div className="provider-body">
-                <div className="inline-field">
-                  <input type={showKeys[provider.id] ? 'text' : 'password'} aria-label={`${provider.name} API key`} value={provider.apiKey} onChange={(event) => onProvidersChange(providers.map((item) => item.id === provider.id ? { ...item, apiKey: event.target.value } : item))} placeholder={`${provider.name} API key`} />
-                  <button type="button" className="secondary-button" onClick={() => setShowKeys((current) => ({ ...current, [provider.id]: !current[provider.id] }))}><Icon name={showKeys[provider.id] ? 'eyeOff' : 'eye'} size={14} /></button>
-                </div>
-                <div className="checkbox-list">
-                  {provider.models.map((model) => (
-                    <label key={model.id}>
-                      <input type="checkbox" checked={model.enabled} onChange={(event) => onProvidersChange(providers.map((item) => item.id === provider.id ? { ...item, models: item.models.map((candidate) => candidate.id === model.id ? { ...candidate, enabled: event.target.checked } : candidate) } : item))} />
-                      <span>{model.name}</span>
-                    </label>
-                  ))}
-                </div>
-                <button type="button" className="primary-button" onClick={() => onProvidersChange(providers.map((item) => item.id === provider.id ? { ...item, status: item.apiKey ? 'connected' : 'not_configured' } : item))}>Save provider</button>
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
-      <h2>Local models</h2>
-      <div className="local-model-controls">
-        <input aria-label="Hugging Face search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Hugging Face ONNX models" />
-        <div className="chip-row">
-          {HF_TASKS.map((entry) => (
-            <button key={entry} type="button" className={`chip ${task === entry ? 'active' : ''}`} onClick={() => setTask(entry)}>{entry}</button>
-          ))}
-        </div>
-      </div>
-      <div className="model-section">
-        <h3>Installed</h3>
-        {(installedModels.filter((model) => model.status === 'installed').length ? installedModels.filter((model) => model.status === 'installed') : SEED_MODELS.filter((model) => model.status === 'installed')).map((model) => (
-          <div key={model.id} className="model-card"><div><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>
-        ))}
-      </div>
-      <div className="model-section">
-        <h3>Recommended</h3>
-        {SEED_MODELS.map((model) => (
-          <button key={model.id} type="button" className="model-card action" onClick={() => void onInstallLocalModel(model.id)}>
-            <div><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span>{model.sizeMB ?? '—'}MB</span>
-          </button>
-        ))}
-      </div>
-      {results.length > 0 && (
-        <div className="model-section">
-          <h3>Search results</h3>
-          {results.map((model) => <div key={model.id} className="model-card"><div><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span>{model.downloads.toLocaleString()} downloads</span></div>)}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function HistoryPanel() {
-  return (
-    <section className="panel-scroll" aria-label="History">
-      <h2>Session history</h2>
-      {mockHistory.map((session) => (
-        <article key={session.id} className="list-card">
-          <h3>{session.title}</h3>
-          <p className="muted">{session.date}</p>
-          <p>{session.preview}</p>
-          <ul>
-            {session.events.map((event) => <li key={event}>{event}</li>)}
-          </ul>
-        </article>
-      ))}
-    </section>
-  );
-}
-
-function ExtensionsPanel({ extensions, onToggle }: { extensions: Extension[]; onToggle: (id: number) => void }) {
-  return (
-    <section className="panel-scroll" aria-label="Extensions">
-      <h2>Extensions</h2>
-      {extensions.map((extension) => (
-        <article key={extension.id} className="list-card extension-card">
-          <div className="extension-icon" style={{ background: `${extension.color}22` }}><Icon name="puzzle" color={extension.color} /></div>
-          <div>
-            <h3>{extension.name}</h3>
-            <p className="muted">{extension.author} · {extension.rating}★ · {extension.users}</p>
-            <p>{extension.description}</p>
-          </div>
-          <label className="switch">
-            <input type="checkbox" aria-label={`Enable ${extension.name}`} checked={extension.enabled} onChange={() => onToggle(extension.id)} />
-            <span />
-          </label>
-        </article>
-      ))}
-    </section>
-  );
-}
-
 function Toast({ toast }: { toast: ToastState }) {
-  if (!toast) return null;
-  return <div className={`toast ${toast.type}`}>{toast.msg}</div>;
+  return toast ? <div className={`toast ${toast.type}`}>{toast.msg}</div> : null;
 }
 
-function App() {
+function AgentBrowserApp() {
   const { toast, setToast } = useToast();
-  const tjs = useTjs();
   const [root, setRoot] = useState<TreeNode>(createInitialRoot());
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
   const [activePanel, setActivePanel] = useState<'workspaces' | 'chat' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
-  const [providers, setProviders] = useState<ModelProvider[]>(MODEL_PROVIDERS);
-  const [installedModels, setInstalledModels] = useState<HFModel[]>(SEED_MODELS);
+  const [registryTask, setRegistryTask] = useState('text-generation');
+  const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
+  const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
   const [omnibar, setOmnibar] = useState('');
   const [openTabId, setOpenTabId] = useState<string | null>(null);
   const [cursorId, setCursorId] = useState<string | null>(null);
@@ -811,22 +430,23 @@ function App() {
   const openTab = openTabId ? findNode(root, openTabId) : null;
 
   useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === '?') {
-        setShowShortcuts(true);
-        return;
-      }
+    void searchBrowserModels('', registryTask).then(setRegistryModels).catch((error) => setToast({ msg: error instanceof Error ? error.message : 'Registry search failed', type: 'error' }));
+  }, [registryTask]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === '?') { setShowShortcuts(true); return; }
       if (activePanel !== 'workspaces') return;
-      const currentIndex = visibleItems.findIndex((item) => item.node.id === cursorId);
+      const index = visibleItems.findIndex((item) => item.node.id === cursorId);
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        const next = visibleItems[Math.min(visibleItems.length - 1, Math.max(0, currentIndex + 1))];
+        const next = visibleItems[Math.min(visibleItems.length - 1, Math.max(0, index + 1))];
         if (next) setCursorId(next.node.id);
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        const next = visibleItems[Math.max(0, currentIndex - 1)];
-        if (next) setCursorId(next.node.id);
+        const prev = visibleItems[Math.max(0, index - 1)];
+        if (prev) setCursorId(prev.node.id);
       }
       if (event.key === 'ArrowRight' && cursorId) {
         const node = findNode(root, cursorId);
@@ -842,48 +462,34 @@ function App() {
       }
       if (event.key === 'Escape') setShowShortcuts(false);
     };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [activePanel, cursorId, root, visibleItems]);
 
-  async function handleInstallLocalModel(modelId: string) {
-    const target = installedModels.find((model) => model.id === modelId) ?? SEED_MODELS.find((model) => model.id === modelId);
-    if (!target) return;
-    setInstalledModels((current) => current.map((model) => model.id === modelId ? { ...model, status: 'loading' } : model));
-    try {
-      await tjs.loadModel(target.task, modelId, (msg) => setToast({ msg, type: 'info' }));
-      setInstalledModels((current) => current.map((model) => model.id === modelId ? { ...model, status: 'installed' } : model));
-    } catch (error) {
-      setToast({ msg: error instanceof Error ? error.message : 'Model installation failed', type: 'error' });
-      setInstalledModels((current) => current.map((model) => model.id === modelId ? { ...model, status: 'available' } : model));
-    }
+  async function installModel(model: HFModel) {
+    setToast({ msg: `Installing ${model.name}…`, type: 'info' });
+    await browserInferenceEngine.loadModel(model.task, model.id, {
+      onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
+      onError: (error) => setToast({ msg: error.message, type: 'error' }),
+    });
+    setInstalledModels((current) => current.some((entry) => entry.id === model.id) ? current : [...current, { ...model, status: 'installed' }]);
+    setToast({ msg: `${model.name} installed`, type: 'success' });
   }
 
   function handleOmnibarSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const result = classifyOmni(omnibar);
-    if (result.intent === 'navigate' && result.url) {
-      const tab: TreeNode = {
-        id: makeId(),
-        name: result.url.replace(/^https?:\/\//, '').slice(0, 28),
-        type: 'tab',
-        url: result.url,
-        memoryTier: 'hot',
-        memoryMB: 80 + Math.floor(Math.random() * 120),
-      };
+    const result = classifyOmnibar(omnibar);
+    if (result.intent === 'navigate') {
+      const tab: TreeNode = { id: makeId(), name: result.value.replace(/^https?:\/\//, '').slice(0, 32), type: 'tab', url: result.value, memoryTier: 'hot', memoryMB: 96 };
       setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, expanded: true, children: [...(node.children ?? []), tab] })));
       setOpenTabId(tab.id);
-      setToast({ msg: `Opened ${result.url}`, type: 'success' });
-    } else if (result.query) {
-      setPendingSearch(result.query);
+      setToast({ msg: `Opened ${result.value}`, type: 'success' });
+    } else {
+      setPendingSearch(result.value);
       setActivePanel('chat');
-      setToast({ msg: `Searching for “${result.query}”`, type: 'info' });
+      setToast({ msg: `Queued search: ${result.value}`, type: 'info' });
     }
     setOmnibar('');
-  }
-
-  function toggleWorkspace(id: string) {
-    setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded })));
   }
 
   function renderSidebar() {
@@ -891,18 +497,18 @@ function App() {
       return (
         <div className="sidebar-content">
           <MemBar root={activeWorkspace} />
-          <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} cursorId={cursorId} onCursorChange={setCursorId} onWorkspaceToggle={toggleWorkspace} onSelectTab={setOpenTabId} onCloseTab={(id) => {
+          <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} cursorId={cursorId} onCursorChange={setCursorId} onToggleFolder={(id) => setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded })))} onOpenTab={setOpenTabId} onCloseTab={(id) => {
             setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, children: (node.children ?? []).filter((child) => child.id !== id) })));
             if (openTabId === id) setOpenTabId(null);
           }} />
         </div>
       );
     }
-    if (activePanel === 'chat') return <ChatPanel providers={providers} pendingSearch={pendingSearch} onConsumedSearch={() => setPendingSearch(null)} onToast={setToast} />;
+    if (activePanel === 'chat') return <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} />;
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel extensions={extensions} onToggle={(id) => setExtensions((current) => current.map((entry) => entry.id === id ? { ...entry, enabled: !entry.enabled } : entry))} />;
-    if (activePanel === 'settings') return <SettingsPanel providers={providers} onProvidersChange={setProviders} installedModels={installedModels} onInstallLocalModel={handleInstallLocalModel} />;
-    return <section className="panel-scroll"><h2>Account</h2><p>Profile and policy controls can be layered in here as needed.</p></section>;
+    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={(query) => { void searchBrowserModels(query, registryTask).then(setRegistryModels).catch((error) => setToast({ msg: error instanceof Error ? error.message : 'Registry search failed', type: 'error' })); }} onInstall={installModel} />;
+    return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 
   return (
@@ -915,67 +521,32 @@ function App() {
           ['extensions', 'puzzle', 'Extensions'],
           ['settings', 'settings', 'Settings'],
           ['account', 'user', 'Account'],
-        ].map(([id, icon, label]) => (
-          <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}>
-            <Icon name={icon as keyof typeof iconPaths} size={16} color={activePanel === id ? '#60a5fa' : '#71717a'} />
-          </button>
-        ))}
-        <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-          <Icon name="panelRight" size={16} color="#71717a" />
-        </button>
+        ].map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof iconPaths} size={16} color={activePanel === id ? '#60a5fa' : '#71717a'} /></button>)}
+        <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
-      {!collapsed && (
+      {!collapsed ? (
         <aside className="sidebar">
           <header className="sidebar-header">
             <form className="omnibar" onSubmit={handleOmnibarSubmit}>
               <Icon name="search" size={13} color="#71717a" />
-              <input aria-label="Omnibar" value={omnibar} onChange={(event) => setOmnibar(event.target.value)} placeholder="Search, URLs, localhost…" />
+              <input aria-label="Omnibar" value={omnibar} onChange={(event) => setOmnibar(event.target.value)} placeholder="Search or navigate…" />
             </form>
             <div className="workspace-pills">
-              {(root.children ?? []).map((workspace) => (
-                <button key={workspace.id} type="button" className={`workspace-pill ${activeWorkspaceId === workspace.id ? 'active' : ''}`} onClick={() => setActiveWorkspaceId(workspace.id)}>{workspace.name}</button>
-              ))}
+              {(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className={`workspace-pill ${activeWorkspaceId === workspace.id ? 'active' : ''}`} onClick={() => setActiveWorkspaceId(workspace.id)}>{workspace.name}</button>)}
               <button type="button" className="workspace-pill add" onClick={() => setShowWorkspaces(true)}><Icon name="plus" size={10} /></button>
             </div>
           </header>
           {renderSidebar()}
         </aside>
-      )}
-      <main className="content-area">
-        {openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel providers={providers} pendingSearch={pendingSearch} onConsumedSearch={() => setPendingSearch(null)} onToast={setToast} />}
-      </main>
-      {showWorkspaces && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher">
-          <div className="modal-card">
-            <div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div>
-            <div className="workspace-grid">
-              {(root.children ?? []).map((workspace) => (
-                <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { setActiveWorkspaceId(workspace.id); setShowWorkspaces(false); }}>
-                  <span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} />
-                  <strong>{workspace.name}</strong>
-                  <span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      {showShortcuts && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
-          <div className="modal-card compact">
-            <div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div>
-            <ul className="shortcut-list">
-              <li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li>
-              <li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li>
-              <li><kbd>Enter</kbd><span>Open a selected tab</span></li>
-              <li><kbd>?</kbd><span>Open this overlay</span></li>
-            </ul>
-          </div>
-        </div>
-      )}
+      ) : null}
+      <main className="content-area">{openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} />}</main>
+      {showWorkspaces ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher"><div className="modal-card"><div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div><div className="workspace-grid">{(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { setActiveWorkspaceId(workspace.id); setShowWorkspaces(false); }}><span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} /><strong>{workspace.name}</strong><span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span></button>)}</div></div></div> : null}
+      {showShortcuts ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"><div className="modal-card compact"><div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div><ul className="shortcut-list"><li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li><li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li><li><kbd>Enter</kbd><span>Open the selected tab</span></li><li><kbd>?</kbd><span>Open this overlay</span></li></ul></div></div> : null}
       <Toast toast={toast} />
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return <AgentBrowserApp />;
+}

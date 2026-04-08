@@ -9,7 +9,7 @@ test('captures the main workspace screen', async ({ page }) => {
 test('captures the settings screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Settings').click();
-  await expect(page.getByText('Provider settings')).toBeVisible();
+  await expect(page.getByText('Browser model registry')).toBeVisible();
   await page.screenshot({ path: 'test-results/settings-screen.png', fullPage: true });
 });
 

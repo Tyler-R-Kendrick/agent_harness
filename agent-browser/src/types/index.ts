@@ -1,20 +1,9 @@
-// ─── Domain types ────────────────────────────────────────────────────────────
-
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
 export type NodeType = 'root' | 'workspace' | 'folder' | 'tab';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
-export type ProviderStatus = 'connected' | 'not_configured';
 export type ModelStatus = 'available' | 'installed' | 'loading';
-export type PanelId =
-  | 'workspaces'
-  | 'chat'
-  | 'history'
-  | 'extensions'
-  | 'settings'
-  | 'account';
-
-// ─── Tree ────────────────────────────────────────────────────────────────────
+export type PanelId = 'workspaces' | 'chat' | 'history' | 'extensions' | 'settings' | 'account';
 
 export interface TreeNode {
   id: string;
@@ -29,8 +18,6 @@ export interface TreeNode {
   url?: string;
   color?: string;
 }
-
-// ─── Chat ────────────────────────────────────────────────────────────────────
 
 export interface McpCard {
   app: string;
@@ -53,31 +40,6 @@ export interface ChatMessage {
   isError?: boolean;
 }
 
-// ─── Providers ───────────────────────────────────────────────────────────────
-
-export interface LLMModel {
-  id: string;
-  name: string;
-  enabled: boolean;
-}
-
-export interface ModelProvider {
-  id: string;
-  name: string;
-  color: string;
-  status: ProviderStatus;
-  apiKey: string;
-  models: LLMModel[];
-}
-
-export interface ApiEndpoint {
-  url: string;
-  header: string;
-  prefix: string;
-}
-
-// ─── Local / HF models ───────────────────────────────────────────────────────
-
 export interface HFModel {
   id: string;
   name: string;
@@ -90,8 +52,6 @@ export interface HFModel {
   status: ModelStatus;
 }
 
-// ─── MCP ─────────────────────────────────────────────────────────────────────
-
 export interface McpAppDef {
   name: string;
   icon: string;
@@ -100,8 +60,6 @@ export interface McpAppDef {
 }
 
 export type McpRegistry = Record<string, McpAppDef>;
-
-// ─── History / Extensions ────────────────────────────────────────────────────
 
 export interface HistorySession {
   id: number;
@@ -123,16 +81,14 @@ export interface Extension {
   description: string;
 }
 
-// ─── TJS Worker messages ─────────────────────────────────────────────────────
-
-export interface TjsGenerateOptions {
+export interface BrowserInferenceRequest {
   task: string;
   modelId: string;
   prompt: unknown;
   options?: Record<string, unknown>;
 }
 
-export interface TjsCallbacks {
+export interface BrowserInferenceCallbacks {
   onStatus?: (msg: string) => void;
   onPhase?: (phase: string) => void;
   onToken?: (token: string) => void;
