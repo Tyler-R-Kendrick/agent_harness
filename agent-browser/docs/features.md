@@ -13,7 +13,10 @@ How to interact:
 - Use the omnibar to search or navigate.
 - Switch workspaces with the pills under the omnibar.
 - Browse tabs and folders from the exploration tree.
-- Use the activity bar to switch between exploration, chat, history, extensions, and settings.
+- Use the **Workspace files** section to add real AGENTS.md, skill, plugin, and hook files to the active workspace.
+- Edit file paths and contents in place, then save them back to browser storage.
+- Review the assistant context preview to confirm the harness is loading and using the stored capability files.
+- Use the activity bar to switch between exploration, history, extensions, and settings.
 - Send a prompt from the themed composer at the bottom using the model pill and green send button.
 
 ## Settings / model registry
@@ -36,8 +39,8 @@ Playwright test: `captures the extensions screen`
 
 How to interact:
 - Open **Extensions** from the activity bar.
-- Review extension cards styled as marketplace entries.
-- Toggle extension enablement using the switch on each card.
+- Review which plugin manifests were discovered from the active workspace.
+- Return to **Exploration** when you need to add or edit plugin manifest files.
 
 ## History panel
 

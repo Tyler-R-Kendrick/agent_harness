@@ -3,7 +3,7 @@ export type NodeType = 'root' | 'workspace' | 'folder' | 'tab';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ModelStatus = 'available' | 'installed' | 'loading';
-export type PanelId = 'workspaces' | 'chat' | 'history' | 'extensions' | 'settings' | 'account';
+export type PanelId = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 
 export interface TreeNode {
   id: string;
@@ -69,16 +69,54 @@ export interface HistorySession {
   events: string[];
 }
 
-export interface Extension {
-  id: number;
+export type IntegrationKind = 'agents' | 'skills' | 'plugins' | 'hooks' | 'mcps';
+
+export type WorkspaceFileKind = 'agents' | 'skill' | 'plugin' | 'hook';
+
+export interface IntegrationSurface {
+  id: string;
   name: string;
-  author: string;
-  category: string;
-  rating: number;
-  users: string;
+  kind: IntegrationKind;
+  source: string;
   enabled: boolean;
   color: string;
   description: string;
+  badges: string[];
+  constraint?: string;
+}
+
+export interface WorkspaceFile {
+  path: string;
+  content: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceSkill {
+  path: string;
+  directory: string;
+  name: string;
+  description: string;
+  content: string;
+}
+
+export interface WorkspacePlugin {
+  path: string;
+  directory: string;
+  manifestName: string;
+  content: string;
+}
+
+export interface WorkspaceHook {
+  path: string;
+  name: string;
+  content: string;
+}
+
+export interface WorkspaceCapabilities {
+  agents: WorkspaceFile[];
+  skills: WorkspaceSkill[];
+  plugins: WorkspacePlugin[];
+  hooks: WorkspaceHook[];
 }
 
 export interface BrowserInferenceRequest {
