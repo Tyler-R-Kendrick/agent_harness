@@ -3,13 +3,28 @@
   "installCommand": "cd agent-browser && npm ci",
   "buildCommand": "cd agent-browser && npm run build",
   "outputDirectory": "agent-browser/dist",
-  "routes": [
+  "headers": [
     {
-      "handle": "filesystem"
-    },
+      "source": "/assets/(.*\\.wasm)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
     {
-      "src": "/.*",
-      "dest": "/index.html"
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*text/html.*"
+        }
+      ],
+      "destination": "/index.html"
     }
   ]
 }
