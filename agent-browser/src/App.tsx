@@ -1,4 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Cpu,
+  Folder,
+  FolderOpen,
+  Globe,
+  History,
+  Layers3,
+  LoaderCircle,
+  LucideIcon,
+  MessageSquare,
+  PanelRightOpen,
+  Plus,
+  Puzzle,
+  RefreshCcw,
+  Search,
+  SendHorizontal,
+  Settings,
+  Sparkles,
+  User,
+  X,
+} from 'lucide-react';
 import './App.css';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
@@ -20,29 +43,27 @@ const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
 
-const iconPaths = {
-  layers: 'M12 2 2 7l10 5 10-5-10-5Zm0 10L2 7m10 5 10-5M2 17l10 5 10-5',
-  messageSquare: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z',
-  clock: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 4v6l4 2',
-  puzzle: 'M19.4 13a1.4 1.4 0 0 0-1.4 1.4V17h-3v-2.6A1.4 1.4 0 0 0 13.6 13H11V9.4A1.4 1.4 0 0 0 9.6 8H7V5h3.6A1.4 1.4 0 0 0 12 3.6 1.6 1.6 0 1 1 15.2 4a1.4 1.4 0 0 0 1.4 1H20v3.4A1.4 1.4 0 0 0 21.4 10a1.6 1.6 0 1 1 0 3 1.4 1.4 0 0 0-1.4 0Z',
-  settings: 'M12 8.5A3.5 3.5 0 1 0 15.5 12 3.5 3.5 0 0 0 12 8.5Zm7.4 3.5a7.6 7.6 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7.3 7.3 0 0 0-1.7-1l-.4-2.6h-4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.3 7.3 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.3 7.3 0 0 0 1.7-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z',
-  user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
-  panelRight: 'M3 3h18v18H3zM15 3v18',
-  search: 'm21 21-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z',
-  folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
-  folderOpen: 'M3 7h18l-2 10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
-  x: 'M18 6 6 18M6 6l12 12',
-  send: 'M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z',
-  loader: 'M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8',
-  globe: 'M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm-7 10h14M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z',
-  arrowLeft: 'M19 12H5m7 7-7-7 7-7',
-  arrowRight: 'M5 12h14m-7 7 7-7-7-7',
-  refresh: 'M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6',
-  crosshair: 'M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4Z',
-  sparkles: 'M5 3l.8 1.9L7.7 5.8 5.8 6.7 5 8.5l-.8-1.8L2.3 5.8l1.9-.9ZM18 7l1.2 3 3 1.2-3 1.2L18 15l-1.2-2.6-3-1.2 3-1.2ZM10 12l1 2.5 2.5 1-2.5 1L10 19l-1-2.5-2.5-1 2.5-1Z',
-  plus: 'M12 5v14M5 12h14',
-  cpu: 'M9 2H7v2H5a2 2 0 0 0-2 2v2H1v2h2v4H1v2h2v2a2 2 0 0 0 2 2h2v2h2v-2h6v2h2v-2h2a2 2 0 0 0 2-2v-2h2v-2h-2v-4h2V8h-2V6a2 2 0 0 0-2-2h-2V2h-2v2H9Zm-2 6h10v8H7Z',
-  terminal: 'm4 17 6-6-6-6M12 19h8',
+const icons = {
+  layers: Layers3,
+  messageSquare: MessageSquare,
+  clock: History,
+  puzzle: Puzzle,
+  settings: Settings,
+  user: User,
+  panelRight: PanelRightOpen,
+  search: Search,
+  folder: Folder,
+  folderOpen: FolderOpen,
+  x: X,
+  send: SendHorizontal,
+  loader: LoaderCircle,
+  globe: Globe,
+  arrowLeft: ArrowLeft,
+  arrowRight: ArrowRight,
+  refresh: RefreshCcw,
+  sparkles: Sparkles,
+  plus: Plus,
+  cpu: Cpu,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -94,12 +115,9 @@ function createInitialRoot(): TreeNode {
   };
 }
 
-function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof iconPaths; size?: number; color?: string; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      <path d={iconPaths[name]} />
-    </svg>
-  );
+function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof icons; size?: number; color?: string; className?: string }) {
+  const IconComponent: LucideIcon = icons[name];
+  return <IconComponent size={size} color={color} className={className} aria-hidden="true" strokeWidth={1.8} />;
 }
 
 function deepUpdate(node: TreeNode, id: string, update: (node: TreeNode) => TreeNode): TreeNode {
@@ -531,7 +549,7 @@ function AgentBrowserApp() {
           ['extensions', 'puzzle', 'Extensions'],
           ['settings', 'settings', 'Settings'],
           ['account', 'user', 'Account'],
-        ].map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof iconPaths} size={16} color={activePanel === id ? '#60a5fa' : '#71717a'} /></button>)}
+        ].map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#60a5fa' : '#71717a'} /></button>)}
         <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
       {!collapsed ? (
