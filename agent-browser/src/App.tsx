@@ -3,6 +3,7 @@ import { useCopilotReadable } from '@copilotkit/react-core';
 import {
   ArrowLeft,
   ArrowRight,
+  ChevronRight,
   Cpu,
   File,
   Folder,
@@ -135,6 +136,7 @@ const icons = {
   sparkles: Sparkles,
   plus: Plus,
   cpu: Cpu,
+  chevronRight: ChevronRight,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -185,6 +187,25 @@ function Icon({ name, size = 16, color = 'currentColor', className = '' }: { nam
   return <IconComponent size={size} color={color} className={className} aria-hidden="true" strokeWidth={1.8} />;
 }
 
+function Favicon({ url, size = 14 }: { url?: string; size?: number }) {
+  const [err, setErr] = useState(false);
+  const domain = useMemo(() => {
+    if (!url) return null;
+    try { return new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { return null; }
+  }, [url]);
+  if (!domain || err) return <Icon name="globe" size={size} color="rgba(255,255,255,.3)" />;
+  return <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} width={size} height={size} onError={() => setErr(true)} style={{ borderRadius: 2, flexShrink: 0, display: 'block' }} alt="" aria-hidden="true" />;
+}
+
+function ActiveMemoryPulse() {
+  return (
+    <span className="memory-pulse" title="Active memory" aria-hidden="true">
+      <span className="memory-pulse-ring" />
+      <span className="memory-pulse-dot" />
+    </span>
+  );
+}
+
 function deepUpdate(node: TreeNode, id: string, update: (node: TreeNode) => TreeNode): TreeNode {
   if (node.id === id) return update(node);
   if (!node.children) return node;
@@ -207,6 +228,10 @@ function flattenTabs(node: TreeNode): TreeNode[] {
 
 function countTabs(node: TreeNode): number {
   return flattenTabs(node).length;
+}
+
+function totalMemoryMB(node: TreeNode): number {
+  return flattenTabs(node).reduce((sum, t) => sum + (t.memoryMB ?? 0), 0);
 }
 
 function getWorkspace(root: TreeNode, workspaceId: string): TreeNode | null {
@@ -873,13 +898,28 @@ function SidebarTree({ activeWorkspaceId, openTabId, editingFilePath, cursorId, 
         const isActiveWs = isWorkspace && node.id === activeWorkspaceId;
         const isEditingFile = isFile && node.filePath === editingFilePath;
         const isSelected = selectedIds.includes(node.id);
+        const tabOpacity = node.type === 'tab' ? (node.memoryTier === 'cold' ? 0.5 : node.memoryTier === 'cool' ? 0.65 : 0.9) : undefined;
         return (
           <div key={node.id} role="treeitem" className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
-            <button type="button" className="tree-button" onFocus={() => onCursorChange(node.id)} onClick={() => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
-              {isFile ? <Icon name="file" size={12} color="#a5b4fc" /> : isFolder ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={node.color ?? '#60a5fa'} /> : <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />}
-              <span>{node.name}</span>
-              {node.type === 'tab' ? <span className="tree-meta">{node.memoryMB ?? 0}MB</span> : null}
-              {isWorkspace ? <span className="tree-meta">{countTabs(node)} tabs</span> : null}
+            <button type="button" className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={() => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
+              {isFile ? (
+                <Icon name="file" size={12} color="#a5b4fc" />
+              ) : isFolder ? (
+                <>
+                  <span className={`tree-chevron ${node.expanded ? 'tree-chevron-expanded' : ''}`}><Icon name="chevronRight" size={11} color="rgba(255,255,255,.25)" /></span>
+                  {isWorkspace && node.activeMemory ? <ActiveMemoryPulse /> : null}
+                  {isWorkspace && node.persisted ? <span className="persist-badge" title="Persisted" aria-label="Persisted workspace">📌</span> : null}
+                  <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={isWorkspace && node.activeMemory ? '#34d399' : node.color ?? '#60a5fa'} />
+                </>
+              ) : (
+                <>
+                  <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />
+                  <Favicon url={node.url} size={13} />
+                </>
+              )}
+              <span className={isWorkspace && !node.persisted ? 'ws-name-temp' : ''}>{node.name}</span>
+              {node.type === 'tab' ? <span className="tree-meta">{fmtMem(node.memoryMB ?? 0)}</span> : null}
+              {isWorkspace ? <span className="tree-meta">{countTabs(node)} tabs · {fmtMem(totalMemoryMB(node))}</span> : null}
             </button>
             {node.type === 'tab' ? <button type="button" className="icon-button subtle" aria-label={`Close ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
             {isFile ? <button type="button" className="icon-button subtle" aria-label={`Remove ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
