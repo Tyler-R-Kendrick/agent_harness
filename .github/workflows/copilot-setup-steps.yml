@@ -36,6 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           skills_cli_version=1.4.9
+          anthropic_skills_ref=ca1e7dc13c0ab5e2dfaa6de71991cd951b8f1cf2
           # Keep the requested installs strict so setup fails fast if any required skill becomes unavailable.
           # `npx --yes` auto-confirms package download; `skills add -y` auto-confirms the skill installation itself.
           # These names intentionally match the current Skills CLI agent identifiers.
@@ -71,12 +72,12 @@ jobs:
           }
 
           install_skill 1/8 https://github.com/vercel-labs/skills df0579f85cb8a360473c921e1343359006100d3c find-skills
-          install_skill 2/8 https://github.com/anthropics/skills ca1e7dc13c0ab5e2dfaa6de71991cd951b8f1cf2 frontend-design
+          install_skill 2/8 https://github.com/anthropics/skills "$anthropic_skills_ref" frontend-design
           install_skill 3/8 https://github.com/vercel-labs/agent-skills 73140fc5b3a214ad3222bcf557b397b3c02d11c1 web-design-guidelines
-          install_skill 4/8 https://github.com/anthropics/skills ca1e7dc13c0ab5e2dfaa6de71991cd951b8f1cf2 skill-creator
+          install_skill 4/8 https://github.com/anthropics/skills "$anthropic_skills_ref" skill-creator
           install_skill 5/8 https://github.com/nextlevelbuilder/ui-ux-pro-max-skill b7e3af80f6e331f6fb456667b82b12cade7c9d35 ui-ux-pro-max
           install_skill 6/8 https://github.com/shadcn/ui d86c5e59395d994fa9c634d9989b4ae20cf0bbbe shadcn
-          install_skill 7/8 https://github.com/anthropics/skills ca1e7dc13c0ab5e2dfaa6de71991cd951b8f1cf2 webapp-testing
+          install_skill 7/8 https://github.com/anthropics/skills "$anthropic_skills_ref" webapp-testing
           install_skill 8/8 https://github.com/pbakaus/impeccable e7afda2c5505a8893bc4d05267949b3197b4c00f impeccable
 
       - name: Install requested Copilot plugin marketplace assets
