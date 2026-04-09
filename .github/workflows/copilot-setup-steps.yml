@@ -37,9 +37,11 @@ jobs:
           set -euo pipefail
           # Keep the requested installs strict so setup fails fast if any required skill becomes unavailable.
           # `npx --yes` auto-confirms package download; `skills add -y` auto-confirms the skill installation itself.
-          agents=(claude-code codex opencode)
+          target_agents=(claude-code codex opencode)
           install_skill() {
-            npx --yes skills add "$1" --skill "$2" --copy -y --agent "${agents[@]}"
+            local repo_url="$1"
+            local skill_name="$2"
+            npx --yes skills add "$repo_url" --skill "$skill_name" --copy -y --agent "${target_agents[@]}"
           }
 
           install_skill https://github.com/vercel-labs/skills find-skills
