@@ -40,12 +40,14 @@ jobs:
           # These names intentionally match the current Skills CLI agent identifiers.
           target_agent_names=(claude-code codex opencode)
           install_skill() {
-            local repo_url="$1"
-            local skill_name="$2"
+            local progress_label="$1"
+            local repo_url="$2"
+            local skill_name="$3"
             local install_args=()
             local agent_name
+            # Skills CLI installs shared project skills into .agents/skills/<skill>/SKILL.md.
             local installed_skill_path=".agents/skills/${skill_name}/SKILL.md"
-            echo "Installing skill: ${skill_name} from ${repo_url}"
+            echo "Installing skill ${progress_label}: ${skill_name} from ${repo_url}"
             for agent_name in "${target_agent_names[@]}"; do
               install_args+=(--agent "$agent_name")
             done
@@ -53,14 +55,14 @@ jobs:
             test -f "$installed_skill_path"
           }
 
-          install_skill https://github.com/vercel-labs/skills find-skills
-          install_skill https://github.com/anthropics/skills frontend-design
-          install_skill https://github.com/vercel-labs/agent-skills web-design-guidelines
-          install_skill https://github.com/anthropics/skills skill-creator
-          install_skill https://github.com/nextlevelbuilder/ui-ux-pro-max-skill ui-ux-pro-max
-          install_skill https://github.com/shadcn/ui shadcn
-          install_skill https://github.com/anthropics/skills webapp-testing
-          install_skill https://github.com/pbakaus/impeccable impeccable
+          install_skill 1/8 https://github.com/vercel-labs/skills find-skills
+          install_skill 2/8 https://github.com/anthropics/skills frontend-design
+          install_skill 3/8 https://github.com/vercel-labs/agent-skills web-design-guidelines
+          install_skill 4/8 https://github.com/anthropics/skills skill-creator
+          install_skill 5/8 https://github.com/nextlevelbuilder/ui-ux-pro-max-skill ui-ux-pro-max
+          install_skill 6/8 https://github.com/shadcn/ui shadcn
+          install_skill 7/8 https://github.com/anthropics/skills webapp-testing
+          install_skill 8/8 https://github.com/pbakaus/impeccable impeccable
 
       - name: Install requested Copilot plugin marketplace assets
         run: |
