@@ -342,7 +342,7 @@ function WorkspaceStoragePanel({
       </div>
       <p className="muted">Store standards-based capability files in the active workspace: root-level AGENTS.md, `.agents/skill/.../SKILL.md`, `.agents/plugins/...`, and `.agents/hooks/...`.</p>
       <WorkspaceFileComposer draftName={draftName} onDraftNameChange={setDraftName} onAddFile={handleAddFile} />
-      {!files.length ? <div className="list-card workspace-empty-state"><strong>No workspace capability files yet.</strong><p className="muted">Add AGENTS.md, a skill, a plugin manifest, or a hook to make this workspace behave differently.</p></div> : null}
+      {!files.length ? <div className="list-card workspace-empty-state"><Icon name="folder" size={24} color="#6b7280" /><strong>No workspace capability files yet.</strong><p className="muted">Add AGENTS.md, a skill, a plugin manifest, or a hook to make this workspace behave differently.</p></div> : null}
       {files.length ? (
         <div className="workspace-file-grid">
           <div className="workspace-file-list" aria-label="Workspace file list">
@@ -369,7 +369,7 @@ function WorkspaceStoragePanel({
               {validationMessage ? <p className="workspace-file-error">{validationMessage}</p> : null}
               <div className="workspace-file-toolbar">
                 <button type="button" className="primary-button" onClick={handleSaveSelectedFile}>Save file</button>
-                <button type="button" className="secondary-button" onClick={() => { onDeleteFile(selectedFile.path); onToast({ msg: `Removed ${selectedFile.path}`, type: 'info' }); }}>Delete file</button>
+                <button type="button" className="secondary-button destructive" onClick={() => { onDeleteFile(selectedFile.path); onToast({ msg: `Removed ${selectedFile.path}`, type: 'info' }); }}>Delete file</button>
               </div>
             </div>
           ) : null}
