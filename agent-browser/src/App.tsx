@@ -296,15 +296,43 @@ function ThinkingBlock({ content, duration, isThinking }: { content?: string; du
   );
 }
 
+function fmtMem(mb: number): string {
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1).replace(/\.0$/, '')} GB`;
+  if (mb >= 1) return `${Math.round(mb)} MB`;
+  return `${Math.round(mb * 1024)} KB`;
+}
+
 function MemBar({ root }: { root: TreeNode }) {
+  const budget = 2048;
   const tabs = flattenTabs(root);
-  const total = Math.max(1, tabs.reduce((sum, tab) => sum + (tab.memoryMB ?? 0), 0));
+  const tierMemory = Object.entries(TIERS).map(([tier, meta]) => ({
+    tier,
+    ...meta,
+    memory: tabs.filter((tab) => tab.memoryTier === tier).reduce((sum, tab) => sum + (tab.memoryMB ?? 0), 0),
+  }));
+  const used = tierMemory.reduce((sum, t) => sum + t.memory, 0);
+  const pct = (mb: number) => Math.max((mb / budget) * 100, 0.3);
   return (
     <div className="mem-bar" aria-label="Memory distribution">
-      {Object.entries(TIERS).map(([tier, meta]) => {
-        const memory = tabs.filter((tab) => tab.memoryTier === tier).reduce((sum, tab) => sum + (tab.memoryMB ?? 0), 0);
-        return memory ? <div key={tier} style={{ width: `${(memory / total) * 100}%`, background: meta.color }} title={`${meta.label}: ${memory}MB`} /> : null;
-      })}
+      <div className="mem-bar-header">
+        <span>Memory</span>
+        <span>{fmtMem(used)} / {fmtMem(budget)}</span>
+      </div>
+      <div className="mem-bar-track">
+        {tierMemory.map((t) =>
+          t.memory ? (
+            <div key={t.tier} style={{ width: `${pct(t.memory)}%`, background: t.color, transition: 'width .5s' }} title={`${t.label}: ${t.memory}MB`} />
+          ) : null,
+        )}
+      </div>
+      <div className="mem-bar-legend">
+        {tierMemory.map((t) => (
+          <span key={t.tier} className="mem-bar-legend-item">
+            <span className="mem-bar-legend-dot" style={{ background: t.color }} />
+            {t.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
