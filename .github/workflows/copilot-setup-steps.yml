@@ -31,3 +31,24 @@ jobs:
       - name: Install app dependencies
         working-directory: agent-browser
         run: npm ci
+
+      - name: Install requested agent skills
+        run: |
+          npx --yes skills add https://github.com/vercel-labs/skills --skill find-skills --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/anthropics/skills --skill frontend-design --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/anthropics/skills --skill skill-creator --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill ui-ux-pro-max --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/shadcn/ui --skill shadcn --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/anthropics/skills --skill webapp-testing --copy -y -a claude-code -a codex -a opencode
+          npx --yes skills add https://github.com/pbakaus/impeccable --skill impeccable --copy -y -a claude-code -a codex -a opencode
+
+      - name: Install requested Copilot plugin marketplace assets
+        run: |
+          if ! command -v copilot >/dev/null 2>&1; then
+            echo "copilot CLI is not available on this runner; skipping Copilot plugin installation."
+            exit 0
+          fi
+
+          copilot plugin marketplace add obra/superpowers-marketplace
+          copilot plugin install superpowers@superpowers-marketplace
