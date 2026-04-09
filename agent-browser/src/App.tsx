@@ -703,7 +703,7 @@ function WorkspaceSwitcherOverlay({
             {filtered.map((workspace, index) => (
               <div
                 key={workspace.id}
-                className={`workspace-list-item ${workspace.id === activeWorkspaceId ? 'active' : ''}`}
+                className={`workspace-list-item workspace-card ${workspace.id === activeWorkspaceId ? 'active' : ''}`}
                 onDoubleClick={() => onRenameWorkspace(workspace.id)}
               >
                 <button
