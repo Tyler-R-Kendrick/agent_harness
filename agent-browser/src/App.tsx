@@ -209,10 +209,6 @@ function countTabs(node: TreeNode): number {
   return flattenTabs(node).length;
 }
 
-function sumMemory(node: TreeNode): number {
-  return flattenTabs(node).reduce((sum, tab) => sum + (tab.memoryMB ?? 0), 0);
-}
-
 function getWorkspace(root: TreeNode, workspaceId: string): TreeNode | null {
   return (root.children ?? []).find((node) => node.id === workspaceId) ?? null;
 }
@@ -664,6 +660,7 @@ function WorkspaceSwitcherOverlay({
   onSwitch,
   onCreateWorkspace,
   onRenameWorkspace,
+  onDeleteWorkspace,
   onClose,
 }: {
   workspaces: TreeNode[];
@@ -671,63 +668,99 @@ function WorkspaceSwitcherOverlay({
   onSwitch: (workspaceId: string) => void;
   onCreateWorkspace: () => void;
   onRenameWorkspace: (workspaceId: string) => void;
+  onDeleteWorkspace?: (workspaceId: string) => void;
   onClose: () => void;
 }) {
-  const [query, setQuery] = useState('');
-  const filtered = workspaces.filter((workspace) => workspace.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const handleSwitch = (id: string) => {
+    onSwitch(id);
+    onClose();
+  };
+
+  const handleCreate = () => {
+    onCreateWorkspace();
+    onClose();
+  };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher" onClick={onClose}>
-      <div className="modal-card workspace-switcher-card">
-        <div className="modal-header workspace-switcher-header" onClick={(event) => event.stopPropagation()}>
-          <div>
-            <span className="panel-eyebrow">Workspace overlay</span>
-            <h2>Workspaces</h2>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close workspace switcher"><Icon name="x" /></button>
-        </div>
-        <div className="workspace-switcher-body" onClick={(event) => event.stopPropagation()}>
-          <label className="omnibar workspace-switcher-search">
-            <Icon name="search" size={13} color="#71717a" />
-            <input aria-label="Search workspaces" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search workspaces…" />
-          </label>
-          <div className="workspace-overlay-toolbar">
-            <div className="workspace-hero-card">
-              <span className="badge">Focused workspace</span>
-              <strong>{workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? 'Workspace'}</strong>
-              <p className="muted">Use Ctrl+1-9 to jump, Ctrl+Alt+←/→ to cycle, or Ctrl+Alt+N to create a new one.</p>
-            </div>
-            <button type="button" className="secondary-button" onClick={onCreateWorkspace}>New workspace</button>
-          </div>
-          <div className="workspace-list">
-            {filtered.map((workspace, index) => (
+    <div className="ws-overlay-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher" onClick={onClose}>
+      <div className="ws-overlay-content" onClick={(e) => e.stopPropagation()}>
+        <div className="ws-overlay-title" role="heading" aria-level={2}>Workspaces</div>
+        <div className="ws-overlay-grid">
+          {workspaces.map((workspace, index) => {
+            const isActive = workspace.id === activeWorkspaceId;
+            const isHovered = workspace.id === hoveredId;
+            const color = workspace.color ?? '#60a5fa';
+            const tabCount = countTabs(workspace);
+            const tabs = (workspace.children ?? []).filter((c) => c.type === 'tab').slice(0, 4);
+
+            return (
               <div
                 key={workspace.id}
-                className={`workspace-list-item workspace-card ${workspace.id === activeWorkspaceId ? 'active' : ''}`}
-                onDoubleClick={() => onRenameWorkspace(workspace.id)}
+                className={`workspace-card ${isActive ? 'active' : ''} ${isHovered ? 'hovered' : ''}`}
+                onMouseEnter={() => setHoveredId(workspace.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                onClick={() => handleSwitch(workspace.id)}
               >
-                <button
-                  type="button"
-                  className="workspace-list-button"
-                  onClick={() => {
-                    onSwitch(workspace.id);
-                    onClose();
+                <div
+                  className="ws-card-thumbnail"
+                  style={{
+                    borderColor: isActive ? color : isHovered ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.06)',
+                    background: isActive ? color + '10' : 'rgba(255,255,255,.03)',
                   }}
                 >
-                  <span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} />
-                  <span className="workspace-list-copy">
-                    <strong>{workspace.name}</strong>
-                    <span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span>
+                  <div className="ws-card-tab-list">
+                    {tabs.length > 0 ? tabs.map((tab) => (
+                      <div key={tab.id} className="ws-card-tab-row">
+                        <span className="ws-card-tab-dot" style={{ background: color + '30' }} />
+                        <span className="ws-card-tab-name">{tab.name}</span>
+                      </div>
+                    )) : (
+                      <div className="ws-card-empty">Empty workspace</div>
+                    )}
+                    {(workspace.children ?? []).filter((c) => c.type === 'tab').length > 4 && (
+                      <div className="ws-card-more">+{(workspace.children ?? []).filter((c) => c.type === 'tab').length - 4} more</div>
+                    )}
+                  </div>
+                  {isActive && <div className="ws-card-active-bar" style={{ background: color }} />}
+                </div>
+                <div className="ws-card-label">
+                  <span className="ws-card-badge" style={{ background: color + '25', color, borderColor: color + '40' }}>
+                    {index + 1}
                   </span>
-                  <span className="workspace-hotkey-chip">{index < 9 ? `Ctrl+${index + 1}` : 'Ctrl+'}</span>
-                </button>
+                  <span className="ws-card-name" onDoubleClick={(e) => { e.stopPropagation(); onRenameWorkspace(workspace.id); }}>
+                    {workspace.name}
+                  </span>
+                  <span className="ws-card-tab-count">{tabCount}</span>
+                </div>
+                {isHovered && !isActive && workspaces.length > 1 && onDeleteWorkspace && (
+                  <button
+                    type="button"
+                    className="ws-card-delete"
+                    onClick={(e) => { e.stopPropagation(); onDeleteWorkspace(workspace.id); }}
+                    aria-label={`Delete workspace ${workspace.name}`}
+                  >
+                    <Icon name="x" size={10} color="rgba(255,255,255,.5)" />
+                  </button>
+                )}
               </div>
-            ))}
+            );
+          })}
+          <div className="workspace-card ws-card-new" onClick={handleCreate}>
+            <div className="ws-card-thumbnail ws-card-new-thumb">
+              <Icon name="plus" size={20} color="rgba(255,255,255,.2)" />
+              <span className="ws-card-new-label">New workspace</span>
+            </div>
+            <div className="ws-card-label">
+              <span className="ws-card-new-hint">Ctrl+Alt+N</span>
+            </div>
           </div>
-          <div className="workspace-switcher-footer">
-            <span>Press Esc or click outside to close</span>
-            <kbd>?</kbd>
-          </div>
+        </div>
+        <div className="ws-overlay-hints">
+          <span>Ctrl+1-9 switch</span>
+          <span>Ctrl+Alt+←→ cycle</span>
+          <span>Esc close</span>
         </div>
       </div>
     </div>

@@ -804,6 +804,188 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--text-soft);
   font-size: 12px;
 }
+/* ── Workspace overlay (card grid) ─────────────────────────── */
+.ws-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,.72);
+  backdrop-filter: blur(24px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in .15s ease-out;
+}
+.ws-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  max-width: 90vw;
+}
+.ws-overlay-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,.4);
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.ws-overlay-grid {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.workspace-card {
+  width: 200px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+.workspace-card.hovered .ws-card-thumbnail {
+  transform: scale(1.04);
+}
+.ws-card-thumbnail {
+  width: 200px;
+  height: 130px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.03);
+  transition: all .15s;
+  transform: scale(1);
+}
+.ws-card-tab-list {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ws-card-tab-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,.04);
+  overflow: hidden;
+}
+.ws-card-tab-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.ws-card-tab-name {
+  font-size: 8px;
+  color: rgba(255,255,255,.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-card-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  color: rgba(255,255,255,.1);
+  font-size: 10px;
+}
+.ws-card-more {
+  font-size: 8px;
+  color: rgba(255,255,255,.15);
+  text-align: center;
+  margin-top: 2px;
+}
+.ws-card-active-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+.ws-card-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.ws-card-badge {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  border: 1px solid;
+  flex-shrink: 0;
+}
+.ws-card-name {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255,255,255,.45);
+  letter-spacing: -.01em;
+  cursor: text;
+}
+.workspace-card.active .ws-card-name {
+  font-weight: 600;
+  color: #e4e4e7;
+}
+.ws-card-tab-count {
+  font-size: 9px;
+  color: rgba(255,255,255,.15);
+}
+.ws-card-delete {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #27272a;
+  border: 1px solid rgba(255,255,255,.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  animation: fade-in .1s ease-out;
+  z-index: 1;
+}
+.ws-card-new-thumb {
+  border: 2px dashed rgba(255,255,255,.08) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255,255,255,.01) !important;
+}
+.ws-card-new-thumb:hover {
+  border-color: rgba(255,255,255,.2) !important;
+  background: rgba(255,255,255,.03) !important;
+}
+.ws-card-new-label {
+  font-size: 10px;
+  color: rgba(255,255,255,.2);
+}
+.ws-card-new-hint {
+  font-size: 10px;
+  color: rgba(255,255,255,.15);
+}
+.ws-overlay-hints {
+  font-size: 10px;
+  color: rgba(255,255,255,.15);
+  display: flex;
+  gap: 12px;
+}
+
 .shortcuts-card {
   width: min(540px, calc(100vw - 32px));
   background: #1b1b1f;
