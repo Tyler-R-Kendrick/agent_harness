@@ -190,8 +190,8 @@ test('captures workspace switching via pills', async ({ page }) => {
   await page.goto('/');
   // Verify we start on Research workspace
   await expect(page.getByText('Workspace graph')).toBeVisible();
-  // Click the Build workspace pill
-  await page.getByRole('button', { name: 'Build' }).click();
+  // Click the Build workspace pill (use pill-specific selector to avoid matching tree button)
+  await page.locator('.workspace-pill').filter({ hasText: 'Build' }).click();
   // The workspace tree should update (Build workspace has CopilotKit docs tab)
   await expect(page.getByRole('button', { name: /CopilotKit docs/ })).toBeVisible();
   assertNoRuntimeErrors();

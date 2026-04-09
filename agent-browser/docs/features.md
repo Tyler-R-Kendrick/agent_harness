@@ -10,14 +10,14 @@ Playwright test: `captures the main workspace screen`
 ![Workspace shell screenshot](./screenshots/workspace-screen.png)
 
 How to interact:
+- The sidebar shows **all workspaces as folders** in a compact file-explorer tree with tabs nested inside each workspace.
+- Click a workspace folder in the tree to expand/collapse it and switch the active workspace context.
+- Click a tab in any workspace to open it as a page overlay (auto-switches to that workspace).
 - Use the omnibar to search or navigate.
-- Switch workspaces with the pills under the omnibar.
-- Browse tabs and folders from the exploration tree.
-- Use the **Workspace files** section to add real AGENTS.md, skill, plugin, and hook files to the active workspace.
-- Edit file paths and contents in place, then save them back to browser storage.
-- Review the assistant context preview to confirm the harness is loading and using the stored capability files.
-- Use the activity bar to switch between exploration, history, extensions, and settings.
-- Send a prompt from the themed composer at the bottom using the model pill and green send button.
+- Switch workspaces with the segmented pill bar under the omnibar — includes a **slide animation** for smooth transitions.
+- Use **Ctrl+←/→** (or **⌘+←/→** on Mac) to slide between workspaces with the keyboard.
+- Use the **Workspace files** section below the tree to add AGENTS.md, skill, plugin, and hook files.
+- Send a prompt from the composer at the bottom using the model pill and green send button.
 
 ## Chat composer
 
@@ -97,6 +97,7 @@ Playwright test: `captures the keyboard shortcuts modal`
 How to interact:
 - Press **?** at any time to open the keyboard shortcuts overlay.
 - Use arrow keys to navigate the workspace tree, Enter to open tabs.
+- Use **Ctrl ←/→** to slide between workspaces.
 - Press **Escape** to close the overlay.
 
 ## Sidebar collapsed
@@ -140,6 +141,7 @@ Playwright test: `captures workspace switching via pills`
 ![Workspace switch screenshot](./screenshots/workspace-switch.png)
 
 How to interact:
-- Click workspace pills at the top of the sidebar to switch between workspaces.
+- Click workspace pills in the segmented tab bar to switch between workspaces with a slide animation.
+- Use **Ctrl+←/→** to switch with the keyboard — the direction of the slide matches the spatial position.
 - Each workspace has its own set of tabs, files, and context.
-- The workspace tree and file storage update to reflect the active workspace.
+- The workspace tree highlights the active workspace and the file storage updates to match.

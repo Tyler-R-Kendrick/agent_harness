@@ -662,15 +662,17 @@ function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: strin
 }
 
 function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void }) {
-  const items = flattenTree(getWorkspace(root, activeWorkspaceId) ?? root);
+  const items = flattenTree(root);
   return (
-    <div className="tree-panel">
+    <div className="tree-panel" role="tree" aria-label="Workspace tree">
       {items.map(({ node, depth }) => {
         const isFolder = node.type !== 'tab';
+        const isWorkspace = node.type === 'workspace';
+        const isActiveWs = isWorkspace && node.id === activeWorkspaceId;
         return (
-          <div key={node.id} className={`tree-row ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${12 + depth * 18}px` }}>
+          <div key={node.id} role="treeitem" className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
             <button type="button" className="tree-button" onFocus={() => onCursorChange(node.id)} onClick={() => isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
-              {isFolder ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={14} color={node.color ?? '#60a5fa'} /> : <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />}
+              {isFolder ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={node.color ?? '#60a5fa'} /> : <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />}
               <span>{node.name}</span>
               <span className="tree-meta">{node.type === 'tab' ? `${node.memoryMB ?? 0}MB` : `${countTabs(node)} tabs`}</span>
             </button>
@@ -702,13 +704,26 @@ function AgentBrowserApp() {
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
+  const slideTimeoutRef = useRef<number>(0);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
-  const visibleItems = useMemo(() => flattenTree(activeWorkspace), [activeWorkspace]);
+  const visibleItems = useMemo(() => flattenTree(root), [root]);
   const openTab = openTabId ? findNode(root, openTabId) : null;
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
+
+  const switchWorkspace = useCallback((newId: string) => {
+    if (newId === activeWorkspaceId) return;
+    const workspaces = root.children ?? [];
+    const oldIdx = workspaces.findIndex((w) => w.id === activeWorkspaceId);
+    const newIdx = workspaces.findIndex((w) => w.id === newId);
+    setSlideDir(newIdx > oldIdx ? 'left' : 'right');
+    setActiveWorkspaceId(newId);
+    window.clearTimeout(slideTimeoutRef.current);
+    slideTimeoutRef.current = window.setTimeout(() => setSlideDir(null), 300);
+  }, [activeWorkspaceId, root]);
 
   useCopilotReadable({
     description: 'Current agent browser workspace context',
@@ -763,6 +778,14 @@ function AgentBrowserApp() {
       if (event.key === 'Escape') { setShowShortcuts(false); return; }
       if (event.defaultPrevented || isEditableTarget(event.target)) return;
       if (event.key === '?') { setShowShortcuts(true); return; }
+      if ((event.ctrlKey || event.metaKey) && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        const workspaces = root.children ?? [];
+        const idx = workspaces.findIndex((w) => w.id === activeWorkspaceId);
+        if (event.key === 'ArrowLeft' && idx > 0) switchWorkspace(workspaces[idx - 1].id);
+        if (event.key === 'ArrowRight' && idx < workspaces.length - 1) switchWorkspace(workspaces[idx + 1].id);
+        return;
+      }
       if (activePanel !== 'workspaces') return;
       const index = visibleItems.findIndex((item) => item.node.id === cursorId);
       if (event.key === 'ArrowDown') {
@@ -790,7 +813,7 @@ function AgentBrowserApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activePanel, cursorId, root, visibleItems]);
+  }, [activePanel, activeWorkspaceId, cursorId, root, switchWorkspace, visibleItems]);
 
   async function installModel(model: HFModel) {
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
@@ -827,15 +850,15 @@ function AgentBrowserApp() {
   function renderSidebar() {
     if (activePanel === 'workspaces') {
       return (
-        <div className="sidebar-content">
+        <div key={`ws-${activeWorkspaceId}`} className={`sidebar-content ${slideDir ? `ws-slide-${slideDir}` : ''}`}>
           <div className="explore-hero">
             <span className="panel-eyebrow">Exploration</span>
             <h2>Workspace graph</h2>
             <p className="muted">Browse directories, pinned tabs, and active memory from a single exploration surface.</p>
           </div>
-          <MemBar root={activeWorkspace} />
-          <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} cursorId={cursorId} onCursorChange={setCursorId} onToggleFolder={(id) => setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded })))} onOpenTab={setOpenTabId} onCloseTab={(id) => {
-            setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, children: (node.children ?? []).filter((child) => child.id !== id) })));
+          <MemBar root={root} />
+          <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} cursorId={cursorId} onCursorChange={setCursorId} onToggleFolder={(id) => { setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded }))); const toggled = findNode(root, id); if (toggled?.type === 'workspace') switchWorkspace(id); }} onOpenTab={(id) => { setOpenTabId(id); for (const ws of root.children ?? []) { if ((ws.children ?? []).some((c) => c.id === id)) { switchWorkspace(ws.id); break; } } }} onCloseTab={(id) => {
+            setRoot((current) => ({ ...current, children: (current.children ?? []).map((ws) => ({ ...ws, children: (ws.children ?? []).filter((child) => child.id !== id) })) }));
             if (openTabId === id) setOpenTabId(null);
           }} />
           <WorkspaceStoragePanel
@@ -887,7 +910,7 @@ function AgentBrowserApp() {
               <input aria-label="Omnibar" value={omnibar} onChange={(event) => setOmnibar(event.target.value)} placeholder="Search or navigate…" />
             </form>
             <div className="workspace-pills">
-              {(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className={`workspace-pill ${activeWorkspaceId === workspace.id ? 'active' : ''}`} onClick={() => setActiveWorkspaceId(workspace.id)}>{workspace.name}</button>)}
+              {(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className={`workspace-pill ${activeWorkspaceId === workspace.id ? 'active' : ''}`} onClick={() => switchWorkspace(workspace.id)}>{workspace.name}</button>)}
               <button type="button" className="workspace-pill add" onClick={() => setShowWorkspaces(true)}><Icon name="plus" size={10} /></button>
             </div>
           </header>
@@ -895,8 +918,8 @@ function AgentBrowserApp() {
         </aside>
       ) : null}
       <main className="content-area">{openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} workspaceName={activeWorkspace.name} workspaceFiles={activeWorkspaceFiles} workspaceCapabilities={activeWorkspaceCapabilities} />}</main>
-      {showWorkspaces ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher"><div className="modal-card"><div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div><div className="workspace-grid">{(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { setActiveWorkspaceId(workspace.id); setShowWorkspaces(false); }}><span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} /><strong>{workspace.name}</strong><span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span></button>)}</div></div></div> : null}
-      {showShortcuts ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"><div className="modal-card compact"><div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div><ul className="shortcut-list"><li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li><li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li><li><kbd>Enter</kbd><span>Open the selected tab</span></li><li><kbd>?</kbd><span>Open this overlay</span></li></ul></div></div> : null}
+      {showWorkspaces ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher"><div className="modal-card"><div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div><div className="workspace-grid">{(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { switchWorkspace(workspace.id); setShowWorkspaces(false); }}><span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} /><strong>{workspace.name}</strong><span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span></button>)}</div></div></div> : null}
+      {showShortcuts ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"><div className="modal-card compact"><div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div><ul className="shortcut-list"><li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li><li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li><li><kbd>Enter</kbd><span>Open the selected tab</span></li><li><kbd>Ctrl ←/→</kbd><span>Switch workspace</span></li><li><kbd>?</kbd><span>Open this overlay</span></li></ul></div></div> : null}
       <Toast toast={toast} />
     </div>
   );
