@@ -10,13 +10,14 @@ Playwright test: `captures the main workspace screen`
 ![Workspace shell screenshot](./screenshots/workspace-screen.png)
 
 How to interact:
-- The sidebar shows **all workspaces as folders** in a compact file-explorer tree with tabs nested inside each workspace.
+- The sidebar shows **all workspaces as folders** in a compact file-explorer tree with tabs and files nested inside each workspace.
 - Click a workspace folder in the tree to expand/collapse it and switch the active workspace context.
 - Click a tab in any workspace to open it as a page overlay (auto-switches to that workspace).
+- Click the **+** button next to a workspace to add files (AGENTS.md, skill, plugin, hook) directly into the tree.
+- Click a file node in the tree to open the **file editor** in the content area.
 - Use the omnibar to search or navigate.
 - Switch workspaces with the segmented pill bar under the omnibar — includes a **slide animation** for smooth transitions.
 - Use **Ctrl+←/→** (or **⌘+←/→** on Mac) to slide between workspaces with the keyboard.
-- Use the **Workspace files** section below the tree to add AGENTS.md, skill, plugin, and hook files.
 - Send a prompt from the composer at the bottom using the model pill and green send button.
 
 ## Chat composer
@@ -129,10 +130,10 @@ Playwright test: `captures workspace file edit and delete flow`
 ![Workspace file edit screenshot](./screenshots/workspace-file-edit.png)
 
 How to interact:
-- Add new capability files using the composer buttons (AGENTS.md, skill, plugin, hook).
-- Select any file from the file list to edit its path and content.
-- Click **Save file** to persist changes to browser storage.
-- Click **Delete file** (styled as a destructive action) to remove a file.
+- Click the **+** button on a workspace node in the tree to add files directly as tree items.
+- Click a file node in the tree to open the **file editor** in the main content area.
+- Edit the file path and content, then click **Save file** to persist to browser storage.
+- Click **Delete file** to remove a file from the workspace.
 
 ## Workspace switching
 

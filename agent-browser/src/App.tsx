@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Cpu,
+  File,
   Folder,
   FolderOpen,
   Globe,
@@ -78,6 +79,7 @@ const icons = {
   search: Search,
   folder: Folder,
   folderOpen: FolderOpen,
+  file: File,
   x: X,
   send: SendHorizontal,
   loader: LoaderCircle,
@@ -227,162 +229,6 @@ function MemBar({ root }: { root: TreeNode }) {
   );
 }
 
-function WorkspaceFileComposer({
-  draftName,
-  onDraftNameChange,
-  onAddFile,
-}: {
-  draftName: string;
-  onDraftNameChange: (value: string) => void;
-  onAddFile: (kind: WorkspaceFileKind) => void;
-}) {
-  return (
-    <div className="workspace-file-composer">
-      <label className="workspace-file-input">
-        <span className="sr-only">Capability name</span>
-        <input aria-label="Capability name" value={draftName} onChange={(event) => onDraftNameChange(event.target.value)} placeholder="Name new skill, plugin, or hook" />
-      </label>
-      <div className="workspace-file-actions">
-        <button type="button" className="secondary-button" onClick={() => onAddFile('agents')}>Add AGENTS.md</button>
-        <button type="button" className="secondary-button" onClick={() => onAddFile('skill')}>Add skill</button>
-        <button type="button" className="secondary-button" onClick={() => onAddFile('plugin')}>Add plugin</button>
-        <button type="button" className="secondary-button" onClick={() => onAddFile('hook')}>Add hook</button>
-      </div>
-    </div>
-  );
-}
-
-function WorkspaceStoragePanel({
-  workspaceName,
-  files,
-  onSaveFile,
-  onDeleteFile,
-  onToast,
-}: {
-  workspaceName: string;
-  files: WorkspaceFile[];
-  onSaveFile: (nextFile: WorkspaceFile, previousPath?: string) => void;
-  onDeleteFile: (path: string) => void;
-  onToast: (toast: Exclude<ToastState, null>) => void;
-}) {
-  const capabilities = useMemo(() => discoverWorkspaceCapabilities(files), [files]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(files[0]?.path ?? null);
-  const [draftName, setDraftName] = useState('');
-  const [editorPath, setEditorPath] = useState(files[0]?.path ?? '');
-  const [editorContent, setEditorContent] = useState(files[0]?.content ?? '');
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
-  const selectedFile = files.find((file) => file.path === selectedPath) ?? null;
-
-  useEffect(() => {
-    if (!files.length) {
-      setSelectedPath(null);
-      return;
-    }
-    if (!selectedPath || !files.some((file) => file.path === selectedPath)) {
-      setSelectedPath(files[0].path);
-    }
-  }, [files, selectedPath]);
-
-  useEffect(() => {
-    if (!selectedFile) {
-      setEditorPath('');
-      setEditorContent('');
-      setValidationMessage(null);
-      return;
-    }
-    setEditorPath(selectedFile.path);
-    setEditorContent(selectedFile.content);
-    setValidationMessage(null);
-  }, [selectedFile]);
-
-  const promptContext = useMemo(() => buildWorkspacePromptContext(files), [files]);
-
-  function handleAddFile(kind: WorkspaceFileKind) {
-    const nextFile = createWorkspaceFileTemplate(kind, draftName);
-    onSaveFile(nextFile);
-    setDraftName('');
-    setSelectedPath(nextFile.path);
-    onToast({ msg: `Added ${nextFile.path} to ${workspaceName}`, type: 'success' });
-  }
-
-  function handleSaveSelectedFile() {
-    if (!selectedFile) return;
-    const nextFile: WorkspaceFile = {
-      path: editorPath.trim(),
-      content: editorContent,
-      updatedAt: new Date().toISOString(),
-    };
-    const validationError = validateWorkspaceFile(nextFile);
-    if (validationError) {
-      setValidationMessage(validationError);
-      return;
-    }
-    onSaveFile(nextFile, selectedFile.path);
-    setSelectedPath(nextFile.path);
-    onToast({ msg: `Saved ${nextFile.path}`, type: 'success' });
-  }
-
-  return (
-    <section className="workspace-storage" aria-label="Workspace storage">
-      <div className="panel-section-header">
-        <span>Workspace files</span>
-        <span className="muted">Persisted in local storage</span>
-      </div>
-      <div className="integration-overview">
-        <div className="list-card integration-summary-card">
-          <span className="badge">Active workspace</span>
-          <strong>{workspaceName}</strong>
-          <p className="muted">{files.length} files · {capabilities.skills.length} skills · {capabilities.plugins.length} plugin manifests</p>
-        </div>
-        <div className="list-card integration-summary-card">
-          <span className="badge">Loaded by assistant</span>
-          <strong>{capabilities.agents.length} AGENTS.md · {capabilities.hooks.length} hooks</strong>
-          <p className="muted">The assistant reads AGENTS.md, skill files, plugin manifests, and hooks from workspace storage before it composes a local prompt.</p>
-        </div>
-      </div>
-      <p className="muted">Store standards-based capability files in the active workspace: root-level AGENTS.md, `.agents/skill/.../SKILL.md`, `.agents/plugins/...`, and `.agents/hooks/...`.</p>
-      <WorkspaceFileComposer draftName={draftName} onDraftNameChange={setDraftName} onAddFile={handleAddFile} />
-      {!files.length ? <div className="list-card workspace-empty-state"><Icon name="folder" size={24} color="#6b7280" /><strong>No workspace capability files yet.</strong><p className="muted">Add AGENTS.md, a skill, a plugin manifest, or a hook to make this workspace behave differently.</p></div> : null}
-      {files.length ? (
-        <div className="workspace-file-grid">
-          <div className="workspace-file-list" aria-label="Workspace file list">
-            {files.map((file) => (
-              <button key={file.path} type="button" className={`list-card workspace-file-row ${selectedPath === file.path ? 'active' : ''}`} onClick={() => setSelectedPath(file.path)}>
-                <div>
-                  <strong>{file.path.split('/').pop()}</strong>
-                  <p className="muted">{file.path}</p>
-                </div>
-                <span className="badge">{detectWorkspaceFileKind(file.path) ?? 'file'}</span>
-              </button>
-            ))}
-          </div>
-          {selectedFile ? (
-            <div className="list-card workspace-file-editor">
-              <label className="workspace-file-field">
-                <span>Path</span>
-                <input aria-label="Workspace file path" value={editorPath} onChange={(event) => setEditorPath(event.target.value)} />
-              </label>
-              <label className="workspace-file-field">
-                <span>Content</span>
-                <textarea aria-label="Workspace file content" value={editorContent} onChange={(event) => setEditorContent(event.target.value)} rows={14} />
-              </label>
-              {validationMessage ? <p className="workspace-file-error">{validationMessage}</p> : null}
-              <div className="workspace-file-toolbar">
-                <button type="button" className="primary-button" onClick={handleSaveSelectedFile}>Save file</button>
-                <button type="button" className="secondary-button destructive" onClick={() => { onDeleteFile(selectedFile.path); onToast({ msg: `Removed ${selectedFile.path}`, type: 'info' }); }}>Delete file</button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      <div className="list-card workspace-context-preview">
-        <span className="badge">Assistant context preview</span>
-        <pre>{promptContext}</pre>
-      </div>
-    </section>
-  );
-}
-
 function ChatMessageView({ message }: { message: ChatMessage }) {
   const content = message.streamedContent || message.content;
   return (
@@ -417,6 +263,73 @@ function PageOverlay({ tab, onClose }: { tab: TreeNode; onClose: () => void }) {
         </div>
         {showInspector ? <div className="picker-overlay">Element picker active</div> : null}
         {showChat ? <aside className="page-chat-panel"><h3>Page Chat</h3><p>Use the main assistant to reason about the currently open page.</p></aside> : null}
+      </div>
+    </section>
+  );
+}
+
+function FileEditorPanel({
+  file,
+  onSave,
+  onDelete,
+  onClose,
+  onToast,
+}: {
+  file: WorkspaceFile;
+  onSave: (nextFile: WorkspaceFile, previousPath?: string) => void;
+  onDelete: (path: string) => void;
+  onClose: () => void;
+  onToast: (toast: Exclude<ToastState, null>) => void;
+}) {
+  const [editorPath, setEditorPath] = useState(file.path);
+  const [editorContent, setEditorContent] = useState(file.content);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setEditorPath(file.path);
+    setEditorContent(file.content);
+    setValidationMessage(null);
+  }, [file]);
+
+  function handleSave() {
+    const nextFile: WorkspaceFile = {
+      path: editorPath.trim(),
+      content: editorContent,
+      updatedAt: new Date().toISOString(),
+    };
+    const validationError = validateWorkspaceFile(nextFile);
+    if (validationError) {
+      setValidationMessage(validationError);
+      return;
+    }
+    onSave(nextFile, file.path);
+    onToast({ msg: `Saved ${nextFile.path}`, type: 'success' });
+  }
+
+  return (
+    <section className="file-editor-panel" aria-label="File editor">
+      <header className="file-editor-header">
+        <div className="file-editor-heading">
+          <Icon name="file" size={14} color="#a5b4fc" />
+          <span className="file-editor-title">{file.path}</span>
+          <span className="badge">{detectWorkspaceFileKind(file.path) ?? 'file'}</span>
+        </div>
+        <button type="button" className="icon-button" aria-label="Close file editor" onClick={onClose}><Icon name="x" /></button>
+      </header>
+      <div className="file-editor-body">
+        <label className="file-editor-field">
+          <span>Path</span>
+          <input aria-label="Workspace file path" value={editorPath} onChange={(event) => setEditorPath(event.target.value)} />
+        </label>
+        <label className="file-editor-field file-editor-content-field">
+          <span>Content</span>
+          <textarea aria-label="Workspace file content" value={editorContent} onChange={(event) => setEditorContent(event.target.value)} />
+        </label>
+        {validationMessage ? <p className="file-editor-error">{validationMessage}</p> : null}
+        <div className="file-editor-toolbar">
+          <button type="button" className="primary-button" onClick={handleSave}>Save file</button>
+          <button type="button" className="secondary-button destructive" onClick={() => { onDelete(file.path); onClose(); onToast({ msg: `Removed ${file.path}`, type: 'info' }); }}>Delete file</button>
+        </div>
       </div>
     </section>
   );
@@ -661,22 +574,27 @@ function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: strin
   );
 }
 
-function SidebarTree({ root, activeWorkspaceId, openTabId, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void }) {
+function SidebarTree({ root, activeWorkspaceId, openTabId, editingFilePath, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; editingFilePath: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void }) {
   const items = flattenTree(root);
   return (
     <div className="tree-panel" role="tree" aria-label="Workspace tree">
       {items.map(({ node, depth }) => {
-        const isFolder = node.type !== 'tab';
+        const isFolder = node.type !== 'tab' && node.type !== 'file';
         const isWorkspace = node.type === 'workspace';
+        const isFile = node.type === 'file';
         const isActiveWs = isWorkspace && node.id === activeWorkspaceId;
+        const isEditingFile = isFile && node.filePath === editingFilePath;
         return (
-          <div key={node.id} role="treeitem" className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
-            <button type="button" className="tree-button" onFocus={() => onCursorChange(node.id)} onClick={() => isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
-              {isFolder ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={node.color ?? '#60a5fa'} /> : <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />}
+          <div key={node.id} role="treeitem" className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
+            <button type="button" className="tree-button" onFocus={() => onCursorChange(node.id)} onClick={() => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
+              {isFile ? <Icon name="file" size={12} color="#a5b4fc" /> : isFolder ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={node.color ?? '#60a5fa'} /> : <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />}
               <span>{node.name}</span>
-              <span className="tree-meta">{node.type === 'tab' ? `${node.memoryMB ?? 0}MB` : `${countTabs(node)} tabs`}</span>
+              {node.type === 'tab' ? <span className="tree-meta">{node.memoryMB ?? 0}MB</span> : null}
+              {isWorkspace ? <span className="tree-meta">{countTabs(node)} tabs</span> : null}
             </button>
-            {node.type === 'tab' ? <button type="button" className="icon-button subtle" onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
+            {node.type === 'tab' ? <button type="button" className="icon-button subtle" aria-label={`Close ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
+            {isFile ? <button type="button" className="icon-button subtle" aria-label={`Remove ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
+            {isWorkspace ? <button type="button" className="icon-button subtle" aria-label={`Add file to ${node.name}`} onClick={() => onAddFile(node.id)}><Icon name="plus" size={11} /></button> : null}
           </div>
         );
       })}
@@ -700,7 +618,10 @@ function AgentBrowserApp() {
   const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
   const [omnibar, setOmnibar] = useState('');
   const [openTabId, setOpenTabId] = useState<string | null>(null);
+  const [editingFilePath, setEditingFilePath] = useState<string | null>(null);
   const [cursorId, setCursorId] = useState<string | null>(null);
+  const [showAddFileMenu, setShowAddFileMenu] = useState<string | null>(null);
+  const [addFileName, setAddFileName] = useState('');
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -713,6 +634,26 @@ function AgentBrowserApp() {
   const openTab = openTabId ? findNode(root, openTabId) : null;
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
+  const editingFile = editingFilePath ? activeWorkspaceFiles.find((f) => f.path === editingFilePath) ?? null : null;
+
+  // Sync workspace files into the tree as 'file' nodes under each workspace
+  useEffect(() => {
+    setRoot((current) => {
+      const workspaces = current.children ?? [];
+      const updated = workspaces.map((ws) => {
+        const files = workspaceFilesByWorkspace[ws.id] ?? [];
+        const nonFileChildren = (ws.children ?? []).filter((c) => c.type !== 'file');
+        const fileNodes: TreeNode[] = files.map((f) => ({
+          id: `file:${ws.id}:${f.path}`,
+          name: f.path.split('/').pop() ?? f.path,
+          type: 'file' as const,
+          filePath: f.path,
+        }));
+        return { ...ws, children: [...nonFileChildren, ...fileNodes] };
+      });
+      return { ...current, children: updated };
+    });
+  }, [workspaceFilesByWorkspace]);
 
   const switchWorkspace = useCallback((newId: string) => {
     if (newId === activeWorkspaceId) return;
@@ -847,37 +788,60 @@ function AgentBrowserApp() {
     setOmnibar('');
   }
 
+  function handleAddFileToWorkspace(kind: WorkspaceFileKind, wsId: string) {
+    const nextFile = createWorkspaceFileTemplate(kind, addFileName);
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [wsId]: upsertWorkspaceFile(current[wsId] ?? [], nextFile),
+    }));
+    setAddFileName('');
+    setShowAddFileMenu(null);
+    setEditingFilePath(nextFile.path);
+    switchWorkspace(wsId);
+    setOpenTabId(null);
+    setToast({ msg: `Added ${nextFile.path}`, type: 'success' });
+  }
+
+  function handleRemoveFileNode(nodeId: string) {
+    // Find which workspace this file belongs to and remove it
+    for (const ws of root.children ?? []) {
+      const fileNode = (ws.children ?? []).find((c) => c.id === nodeId && c.type === 'file');
+      if (fileNode?.filePath) {
+        setWorkspaceFilesByWorkspace((current) => ({
+          ...current,
+          [ws.id]: removeWorkspaceFile(current[ws.id] ?? [], fileNode.filePath!),
+        }));
+        if (editingFilePath === fileNode.filePath) setEditingFilePath(null);
+        setToast({ msg: `Removed ${fileNode.filePath}`, type: 'info' });
+        return;
+      }
+    }
+    // If not a file node, it's a tab - remove from tree
+    setRoot((current) => ({ ...current, children: (current.children ?? []).map((ws) => ({ ...ws, children: (ws.children ?? []).filter((child) => child.id !== nodeId) })) }));
+    if (openTabId === nodeId) setOpenTabId(null);
+  }
+
+  function handleOpenFileNode(nodeId: string) {
+    const node = findNode(root, nodeId);
+    if (node?.filePath) {
+      setEditingFilePath(node.filePath);
+      setOpenTabId(null);
+      // Switch to the workspace that owns this file
+      for (const ws of root.children ?? []) {
+        if ((ws.children ?? []).some((c) => c.id === nodeId)) {
+          switchWorkspace(ws.id);
+          break;
+        }
+      }
+    }
+  }
+
   function renderSidebar() {
     if (activePanel === 'workspaces') {
       return (
         <div key={`ws-${activeWorkspaceId}`} className={`sidebar-content ${slideDir ? `ws-slide-${slideDir}` : ''}`}>
-          <div className="explore-hero">
-            <span className="panel-eyebrow">Exploration</span>
-            <h2>Workspace graph</h2>
-            <p className="muted">Browse directories, pinned tabs, and active memory from a single exploration surface.</p>
-          </div>
           <MemBar root={root} />
-          <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} cursorId={cursorId} onCursorChange={setCursorId} onToggleFolder={(id) => { setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded }))); const toggled = findNode(root, id); if (toggled?.type === 'workspace') switchWorkspace(id); }} onOpenTab={(id) => { setOpenTabId(id); for (const ws of root.children ?? []) { if ((ws.children ?? []).some((c) => c.id === id)) { switchWorkspace(ws.id); break; } } }} onCloseTab={(id) => {
-            setRoot((current) => ({ ...current, children: (current.children ?? []).map((ws) => ({ ...ws, children: (ws.children ?? []).filter((child) => child.id !== id) })) }));
-            if (openTabId === id) setOpenTabId(null);
-          }} />
-          <WorkspaceStoragePanel
-            workspaceName={activeWorkspace.name}
-            files={activeWorkspaceFiles}
-            onSaveFile={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => {
-              const existing = current[activeWorkspaceId] ?? [];
-              const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing;
-              return {
-                ...current,
-                [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile),
-              };
-            })}
-            onDeleteFile={(path) => setWorkspaceFilesByWorkspace((current) => ({
-              ...current,
-              [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path),
-            }))}
-            onToast={setToast}
-          />
+          <SidebarTree root={root} activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} editingFilePath={editingFilePath} cursorId={cursorId} onCursorChange={setCursorId} onToggleFolder={(id) => { setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded }))); const toggled = findNode(root, id); if (toggled?.type === 'workspace') switchWorkspace(id); }} onOpenTab={(id) => { setOpenTabId(id); setEditingFilePath(null); for (const ws of root.children ?? []) { if ((ws.children ?? []).some((c) => c.id === id)) { switchWorkspace(ws.id); break; } } }} onCloseTab={handleRemoveFileNode} onOpenFile={handleOpenFileNode} onAddFile={(wsId) => setShowAddFileMenu(wsId)} />
         </div>
       );
     }
@@ -917,7 +881,8 @@ function AgentBrowserApp() {
           {renderSidebar()}
         </aside>
       ) : null}
-      <main className="content-area">{openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} workspaceName={activeWorkspace.name} workspaceFiles={activeWorkspaceFiles} workspaceCapabilities={activeWorkspaceCapabilities} />}</main>
+      <main className="content-area">{editingFile ? <FileEditorPanel file={editingFile} onSave={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => { const existing = current[activeWorkspaceId] ?? []; const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing; return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) }; })} onDelete={(path) => setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }))} onClose={() => setEditingFilePath(null)} onToast={setToast} /> : openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} workspaceName={activeWorkspace.name} workspaceFiles={activeWorkspaceFiles} workspaceCapabilities={activeWorkspaceCapabilities} />}</main>
+      {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('agents', showAddFileMenu)}>AGENTS.md</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('skill', showAddFileMenu)}>Skill</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button></div></div></div></div> : null}
       {showWorkspaces ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher"><div className="modal-card"><div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div><div className="workspace-grid">{(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { switchWorkspace(workspace.id); setShowWorkspaces(false); }}><span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} /><strong>{workspace.name}</strong><span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span></button>)}</div></div></div> : null}
       {showShortcuts ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"><div className="modal-card compact"><div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div><ul className="shortcut-list"><li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li><li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li><li><kbd>Enter</kbd><span>Open the selected tab</span></li><li><kbd>Ctrl ←/→</kbd><span>Switch workspace</span></li><li><kbd>?</kbd><span>Open this overlay</span></li></ul></div></div> : null}
       <Toast toast={toast} />

@@ -43,10 +43,18 @@ test('captures the main workspace screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   await expect(page.getByLabel('Omnibar')).toBeVisible();
-  await expect(page.getByText('Workspace files')).toBeVisible();
-  await page.getByRole('button', { name: 'Add AGENTS.md' }).click();
+  // The tree shows workspaces with tabs and a "+" button to add files
+  await expect(page.getByLabel('Workspace tree')).toBeVisible();
+  // Add a file via the "+" button on Research workspace
+  await page.getByLabel('Add file to Research').click();
+  await expect(page.getByRole('dialog', { name: 'Add file' })).toBeVisible();
+  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  // AGENTS.md should appear in the tree and open in the file editor
+  await expect(page.getByLabel('Workspace file path')).toHaveValue('AGENTS.md');
+  // Add a skill
+  await page.getByLabel('Add file to Research').click();
   await page.getByLabel('Capability name').fill('review-pr');
-  await page.getByRole('button', { name: 'Add skill' }).click();
+  await page.getByRole('button', { name: 'Skill' }).click();
   await expect(page.getByLabel('Workspace file path')).toHaveValue('.agents/skill/review-pr/SKILL.md');
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
@@ -171,14 +179,16 @@ test('captures omnibar URL navigation creating a new tab', async ({ page }) => {
 test('captures workspace file edit and delete flow', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
-  // Add a file first
+  // Add a file via the tree "+" button
+  await page.getByLabel('Add file to Research').click();
   await page.getByLabel('Capability name').fill('test-hook');
-  await page.getByRole('button', { name: 'Add hook' }).click();
+  await page.getByRole('button', { name: 'Hook' }).click();
+  // File editor opens in the content area
   await expect(page.getByLabel('Workspace file path')).toHaveValue('.agents/hooks/test-hook.sh');
   // Edit the content
   await page.getByLabel('Workspace file content').fill('{"name": "test-hook", "version": "1.0"}');
-  // Save the file
-  await page.getByRole('button', { name: 'Save file' }).click();
+  // Save the file (force click past any CopilotKit error overlay)
+  await page.getByRole('button', { name: 'Save file' }).click({ force: true });
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-file-edit.png', fullPage: true });
 });
@@ -188,12 +198,12 @@ test('captures workspace file edit and delete flow', async ({ page }) => {
 test('captures workspace switching via pills', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
-  // Verify we start on Research workspace
-  await expect(page.getByText('Workspace graph')).toBeVisible();
+  // Verify we start on Research workspace by checking tree has Research tabs
+  await expect(page.getByRole('button', { name: /Hugging Face/ }).first()).toBeVisible();
   // Click the Build workspace pill (use pill-specific selector to avoid matching tree button)
   await page.locator('.workspace-pill').filter({ hasText: 'Build' }).click();
   // The workspace tree should update (Build workspace has CopilotKit docs tab)
-  await expect(page.getByRole('button', { name: /CopilotKit docs/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /CopilotKit docs/ }).first()).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-switch.png', fullPage: true });
 });
