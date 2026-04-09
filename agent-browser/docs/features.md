@@ -10,14 +10,28 @@ Playwright test: `captures the main workspace screen`
 ![Workspace shell screenshot](./screenshots/workspace-screen.png)
 
 How to interact:
+- The sidebar shows **all workspaces as folders** in a compact file-explorer tree with tabs and files nested inside each workspace.
+- Click a workspace folder in the tree to expand/collapse it and switch the active workspace context.
+- Click a tab in any workspace to open it as a page overlay (auto-switches to that workspace).
+- Click the **+** button next to a workspace to add files (AGENTS.md, skill, plugin, hook) directly into the tree.
+- Click a file node in the tree to open the **file editor** in the content area.
 - Use the omnibar to search or navigate.
-- Switch workspaces with the pills under the omnibar.
-- Browse tabs and folders from the exploration tree.
-- Use the **Workspace files** section to add real AGENTS.md, skill, plugin, and hook files to the active workspace.
-- Edit file paths and contents in place, then save them back to browser storage.
-- Review the assistant context preview to confirm the harness is loading and using the stored capability files.
-- Use the activity bar to switch between exploration, history, extensions, and settings.
-- Send a prompt from the themed composer at the bottom using the model pill and green send button.
+- Use the **workspace pill toggle** under the omnibar to open the workspace overlay.
+- Use the **?** button next to it to open the screenshot-style hotkeys modal.
+- Type directly while focused in Workspaces to incrementally filter the tree.
+- Send a prompt from the composer at the bottom using the model pill and green send button.
+
+## Chat composer
+
+Playwright test: `captures the chat panel with composer`
+
+![Chat composer screenshot](./screenshots/chat-composer.png)
+
+How to interact:
+- Type a message in the chat composer textarea.
+- Select an installed local model from the model pill dropdown.
+- Click the green **Send** button or press Enter to submit.
+- The workspace assistant header shows the current context (active models, skills, plugins, hooks).
 
 ## Settings / model registry
 
@@ -52,3 +66,92 @@ How to interact:
 - Open **History** from the activity bar.
 - Review recent sessions as stacked timeline cards.
 - Scan event counts, summaries, and session details before resuming work.
+
+## Page overlay
+
+Playwright test: `captures the page overlay when opening a tab`
+
+![Page overlay screenshot](./screenshots/page-overlay.png)
+
+How to interact:
+- Click any tab in the workspace tree to open it as a page overlay.
+- Use the address bar and navigation controls (back, forward, refresh) at the top.
+- Toggle the element inspector or page chat panel from the toolbar buttons.
+- Close the overlay to return to the main chat view.
+
+## Workspace switcher
+
+Playwright test: `captures the workspace switcher modal`
+
+![Workspace switcher screenshot](./screenshots/workspace-switcher.png)
+
+How to interact:
+- Click the **workspace pill toggle** to open the switcher modal.
+- Search workspaces from the top of the overlay.
+- Each workspace row shows its name, jump hint, tab count, and memory usage.
+- Click a workspace row to switch to it and close the modal.
+- Use **Ctrl+1…9** to jump directly, **Ctrl+Alt+←/→** to cycle, and **Ctrl+Alt+N** to create a new empty workspace.
+- Double-click the workspace pill (or a workspace row) to rename a workspace.
+
+## Keyboard shortcuts
+
+Playwright test: `captures the keyboard shortcuts modal`
+
+![Keyboard shortcuts screenshot](./screenshots/keyboard-shortcuts.png)
+
+How to interact:
+- Press **?** at any time to open the keyboard shortcuts overlay.
+- Use **↑ / ↓** to move the tree cursor, **→** to expand/enter, **←** to collapse/go to parent, and **Home / End** for first/last item.
+- Use **Space**, **Shift+↑/↓**, and **Ctrl+A** for selection.
+- Use **Enter**, **Ctrl+X**, **Ctrl+V**, and **Esc** for operations.
+- Use **Type to filter** for incremental search.
+- Use **Ctrl+1-9**, **Ctrl+Alt+←/→**, **Ctrl+Alt+N**, and **Double-click pill** for workspace switching/management.
+- Press **Escape** to close the overlay.
+
+## Sidebar collapsed
+
+Playwright test: `captures the sidebar collapsed state`
+
+![Sidebar collapsed screenshot](./screenshots/sidebar-collapsed.png)
+
+How to interact:
+- Click the sidebar toggle button at the bottom of the activity bar to collapse or expand.
+- When collapsed, the full width is available for the chat or page overlay panel.
+- The activity bar remains visible for quick navigation.
+
+## Omnibar navigation
+
+Playwright test: `captures omnibar URL navigation creating a new tab`
+
+![Omnibar navigation screenshot](./screenshots/omnibar-navigation.png)
+
+How to interact:
+- Type a URL in the omnibar and press Enter to open it as a new tab.
+- The page overlay opens immediately with the simulated browser chrome.
+- Search queries (non-URLs) are forwarded to the assistant as a web search request.
+
+## Workspace file editing
+
+Playwright test: `captures workspace file edit and delete flow`
+
+![Workspace file edit screenshot](./screenshots/workspace-file-edit.png)
+
+How to interact:
+- Click the **+** button on a workspace node in the tree to add files directly as tree items.
+- Click a file node in the tree to open the **file editor** in the main content area.
+- Edit the file path and content, then click **Save file** to persist to browser storage.
+- Click **Delete file** to remove a file from the workspace.
+
+## Workspace switching
+
+Playwright test: `captures workspace switching via pills`
+
+![Workspace switch screenshot](./screenshots/workspace-switch.png)
+
+How to interact:
+- Click the workspace pill toggle to open the workspace overlay, then choose a workspace.
+- Use **Ctrl+Alt+←/→** to switch with the keyboard — the direction of the slide matches the spatial position.
+- Use **Ctrl+1…9** to jump directly by workspace position.
+- Use **Ctrl+Alt+N** to create a new empty workspace and **Double-click pill** to rename the current workspace.
+- Each workspace has its own set of tabs, files, and context.
+- The workspace tree highlights the active workspace and file nodes follow the active workspace context.

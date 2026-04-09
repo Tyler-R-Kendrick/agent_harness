@@ -71,17 +71,30 @@ describe('App', () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.getByText('Workspace files')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add AGENTS.md' }));
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-pr' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add skill' }));
+    // Click the "+" button on the Research workspace to open the add-file modal
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    expect(screen.getByText('Add file')).toBeInTheDocument();
+
+    // Add AGENTS.md
+    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
 
     expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
-    expect(screen.getByText('.agents/skill/review-pr/SKILL.md')).toBeInTheDocument();
+
+    // Open add file modal again, name it, and add a skill
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-pr' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    // The skill file should appear in the tree
+    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
 
     const storedFiles = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, Array<{ path: string }>>;
     expect(storedFiles['ws-research']).toEqual(expect.arrayContaining([
@@ -101,7 +114,9 @@ describe('App', () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add AGENTS.md' }));
+    // Click the "+" button on the Research workspace to open add-file modal
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
@@ -133,10 +148,22 @@ describe('App', () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add AGENTS.md' }));
+    // Add AGENTS.md via the tree "+" button
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    // Edit the file content in the file editor (now in the content area)
     fireEvent.change(screen.getByLabelText('Workspace file content'), { target: { value: '# Rules\nAlways run workspace checks first.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save file' }));
 
+    // Close the file editor to return to chat
+    fireEvent.click(screen.getByLabelText('Close file editor'));
+
+    // Navigate to settings and install the model
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
@@ -144,6 +171,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    // Send a message
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the workspace rules.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -184,6 +212,71 @@ describe('App', () => {
     fireEvent.keyDown(omnibar, { key: '?' });
 
     expect(screen.queryByLabelText('Keyboard shortcuts')).not.toBeInTheDocument();
+  });
+
+  it('opens the workspace overlay with the hotkey and jumps by number', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
+    expect(screen.getByRole('dialog', { name: 'Workspace switcher' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Build');
+  });
+
+  it('supports creating and renaming workspaces from the screenshot controls', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'N', ctrlKey: true, altKey: true });
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Workspace 3');
+
+    fireEvent.doubleClick(screen.getByLabelText('Toggle workspace overlay'));
+    expect(screen.getByRole('dialog', { name: 'Rename workspace' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Ops' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Ops');
+  });
+
+  it('supports screenshot selection and clipboard hotkeys in the workspace tree', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'End' });
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+    expect(document.querySelector('.tree-row.selected')).not.toBeNull();
+
+    fireEvent.keyDown(window, { key: 'x', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'Home' });
+    fireEvent.keyDown(window, { key: 'v', ctrlKey: true });
+    expect(document.querySelectorAll('.tree-row').length).toBeGreaterThan(0);
+  });
+
+  it('supports type-to-filter and shows the screenshot hotkeys overlay', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'b' });
+    expect(screen.getByLabelText('Clear workspace filter')).toHaveTextContent('b');
+
+    fireEvent.keyDown(window, { key: '?' });
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+Alt+←/→')).toBeInTheDocument();
+    expect(screen.getByText('Double-click pill')).toBeInTheDocument();
   });
 
   it('debounces settings searches and aborts the previous request on query changes', async () => {

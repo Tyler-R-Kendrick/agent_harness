@@ -1,5 +1,5 @@
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
-export type NodeType = 'root' | 'workspace' | 'folder' | 'tab';
+export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ModelStatus = 'available' | 'installed' | 'loading';
@@ -17,6 +17,7 @@ export interface TreeNode {
   memoryMB?: number;
   url?: string;
   color?: string;
+  filePath?: string;
 }
 
 export interface McpCard {

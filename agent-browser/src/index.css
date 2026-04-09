@@ -10,4 +10,6 @@ body {
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }
+html { scroll-behavior: smooth; }
 a { color: inherit; }
