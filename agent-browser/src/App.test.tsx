@@ -214,30 +214,69 @@ describe('App', () => {
     expect(screen.queryByLabelText('Keyboard shortcuts')).not.toBeInTheDocument();
   });
 
-  it('opens the workspace switcher with the hotkey and jumps by number', async () => {
+  it('opens the workspace overlay with the hotkey and jumps by number', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.keyDown(window, { key: 'O', ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
     expect(screen.getByRole('dialog', { name: 'Workspace switcher' })).toBeInTheDocument();
-    expect(screen.getByText('Jump between workspaces')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '2', ctrlKey: true });
-    expect(document.querySelector('.workspace-pill.active')?.textContent).toBe('Build');
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Build');
   });
 
-  it('opens add-file flow with the workspace action hotkey', async () => {
+  it('supports creating and renaming workspaces from the screenshot controls', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.keyDown(window, { key: 'A', ctrlKey: true, shiftKey: true });
-    expect(screen.getByRole('dialog', { name: 'Add file' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'N', ctrlKey: true, altKey: true });
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Workspace 3');
+
+    fireEvent.doubleClick(screen.getByLabelText('Toggle workspace overlay'));
+    expect(screen.getByRole('dialog', { name: 'Rename workspace' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Ops' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Ops');
+  });
+
+  it('supports screenshot selection and clipboard hotkeys in the workspace tree', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'End' });
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+    expect(document.querySelector('.tree-row.selected')).not.toBeNull();
+
+    fireEvent.keyDown(window, { key: 'x', ctrlKey: true });
+    fireEvent.keyDown(window, { key: 'Home' });
+    fireEvent.keyDown(window, { key: 'v', ctrlKey: true });
+    expect(document.querySelectorAll('.tree-row').length).toBeGreaterThan(0);
+  });
+
+  it('supports type-to-filter and shows the screenshot hotkeys overlay', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'b' });
+    expect(screen.getByLabelText('Clear workspace filter')).toHaveTextContent('b');
+
+    fireEvent.keyDown(window, { key: '?' });
+    expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+Alt+←/→')).toBeInTheDocument();
+    expect(screen.getByText('Double-click pill')).toBeInTheDocument();
   });
 
   it('debounces settings searches and aborts the previous request on query changes', async () => {

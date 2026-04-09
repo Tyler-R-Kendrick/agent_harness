@@ -16,9 +16,9 @@ How to interact:
 - Click the **+** button next to a workspace to add files (AGENTS.md, skill, plugin, hook) directly into the tree.
 - Click a file node in the tree to open the **file editor** in the content area.
 - Use the omnibar to search or navigate.
-- Use the **workspace launcher** under the omnibar to open the richer switcher overlay.
-- Switch workspaces with the segmented pill bar under the launcher — includes a **slide animation** for smooth transitions.
-- Use **Ctrl/⌘+Shift+O** for the switcher, **Ctrl/⌘+←/→** to cycle, and **Ctrl/⌘+1…9** to jump directly.
+- Use the **workspace pill toggle** under the omnibar to open the workspace overlay.
+- Use the **?** button next to it to open the screenshot-style hotkeys modal.
+- Type directly while focused in Workspaces to incrementally filter the tree.
 - Send a prompt from the composer at the bottom using the model pill and green send button.
 
 ## Chat composer
@@ -86,10 +86,12 @@ Playwright test: `captures the workspace switcher modal`
 ![Workspace switcher screenshot](./screenshots/workspace-switcher.png)
 
 How to interact:
-- Click the **workspace launcher** or **Open workspace switcher** button to open the switcher modal.
+- Click the **workspace pill toggle** to open the switcher modal.
 - Search workspaces from the top of the overlay.
-- Each workspace tile shows its name, jump hint, tab count, and memory usage.
-- Click a workspace tile to switch to it and close the modal.
+- Each workspace row shows its name, jump hint, tab count, and memory usage.
+- Click a workspace row to switch to it and close the modal.
+- Use **Ctrl+1…9** to jump directly, **Ctrl+Alt+←/→** to cycle, and **Ctrl+Alt+N** to create a new empty workspace.
+- Double-click the workspace pill (or a workspace row) to rename a workspace.
 
 ## Keyboard shortcuts
 
@@ -99,11 +101,11 @@ Playwright test: `captures the keyboard shortcuts modal`
 
 How to interact:
 - Press **?** at any time to open the keyboard shortcuts overlay.
-- Use arrow keys to navigate the workspace tree, Enter to open tabs or files.
-- Use **Ctrl/⌘ + Shift + O** to open the workspace switcher.
-- Use **Ctrl/⌘ + ←/→** to slide between workspaces.
-- Use **Ctrl/⌘ + 1…9** to jump directly to a workspace.
-- Use **/** to focus the omnibar and **Ctrl/⌘ + Shift + A** to add files to the active workspace.
+- Use **↑ / ↓** to move the tree cursor, **→** to expand/enter, **←** to collapse/go to parent, and **Home / End** for first/last item.
+- Use **Space**, **Shift+↑/↓**, and **Ctrl+A** for selection.
+- Use **Enter**, **Ctrl+X**, **Ctrl+V**, and **Esc** for operations.
+- Use **Type to filter** for incremental search.
+- Use **Ctrl+1-9**, **Ctrl+Alt+←/→**, **Ctrl+Alt+N**, and **Double-click pill** for workspace switching/management.
 - Press **Escape** to close the overlay.
 
 ## Sidebar collapsed
@@ -147,8 +149,9 @@ Playwright test: `captures workspace switching via pills`
 ![Workspace switch screenshot](./screenshots/workspace-switch.png)
 
 How to interact:
-- Click workspace pills in the segmented tab bar to switch between workspaces with a slide animation.
-- Use **Ctrl/⌘+←/→** to switch with the keyboard — the direction of the slide matches the spatial position.
-- Use **Ctrl/⌘+1…9** to jump directly by workspace position.
+- Click the workspace pill toggle to open the workspace overlay, then choose a workspace.
+- Use **Ctrl+Alt+←/→** to switch with the keyboard — the direction of the slide matches the spatial position.
+- Use **Ctrl+1…9** to jump directly by workspace position.
+- Use **Ctrl+Alt+N** to create a new empty workspace and **Double-click pill** to rename the current workspace.
 - Each workspace has its own set of tabs, files, and context.
 - The workspace tree highlights the active workspace and file nodes follow the active workspace context.

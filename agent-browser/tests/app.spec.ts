@@ -107,11 +107,11 @@ test('captures the chat panel with composer', async ({ page }) => {
 test('captures the workspace switcher modal', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
-  // Click the workspace launcher to open the switcher
+  // Click the workspace overlay toggle to open the switcher
   await page.getByLabel('Omnibar').waitFor();
-  await page.getByLabel('Open workspace switcher').first().click();
+  await page.getByLabel('Toggle workspace overlay').click();
   await expect(page.getByRole('dialog', { name: 'Workspace switcher' })).toBeVisible();
-  await expect(page.getByText('Jump between workspaces')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-switcher.png', fullPage: true });
 });
@@ -125,7 +125,7 @@ test('captures the keyboard shortcuts modal', async ({ page }) => {
   // Press ? to open keyboard shortcuts overlay
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
-  await expect(page.getByText('Ctrl/⌘ + Shift + O')).toBeVisible();
+  await expect(page.getByText('Ctrl+Alt+←/→')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/keyboard-shortcuts.png', fullPage: true });
 });
@@ -195,13 +195,13 @@ test('captures workspace file edit and delete flow', async ({ page }) => {
 
 // ── User flow: switching workspaces ───────────────────────────────────
 
-test('captures workspace switching via pills', async ({ page }) => {
+test('captures workspace switching via hotkeys', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   // Verify we start on Research workspace by checking tree has Research tabs
   await expect(page.getByRole('button', { name: /Hugging Face/ }).first()).toBeVisible();
-  // Click the Build workspace pill (use pill-specific selector to avoid matching tree button)
-  await page.locator('.workspace-pill').filter({ hasText: 'Build' }).click();
+  // Use the target workspace hotkey to switch
+  await page.keyboard.press('Control+Alt+ArrowRight');
   // The workspace tree should update (Build workspace has CopilotKit docs tab)
   await expect(page.getByRole('button', { name: /CopilotKit docs/ }).first()).toBeVisible();
   assertNoRuntimeErrors();
