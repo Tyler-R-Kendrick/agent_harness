@@ -37,12 +37,14 @@ jobs:
           set -euo pipefail
           # Keep the requested installs strict so setup fails fast if any required skill becomes unavailable.
           # `npx --yes` auto-confirms package download; `skills add -y` auto-confirms the skill installation itself.
+          # These names intentionally match the current Skills CLI agent identifiers.
           target_agent_names=(claude-code codex opencode)
           install_skill() {
             local repo_url="$1"
             local skill_name="$2"
             local install_args=()
             local agent_name
+            echo "Installing skill: ${skill_name} from ${repo_url}"
             for agent_name in "${target_agent_names[@]}"; do
               install_args+=(--agent "$agent_name")
             done
