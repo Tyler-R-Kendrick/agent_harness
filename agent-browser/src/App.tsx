@@ -5,6 +5,8 @@ import {
   ArrowRight,
   ChevronRight,
   Cpu,
+  Eye,
+  EyeOff,
   File,
   Folder,
   FolderOpen,
@@ -137,6 +139,8 @@ const icons = {
   plus: Plus,
   cpu: Cpu,
   chevronRight: ChevronRight,
+  eye: Eye,
+  eyeOff: EyeOff,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -627,43 +631,115 @@ function ChatPanel({
   );
 }
 
+interface CloudProvider {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  models: { id: string; name: string; enabled: boolean }[];
+}
+
+const CLOUD_PROVIDERS: CloudProvider[] = [
+  { id: 'anthropic', name: 'Anthropic', color: '#d97706', icon: 'A', models: [{ id: 'claude-3-opus', name: 'Claude 3 Opus', enabled: false }, { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', enabled: true }, { id: 'claude-3-haiku', name: 'Claude 3 Haiku', enabled: false }] },
+  { id: 'openai', name: 'OpenAI', color: '#10b981', icon: 'O', models: [{ id: 'gpt-4o', name: 'GPT-4o', enabled: true }, { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', enabled: false }, { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', enabled: false }] },
+  { id: 'google', name: 'Google', color: '#3b82f6', icon: 'G', models: [{ id: 'gemini-pro', name: 'Gemini Pro', enabled: false }, { id: 'gemini-ultra', name: 'Gemini Ultra', enabled: false }] },
+  { id: 'openrouter', name: 'OpenRouter', color: '#8b5cf6', icon: 'R', models: [{ id: 'auto', name: 'Auto (best available)', enabled: false }] },
+  { id: 'ollama', name: 'Ollama', color: '#f43f5e', icon: 'L', models: [{ id: 'llama3', name: 'Llama 3', enabled: false }, { id: 'mistral', name: 'Mistral', enabled: false }] },
+];
+
+function ProviderCard({ provider }: { provider: CloudProvider }) {
+  const [expanded, setExpanded] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [models, setModels] = useState(provider.models);
+  const configured = apiKey.length > 0;
+
+  return (
+    <div className={`provider-card ${expanded ? 'expanded' : ''}`}>
+      <button type="button" className="provider-card-header" onClick={() => setExpanded(!expanded)}>
+        <span className="provider-icon" style={{ background: provider.color }}>{provider.icon}</span>
+        <span className="provider-name">{provider.name}</span>
+        <span className={`badge ${configured ? 'connected' : 'muted'}`}>{configured ? 'Connected' : 'Not configured'}</span>
+        <Icon name="chevronRight" size={12} color="#94a3b8" />
+      </button>
+      {expanded && (
+        <div className="provider-card-body">
+          <label className="provider-key-label">
+            API Key
+            <div className="provider-key-row">
+              <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={`Enter ${provider.name} API key`} className="provider-key-input" />
+              <button type="button" className="icon-button" onClick={() => setShowKey(!showKey)}><Icon name={showKey ? 'eyeOff' : 'eye'} size={14} color="#94a3b8" /></button>
+            </div>
+          </label>
+          <div className="provider-models">
+            <span className="provider-models-title">Models</span>
+            {models.map((m) => (
+              <label key={m.id} className="provider-model-row">
+                <input type="checkbox" checked={m.enabled} onChange={() => setModels(models.map((x) => x.id === m.id ? { ...x, enabled: !x.enabled } : x))} />
+                <span>{m.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsPanel({ registryModels, installedModels, task, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
+  const [settingsTab, setSettingsTab] = useState<'providers' | 'local'>('providers');
+
   return (
     <section className="panel-scroll settings-panel" aria-label="Settings">
       <span className="panel-eyebrow">Settings / Models</span>
       <div className="settings-switcher">
-        <button type="button" className="activity-inline-button">Providers</button>
-        <button type="button" className="activity-inline-button active">Local</button>
+        <button type="button" className={`activity-inline-button ${settingsTab === 'providers' ? 'active' : ''}`} onClick={() => setSettingsTab('providers')}>Providers</button>
+        <button type="button" className={`activity-inline-button ${settingsTab === 'local' ? 'active' : ''}`} onClick={() => setSettingsTab('local')}>Local</button>
       </div>
-      <div className="local-model-controls">
-        <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search local model registry" />
-        <div className="chip-row">
-          {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
+
+      {settingsTab === 'providers' && (
+        <div className="cloud-providers-section">
+          <h3>Cloud Providers</h3>
+          <p className="muted">Configure API keys and enable models from cloud providers.</p>
+          <div className="provider-list">
+            {CLOUD_PROVIDERS.map((p) => <ProviderCard key={p.id} provider={p} />)}
+          </div>
         </div>
-      </div>
-      <div className="panel-section-header">
-        <span>Results ({registryModels.length})</span>
-        <span className="muted">{installedModels.length} models loaded</span>
-      </div>
-      <div className="model-section settings-result-list">
-        {registryModels.map((model) => (
-          <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
-            <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
-            <div className="model-card-body">
-              <strong>{model.name}</strong>
-              <span className="chip mini">{model.task}</span>
-              <p>{model.author}</p>
-              <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
+      )}
+
+      {settingsTab === 'local' && (
+        <>
+          <div className="local-model-controls">
+            <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search local model registry" />
+            <div className="chip-row">
+              {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
             </div>
-            <span className="secondary-button">Load</span>
-          </button>
-        ))}
-        {!registryModels.length ? <p className="muted">Search the local Hugging Face ONNX registry to populate the model drawer.</p> : null}
-      </div>
-      <div className="model-section">
-        <h3>Installed models</h3>
-        {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card installed"><div className="model-card-body"><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
-      </div>
+          </div>
+          <div className="panel-section-header">
+            <span>Results ({registryModels.length})</span>
+            <span className="muted">{installedModels.length} models loaded</span>
+          </div>
+          <div className="model-section settings-result-list">
+            {registryModels.map((model) => (
+              <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
+                <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
+                <div className="model-card-body">
+                  <strong>{model.name}</strong>
+                  <span className="chip mini">{model.task}</span>
+                  <p>{model.author}</p>
+                  <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
+                </div>
+                <span className="secondary-button">Load</span>
+              </button>
+            ))}
+            {!registryModels.length ? <p className="muted">Search the local Hugging Face ONNX registry to populate the model drawer.</p> : null}
+          </div>
+          <div className="model-section">
+            <h3>Installed models</h3>
+            {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card installed"><div className="model-card-body"><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -672,37 +748,99 @@ function HistoryPanel() {
   return <section className="panel-scroll history-panel" aria-label="History"><span className="panel-eyebrow">History</span><h2>Recent sessions</h2><p className="muted">Pick up where you left off across research, build, and UX investigations.</p>{mockHistory.map((session) => <article key={session.id} className="list-card history-card"><div className="history-card-header"><div><h3>{session.title}</h3><p className="muted">{session.date}</p></div><span className="badge">{session.events.length} events</span></div><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
 }
 
+interface MarketplaceExtension {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  iconColor: string;
+  iconLetter: string;
+  stars: number;
+  users: string;
+  installed: boolean;
+  category: string;
+}
+
+const MARKETPLACE_ITEMS: MarketplaceExtension[] = [
+  { id: 'ublock', name: 'uBlock Origin', author: 'Raymond Hill', description: 'An efficient wide-spectrum content blocker for Chromium and Firefox.', iconColor: '#800000', iconLetter: 'uB', stars: 5, users: '10M+', installed: true, category: 'Privacy' },
+  { id: 'dark-reader', name: 'Dark Reader', author: 'Dark Reader Ltd', description: 'Dark mode for every website. Take care of your eyes, use Dark Reader for night and daily browsing.', iconColor: '#1a1a2e', iconLetter: 'DR', stars: 4, users: '5M+', installed: true, category: 'Productivity' },
+  { id: 'mcp-bridge', name: 'MCP Bridge', author: 'Anthropic', description: 'Connect to Model Context Protocol servers for tool-augmented AI interactions.', iconColor: '#d97706', iconLetter: 'MC', stars: 4, users: '50K+', installed: false, category: 'AI' },
+  { id: '1password', name: '1Password', author: 'AgileBits', description: 'The best way to experience 1Password in your browser. Easily sign in, generate passwords, and autofill forms.', iconColor: '#0572ec', iconLetter: '1P', stars: 5, users: '2M+', installed: false, category: 'Privacy' },
+  { id: 'react-devtools', name: 'React DevTools', author: 'Meta', description: 'Adds React debugging tools to the browser DevTools. Inspect the component hierarchy and props.', iconColor: '#61dafb', iconLetter: 'Re', stars: 4, users: '3M+', installed: true, category: 'Developer' },
+  { id: 'copilot', name: 'GitHub Copilot', author: 'GitHub', description: 'AI pair programmer that helps you write code faster with autocomplete-style suggestions.', iconColor: '#238636', iconLetter: 'GH', stars: 5, users: '1M+', installed: false, category: 'AI' },
+  { id: 'bitwarden', name: 'Bitwarden', author: 'Bitwarden Inc', description: 'A secure and free password manager for all of your devices.', iconColor: '#175DDC', iconLetter: 'Bw', stars: 4, users: '1M+', installed: false, category: 'Privacy' },
+  { id: 'grammarly', name: 'Grammarly', author: 'Grammarly Inc', description: 'Improve your writing with AI-powered grammar checking, spell checking, and style suggestions.', iconColor: '#15c39a', iconLetter: 'Gr', stars: 4, users: '10M+', installed: false, category: 'Productivity' },
+  { id: 'json-viewer', name: 'JSON Viewer', author: 'nicedoc.io', description: 'Beautify and format JSON data in the browser with syntax highlighting and tree view.', iconColor: '#f59e0b', iconLetter: 'JS', stars: 4, users: '500K+', installed: true, category: 'Developer' },
+  { id: 'vimium', name: 'Vimium', author: 'Phil Crosby', description: 'The Hacker\'s browser. Navigate the web without a mouse using Vim-like keybindings.', iconColor: '#4ade80', iconLetter: 'Vi', stars: 5, users: '800K+', installed: false, category: 'Tools' },
+];
+
 function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: string; capabilities: WorkspaceCapabilities }) {
+  const [search, setSearch] = useState('');
+  const [installedExtensions, setInstalledExtensions] = useState<Set<string>>(() => new Set(MARKETPLACE_ITEMS.filter((e) => e.installed).map((e) => e.id)));
+
+  const filtered = MARKETPLACE_ITEMS.filter((ext) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return ext.name.toLowerCase().includes(q) || ext.description.toLowerCase().includes(q) || ext.author.toLowerCase().includes(q);
+  });
+
+  const toggleInstall = (id: string) => {
+    setInstalledExtensions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
-      <span className="panel-eyebrow">Extensions</span>
-      <h2>Workspace plugin manifests</h2>
-      <p className="muted">Plugin support is discovered from standards-based manifests stored in the active workspace.</p>
-      <div className="integration-overview">
-        <div className="list-card integration-summary-card">
-          <span className="badge">Active workspace</span>
-          <strong>{workspaceName}</strong>
-          <p className="muted">{capabilities.plugins.length} plugin manifests · {capabilities.hooks.length} hooks discovered</p>
-        </div>
+      <div className="extensions-topbar">
+        <Icon name="puzzle" size={16} color="#f59e0b" />
+        <h2>Extensions</h2>
+        <span className="badge">{installedExtensions.size} installed</span>
       </div>
-      {capabilities.plugins.length ? (
-        <div className="integration-list">
-          {capabilities.plugins.map((plugin) => (
-            <article key={plugin.path} className="list-card extension-card">
-              <div className="extension-icon">
-                <Icon name="puzzle" color="#f59e0b" />
+      <div className="extensions-search">
+        <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search extensions…" />
+      </div>
+      <div className="extensions-grid">
+        {filtered.map((ext) => {
+          const isInstalled = installedExtensions.has(ext.id);
+          return (
+            <article key={ext.id} className="marketplace-card">
+              <div className="marketplace-card-icon" style={{ background: ext.iconColor }}>
+                <span>{ext.iconLetter}</span>
               </div>
-              <div className="extension-content">
-                <div className="extension-title-row">
-                  <h3>{plugin.directory}</h3>
-                  <span className="badge">{plugin.manifestName}</span>
+              <div className="marketplace-card-body">
+                <strong>{ext.name}</strong>
+                <span className="marketplace-card-author">{ext.author}</span>
+                <p className="marketplace-card-desc">{ext.description}</p>
+                <div className="marketplace-card-meta">
+                  <span className="marketplace-stars">{'★'.repeat(ext.stars)}{'☆'.repeat(5 - ext.stars)}</span>
+                  <span className="muted">{ext.users}</span>
                 </div>
+              </div>
+              <button type="button" className={`marketplace-install-btn ${isInstalled ? 'installed' : ''}`} onClick={() => toggleInstall(ext.id)}>
+                {isInstalled ? 'Installed' : 'Add'}
+              </button>
+            </article>
+          );
+        })}
+        {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
+      </div>
+      {capabilities.plugins.length > 0 && (
+        <div className="workspace-plugins-section">
+          <h3>Workspace Plugins ({workspaceName})</h3>
+          {capabilities.plugins.map((plugin) => (
+            <div key={plugin.path} className="list-card extension-card">
+              <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
+              <div className="extension-content">
+                <div className="extension-title-row"><h3>{plugin.directory}</h3><span className="badge">{plugin.manifestName}</span></div>
                 <p>{plugin.path}</p>
               </div>
-            </article>
+            </div>
           ))}
         </div>
-      ) : <p className="muted">No plugin manifests stored yet. Add one from Exploration to register a plugin bundle in this workspace.</p>}
+      )}
     </section>
   );
 }
