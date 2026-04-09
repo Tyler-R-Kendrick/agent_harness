@@ -34,19 +34,25 @@ jobs:
 
       - name: Install requested agent skills
         run: |
-          npx --yes skills add https://github.com/vercel-labs/skills --skill find-skills --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/anthropics/skills --skill frontend-design --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/vercel-labs/agent-skills --skill web-design-guidelines --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/anthropics/skills --skill skill-creator --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/nextlevelbuilder/ui-ux-pro-max-skill --skill ui-ux-pro-max --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/shadcn/ui --skill shadcn --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/anthropics/skills --skill webapp-testing --copy -y -a claude-code -a codex -a opencode
-          npx --yes skills add https://github.com/pbakaus/impeccable --skill impeccable --copy -y -a claude-code -a codex -a opencode
+          set -euo pipefail
+          agents=(-a claude-code -a codex -a opencode)
+          install_skill() {
+            npx --yes skills add "$1" --skill "$2" --copy -y "${agents[@]}"
+          }
+
+          install_skill https://github.com/vercel-labs/skills find-skills
+          install_skill https://github.com/anthropics/skills frontend-design
+          install_skill https://github.com/vercel-labs/agent-skills web-design-guidelines
+          install_skill https://github.com/anthropics/skills skill-creator
+          install_skill https://github.com/nextlevelbuilder/ui-ux-pro-max-skill ui-ux-pro-max
+          install_skill https://github.com/shadcn/ui shadcn
+          install_skill https://github.com/anthropics/skills webapp-testing
+          install_skill https://github.com/pbakaus/impeccable impeccable
 
       - name: Install requested Copilot plugin marketplace assets
         run: |
           if ! command -v copilot >/dev/null 2>&1; then
-            echo "copilot CLI is not available on this runner; skipping Copilot plugin installation."
+            echo "Note: copilot CLI is not available on this runner; skipping optional Copilot plugin installation."
             exit 0
           fi
 
