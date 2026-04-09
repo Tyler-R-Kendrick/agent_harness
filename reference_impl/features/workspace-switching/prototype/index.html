@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Workspace Hot-Swapping Prototype</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#09090b;color:#d4d4d8;overflow:hidden}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+@keyframes slide-up{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(96,165,250,.4)}70%{box-shadow:0 0 0 6px rgba(96,165,250,0)}100%{box-shadow:0 0 0 0 rgba(96,165,250,0)}}
+@keyframes switch-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:3px}
+</style>
+<script type="text/babel">
+const{useState,useCallback,useMemo,useEffect,useRef,memo}=React;
+
+/* ═══════════ SVG Icons ═══════════ */
+const ic={
+  chevron:"M9 18l6-6-6-6",
+  layers:["M12 2L2 7l10 5 10-5-10-5z","M2 17l10 5 10-5","M2 12l10 5 10-5"],
+  folder:"M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z",
+  folderOpen:"M6 14l1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v2",
+  plus:["M12 5v14","M5 12h14"],
+  x:["M18 6L6 18","M6 6l12 12"],
+  globe:["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M2 12h20","M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"],
+  search:["M11 17.25a6.25 6.25 0 1 1 0-12.5 6.25 6.25 0 0 1 0 12.5z","M16 16l4.5 4.5"],
+  settings:"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z",
+  sparkles:"M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z",
+  trash:["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
+  edit:["M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"],
+  monitor:["M2 3h20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z","M8 21h8","M12 17v4"],
+  /* Multi-desktop icon: two overlapping rectangles */
+  desktops:["M4 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z","M8 2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2"],
+  grid:["M3 3h7v7H3z","M14 3h7v7h-7z","M3 14h7v7H3z","M14 14h7v7h-7z"],
+  copy:["M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2z","M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"],
+  arrowLeft:["M19 12H5","M12 19l-7-7 7-7"],
+  arrowRight:["M5 12h14","M12 5l7 7-7 7"],
+  check:["M20 6L9 17l-5-5"],
+  zap:["M13 2L3 14h9l-1 8 10-12h-9l1-8"],
+  bookmarkFill:"M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z",
+  send:["M22 2L11 13","M22 2l-7 20-4-9-9-4 20-7"],
+  messageSquare:["M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"],
+};
+function I({d,size=16,color="currentColor",fill="none",style={}}){
+  const paths=Array.isArray(d)?d:[d];
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{display:"block",flexShrink:0,...style}}>
+    {paths.map((p,i)=><path key={i} d={p}/>)}
+  </svg>;
+}
+
+/* ═══════════ Favicon ═══════════ */
+function Favicon({url,size=14}){
+  const[err,setErr]=useState(false);
+  const domain=useMemo(()=>{try{return new URL(url?.startsWith("http")?url:"https://"+url).hostname}catch(e){return null}},[url]);
+  if(!domain||err)return<I d={ic.globe} size={size} color="rgba(255,255,255,.3)"/>;
+  return<img src={"https://www.google.com/s2/favicons?domain="+domain+"&sz=32"} width={size} height={size}
+    onError={()=>setErr(true)} style={{borderRadius:2,flexShrink:0,display:"block"}} alt=""/>;
+}
+
+/* ═══════════ Constants ═══════════ */
+const WORKSPACE_COLORS=["#60a5fa","#34d399","#f472b6","#fbbf24","#a78bfa","#fb923c","#22d3ee","#e879f9","#4ade80"];
+
+function makeWorkspace(id,name,colorIdx,tabs=[]){
+  return{
+    id,name,
+    color:WORKSPACE_COLORS[colorIdx%WORKSPACE_COLORS.length],
+    root:{
+      id:"root-"+id,name,type:"workspace",expanded:true,persisted:true,activeMemory:true,
+      children:tabs.map((t,i)=>({id:id+"-t"+i,name:t.name,url:t.url,type:"tab",memoryTier:"hot",memoryMB:50}))
+    },
+    activeTabs:[],
+    cursorId:null,
+    selectedIds:new Set(),
+    scrollTop:0,
+  };
+}
+
+const INITIAL_WORKSPACES=[
+  makeWorkspace("ws-1","Daily Driver",0,[
+    {name:"Gmail",url:"https://mail.google.com"},
+    {name:"Google Calendar",url:"https://calendar.google.com"},
+    {name:"Slack",url:"https://app.slack.com"},
+    {name:"GitHub",url:"https://github.com"},
+  ]),
+  makeWorkspace("ws-2","Research",1,[
+    {name:"Chromium Source",url:"https://source.chromium.org"},
+    {name:"MDN Web APIs",url:"https://developer.mozilla.org/en-US/docs/Web/API"},
+    {name:"Servo Repository",url:"https://github.com/nicbarter/servo"},
+  ]),
+  makeWorkspace("ws-3","Personal",2,[
+    {name:"YouTube",url:"https://youtube.com"},
+    {name:"Reddit",url:"https://reddit.com"},
+    {name:"Spotify",url:"https://open.spotify.com"},
+  ]),
+];
+
+/* ═══════════ Tree Helpers ═══════════ */
+function deepUpdate(node,id,fn){if(node.id===id)return fn(node);if(node.children)return{...node,children:node.children.map(c=>deepUpdate(c,id,fn))};return node}
+function cntTabs(n){return n.type==="tab"?1:(n.children||[]).reduce((s,c)=>s+cntTabs(c),0)}
+
+/* ═══════════ Tab Row ═══════════ */
+function TabRow({tab,depth=0,active,onOpen,isCursor,onSetCursor}){
+  const[hov,setHov]=useState(false);
+  const bg=active?"rgba(96,165,250,.1)":isCursor?"rgba(96,165,250,.06)":hov?"rgba(255,255,255,.025)":"transparent";
+  const shortUrl=useMemo(()=>{
+    try{const u=new URL(tab.url?.startsWith("http")?tab.url:"https://"+tab.url);return u.hostname+u.pathname.replace(/\/$/,"")}catch(e){return tab.url||""}
+  },[tab.url]);
+  return(
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      onClick={()=>{onSetCursor&&onSetCursor(tab.id);onOpen&&onOpen(tab)}}
+      style={{display:"flex",alignItems:"center",gap:6,padding:"3px 8px 3px "+(depth*16+20)+"px",
+        cursor:"pointer",borderRadius:4,transition:"background .1s",
+        background:bg,borderLeft:active?"2px solid #60a5fa":isCursor?"2px solid rgba(96,165,250,.5)":"2px solid transparent"}}>
+      <Favicon url={tab.url} size={13}/>
+      <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column"}}>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:12,letterSpacing:"-.01em",
+          color:active?"#e4e4e7":"inherit",fontWeight:active?500:400}}>{tab.name}</span>
+        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:10,color:"rgba(255,255,255,.15)",letterSpacing:"-.01em"}}>{shortUrl}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ Workspace Folder ═══════════ */
+function WsFolder({ws,depth=0,activeSet,onOpen,onToggle,cursorId,onSetCursor}){
+  const[hov,setHov]=useState(false);
+  const tabs=cntTabs(ws);
+  const isCursor=cursorId===ws.id;
+  const bg=isCursor?"rgba(96,165,250,.06)":hov?"rgba(255,255,255,.025)":"transparent";
+  return(
+    <div>
+      <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+        onClick={()=>{onSetCursor&&onSetCursor(ws.id);onToggle(ws.id)}}
+        style={{display:"flex",alignItems:"center",gap:5,padding:"4px 8px 4px "+(depth*16+4)+"px",
+          cursor:"pointer",borderRadius:4,borderLeft:"2px solid "+(isCursor?"#60a5fa":"rgba(63,63,70,.45)"),
+          transition:"background .1s",background:bg}}>
+        <span style={{display:"flex",transition:"transform .12s",transform:ws.expanded?"rotate(90deg)":"rotate(0)"}}>
+          <I d={ic.chevron} size={11} color="rgba(255,255,255,.25)"/>
+        </span>
+        <I d={ws.expanded?ic.folderOpen:ic.folder} size={13} color="rgba(255,255,255,.4)"/>
+        <span style={{flex:1,fontSize:12,fontWeight:550,letterSpacing:"-.01em",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+          color:"rgba(255,255,255,.6)"}}>{ws.name}</span>
+        <span style={{fontSize:10,opacity:.15,fontVariantNumeric:"tabular-nums",fontWeight:500}}>{tabs}</span>
+      </div>
+      {ws.expanded&&ws.children&&ws.children.map(c=>
+        c.type==="workspace"
+          ?<WsFolder key={c.id} ws={c} depth={depth+1} activeSet={activeSet} onOpen={onOpen} onToggle={onToggle} cursorId={cursorId} onSetCursor={onSetCursor}/>
+          :<TabRow key={c.id} tab={c} depth={depth+1} active={activeSet&&activeSet.has(c.id)} onOpen={onOpen} isCursor={cursorId===c.id} onSetCursor={onSetCursor}/>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════ Workspace Pill ═══════════ */
+function WorkspacePill({ws,index,isActive,onClick,onDoubleClick,onDelete,canDelete,isDragOver,onDragStart,onDragOver,onDrop,onDragEnd}){
+  const[hov,setHov]=useState(false);
+  const tabCount=cntTabs(ws.root);
+  return(
+    <div
+      draggable
+      onDragStart={e=>{e.dataTransfer.setData("text/plain",ws.id);onDragStart&&onDragStart(ws.id)}}
+      onDragOver={e=>{e.preventDefault();onDragOver&&onDragOver(ws.id)}}
+      onDrop={e=>{e.preventDefault();onDrop&&onDrop(ws.id)}}
+      onDragEnd={onDragEnd}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      onClick={onClick} onDoubleClick={onDoubleClick}
+      title={ws.name+" (Ctrl+"+(index+1)+")"}
+      style={{
+        display:"flex",alignItems:"center",gap:5,
+        padding:"4px 10px",borderRadius:6,cursor:"pointer",
+        background:isActive?"rgba(255,255,255,.06)":hov?"rgba(255,255,255,.03)":"transparent",
+        border:isDragOver?"1px dashed rgba(255,255,255,.2)":"1px solid "+(isActive?"rgba(255,255,255,.1)":"transparent"),
+        transition:"all .12s",position:"relative",flexShrink:0,
+        userSelect:"none",WebkitUserSelect:"none",
+      }}>
+      {/* Number badge */}
+      <span style={{
+        width:16,height:16,borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",
+        fontSize:9,fontWeight:700,flexShrink:0,
+        background:isActive?ws.color+"25":"rgba(255,255,255,.04)",
+        color:isActive?ws.color:"rgba(255,255,255,.25)",
+        border:"1px solid "+(isActive?ws.color+"40":"rgba(255,255,255,.06)"),
+      }}>{index+1}</span>
+      {/* Name */}
+      <span style={{
+        fontSize:11,fontWeight:isActive?600:400,letterSpacing:"-.01em",
+        color:isActive?"#e4e4e7":"rgba(255,255,255,.35)",
+        overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80,
+      }}>{ws.name}</span>
+      {/* Tab count */}
+      <span style={{fontSize:9,color:"rgba(255,255,255,.12)",fontVariantNumeric:"tabular-nums",flexShrink:0}}>{tabCount}</span>
+      {/* Delete button on hover (not for last workspace) */}
+      {hov&&canDelete&&!isActive&&(
+        <button onClick={e=>{e.stopPropagation();onDelete(ws.id)}}
+          style={{position:"absolute",top:-4,right:-4,width:14,height:14,borderRadius:"50%",
+            background:"#27272a",border:"1px solid rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center",
+            cursor:"pointer",padding:0,animation:"fade-in .1s ease-out"}}>
+          <I d={ic.x} size={8} color="rgba(255,255,255,.4)"/>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════ Workspace Indicator Strip ═══════════ */
+function WorkspaceIndicator({workspaces,activeId,onSwitch,onCreate,onDelete,onRename,onReorder}){
+  const[renamingId,setRenamingId]=useState(null);
+  const[renameVal,setRenameVal]=useState("");
+  const[dragOverId,setDragOverId]=useState(null);
+  const[dragSourceId,setDragSourceId]=useState(null);
+  const renameRef=useRef(null);
+
+  useEffect(()=>{
+    if(renamingId&&renameRef.current){renameRef.current.focus();renameRef.current.select()}
+  },[renamingId]);
+
+  const startRename=(ws)=>{
+    setRenamingId(ws.id);
+    setRenameVal(ws.name);
+  };
+  const commitRename=()=>{
+    if(renameVal.trim()&&renamingId){onRename(renamingId,renameVal.trim())}
+    setRenamingId(null);
+  };
+
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:4,padding:"8px 8px 6px",borderBottom:"1px solid rgba(255,255,255,.04)",
+      overflowX:"auto",overflowY:"hidden",flexShrink:0}}>
+      {workspaces.map((ws,i)=>(
+        renamingId===ws.id?(
+          <input key={ws.id} ref={renameRef} value={renameVal} onChange={e=>setRenameVal(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter")commitRename();if(e.key==="Escape")setRenamingId(null);e.stopPropagation()}}
+            onBlur={commitRename}
+            style={{width:100,padding:"4px 8px",fontSize:11,fontWeight:600,background:"rgba(255,255,255,.06)",
+              border:"1px solid "+ws.color,borderRadius:6,color:"#e4e4e7",outline:"none",letterSpacing:"-.01em"}}/>
+        ):(
+          <WorkspacePill key={ws.id} ws={ws} index={i} isActive={ws.id===activeId}
+            onClick={()=>onSwitch(ws.id)}
+            onDoubleClick={(e)=>{e.stopPropagation();startRename(ws)}}
+            onDelete={onDelete}
+            canDelete={workspaces.length>1}
+            isDragOver={dragOverId===ws.id&&dragSourceId!==ws.id}
+            onDragStart={setDragSourceId}
+            onDragOver={setDragOverId}
+            onDrop={(targetId)=>{if(dragSourceId&&dragSourceId!==targetId)onReorder(dragSourceId,targetId);setDragOverId(null);setDragSourceId(null)}}
+            onDragEnd={()=>{setDragOverId(null);setDragSourceId(null)}}
+          />
+        )
+      ))}
+      {/* New workspace button */}
+      <button onClick={onCreate} title="New workspace (Ctrl+Alt+N)"
+        style={{width:24,height:24,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",
+          background:"rgba(255,255,255,.02)",border:"1px dashed rgba(255,255,255,.08)",cursor:"pointer",flexShrink:0,
+          color:"rgba(255,255,255,.2)",transition:"all .12s"}}
+        onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,.05)";e.currentTarget.style.borderColor="rgba(255,255,255,.15)";e.currentTarget.style.color="rgba(255,255,255,.4)"}}
+        onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,.02)";e.currentTarget.style.borderColor="rgba(255,255,255,.08)";e.currentTarget.style.color="rgba(255,255,255,.2)"}}>
+        <I d={ic.plus} size={12}/>
+      </button>
+    </div>
+  );
+}
+
+/* ═══════════ Toast ═══════════ */
+function Toast({message}){
+  if(!message)return null;
+  return(
+    <div style={{position:"fixed",bottom:16,left:"50%",transform:"translateX(-50%)",
+      background:"rgba(12,12,15,.92)",backdropFilter:"blur(12px)",color:"#a1a1aa",
+      padding:"6px 16px",borderRadius:7,fontSize:11.5,fontWeight:500,
+      border:"1px solid rgba(255,255,255,.05)",zIndex:999,animation:"slide-up .18s ease-out"}}>
+      {message}
+    </div>
+  );
+}
+
+/* ═══════════ Shortcut Help ═══════════ */
+function ShortcutOverlay({onClose}){
+  const groups=[
+    {title:"Workspace Switching",items:[
+      ["Ctrl+1–9","Jump to workspace N"],
+      ["Ctrl+Alt+←/→","Previous / next workspace"],
+      ["Ctrl+Alt+N","New empty workspace"],
+      ["Double-click pill","Rename workspace"],
+    ]},
+    {title:"Tree Navigation",items:[
+      ["↑ / ↓","Move cursor"],
+      ["→ / ←","Expand / collapse"],
+      ["Enter","Toggle tab in canvas"],
+      ["Space","Toggle selection"],
+    ]},
+    {title:"General",items:[
+      ["?","Show this overlay"],
+      ["Esc","Close / cancel"],
+    ]},
+  ];
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",backdropFilter:"blur(4px)",zIndex:900,
+      display:"flex",alignItems:"center",justifyContent:"center",animation:"fade-in .12s ease-out"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#18181b",border:"1px solid rgba(255,255,255,.08)",
+        borderRadius:12,padding:24,width:380,maxHeight:"80vh",overflow:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <span style={{fontSize:13,fontWeight:700,letterSpacing:"-.02em"}}>Keyboard Shortcuts</span>
+          <button onClick={onClose} style={{background:"none",border:"none",padding:4,cursor:"pointer",color:"rgba(255,255,255,.3)"}}>
+            <I d={ic.x} size={14}/>
+          </button>
+        </div>
+        {groups.map(g=>(
+          <div key={g.title} style={{marginBottom:16}}>
+            <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:"rgba(255,255,255,.2)",marginBottom:6}}>{g.title}</div>
+            {g.items.map(([key,desc])=>(
+              <div key={key} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",fontSize:11.5}}>
+                <code style={{background:"rgba(255,255,255,.04)",padding:"1px 6px",borderRadius:3,fontSize:10,color:"#a1a1aa",border:"1px solid rgba(255,255,255,.06)"}}>{key}</code>
+                <span style={{color:"rgba(255,255,255,.5)"}}>{desc}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ Chat Placeholder ═══════════ */
+function ChatPlaceholder(){
+  return(
+    <div style={{flex:1,display:"flex",flexDirection:"column",background:"#0c0c0f"}}>
+      <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",gap:8}}>
+        <I d={ic.sparkles} size={14} color="#60a5fa"/>
+        <span style={{fontSize:12,fontWeight:600,color:"rgba(255,255,255,.5)"}}>Workspace Assistant</span>
+      </div>
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{textAlign:"center",maxWidth:280}}>
+          <I d={ic.messageSquare} size={28} color="rgba(255,255,255,.06)" style={{margin:"0 auto 12px"}}/>
+          <p style={{fontSize:12,color:"rgba(255,255,255,.2)",lineHeight:1.6}}>
+            Chat is the base layer. Browser panes overlay on top when tabs are selected.
+          </p>
+        </div>
+      </div>
+      <div style={{padding:"12px 16px",borderTop:"1px solid rgba(255,255,255,.04)",display:"flex",gap:8}}>
+        <input placeholder="Ask anything..." disabled style={{flex:1,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",
+          borderRadius:6,padding:"6px 12px",fontSize:12,color:"#71717a",outline:"none"}}/>
+        <button disabled style={{background:"rgba(96,165,250,.15)",border:"1px solid rgba(96,165,250,.25)",color:"#60a5fa",
+          padding:"6px 10px",borderRadius:6,display:"flex",alignItems:"center",opacity:.3}}>
+          <I d={ic.send} size={13}/>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ Main App ═══════════ */
+function App(){
+  const[workspaces,setWorkspaces]=useState(INITIAL_WORKSPACES);
+  const[activeWsId,setActiveWsId]=useState("ws-1");
+  const[toast,setToast]=useState(null);
+  const[showShortcuts,setShowShortcuts]=useState(false);
+  const[switchAnim,setSwitchAnim]=useState(false);
+  const treeRef=useRef(null);
+  const wsCounter=useRef(4);
+
+  const activeWs=workspaces.find(w=>w.id===activeWsId)||workspaces[0];
+  const activeIdx=workspaces.findIndex(w=>w.id===activeWsId);
+
+  const notify=useCallback(msg=>{setToast(msg);setTimeout(()=>setToast(null),1800)},[]);
+
+  /* ── Workspace operations ── */
+  const switchTo=useCallback((id)=>{
+    if(id===activeWsId)return;
+    const ws=workspaces.find(w=>w.id===id);
+    if(!ws)return;
+    setSwitchAnim(true);
+    setTimeout(()=>setSwitchAnim(false),200);
+    setActiveWsId(id);
+    const idx=workspaces.findIndex(w=>w.id===id);
+    notify("Switched to "+ws.name+" ("+( idx+1)+")");
+  },[activeWsId,workspaces,notify]);
+
+  const switchByIndex=useCallback((idx)=>{
+    if(idx>=0&&idx<workspaces.length)switchTo(workspaces[idx].id);
+  },[workspaces,switchTo]);
+
+  const switchPrev=useCallback(()=>{
+    const idx=(activeIdx-1+workspaces.length)%workspaces.length;
+    switchTo(workspaces[idx].id);
+  },[activeIdx,workspaces,switchTo]);
+
+  const switchNext=useCallback(()=>{
+    const idx=(activeIdx+1)%workspaces.length;
+    switchTo(workspaces[idx].id);
+  },[activeIdx,workspaces,switchTo]);
+
+  const createWorkspace=useCallback(()=>{
+    const n=wsCounter.current++;
+    const ws=makeWorkspace("ws-"+n,"Workspace "+n,(workspaces.length)%WORKSPACE_COLORS.length);
+    setWorkspaces(prev=>[...prev,ws]);
+    setSwitchAnim(true);
+    setTimeout(()=>setSwitchAnim(false),200);
+    setActiveWsId(ws.id);
+    notify("Created "+ws.name);
+  },[workspaces.length,notify]);
+
+  const deleteWorkspace=useCallback((id)=>{
+    if(workspaces.length<=1)return;
+    const idx=workspaces.findIndex(w=>w.id===id);
+    const name=workspaces[idx]?.name||"Workspace";
+    setWorkspaces(prev=>prev.filter(w=>w.id!==id));
+    if(id===activeWsId){
+      const nextIdx=Math.min(idx,workspaces.length-2);
+      const nextWs=workspaces.filter(w=>w.id!==id)[nextIdx];
+      if(nextWs)setActiveWsId(nextWs.id);
+    }
+    notify("Deleted "+name);
+  },[workspaces,activeWsId,notify]);
+
+  const renameWorkspace=useCallback((id,name)=>{
+    setWorkspaces(prev=>prev.map(w=>w.id===id?{...w,name}:w));
+    notify("Renamed to "+name);
+  },[notify]);
+
+  const reorderWorkspaces=useCallback((sourceId,targetId)=>{
+    setWorkspaces(prev=>{
+      const sourceIdx=prev.findIndex(w=>w.id===sourceId);
+      const targetIdx=prev.findIndex(w=>w.id===targetId);
+      if(sourceIdx<0||targetIdx<0)return prev;
+      const next=[...prev];
+      const[moved]=next.splice(sourceIdx,1);
+      next.splice(targetIdx,0,moved);
+      return next;
+    });
+  },[]);
+
+  /* ── Tree operations (scoped to active workspace) ── */
+  const updateActiveWs=useCallback((fn)=>{
+    setWorkspaces(prev=>prev.map(w=>w.id===activeWsId?fn(w):w));
+  },[activeWsId]);
+
+  const toggleFolder=useCallback(id=>{
+    updateActiveWs(ws=>({...ws,root:deepUpdate(ws.root,id,n=>({...n,expanded:!n.expanded}))}));
+  },[updateActiveWs]);
+
+  const toggleTab=useCallback(tab=>{
+    updateActiveWs(ws=>{
+      const exists=ws.activeTabs.find(t=>t.id===tab.id);
+      if(exists)return{...ws,activeTabs:ws.activeTabs.filter(t=>t.id!==tab.id)};
+      return{...ws,activeTabs:[...ws.activeTabs,tab]};
+    });
+  },[updateActiveWs]);
+
+  const setCursorId=useCallback(id=>{
+    updateActiveWs(ws=>({...ws,cursorId:id}));
+  },[updateActiveWs]);
+
+  /* ── Keyboard handler ── */
+  useEffect(()=>{
+    const handler=(e)=>{
+      /* Workspace switching: Ctrl+1-9 */
+      if(e.ctrlKey&&!e.altKey&&!e.shiftKey&&/^[1-9]$/.test(e.key)){
+        e.preventDefault();
+        switchByIndex(parseInt(e.key)-1);
+        return;
+      }
+      /* Ctrl+Alt+Left/Right: prev/next */
+      if(e.ctrlKey&&e.altKey&&e.key==="ArrowLeft"){e.preventDefault();switchPrev();return}
+      if(e.ctrlKey&&e.altKey&&e.key==="ArrowRight"){e.preventDefault();switchNext();return}
+      /* Ctrl+Alt+N: new workspace */
+      if(e.ctrlKey&&e.altKey&&(e.key==="n"||e.key==="N")){e.preventDefault();createWorkspace();return}
+      /* ?: shortcut help */
+      if(e.key==="?"&&!e.ctrlKey&&!e.metaKey){
+        if(document.activeElement?.tagName==="INPUT")return;
+        e.preventDefault();setShowShortcuts(s=>!s);return;
+      }
+      if(e.key==="Escape"&&showShortcuts){setShowShortcuts(false);e.preventDefault();return}
+    };
+    window.addEventListener("keydown",handler);
+    return()=>window.removeEventListener("keydown",handler);
+  },[switchByIndex,switchPrev,switchNext,createWorkspace,showShortcuts]);
+
+  const activeSet=useMemo(()=>new Set(activeWs.activeTabs.map(t=>t.id)),[activeWs.activeTabs]);
+
+  return(
+    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+      {/* Activity Bar */}
+      <div style={{width:34,background:"#09090b",borderRight:"1px solid rgba(255,255,255,.04)",display:"flex",flexDirection:"column",alignItems:"center",paddingTop:8,gap:2,flexShrink:0}}>
+        <button title="Workspaces" style={{width:28,height:28,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",
+          background:"rgba(96,165,250,.08)",border:"none",cursor:"pointer",borderLeft:"2px solid #60a5fa"}}>
+          <I d={ic.desktops} size={15} color="#60a5fa"/>
+        </button>
+      </div>
+
+      {/* Sidebar */}
+      <div style={{width:260,background:"#09090b",borderRight:"1px solid rgba(255,255,255,.04)",display:"flex",flexDirection:"column",flexShrink:0}}>
+        {/* Workspace indicator strip */}
+        <WorkspaceIndicator
+          workspaces={workspaces}
+          activeId={activeWsId}
+          onSwitch={switchTo}
+          onCreate={createWorkspace}
+          onDelete={deleteWorkspace}
+          onRename={renameWorkspace}
+          onReorder={reorderWorkspaces}
+        />
+
+        {/* Active workspace color bar */}
+        <div style={{height:2,background:activeWs.color,opacity:.3,flexShrink:0}}/>
+
+        {/* Tree */}
+        <div ref={treeRef} style={{flex:1,overflowY:"auto",padding:"3px 0",
+          animation:switchAnim?"switch-in .2s ease-out":"none"}}>
+          {activeWs.root.children&&activeWs.root.children.length>0?
+            activeWs.root.children.map(node=>
+              node.type==="tab"
+                ?<TabRow key={node.id} tab={node} active={activeSet.has(node.id)} onOpen={toggleTab} isCursor={activeWs.cursorId===node.id} onSetCursor={setCursorId}/>
+                :<WsFolder key={node.id} ws={node} activeSet={activeSet} onOpen={toggleTab} onToggle={toggleFolder} cursorId={activeWs.cursorId} onSetCursor={setCursorId}/>
+            )
+            :<div style={{textAlign:"center",padding:32,fontSize:11,opacity:.15}}>Empty workspace</div>
+          }
+        </div>
+
+        {/* Footer: workspace name + tab count */}
+        <div style={{padding:"8px 12px",borderTop:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:activeWs.color,flexShrink:0}}/>
+            <span style={{fontSize:10.5,fontWeight:600,color:"rgba(255,255,255,.3)",letterSpacing:"-.01em"}}>{activeWs.name}</span>
+          </div>
+          <span style={{fontSize:10,color:"rgba(255,255,255,.1)",fontVariantNumeric:"tabular-nums"}}>{cntTabs(activeWs.root)} tabs</span>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div style={{flex:1,position:"relative",background:"#0c0c0f"}}>
+        {/* Chat base layer */}
+        <div style={{position:"absolute",inset:0}}>
+          <ChatPlaceholder/>
+        </div>
+
+        {/* Browser pane overlay */}
+        {activeWs.activeTabs.length>0&&(
+          <div style={{position:"absolute",inset:0,display:"flex",overflow:"hidden",background:"#0c0c0f",zIndex:1}}>
+            {activeWs.activeTabs.map((tab,i)=>(
+              <div key={tab.id} style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,
+                borderRight:i<activeWs.activeTabs.length-1?"1px solid rgba(255,255,255,.06)":"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",
+                  background:"rgba(255,255,255,.02)",borderBottom:"1px solid rgba(255,255,255,.06)",flexShrink:0}}>
+                  <Favicon url={tab.url} size={13}/>
+                  <span style={{flex:1,fontSize:11,fontWeight:500,color:"#71717a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tab.name}</span>
+                  <button onClick={()=>toggleTab(tab)} style={{background:"none",border:"none",padding:2,borderRadius:3,display:"flex",
+                    color:"rgba(255,255,255,.2)",cursor:"pointer"}}
+                    onMouseEnter={e=>{e.currentTarget.style.color="rgba(255,255,255,.5)"}}
+                    onMouseLeave={e=>{e.currentTarget.style.color="rgba(255,255,255,.2)"}}>
+                    <I d={ic.x} size={12}/>
+                  </button>
+                </div>
+                <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:"#111114"}}>
+                  <div style={{textAlign:"center"}}>
+                    <Favicon url={tab.url} size={32}/>
+                    <p style={{marginTop:8,fontSize:12,color:"rgba(255,255,255,.2)"}}>{tab.name}</p>
+                    <p style={{fontSize:10,color:"rgba(255,255,255,.08)"}}>{tab.url}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showShortcuts&&<ShortcutOverlay onClose={()=>setShowShortcuts(false)}/>}
+      <Toast message={toast}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</head>
+<body><div id="root"></div></body>
+</html>

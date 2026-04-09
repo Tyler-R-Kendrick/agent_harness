@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-Pane Navigation Prototype</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #09090b; color: #a1a1aa; }
+    #root { width: 100vw; height: 100vh; display: flex; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useCallback, useRef, useEffect } = React;
+
+    const I = ({ name, size = 16, color = '#a1a1aa' }) => {
+      const icons = {
+        folder: <path d="M22 19a2 2 0 0 1-2.4 2H4.4a2 2 0 0 1-2.4-2V5a2 2 0 0 1 2.4-2h5l2.3-2.3a2 2 0 0 1 2.83 0L17 3h2.6a2 2 0 0 1 2.4 2z" />,
+        file: <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />,
+        grid: <path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zM3 14h7v7H3v-7zm11 0h7v7h-7v-7z" />,
+        close: <path d="M18 6L6 18M6 6l12 12" strokeWidth="2" />,
+        x: <path d="M18 6l-12 12M6 6l12 12" strokeWidth="2" />,
+        chevronRight: <path d="M9 18l6-6-6-6" strokeWidth="2" />,
+        menu: <path d="M3 6h18M3 12h18M3 18h18" strokeWidth="2" />,
+      };
+      const svg = icons[name] || icons.file;
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="round" strokeLinejoin="round">
+          {svg}
+        </svg>
+      );
+    };
+
+    const tabs = [
+      { id: 'gmail', name: 'Gmail', folder: 'Daily Driver', color: '#ef4444', url: 'mail.google.com' },
+      { id: 'slack', name: 'Slack', folder: 'Daily Driver', color: '#a855f7', url: 'slack.com' },
+      { id: 'calendar', name: 'Calendar', folder: 'Daily Driver', color: '#3b82f6', url: 'calendar.google.com' },
+      { id: 'hackernews', name: 'Hacker News', folder: 'Research', color: '#f97316', url: 'news.ycombinator.com' },
+      { id: 'chromium', name: 'Chromium Source', folder: 'Research', color: '#10b981', url: 'chromium.googlesource.com' },
+      { id: 'arxiv', name: 'ArXiv', folder: 'Research', color: '#14b8a6', url: 'arxiv.org' },
+      { id: 'amazon', name: 'Amazon', folder: 'Shopping', color: '#eab308', url: 'amazon.com' },
+      { id: 'rtings', name: 'RTINGS', folder: 'Shopping', color: '#06b6d4', url: 'rtings.com' },
+    ];
+
+    const TabGradient = ({ tabId }) => {
+      const tab = tabs.find(t => t.id === tabId);
+      if (!tab) return '#1a1a1e';
+      const color = tab.color;
+      return `linear-gradient(135deg, ${color}22 0%, ${color}11 100%)`;
+    };
+
+    const ContextMenu = ({ x, y, items, onClose }) => {
+      const ref = useRef(null);
+      useEffect(() => {
+        const close = (e) => {
+          if (ref.current && !ref.current.contains(e.target)) onClose();
+        };
+        document.addEventListener('click', close);
+        return () => document.removeEventListener('click', close);
+      }, [onClose]);
+
+      return (
+        <div
+          ref={ref}
+          style={{
+            position: 'fixed',
+            left: x,
+            top: y,
+            background: '#0c0c0f',
+            border: '1px solid #27272a',
+            borderRadius: '4px',
+            zIndex: 1000,
+            minWidth: '160px',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)',
+          }}
+        >
+          {items.map((item, i) => (
+            <div
+              key={i}
+              onClick={() => { item.action(); onClose(); }}
+              style={{
+                padding: '8px 12px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                borderBottom: i < items.length - 1 ? '1px solid #27272a' : 'none',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => e.target.style.background = '#18181b'}
+              onMouseLeave={(e) => e.target.style.background = 'transparent'}
+            >
+              {item.label}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    const LayoutPicker = ({ onSelect, onClose }) => {
+      const layouts = [
+        { name: 'Single', mode: 'single' },
+        { name: 'Side by Side', mode: 'sidebyside' },
+        { name: 'Top/Bottom', mode: 'topbottom' },
+        { name: '1+2', mode: '1plus2' },
+        { name: '2x2 Grid', mode: '2x2' },
+      ];
+
+      return (
+        <div
+          style={{
+            position: 'absolute',
+            top: '60px',
+            right: '16px',
+            background: '#0c0c0f',
+            border: '1px solid #27272a',
+            borderRadius: '6px',
+            padding: '12px',
+            zIndex: 500,
+            minWidth: '280px',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: '12px', textTransform: 'uppercase', color: '#71717a' }}>
+            Layout Presets
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {layouts.map(({ name, mode }) => (
+              <button
+                key={mode}
+                onClick={() => { onSelect(mode); onClose(); }}
+                style={{
+                  padding: '8px',
+                  background: '#18181b',
+                  border: '1px solid #27272a',
+                  borderRadius: '4px',
+                  color: '#a1a1aa',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#27272a';
+                  e.target.style.borderColor = '#60a5fa';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#18181b';
+                  e.target.style.borderColor = '#27272a';
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    const PaneHeader = ({ pane, isActive, onClose, onContextMenu, onImportanceChange }) => {
+      const tab = tabs.find(t => t.id === pane.tabId);
+      const [contextMenu, setContextMenu] = useState(null);
+
+      const handleContextMenu = (e) => {
+        e.preventDefault();
+        const items = [
+          { label: 'Importance: Low', action: () => onImportanceChange(pane.id, 0.6) },
+          { label: 'Importance: Normal', action: () => onImportanceChange(pane.id, 1.0) },
+          { label: 'Importance: High', action: () => onImportanceChange(pane.id, 1.5) },
+        ];
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
+      };
+
+      return (
+        <>
+          <div
+            onContextMenu={handleContextMenu}
+            style={{
+              height: '24px',
+              background: '#111',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingLeft: '8px',
+              paddingRight: '4px',
+              borderTop: isActive ? '2px solid #60a5fa' : 'none',
+              borderBottom: '1px solid #27272a',
+              gap: '6px',
+              cursor: 'default',
+              fontSize: '11px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: tab?.color || '#71717a',
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {tab?.name || 'Empty'}
+              </span>
+            </div>
+            <button
+              onClick={() => onClose(pane.id)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#71717a',
+                cursor: 'pointer',
+                padding: '2px 4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={(e) => e.target.style.color = '#a1a1aa'}
+              onMouseLeave={(e) => e.target.style.color = '#71717a'}
+            >
+              <I name="x" size={12} />
+            </button>
+          </div>
+          {contextMenu && (
+            <ContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              items={contextMenu.items}
+              onClose={() => setContextMenu(null)}
+            />
+          )}
+        </>
+      );
+    };
+
+    const Pane = ({ pane, isActive, onClose, onFocus, onImportanceChange }) => {
+      const tab = tabs.find(t => t.id === pane.tabId);
+
+      return (
+        <div
+          onClick={() => onFocus(pane.id)}
+          style={{
+            flex: pane.weight,
+            display: 'flex',
+            flexDirection: 'column',
+            background: '#0c0c0f',
+            minWidth: 0,
+            minHeight: 0,
+            borderRight: '1px solid rgba(255,255,255,.08)',
+          }}
+        >
+          <PaneHeader
+            pane={pane}
+            isActive={isActive}
+            onClose={onClose}
+            onImportanceChange={onImportanceChange}
+          />
+          {tab ? (
+            <div
+              style={{
+                flex: 1,
+                background: TabGradient(pane.tabId),
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+              }}
+            >
+              <div style={{ fontSize: '24px', fontWeight: 600, color: '#e4e4e7' }}>
+                {tab.name}
+              </div>
+              <div style={{ fontSize: '12px', color: '#a1a1aa' }}>
+                {tab.url}
+              </div>
+            </div>
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '2px dashed #27272a',
+                opacity: 0.5,
+                fontSize: '12px',
+                color: '#71717a',
+              }}
+            >
+              Drop a tab here
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const Canvas = ({ panes, activePaneId, layoutMode, onClosPane, onFocusPane, onLayoutChange, onImportanceChange }) => {
+      const [showLayoutPicker, setShowLayoutPicker] = useState(false);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.code === 'KeyW' && e.ctrlKey) {
+            e.preventDefault();
+            onClosPane(activePaneId);
+          }
+          if (e.code === 'Digit1' && e.ctrlKey) onFocusPane(panes[0]?.id);
+          if (e.code === 'Digit2' && e.ctrlKey) onFocusPane(panes[1]?.id);
+          if (e.code === 'Digit3' && e.ctrlKey) onFocusPane(panes[2]?.id);
+          if (e.code === 'Digit4' && e.ctrlKey) onFocusPane(panes[3]?.id);
+          if (e.code === 'KeyL' && e.ctrlKey && e.altKey) setShowLayoutPicker(!showLayoutPicker);
+          if (e.code === 'Escape') setShowLayoutPicker(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [activePaneId, panes, onClosPane, onFocusPane, showLayoutPicker]);
+
+      const renderLayout = () => {
+        if (panes.length === 0) {
+          return (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#71717a' }}>
+              No panes open
+            </div>
+          );
+        }
+
+        const commonStyle = { display: 'flex', flex: 1, minHeight: 0, minWidth: 0 };
+
+        if (layoutMode === 'single' || panes.length === 1) {
+          return (
+            <div style={{ ...commonStyle }}>
+              <Pane
+                key={panes[0].id}
+                pane={panes[0]}
+                isActive={activePaneId === panes[0].id}
+                onClose={onClosPane}
+                onFocus={onFocusPane}
+                onImportanceChange={onImportanceChange}
+              />
+            </div>
+          );
+        }
+
+        if (layoutMode === 'sidebyside' && panes.length >= 2) {
+          return (
+            <div style={{ ...commonStyle }}>
+              {panes.slice(0, 2).map((p) => (
+                <Pane
+                  key={p.id}
+                  pane={p}
+                  isActive={activePaneId === p.id}
+                  onClose={onClosPane}
+                  onFocus={onFocusPane}
+                  onImportanceChange={onImportanceChange}
+                />
+              ))}
+            </div>
+          );
+        }
+
+        if (layoutMode === 'topbottom' && panes.length >= 2) {
+          return (
+            <div style={{ ...commonStyle, flexDirection: 'column' }}>
+              {panes.slice(0, 2).map((p) => (
+                <Pane
+                  key={p.id}
+                  pane={p}
+                  isActive={activePaneId === p.id}
+                  onClose={onClosPane}
+                  onFocus={onFocusPane}
+                  onImportanceChange={onImportanceChange}
+                />
+              ))}
+            </div>
+          );
+        }
+
+        if (layoutMode === '1plus2' && panes.length >= 2) {
+          return (
+            <div style={{ ...commonStyle }}>
+              <Pane
+                key={panes[0].id}
+                pane={panes[0]}
+                isActive={activePaneId === panes[0].id}
+                onClose={onClosPane}
+                onFocus={onFocusPane}
+                onImportanceChange={onImportanceChange}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                {panes.slice(1, Math.min(3, panes.length)).map((p) => (
+                  <Pane
+                    key={p.id}
+                    pane={p}
+                    isActive={activePaneId === p.id}
+                    onClose={onClosPane}
+                    onFocus={onFocusPane}
+                    onImportanceChange={onImportanceChange}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        if (layoutMode === '2x2' && panes.length >= 2) {
+          return (
+            <div style={{ ...commonStyle, flexWrap: 'wrap' }}>
+              {panes.slice(0, 4).map((p) => (
+                <div key={p.id} style={{ flex: '0 0 50%', minHeight: 0, minWidth: 0 }}>
+                  <Pane
+                    pane={p}
+                    isActive={activePaneId === p.id}
+                    onClose={onClosPane}
+                    onFocus={onFocusPane}
+                    onImportanceChange={onImportanceChange}
+                  />
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        return (
+          <div style={{ ...commonStyle }}>
+            <Pane
+              key={panes[0].id}
+              pane={panes[0]}
+              isActive={activePaneId === panes[0].id}
+              onClose={onClosPane}
+              onFocus={onFocusPane}
+              onImportanceChange={onImportanceChange}
+            />
+          </div>
+        );
+      };
+
+      return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0c0c0f', position: 'relative' }}>
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              minHeight: 0,
+              position: 'relative',
+            }}
+          >
+            {renderLayout()}
+          </div>
+          <div
+            style={{
+              height: '24px',
+              background: '#0c0c0f',
+              borderTop: '1px solid #27272a',
+              paddingLeft: '12px',
+              paddingRight: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '11px',
+              color: '#71717a',
+            }}
+          >
+            Alt+Tab: cycle | Ctrl+1-4: focus | Ctrl+W: close | Ctrl+Alt+L: layout
+          </div>
+          <button
+            onClick={() => setShowLayoutPicker(!showLayoutPicker)}
+            style={{
+              position: 'absolute',
+              top: '12px',
+              right: '12px',
+              background: '#18181b',
+              border: '1px solid #27272a',
+              color: '#a1a1aa',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s',
+              zIndex: 100,
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#27272a';
+              e.target.style.borderColor = '#60a5fa';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = '#18181b';
+              e.target.style.borderColor = '#27272a';
+            }}
+          >
+            <I name="grid" size={14} /> Layout
+          </button>
+          {showLayoutPicker && (
+            <LayoutPicker onSelect={onLayoutChange} onClose={() => setShowLayoutPicker(false)} />
+          )}
+        </div>
+      );
+    };
+
+    const Sidebar = ({ onOpenTab }) => {
+      const folders = ['Daily Driver', 'Research', 'Shopping'];
+      const [expandedFolders, setExpandedFolders] = useState(new Set(folders));
+      const [contextMenu, setContextMenu] = useState(null);
+      const [selectedTabId, setSelectedTabId] = useState(null);
+
+      const toggleFolder = (folder) => {
+        const newSet = new Set(expandedFolders);
+        if (newSet.has(folder)) newSet.delete(folder);
+        else newSet.add(folder);
+        setExpandedFolders(newSet);
+      };
+
+      const handleTabContextMenu = (e, tab) => {
+        e.preventDefault();
+        const items = [
+          { label: 'Open in new pane', action: () => onOpenTab(tab.id, 'new') },
+          { label: 'Split right', action: () => onOpenTab(tab.id, 'right') },
+          { label: 'Split below', action: () => onOpenTab(tab.id, 'below') },
+          { label: 'Replace active pane', action: () => onOpenTab(tab.id, 'replace') },
+        ];
+        setContextMenu({ x: e.clientX, y: e.clientY, items });
+      };
+
+      return (
+        <>
+          <div style={{ width: '240px', background: '#09090b', borderRight: '1px solid #27272a', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '12px', fontSize: '12px', fontWeight: 600, color: '#71717a', textTransform: 'uppercase' }}>
+              Workspace
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', paddingBottom: '8px' }}>
+              {folders.map((folder) => (
+                <div key={folder}>
+                  <div
+                    onClick={() => toggleFolder(folder)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '12px',
+                      color: '#a1a1aa',
+                      userSelect: 'none',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = '#18181b'}
+                    onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                  >
+                    <I name="folder" size={14} />
+                    {folder}
+                    <I name="chevronRight" size={12} color="#71717a" style={{ transform: expandedFolders.has(folder) ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                  </div>
+                  {expandedFolders.has(folder) && (
+                    <div>
+                      {tabs.filter(t => t.folder === folder).map((tab) => (
+                        <div
+                          key={tab.id}
+                          onClick={() => { onOpenTab(tab.id, 'single'); setSelectedTabId(tab.id); }}
+                          onContextMenu={(e) => handleTabContextMenu(e, tab)}
+                          style={{
+                            padding: '8px 12px 8px 32px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '12px',
+                            color: '#a1a1aa',
+                            userSelect: 'none',
+                            background: selectedTabId === tab.id ? '#18181b' : 'transparent',
+                            borderLeft: selectedTabId === tab.id ? '2px solid #60a5fa' : '2px solid transparent',
+                            paddingLeft: '30px',
+                            transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (selectedTabId !== tab.id) e.target.style.background = '#0f0f12';
+                          }}
+                          onMouseLeave={(e) => {
+                            if (selectedTabId !== tab.id) e.target.style.background = 'transparent';
+                          }}
+                        >
+                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: tab.color, flexShrink: 0 }} />
+                          {tab.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          {contextMenu && (
+            <ContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              items={contextMenu.items}
+              onClose={() => setContextMenu(null)}
+            />
+          )}
+        </>
+      );
+    };
+
+    const App = () => {
+      const [panes, setPanes] = useState([
+        { id: 'p1', tabId: 'gmail', weight: 1 },
+        { id: 'p2', tabId: 'slack', weight: 1 },
+      ]);
+      const [activePaneId, setActivePaneId] = useState('p1');
+      const [layoutMode, setLayoutMode] = useState('sidebyside');
+      const nextPaneIdRef = useRef(3);
+
+      const openTab = useCallback((tabId, mode) => {
+        if (mode === 'single') {
+          setPanes([{ id: 'p1', tabId, weight: 1 }]);
+          setActivePaneId('p1');
+          nextPaneIdRef.current = 2;
+        } else if (mode === 'new') {
+          const newId = `p${nextPaneIdRef.current++}`;
+          setPanes([...panes, { id: newId, tabId, weight: 1 }]);
+          setActivePaneId(newId);
+          setLayoutMode('sidebyside');
+        } else if (mode === 'right') {
+          const newId = `p${nextPaneIdRef.current++}`;
+          setPanes([...panes, { id: newId, tabId, weight: 1 }]);
+          setActivePaneId(newId);
+          setLayoutMode('sidebyside');
+        } else if (mode === 'below') {
+          const newId = `p${nextPaneIdRef.current++}`;
+          setPanes([...panes, { id: newId, tabId, weight: 1 }]);
+          setActivePaneId(newId);
+          setLayoutMode('topbottom');
+        } else if (mode === 'replace') {
+          setPanes(panes.map(p => p.id === activePaneId ? { ...p, tabId } : p));
+        }
+      }, [panes, activePaneId]);
+
+      const closePane = useCallback((id) => {
+        const newPanes = panes.filter(p => p.id !== id);
+        setPanes(newPanes);
+        if (activePaneId === id) {
+          setActivePaneId(newPanes[0]?.id || null);
+        }
+      }, [panes, activePaneId]);
+
+      const focusPane = useCallback((id) => {
+        if (panes.find(p => p.id === id)) {
+          setActivePaneId(id);
+        }
+      }, [panes]);
+
+      const changeImportance = useCallback((id, weight) => {
+        setPanes(panes.map(p => p.id === id ? { ...p, weight } : p));
+      }, [panes]);
+
+      return (
+        <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
+          <Sidebar onOpenTab={openTab} />
+          <Canvas
+            panes={panes}
+            activePaneId={activePaneId}
+            layoutMode={layoutMode}
+            onClosPane={closePane}
+            onFocusPane={focusPane}
+            onLayoutChange={setLayoutMode}
+            onImportanceChange={changeImportance}
+          />
+        </div>
+      );
+    };
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

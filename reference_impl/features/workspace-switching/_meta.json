@@ -1,0 +1,12 @@
+{
+  "feature": "workspace-switching",
+  "name": "Workspace Hot-Swapping",
+  "status": "prototyped",
+  "created": "2026-04-04",
+  "updated": "2026-04-04",
+  "phases_complete": ["research", "spec", "prototype", "integration"],
+  "prototype_path": "prototype/index.html",
+  "inspired_by": ["Windows Virtual Desktops", "macOS Spaces", "Vivaldi Workspaces", "Arc Browser Spaces"],
+  "tags": ["workspace", "navigation", "keyboard-shortcuts", "multi-desktop", "context-switching"],
+  "dependencies": []
+}

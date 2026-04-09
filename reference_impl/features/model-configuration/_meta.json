@@ -1,0 +1,12 @@
+{
+  "feature": "model-configuration",
+  "name": "Model Configuration Settings",
+  "status": "integration-ready",
+  "created": "2026-04-04",
+  "updated": "2026-04-04",
+  "phases_complete": ["research", "spec", "prototype", "integration"],
+  "prototype_path": "prototype/index.html",
+  "inspired_by": ["LM Studio", "Jan.ai", "Ollama", "OpenRouter", "Transformers.js"],
+  "tags": ["settings", "models", "local-inference", "wasm", "transformers-js", "offline"],
+  "dependencies": []
+}

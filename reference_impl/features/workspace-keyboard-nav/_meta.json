@@ -1,0 +1,12 @@
+{
+  "feature": "workspace-keyboard-nav",
+  "name": "Workspace Keyboard Navigation & Tab Management",
+  "status": "integration-ready",
+  "created": "2026-04-04",
+  "updated": "2026-04-04",
+  "phases_complete": ["research", "spec", "prototype", "integration"],
+  "prototype_path": "prototype/index.html",
+  "inspired_by": ["Total Commander", "Midnight Commander", "Ranger", "VSCode Tree View", "Vivaldi Tab Stacking", "WAI-ARIA Treeview"],
+  "tags": ["keyboard-navigation", "accessibility", "drag-drop", "power-user", "workspace", "tree-view", "tab-management"],
+  "dependencies": []
+}

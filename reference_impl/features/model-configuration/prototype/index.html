@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Model Configuration – Prototype</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:#09090b;color:#a1a1aa;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;overflow:hidden}
+    input,button,textarea{font-family:inherit}button{cursor:pointer}
+    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.06);border-radius:3px}
+    @keyframes fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes slide-up{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+    @keyframes progress-stripe{0%{background-position:0 0}100%{background-position:20px 0}}
+    @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useCallback,useMemo,useRef,useEffect}=React;
+
+/* ═══════════ SVG Icon ═══════════ */
+const I=({d,size=16,color="currentColor",fill="none",sw=1.5,style={}})=>(
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color}
+    strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"
+    style={{flexShrink:0,display:"block",...style}}>
+    {(Array.isArray(d)?d:[d]).map((p,i)=><path key={i} d={p}/>)}
+  </svg>
+);
+
+const ic={
+  settings:["M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z","M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  x:["M18 6L6 18","M6 6l12 12"],
+  check:["M20 6L9 17l-5-5"],
+  chevron:"M9 18l6-6-6-6",
+  chevronDown:"M6 9l6 6 6-6",
+  eye:["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z","M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"],
+  eyeOff:["M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94","M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19","M1 1l22 22","M14.12 14.12a3 3 0 1 1-4.24-4.24"],
+  cloud:["M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"],
+  cpu:["M18 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z","M9 9h6v6H9z","M9 1v3","M15 1v3","M9 20v3","M15 20v3","M20 9h3","M20 14h3","M1 9h3","M1 14h3"],
+  download:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","M7 10l5 5 5-5","M12 15V3"],
+  trash:["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
+  search:["M11 17.25a6.25 6.25 0 1 1 0-12.5 6.25 6.25 0 0 1 0 12.5z","M16 16l4.5 4.5"],
+  globe:["M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z","M2 12h20","M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"],
+  zap:["M13 2L3 14h9l-1 8 10-12h-9l1-8"],
+  key:["M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"],
+  shield:["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"],
+  sparkles:["M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z"],
+  loader:["M12 2v4","M18.36 5.64l-2.83 2.83","M22 12h-4","M18.36 18.36l-2.83-2.83","M12 18v4","M5.64 18.36l2.83-2.83","M2 12h4","M5.64 5.64l2.83 2.83"],
+  hardDrive:["M22 12H2","M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z","M6 16h.01","M10 16h.01"],
+  wifi:["M5 12.55a11 11 0 0 1 14.08 0","M1.42 9a16 16 0 0 1 21.16 0","M8.53 16.11a6 6 0 0 1 6.95 0","M12 20h.01"],
+  wifiOff:["M1 1l22 22","M16.72 11.06A10.94 10.94 0 0 1 19 12.55","M5 12.55a10.94 10.94 0 0 1 5.17-2.39","M10.71 5.05A16 16 0 0 1 22.56 9","M1.42 9a15.91 15.91 0 0 1 4.7-2.88","M8.53 16.11a6 6 0 0 1 6.95 0","M12 20h.01"],
+  server:["M2 4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4z","M2 14a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4z","M6 6h.01","M6 16h.01"],
+  toggleLeft:["M16 5H8a7 7 0 0 0 0 14h8A7 7 0 0 0 16 5z","M8 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  toggleRight:["M16 5H8a7 7 0 0 0 0 14h8A7 7 0 0 0 16 5z","M16 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+};
+
+/* ═══════════ Mock Data ═══════════ */
+const PROVIDERS=[
+  {id:"anthropic",name:"Anthropic",color:"#d97706",status:"connected",
+    models:[{id:"claude-opus-4",name:"Claude Opus 4",enabled:true},{id:"claude-sonnet-4",name:"Claude Sonnet 4",enabled:true},{id:"claude-haiku-3.5",name:"Claude Haiku 3.5",enabled:false}]},
+  {id:"openai",name:"OpenAI",color:"#10b981",status:"not_configured",
+    models:[{id:"gpt-4o",name:"GPT-4o",enabled:true},{id:"gpt-4o-mini",name:"GPT-4o Mini",enabled:true},{id:"o3",name:"o3",enabled:false}]},
+  {id:"google",name:"Google",color:"#3b82f6",status:"not_configured",
+    models:[{id:"gemini-2.5-pro",name:"Gemini 2.5 Pro",enabled:true},{id:"gemini-2.5-flash",name:"Gemini 2.5 Flash",enabled:true}]},
+  {id:"mistral",name:"Mistral",color:"#f97316",status:"not_configured",
+    models:[{id:"mistral-large",name:"Mistral Large",enabled:true},{id:"codestral",name:"Codestral",enabled:false}]},
+  {id:"openrouter",name:"OpenRouter",color:"#8b5cf6",status:"not_configured",
+    models:[{id:"auto",name:"Auto (best available)",enabled:true}]},
+  {id:"ollama",name:"Ollama (Local Server)",color:"#6366f1",status:"not_configured",
+    models:[{id:"llama3",name:"Llama 3",enabled:true},{id:"mistral-local",name:"Mistral 7B",enabled:true}]},
+];
+
+const LOCAL_MODELS=[
+  {id:"phi-3-mini",name:"Phi-3 Mini",params:"3.8B",quant:"q4",sizeMB:2100,speedRating:4,desc:"Microsoft's compact model. Good for general tasks.",status:"installed"},
+  {id:"tinyllama",name:"TinyLlama 1.1B",params:"1.1B",quant:"q4",sizeMB:640,speedRating:5,desc:"Ultra-lightweight. Fast responses, basic quality.",status:"installed"},
+  {id:"smollm2",name:"SmolLM2 1.7B",params:"1.7B",quant:"q4",sizeMB:920,speedRating:5,desc:"Hugging Face's efficient small model. Great for simple tasks.",status:"available"},
+  {id:"gemma-2b",name:"Gemma 2B",params:"2B",quant:"q4",sizeMB:1400,speedRating:4,desc:"Google's lightweight open model. Good multilingual support.",status:"available"},
+  {id:"qwen2-1.5b",name:"Qwen2 1.5B",params:"1.5B",quant:"q4",sizeMB:870,speedRating:5,desc:"Alibaba's compact model. Strong on coding tasks.",status:"available"},
+  {id:"starcoder2-3b",name:"StarCoder2 3B",params:"3B",quant:"q8",sizeMB:3200,speedRating:3,desc:"Code-specialized model. Best for programming assistance.",status:"available"},
+  {id:"mistral-7b",name:"Mistral 7B",params:"7B",quant:"q4",sizeMB:4100,speedRating:2,desc:"High quality but large. May be slow in browser.",status:"available"},
+];
+
+/* ═══════════ Provider Card ═══════════ */
+function ProviderCard({provider,onUpdate}){
+  const[expanded,setExpanded]=useState(false);
+  const[showKey,setShowKey]=useState(false);
+  const[apiKey,setApiKey]=useState(provider.status==="connected"?"sk-****************************":"");
+  const[hov,setHov]=useState(false);
+  const connected=provider.status==="connected";
+  const enabledCount=provider.models.filter(m=>m.enabled).length;
+
+  const handleSave=()=>{
+    if(apiKey.trim())onUpdate({...provider,status:"connected"});
+  };
+
+  return(
+    <div style={{background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.05)",borderRadius:8,overflow:"hidden",
+      transition:"all .15s",marginBottom:8}} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
+      {/* Header */}
+      <div onClick={()=>setExpanded(!expanded)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",cursor:"pointer",
+        background:hov&&!expanded?"rgba(255,255,255,.01)":"transparent",transition:"background .1s"}}>
+        <div style={{width:28,height:28,borderRadius:6,background:provider.color+"20",border:"1px solid "+provider.color+"40",
+          display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <span style={{fontSize:13,fontWeight:700,color:provider.color}}>{provider.name.charAt(0)}</span>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12.5,fontWeight:600,color:"#e4e4e7"}}>{provider.name}</div>
+          <div style={{fontSize:10.5,opacity:.35,marginTop:1}}>
+            {connected?enabledCount+" model"+(enabledCount!==1?"s":"")+" enabled":"Not configured"}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {connected&&<span style={{width:7,height:7,borderRadius:"50%",background:"#34d399"}}/>}
+          <I d={ic.chevronDown} size={14} color="rgba(255,255,255,.2)" style={{transform:expanded?"rotate(180deg)":"none",transition:"transform .15s"}}/>
+        </div>
+      </div>
+
+      {/* Expanded config */}
+      {expanded&&(
+        <div style={{padding:"0 12px 12px",animation:"fade-in .15s ease-out"}}>
+          <div style={{borderTop:"1px solid rgba(255,255,255,.04)",paddingTop:10}}>
+            {/* API Key */}
+            <label style={{fontSize:10.5,fontWeight:600,opacity:.4,display:"block",marginBottom:4}}>API Key</label>
+            <div style={{display:"flex",gap:6,marginBottom:10}}>
+              <div style={{flex:1,position:"relative"}}>
+                <input type={showKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)}
+                  placeholder="Enter API key..."
+                  style={{width:"100%",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:5,
+                    padding:"6px 32px 6px 8px",fontSize:11.5,color:"#d4d4d8",outline:"none"}}
+                  onFocus={e=>{e.target.style.borderColor="rgba(255,255,255,.15)"}}
+                  onBlur={e=>{e.target.style.borderColor="rgba(255,255,255,.06)"}}/>
+                <button onClick={()=>setShowKey(!showKey)} style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",
+                  background:"none",border:"none",padding:2,color:"rgba(255,255,255,.2)",display:"flex"}}>
+                  <I d={showKey?ic.eyeOff:ic.eye} size={12}/>
+                </button>
+              </div>
+              <button onClick={handleSave} style={{background:apiKey.trim()?"rgba(52,211,153,.15)":"rgba(255,255,255,.03)",
+                border:apiKey.trim()?"1px solid rgba(52,211,153,.25)":"1px solid rgba(255,255,255,.06)",
+                color:apiKey.trim()?"#34d399":"rgba(255,255,255,.2)",
+                padding:"5px 12px",borderRadius:5,fontSize:11,fontWeight:600,transition:"all .15s"}}>
+                Save
+              </button>
+            </div>
+
+            {/* Base URL */}
+            <label style={{fontSize:10.5,fontWeight:600,opacity:.4,display:"block",marginBottom:4}}>Base URL</label>
+            <input value={"https://api."+provider.id+".com/v1"} readOnly
+              style={{width:"100%",background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.04)",borderRadius:5,
+                padding:"6px 8px",fontSize:11,color:"rgba(255,255,255,.3)",outline:"none",marginBottom:12}}/>
+
+            {/* Models */}
+            <label style={{fontSize:10.5,fontWeight:600,opacity:.4,display:"block",marginBottom:6}}>Models</label>
+            {provider.models.map(m=>(
+              <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0"}}>
+                <div onClick={()=>{
+                  const updated={...provider,models:provider.models.map(mo=>mo.id===m.id?{...mo,enabled:!mo.enabled}:mo)};
+                  onUpdate(updated);
+                }}
+                  style={{width:16,height:16,borderRadius:3,border:m.enabled?"1px solid rgba(52,211,153,.4)":"1px solid rgba(255,255,255,.1)",
+                    background:m.enabled?"rgba(52,211,153,.15)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .1s"}}>
+                  {m.enabled&&<I d={ic.check} size={10} color="#34d399" sw={2.5}/>}
+                </div>
+                <span style={{fontSize:12,color:m.enabled?"#d4d4d8":"rgba(255,255,255,.25)",transition:"color .1s"}}>{m.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════ Local Model Card ═══════════ */
+function LocalModelCard({model,onInstall,onDelete}){
+  const[hov,setHov]=useState(false);
+  const[downloading,setDownloading]=useState(false);
+  const[progress,setProgress]=useState(0);
+  const[speed,setSpeed]=useState(0);
+  const intervalRef=useRef(null);
+
+  const isInstalled=model.status==="installed";
+  const sizeFmt=model.sizeMB>=1000?(model.sizeMB/1000).toFixed(1)+"GB":model.sizeMB+"MB";
+
+  const startDownload=()=>{
+    setDownloading(true);setProgress(0);
+    let p=0;
+    intervalRef.current=setInterval(()=>{
+      const inc=Math.random()*4+1;
+      p=Math.min(p+inc,100);
+      setProgress(p);
+      setSpeed(Math.floor(Math.random()*30+10));
+      if(p>=100){
+        clearInterval(intervalRef.current);
+        setTimeout(()=>{setDownloading(false);onInstall(model.id)},300);
+      }
+    },150);
+  };
+
+  const cancelDownload=()=>{
+    clearInterval(intervalRef.current);
+    setDownloading(false);setProgress(0);
+  };
+
+  useEffect(()=>()=>{if(intervalRef.current)clearInterval(intervalRef.current)},[]);
+
+  const speedBars=[];
+  for(let i=0;i<5;i++)speedBars.push(i<model.speedRating);
+
+  return(
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{background:hov?"rgba(255,255,255,.025)":"rgba(255,255,255,.01)",border:"1px solid rgba(255,255,255,.05)",
+        borderRadius:8,padding:12,marginBottom:8,transition:"all .15s",animation:"fade-in .2s ease-out"}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+        <div style={{width:32,height:32,borderRadius:6,
+          background:isInstalled?"rgba(52,211,153,.1)":"rgba(96,165,250,.08)",
+          border:isInstalled?"1px solid rgba(52,211,153,.2)":"1px solid rgba(96,165,250,.15)",
+          display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <I d={isInstalled?ic.hardDrive:ic.download} size={15} color={isInstalled?"#34d399":"#60a5fa"}/>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+            <span style={{fontSize:12.5,fontWeight:600,color:"#e4e4e7"}}>{model.name}</span>
+            <span style={{fontSize:9.5,padding:"1px 5px",borderRadius:3,fontWeight:600,fontFamily:"monospace",
+              background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.3)"}}>{model.quant}</span>
+            {isInstalled&&<span style={{fontSize:9,padding:"1px 5px",borderRadius:3,fontWeight:600,
+              background:"rgba(52,211,153,.1)",color:"#34d399"}}>Ready</span>}
+          </div>
+          <div style={{fontSize:11,opacity:.35,marginBottom:4}}>{model.desc}</div>
+          <div style={{display:"flex",alignItems:"center",gap:12,fontSize:10,opacity:.3}}>
+            <span>{model.params} params</span>
+            <span>{sizeFmt}</span>
+            <span style={{display:"flex",alignItems:"center",gap:2}}>
+              Speed:
+              {speedBars.map((on,i)=><span key={i} style={{width:3,height:on?8+i*2:6,borderRadius:1,
+                background:on?"rgba(52,211,153,.5)":"rgba(255,255,255,.1)",transition:"all .15s"}}/>)}
+            </span>
+          </div>
+        </div>
+        <div style={{flexShrink:0}}>
+          {downloading?(
+            <button onClick={cancelDownload} style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",
+              color:"#ef4444",padding:"5px 10px",borderRadius:5,fontSize:10.5,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>
+              <I d={ic.x} size={11} color="#ef4444"/>Cancel
+            </button>
+          ):isInstalled?(
+            <button onClick={()=>onDelete(model.id)} style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",
+              color:"rgba(255,255,255,.3)",padding:"5px 10px",borderRadius:5,fontSize:10.5,fontWeight:600,display:"flex",alignItems:"center",gap:4,
+              opacity:hov?1:0,transition:"opacity .15s"}}>
+              <I d={ic.trash} size={11} color="rgba(255,255,255,.3)"/>Delete
+            </button>
+          ):(
+            <button onClick={startDownload} style={{background:"rgba(96,165,250,.12)",border:"1px solid rgba(96,165,250,.2)",
+              color:"#60a5fa",padding:"5px 10px",borderRadius:5,fontSize:10.5,fontWeight:600,display:"flex",alignItems:"center",gap:4,
+              transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(96,165,250,.2)"}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(96,165,250,.12)"}}>
+              <I d={ic.download} size={11} color="#60a5fa"/>Install
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Download progress */}
+      {downloading&&(
+        <div style={{marginTop:10,animation:"fade-in .15s ease-out"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:10,opacity:.4}}>
+            <span>Downloading... {Math.floor(progress)}%</span>
+            <span>{speed} MB/s · {Math.max(1,Math.ceil((100-progress)/20))}s remaining</span>
+          </div>
+          <div style={{height:4,background:"rgba(255,255,255,.04)",borderRadius:2,overflow:"hidden"}}>
+            <div style={{height:"100%",width:progress+"%",borderRadius:2,transition:"width .15s linear",
+              background:"linear-gradient(90deg,#3b82f6,#60a5fa)",
+              backgroundSize:"20px 4px"}}/>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════ Storage Bar ═══════════ */
+function StorageBar({models}){
+  const installed=models.filter(m=>m.status==="installed");
+  const usedMB=installed.reduce((s,m)=>s+m.sizeMB,0);
+  const quotaMB=5000;
+  const pct=Math.min((usedMB/quotaMB)*100,100);
+  return(
+    <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,255,255,.04)",background:"rgba(0,0,0,.2)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,opacity:.3,marginBottom:4}}>
+        <span>Cache: {(usedMB/1000).toFixed(1)} GB used</span>
+        <span>{(quotaMB/1000).toFixed(0)} GB quota</span>
+      </div>
+      <div style={{height:3,background:"rgba(255,255,255,.04)",borderRadius:2,overflow:"hidden"}}>
+        <div style={{height:"100%",width:pct+"%",background:pct>80?"#ef4444":"#60a5fa",borderRadius:2,transition:"width .3s"}}/>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════ Model Selector Dropdown ═══════════ */
+function ModelSelector({providers,localModels,activeModel,onSelect,onClose}){
+  const cloudModels=[];
+  providers.filter(p=>p.status==="connected").forEach(p=>{
+    p.models.filter(m=>m.enabled).forEach(m=>{cloudModels.push({...m,provider:p.name,providerColor:p.color})});
+  });
+  const installed=localModels.filter(m=>m.status==="installed");
+
+  return(
+    <div style={{position:"absolute",bottom:"100%",left:0,right:0,marginBottom:6,background:"#18181b",border:"1px solid rgba(255,255,255,.08)",
+      borderRadius:8,overflow:"hidden",animation:"fade-in .1s ease-out",zIndex:50,maxHeight:280,overflowY:"auto"}}>
+      {cloudModels.length>0&&(
+        <>
+          <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:600,opacity:.25,textTransform:"uppercase",letterSpacing:1}}>
+            <span style={{display:"flex",alignItems:"center",gap:5}}><I d={ic.cloud} size={10}/>Cloud Models</span>
+          </div>
+          {cloudModels.map(m=>(
+            <ModelOption key={m.id} name={m.name} sub={m.provider} color={m.providerColor} active={activeModel===m.id}
+              icon={ic.sparkles} onClick={()=>{onSelect(m.id);onClose()}}/>
+          ))}
+        </>
+      )}
+      {installed.length>0&&(
+        <>
+          <div style={{padding:"8px 12px 4px",fontSize:10,fontWeight:600,opacity:.25,textTransform:"uppercase",letterSpacing:1,
+            borderTop:cloudModels.length?"1px solid rgba(255,255,255,.04)":"none"}}>
+            <span style={{display:"flex",alignItems:"center",gap:5}}><I d={ic.cpu} size={10}/>Local Models</span>
+          </div>
+          {installed.map(m=>(
+            <ModelOption key={m.id} name={m.name} sub={m.params+" · "+m.quant} color="#34d399" active={activeModel===m.id}
+              icon={ic.hardDrive} onClick={()=>{onSelect(m.id);onClose()}}/>
+          ))}
+        </>
+      )}
+      {cloudModels.length===0&&installed.length===0&&(
+        <div style={{padding:16,textAlign:"center",fontSize:11,opacity:.2}}>No models configured. Add a provider or install a local model.</div>
+      )}
+    </div>
+  );
+}
+
+function ModelOption({name,sub,color,active,icon,onClick}){
+  const[hov,setHov]=useState(false);
+  return(
+    <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",cursor:"pointer",
+        background:hov?"rgba(255,255,255,.04)":active?"rgba(255,255,255,.03)":"transparent",transition:"background .1s"}}>
+      <I d={icon} size={13} color={color} style={{opacity:.6}}/>
+      <div style={{flex:1,minWidth:0}}>
+        <span style={{fontSize:12,fontWeight:active?600:500,color:active?"#e4e4e7":"#a1a1aa"}}>{name}</span>
+        <span style={{fontSize:10,opacity:.3,marginLeft:6}}>{sub}</span>
+      </div>
+      {active&&<I d={ic.check} size={13} color="#34d399"/>}
+    </div>
+  );
+}
+
+/* ═══════════ Main App ═══════════ */
+function App(){
+  const[tab,setTab]=useState("providers");
+  const[providers,setProviders]=useState(PROVIDERS);
+  const[localModels,setLocalModels]=useState(LOCAL_MODELS);
+  const[activeModel,setActiveModel]=useState("claude-opus-4");
+  const[selectorOpen,setSelectorOpen]=useState(false);
+  const[searchLocal,setSearchLocal]=useState("");
+
+  const updateProvider=useCallback((updated)=>{
+    setProviders(ps=>ps.map(p=>p.id===updated.id?updated:p));
+  },[]);
+
+  const installModel=useCallback((id)=>{
+    setLocalModels(ms=>ms.map(m=>m.id===id?{...m,status:"installed"}:m));
+  },[]);
+
+  const deleteModel=useCallback((id)=>{
+    setLocalModels(ms=>ms.map(m=>m.id===id?{...m,status:"available"}:m));
+  },[]);
+
+  const filteredLocal=useMemo(()=>{
+    if(!searchLocal)return localModels;
+    return localModels.filter(m=>m.name.toLowerCase().includes(searchLocal.toLowerCase())||m.desc.toLowerCase().includes(searchLocal.toLowerCase()));
+  },[localModels,searchLocal]);
+
+  const installed=filteredLocal.filter(m=>m.status==="installed");
+  const available=filteredLocal.filter(m=>m.status==="available");
+
+  /* Find active model display name */
+  const activeModelName=useMemo(()=>{
+    for(const p of providers){
+      const m=p.models.find(m=>m.id===activeModel);
+      if(m)return m.name;
+    }
+    const lm=localModels.find(m=>m.id===activeModel);
+    if(lm)return lm.name;
+    return activeModel;
+  },[activeModel,providers,localModels]);
+
+  return(
+    <div style={{display:"flex",height:"100vh",overflow:"hidden"}}>
+      {/* Simplified sidebar showing just settings with models */}
+      <div style={{width:320,display:"flex",flexDirection:"column",borderRight:"1px solid rgba(255,255,255,.04)",background:"#09090b",flexShrink:0}}>
+        {/* Settings header */}
+        <div style={{padding:"12px 14px 10px",borderBottom:"1px solid rgba(255,255,255,.04)",display:"flex",alignItems:"center",gap:8}}>
+          <I d={ic.settings} size={15} color="rgba(255,255,255,.3)"/>
+          <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,opacity:.25}}>Settings</span>
+          <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,opacity:.15,marginLeft:2}}>/</span>
+          <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,opacity:.45,color:"#e4e4e7"}}>Models</span>
+        </div>
+
+        {/* Tab bar */}
+        <div style={{display:"flex",borderBottom:"1px solid rgba(255,255,255,.04)"}}>
+          {[{id:"providers",label:"Providers",icon:ic.cloud},{id:"local",label:"Local Models",icon:ic.cpu}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{flex:1,padding:"9px 0",background:"none",border:"none",borderBottom:tab===t.id?"2px solid #e4e4e7":"2px solid transparent",
+                color:tab===t.id?"#e4e4e7":"rgba(255,255,255,.25)",fontSize:11.5,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                transition:"all .12s",cursor:"pointer"}}>
+              <I d={t.icon} size={13} color={tab===t.id?"#e4e4e7":"rgba(255,255,255,.2)"}/>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Panel content */}
+        <div style={{flex:1,overflowY:"auto",padding:"10px 10px"}}>
+          {tab==="providers"&&(
+            <div>
+              {providers.map(p=><ProviderCard key={p.id} provider={p} onUpdate={updateProvider}/>)}
+            </div>
+          )}
+          {tab==="local"&&(
+            <div>
+              {/* Search */}
+              <div style={{position:"relative",marginBottom:10}}>
+                <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",display:"flex",opacity:.2}}>
+                  <I d={ic.search} size={12}/>
+                </span>
+                <input value={searchLocal} onChange={e=>setSearchLocal(e.target.value)} placeholder="Search models..."
+                  style={{width:"100%",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.06)",borderRadius:6,
+                    padding:"6px 8px 6px 28px",fontSize:11.5,color:"#d4d4d8",outline:"none"}}
+                  onFocus={e=>{e.target.style.borderColor="rgba(255,255,255,.12)"}}
+                  onBlur={e=>{e.target.style.borderColor="rgba(255,255,255,.06)"}}/>
+              </div>
+
+              {/* Installed */}
+              {installed.length>0&&(
+                <>
+                  <div style={{fontSize:10,fontWeight:600,opacity:.25,textTransform:"uppercase",letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
+                    <I d={ic.hardDrive} size={10}/>Installed ({installed.length})
+                  </div>
+                  {installed.map(m=><LocalModelCard key={m.id} model={m} onInstall={installModel} onDelete={deleteModel}/>)}
+                </>
+              )}
+
+              {/* Available */}
+              {available.length>0&&(
+                <>
+                  <div style={{fontSize:10,fontWeight:600,opacity:.25,textTransform:"uppercase",letterSpacing:1,marginBottom:6,marginTop:installed.length?12:0,display:"flex",alignItems:"center",gap:5}}>
+                    <I d={ic.globe} size={10}/>Available ({available.length})
+                  </div>
+                  {available.map(m=><LocalModelCard key={m.id} model={m} onInstall={installModel} onDelete={deleteModel}/>)}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Storage bar (local tab only) */}
+        {tab==="local"&&<StorageBar models={localModels}/>}
+      </div>
+
+      {/* Main content area - simulated chat */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",background:"#0c0c0f"}}>
+        <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",opacity:.08,fontSize:14}}>
+          Chat interface
+        </div>
+
+        {/* Model selector at bottom */}
+        <div style={{padding:"12px 24px 16px",borderTop:"1px solid rgba(255,255,255,.04)",position:"relative"}}>
+          {selectorOpen&&<ModelSelector providers={providers} localModels={localModels} activeModel={activeModel}
+            onSelect={setActiveModel} onClose={()=>setSelectorOpen(false)}/>}
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {/* Model pill */}
+            <button onClick={()=>setSelectorOpen(!selectorOpen)}
+              style={{background:selectorOpen?"rgba(255,255,255,.06)":"rgba(255,255,255,.03)",
+                border:"1px solid "+(selectorOpen?"rgba(255,255,255,.1)":"rgba(255,255,255,.05)"),
+                borderRadius:6,padding:"5px 10px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",transition:"all .12s"}}
+              onMouseEnter={e=>{if(!selectorOpen)e.currentTarget.style.background="rgba(255,255,255,.05)"}}
+              onMouseLeave={e=>{if(!selectorOpen)e.currentTarget.style.background=selectorOpen?"rgba(255,255,255,.06)":"rgba(255,255,255,.03)"}}>
+              <I d={ic.sparkles} size={12} color="#60a5fa"/>
+              <span style={{fontSize:11.5,fontWeight:600,color:"#d4d4d8"}}>{activeModelName}</span>
+              <I d={ic.chevronDown} size={11} color="rgba(255,255,255,.2)" style={{transform:selectorOpen?"rotate(180deg)":"none",transition:"transform .15s"}}/>
+            </button>
+
+            {/* Chat input placeholder */}
+            <div style={{flex:1,background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.05)",borderRadius:6,
+              padding:"7px 12px",fontSize:12,color:"rgba(255,255,255,.15)"}}>
+              Ask about your workspace, browse the web, or run a task...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Click outside to close selector */}
+      {selectorOpen&&<div onClick={()=>setSelectorOpen(false)} style={{position:"fixed",inset:0,zIndex:40}}/>}
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
