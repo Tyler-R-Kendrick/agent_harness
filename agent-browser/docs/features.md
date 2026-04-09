@@ -19,6 +19,18 @@ How to interact:
 - Use the activity bar to switch between exploration, history, extensions, and settings.
 - Send a prompt from the themed composer at the bottom using the model pill and green send button.
 
+## Chat composer
+
+Playwright test: `captures the chat panel with composer`
+
+![Chat composer screenshot](./screenshots/chat-composer.png)
+
+How to interact:
+- Type a message in the chat composer textarea.
+- Select an installed local model from the model pill dropdown.
+- Click the green **Send** button or press Enter to submit.
+- The workspace assistant header shows the current context (active models, skills, plugins, hooks).
+
 ## Settings / model registry
 
 Playwright test: `captures the settings screen`
@@ -52,3 +64,82 @@ How to interact:
 - Open **History** from the activity bar.
 - Review recent sessions as stacked timeline cards.
 - Scan event counts, summaries, and session details before resuming work.
+
+## Page overlay
+
+Playwright test: `captures the page overlay when opening a tab`
+
+![Page overlay screenshot](./screenshots/page-overlay.png)
+
+How to interact:
+- Click any tab in the workspace tree to open it as a page overlay.
+- Use the address bar and navigation controls (back, forward, refresh) at the top.
+- Toggle the element inspector or page chat panel from the toolbar buttons.
+- Close the overlay to return to the main chat view.
+
+## Workspace switcher
+
+Playwright test: `captures the workspace switcher modal`
+
+![Workspace switcher screenshot](./screenshots/workspace-switcher.png)
+
+How to interact:
+- Click the **+** button next to the workspace pills to open the switcher modal.
+- Each workspace tile shows its name, tab count, and memory usage.
+- Click a workspace tile to switch to it and close the modal.
+
+## Keyboard shortcuts
+
+Playwright test: `captures the keyboard shortcuts modal`
+
+![Keyboard shortcuts screenshot](./screenshots/keyboard-shortcuts.png)
+
+How to interact:
+- Press **?** at any time to open the keyboard shortcuts overlay.
+- Use arrow keys to navigate the workspace tree, Enter to open tabs.
+- Press **Escape** to close the overlay.
+
+## Sidebar collapsed
+
+Playwright test: `captures the sidebar collapsed state`
+
+![Sidebar collapsed screenshot](./screenshots/sidebar-collapsed.png)
+
+How to interact:
+- Click the sidebar toggle button at the bottom of the activity bar to collapse or expand.
+- When collapsed, the full width is available for the chat or page overlay panel.
+- The activity bar remains visible for quick navigation.
+
+## Omnibar navigation
+
+Playwright test: `captures omnibar URL navigation creating a new tab`
+
+![Omnibar navigation screenshot](./screenshots/omnibar-navigation.png)
+
+How to interact:
+- Type a URL in the omnibar and press Enter to open it as a new tab.
+- The page overlay opens immediately with the simulated browser chrome.
+- Search queries (non-URLs) are forwarded to the assistant as a web search request.
+
+## Workspace file editing
+
+Playwright test: `captures workspace file edit and delete flow`
+
+![Workspace file edit screenshot](./screenshots/workspace-file-edit.png)
+
+How to interact:
+- Add new capability files using the composer buttons (AGENTS.md, skill, plugin, hook).
+- Select any file from the file list to edit its path and content.
+- Click **Save file** to persist changes to browser storage.
+- Click **Delete file** (styled as a destructive action) to remove a file.
+
+## Workspace switching
+
+Playwright test: `captures workspace switching via pills`
+
+![Workspace switch screenshot](./screenshots/workspace-switch.png)
+
+How to interact:
+- Click workspace pills at the top of the sidebar to switch between workspaces.
+- Each workspace has its own set of tabs, files, and context.
+- The workspace tree and file storage update to reflect the active workspace.
