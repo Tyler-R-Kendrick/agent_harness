@@ -107,12 +107,11 @@ test('captures the chat panel with composer', async ({ page }) => {
 test('captures the workspace switcher modal', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
-  // Click the "+" add workspace button to open the switcher
+  // Click the workspace launcher to open the switcher
   await page.getByLabel('Omnibar').waitFor();
-  const addButton = page.locator('.workspace-pill.add');
-  await addButton.click();
+  await page.getByLabel('Open workspace switcher').first().click();
   await expect(page.getByRole('dialog', { name: 'Workspace switcher' })).toBeVisible();
-  await expect(page.getByText('Workspaces')).toBeVisible();
+  await expect(page.getByText('Jump between workspaces')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-switcher.png', fullPage: true });
 });
@@ -126,6 +125,7 @@ test('captures the keyboard shortcuts modal', async ({ page }) => {
   // Press ? to open keyboard shortcuts overlay
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
+  await expect(page.getByText('Ctrl/⌘ + Shift + O')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/keyboard-shortcuts.png', fullPage: true });
 });

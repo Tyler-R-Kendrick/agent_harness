@@ -214,6 +214,32 @@ describe('App', () => {
     expect(screen.queryByLabelText('Keyboard shortcuts')).not.toBeInTheDocument();
   });
 
+  it('opens the workspace switcher with the hotkey and jumps by number', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'O', ctrlKey: true, shiftKey: true });
+    expect(screen.getByRole('dialog', { name: 'Workspace switcher' })).toBeInTheDocument();
+    expect(screen.getByText('Jump between workspaces')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+    expect(document.querySelector('.workspace-pill.active')?.textContent).toBe('Build');
+  });
+
+  it('opens add-file flow with the workspace action hotkey', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: 'A', ctrlKey: true, shiftKey: true });
+    expect(screen.getByRole('dialog', { name: 'Add file' })).toBeInTheDocument();
+  });
+
   it('debounces settings searches and aborts the previous request on query changes', async () => {
     vi.useFakeTimers();
     render(<App />);

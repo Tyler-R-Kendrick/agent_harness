@@ -59,13 +59,41 @@ const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
-  ['workspaces', 'layers', 'Exploration'],
+  ['workspaces', 'layers', 'Workspaces'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
 ] as const;
 const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
+] as const;
+const WORKSPACE_SHORTCUT_GROUPS = [
+  {
+    title: 'Workspace switching',
+    items: [
+      { keys: 'Ctrl/⌘ + Shift + O', description: 'Open workspace switcher' },
+      { keys: 'Ctrl/⌘ + ←', description: 'Previous workspace' },
+      { keys: 'Ctrl/⌘ + →', description: 'Next workspace' },
+      { keys: 'Ctrl/⌘ + 1…9', description: 'Jump to workspace by position' },
+    ],
+  },
+  {
+    title: 'Workspace actions',
+    items: [
+      { keys: '/', description: 'Focus omnibar' },
+      { keys: 'Ctrl/⌘ + Shift + A', description: 'Add file to active workspace' },
+      { keys: '?', description: 'Show keyboard shortcuts' },
+      { keys: 'Esc', description: 'Close overlays / active file editor' },
+    ],
+  },
+  {
+    title: 'Tree navigation',
+    items: [
+      { keys: '↑ / ↓', description: 'Move selection in the workspace tree' },
+      { keys: '← / →', description: 'Collapse or expand workspace folders' },
+      { keys: 'Enter', description: 'Open selected tab or file' },
+    ],
+  },
 ] as const;
 
 const icons = {
@@ -574,6 +602,101 @@ function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: strin
   );
 }
 
+function WorkspaceSwitcherOverlay({
+  workspaces,
+  activeWorkspaceId,
+  onSwitch,
+  onClose,
+}: {
+  workspaces: TreeNode[];
+  activeWorkspaceId: string;
+  onSwitch: (workspaceId: string) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const filtered = workspaces.filter((workspace) => workspace.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher">
+      <div className="modal-card workspace-switcher-card">
+        <div className="modal-header workspace-switcher-header">
+          <div>
+            <span className="panel-eyebrow">Workspace navigation</span>
+            <h2>Jump between workspaces</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close workspace switcher"><Icon name="x" /></button>
+        </div>
+        <div className="workspace-switcher-body">
+          <label className="omnibar workspace-switcher-search">
+            <Icon name="search" size={13} color="#71717a" />
+            <input aria-label="Search workspaces" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search workspaces…" />
+          </label>
+          <div className="workspace-hero-card">
+            <span className="badge">Focused workspace</span>
+            <strong>{workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.name ?? 'Workspace'}</strong>
+            <p className="muted">Use Ctrl/⌘ + ←/→ to cycle, or Ctrl/⌘ + 1…9 to jump directly.</p>
+          </div>
+          <div className="workspace-grid">
+            {filtered.map((workspace, index) => (
+              <button
+                key={workspace.id}
+                type="button"
+                className={`workspace-tile ${workspace.id === activeWorkspaceId ? 'active' : ''}`}
+                onClick={() => {
+                  onSwitch(workspace.id);
+                  onClose();
+                }}
+              >
+                <div className="workspace-tile-topline">
+                  <span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} />
+                  <span className="workspace-hotkey-chip">{index < 9 ? `⌘${index + 1}` : '⌘+'}</span>
+                </div>
+                <strong>{workspace.name}</strong>
+                <span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span>
+              </button>
+            ))}
+          </div>
+          <div className="workspace-switcher-footer">
+            <span>Shortcut</span>
+            <kbd>Ctrl/⌘ + Shift + O</kbd>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShortcutOverlay({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+      <div className="modal-card shortcuts-card">
+        <div className="modal-header">
+          <div>
+            <span className="panel-eyebrow">Hotkeys</span>
+            <h2>Keyboard shortcuts</h2>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close keyboard shortcuts"><Icon name="x" /></button>
+        </div>
+        <div className="shortcut-groups">
+          {WORKSPACE_SHORTCUT_GROUPS.map((group) => (
+            <section key={group.title} className="shortcut-group">
+              <h3>{group.title}</h3>
+              <ul className="shortcut-list">
+                {group.items.map((item) => (
+                  <li key={item.keys}>
+                    <span>{item.description}</span>
+                    <kbd>{item.keys}</kbd>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SidebarTree({ root, activeWorkspaceId, openTabId, editingFilePath, cursorId, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; editingFilePath: string | null; cursorId: string | null; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void }) {
   const items = flattenTree(root);
   return (
@@ -627,6 +750,7 @@ function AgentBrowserApp() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
   const slideTimeoutRef = useRef<number>(0);
+  const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
@@ -665,6 +789,19 @@ function AgentBrowserApp() {
     window.clearTimeout(slideTimeoutRef.current);
     slideTimeoutRef.current = window.setTimeout(() => setSlideDir(null), 300);
   }, [activeWorkspaceId, root]);
+
+  const openWorkspaceSwitcher = useCallback(() => {
+    setActivePanel('workspaces');
+    setCollapsed(false);
+    setShowWorkspaces(true);
+  }, []);
+
+  const jumpToWorkspaceByIndex = useCallback((index: number) => {
+    const workspaces = root.children ?? [];
+    const target = workspaces[index];
+    if (!target) return;
+    switchWorkspace(target.id);
+  }, [root, switchWorkspace]);
 
   useCopilotReadable({
     description: 'Current agent browser workspace context',
@@ -716,9 +853,39 @@ function AgentBrowserApp() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setShowShortcuts(false); return; }
+      if (event.key === 'Escape') {
+        setShowShortcuts(false);
+        setShowWorkspaces(false);
+        setShowAddFileMenu(null);
+        if (editingFilePath) setEditingFilePath(null);
+        if (openTabId) setOpenTabId(null);
+        return;
+      }
       if (event.defaultPrevented || isEditableTarget(event.target)) return;
-      if (event.key === '?') { setShowShortcuts(true); return; }
+      if (event.key === '?') { event.preventDefault(); setShowShortcuts(true); return; }
+      if (event.key === '/') {
+        event.preventDefault();
+        omnibarRef.current?.focus();
+        omnibarRef.current?.select();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        openWorkspaceSwitcher();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setActivePanel('workspaces');
+        setCollapsed(false);
+        setShowAddFileMenu(activeWorkspaceId);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && /^[1-9]$/.test(event.key)) {
+        event.preventDefault();
+        jumpToWorkspaceByIndex(Number(event.key) - 1);
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
         event.preventDefault();
         const workspaces = root.children ?? [];
@@ -750,11 +917,12 @@ function AgentBrowserApp() {
       if (event.key === 'Enter' && cursorId) {
         const node = findNode(root, cursorId);
         if (node?.type === 'tab') setOpenTabId(node.id);
+        if (node?.type === 'file') handleOpenFileNode(node.id);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activePanel, activeWorkspaceId, cursorId, root, switchWorkspace, visibleItems]);
+  }, [activePanel, activeWorkspaceId, cursorId, editingFilePath, handleOpenFileNode, jumpToWorkspaceByIndex, openTabId, openWorkspaceSwitcher, root, switchWorkspace, visibleItems]);
 
   async function installModel(model: HFModel) {
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
@@ -855,7 +1023,7 @@ function AgentBrowserApp() {
     <div className="app-shell">
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
-          {PRIMARY_NAV.map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+          {PRIMARY_NAV.map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else { setActivePanel('workspaces'); setCollapsed(false); } return; } setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">
@@ -867,15 +1035,24 @@ function AgentBrowserApp() {
         <aside className="sidebar">
           <header className="sidebar-header">
             <div className="sidebar-title-row">
-              <span className="panel-eyebrow">{activePanel === 'settings' ? 'Settings / Models' : activePanel === 'history' ? 'History' : activePanel === 'extensions' ? 'Extensions' : 'Exploration'}</span>
+              <span className="panel-eyebrow">{activePanel === 'settings' ? 'Settings / Models' : activePanel === 'history' ? 'History' : activePanel === 'extensions' ? 'Extensions' : 'Workspaces'}</span>
             </div>
             <form className="omnibar" onSubmit={handleOmnibarSubmit}>
               <Icon name="search" size={13} color="#71717a" />
-              <input aria-label="Omnibar" value={omnibar} onChange={(event) => setOmnibar(event.target.value)} placeholder="Search or navigate…" />
+              <input ref={omnibarRef} aria-label="Omnibar" value={omnibar} onChange={(event) => setOmnibar(event.target.value)} placeholder="Search or navigate…" />
             </form>
+            <div className="workspace-toolbar">
+              <button type="button" className="workspace-launcher" aria-label="Open workspace switcher" onClick={openWorkspaceSwitcher}>
+                <span className="workspace-launcher-copy">
+                  <span className="workspace-launcher-label">Workspace</span>
+                  <strong>{activeWorkspace.name}</strong>
+                </span>
+                <span className="workspace-launcher-shortcut">⌘⇧O</span>
+              </button>
+            </div>
             <div className="workspace-pills">
               {(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className={`workspace-pill ${activeWorkspaceId === workspace.id ? 'active' : ''}`} onClick={() => switchWorkspace(workspace.id)}>{workspace.name}</button>)}
-              <button type="button" className="workspace-pill add" onClick={() => setShowWorkspaces(true)}><Icon name="plus" size={10} /></button>
+              <button type="button" className="workspace-pill add" aria-label="Open workspace switcher" onClick={openWorkspaceSwitcher}><Icon name="plus" size={10} /></button>
             </div>
           </header>
           {renderSidebar()}
@@ -883,8 +1060,8 @@ function AgentBrowserApp() {
       ) : null}
       <main className="content-area">{editingFile ? <FileEditorPanel file={editingFile} onSave={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => { const existing = current[activeWorkspaceId] ?? []; const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing; return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) }; })} onDelete={(path) => setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }))} onClose={() => setEditingFilePath(null)} onToast={setToast} /> : openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} workspaceName={activeWorkspace.name} workspaceFiles={activeWorkspaceFiles} workspaceCapabilities={activeWorkspaceCapabilities} />}</main>
       {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('agents', showAddFileMenu)}>AGENTS.md</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('skill', showAddFileMenu)}>Skill</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button></div></div></div></div> : null}
-      {showWorkspaces ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher"><div className="modal-card"><div className="modal-header"><h2>Workspaces</h2><button type="button" className="icon-button" onClick={() => setShowWorkspaces(false)}><Icon name="x" /></button></div><div className="workspace-grid">{(root.children ?? []).map((workspace) => <button key={workspace.id} type="button" className="workspace-tile" onClick={() => { switchWorkspace(workspace.id); setShowWorkspaces(false); }}><span className="workspace-swatch" style={{ background: workspace.color ?? '#60a5fa' }} /><strong>{workspace.name}</strong><span>{countTabs(workspace)} tabs · {sumMemory(workspace)}MB</span></button>)}</div></div></div> : null}
-      {showShortcuts ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"><div className="modal-card compact"><div className="modal-header"><h2>Keyboard shortcuts</h2><button type="button" className="icon-button" onClick={() => setShowShortcuts(false)}><Icon name="x" /></button></div><ul className="shortcut-list"><li><kbd>↑ / ↓</kbd><span>Move through the tree</span></li><li><kbd>→ / ←</kbd><span>Expand or collapse folders</span></li><li><kbd>Enter</kbd><span>Open the selected tab</span></li><li><kbd>Ctrl ←/→</kbd><span>Switch workspace</span></li><li><kbd>?</kbd><span>Open this overlay</span></li></ul></div></div> : null}
+      {showWorkspaces ? <WorkspaceSwitcherOverlay workspaces={root.children ?? []} activeWorkspaceId={activeWorkspaceId} onSwitch={switchWorkspace} onClose={() => setShowWorkspaces(false)} /> : null}
+      {showShortcuts ? <ShortcutOverlay onClose={() => setShowShortcuts(false)} /> : null}
       <Toast toast={toast} />
     </div>
   );
