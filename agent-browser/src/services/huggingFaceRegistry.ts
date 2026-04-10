@@ -67,14 +67,6 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   };
 }
 
-function getSiblingFilenames(entry: Record<string, unknown>): string[] {
-  if (!Array.isArray(entry.siblings)) return [];
-  return entry.siblings
-    .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
-    .map((s) => (typeof s['rfilename'] === 'string' ? s['rfilename'] : ''))
-    .filter(Boolean);
-}
-
 export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
   const url = new URL(HUGGING_FACE_MODELS_API);
   // Match reference_impl query shape while still asking for siblings so we can verify files.

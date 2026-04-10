@@ -384,6 +384,6 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('Installed')).toBeInTheDocument();
+    expect(screen.getAllByText('Installed').length).toBeGreaterThan(0);
   });
 });

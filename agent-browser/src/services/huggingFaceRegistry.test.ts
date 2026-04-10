@@ -135,6 +135,7 @@ describe('searchBrowserModels', () => {
       ok: true,
       json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model.onnx' }] })],
     });
+    getAvailableDtypesMock.mockResolvedValue(['fp32']);
 
     const results = await searchBrowserModels('', 'text-generation');
 
@@ -147,6 +148,7 @@ describe('searchBrowserModels', () => {
       ok: true,
       json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model_quantized.onnx' }] })],
     });
+    getAvailableDtypesMock.mockResolvedValue(['q8']);
 
     const results = await searchBrowserModels('', 'text-generation');
 
