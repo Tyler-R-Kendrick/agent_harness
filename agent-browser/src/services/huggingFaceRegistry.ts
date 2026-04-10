@@ -4,9 +4,26 @@ const HUGGING_FACE_MODELS_API = 'https://huggingface.co/api/models';
 
 /**
  * Ordered list of ONNX quantization dtypes from most preferred (smallest/fastest in browser)
- * to least preferred. Each maps to a file named `onnx/model_<dtype>.onnx`.
+ * to least preferred.
  */
 export const ONNX_DTYPE_PREFERENCE: readonly OnnxDtype[] = ['q4', 'q4f16', 'int8', 'uint8', 'fp16', 'q8', 'bnb4', 'fp32'];
+
+const ONNX_DTYPE_SUFFIX: Record<OnnxDtype, string> = {
+  q4: '_q4',
+  q4f16: '_q4f16',
+  int8: '_int8',
+  uint8: '_uint8',
+  fp16: '_fp16',
+  q8: '_quantized',
+  bnb4: '_bnb4',
+  fp32: '',
+};
+
+function matchesOnnxFileForDtype(filename: string, dtype: OnnxDtype): boolean {
+  const suffix = ONNX_DTYPE_SUFFIX[dtype];
+  const escapedSuffix = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^onnx\\/[A-Za-z0-9_-]+${escapedSuffix}\\.onnx$`).test(filename);
+}
 
 /**
  * Given a list of file paths in a model repo (siblings' rfilename values),
@@ -14,7 +31,7 @@ export const ONNX_DTYPE_PREFERENCE: readonly OnnxDtype[] = ['q4', 'q4f16', 'int8
  */
 export function pickBestDtype(filenames: string[]): OnnxDtype | null {
   for (const dtype of ONNX_DTYPE_PREFERENCE) {
-    if (filenames.some((f) => f === `onnx/model_${dtype}.onnx`)) {
+    if (filenames.some((f) => matchesOnnxFileForDtype(f, dtype))) {
       return dtype;
     }
   }
@@ -50,8 +67,11 @@ function getSiblingFilenames(entry: Record<string, unknown>): string[] {
 
 export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
   const url = new URL(HUGGING_FACE_MODELS_API);
-  // full=true returns siblings (file listing) so we can verify ONNX files actually exist.
+  // Match reference_impl query shape while still asking for siblings so we can verify files.
   url.searchParams.set('library', 'transformers.js');
+  url.searchParams.set('tags', 'onnx');
+  url.searchParams.set('sort', 'downloads');
+  url.searchParams.set('direction', '-1');
   url.searchParams.set('full', 'true');
   if (task) url.searchParams.set('pipeline_tag', task);
   if (search.trim()) url.searchParams.set('search', search.trim());
@@ -72,4 +92,3 @@ export async function searchBrowserModels(search: string, task: string, limit = 
   }
   return results;
 }
-

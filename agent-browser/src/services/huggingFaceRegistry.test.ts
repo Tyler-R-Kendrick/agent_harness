@@ -19,15 +19,19 @@ function makeEntry(overrides: Record<string, unknown> = {}): Record<string, unkn
 
 describe('pickBestDtype', () => {
   it('returns q4 when model_q4.onnx exists', () => {
-    expect(pickBestDtype(['onnx/model_q4.onnx', 'onnx/model_fp32.onnx'])).toBe('q4');
+    expect(pickBestDtype(['onnx/model_q4.onnx', 'onnx/model.onnx'])).toBe('q4');
   });
 
   it('prefers higher-priority dtypes', () => {
-    expect(pickBestDtype(['onnx/model_fp32.onnx', 'onnx/model_q4f16.onnx'])).toBe('q4f16');
+    expect(pickBestDtype(['onnx/model.onnx', 'onnx/model_q4f16.onnx'])).toBe('q4f16');
   });
 
   it('falls back through the preference list', () => {
-    expect(pickBestDtype(['onnx/model_fp32.onnx'])).toBe('fp32');
+    expect(pickBestDtype(['onnx/model.onnx'])).toBe('fp32');
+  });
+
+  it('recognizes the q8 quantized filename used by Transformers.js', () => {
+    expect(pickBestDtype(['onnx/model_quantized.onnx'])).toBe('q8');
   });
 
   it('returns null when no ONNX model files are present', () => {
@@ -40,7 +44,12 @@ describe('pickBestDtype', () => {
 
   it('covers all preference entries', () => {
     for (const dtype of ONNX_DTYPE_PREFERENCE) {
-      expect(pickBestDtype([`onnx/model_${dtype}.onnx`])).toBe(dtype);
+      const file = dtype === 'fp32'
+        ? 'onnx/model.onnx'
+        : dtype === 'q8'
+          ? 'onnx/model_quantized.onnx'
+          : `onnx/model_${dtype}.onnx`;
+      expect(pickBestDtype([file])).toBe(dtype);
     }
   });
 });
@@ -50,7 +59,7 @@ describe('searchBrowserModels', () => {
     fetchMock.mockReset();
   });
 
-  it('requests the HF API with library=transformers.js and full=true', async () => {
+  it('requests the HF API with reference_impl search params', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [makeEntry()],
@@ -60,6 +69,9 @@ describe('searchBrowserModels', () => {
 
     const url = new URL(fetchMock.mock.calls[0][0] as string);
     expect(url.searchParams.get('library')).toBe('transformers.js');
+    expect(url.searchParams.get('tags')).toBe('onnx');
+    expect(url.searchParams.get('sort')).toBe('downloads');
+    expect(url.searchParams.get('direction')).toBe('-1');
     expect(url.searchParams.get('full')).toBe('true');
   });
 
@@ -99,13 +111,25 @@ describe('searchBrowserModels', () => {
   it('includes models that only have fp32 ONNX files', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model_fp32.onnx' }] })],
+      json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model.onnx' }] })],
     });
 
     const results = await searchBrowserModels('', 'text-generation');
 
     expect(results).toHaveLength(1);
     expect(results[0].dtype).toBe('fp32');
+  });
+
+  it('includes models that only have q8 ONNX files', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model_quantized.onnx' }] })],
+    });
+
+    const results = await searchBrowserModels('', 'text-generation');
+
+    expect(results).toHaveLength(1);
+    expect(results[0].dtype).toBe('q8');
   });
 
   it('stores the best available dtype on the model', async () => {
@@ -115,7 +139,7 @@ describe('searchBrowserModels', () => {
         makeEntry({
           id: 'org/multi',
           siblings: [
-            { rfilename: 'onnx/model_fp32.onnx' },
+            { rfilename: 'onnx/model.onnx' },
             { rfilename: 'onnx/model_q4.onnx' },
             { rfilename: 'onnx/model_q4f16.onnx' },
           ],
