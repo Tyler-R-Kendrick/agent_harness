@@ -289,7 +289,7 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    const input = screen.getByLabelText('Model search');
+    const input = screen.getByLabelText('Hugging Face search');
     const firstSignal = searchBrowserModelsMock.mock.calls[0][3] as AbortSignal;
 
     fireEvent.change(input, { target: { value: 'q' } });
@@ -304,6 +304,86 @@ describe('App', () => {
     });
 
     expect(searchBrowserModelsMock).toHaveBeenCalledTimes(2);
-    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('qwen', 'text-generation', 12, expect.any(AbortSignal));
+    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('qwen', '', 12, expect.any(AbortSignal));
+  });
+
+  it('starts with all model type filters deselected and toggles them on demand', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    const generationChip = screen.getByRole('button', { name: 'text-generation' });
+    const classificationChip = screen.getByRole('button', { name: 'text-classification' });
+
+    expect(generationChip).not.toHaveClass('active');
+    expect(classificationChip).not.toHaveClass('active');
+    expect(searchBrowserModelsMock).toHaveBeenNthCalledWith(1, '', '', 12, expect.any(AbortSignal));
+
+    fireEvent.click(generationChip);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('', 'text-generation', 12, expect.any(AbortSignal));
+    expect(generationChip).toHaveClass('active');
+
+    fireEvent.click(generationChip);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(generationChip).not.toHaveClass('active');
+    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('', '', 12, expect.any(AbortSignal));
+  });
+
+  it('shows loading progress state while installing a model', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+      dtype: 'q4',
+    }]);
+
+    let resolveInstall!: () => void;
+    loadModelMock.mockImplementation((_task, _id, _dtype, callbacks) => {
+      callbacks.onPhase('Downloading model…');
+      return new Promise<void>((resolve) => {
+        resolveInstall = resolve;
+      });
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    const button = screen.getByRole('button', { name: /Test Model/i });
+    fireEvent.click(button);
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(button).toBeDisabled();
+
+    await act(async () => {
+      resolveInstall();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Installed')).toBeInTheDocument();
   });
 });

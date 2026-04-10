@@ -1,3 +1,4 @@
+import { ModelRegistry } from '@huggingface/transformers';
 import type { HFModel, OnnxDtype } from '../types';
 
 const HUGGING_FACE_MODELS_API = 'https://huggingface.co/api/models';
@@ -32,6 +33,15 @@ function matchesOnnxFileForDtype(filename: string, dtype: OnnxDtype): boolean {
 export function pickBestDtype(filenames: string[]): OnnxDtype | null {
   for (const dtype of ONNX_DTYPE_PREFERENCE) {
     if (filenames.some((f) => matchesOnnxFileForDtype(f, dtype))) {
+      return dtype;
+    }
+  }
+  return null;
+}
+
+function pickPreferredAvailableDtype(dtypes: string[]): OnnxDtype | null {
+  for (const dtype of ONNX_DTYPE_PREFERENCE) {
+    if (dtypes.includes(dtype)) {
       return dtype;
     }
   }
@@ -81,14 +91,18 @@ export async function searchBrowserModels(search: string, task: string, limit = 
     throw new Error(`Model registry error: ${response.status}`);
   }
   const payload = (await response.json()) as Record<string, unknown>[];
-  const results: HFModel[] = [];
-  for (const entry of payload) {
+  const results = await Promise.all(payload.map(async (entry) => {
     const id = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
-    if (!id) continue;
-    const filenames = getSiblingFilenames(entry);
-    const dtype = pickBestDtype(filenames);
-    if (!dtype) continue; // model has no loadable ONNX file — skip it
-    results.push(toModel(entry, dtype));
-  }
-  return results;
+    if (!id) return null;
+
+    try {
+      const availableDtypes = await ModelRegistry.get_available_dtypes(id);
+      const dtype = pickPreferredAvailableDtype(availableDtypes);
+      if (!dtype) return null;
+      return toModel(entry, dtype);
+    } catch {
+      return null;
+    }
+  }));
+  return results.filter((result): result is HFModel => result !== null);
 }

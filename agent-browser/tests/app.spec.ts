@@ -65,6 +65,7 @@ test('captures the settings screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Settings').click();
   await expect(page.getByLabel('Hugging Face search')).toBeVisible();
+  await expect(page.locator('.chip.active')).toHaveCount(0);
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
 });

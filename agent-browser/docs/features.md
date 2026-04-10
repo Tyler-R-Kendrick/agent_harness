@@ -42,7 +42,7 @@ Playwright test: `captures the settings screen`
 How to interact:
 - Open **Settings** from the bottom of the activity bar.
 - Use the Local tab styling to browse browser-runnable ONNX models.
-- Search the registry and narrow results by supported local task chips.
+- Search the registry across all supported browser models, then optionally narrow results with the task chips.
 - Use the Load button on a result card to install a model for local inference.
 
 ## Extensions panel
