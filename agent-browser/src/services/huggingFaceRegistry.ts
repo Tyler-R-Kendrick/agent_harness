@@ -2,17 +2,6 @@ import type { HFModel } from '../types';
 
 const HUGGING_FACE_MODELS_API = 'https://huggingface.co/api/models';
 
-function hasOnnxTag(tags: string[] | undefined): boolean {
-  return (tags ?? []).some((tag) => tag.toLowerCase().includes('onnx'));
-}
-
-function isBrowserRunnable(entry: Record<string, unknown>, task?: string): boolean {
-  const tags = Array.isArray(entry.tags) ? entry.tags.map(String) : [];
-  const pipelineTag = typeof entry.pipeline_tag === 'string' ? entry.pipeline_tag : '';
-  const modelId = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
-  return Boolean(modelId) && hasOnnxTag(tags) && (!task || pipelineTag === task || tags.includes(task));
-}
-
 function toModel(entry: Record<string, unknown>): HFModel {
   const id = typeof entry.id === 'string' ? entry.id : String(entry.modelId ?? '');
   const tags = Array.isArray(entry.tags) ? entry.tags.map(String) : [];
@@ -33,12 +22,18 @@ function toModel(entry: Record<string, unknown>): HFModel {
 
 export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
   const url = new URL(HUGGING_FACE_MODELS_API);
+  // Filter to Transformers.js-compatible ONNX models that run in the browser.
+  url.searchParams.set('library', 'transformers.js');
+  if (task) url.searchParams.set('pipeline_tag', task);
   if (search.trim()) url.searchParams.set('search', search.trim());
-  url.searchParams.set('limit', String(limit * 3));
+  url.searchParams.set('limit', String(limit));
   const response = await fetch(url.toString(), { signal });
   if (!response.ok) {
-    throw new Error(`Hugging Face registry error: ${response.status}`);
+    throw new Error(`Model registry error: ${response.status}`);
   }
   const payload = (await response.json()) as Record<string, unknown>[];
-  return payload.filter((entry) => isBrowserRunnable(entry, task)).slice(0, limit).map(toModel);
+  return payload.filter((entry) => {
+    const id = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
+    return Boolean(id);
+  }).map(toModel);
 }
