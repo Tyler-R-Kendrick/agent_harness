@@ -1,8 +1,9 @@
 import { pipeline, type PreTrainedTokenizer } from '@huggingface/transformers';
 import { buildPipelineLoadOptions, buildPipelineRunOptions } from '../services/browserInferenceRuntime';
+import type { OnnxDtype } from '../types';
 
 type WorkerRequest =
-  | { type: 'load'; id: string; task: string; modelId: string }
+  | { type: 'load'; id: string; task: string; modelId: string; dtype?: OnnxDtype }
   | { type: 'generate'; id: string; task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> };
 
 type PipelineInstance = ((prompt: unknown, options?: Record<string, unknown>) => Promise<unknown>) & { tokenizer?: unknown };
@@ -22,11 +23,11 @@ function assertSupportedTask(task: string): asserts task is 'text-generation' | 
   }
 }
 
-async function getPipeline(task: string, modelId: string, onPhase?: (phase: string) => void) {
+async function getPipeline(task: string, modelId: string, onPhase?: (phase: string) => void, dtype?: OnnxDtype) {
   const key = `${task}::${modelId}`;
   if (!pipelines.has(key)) {
     assertSupportedTask(task);
-    const loaded = await pipeline(task, modelId, buildPipelineLoadOptions(onPhase));
+    const loaded = await pipeline(task, modelId, buildPipelineLoadOptions(onPhase, dtype));
     pipelines.set(key, loaded);
   }
   return pipelines.get(key)!;
@@ -36,7 +37,7 @@ async function handleMessage(data: WorkerRequest) {
   try {
     if (data.type === 'load') {
       postMessage({ type: 'phase', id: data.id, phase: 'Downloading model…' });
-      await getPipeline(data.task, data.modelId, (phase) => postMessage({ type: 'phase', id: data.id, phase }));
+      await getPipeline(data.task, data.modelId, (phase) => postMessage({ type: 'phase', id: data.id, phase }), data.dtype);
       postMessage({ type: 'status', id: data.id, msg: 'ready' });
       return;
     }

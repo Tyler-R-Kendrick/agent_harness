@@ -2,42 +2,42 @@
   "version": 1,
   "skills": {
     "find-skills": {
-      "source": "/tmp/skill-checkout.xgJR2W",
+      "source": "/tmp/skill-checkout.mhE8Fm",
       "sourceType": "local",
       "computedHash": "d31e234f0c90694a670222cdd1dafa853e051d7066beda389f1097c22dadd461"
     },
     "frontend-design": {
-      "source": "/tmp/skill-checkout.77j2S0",
+      "source": "/tmp/skill-checkout.Jzl8Oi",
       "sourceType": "local",
       "computedHash": "063a0e6448123cd359ad0044cc46b0e490cc7964d45ef4bb9fd842bd2ffbca67"
     },
     "impeccable": {
-      "source": "/tmp/skill-checkout.IlYPu5",
+      "source": "/tmp/skill-checkout.ZKunl5",
       "sourceType": "local",
       "computedHash": "094491c0ae1dedba1865a45d8e9ec75520fb161e2d2fe0029cba914200335ba1"
     },
     "shadcn": {
-      "source": "/tmp/skill-checkout.LAmcpX",
+      "source": "/tmp/skill-checkout.wW6iid",
       "sourceType": "local",
       "computedHash": "873c67922d80775a9fdf596db7964b579f0408c30ec6e3d11989f6055bbec89f"
     },
     "skill-creator": {
-      "source": "/tmp/skill-checkout.5Bzd1q",
+      "source": "/tmp/skill-checkout.eUHxTs",
       "sourceType": "local",
       "computedHash": "b122f4d1e91aa1d83027e050b5b37c3156203ee85458d7b1360bc48167c9e02a"
     },
     "ui-ux-pro-max": {
-      "source": "/tmp/skill-checkout.YdIXnI",
+      "source": "/tmp/skill-checkout.I1sRIh",
       "sourceType": "local",
       "computedHash": "0a413bf988d06481f69bb81df2070741c3ba12dd9f1be2706d57f259c905992d"
     },
     "web-design-guidelines": {
-      "source": "/tmp/skill-checkout.EVcR4x",
+      "source": "/tmp/skill-checkout.23jjCk",
       "sourceType": "local",
       "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
     },
     "webapp-testing": {
-      "source": "/tmp/skill-checkout.kEWwQw",
+      "source": "/tmp/skill-checkout.8cOUh9",
       "sourceType": "local",
       "computedHash": "cf8e5916d474886bd67b09691247f43f331523008b7d366064bc607ab42d6302"
     }

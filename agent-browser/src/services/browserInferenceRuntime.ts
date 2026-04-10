@@ -1,4 +1,5 @@
 import { TextStreamer, type PreTrainedTokenizer } from '@huggingface/transformers';
+import type { OnnxDtype } from '../types';
 
 type InferenceTask = 'text-generation' | 'text-classification' | 'question-answering' | 'feature-extraction' | 'summarization';
 
@@ -18,9 +19,9 @@ export function isStreamingTask(task: string): task is 'text-generation' {
   return task === 'text-generation';
 }
 
-export function buildPipelineLoadOptions(onPhase?: (phase: string) => void) {
+export function buildPipelineLoadOptions(onPhase?: (phase: string) => void, dtype: OnnxDtype = 'q4') {
   return {
-    dtype: 'q4' as const,
+    dtype,
     device: 'wasm' as const,
     progress_callback(progress: ProgressInfo) {
       if (!onPhase) return;

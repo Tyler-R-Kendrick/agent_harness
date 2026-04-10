@@ -4,6 +4,8 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ModelStatus = 'available' | 'installed' | 'loading';
 export type PanelId = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
+/** ONNX quantization dtype values understood by Transformers.js. */
+export type OnnxDtype = 'q4' | 'q4f16' | 'int8' | 'uint8' | 'fp16' | 'q8' | 'bnb4' | 'fp32';
 
 export interface TreeNode {
   id: string;
@@ -51,6 +53,8 @@ export interface HFModel {
   tags: string[];
   sizeMB: number | null;
   status: ModelStatus;
+  /** Best available quantization dtype confirmed to exist in the model's ONNX siblings. */
+  dtype: OnnxDtype;
 }
 
 export interface McpAppDef {

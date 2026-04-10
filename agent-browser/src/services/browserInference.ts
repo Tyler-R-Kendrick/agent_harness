@@ -1,4 +1,5 @@
 import BrowserInferenceWorker from '../workers/browserInference.worker?worker';
+import type { OnnxDtype } from '../types';
 
 export type InferenceCallbacks = {
   onStatus?: (msg: string) => void;
@@ -24,7 +25,7 @@ class BrowserInferenceEngine {
     return this.worker;
   }
 
-  async loadModel(task: string, modelId: string, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
+  async loadModel(task: string, modelId: string, dtype: OnnxDtype, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
     const id = `load-${crypto.randomUUID()}`;
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
@@ -42,7 +43,7 @@ class BrowserInferenceEngine {
           reject(error);
         }
       });
-      worker.postMessage({ type: 'load', id, task, modelId });
+      worker.postMessage({ type: 'load', id, task, modelId, dtype });
     });
   }
 

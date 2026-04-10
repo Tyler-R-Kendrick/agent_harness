@@ -141,6 +141,7 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
+      dtype: 'q4',
     }]);
     render(<App />);
 
@@ -288,7 +289,7 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    const input = screen.getByLabelText('Hugging Face search');
+    const input = screen.getByLabelText('Model search');
     const firstSignal = searchBrowserModelsMock.mock.calls[0][3] as AbortSignal;
 
     fireEvent.change(input, { target: { value: 'q' } });

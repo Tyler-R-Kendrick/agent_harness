@@ -5,8 +5,6 @@ import {
   ArrowRight,
   ChevronRight,
   Cpu,
-  Eye,
-  EyeOff,
   File,
   Folder,
   FolderOpen,
@@ -139,8 +137,6 @@ const icons = {
   plus: Plus,
   cpu: Cpu,
   chevronRight: ChevronRight,
-  eye: Eye,
-  eyeOff: EyeOff,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -631,115 +627,40 @@ function ChatPanel({
   );
 }
 
-interface CloudProvider {
-  id: string;
-  name: string;
-  color: string;
-  icon: string;
-  models: { id: string; name: string; enabled: boolean }[];
-}
-
-const CLOUD_PROVIDERS: CloudProvider[] = [
-  { id: 'anthropic', name: 'Anthropic', color: '#d97706', icon: 'A', models: [{ id: 'claude-3-opus', name: 'Claude 3 Opus', enabled: false }, { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', enabled: true }, { id: 'claude-3-haiku', name: 'Claude 3 Haiku', enabled: false }] },
-  { id: 'openai', name: 'OpenAI', color: '#10b981', icon: 'O', models: [{ id: 'gpt-4o', name: 'GPT-4o', enabled: true }, { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', enabled: false }, { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', enabled: false }] },
-  { id: 'google', name: 'Google', color: '#3b82f6', icon: 'G', models: [{ id: 'gemini-pro', name: 'Gemini Pro', enabled: false }, { id: 'gemini-ultra', name: 'Gemini Ultra', enabled: false }] },
-  { id: 'openrouter', name: 'OpenRouter', color: '#8b5cf6', icon: 'R', models: [{ id: 'auto', name: 'Auto (best available)', enabled: false }] },
-  { id: 'ollama', name: 'Ollama', color: '#f43f5e', icon: 'L', models: [{ id: 'llama3', name: 'Llama 3', enabled: false }, { id: 'mistral', name: 'Mistral', enabled: false }] },
-];
-
-function ProviderCard({ provider }: { provider: CloudProvider }) {
-  const [expanded, setExpanded] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [models, setModels] = useState(provider.models);
-  const configured = apiKey.length > 0;
-
-  return (
-    <div className={`provider-card ${expanded ? 'expanded' : ''}`}>
-      <button type="button" className="provider-card-header" onClick={() => setExpanded(!expanded)}>
-        <span className="provider-icon" style={{ background: provider.color }}>{provider.icon}</span>
-        <span className="provider-name">{provider.name}</span>
-        <span className={`badge ${configured ? 'connected' : 'muted'}`}>{configured ? 'Connected' : 'Not configured'}</span>
-        <Icon name="chevronRight" size={12} color="#94a3b8" />
-      </button>
-      {expanded && (
-        <div className="provider-card-body">
-          <label className="provider-key-label">
-            API Key
-            <div className="provider-key-row">
-              <input type={showKey ? 'text' : 'password'} value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={`Enter ${provider.name} API key`} className="provider-key-input" />
-              <button type="button" className="icon-button" onClick={() => setShowKey(!showKey)}><Icon name={showKey ? 'eyeOff' : 'eye'} size={14} color="#94a3b8" /></button>
-            </div>
-          </label>
-          <div className="provider-models">
-            <span className="provider-models-title">Models</span>
-            {models.map((m) => (
-              <label key={m.id} className="provider-model-row">
-                <input type="checkbox" checked={m.enabled} onChange={() => setModels(models.map((x) => x.id === m.id ? { ...x, enabled: !x.enabled } : x))} />
-                <span>{m.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SettingsPanel({ registryModels, installedModels, task, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
-  const [settingsTab, setSettingsTab] = useState<'providers' | 'local'>('providers');
-
   return (
     <section className="panel-scroll settings-panel" aria-label="Settings">
       <span className="panel-eyebrow">Settings / Models</span>
-      <div className="settings-switcher">
-        <button type="button" className={`activity-inline-button ${settingsTab === 'providers' ? 'active' : ''}`} onClick={() => setSettingsTab('providers')}>Providers</button>
-        <button type="button" className={`activity-inline-button ${settingsTab === 'local' ? 'active' : ''}`} onClick={() => setSettingsTab('local')}>Local</button>
-      </div>
 
-      {settingsTab === 'providers' && (
-        <div className="cloud-providers-section">
-          <h3>Cloud Providers</h3>
-          <p className="muted">Configure API keys and enable models from cloud providers.</p>
-          <div className="provider-list">
-            {CLOUD_PROVIDERS.map((p) => <ProviderCard key={p.id} provider={p} />)}
-          </div>
+      <div className="local-model-controls">
+        <input aria-label="Model search" onChange={(event) => onSearch(event.target.value)} placeholder="Search model registry" />
+        <div className="chip-row">
+          {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
         </div>
-      )}
-
-      {settingsTab === 'local' && (
-        <>
-          <div className="local-model-controls">
-            <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search local model registry" />
-            <div className="chip-row">
-              {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
+      </div>
+      <div className="panel-section-header">
+        <span>Results ({registryModels.length})</span>
+        <span className="muted">{installedModels.length} models loaded</span>
+      </div>
+      <div className="model-section settings-result-list">
+        {registryModels.map((model) => (
+          <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
+            <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
+            <div className="model-card-body">
+              <strong>{model.name}</strong>
+              <span className="chip mini">{model.task}</span>
+              <p>{model.author}</p>
+              <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
             </div>
-          </div>
-          <div className="panel-section-header">
-            <span>Results ({registryModels.length})</span>
-            <span className="muted">{installedModels.length} models loaded</span>
-          </div>
-          <div className="model-section settings-result-list">
-            {registryModels.map((model) => (
-              <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
-                <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
-                <div className="model-card-body">
-                  <strong>{model.name}</strong>
-                  <span className="chip mini">{model.task}</span>
-                  <p>{model.author}</p>
-                  <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
-                </div>
-                <span className="secondary-button">Load</span>
-              </button>
-            ))}
-            {!registryModels.length ? <p className="muted">Search the local Hugging Face ONNX registry to populate the model drawer.</p> : null}
-          </div>
-          <div className="model-section">
-            <h3>Installed models</h3>
-            {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card installed"><div className="model-card-body"><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
-          </div>
-        </>
-      )}
+            <span className="secondary-button">Load</span>
+          </button>
+        ))}
+        {!registryModels.length ? <p className="muted">Search the model registry to find browser-runnable ONNX models.</p> : null}
+      </div>
+      <div className="model-section">
+        <h3>Installed models</h3>
+        {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card installed"><div className="model-card-body"><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
+      </div>
     </section>
   );
 }
@@ -1465,7 +1386,7 @@ function AgentBrowserApp() {
 
   async function installModel(model: HFModel) {
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
-    await browserInferenceEngine.loadModel(model.task, model.id, {
+    await browserInferenceEngine.loadModel(model.task, model.id, model.dtype, {
       onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
       onError: (error) => setToast({ msg: error.message, type: 'error' }),
     });
