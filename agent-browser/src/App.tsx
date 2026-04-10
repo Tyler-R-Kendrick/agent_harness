@@ -1386,7 +1386,7 @@ function AgentBrowserApp() {
 
   async function installModel(model: HFModel) {
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
-    await browserInferenceEngine.loadModel(model.task, model.id, {
+    await browserInferenceEngine.loadModel(model.task, model.id, model.dtype, {
       onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
       onError: (error) => setToast({ msg: error.message, type: 'error' }),
     });

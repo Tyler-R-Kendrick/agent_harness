@@ -141,6 +141,7 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
+      dtype: 'q4',
     }]);
     render(<App />);
 
