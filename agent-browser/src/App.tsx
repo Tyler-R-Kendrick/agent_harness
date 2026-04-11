@@ -1417,6 +1417,10 @@ function AgentBrowserApp() {
       });
       setInstalledModels((current) => current.some((entry) => entry.id === model.id) ? current : [...current, { ...model, status: 'installed' }]);
       setToast({ msg: `${model.name} installed`, type: 'success' });
+    } catch (error) {
+      console.error(`Failed to install model ${model.id}`, error);
+      const message = error instanceof Error ? error.message : 'Unknown installation error';
+      setToast({ msg: `Failed to install ${model.name}: ${message}`, type: 'error' });
     } finally {
       setLoadingModelId((current) => current === model.id ? null : current);
     }

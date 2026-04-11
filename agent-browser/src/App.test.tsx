@@ -386,4 +386,41 @@ describe('App', () => {
 
     expect(screen.getAllByText('Installed').length).toBeGreaterThan(0);
   });
+
+  it('shows an error toast and resets install state when a model install fails', async () => {
+    vi.useFakeTimers();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+      dtype: 'q4',
+    }]);
+    loadModelMock.mockRejectedValue(new Error('worker crashed'));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    const button = screen.getByRole('button', { name: /Test Model/i });
+    fireEvent.click(button);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Failed to install Test Model: worker crashed')).toBeInTheDocument();
+    expect(screen.queryByText('Installed')).not.toBeInTheDocument();
+    expect(button).not.toBeDisabled();
+    expect(errorSpy).toHaveBeenCalledWith('Failed to install model hf-test-model', expect.any(Error));
+  });
 });

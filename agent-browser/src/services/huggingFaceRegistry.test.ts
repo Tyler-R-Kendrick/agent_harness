@@ -62,6 +62,7 @@ describe('pickBestDtype', () => {
 
 describe('searchBrowserModels', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     fetchMock.mockReset();
     getAvailableDtypesMock.mockReset();
     getAvailableDtypesMock.mockResolvedValue(['q4']);
@@ -110,7 +111,7 @@ describe('searchBrowserModels', () => {
     expect(url.searchParams.get('search')).toBe('qwen');
   });
 
-  it('filters out models that have no loadable browser dtypes', async () => {
+  it('filters out models that have no loadable browser dtypes but preserves transient lookup failures via siblings fallback', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [
@@ -127,7 +128,26 @@ describe('searchBrowserModels', () => {
 
     const results = await searchBrowserModels('', 'text-generation');
 
-    expect(results.map((m) => m.id)).toEqual(['org/good']);
+    expect(results.map((m) => m.id)).toEqual(['org/good', 'org/broken']);
+  });
+
+  it('falls back to ONNX sibling inspection when dtype lookup fails', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [makeEntry({ id: 'org/fallback', siblings: [{ rfilename: 'onnx/model_q4f16.onnx' }] })],
+    });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    getAvailableDtypesMock.mockRejectedValue(new Error('transient registry failure'));
+
+    const results = await searchBrowserModels('', 'text-generation');
+
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('org/fallback');
+    expect(results[0].dtype).toBe('q4f16');
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Falling back to ONNX sibling inspection for org/fallback',
+      expect.any(Error),
+    );
   });
 
   it('includes models that only have fp32 ONNX files', async () => {

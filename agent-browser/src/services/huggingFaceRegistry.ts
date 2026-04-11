@@ -48,6 +48,15 @@ function pickPreferredAvailableDtype(dtypes: string[]): OnnxDtype | null {
   return null;
 }
 
+function getSiblingFilenames(entry: Record<string, unknown>): string[] {
+  if (!Array.isArray(entry.siblings)) return [];
+  return entry.siblings.flatMap((sibling) => {
+    if (!sibling || typeof sibling !== 'object') return [];
+    const filename = (sibling as { rfilename?: unknown }).rfilename;
+    return typeof filename === 'string' ? [filename] : [];
+  });
+}
+
 function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   const id = typeof entry.id === 'string' ? entry.id : String(entry.modelId ?? '');
   const tags = Array.isArray(entry.tags) ? entry.tags.map(String) : [];
@@ -87,12 +96,18 @@ export async function searchBrowserModels(search: string, task: string, limit = 
     const id = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
     if (!id) return null;
 
+    const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
     try {
       const availableDtypes = await ModelRegistry.get_available_dtypes(id);
-      const dtype = pickPreferredAvailableDtype(availableDtypes);
+      const dtype = Array.isArray(availableDtypes) ? pickPreferredAvailableDtype(availableDtypes) : null;
       if (!dtype) return null;
       return toModel(entry, dtype);
-    } catch {
+    } catch (error) {
+      if (fallbackDtype) {
+        console.warn(`Falling back to ONNX sibling inspection for ${id}`, error);
+        return toModel(entry, fallbackDtype);
+      }
+      console.error(`Failed to resolve browser dtypes for ${id}`, error);
       return null;
     }
   }));
