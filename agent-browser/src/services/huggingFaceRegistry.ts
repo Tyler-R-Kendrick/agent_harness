@@ -98,7 +98,7 @@ export async function searchBrowserModels(search: string, task: string, limit = 
 
     try {
       const availableDtypes = await ModelRegistry.get_available_dtypes(id);
-      const dtype = Array.isArray(availableDtypes) ? pickPreferredAvailableDtype(availableDtypes) : null;
+      const dtype = pickPreferredAvailableDtype(availableDtypes);
       if (!dtype) return null;
       return toModel(entry, dtype);
     } catch (error) {
