@@ -111,30 +111,28 @@ describe('searchBrowserModels', () => {
     expect(url.searchParams.get('search')).toBe('qwen');
   });
 
-  it('filters out models that have no loadable browser dtypes but preserves transient lookup failures via siblings fallback', async () => {
+  it('filters out models with no loadable browser dtypes', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [
         makeEntry({ id: 'org/good', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
         makeEntry({ id: 'org/bad', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
-        makeEntry({ id: 'org/broken', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
       ],
     });
     getAvailableDtypesMock.mockImplementation(async (id: string) => {
       if (id === 'org/good') return ['q4'];
-      if (id === 'org/bad') return [];
-      throw new Error('missing config');
+      return [];
     });
 
     const results = await searchBrowserModels('', 'text-generation');
 
-    expect(results.map((m) => m.id)).toEqual(['org/good', 'org/broken']);
+    expect(results.map((m) => m.id)).toEqual(['org/good']);
   });
 
   it('falls back to ONNX sibling inspection when dtype lookup fails', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => [makeEntry({ id: 'org/fallback', siblings: [{ rfilename: 'onnx/model_q4f16.onnx' }] })],
+      json: async () => [makeEntry({ id: 'org/broken', siblings: [{ rfilename: 'onnx/model_q4f16.onnx' }] })],
     });
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     getAvailableDtypesMock.mockRejectedValue(new Error('transient registry failure'));
@@ -142,10 +140,10 @@ describe('searchBrowserModels', () => {
     const results = await searchBrowserModels('', 'text-generation');
 
     expect(results).toHaveLength(1);
-    expect(results[0].id).toBe('org/fallback');
+    expect(results[0].id).toBe('org/broken');
     expect(results[0].dtype).toBe('q4f16');
     expect(warnSpy).toHaveBeenCalledWith(
-      'Falling back to ONNX sibling inspection for org/fallback',
+      'Falling back to ONNX sibling inspection for org/broken',
       expect.any(Error),
     );
   });
