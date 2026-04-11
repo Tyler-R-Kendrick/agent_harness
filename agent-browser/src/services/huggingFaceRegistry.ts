@@ -96,13 +96,13 @@ export async function searchBrowserModels(search: string, task: string, limit = 
     const id = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
     if (!id) return null;
 
-    const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
     try {
       const availableDtypes = await ModelRegistry.get_available_dtypes(id);
       const dtype = Array.isArray(availableDtypes) ? pickPreferredAvailableDtype(availableDtypes) : null;
       if (!dtype) return null;
       return toModel(entry, dtype);
     } catch (error) {
+      const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
       if (fallbackDtype) {
         console.warn(`Falling back to ONNX sibling inspection for ${id}`, error);
         return toModel(entry, fallbackDtype);
