@@ -1,3 +1,4 @@
+import { ModelRegistry } from '@huggingface/transformers';
 import type { HFModel, OnnxDtype } from '../types';
 
 const HUGGING_FACE_MODELS_API = 'https://huggingface.co/api/models';
@@ -38,6 +39,24 @@ export function pickBestDtype(filenames: string[]): OnnxDtype | null {
   return null;
 }
 
+function pickPreferredAvailableDtype(dtypes: string[]): OnnxDtype | null {
+  for (const dtype of ONNX_DTYPE_PREFERENCE) {
+    if (dtypes.includes(dtype)) {
+      return dtype;
+    }
+  }
+  return null;
+}
+
+function getSiblingFilenames(entry: Record<string, unknown>): string[] {
+  if (!Array.isArray(entry.siblings)) return [];
+  return entry.siblings.flatMap((sibling) => {
+    if (!sibling || typeof sibling !== 'object') return [];
+    const filename = (sibling as { rfilename?: unknown }).rfilename;
+    return typeof filename === 'string' ? [filename] : [];
+  });
+}
+
 function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   const id = typeof entry.id === 'string' ? entry.id : String(entry.modelId ?? '');
   const tags = Array.isArray(entry.tags) ? entry.tags.map(String) : [];
@@ -57,14 +76,6 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   };
 }
 
-function getSiblingFilenames(entry: Record<string, unknown>): string[] {
-  if (!Array.isArray(entry.siblings)) return [];
-  return entry.siblings
-    .filter((s): s is Record<string, unknown> => typeof s === 'object' && s !== null)
-    .map((s) => (typeof s['rfilename'] === 'string' ? s['rfilename'] : ''))
-    .filter(Boolean);
-}
-
 export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
   const url = new URL(HUGGING_FACE_MODELS_API);
   // Match reference_impl query shape while still asking for siblings so we can verify files.
@@ -81,14 +92,24 @@ export async function searchBrowserModels(search: string, task: string, limit = 
     throw new Error(`Model registry error: ${response.status}`);
   }
   const payload = (await response.json()) as Record<string, unknown>[];
-  const results: HFModel[] = [];
-  for (const entry of payload) {
+  const results = await Promise.all(payload.map(async (entry) => {
     const id = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
-    if (!id) continue;
-    const filenames = getSiblingFilenames(entry);
-    const dtype = pickBestDtype(filenames);
-    if (!dtype) continue; // model has no loadable ONNX file — skip it
-    results.push(toModel(entry, dtype));
-  }
-  return results;
+    if (!id) return null;
+
+    try {
+      const availableDtypes = await ModelRegistry.get_available_dtypes(id);
+      const dtype = pickPreferredAvailableDtype(availableDtypes);
+      if (!dtype) return null;
+      return toModel(entry, dtype);
+    } catch (error) {
+      const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
+      if (fallbackDtype) {
+        console.warn(`Falling back to ONNX sibling inspection for ${id}`, error);
+        return toModel(entry, fallbackDtype);
+      }
+      console.error(`Failed to resolve browser dtypes for ${id}`, error);
+      return null;
+    }
+  }));
+  return results.filter((result): result is HFModel => result !== null);
 }

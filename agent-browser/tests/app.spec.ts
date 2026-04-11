@@ -65,6 +65,7 @@ test('captures the settings screen', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Settings').click();
   await expect(page.getByLabel('Hugging Face search')).toBeVisible();
+  await expect(page.locator('.chip.active')).toHaveCount(0);
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
 });
@@ -73,8 +74,8 @@ test('captures the extensions screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   await page.getByLabel('Extensions').click();
-  await expect(page.getByText('Workspace plugin manifests')).toBeVisible();
-  await expect(page.getByText('No plugin manifests stored yet.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Extensions' })).toBeVisible();
+  await expect(page.getByLabel('Search extensions')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/extensions-screen.png', fullPage: true });
 });

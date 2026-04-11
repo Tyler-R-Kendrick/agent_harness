@@ -627,15 +627,25 @@ function ChatPanel({
   );
 }
 
-function SettingsPanel({ registryModels, installedModels, task, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
+function SettingsPanel({ registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
   return (
     <section className="panel-scroll settings-panel" aria-label="Settings">
       <span className="panel-eyebrow">Settings / Models</span>
 
       <div className="local-model-controls">
-        <input aria-label="Model search" onChange={(event) => onSearch(event.target.value)} placeholder="Search model registry" />
+        <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search model registry" />
         <div className="chip-row">
-          {TASK_OPTIONS.map((option) => <button key={option} type="button" className={`chip ${task === option ? 'active' : ''}`} onClick={() => onTaskChange(option)}>{option}</button>)}
+          {TASK_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={`chip ${task === option ? 'active' : ''}`}
+              aria-pressed={task === option}
+              onClick={() => onTaskChange(task === option ? '' : option)}
+            >
+              {option}
+            </button>
+          ))}
         </div>
       </div>
       <div className="panel-section-header">
@@ -644,16 +654,22 @@ function SettingsPanel({ registryModels, installedModels, task, onTaskChange, on
       </div>
       <div className="model-section settings-result-list">
         {registryModels.map((model) => (
-          <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)}>
-            <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
-            <div className="model-card-body">
-              <strong>{model.name}</strong>
-              <span className="chip mini">{model.task}</span>
-              <p>{model.author}</p>
-              <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
-            </div>
-            <span className="secondary-button">Load</span>
-          </button>
+          (() => {
+            const isInstalled = installedModels.some((entry) => entry.id === model.id);
+            const isLoading = loadingModelId === model.id;
+            return (
+              <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)} disabled={isInstalled || isLoading}>
+                <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
+                <div className="model-card-body">
+                  <strong>{model.name}</strong>
+                  <span className="chip mini">{model.task}</span>
+                  <p>{model.author}</p>
+                  <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
+                </div>
+                <span className="secondary-button">{isInstalled ? 'Installed' : isLoading ? 'Loading…' : 'Load'}</span>
+              </button>
+            );
+          })()
         ))}
         {!registryModels.length ? <p className="muted">Search the model registry to find browser-runnable ONNX models.</p> : null}
       </div>
@@ -1000,10 +1016,11 @@ function AgentBrowserApp() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
   const [activePanel, setActivePanel] = useState<'workspaces' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
-  const [registryTask, setRegistryTask] = useState('text-generation');
+  const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
+  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [omnibar, setOmnibar] = useState('');
   const [openTabId, setOpenTabId] = useState<string | null>(null);
   const [editingFilePath, setEditingFilePath] = useState<string | null>(null);
@@ -1385,13 +1402,28 @@ function AgentBrowserApp() {
   }, [activePanel, activeWorkspaceId, clipboardIds, createWorkspace, cursorId, editingFilePath, handleOpenFileNode, jumpToWorkspaceByIndex, openTabId, openWorkspaceSwitcher, pasteSelectionIntoWorkspace, root, selectedIds, selectionAnchorId, setToast, switchWorkspace, treeFilter, visibleItems]);
 
   async function installModel(model: HFModel) {
+    if (loadingModelId === model.id) return;
+    if (installedModels.some((entry) => entry.id === model.id)) {
+      setToast({ msg: `${model.name} is already installed`, type: 'info' });
+      return;
+    }
+
+    setLoadingModelId(model.id);
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
-    await browserInferenceEngine.loadModel(model.task, model.id, model.dtype, {
-      onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
-      onError: (error) => setToast({ msg: error.message, type: 'error' }),
-    });
-    setInstalledModels((current) => current.some((entry) => entry.id === model.id) ? current : [...current, { ...model, status: 'installed' }]);
-    setToast({ msg: `${model.name} installed`, type: 'success' });
+    try {
+      await browserInferenceEngine.loadModel(model.task, model.id, model.dtype, {
+        onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
+        onError: (error) => setToast({ msg: error.message, type: 'error' }),
+      });
+      setInstalledModels((current) => current.some((entry) => entry.id === model.id) ? current : [...current, { ...model, status: 'installed' }]);
+      setToast({ msg: `${model.name} installed`, type: 'success' });
+    } catch (error) {
+      console.error(`Failed to install model ${model.id}`, error);
+      const message = error instanceof Error ? error.message : 'Unknown installation error';
+      setToast({ msg: `Failed to install ${model.name}: ${message}`, type: 'error' });
+    } finally {
+      setLoadingModelId((current) => current === model.id ? null : current);
+    }
   }
 
   function handleOmnibarSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -1475,7 +1507,7 @@ function AgentBrowserApp() {
     }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
-    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
+    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 
