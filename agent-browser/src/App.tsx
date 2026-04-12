@@ -42,6 +42,7 @@ import {
   WORKSPACE_FILES_STORAGE_KEY,
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
+import { createUniqueId } from './utils/uniqueId';
 import type { ChatMessage, HFModel, HistorySession, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
@@ -143,10 +144,6 @@ const mockHistory: HistorySession[] = [
   { id: 1, title: 'Research Session', date: 'Today · 2:15 PM', preview: 'Investigated browser-safe ONNX models', events: ['Opened Hugging Face registry', 'Installed an ONNX model', 'Streamed a local response'] },
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
-
-function createUniqueId() {
-  return crypto.randomUUID();
-}
 
 function createInitialRoot(): TreeNode {
   return {
