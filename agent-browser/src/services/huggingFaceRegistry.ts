@@ -57,6 +57,15 @@ function getSiblingFilenames(entry: Record<string, unknown>): string[] {
   });
 }
 
+function fallbackModelFromSiblings(entry: Record<string, unknown>, id: string, error?: unknown): HFModel | null {
+  const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
+  if (!fallbackDtype) return null;
+  if (error) {
+    console.warn(`Falling back to ONNX sibling inspection for ${id}`, error);
+  }
+  return toModel(entry, fallbackDtype);
+}
+
 function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   const id = typeof entry.id === 'string' ? entry.id : String(entry.modelId ?? '');
   const tags = Array.isArray(entry.tags) ? entry.tags.map(String) : [];
@@ -101,18 +110,10 @@ export async function searchBrowserModels(search: string, task: string, limit = 
       const availableDtypes = await ModelRegistry.get_available_dtypes(id);
       const dtype = pickPreferredAvailableDtype(availableDtypes);
       if (dtype) return toModel(entry, dtype);
-
-      // Match reference behavior more closely by retaining ONNX-tagged candidates when
-      // sibling files indicate a loadable ONNX dtype even if registry probing returns none.
-      const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
-      if (fallbackDtype) return toModel(entry, fallbackDtype);
-      return null;
+      return fallbackModelFromSiblings(entry, id);
     } catch (error) {
-      const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
-      if (fallbackDtype) {
-        console.warn(`Falling back to ONNX sibling inspection for ${id}`, error);
-        return toModel(entry, fallbackDtype);
-      }
+      const fallbackModel = fallbackModelFromSiblings(entry, id, error);
+      if (fallbackModel) return fallbackModel;
       console.error(`Failed to resolve browser dtypes for ${id}`, error);
       return null;
     }
