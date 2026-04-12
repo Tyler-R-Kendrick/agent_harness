@@ -37,6 +37,16 @@ function captureRuntimeErrors(page: Page) {
   return () => expect(errors, errors.join('\n')).toEqual([]);
 }
 
+/** Click the Terminal mode tab (bypassing any overlays). */
+async function switchToTerminalMode(page: Page) {
+  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+}
+
+/** Click the Chat mode tab (bypassing any overlays). */
+async function switchToChatMode(page: Page) {
+  await page.evaluate(() => { (document.querySelector('[aria-label="Chat mode"]') as HTMLElement)?.click(); });
+}
+
 // ── Screen capture tests ──────────────────────────────────────────────
 
 test('captures the main workspace screen', async ({ page }) => {
@@ -238,7 +248,7 @@ test('captures the chat/terminal tab switching UX', async ({ page }) => {
   await expect(page.getByLabel('Bash input')).not.toBeVisible();
 
   // Switch to terminal mode
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  await switchToTerminalMode(page);
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
   await expect(termTab).toHaveAttribute('aria-selected', 'true');
   await expect(chatTab).toHaveAttribute('aria-selected', 'false');
@@ -251,7 +261,7 @@ test('captures the chat/terminal tab switching UX', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/just-bash-open.png', fullPage: true });
 
   // Switch back to chat mode
-  await page.evaluate(() => { (document.querySelector('[aria-label="Chat mode"]') as HTMLElement)?.click(); });
+  await switchToChatMode(page);
   await expect(page.getByLabel('Chat panel')).toBeVisible();
   await expect(page.getByLabel('Chat input')).toBeVisible();
   await expect(page.getByLabel('Bash input')).not.toBeVisible();
@@ -265,7 +275,7 @@ test('terminal auto-focuses bash input on switch', async ({ page }) => {
   await page.goto('/');
 
   // Switch to terminal mode
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  await switchToTerminalMode(page);
   await expect(page.getByLabel('Bash input')).toBeVisible();
 
   // The bash input should be auto-focused
@@ -279,7 +289,7 @@ test('terminal refocuses input after command execution', async ({ page }) => {
   await page.goto('/');
 
   // Switch to terminal mode
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  await switchToTerminalMode(page);
   const bashInput = page.getByLabel('Bash input');
   await expect(bashInput).toBeVisible();
 
@@ -304,7 +314,7 @@ test('captures just-bash TUI pwd command', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
 
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  await switchToTerminalMode(page);
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
 
   const bashInput = page.getByLabel('Bash input');
@@ -326,7 +336,7 @@ test('captures just-bash TUI clear command', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
 
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  await switchToTerminalMode(page);
   const bashInput = page.getByLabel('Bash input');
 
   // Run a command via just-bash
@@ -352,7 +362,7 @@ test('terminal shows welcome message when empty', async ({ page }) => {
   await page.goto('/');
 
   // Switch to terminal mode
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  await switchToTerminalMode(page);
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
 
   // Welcome message should be visible

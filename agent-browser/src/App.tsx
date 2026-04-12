@@ -481,6 +481,7 @@ function JustBashPanel() {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    // Seed an empty .keep file so the in-memory FS has a valid directory at the cwd
     bashRef.current = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/.keep`]: '' } });
     return () => { bashRef.current = null; };
   }, []);
@@ -514,7 +515,7 @@ function JustBashPanel() {
       setHistory((prev) => [...prev, { cmd, stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 }]);
     } finally {
       setRunning(false);
-      // Refocus the input after command execution completes
+      // Use rAF to ensure focus happens after the disabled→enabled DOM update
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
