@@ -42,6 +42,7 @@ import {
   WORKSPACE_FILES_STORAGE_KEY,
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
+import { createUniqueId } from './utils/uniqueId';
 import type { ChatMessage, HFModel, HistorySession, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
@@ -58,7 +59,6 @@ const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answer
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
-const MAX_FALLBACK_ID_COUNTER = 0x1000000;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
@@ -144,18 +144,6 @@ const mockHistory: HistorySession[] = [
   { id: 1, title: 'Research Session', date: 'Today · 2:15 PM', preview: 'Investigated browser-safe ONNX models', events: ['Opened Hugging Face registry', 'Installed an ONNX model', 'Streamed a local response'] },
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
-
-let fallbackIdCounter = 0;
-
-function createUniqueId() {
-  const randomUUID = globalThis.crypto?.randomUUID;
-  if (typeof randomUUID === 'function') {
-    return randomUUID.call(globalThis.crypto);
-  }
-  // Counter guarantees uniqueness across repeated calls in the same millisecond.
-  fallbackIdCounter = (fallbackIdCounter + 1) % MAX_FALLBACK_ID_COUNTER;
-  return `id-${Date.now().toString(36)}-${fallbackIdCounter.toString(36).padStart(5, '0')}`;
-}
 
 function createInitialRoot(): TreeNode {
   return {

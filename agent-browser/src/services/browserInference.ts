@@ -1,5 +1,6 @@
 import BrowserInferenceWorker from '../workers/browserInference.worker?worker';
 import type { OnnxDtype } from '../types';
+import { createPrefixedId } from '../utils/uniqueId';
 
 export type InferenceCallbacks = {
   onStatus?: (msg: string) => void;
@@ -26,7 +27,7 @@ class BrowserInferenceEngine {
   }
 
   async loadModel(task: string, modelId: string, dtype: OnnxDtype, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
-    const id = `load-${crypto.randomUUID()}`;
+    const id = createPrefixedId('load');
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
       this.pending.set(id, (payload) => {
@@ -48,7 +49,7 @@ class BrowserInferenceEngine {
   }
 
   async generate(input: { task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> }, callbacks: InferenceCallbacks) {
-    const id = `generate-${crypto.randomUUID()}`;
+    const id = createPrefixedId('generate');
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
       this.pending.set(id, (payload) => {

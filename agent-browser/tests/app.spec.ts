@@ -64,18 +64,17 @@ test('captures startup render without crypto.randomUUID', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.addInitScript(() => {
     const originalCrypto = window.crypto;
-    let fallbackSeed = 0;
-    // Deterministic filler is sufficient here because this is test-only plumbing.
-    const getRandomValues = originalCrypto?.getRandomValues?.bind(originalCrypto) ?? ((array: Uint8Array) => {
-      for (let i = 0; i < array.length; i += 1) {
-        fallbackSeed = (fallbackSeed + 37) % 256;
-        array[i] = fallbackSeed;
-      }
-      return array;
+    if (!originalCrypto) return;
+    const cryptoWithoutRandomUuid = new Proxy(originalCrypto, {
+      get(target, prop) {
+        if (prop === 'randomUUID') return undefined;
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
     });
     Object.defineProperty(window, 'crypto', {
       configurable: true,
-      value: { getRandomValues },
+      value: cryptoWithoutRandomUuid,
     });
   });
   await page.goto('/');
