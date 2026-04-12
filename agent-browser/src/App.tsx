@@ -472,16 +472,22 @@ import { Bash } from 'just-bash/browser';
 const BASH_INITIAL_CWD = '/workspace';
 type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
 
-function JustBashPanel({ onClose }: { onClose: () => void }) {
+function JustBashPanel() {
   const [history, setHistory] = useState<BashEntry[]>([]);
   const [input, setInput] = useState('');
   const [running, setRunning] = useState(false);
   const outputRef = useRef<HTMLDivElement | null>(null);
   const bashRef = useRef<Bash | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     bashRef.current = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/.keep`]: '' } });
     return () => { bashRef.current = null; };
+  }, []);
+
+  // Auto-focus the bash input on mount
+  useEffect(() => {
+    inputRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -495,6 +501,7 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
     if (cmd === 'clear') {
       setHistory([]);
       setInput('');
+      inputRef.current?.focus();
       return;
     }
     if (!bashRef.current) return;
@@ -507,16 +514,20 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
       setHistory((prev) => [...prev, { cmd, stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 }]);
     } finally {
       setRunning(false);
+      // Refocus the input after command execution completes
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
   return (
-    <section className="just-bash-panel" aria-label="Terminal">
-      <header className="just-bash-header">
-        <span className="just-bash-title"><Icon name="terminal" size={13} color="#4ade80" />just-bash</span>
-        <button type="button" className="icon-button" aria-label="Close terminal" onClick={onClose}><Icon name="x" /></button>
-      </header>
+    <>
       <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="assertive">
+        {history.length === 0 ? (
+          <div className="bash-welcome">
+            <span className="bash-prompt">$</span> Welcome to <strong>just-bash</strong> — a sandboxed shell.
+            <br />Type commands like <code>echo hello</code>, <code>ls</code>, <code>pwd</code>, or <code>clear</code>.
+          </div>
+        ) : null}
         {history.map((entry, index) => (
           <div key={index} className="bash-entry">
             <span className="bash-prompt">$ </span><span className="bash-cmd">{entry.cmd}</span>
@@ -529,6 +540,7 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
       <form className="just-bash-compose" onSubmit={(e) => { void handleSubmit(e); }}>
         <span className="bash-prompt">$ </span>
         <input
+          ref={inputRef}
           className="bash-input"
           aria-label="Bash input"
           value={input}
@@ -540,7 +552,7 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
         />
         {running ? <span className="bash-spinner" aria-label="Running" /> : null}
       </form>
-    </section>
+    </>
   );
 }
 
@@ -670,38 +682,46 @@ function ChatPanel({
   }, [pendingSearch, onSearchConsumed, sendMessage]);
 
   return (
-    <section className="chat-panel" aria-label="Chat panel">
+    <section className={`chat-panel ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className="chat-header">
         <div className="chat-heading">
-          <span className="panel-eyebrow">Workspace assistant</span>
-          <h2>Agent Chat</h2>
-          <p>I'm your workspace assistant with access to local models, exploration context, and the capability files stored in {workspaceName}.</p>
+          <span className="panel-eyebrow">{showBash ? 'Sandboxed shell' : 'Workspace assistant'}</span>
+          <h2>{showBash ? 'Terminal' : 'Agent Chat'}</h2>
+          <p>{showBash ? 'Run commands in a sandboxed just-bash shell. Files persist while the tab is open.' : `I'm your workspace assistant with access to local models, exploration context, and the capability files stored in ${workspaceName}.`}</p>
         </div>
-        <button type="button" className={`icon-button ${showBash ? 'active' : ''}`} aria-label="Toggle terminal" onClick={() => setShowBash((current) => !current)}><Icon name="terminal" /></button>
+        <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
+          <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" className={`mode-tab ${!showBash ? 'active' : ''}`} onClick={() => setShowBash(false)}><Icon name="sparkles" size={13} />Chat</button>
+          <button type="button" role="tab" aria-selected={showBash} aria-label="Terminal mode" className={`mode-tab ${showBash ? 'active' : ''}`} onClick={() => setShowBash(true)}><Icon name="terminal" size={13} />Terminal</button>
+        </div>
       </header>
-      <div className="message-list" role="log" aria-live="polite">
-        <div className="chat-empty-state">
-          <Icon name="sparkles" size={14} color="#d1fae5" />
-          <span>Ask about your workspace, browse the web, or run a task.</span>
-        </div>
-        {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
-        <div ref={bottomRef} />
-      </div>
-      <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
-      <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
-        <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
-        <div className="composer-toolbar">
-          <label className="model-pill">
-            <span className="sr-only">Installed model</span>
-            <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)}>
-              <option value="">Choose an installed model</option>
-              {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
-        </div>
-      </form>
-      {showBash ? <JustBashPanel onClose={() => setShowBash(false)} /> : null}
+      {showBash ? (
+        <JustBashPanel />
+      ) : (
+        <>
+          <div className="message-list" role="log" aria-live="polite">
+            <div className="chat-empty-state">
+              <Icon name="sparkles" size={14} color="#d1fae5" />
+              <span>Ask about your workspace, browse the web, or run a task.</span>
+            </div>
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
+            <div ref={bottomRef} />
+          </div>
+          <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
+          <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
+            <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
+            <div className="composer-toolbar">
+              <label className="model-pill">
+                <span className="sr-only">Installed model</span>
+                <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)}>
+                  <option value="">Choose an installed model</option>
+                  {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+              </label>
+              <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
+            </div>
+          </form>
+        </>
+      )}
     </section>
   );
 }
