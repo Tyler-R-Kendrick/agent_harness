@@ -68,7 +68,7 @@ describe('searchBrowserModels', () => {
     getAvailableDtypesMock.mockResolvedValue(['q4']);
   });
 
-  it('requests the HF API without ONNX tag requirement', async () => {
+  it('requests the HF API with reference_impl filters', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [makeEntry()],
@@ -78,11 +78,11 @@ describe('searchBrowserModels', () => {
 
     const url = new URL(fetchMock.mock.calls[0][0] as string);
     expect(url.searchParams.get('library')).toBe('transformers.js');
-    expect(url.searchParams.get('tags')).toBeNull();
+    expect(url.searchParams.get('tags')).toBe('onnx');
     expect(url.searchParams.get('sort')).toBe('downloads');
     expect(url.searchParams.get('direction')).toBe('-1');
     expect(url.searchParams.get('full')).toBe('true');
-    expect(url.searchParams.get('limit')).toBe('48');
+    expect(url.searchParams.get('limit')).toBe('20');
   });
 
   it('passes pipeline_tag when task is provided', async () => {
@@ -117,7 +117,7 @@ describe('searchBrowserModels', () => {
       ok: true,
       json: async () => [
         makeEntry({ id: 'org/good', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
-        makeEntry({ id: 'org/bad', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
+        makeEntry({ id: 'org/bad', siblings: [{ rfilename: 'tokenizer.json' }] }),
       ],
     });
     getAvailableDtypesMock.mockImplementation(async (id: string) => {
@@ -128,6 +128,20 @@ describe('searchBrowserModels', () => {
     const results = await searchBrowserModels('', 'text-generation');
 
     expect(results.map((m) => m.id)).toEqual(['org/good']);
+  });
+
+  it('falls back to sibling ONNX files when dtype probing returns no dtypes', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [makeEntry({ id: 'org/fallback', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] })],
+    });
+    getAvailableDtypesMock.mockResolvedValue([]);
+
+    const results = await searchBrowserModels('', 'text-generation');
+
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('org/fallback');
+    expect(results[0].dtype).toBe('q4');
   });
 
   it('falls back to ONNX sibling inspection when dtype lookup fails', async () => {

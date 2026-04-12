@@ -1205,7 +1205,7 @@ function AgentBrowserApp() {
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchBrowserModels(registryQuery, registryTask, 12, controller.signal)
+      void searchBrowserModels(registryQuery, registryTask, 25, controller.signal)
         .then(setRegistryModels)
         .catch((error) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;

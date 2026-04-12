@@ -76,18 +76,18 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   };
 }
 
-export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
+export async function searchBrowserModels(search: string, task: string, limit = 20, signal?: AbortSignal): Promise<HFModel[]> {
   const normalizedLimit = Math.max(1, limit);
-  const candidateFetchLimit = Math.min(100, Math.max(normalizedLimit * 4, normalizedLimit));
   const url = new URL(HUGGING_FACE_MODELS_API);
-  // Pull a broader candidate pool, then rely on dtype validation to keep only truly browser-loadable models.
+  // Match reference_impl discovery filters, then validate browser-loadable dtypes.
   url.searchParams.set('library', 'transformers.js');
+  url.searchParams.set('tags', 'onnx');
   url.searchParams.set('sort', 'downloads');
   url.searchParams.set('direction', '-1');
   url.searchParams.set('full', 'true');
   if (task) url.searchParams.set('pipeline_tag', task);
   if (search.trim()) url.searchParams.set('search', search.trim());
-  url.searchParams.set('limit', String(candidateFetchLimit));
+  url.searchParams.set('limit', String(normalizedLimit));
   const response = await fetch(url.toString(), { signal });
   if (!response.ok) {
     throw new Error(`Model registry error: ${response.status}`);
@@ -100,8 +100,13 @@ export async function searchBrowserModels(search: string, task: string, limit = 
     try {
       const availableDtypes = await ModelRegistry.get_available_dtypes(id);
       const dtype = pickPreferredAvailableDtype(availableDtypes);
-      if (!dtype) return null;
-      return toModel(entry, dtype);
+      if (dtype) return toModel(entry, dtype);
+
+      // Match reference behavior more closely by retaining ONNX-tagged candidates when
+      // sibling files indicate a loadable ONNX dtype even if registry probing returns none.
+      const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
+      if (fallbackDtype) return toModel(entry, fallbackDtype);
+      return null;
     } catch (error) {
       const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
       if (fallbackDtype) {
