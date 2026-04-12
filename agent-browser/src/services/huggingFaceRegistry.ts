@@ -92,8 +92,7 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
 export async function searchBrowserModels(search: string, task: string, limit = 25, signal?: AbortSignal): Promise<HFModel[]> {
   const normalizedLimit = Math.max(1, limit);
   // Overfetch so that post-filter results still fill the requested count.
-  const overfetchTarget = normalizedLimit * MODEL_CANDIDATE_OVERFETCH_MULTIPLIER;
-  const candidateFetchLimit = Math.min(MODEL_CANDIDATE_OVERFETCH_MAX, Math.max(overfetchTarget, normalizedLimit));
+  const candidateFetchLimit = Math.min(MODEL_CANDIDATE_OVERFETCH_MAX, normalizedLimit * MODEL_CANDIDATE_OVERFETCH_MULTIPLIER);
   const url = new URL(HUGGING_FACE_MODELS_API);
   // Fetch models with the same filter approach as the reference_impl (library=transformers.js, tags=onnx),
   // then validate which are truly browser-loadable via dtype probing.
