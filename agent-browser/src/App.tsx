@@ -469,6 +469,7 @@ function FileEditorPanel({
 
 import { Bash } from 'just-bash/browser';
 
+const BASH_INITIAL_CWD = '/workspace';
 type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
 
 function JustBashPanel({ onClose }: { onClose: () => void }) {
@@ -479,7 +480,7 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
   const bashRef = useRef<Bash | null>(null);
 
   useEffect(() => {
-    bashRef.current = new Bash({ cwd: '/workspace', files: { '/workspace/.keep': '' } });
+    bashRef.current = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/.keep`]: '' } });
     return () => { bashRef.current = null; };
   }, []);
 
@@ -496,10 +497,11 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
       setInput('');
       return;
     }
+    if (!bashRef.current) return;
     setInput('');
     setRunning(true);
     try {
-      const result = await bashRef.current!.exec(cmd);
+      const result = await bashRef.current.exec(cmd);
       setHistory((prev) => [...prev, { cmd, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode }]);
     } catch (error) {
       setHistory((prev) => [...prev, { cmd, stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 }]);
