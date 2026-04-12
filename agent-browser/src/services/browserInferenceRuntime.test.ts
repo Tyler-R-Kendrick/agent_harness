@@ -51,4 +51,26 @@ describe('browser inference runtime helpers', () => {
     expect(formatBrowserInferenceResult([{ summary_text: 'Short summary' }])).toBe('Short summary');
     expect(formatBrowserInferenceResult({ answer: 'The answer', score: 0.77 })).toBe('The answer');
   });
+
+  it('buildPipelineLoadOptions does not include a device or dtype key — Transformers.js auto-selects both', async () => {
+    const { buildPipelineLoadOptions } = await import('./browserInferenceRuntime');
+
+    const opts = buildPipelineLoadOptions();
+
+    expect(opts).not.toHaveProperty('device');
+    expect(opts).not.toHaveProperty('dtype');
+    expect(opts).toHaveProperty('progress_callback');
+  });
+
+  it('buildPipelineLoadOptions accepts a progress callback and invokes it with formatted phase strings', async () => {
+    const { buildPipelineLoadOptions } = await import('./browserInferenceRuntime');
+
+    const phases: string[] = [];
+    const opts = buildPipelineLoadOptions((phase) => phases.push(phase));
+    const cb = (opts as { progress_callback: (p: Record<string, unknown>) => void }).progress_callback;
+
+    cb({ status: 'progress', file: 'onnx/model.onnx', progress: 42 });
+
+    expect(phases.length).toBeGreaterThan(0);
+  });
 });

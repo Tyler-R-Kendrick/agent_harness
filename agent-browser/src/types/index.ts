@@ -51,10 +51,8 @@ export interface HFModel {
   downloads: number;
   likes: number;
   tags: string[];
-  sizeMB: number | null;
+  sizeMB: number;
   status: ModelStatus;
-  /** Best available quantization dtype confirmed to exist in the model's ONNX siblings. */
-  dtype: OnnxDtype;
 }
 
 export interface McpAppDef {

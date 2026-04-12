@@ -141,7 +141,6 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
-      dtype: 'q4',
     }]);
     render(<App />);
 
@@ -304,7 +303,7 @@ describe('App', () => {
     });
 
     expect(searchBrowserModelsMock).toHaveBeenCalledTimes(2);
-    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('qwen', '', 12, expect.any(AbortSignal));
+    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('qwen', '', 25, expect.any(AbortSignal));
   });
 
   it('starts with all model type filters deselected and toggles them on demand', async () => {
@@ -317,12 +316,12 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
-    const generationChip = screen.getByRole('button', { name: 'text-generation' });
-    const classificationChip = screen.getByRole('button', { name: 'text-classification' });
+    const generationChip = screen.getByRole('button', { name: 'Text Generation' });
+    const classificationChip = screen.getByRole('button', { name: 'Classification' });
 
     expect(generationChip).not.toHaveClass('active');
     expect(classificationChip).not.toHaveClass('active');
-    expect(searchBrowserModelsMock).toHaveBeenNthCalledWith(1, '', '', 12, expect.any(AbortSignal));
+    expect(searchBrowserModelsMock).toHaveBeenNthCalledWith(1, '', '', 25, expect.any(AbortSignal));
 
     fireEvent.click(generationChip);
 
@@ -330,7 +329,7 @@ describe('App', () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('', 'text-generation', 12, expect.any(AbortSignal));
+    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('', 'text-generation', 25, expect.any(AbortSignal));
     expect(generationChip).toHaveClass('active');
 
     fireEvent.click(generationChip);
@@ -340,7 +339,7 @@ describe('App', () => {
     });
 
     expect(generationChip).not.toHaveClass('active');
-    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('', '', 12, expect.any(AbortSignal));
+    expect(searchBrowserModelsMock).toHaveBeenLastCalledWith('', '', 25, expect.any(AbortSignal));
   });
 
   it('shows loading progress state while installing a model', async () => {
@@ -355,11 +354,10 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
-      dtype: 'q4',
     }]);
 
     let resolveInstall!: () => void;
-    loadModelMock.mockImplementation((_task, _id, _dtype, callbacks) => {
+    loadModelMock.mockImplementation((_task, _id, callbacks) => {
       callbacks.onPhase('Downloading model…');
       return new Promise<void>((resolve) => {
         resolveInstall = resolve;
@@ -400,7 +398,6 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
-      dtype: 'q4',
     }]);
     loadModelMock.mockRejectedValue(new Error('worker crashed'));
 

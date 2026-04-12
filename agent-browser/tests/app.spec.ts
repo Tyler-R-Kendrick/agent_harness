@@ -232,3 +232,142 @@ test('captures workspace switching via hotkeys', async ({ page }) => {
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-switch.png', fullPage: true });
 });
+
+// ── Integration: gpt-2 model installation ─────────────────────────────
+//
+// These tests use addInitScript to override window.fetch before module init,
+// which is the only reliable way to intercept cross-origin HF API calls in
+// this preview-server environment.  The inference worker is intercepted via
+// page.route() so the Worker constructor is never overridden (which would
+// cause a blank page render in headless Chromium).
+
+/** Minimal stub script served in place of the real browserInference worker. */
+const WORKER_STUB = `
+  self.onmessage = function(e) {
+    var action = e.data.action;
+    var id = e.data.id;
+    if (action === 'load') {
+      postMessage({ type: 'status', phase: 'model', id: id, msg: 'Loading\u2026', pct: null });
+      setTimeout(function() { postMessage({ type: 'done', id: id, result: { loaded: true } }); }, 80);
+    } else if (action === 'generate') {
+      postMessage({ type: 'phase', id: id, phase: 'thinking' });
+      postMessage({ type: 'phase', id: id, phase: 'generating' });
+      postMessage({ type: 'token', id: id, token: 'Hi' });
+      postMessage({ type: 'done', id: id, result: { text: 'Hi' } });
+    }
+  };
+`;
+
+const GPT2_ENTRY = {
+  id: 'openai-community/gpt2',
+  pipeline_tag: 'text-generation',
+  downloads: 1234567,
+  likes: 5678,
+  tags: ['transformers.js', 'onnx', 'text-generation'],
+  siblings: [
+    { rfilename: 'config.json' },
+    { rfilename: 'tokenizer.json' },
+    { rfilename: 'onnx/model.onnx' },
+    { rfilename: 'onnx/model_quantized.onnx' },
+  ],
+};
+
+/** Simulated gated model: no ONNX siblings → would cause console.error in old code. */
+const GATED_ENTRY = {
+  id: 'pyannote/speaker-diarization-3.1',
+  pipeline_tag: 'audio-classification',
+  downloads: 5000,
+  likes: 200,
+  tags: ['transformers.js', 'onnx'],
+  siblings: [], // no ONNX siblings visible; dtype probe will fail with 401
+};
+
+/**
+ * Adds an addInitScript that overrides window.fetch to mock:
+ * - HF model search API → returns GPT-2 + optionally a gated model
+ * - Any HF dtype-probing request for gated model → 401
+ */
+async function mockHFApi(page: Page, entries: unknown[]) {
+  await page.addInitScript((payload: string) => {
+    const orig = window.fetch.bind(window);
+    (window as unknown as Record<string, unknown>).fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input
+        : input instanceof Request ? input.url
+        : String(input);
+      if (url.includes('huggingface.co/api/models')) {
+        return new Response(payload, { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      // Gated model config.json → 401 (simulates auth-gated HF repos)
+      if (url.includes('pyannote') && url.includes('config.json')) {
+        return new Response('', { status: 401 });
+      }
+      return orig(input, init);
+    };
+  }, JSON.stringify(entries));
+}
+
+test('settings: gated models are silently excluded without console.error', async ({ page }) => {
+  // This test PREVIOUSLY FAILED because the old code called console.error(
+  // "Failed to resolve browser dtypes for pyannote/speaker-diarization-3.1")
+  // for each gated model whose config.json returned 401.
+  // After the siblings-first fix, gated models with no ONNX siblings are
+  // silently excluded — no console.error fires.
+  const appErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource:')) {
+      appErrors.push(msg.text());
+    }
+  });
+
+  // Return both gpt-2 (has ONNX siblings) and a gated model (no ONNX siblings)
+  await mockHFApi(page, [GPT2_ENTRY, GATED_ENTRY]);
+
+  await page.goto('/');
+  await page.getByLabel('Settings').click();
+
+  // gpt-2 resolves via fast-path (ONNX siblings); gated model → silently null
+  await expect(page.getByRole('button', { name: /gpt2/i }).first()).toBeVisible({ timeout: 8000 });
+
+  // No application-level console.error should appear for the gated model
+  expect(appErrors, `Unexpected console errors:\n${appErrors.join('\n')}`).toEqual([]);
+
+  await page.screenshot({ path: 'docs/screenshots/settings-model-list.png' });
+});
+
+test('installs gpt-2 and shows Installed state without console errors', async ({ page }) => {
+  const appErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource:')) {
+      appErrors.push(msg.text());
+    }
+  });
+  page.on('pageerror', (error) => appErrors.push(`pageerror: ${error.message}`));
+
+  // Intercept the worker module script at the browser-context level so the stub
+  // is served for ALL requests including those originating from a dedicated
+  // web worker (page.route() only covers the page frame, not worker threads).
+  await page.context().route(/\/assets\/browserInference\.worker[^/]*\.js/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/javascript', body: WORKER_STUB });
+  });
+
+  // Override window.fetch to mock the HF API (cross-origin; page.route() does not
+  // reliably intercept these in the preview-server environment).
+  await mockHFApi(page, [GPT2_ENTRY]);
+
+  await page.goto('/');
+  await page.getByLabel('Settings').click();
+
+  // Wait for gpt-2 to appear (siblings-fast-path; no dtype probe needed)
+  const modelButton = page.getByRole('button', { name: /gpt2/i }).first();
+  await expect(modelButton).toBeVisible({ timeout: 8000 });
+
+  // Click Load — the stub worker resolves in ~80ms
+  await modelButton.click();
+
+  // After install, the model card shows an "Installed" badge (the Load button is replaced)
+  await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
+
+  expect(appErrors, `Errors during gpt-2 install:\n${appErrors.join('\n')}`).toEqual([]);
+
+  await page.screenshot({ path: 'docs/screenshots/gpt2-installed.png' });
+});
