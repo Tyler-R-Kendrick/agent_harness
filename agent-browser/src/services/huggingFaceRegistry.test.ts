@@ -82,7 +82,7 @@ describe('searchBrowserModels', () => {
     expect(url.searchParams.get('sort')).toBe('downloads');
     expect(url.searchParams.get('direction')).toBe('-1');
     expect(url.searchParams.get('full')).toBe('true');
-    expect(url.searchParams.get('limit')).toBe('20');
+    expect(url.searchParams.get('limit')).toBe('100');
   });
 
   it('passes pipeline_tag when task is provided', async () => {
@@ -279,5 +279,14 @@ describe('searchBrowserModels', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe('author/one');
+  });
+
+  it('overfetches candidates to preserve requested result count after filtering', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => [] });
+
+    await searchBrowserModels('', '', 10);
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.searchParams.get('limit')).toBe('40');
   });
 });
