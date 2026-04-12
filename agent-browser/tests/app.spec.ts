@@ -234,145 +234,137 @@ test('captures workspace switching via hotkeys', async ({ page }) => {
 });
 
 // ── Integration: gpt-2 model installation ─────────────────────────────
+//
+// These tests use addInitScript to override window.fetch before module init,
+// which is the only reliable way to intercept cross-origin HF API calls in
+// this preview-server environment.  The inference worker is intercepted via
+// page.route() so the Worker constructor is never overridden (which would
+// cause a blank page render in headless Chromium).
 
-test('installs gpt-2 without any console errors', async ({ page }) => {
-  const consoleErrors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      const text = message.text();
-      // Skip browser-generated resource-load failure messages (e.g. CopilotKit
-      // backend unreachable in the test environment).  Application-level model
-      // errors ("Failed to resolve browser dtypes for …", "Failed to install model …")
-      // do NOT start with this prefix and will still be caught.
-      if (text.startsWith('Failed to load resource:')) return;
-      consoleErrors.push(text);
+/** Minimal stub script served in place of the real browserInference worker. */
+const WORKER_STUB = `
+  self.onmessage = function(e) {
+    var type = e.data.type;
+    var id = e.data.id;
+    if (type === 'load') {
+      postMessage({ type: 'phase', id: id, phase: 'Loading\u2026' });
+      setTimeout(function() { postMessage({ type: 'status', id: id, msg: 'ready' }); }, 80);
+    } else if (type === 'generate') {
+      postMessage({ type: 'done', id: id, result: { generated_text: 'Hi' } });
     }
-  });
-  page.on('pageerror', (error) => {
-    consoleErrors.push(`pageerror: ${error.message}`);
-  });
+  };
+`;
 
-  // Inject mocks before any page script runs so Transformers.js and the Worker
-  // constructor pick up our fakes when they initialize.
-  await page.addInitScript(() => {
-    // ── A. Stub the inference worker ──────────────────────────────────────
-    // The bundled app creates `new Worker('/assets/browserInference.worker-xxx.js',
-    // { type: 'module' })`.  We intercept any Worker creation whose URL mentions
-    // "browserInference" and instead return a plain (classic) blob-URL worker
-    // that simulates a successful pipeline load without real model downloads.
-    const _OrigWorker = window.Worker;
-    const STUB_SRC = `
-      self.onmessage = async function(e) {
-        var type = e.data.type, id = e.data.id;
-        if (type === 'load') {
-          postMessage({ type: 'phase', id: id, phase: 'Downloading model\u2026' });
-          setTimeout(function() {
-            postMessage({ type: 'status', id: id, msg: 'ready' });
-          }, 100);
-        } else if (type === 'generate') {
-          postMessage({ type: 'done', id: id, result: { generated_text: 'Hello' } });
-        }
-      };
-    `;
-    // Using a regular function constructor so we can return the real Worker
-    // instance directly (a non-primitive return from `new` is used as-is).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    function MockWorker(this: unknown, url: string | URL, options?: WorkerOptions): Worker {
-      const urlStr = typeof url === 'string' ? url : String(url);
-      if (urlStr.includes('browserInference')) {
-        const blob = new Blob([STUB_SRC], { type: 'application/javascript' });
-        return new _OrigWorker(URL.createObjectURL(blob)); // classic worker, no module flag
-      }
-      return new _OrigWorker(url, options);
-    }
-    MockWorker.prototype = _OrigWorker.prototype;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).Worker = MockWorker;
+const GPT2_ENTRY = {
+  id: 'openai-community/gpt2',
+  pipeline_tag: 'text-generation',
+  downloads: 1234567,
+  likes: 5678,
+  tags: ['transformers.js', 'onnx', 'text-generation'],
+  siblings: [
+    { rfilename: 'config.json' },
+    { rfilename: 'tokenizer.json' },
+    { rfilename: 'onnx/model.onnx' },
+    { rfilename: 'onnx/model_quantized.onnx' },
+  ],
+};
 
-    // ── B. Stub window.fetch for HF API and dtype-probing calls ───────────
-    // Transformers.js captures `globalThis.fetch` during module init, so we must
-    // override it here (before page scripts run) rather than via page.route().
-    const _originalFetch = window.fetch.bind(window);
+/** Simulated gated model: no ONNX siblings → would cause console.error in old code. */
+const GATED_ENTRY = {
+  id: 'pyannote/speaker-diarization-3.1',
+  pipeline_tag: 'audio-classification',
+  downloads: 5000,
+  likes: 200,
+  tags: ['transformers.js', 'onnx'],
+  siblings: [], // no ONNX siblings visible; dtype probe will fail with 401
+};
 
-    const GPT2_SIBLINGS = [
-      { rfilename: 'config.json' },
-      { rfilename: 'tokenizer.json' },
-      { rfilename: 'onnx/model.onnx' },
-      { rfilename: 'onnx/model_quantized.onnx' },
-    ];
-    const GPT2_API_ENTRY = {
-      id: 'openai-community/gpt2',
-      pipeline_tag: 'text-generation',
-      downloads: 1234567,
-      likes: 5678,
-      tags: ['transformers.js', 'onnx', 'text-generation'],
-      siblings: GPT2_SIBLINGS,
-    };
-    const GPT2_CONFIG = JSON.stringify({
-      model_type: 'gpt2',
-      architectures: ['GPT2LMHeadModel'],
-      vocab_size: 50257,
-      n_positions: 1024,
-      n_embd: 768,
-      n_layer: 12,
-      n_head: 12,
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (window as any).fetch = async function(input: RequestInfo | URL, init?: RequestInit) {
+/**
+ * Adds an addInitScript that overrides window.fetch to mock:
+ * - HF model search API → returns GPT-2 + optionally a gated model
+ * - Any HF dtype-probing request for gated model → 401
+ */
+async function mockHFApi(page: Page, entries: unknown[]) {
+  await page.addInitScript((payload: string) => {
+    const orig = window.fetch.bind(window);
+    (window as unknown as Record<string, unknown>).fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input
         : input instanceof Request ? input.url
         : String(input);
-
-      // HF model search → return only gpt-2
       if (url.includes('huggingface.co/api/models')) {
-        return new Response(JSON.stringify([GPT2_API_ENTRY]), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return new Response(payload, { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
-
-      // gpt-2 config.json for dtype probing (ModelRegistry.get_available_dtypes)
-      if (url.includes('openai-community/gpt2') && url.includes('config.json')) {
-        return new Response(GPT2_CONFIG, {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+      // Gated model config.json → 401 (simulates auth-gated HF repos)
+      if (url.includes('pyannote') && url.includes('config.json')) {
+        return new Response('', { status: 401 });
       }
-
-      // ONNX file existence checks (Range GET from get_file_metadata)
-      if (url.includes('openai-community/gpt2') && url.includes('/onnx/')) {
-        const exists = url.endsWith('model_quantized.onnx') || url.endsWith('model.onnx');
-        if (exists) {
-          return new Response('', {
-            status: 206,
-            headers: { 'Content-Range': 'bytes 0-0/12345678', 'Content-Length': '1' },
-          });
-        }
-        return new Response('', { status: 404 });
-      }
-
-      return _originalFetch(input, init);
+      return orig(input, init);
     };
+  }, JSON.stringify(entries));
+}
+
+test('settings: gated models are silently excluded without console.error', async ({ page }) => {
+  // This test PREVIOUSLY FAILED because the old code called console.error(
+  // "Failed to resolve browser dtypes for pyannote/speaker-diarization-3.1")
+  // for each gated model whose config.json returned 401.
+  // After the siblings-first fix, gated models with no ONNX siblings are
+  // silently excluded — no console.error fires.
+  const appErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource:')) {
+      appErrors.push(msg.text());
+    }
   });
 
-  // Navigate and open the Settings panel
+  // Return both gpt-2 (has ONNX siblings) and a gated model (no ONNX siblings)
+  await mockHFApi(page, [GPT2_ENTRY, GATED_ENTRY]);
+
   await page.goto('/');
   await page.getByLabel('Settings').click();
 
-  // Wait for gpt-2 to appear (350ms debounce + mock API response)
+  // gpt-2 resolves via fast-path (ONNX siblings); gated model → silently null
+  await expect(page.getByRole('button', { name: /gpt2/i }).first()).toBeVisible({ timeout: 8000 });
+
+  // No application-level console.error should appear for the gated model
+  expect(appErrors, `Unexpected console errors:\n${appErrors.join('\n')}`).toEqual([]);
+
+  await page.screenshot({ path: 'docs/screenshots/settings-model-list.png' });
+});
+
+test('installs gpt-2 and shows Installed state without console errors', async ({ page }) => {
+  const appErrors: string[] = [];
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && !msg.text().startsWith('Failed to load resource:')) {
+      appErrors.push(msg.text());
+    }
+  });
+  page.on('pageerror', (error) => appErrors.push(`pageerror: ${error.message}`));
+
+  // Intercept the worker module script at the browser-context level so the stub
+  // is served for ALL requests including those originating from a dedicated
+  // web worker (page.route() only covers the page frame, not worker threads).
+  await page.context().route(/\/assets\/browserInference\.worker[^/]*\.js/, async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/javascript', body: WORKER_STUB });
+  });
+
+  // Override window.fetch to mock the HF API (cross-origin; page.route() does not
+  // reliably intercept these in the preview-server environment).
+  await mockHFApi(page, [GPT2_ENTRY]);
+
+  await page.goto('/');
+  await page.getByLabel('Settings').click();
+
+  // Wait for gpt-2 to appear (siblings-fast-path; no dtype probe needed)
   const modelButton = page.getByRole('button', { name: /gpt2/i }).first();
   await expect(modelButton).toBeVisible({ timeout: 8000 });
 
-  // Click Load — the stub worker resolves in ~100ms
+  // Click Load — the stub worker resolves in ~80ms
   await modelButton.click();
 
-  // The button becomes disabled and its inner span changes to "Installed"
+  // Button label changes to "Installed" once the worker posts status:'ready'
   await expect(modelButton.locator('text=Installed')).toBeVisible({ timeout: 8000 });
 
-  // No console.error fired at any point during the flow
-  expect(consoleErrors, `Console errors during gpt-2 install:\n${consoleErrors.join('\n')}`).toEqual([]);
+  expect(appErrors, `Errors during gpt-2 install:\n${appErrors.join('\n')}`).toEqual([]);
 
-  await page.screenshot({ path: 'docs/screenshots/gpt2-installed.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/gpt2-installed.png' });
 });
-

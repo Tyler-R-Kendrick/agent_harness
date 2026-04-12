@@ -61,15 +61,6 @@ function getSiblingFilenames(entry: Record<string, unknown>): string[] {
   });
 }
 
-function fallbackModelFromSiblings(entry: Record<string, unknown>, id: string, error?: unknown): HFModel | null {
-  const fallbackDtype = pickBestDtype(getSiblingFilenames(entry));
-  if (!fallbackDtype) return null;
-  if (error) {
-    console.warn(`Falling back to ONNX sibling inspection for ${id}`, error);
-  }
-  return toModel(entry, fallbackDtype);
-}
-
 function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
   const id = typeof entry.id === 'string' ? entry.id : String(entry.modelId ?? '');
   const tags = Array.isArray(entry.tags) ? entry.tags.map(String) : [];
@@ -113,15 +104,18 @@ export async function searchBrowserModels(search: string, task: string, limit = 
     const id = typeof entry.id === 'string' ? entry.id : typeof entry.modelId === 'string' ? entry.modelId : '';
     if (!id) return null;
 
+    // Fast path: siblings are already included in the API response (full=true).
+    // If any ONNX file is listed, determine the dtype directly — no extra network requests.
+    const siblingDtype = pickBestDtype(getSiblingFilenames(entry));
+    if (siblingDtype) return toModel(entry, siblingDtype);
+
+    // Slow path: no ONNX siblings visible — probe the model hub for available dtypes.
+    // Gated or non-ONNX models will fail here and are silently excluded.
     try {
       const availableDtypes = await ModelRegistry.get_available_dtypes(id);
       const dtype = pickPreferredAvailableDtype(availableDtypes);
-      if (dtype) return toModel(entry, dtype);
-      return fallbackModelFromSiblings(entry, id);
-    } catch (error) {
-      const fallbackModel = fallbackModelFromSiblings(entry, id, error);
-      if (fallbackModel) return fallbackModel;
-      console.error(`Failed to resolve browser dtypes for ${id}`, error);
+      return dtype ? toModel(entry, dtype) : null;
+    } catch {
       return null;
     }
   }));

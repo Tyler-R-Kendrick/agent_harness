@@ -144,23 +144,19 @@ describe('searchBrowserModels', () => {
     expect(results[0].dtype).toBe('q4');
   });
 
-  it('falls back to ONNX sibling inspection when dtype lookup fails', async () => {
+  it('silently excludes gated or inaccessible models without logging errors', async () => {
+    // Entry has no ONNX siblings → slow path → get_available_dtypes fails → silently excluded
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => [makeEntry({ id: 'org/broken', siblings: [{ rfilename: 'onnx/model_q4f16.onnx' }] })],
+      json: async () => [makeEntry({ id: 'org/gated', siblings: [] })],
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    getAvailableDtypesMock.mockRejectedValue(new Error('transient registry failure'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getAvailableDtypesMock.mockRejectedValue(new Error('401 Unauthorized'));
 
     const results = await searchBrowserModels('', 'text-generation');
 
-    expect(results).toHaveLength(1);
-    expect(results[0].id).toBe('org/broken');
-    expect(results[0].dtype).toBe('q4f16');
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Falling back to ONNX sibling inspection for org/broken',
-      expect.any(Error),
-    );
+    expect(results).toHaveLength(0);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('includes models that only have fp32 ONNX files', async () => {
@@ -189,7 +185,8 @@ describe('searchBrowserModels', () => {
     expect(results[0].dtype).toBe('q8');
   });
 
-  it('stores the best available dtype on the model', async () => {
+  it('stores the most-preferred dtype from the model siblings', async () => {
+    // Fast path picks the best dtype from siblings; ModelRegistry is not consulted.
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [
@@ -203,11 +200,10 @@ describe('searchBrowserModels', () => {
         }),
       ],
     });
-    getAvailableDtypesMock.mockResolvedValue(['fp32', 'q4f16']);
 
     const results = await searchBrowserModels('', 'text-generation');
 
-    expect(results[0].dtype).toBe('q4f16');
+    expect(results[0].dtype).toBe('q4'); // q4 ranks above q4f16 and fp32
   });
 
   it('maps model fields correctly', async () => {
@@ -234,20 +230,32 @@ describe('searchBrowserModels', () => {
     expect(model.likes).toBe(42);
   });
 
-  it('checks available dtypes for each candidate model', async () => {
+  it('uses ONNX siblings directly without calling ModelRegistry for models with visible ONNX files', async () => {
+    // Fast path: siblings already reveal the ONNX dtype — no extra network requests needed.
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [
-        makeEntry({ id: 'author/one' }),
-        makeEntry({ id: 'author/two' }),
+        makeEntry({ id: 'author/one', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
+        makeEntry({ id: 'author/two', siblings: [{ rfilename: 'onnx/model_quantized.onnx' }] }),
       ],
     });
 
     await searchBrowserModels('', 'text-generation');
 
-    expect(getAvailableDtypesMock).toHaveBeenCalledTimes(2);
-    expect(getAvailableDtypesMock).toHaveBeenNthCalledWith(1, 'author/one');
-    expect(getAvailableDtypesMock).toHaveBeenNthCalledWith(2, 'author/two');
+    expect(getAvailableDtypesMock).not.toHaveBeenCalled();
+  });
+
+  it('probes ModelRegistry only for models that have no visible ONNX siblings', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [makeEntry({ id: 'author/probe-needed', siblings: [] })],
+    });
+    getAvailableDtypesMock.mockResolvedValue(['q4']);
+
+    await searchBrowserModels('', 'text-generation');
+
+    expect(getAvailableDtypesMock).toHaveBeenCalledOnce();
+    expect(getAvailableDtypesMock).toHaveBeenCalledWith('author/probe-needed');
   });
 
   it('respects the AbortSignal', async () => {
