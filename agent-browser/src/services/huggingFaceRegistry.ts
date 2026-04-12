@@ -2,6 +2,8 @@ import { ModelRegistry } from '@huggingface/transformers';
 import type { HFModel, OnnxDtype } from '../types';
 
 const HUGGING_FACE_MODELS_API = 'https://huggingface.co/api/models';
+const MODEL_CANDIDATE_OVERFETCH_MULTIPLIER = 4;
+const MODEL_CANDIDATE_OVERFETCH_MAX = 100;
 
 /**
  * Ordered list of ONNX quantization dtypes from most preferred (smallest/fastest in browser)
@@ -87,7 +89,10 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
 
 export async function searchBrowserModels(search: string, task: string, limit = 25, signal?: AbortSignal): Promise<HFModel[]> {
   const normalizedLimit = Math.max(1, limit);
-  const candidateFetchLimit = Math.min(100, Math.max(normalizedLimit * 4, normalizedLimit));
+  const candidateFetchLimit = Math.min(
+    MODEL_CANDIDATE_OVERFETCH_MAX,
+    Math.max(normalizedLimit * MODEL_CANDIDATE_OVERFETCH_MULTIPLIER, normalizedLimit),
+  );
   const url = new URL(HUGGING_FACE_MODELS_API);
   // Match reference_impl discovery filters, then validate browser-loadable dtypes.
   url.searchParams.set('library', 'transformers.js');
