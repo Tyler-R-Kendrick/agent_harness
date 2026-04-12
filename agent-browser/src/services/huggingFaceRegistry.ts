@@ -78,7 +78,7 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
 
 export async function searchBrowserModels(search: string, task: string, limit = 12, signal?: AbortSignal): Promise<HFModel[]> {
   const normalizedLimit = Math.max(1, limit);
-  const candidateLimit = Math.min(100, Math.max(normalizedLimit * 4, normalizedLimit));
+  const candidateFetchLimit = Math.min(100, Math.max(normalizedLimit * 4, normalizedLimit));
   const url = new URL(HUGGING_FACE_MODELS_API);
   // Pull a broader candidate pool, then rely on dtype validation to keep only truly browser-loadable models.
   url.searchParams.set('library', 'transformers.js');
@@ -87,7 +87,7 @@ export async function searchBrowserModels(search: string, task: string, limit = 
   url.searchParams.set('full', 'true');
   if (task) url.searchParams.set('pipeline_tag', task);
   if (search.trim()) url.searchParams.set('search', search.trim());
-  url.searchParams.set('limit', String(candidateLimit));
+  url.searchParams.set('limit', String(candidateFetchLimit));
   const response = await fetch(url.toString(), { signal });
   if (!response.ok) {
     throw new Error(`Model registry error: ${response.status}`);

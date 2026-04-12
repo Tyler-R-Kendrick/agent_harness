@@ -68,7 +68,7 @@ describe('searchBrowserModels', () => {
     getAvailableDtypesMock.mockResolvedValue(['q4']);
   });
 
-  it('requests the HF API with browser-model search params', async () => {
+  it('requests the HF API without ONNX tag requirement', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [makeEntry()],
