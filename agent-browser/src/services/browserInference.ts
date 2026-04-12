@@ -71,7 +71,9 @@ class BrowserInferenceEngine {
     return new Promise<void>((resolve, reject) => {
       this.callbacks.set(id, {
         ...callbacks,
-        onDone: () => { /* resolved via cb.resolve() */ },
+        // `done` fires cb.resolve() below via the unified message handler;
+        // onDone is only needed for generate where the caller may want the result.
+        onDone: undefined,
         resolve,
         reject,
       });

@@ -71,7 +71,9 @@ export async function handleMessage(data: WorkerRequest) {
 
       if (task === 'text-generation') {
         postMessage({ type: 'phase', id, phase: 'generating' });
-        const streamer = new TextStreamer(pipe.tokenizer as ConstructorParameters<typeof TextStreamer>[0], {
+        // pipe.tokenizer is the PreTrainedTokenizer attached by the pipeline; cast required
+        // because the PipelineWithTokenizer type uses `unknown` for compatibility with all pipeline types.
+        const streamer = new TextStreamer(pipe.tokenizer as import('@huggingface/transformers').PreTrainedTokenizer, {
           skip_prompt: true,
           callback_function: (token: string) => {
             postMessage({ type: 'token', id, token });
@@ -89,6 +91,7 @@ export async function handleMessage(data: WorkerRequest) {
       } else if (task === 'text2text-generation' || task === 'translation' || task === 'summarization') {
         postMessage({ type: 'phase', id, phase: 'generating' });
         const result = await pipe(prompt, { max_new_tokens: (options.max_new_tokens as number) || 256 }) as Array<Record<string, string>>;
+        // Pick the first non-null text field in priority order matching the reference_impl
         const text = result[0]?.generated_text ?? result[0]?.translation_text ?? result[0]?.summary_text ?? JSON.stringify(result);
         postMessage({ type: 'token', id, token: text });
         postMessage({ type: 'done', id, result: { text } });
@@ -136,6 +139,8 @@ if (typeof self !== 'undefined') {
   };
 
   self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
+    // Guard against messages with no id — matches reference_impl's `if(!id) return` check,
+    // which protects against browser-internal worker messages that have no application id.
     if (!event.data?.id) return;
     await handleMessage(event.data);
   };
