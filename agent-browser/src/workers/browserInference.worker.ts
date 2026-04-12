@@ -1,11 +1,7 @@
-import { pipeline, type PreTrainedTokenizer } from '@huggingface/transformers';
-import { buildPipelineRunOptions } from '../services/browserInferenceRuntime';
+// TypeScript port of reference_impl/tjs-worker.js
+// Keeps the same message protocol and per-task generate logic as the reference.
 
-type WorkerRequest =
-  | { type: 'load'; id: string; task: string; modelId: string }
-  | { type: 'generate'; id: string; task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> };
-
-type PipelineInstance = ((prompt: unknown, options?: Record<string, unknown>) => Promise<unknown>) & { tokenizer?: unknown };
+import { pipeline, TextStreamer } from '@huggingface/transformers';
 
 type ProgressInfo = {
   status?: unknown;
@@ -13,65 +9,134 @@ type ProgressInfo = {
   progress?: unknown;
 };
 
+type AnyPipeline = (prompt: unknown, options?: Record<string, unknown>) => Promise<unknown>;
+type PipelineWithTokenizer = AnyPipeline & { tokenizer?: unknown };
+
 const pipelines = new Map<string, unknown>();
 
-function buildProgressCallback(id: string) {
-  return (p: ProgressInfo) => {
-    const status = typeof p.status === 'string' ? p.status : null;
-    const file = typeof p.file === 'string' ? p.file : null;
-    const pct = typeof p.progress === 'number' ? Math.round(p.progress) : null;
-
-    if (status === 'progress' && pct != null) {
-      postMessage({ type: 'phase', id, phase: `${file ?? 'Downloading…'} ${pct}%` });
-    } else if (status === 'download') {
-      postMessage({ type: 'phase', id, phase: file ?? 'Starting download…' });
-    } else if (status === 'initiate') {
-      postMessage({ type: 'phase', id, phase: file ?? 'Initializing…' });
-    } else if (status === 'done' || status === 'ready') {
-      postMessage({ type: 'phase', id, phase: file ? `Loaded ${file}` : 'Finalizing…' });
-    }
-  };
+function postProgress(phase: string, msg: string, pct: number | null) {
+  postMessage({ type: 'status', phase, msg, pct });
 }
 
-async function getPipeline(task: string, modelId: string, id: string) {
-  const key = `${task}::${modelId}`;
-  if (!pipelines.has(key)) {
-    // Cast mirrors reference_impl: all task strings are forwarded directly to the
-    // Transformers.js pipeline; unsupported tasks surface as a runtime rejection that
-    // is caught and posted as a type:'error' message without crashing the worker.
-    const loaded = await pipeline(task as Parameters<typeof pipeline>[0], modelId, {
-      progress_callback: buildProgressCallback(id),
-    });
-    pipelines.set(key, loaded);
-  }
-  return pipelines.get(key)!;
+async function getPipeline(task: string, modelId: string): Promise<PipelineWithTokenizer> {
+  const key = `${modelId}:${task}`;
+  if (pipelines.has(key)) return pipelines.get(key) as PipelineWithTokenizer;
+
+  postProgress('model', 'Loading model weights...', 0);
+  const pipe = await pipeline(task as Parameters<typeof pipeline>[0], modelId, {
+    progress_callback: (p: ProgressInfo) => {
+      const status = typeof p.status === 'string' ? p.status : null;
+      const file = typeof p.file === 'string' ? p.file : null;
+      const pct = typeof p.progress === 'number' ? Math.round(p.progress) : null;
+
+      if (status === 'progress' && pct != null) {
+        postProgress('model', file ?? 'Downloading...', pct);
+      } else if (status === 'download') {
+        postProgress('model', file ?? 'Starting download...', null);
+      } else if (status === 'initiate') {
+        postProgress('model', file ?? 'Initializing...', null);
+      } else if (status === 'done' || status === 'ready') {
+        postProgress('model', file ?? 'Finalizing...', 100);
+      }
+    },
+  });
+  pipelines.set(key, pipe);
+  return pipe as PipelineWithTokenizer;
 }
+
+export type WorkerRequest =
+  | { id: string; action: 'ping' }
+  | { id: string; action: 'load'; task: string; modelId: string }
+  | { id: string; action: 'generate'; task: string; modelId: string; prompt: unknown; options: Record<string, unknown> };
 
 export async function handleMessage(data: WorkerRequest) {
+  const { id, action } = data;
   try {
-    if (data.type === 'load') {
-      postMessage({ type: 'phase', id: data.id, phase: 'Loading model…' });
-      await getPipeline(data.task, data.modelId, data.id);
-      postMessage({ type: 'status', id: data.id, msg: 'ready' });
+    if (action === 'ping') {
+      postMessage({ type: 'done', id, result: { pong: true } });
       return;
     }
 
-    const pipe = (await getPipeline(data.task, data.modelId, data.id)) as PipelineInstance;
-    const result = await pipe(
-      data.prompt,
-      buildPipelineRunOptions(data.task, data.options, (pipe.tokenizer as PreTrainedTokenizer | null | undefined) ?? null, (token) => {
-        postMessage({ type: 'token', id: data.id, token });
-      }),
-    );
+    if (action === 'load') {
+      const { task, modelId } = data;
+      await getPipeline(task, modelId);
+      postMessage({ type: 'done', id, result: { loaded: true } });
+      return;
+    }
 
-    postMessage({ type: 'done', id: data.id, result });
-  } catch (error) {
-    postMessage({ type: 'error', id: data.id, msg: error instanceof Error ? error.message : String(error) });
+    if (action === 'generate') {
+      const { task, modelId, prompt, options } = data;
+      const pipe = await getPipeline(task, modelId);
+      postMessage({ type: 'phase', id, phase: 'thinking' });
+
+      if (task === 'text-generation') {
+        postMessage({ type: 'phase', id, phase: 'generating' });
+        const streamer = new TextStreamer(pipe.tokenizer as ConstructorParameters<typeof TextStreamer>[0], {
+          skip_prompt: true,
+          callback_function: (token: string) => {
+            postMessage({ type: 'token', id, token });
+          },
+        });
+        const result = await pipe(prompt, {
+          max_new_tokens: (options.max_new_tokens as number) || 256,
+          temperature: (options.temperature as number) || 0.7,
+          do_sample: options.do_sample !== false,
+          top_p: (options.top_p as number) || 0.9,
+          streamer,
+        }) as Array<{ generated_text?: string }>;
+        postMessage({ type: 'done', id, result: { text: result[0]?.generated_text ?? '' } });
+
+      } else if (task === 'text2text-generation' || task === 'translation' || task === 'summarization') {
+        postMessage({ type: 'phase', id, phase: 'generating' });
+        const result = await pipe(prompt, { max_new_tokens: (options.max_new_tokens as number) || 256 }) as Array<Record<string, string>>;
+        const text = result[0]?.generated_text ?? result[0]?.translation_text ?? result[0]?.summary_text ?? JSON.stringify(result);
+        postMessage({ type: 'token', id, token: text });
+        postMessage({ type: 'done', id, result: { text } });
+
+      } else if (task === 'text-classification' || task === 'sentiment-analysis') {
+        postMessage({ type: 'phase', id, phase: 'generating' });
+        const result = await pipe(prompt) as Array<{ label: string; score: number }>;
+        const text = (result || []).map((r) => `${r.label} (${Math.round(r.score * 100)}%)`).join(', ');
+        postMessage({ type: 'token', id, token: text });
+        postMessage({ type: 'done', id, result: { text } });
+
+      } else if (task === 'question-answering') {
+        postMessage({ type: 'phase', id, phase: 'generating' });
+        const result = await pipe(prompt) as { answer?: string };
+        const text = result.answer ?? JSON.stringify(result);
+        postMessage({ type: 'token', id, token: text });
+        postMessage({ type: 'done', id, result: { text } });
+
+      } else if (task === 'feature-extraction') {
+        postMessage({ type: 'phase', id, phase: 'generating' });
+        const result = await pipe(prompt, { pooling: 'mean', normalize: true }) as { data?: unknown[]; size?: unknown };
+        const dim = result?.data?.length ?? result?.size ?? '?';
+        const text = `Generated embedding vector (${String(dim)} dimensions).`;
+        postMessage({ type: 'token', id, token: text });
+        postMessage({ type: 'done', id, result: { text } });
+
+      } else {
+        postMessage({ type: 'phase', id, phase: 'generating' });
+        const result = await pipe(prompt) as unknown;
+        const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+        postMessage({ type: 'token', id, token: text });
+        postMessage({ type: 'done', id, result: { text } });
+      }
+    }
+  } catch (err) {
+    postMessage({ type: 'error', id, error: err instanceof Error ? err.message : String(err) });
   }
 }
 
 if (typeof self !== 'undefined') {
+  // Match reference_impl: guard against messages with no id (internal worker messages etc)
+  self.onerror = (e) => {
+    const msg = e instanceof ErrorEvent ? e.message : String(e);
+    self.postMessage({ type: 'error', id: '__global', error: 'Worker: ' + msg });
+  };
+
   self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
+    if (!event.data?.id) return;
     await handleMessage(event.data);
   };
 }

@@ -244,13 +244,16 @@ test('captures workspace switching via hotkeys', async ({ page }) => {
 /** Minimal stub script served in place of the real browserInference worker. */
 const WORKER_STUB = `
   self.onmessage = function(e) {
-    var type = e.data.type;
+    var action = e.data.action;
     var id = e.data.id;
-    if (type === 'load') {
-      postMessage({ type: 'phase', id: id, phase: 'Loading\u2026' });
-      setTimeout(function() { postMessage({ type: 'status', id: id, msg: 'ready' }); }, 80);
-    } else if (type === 'generate') {
-      postMessage({ type: 'done', id: id, result: { generated_text: 'Hi' } });
+    if (action === 'load') {
+      postMessage({ type: 'status', phase: 'model', id: id, msg: 'Loading\u2026', pct: null });
+      setTimeout(function() { postMessage({ type: 'done', id: id, result: { loaded: true } }); }, 80);
+    } else if (action === 'generate') {
+      postMessage({ type: 'phase', id: id, phase: 'thinking' });
+      postMessage({ type: 'phase', id: id, phase: 'generating' });
+      postMessage({ type: 'token', id: id, token: 'Hi' });
+      postMessage({ type: 'done', id: id, result: { text: 'Hi' } });
     }
   };
 `;
