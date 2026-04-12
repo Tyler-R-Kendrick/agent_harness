@@ -2,7 +2,9 @@ import { ModelRegistry } from '@huggingface/transformers';
 import type { HFModel, OnnxDtype } from '../types';
 
 const HUGGING_FACE_MODELS_API = 'https://huggingface.co/api/models';
+/** Fetch this many extra candidates before dtype-filtering to maximise the final result count. */
 const MODEL_CANDIDATE_OVERFETCH_MULTIPLIER = 4;
+/** Hard cap on how many model candidates to request from the Hub in a single query. */
 const MODEL_CANDIDATE_OVERFETCH_MAX = 100;
 
 /**
@@ -89,12 +91,12 @@ function toModel(entry: Record<string, unknown>, dtype: OnnxDtype): HFModel {
 
 export async function searchBrowserModels(search: string, task: string, limit = 25, signal?: AbortSignal): Promise<HFModel[]> {
   const normalizedLimit = Math.max(1, limit);
-  const candidateFetchLimit = Math.min(
-    MODEL_CANDIDATE_OVERFETCH_MAX,
-    Math.max(normalizedLimit * MODEL_CANDIDATE_OVERFETCH_MULTIPLIER, normalizedLimit),
-  );
+  // Overfetch so that post-filter results still fill the requested count.
+  const overfetchTarget = normalizedLimit * MODEL_CANDIDATE_OVERFETCH_MULTIPLIER;
+  const candidateFetchLimit = Math.min(MODEL_CANDIDATE_OVERFETCH_MAX, Math.max(overfetchTarget, normalizedLimit));
   const url = new URL(HUGGING_FACE_MODELS_API);
-  // Match reference_impl discovery filters, then validate browser-loadable dtypes.
+  // Fetch models with the same filter approach as the reference_impl (library=transformers.js, tags=onnx),
+  // then validate which are truly browser-loadable via dtype probing.
   url.searchParams.set('library', 'transformers.js');
   url.searchParams.set('tags', 'onnx');
   url.searchParams.set('sort', 'downloads');

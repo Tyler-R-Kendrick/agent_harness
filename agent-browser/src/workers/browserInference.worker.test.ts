@@ -7,7 +7,7 @@ vi.stubGlobal('postMessage', postMessageSpy);
 
 /**
  * Each test resets modules so the worker's internal pipeline cache is cleared and
- * the pipeline mock is re-wired through the fresh module graph.
+ * the pipeline mock is rewired through the fresh module graph.
  */
 beforeEach(() => {
   pipelineMock.mockReset();

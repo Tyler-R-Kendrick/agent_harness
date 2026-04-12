@@ -21,7 +21,7 @@ export function isStreamingTask(task: string): task is 'text-generation' {
 
 export function buildPipelineLoadOptions(onPhase?: (phase: string) => void, dtype?: OnnxDtype) {
   return {
-    ...(dtype ? { dtype } : {}),
+    ...(dtype && { dtype }),
     progress_callback(progress: ProgressInfo) {
       if (!onPhase) return;
 
