@@ -58,6 +58,7 @@ const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answer
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
+const MAX_FALLBACK_ID_COUNTER = 0x1000000;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
@@ -151,7 +152,7 @@ function createUniqueId() {
   if (typeof randomUUID === 'function') {
     return randomUUID.call(globalThis.crypto);
   }
-  fallbackIdCounter = (fallbackIdCounter + 1) % 0x1000000;
+  fallbackIdCounter = (fallbackIdCounter + 1) % MAX_FALLBACK_ID_COUNTER;
   return `id-${Date.now().toString(36)}-${fallbackIdCounter.toString(36).padStart(5, '0')}`;
 }
 
