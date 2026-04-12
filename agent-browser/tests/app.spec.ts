@@ -364,8 +364,8 @@ test('installs gpt-2 and shows Installed state without console errors', async ({
   // Click Load — the stub worker resolves in ~80ms
   await modelButton.click();
 
-  // Button label changes to "Installed" once the worker posts status:'ready'
-  await expect(modelButton.locator('text=Installed')).toBeVisible({ timeout: 8000 });
+  // After install, the model card shows an "Installed" badge (the Load button is replaced)
+  await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
 
   expect(appErrors, `Errors during gpt-2 install:\n${appErrors.join('\n')}`).toEqual([]);
 

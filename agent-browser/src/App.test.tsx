@@ -316,8 +316,8 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
-    const generationChip = screen.getByRole('button', { name: 'text-generation' });
-    const classificationChip = screen.getByRole('button', { name: 'text-classification' });
+    const generationChip = screen.getByRole('button', { name: 'Text Generation' });
+    const classificationChip = screen.getByRole('button', { name: 'Classification' });
 
     expect(generationChip).not.toHaveClass('active');
     expect(classificationChip).not.toHaveClass('active');

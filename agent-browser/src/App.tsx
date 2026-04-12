@@ -55,7 +55,42 @@ const TIERS = {
   cold: { color: '#52525b', label: 'Cold' },
 } as const;
 
-const TASK_OPTIONS = ['text-generation', 'text-classification', 'question-answering', 'feature-extraction', 'summarization'];
+const TASK_OPTIONS = [
+  'text-generation', 'text2text-generation', 'text-classification',
+  'token-classification', 'question-answering', 'summarization',
+  'translation', 'feature-extraction', 'fill-mask',
+  'image-classification', 'object-detection', 'image-segmentation',
+  'automatic-speech-recognition', 'zero-shot-classification',
+  'sentence-similarity',
+];
+
+const HF_TASK_LABELS: Record<string, string> = {
+  'text-generation': 'Text Generation',
+  'text2text-generation': 'Text-to-Text',
+  'text-classification': 'Classification',
+  'token-classification': 'Token Classification',
+  'question-answering': 'QA',
+  'summarization': 'Summarization',
+  'translation': 'Translation',
+  'feature-extraction': 'Embeddings',
+  'fill-mask': 'Fill Mask',
+  'image-classification': 'Image Classification',
+  'object-detection': 'Object Detection',
+  'image-segmentation': 'Image Segmentation',
+  'automatic-speech-recognition': 'Speech Recognition',
+  'zero-shot-classification': 'Zero-Shot',
+  'sentence-similarity': 'Sentence Similarity',
+};
+
+// Pre-populated registry shown before any HF API call completes.
+// Mirrors reference_impl LOCAL_MODELS_SEED exactly.
+const LOCAL_MODELS_SEED: HFModel[] = [
+  { id: 'onnx-community/Qwen3-0.6B-ONNX', name: 'Qwen3-0.6B-ONNX', author: 'onnx-community', task: 'text-generation', downloads: 5000, likes: 30, tags: ['transformers.js', 'text-generation', 'onnx'], sizeMB: 0, status: 'available' },
+  { id: 'Xenova/distilbert-base-uncased-finetuned-sst-2-english', name: 'distilbert-base-uncased-finetuned-sst-2-english', author: 'Xenova', task: 'text-classification', downloads: 50000, likes: 32, tags: ['transformers.js'], sizeMB: 0, status: 'available' },
+  { id: 'Xenova/all-MiniLM-L6-v2', name: 'all-MiniLM-L6-v2', author: 'Xenova', task: 'feature-extraction', downloads: 80000, likes: 65, tags: ['transformers.js', 'feature-extraction'], sizeMB: 0, status: 'available' },
+  { id: 'Xenova/whisper-tiny.en', name: 'whisper-tiny.en', author: 'Xenova', task: 'automatic-speech-recognition', downloads: 25000, likes: 28, tags: ['transformers.js'], sizeMB: 0, status: 'available' },
+  { id: 'Xenova/detr-resnet-50', name: 'detr-resnet-50', author: 'Xenova', task: 'object-detection', downloads: 15000, likes: 20, tags: ['transformers.js'], sizeMB: 0, status: 'available' },
+];
 const MAX_CONTEXT_MESSAGES = 7;
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
@@ -624,13 +659,51 @@ function ChatPanel({
   );
 }
 
-function SettingsPanel({ registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void> }) {
+function ModelCard({ model, isInstalled, isLoading, onInstall, onDelete }: { model: HFModel; isInstalled: boolean; isLoading: boolean; onInstall: () => void; onDelete?: () => void }) {
+  const taskLabel = HF_TASK_LABELS[model.task] ?? model.task;
+  return (
+    <div className="model-card">
+      <div className="model-card-icon"><Icon name="layers" size={15} color={isInstalled ? '#34d399' : '#60a5fa'} /></div>
+      <div className="model-card-body">
+        <strong>{model.name}</strong>
+        <span className="chip mini">{taskLabel}</span>
+        <p>{model.author}</p>
+        <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes{model.sizeMB > 0 ? ` · ${model.sizeMB >= 1000 ? (model.sizeMB / 1000).toFixed(1) + 'GB' : model.sizeMB + 'MB'}` : ''}</small>
+      </div>
+      {isInstalled ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <span className="badge connected">Installed</span>
+          {onDelete && <button type="button" className="secondary-button" style={{ fontSize: 10 }} onClick={onDelete}>Remove</button>}
+        </div>
+      ) : (
+        <button type="button" className="secondary-button" aria-label={`${model.name} ${isLoading ? 'Loading' : 'Load'}`} onClick={onInstall} disabled={isLoading}>
+          {isLoading ? 'Loading…' : 'Load'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SettingsPanel({ registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void }) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const installedIds = new Set(installedModels.map((m) => m.id));
+  // Recommended = seed models not yet installed, only shown when no filter active
+  const recommended = (!searchQuery && !task) ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
+  const recommendedIds = new Set(recommended.map((m) => m.id));
+  // HF results, deduped against installed + recommended
+  const hfResults = registryModels.filter((r) => !installedIds.has(r.id) && !recommendedIds.has(r.id));
+
+  function handleSearch(value: string) {
+    setSearchQuery(value);
+    onSearch(value);
+  }
+
   return (
     <section className="panel-scroll settings-panel" aria-label="Settings">
       <span className="panel-eyebrow">Settings / Models</span>
 
       <div className="local-model-controls">
-        <input aria-label="Hugging Face search" onChange={(event) => onSearch(event.target.value)} placeholder="Search model registry" />
+        <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search model registry" />
         <div className="chip-row">
           {TASK_OPTIONS.map((option) => (
             <button
@@ -640,39 +713,39 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
               aria-pressed={task === option}
               onClick={() => onTaskChange(task === option ? '' : option)}
             >
-              {option}
+              {HF_TASK_LABELS[option] ?? option}
             </button>
           ))}
         </div>
       </div>
-      <div className="panel-section-header">
-        <span>Results ({registryModels.length})</span>
-        <span className="muted">{installedModels.length} models loaded</span>
-      </div>
+
+      {installedModels.length > 0 && (
+        <div className="model-section">
+          <div className="panel-section-header"><span>Loaded ({installedModels.length})</span></div>
+          {installedModels.map((model) => (
+            <ModelCard key={model.id} model={model} isInstalled={true} isLoading={false} onInstall={() => undefined} onDelete={() => onDelete(model.id)} />
+          ))}
+        </div>
+      )}
+
+      {recommended.length > 0 && (
+        <div className="model-section">
+          <div className="panel-section-header"><span>Recommended ({recommended.length})</span></div>
+          {recommended.map((model) => (
+            <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
+          ))}
+        </div>
+      )}
+
       <div className="model-section settings-result-list">
-        {registryModels.map((model) => (
-          (() => {
-            const isInstalled = installedModels.some((entry) => entry.id === model.id);
-            const isLoading = loadingModelId === model.id;
-            return (
-              <button key={model.id} type="button" className="model-card action" onClick={() => void onInstall(model)} disabled={isInstalled || isLoading}>
-                <div className="model-card-icon"><Icon name="layers" size={15} color="#60a5fa" /></div>
-                <div className="model-card-body">
-                  <strong>{model.name}</strong>
-                  <span className="chip mini">{model.task}</span>
-                  <p>{model.author}</p>
-                  <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes</small>
-                </div>
-                <span className="secondary-button">{isInstalled ? 'Installed' : isLoading ? 'Loading…' : 'Load'}</span>
-              </button>
-            );
-          })()
+        <div className="panel-section-header">
+          <span>{searchQuery || task ? `Results (${hfResults.length})` : `Popular on HF (${hfResults.length})`}</span>
+          <span className="muted">{installedModels.length} models loaded</span>
+        </div>
+        {hfResults.map((model) => (
+          <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
         ))}
-        {!registryModels.length ? <p className="muted">Search the model registry to find browser-runnable ONNX models.</p> : null}
-      </div>
-      <div className="model-section">
-        <h3>Installed models</h3>
-        {installedModels.length ? installedModels.map((model) => <div key={model.id} className="model-card installed"><div className="model-card-body"><strong>{model.name}</strong><p>{model.author} · {model.task}</p></div><span className="badge connected">Installed</span></div>) : <p className="muted">No models installed yet.</p>}
+        {!hfResults.length && !recommended.length && <p className="muted">Search the model registry to find browser-runnable ONNX models.</p>}
       </div>
     </section>
   );
@@ -1409,6 +1482,8 @@ function AgentBrowserApp() {
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
     try {
       await browserInferenceEngine.loadModel(model.task, model.id, {
+        // onStatus(phase, msg, pct): show download progress per TRD §7.1
+        onStatus: (_phase, msg, pct) => setToast({ msg: pct != null ? `${msg} ${pct}%` : msg, type: 'info' }),
         onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
         onError: (error) => setToast({ msg: error.message, type: 'error' }),
       });
@@ -1421,6 +1496,10 @@ function AgentBrowserApp() {
     } finally {
       setLoadingModelId((current) => current === model.id ? null : current);
     }
+  }
+
+  function deleteModel(id: string) {
+    setInstalledModels((current) => current.filter((m) => m.id !== id));
   }
 
   function handleOmnibarSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -1504,7 +1583,7 @@ function AgentBrowserApp() {
     }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
-    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} />;
+    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 

@@ -75,6 +75,7 @@ export async function handleMessage(data: WorkerRequest) {
         // because the PipelineWithTokenizer type uses `unknown` for compatibility with all pipeline types.
         const streamer = new TextStreamer(pipe.tokenizer as import('@huggingface/transformers').PreTrainedTokenizer, {
           skip_prompt: true,
+          skip_special_tokens: true,
           callback_function: (token: string) => {
             postMessage({ type: 'token', id, token });
           },
