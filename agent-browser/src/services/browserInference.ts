@@ -1,5 +1,4 @@
 import BrowserInferenceWorker from '../workers/browserInference.worker?worker';
-import type { OnnxDtype } from '../types';
 import { createPrefixedId } from '../utils/uniqueId';
 
 export type InferenceCallbacks = {
@@ -26,7 +25,7 @@ class BrowserInferenceEngine {
     return this.worker;
   }
 
-  async loadModel(task: string, modelId: string, dtype: OnnxDtype, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
+  async loadModel(task: string, modelId: string, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
     const id = createPrefixedId('load');
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
@@ -44,7 +43,7 @@ class BrowserInferenceEngine {
           reject(error);
         }
       });
-      worker.postMessage({ type: 'load', id, task, modelId, dtype });
+      worker.postMessage({ type: 'load', id, task, modelId });
     });
   }
 

@@ -1,7 +1,4 @@
 import { TextStreamer, type PreTrainedTokenizer } from '@huggingface/transformers';
-import type { OnnxDtype } from '../types';
-
-type InferenceTask = 'text-generation' | 'text-classification' | 'question-answering' | 'feature-extraction' | 'summarization';
 
 type ProgressInfo = {
   status?: unknown;
@@ -19,9 +16,8 @@ export function isStreamingTask(task: string): task is 'text-generation' {
   return task === 'text-generation';
 }
 
-export function buildPipelineLoadOptions(onPhase?: (phase: string) => void, dtype?: OnnxDtype) {
+export function buildPipelineLoadOptions(onPhase?: (phase: string) => void) {
   return {
-    ...(dtype && { dtype }),
     progress_callback(progress: ProgressInfo) {
       if (!onPhase) return;
 
@@ -43,7 +39,7 @@ export function buildPipelineLoadOptions(onPhase?: (phase: string) => void, dtyp
 }
 
 export function buildPipelineRunOptions(
-  task: InferenceTask,
+  task: string,
   options: Record<string, unknown> | undefined,
   tokenizer: PreTrainedTokenizer | null,
   onToken: (token: string) => void,

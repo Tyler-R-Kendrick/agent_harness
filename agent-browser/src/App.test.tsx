@@ -141,7 +141,6 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
-      dtype: 'q4',
     }]);
     render(<App />);
 
@@ -355,11 +354,10 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
-      dtype: 'q4',
     }]);
 
     let resolveInstall!: () => void;
-    loadModelMock.mockImplementation((_task, _id, _dtype, callbacks) => {
+    loadModelMock.mockImplementation((_task, _id, callbacks) => {
       callbacks.onPhase('Downloading model…');
       return new Promise<void>((resolve) => {
         resolveInstall = resolve;
@@ -400,7 +398,6 @@ describe('App', () => {
       tags: ['onnx'],
       sizeMB: 64,
       status: 'available',
-      dtype: 'q4',
     }]);
     loadModelMock.mockRejectedValue(new Error('worker crashed'));
 

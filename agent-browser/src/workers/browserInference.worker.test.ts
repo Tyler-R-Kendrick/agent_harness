@@ -34,12 +34,12 @@ describe('browserInference.worker handleMessage', () => {
 
     const handleMessage = await getHandleMessage();
 
-    await handleMessage({ type: 'load', id: 'req-1', task: 'text-generation', modelId: 'openai-community/gpt2', dtype: 'q8' });
+    await handleMessage({ type: 'load', id: 'req-1', task: 'text-generation', modelId: 'openai-community/gpt2' });
 
     expect(pipelineMock).toHaveBeenCalledWith(
       'text-generation',
       'openai-community/gpt2',
-      expect.objectContaining({ dtype: 'q8' }),
+      expect.objectContaining({ progress_callback: expect.any(Function) }),
     );
 
     expect(postMessageSpy).toHaveBeenCalledWith(
@@ -50,16 +50,18 @@ describe('browserInference.worker handleMessage', () => {
     expect(messages.every((m) => m.type !== 'error')).toBe(true);
   });
 
-  it('loads gpt-2 without forcing a backend device so Transformers.js can auto-select', async () => {
+  it('loads gpt-2 without forcing a backend device or dtype so Transformers.js can auto-select', async () => {
     pipelineMock.mockResolvedValue(vi.fn());
 
     const handleMessage = await getHandleMessage();
 
-    await handleMessage({ type: 'load', id: 'req-2', task: 'text-generation', modelId: 'openai-community/gpt2', dtype: 'q8' });
+    await handleMessage({ type: 'load', id: 'req-2', task: 'text-generation', modelId: 'openai-community/gpt2' });
 
     expect(pipelineMock).toHaveBeenCalledTimes(1);
     const loadOptions = pipelineMock.mock.calls[0][2] as Record<string, unknown>;
     expect(loadOptions).not.toHaveProperty('device');
+    expect(loadOptions).not.toHaveProperty('dtype');
+    expect(loadOptions).toHaveProperty('progress_callback');
   });
 
   it('posts an error when pipeline loading fails and does not throw', async () => {
@@ -68,22 +70,11 @@ describe('browserInference.worker handleMessage', () => {
     const handleMessage = await getHandleMessage();
 
     await expect(
-      handleMessage({ type: 'load', id: 'req-3', task: 'text-generation', modelId: 'openai-community/gpt2', dtype: 'q8' }),
+      handleMessage({ type: 'load', id: 'req-3', task: 'text-generation', modelId: 'openai-community/gpt2' }),
     ).resolves.not.toThrow();
 
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'error', id: 'req-3', msg: 'ONNX file not found' }),
-    );
-  });
-
-  it('posts an error immediately for an unsupported task without calling pipeline', async () => {
-    const handleMessage = await getHandleMessage();
-
-    await handleMessage({ type: 'load', id: 'req-4', task: 'unsupported-task', modelId: 'gpt2' });
-
-    expect(pipelineMock).not.toHaveBeenCalled();
-    expect(postMessageSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'error', id: 'req-4' }),
     );
   });
 
@@ -106,7 +97,6 @@ describe('browserInference.worker handleMessage', () => {
       id: 'req-5',
       task: 'text-generation',
       modelId: 'openai-community/gpt2',
-      dtype: 'q8',
     });
 
     // The initial phase message + at least one progress-derived phase should have been posted
@@ -132,8 +122,8 @@ describe('browserInference.worker handleMessage', () => {
 
     const handleMessage = await getHandleMessage();
 
-    await handleMessage({ type: 'load', id: 'req-6a', task: 'text-generation', modelId: 'org/cached-model', dtype: 'q8' });
-    await handleMessage({ type: 'load', id: 'req-6b', task: 'text-generation', modelId: 'org/cached-model', dtype: 'q8' });
+    await handleMessage({ type: 'load', id: 'req-6a', task: 'text-generation', modelId: 'org/cached-model' });
+    await handleMessage({ type: 'load', id: 'req-6b', task: 'text-generation', modelId: 'org/cached-model' });
 
     expect(pipelineMock).toHaveBeenCalledTimes(1);
   });

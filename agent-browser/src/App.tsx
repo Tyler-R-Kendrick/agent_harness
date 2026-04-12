@@ -1408,7 +1408,7 @@ function AgentBrowserApp() {
     setLoadingModelId(model.id);
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
     try {
-      await browserInferenceEngine.loadModel(model.task, model.id, model.dtype, {
+      await browserInferenceEngine.loadModel(model.task, model.id, {
         onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
         onError: (error) => setToast({ msg: error.message, type: 'error' }),
       });
