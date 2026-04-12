@@ -475,7 +475,7 @@ const BASH_COMMANDS: Record<string, (args: string[]) => string> = {
   pwd: () => '/workspace',
   whoami: () => 'agent',
   date: () => new Date().toString(),
-  ls: () => 'AGENTS.md  skills/  hooks/  plugins/',
+  ls: () => '.agents/skills/  .claude/skills/  skills/  AGENTS.md',
 };
 
 function runBashCommand(line: string): string {
@@ -516,7 +516,7 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
         <span className="just-bash-title"><Icon name="terminal" size={13} color="#4ade80" />just-bash</span>
         <button type="button" className="icon-button" aria-label="Close terminal" onClick={onClose}><Icon name="x" /></button>
       </header>
-      <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="polite">
+      <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="assertive">
         {history.map((entry, index) => (
           <div key={index} className="bash-entry">
             <span className="bash-prompt">$ </span><span className="bash-cmd">{entry.cmd}</span>
