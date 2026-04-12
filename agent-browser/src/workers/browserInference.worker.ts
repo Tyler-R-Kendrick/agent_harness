@@ -33,7 +33,7 @@ async function getPipeline(task: string, modelId: string, onPhase?: (phase: stri
   return pipelines.get(key)!;
 }
 
-async function handleMessage(data: WorkerRequest) {
+export async function handleMessage(data: WorkerRequest) {
   try {
     if (data.type === 'load') {
       postMessage({ type: 'phase', id: data.id, phase: 'Downloading model…' });

@@ -19,10 +19,9 @@ export function isStreamingTask(task: string): task is 'text-generation' {
   return task === 'text-generation';
 }
 
-export function buildPipelineLoadOptions(onPhase?: (phase: string) => void, dtype: OnnxDtype = 'q4') {
+export function buildPipelineLoadOptions(onPhase?: (phase: string) => void, dtype?: OnnxDtype) {
   return {
-    dtype,
-    device: 'wasm' as const,
+    ...(dtype ? { dtype } : {}),
     progress_callback(progress: ProgressInfo) {
       if (!onPhase) return;
 

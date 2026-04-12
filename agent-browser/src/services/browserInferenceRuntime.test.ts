@@ -51,4 +51,24 @@ describe('browser inference runtime helpers', () => {
     expect(formatBrowserInferenceResult([{ summary_text: 'Short summary' }])).toBe('Short summary');
     expect(formatBrowserInferenceResult({ answer: 'The answer', score: 0.77 })).toBe('The answer');
   });
+
+  it('buildPipelineLoadOptions does not include a device key so Transformers.js auto-selects the backend', async () => {
+    const { buildPipelineLoadOptions } = await import('./browserInferenceRuntime');
+
+    const opts = buildPipelineLoadOptions(undefined, 'q8');
+
+    expect(opts).not.toHaveProperty('device');
+    expect(opts).toHaveProperty('dtype', 'q8');
+    expect(opts).toHaveProperty('progress_callback');
+  });
+
+  it('buildPipelineLoadOptions omits dtype entirely when no dtype is provided, matching the reference_impl baseline', async () => {
+    const { buildPipelineLoadOptions } = await import('./browserInferenceRuntime');
+
+    const opts = buildPipelineLoadOptions();
+
+    expect(opts).not.toHaveProperty('device');
+    expect(opts).not.toHaveProperty('dtype');
+    expect(opts).toHaveProperty('progress_callback');
+  });
 });
