@@ -65,6 +65,7 @@ test('captures startup render without crypto.randomUUID', async ({ page }) => {
   await page.addInitScript(() => {
     const originalCrypto = window.crypto;
     let fallbackSeed = 0;
+    // Deterministic filler is sufficient here because this is test-only plumbing.
     const getRandomValues = originalCrypto?.getRandomValues?.bind(originalCrypto) ?? ((array: Uint8Array) => {
       for (let i = 0; i < array.length; i += 1) {
         fallbackSeed = (fallbackSeed + 37) % 256;

@@ -152,6 +152,7 @@ function createUniqueId() {
   if (typeof randomUUID === 'function') {
     return randomUUID.call(globalThis.crypto);
   }
+  // Counter guarantees uniqueness across repeated calls in the same millisecond.
   fallbackIdCounter = (fallbackIdCounter + 1) % MAX_FALLBACK_ID_COUNTER;
   return `id-${Date.now().toString(36)}-${fallbackIdCounter.toString(36).padStart(5, '0')}`;
 }
