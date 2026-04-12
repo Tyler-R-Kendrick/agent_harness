@@ -68,7 +68,7 @@ describe('searchBrowserModels', () => {
     getAvailableDtypesMock.mockResolvedValue(['q4']);
   });
 
-  it('requests the HF API with reference_impl search params', async () => {
+  it('requests the HF API with browser-model search params', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [makeEntry()],
@@ -78,10 +78,11 @@ describe('searchBrowserModels', () => {
 
     const url = new URL(fetchMock.mock.calls[0][0] as string);
     expect(url.searchParams.get('library')).toBe('transformers.js');
-    expect(url.searchParams.get('tags')).toBe('onnx');
+    expect(url.searchParams.get('tags')).toBeNull();
     expect(url.searchParams.get('sort')).toBe('downloads');
     expect(url.searchParams.get('direction')).toBe('-1');
     expect(url.searchParams.get('full')).toBe('true');
+    expect(url.searchParams.get('limit')).toBe('48');
   });
 
   it('passes pipeline_tag when task is provided', async () => {
@@ -248,5 +249,21 @@ describe('searchBrowserModels', () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
 
     await expect(searchBrowserModels('', 'text-generation')).rejects.toThrow('503');
+  });
+
+  it('returns only the requested number of validated models', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        makeEntry({ id: 'author/one' }),
+        makeEntry({ id: 'author/two' }),
+      ],
+    });
+    getAvailableDtypesMock.mockResolvedValue(['q4']);
+
+    const results = await searchBrowserModels('', '', 1);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('author/one');
   });
 });
