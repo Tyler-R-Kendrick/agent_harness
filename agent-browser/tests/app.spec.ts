@@ -264,6 +264,9 @@ test('captures just-bash TUI running a command', async ({ page }) => {
   await bashInput.fill('echo hello world');
   await bashInput.press('Enter');
 
+  // Wait for async just-bash execution to complete (input re-enabled)
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
+
   // Output should appear in the terminal output log
   await expect(page.getByLabel('Terminal output')).toContainText('echo hello world');
   await expect(page.getByLabel('Terminal output')).toContainText('hello world');
@@ -272,7 +275,7 @@ test('captures just-bash TUI running a command', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/just-bash-command.png', fullPage: true });
 });
 
-test('captures just-bash TUI help command', async ({ page }) => {
+test('captures just-bash TUI pwd command', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
 
@@ -280,14 +283,18 @@ test('captures just-bash TUI help command', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
 
   const bashInput = page.getByLabel('Bash input');
-  await bashInput.fill('help');
+  await bashInput.fill('pwd');
   await bashInput.press('Enter');
 
-  // Help output should list available commands
-  await expect(page.getByLabel('Terminal output')).toContainText('Available commands');
+  // Wait for async just-bash execution to complete
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
+
+  // pwd outputs the current working directory (/workspace)
+  await expect(page.getByLabel('Terminal output')).toContainText('pwd');
+  await expect(page.getByLabel('Terminal output')).toContainText('/workspace');
 
   assertNoRuntimeErrors();
-  await page.screenshot({ path: 'docs/screenshots/just-bash-help.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/just-bash-pwd.png', fullPage: true });
 });
 
 test('captures just-bash TUI clear command', async ({ page }) => {
@@ -297,12 +304,13 @@ test('captures just-bash TUI clear command', async ({ page }) => {
   await page.evaluate(() => { (document.querySelector('[aria-label="Toggle terminal"]') as HTMLElement)?.click(); });
   const bashInput = page.getByLabel('Bash input');
 
-  // Run a command
+  // Run a command via just-bash
   await bashInput.fill('echo before clear');
   await bashInput.press('Enter');
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
   await expect(page.getByLabel('Terminal output')).toContainText('before clear');
 
-  // Run clear
+  // Run clear (handled in-app, clears history without going through just-bash)
   await bashInput.fill('clear');
   await bashInput.press('Enter');
   await expect(page.getByLabel('Terminal output')).not.toContainText('before clear');

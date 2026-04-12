@@ -467,47 +467,45 @@ function FileEditorPanel({
   );
 }
 
-type BashEntry = { cmd: string; output: string };
+import { Bash } from 'just-bash/browser';
 
-const BASH_COMMANDS: Record<string, (args: string[]) => string> = {
-  help: () => 'Available commands: echo, ls, pwd, date, whoami, clear, help',
-  echo: (args) => args.join(' '),
-  pwd: () => '/workspace',
-  whoami: () => 'agent',
-  date: () => new Date().toString(),
-  ls: () => '.agents/skills/  .claude/skills/  skills/  AGENTS.md',
-};
-
-function runBashCommand(line: string): string {
-  const trimmed = line.trim();
-  if (!trimmed) return '';
-  const [cmd, ...args] = trimmed.split(/\s+/);
-  const handler = BASH_COMMANDS[cmd];
-  if (handler) return handler(args);
-  return `${cmd}: command not found`;
-}
+type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
 
 function JustBashPanel({ onClose }: { onClose: () => void }) {
   const [history, setHistory] = useState<BashEntry[]>([]);
   const [input, setInput] = useState('');
+  const [running, setRunning] = useState(false);
   const outputRef = useRef<HTMLDivElement | null>(null);
+  const bashRef = useRef<Bash | null>(null);
+
+  useEffect(() => {
+    bashRef.current = new Bash({ cwd: '/workspace', files: { '/workspace/.keep': '' } });
+    return () => { bashRef.current = null; };
+  }, []);
 
   useEffect(() => {
     outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' });
   }, [history]);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const cmd = input.trim();
-    if (!cmd) return;
+    if (!cmd || running) return;
     if (cmd === 'clear') {
       setHistory([]);
       setInput('');
       return;
     }
-    const output = runBashCommand(cmd);
-    setHistory((prev) => [...prev, { cmd, output }]);
     setInput('');
+    setRunning(true);
+    try {
+      const result = await bashRef.current!.exec(cmd);
+      setHistory((prev) => [...prev, { cmd, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode }]);
+    } catch (error) {
+      setHistory((prev) => [...prev, { cmd, stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 }]);
+    } finally {
+      setRunning(false);
+    }
   }
 
   return (
@@ -520,11 +518,13 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
         {history.map((entry, index) => (
           <div key={index} className="bash-entry">
             <span className="bash-prompt">$ </span><span className="bash-cmd">{entry.cmd}</span>
-            {entry.output ? <div className="bash-result">{entry.output}</div> : null}
+            {entry.stdout ? <div className="bash-result">{entry.stdout}</div> : null}
+            {entry.stderr ? <div className="bash-result bash-stderr">{entry.stderr}</div> : null}
           </div>
         ))}
+        {running ? <div className="bash-running"><span className="bash-prompt">$ </span><span className="bash-cmd">{input || '…'}</span></div> : null}
       </div>
-      <form className="just-bash-compose" onSubmit={handleSubmit}>
+      <form className="just-bash-compose" onSubmit={(e) => { void handleSubmit(e); }}>
         <span className="bash-prompt">$ </span>
         <input
           className="bash-input"
@@ -534,7 +534,9 @@ function JustBashPanel({ onClose }: { onClose: () => void }) {
           placeholder="type a command…"
           autoComplete="off"
           spellCheck={false}
+          disabled={running}
         />
+        {running ? <span className="bash-spinner" aria-label="Running" /> : null}
       </form>
     </section>
   );

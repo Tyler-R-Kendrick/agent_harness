@@ -771,6 +771,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .bash-prompt { color: #4ade80; user-select: none; }
 .bash-cmd { color: #e2e8f0; }
 .bash-result { color: #94a3b8; padding-left: 14px; white-space: pre-wrap; word-break: break-word; }
+.bash-stderr { color: #f87171; }
+.bash-running { display: flex; gap: 4px; opacity: 0.7; }
+.bash-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(74, 222, 128, 0.3);
+  border-top-color: #4ade80;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
 .just-bash-compose {
   display: flex;
   align-items: center;
