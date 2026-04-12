@@ -60,6 +60,30 @@ test('captures the main workspace screen', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
 });
 
+test('captures startup render without crypto.randomUUID', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.addInitScript(() => {
+    const originalCrypto = window.crypto;
+    if (!originalCrypto) return;
+    const cryptoWithoutRandomUuid = new Proxy(originalCrypto, {
+      get(target, prop) {
+        if (prop === 'randomUUID') return undefined;
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    Object.defineProperty(window, 'crypto', {
+      configurable: true,
+      value: cryptoWithoutRandomUuid,
+    });
+  });
+  await page.goto('/');
+  await expect(page.getByLabel('Omnibar')).toBeVisible();
+  await expect(page.getByLabel('Workspace tree')).toBeVisible();
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/runtime-fallback-render.png', fullPage: true });
+});
+
 test('captures the settings screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');

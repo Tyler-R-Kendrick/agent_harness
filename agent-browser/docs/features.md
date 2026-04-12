@@ -9,6 +9,12 @@ Playwright test: `captures the main workspace screen`
 
 ![Workspace shell screenshot](./screenshots/workspace-screen.png)
 
+## Startup resilience
+
+Playwright test: `captures startup render without crypto.randomUUID`
+
+![Startup fallback render screenshot](./screenshots/runtime-fallback-render.png)
+
 How to interact:
 - The sidebar shows **all workspaces as folders** in a compact file-explorer tree with tabs and files nested inside each workspace.
 - Click a workspace folder in the tree to expand/collapse it and switch the active workspace context.
