@@ -144,12 +144,15 @@ const mockHistory: HistorySession[] = [
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
 
+let fallbackIdCounter = 0;
+
 function createUniqueId() {
   const randomUUID = globalThis.crypto?.randomUUID;
   if (typeof randomUUID === 'function') {
     return randomUUID.call(globalThis.crypto);
   }
-  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  fallbackIdCounter = (fallbackIdCounter + 1) % 0x1000000;
+  return `id-${Date.now().toString(36)}-${fallbackIdCounter.toString(36).padStart(5, '0')}`;
 }
 
 function createInitialRoot(): TreeNode {

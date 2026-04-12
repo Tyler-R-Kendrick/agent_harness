@@ -63,9 +63,11 @@ test('captures the main workspace screen', async ({ page }) => {
 test('captures startup render without crypto.randomUUID', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.addInitScript(() => {
+    const originalCrypto = window.crypto;
+    const getRandomValues = originalCrypto?.getRandomValues?.bind(originalCrypto) ?? ((array: Uint8Array) => array);
     Object.defineProperty(window, 'crypto', {
       configurable: true,
-      value: { getRandomValues: window.crypto.getRandomValues.bind(window.crypto) },
+      value: { getRandomValues },
     });
   });
   await page.goto('/');
