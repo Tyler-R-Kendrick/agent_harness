@@ -36,8 +36,9 @@ function buildProgressCallback(id: string) {
 async function getPipeline(task: string, modelId: string, id: string) {
   const key = `${task}::${modelId}`;
   if (!pipelines.has(key)) {
-    // Match reference_impl: call pipeline(task, modelId) with only a progress_callback —
-    // no dtype or device override. Transformers.js auto-selects the best available weights.
+    // Cast mirrors reference_impl: all task strings are forwarded directly to the
+    // Transformers.js pipeline; unsupported tasks surface as a runtime rejection that
+    // is caught and posted as a type:'error' message without crashing the worker.
     const loaded = await pipeline(task as Parameters<typeof pipeline>[0], modelId, {
       progress_callback: buildProgressCallback(id),
     });
