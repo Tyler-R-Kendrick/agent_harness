@@ -22,6 +22,7 @@ import {
   SendHorizontal,
   Settings,
   Sparkles,
+  Terminal,
   User,
   X,
 } from 'lucide-react';
@@ -138,6 +139,7 @@ const icons = {
   plus: Plus,
   cpu: Cpu,
   chevronRight: ChevronRight,
+  terminal: Terminal,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -465,6 +467,79 @@ function FileEditorPanel({
   );
 }
 
+type BashEntry = { cmd: string; output: string };
+
+const BASH_COMMANDS: Record<string, (args: string[]) => string> = {
+  help: () => 'Available commands: echo, ls, pwd, date, whoami, clear, help',
+  echo: (args) => args.join(' '),
+  pwd: () => '/workspace',
+  whoami: () => 'agent',
+  date: () => new Date().toString(),
+  ls: () => 'AGENTS.md  skills/  hooks/  plugins/',
+};
+
+function runBashCommand(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) return '';
+  const [cmd, ...args] = trimmed.split(/\s+/);
+  const handler = BASH_COMMANDS[cmd];
+  if (handler) return handler(args);
+  return `${cmd}: command not found`;
+}
+
+function JustBashPanel({ onClose }: { onClose: () => void }) {
+  const [history, setHistory] = useState<BashEntry[]>([]);
+  const [input, setInput] = useState('');
+  const outputRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' });
+  }, [history]);
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const cmd = input.trim();
+    if (!cmd) return;
+    if (cmd === 'clear') {
+      setHistory([]);
+      setInput('');
+      return;
+    }
+    const output = runBashCommand(cmd);
+    setHistory((prev) => [...prev, { cmd, output }]);
+    setInput('');
+  }
+
+  return (
+    <section className="just-bash-panel" aria-label="Terminal">
+      <header className="just-bash-header">
+        <span className="just-bash-title"><Icon name="terminal" size={13} color="#4ade80" />just-bash</span>
+        <button type="button" className="icon-button" aria-label="Close terminal" onClick={onClose}><Icon name="x" /></button>
+      </header>
+      <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="polite">
+        {history.map((entry, index) => (
+          <div key={index} className="bash-entry">
+            <span className="bash-prompt">$ </span><span className="bash-cmd">{entry.cmd}</span>
+            {entry.output ? <div className="bash-result">{entry.output}</div> : null}
+          </div>
+        ))}
+      </div>
+      <form className="just-bash-compose" onSubmit={handleSubmit}>
+        <span className="bash-prompt">$ </span>
+        <input
+          className="bash-input"
+          aria-label="Bash input"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="type a command…"
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </form>
+    </section>
+  );
+}
+
 function ChatPanel({
   installedModels,
   pendingSearch,
@@ -485,6 +560,7 @@ function ChatPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([{ id: createUniqueId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }]);
   const [input, setInput] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
+  const [showBash, setShowBash] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef(messages);
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
@@ -597,6 +673,7 @@ function ChatPanel({
           <h2>Agent Chat</h2>
           <p>I'm your workspace assistant with access to local models, exploration context, and the capability files stored in {workspaceName}.</p>
         </div>
+        <button type="button" className={`icon-button ${showBash ? 'active' : ''}`} aria-label="Toggle terminal" onClick={() => setShowBash((current) => !current)}><Icon name="terminal" /></button>
       </header>
       <div className="message-list" role="log" aria-live="polite">
         <div className="chat-empty-state">
@@ -620,6 +697,7 @@ function ChatPanel({
           <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
         </div>
       </form>
+      {showBash ? <JustBashPanel onClose={() => setShowBash(false)} /> : null}
     </section>
   );
 }

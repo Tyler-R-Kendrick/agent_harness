@@ -730,6 +730,66 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 20px;
   background: #0c0c0f;
 }
+.just-bash-panel {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  height: 240px;
+  border-top: 1px solid var(--panel-border);
+  background: #0d1117;
+  font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  color: #4ade80;
+}
+.just-bash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.15);
+  background: #010409;
+  flex-shrink: 0;
+}
+.just-bash-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4ade80;
+  letter-spacing: 0.04em;
+}
+.just-bash-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bash-entry { display: flex; flex-direction: column; gap: 2px; }
+.bash-prompt { color: #4ade80; user-select: none; }
+.bash-cmd { color: #e2e8f0; }
+.bash-result { color: #94a3b8; padding-left: 14px; white-space: pre-wrap; word-break: break-word; }
+.just-bash-compose {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(74, 222, 128, 0.15);
+  background: #010409;
+  flex-shrink: 0;
+}
+.bash-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-family: inherit;
+  font-size: inherit;
+  caret-color: #4ade80;
+}
 .picker-overlay {
   position: absolute;
   inset: 72px 0 0 0;
