@@ -39,12 +39,16 @@ function captureRuntimeErrors(page: Page) {
 
 /** Click the Terminal mode tab (bypassing any overlays). */
 async function switchToTerminalMode(page: Page) {
-  await page.evaluate(() => { (document.querySelector('[aria-label="Terminal mode"]') as HTMLElement)?.click(); });
+  const tab = page.getByRole('tab', { name: 'Terminal mode' });
+  await expect(tab).toBeVisible();
+  await tab.click({ force: true });
 }
 
 /** Click the Chat mode tab (bypassing any overlays). */
 async function switchToChatMode(page: Page) {
-  await page.evaluate(() => { (document.querySelector('[aria-label="Chat mode"]') as HTMLElement)?.click(); });
+  const tab = page.getByRole('tab', { name: 'Chat mode' });
+  await expect(tab).toBeVisible();
+  await tab.click({ force: true });
 }
 
 // ── Screen capture tests ──────────────────────────────────────────────

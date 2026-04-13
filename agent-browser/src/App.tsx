@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { useCopilotReadable } from '@copilotkit/react-core';
 import {
   ArrowLeft,
@@ -404,6 +404,22 @@ function createVirtualFsTreeNodes(prefix: string, paths: string[]): TreeNode[] {
   return root.children ?? [];
 }
 
+function buildWorkspaceNodeMap(root: TreeNode): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const workspace of root.children ?? []) {
+    if (workspace.type !== 'workspace') continue;
+    map.set(workspace.id, workspace.id);
+    const stack = [...(workspace.children ?? [])];
+    while (stack.length) {
+      const node = stack.pop();
+      if (!node) continue;
+      map.set(node.id, workspace.id);
+      if (node.children?.length) stack.push(...node.children);
+    }
+  }
+  return map;
+}
+
 function flattenTreeFiltered(node: TreeNode, query: string, depth = 0): FlatTreeItem[] {
   const normalized = query.trim().toLowerCase();
   const children = node.children ?? [];
@@ -624,15 +640,19 @@ type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number
 function JustBashPanel({
   sessionId,
   onFsPathsChanged,
+  bashBySessionRef,
+  historyBySession,
+  setHistoryBySession,
 }: {
   sessionId: string;
   onFsPathsChanged: (sessionId: string, paths: string[]) => void;
+  bashBySessionRef: MutableRefObject<Record<string, Bash>>;
+  historyBySession: Record<string, BashEntry[]>;
+  setHistoryBySession: Dispatch<SetStateAction<Record<string, BashEntry[]>>>;
 }) {
-  const [historyBySession, setHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const [input, setInput] = useState('');
   const [running, setRunning] = useState(false);
   const outputRef = useRef<HTMLDivElement | null>(null);
-  const bashBySessionRef = useRef<Record<string, Bash>>({});
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const history = historyBySession[sessionId] ?? [];
@@ -762,15 +782,19 @@ function ChatPanel({
   onNewTerminalSession: () => void;
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
 }) {
+  const SYSTEM_READY_MESSAGE = 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.';
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [input, setInput] = useState('');
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
+  const [bashHistoryBySession, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
+  const consumedPendingSearchRef = useRef<string | null>(null);
+  const bashBySessionRef = useRef<Record<string, Bash>>({});
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
   const activeChatSessionId = activeAgentSessionId ?? 'agent:fallback';
-  const messages = messagesBySession[activeChatSessionId] ?? [{ id: createUniqueId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }];
+  const messages = messagesBySession[activeChatSessionId] ?? [{ id: `${activeChatSessionId}:system`, role: 'system', content: SYSTEM_READY_MESSAGE }];
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
 
   useEffect(() => {
@@ -780,6 +804,12 @@ function ChatPanel({
       return { ...current, [activeChatSessionId]: installedModels[0].id };
     });
   }, [activeChatSessionId, installedModels]);
+
+  useEffect(() => {
+    setMessagesBySession((current) => current[activeChatSessionId]
+      ? current
+      : { ...current, [activeChatSessionId]: [{ id: `${activeChatSessionId}:system`, role: 'system', content: SYSTEM_READY_MESSAGE }] });
+  }, [activeChatSessionId]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -792,7 +822,7 @@ function ChatPanel({
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
     setMessagesBySession((current) => ({
       ...current,
-      [activeChatSessionId]: (current[activeChatSessionId] ?? messages).map((message) => message.id === id ? { ...message, ...patch } : message),
+      [activeChatSessionId]: (current[activeChatSessionId] ?? messagesRef.current).map((message) => message.id === id ? { ...message, ...patch } : message),
     }));
   }
 
@@ -872,10 +902,15 @@ function ChatPanel({
     } catch (error) {
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
-  }, [activeChatSessionId, installedModels, messages, onToast, selectedModelId, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, installedModels, onToast, selectedModelId, workspaceName, workspacePromptContext]);
 
   useEffect(() => {
-    if (!pendingSearch) return;
+    if (!pendingSearch) {
+      consumedPendingSearchRef.current = null;
+      return;
+    }
+    if (consumedPendingSearchRef.current === pendingSearch) return;
+    consumedPendingSearchRef.current = pendingSearch;
     void sendMessage(`Search the web for: ${pendingSearch}`);
     onSearchConsumed();
   }, [pendingSearch, onSearchConsumed, sendMessage]);
@@ -888,16 +923,28 @@ function ChatPanel({
           <h2>{showBash ? 'Terminal' : 'Agent Chat'}</h2>
           <p>{showBash ? 'Run commands in a sandboxed just-bash shell. Files persist while the tab is open.' : `I'm your workspace assistant with access to local models, exploration context, and the capability files stored in ${workspaceName}.`}</p>
         </div>
-        <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
-          <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" className={`mode-tab ${!showBash ? 'active' : ''}`} onClick={() => onSwitchMode('agent')}><Icon name="sparkles" size={13} />Chat</button>
-          <button type="button" role="tab" aria-selected={showBash} aria-label="Terminal mode" className={`mode-tab ${showBash ? 'active' : ''}`} onClick={() => onSwitchMode('terminal')}><Icon name="terminal" size={13} />Terminal</button>
-          {!showBash ? <button type="button" className="mode-tab" aria-label="New chat session" onClick={onNewAgentSession}><Icon name="plus" size={13} />New chat</button> : null}
-          {showBash ? <button type="button" className="mode-tab" aria-label="New terminal session" onClick={onNewTerminalSession}><Icon name="plus" size={13} />New terminal</button> : null}
+        <div className="chat-mode-controls">
+          <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
+            <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" className={`mode-tab ${!showBash ? 'active' : ''}`} onClick={() => onSwitchMode('agent')}><Icon name="sparkles" size={13} />Chat</button>
+            <button type="button" role="tab" aria-selected={showBash} aria-label="Terminal mode" className={`mode-tab ${showBash ? 'active' : ''}`} onClick={() => onSwitchMode('terminal')}><Icon name="terminal" size={13} />Terminal</button>
+          </div>
+          {!showBash ? <button type="button" className="mode-tab mode-action" aria-label="New chat session" onClick={onNewAgentSession}><Icon name="plus" size={13} />New chat</button> : null}
+          {showBash ? <button type="button" className="mode-tab mode-action" aria-label="New terminal session" onClick={onNewTerminalSession}><Icon name="plus" size={13} />New terminal</button> : null}
         </div>
       </header>
-      {showBash ? (
-        activeTerminalSessionId ? <JustBashPanel sessionId={activeTerminalSessionId} onFsPathsChanged={onTerminalFsPathsChanged} /> : <div className="chat-empty-state"><span>No terminal session selected.</span></div>
-      ) : (
+      <div hidden={!showBash} aria-hidden={!showBash}>
+        {showBash && activeTerminalSessionId ? (
+          <JustBashPanel
+            sessionId={activeTerminalSessionId}
+            onFsPathsChanged={onTerminalFsPathsChanged}
+            bashBySessionRef={bashBySessionRef}
+            historyBySession={bashHistoryBySession}
+            setHistoryBySession={setBashHistoryBySession}
+          />
+        ) : null}
+        {showBash && !activeTerminalSessionId ? <div className="chat-empty-state"><span>No terminal session selected.</span></div> : null}
+      </div>
+      <div hidden={showBash} aria-hidden={showBash}>
         <>
           <div className="message-list" role="log" aria-live="polite">
             <div className="chat-empty-state">
@@ -922,7 +969,7 @@ function ChatPanel({
             </div>
           </form>
         </>
-      )}
+      </div>
     </section>
   );
 }
@@ -1301,7 +1348,7 @@ function RenameWorkspaceOverlay({
   );
 }
 
-function SidebarTree({ root, activeWorkspaceId, openTabId, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile, onAddAgent, onAddTerminal, items }: { root: TreeNode; activeWorkspaceId: string; openTabId: string | null; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; onAddTerminal: (workspaceId: string) => void; items: FlatTreeItem[] }) {
+function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabId, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile, onAddAgent, onAddTerminal, items }: { root: TreeNode; workspaceByNodeId: Map<string, string>; activeWorkspaceId: string; openTabId: string | null; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; onAddTerminal: (workspaceId: string) => void; items: FlatTreeItem[] }) {
   return (
     <div className="tree-panel" role="tree" aria-label="Workspace tree">
       {items.map(({ node, depth }) => {
@@ -1312,7 +1359,8 @@ function SidebarTree({ root, activeWorkspaceId, openTabId, editingFilePath, curs
         const isEditingFile = isFile && node.filePath === editingFilePath;
         const isSelected = selectedIds.includes(node.id);
         const tabOpacity = node.type === 'tab' ? (node.memoryTier === 'cold' ? 0.5 : node.memoryTier === 'cool' ? 0.65 : 0.9) : undefined;
-        const workspaceParent = findWorkspaceForNode(root, node.id);
+        const workspaceParentId = workspaceByNodeId.get(node.id);
+        const workspaceParent = workspaceParentId ? getWorkspace(root, workspaceParentId) : null;
         return (
           <div key={node.id} role="treeitem" className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
             <button type="button" className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={() => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
@@ -1398,6 +1446,7 @@ function AgentBrowserApp() {
   const visibleItems = useMemo(() => flattenTreeFiltered(root, treeFilter), [root, treeFilter]);
   const openTab = openTabId ? findNode(root, openTabId) : null;
   const openBrowserTab = openTab?.type === 'tab' && (openTab.nodeKind ?? 'browser') === 'browser' ? openTab : null;
+  const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const editingFile = editingFilePath ? activeWorkspaceFiles.find((f) => f.path === editingFilePath) ?? null : null;
@@ -1989,6 +2038,7 @@ function AgentBrowserApp() {
           <MemBar root={root} />
           <SidebarTree
             root={root}
+            workspaceByNodeId={workspaceByNodeId}
             activeWorkspaceId={activeWorkspaceId}
             openTabId={openTabId}
             editingFilePath={editingFilePath}

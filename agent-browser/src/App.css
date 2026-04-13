@@ -731,6 +731,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: #0c0c0f;
 }
 /* ── Chat/Terminal mode tabs ─────────────────────── */
+.chat-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .chat-mode-tabs {
   display: flex;
   gap: 2px;
@@ -755,7 +760,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .mode-tab:hover { background: rgba(255,255,255,.06); color: var(--text-soft); }
 .mode-tab.active { background: rgba(255,255,255,.1); color: #f8fafc; }
-.mode-tab.active:last-child { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.chat-panel.mode-terminal .chat-mode-tabs .mode-tab.active { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.mode-action { border: 1px solid rgba(255,255,255,.08); }
 
 /* ── Terminal mode fills the chat content area ───── */
 .chat-panel.mode-terminal {
