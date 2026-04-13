@@ -1,4 +1,4 @@
-# agent_harness
+# Agent Harness
 
 A collection of different agent harness UX POCs to experiment with.
 
