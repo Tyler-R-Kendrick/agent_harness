@@ -618,6 +618,7 @@ function FileEditorPanel({
 }
 
 const BASH_INITIAL_CWD = '/workspace';
+const BASH_CWD_PLACEHOLDER_FILE = '.keep';
 type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
 
 function JustBashPanel({
@@ -639,7 +640,7 @@ function JustBashPanel({
   const getSessionBash = useCallback((id: string) => {
     if (!bashBySessionRef.current[id]) {
       // Seed a placeholder file so the configured cwd always exists in the in-memory FS.
-      bashBySessionRef.current[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/.keep`]: '' } });
+      bashBySessionRef.current[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '' } });
     }
     return bashBySessionRef.current[id];
   }, []);
@@ -1918,8 +1919,8 @@ function AgentBrowserApp() {
   function handleRemoveFileNode(nodeId: string) {
     const node = findNode(root, nodeId);
     if (!node) return;
+    const ownerWorkspace = findWorkspaceForNode(root, nodeId);
     if (node.type === 'file' && node.filePath) {
-      const ownerWorkspace = findWorkspaceForNode(root, nodeId);
       if (!ownerWorkspace) return;
       setWorkspaceFilesByWorkspace((current) => ({
         ...current,
@@ -1929,10 +1930,23 @@ function AgentBrowserApp() {
       setToast({ msg: `Removed ${node.filePath}`, type: 'info' });
       return;
     }
-    setRoot((current) => removeNodeById(current, nodeId));
+    let nextAgentSessionId = activeAgentSessionId;
+    let nextTerminalSessionId = activeTerminalSessionId;
+    setRoot((current) => {
+      const next = removeNodeById(current, nodeId);
+      if (activeAgentSessionId === nodeId) {
+        const workspace = ownerWorkspace ? getWorkspace(next, ownerWorkspace.id) : getWorkspace(next, activeWorkspaceId);
+        nextAgentSessionId = workspace ? findFirstSessionId(workspace, 'agent') : null;
+      }
+      if (activeTerminalSessionId === nodeId) {
+        const workspace = ownerWorkspace ? getWorkspace(next, ownerWorkspace.id) : getWorkspace(next, activeWorkspaceId);
+        nextTerminalSessionId = workspace ? findFirstSessionId(workspace, 'terminal') : null;
+      }
+      return next;
+    });
     if (openTabId === nodeId) setOpenTabId(null);
-    if (activeAgentSessionId === nodeId) setActiveAgentSessionId(null);
-    if (activeTerminalSessionId === nodeId) setActiveTerminalSessionId(null);
+    if (activeAgentSessionId === nodeId) setActiveAgentSessionId(nextAgentSessionId ?? null);
+    if (activeTerminalSessionId === nodeId) setActiveTerminalSessionId(nextTerminalSessionId ?? null);
   }
 
   function handleOpenFileNode(nodeId: string) {
