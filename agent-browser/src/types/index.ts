@@ -1,5 +1,6 @@
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
 export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
+export type NodeKind = 'browser' | 'terminal' | 'agent' | 'files';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ModelStatus = 'available' | 'installed' | 'loading';
@@ -11,6 +12,7 @@ export interface TreeNode {
   id: string;
   name: string;
   type: NodeType;
+  nodeKind?: NodeKind;
   children?: TreeNode[];
   expanded?: boolean;
   persisted?: boolean;

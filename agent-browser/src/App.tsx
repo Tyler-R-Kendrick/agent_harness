@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { useCopilotReadable } from '@copilotkit/react-core';
 import {
   ArrowLeft,
@@ -22,9 +22,11 @@ import {
   SendHorizontal,
   Settings,
   Sparkles,
+  Terminal,
   User,
   X,
 } from 'lucide-react';
+import { Bash } from 'just-bash/browser';
 import './App.css';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
@@ -43,7 +45,7 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { createUniqueId } from './utils/uniqueId';
-import type { ChatMessage, HFModel, HistorySession, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { ChatMessage, HFModel, HistorySession, NodeKind, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -149,6 +151,76 @@ const WORKSPACE_SHORTCUT_GROUPS = [
   },
 ] as const;
 const WORKSPACE_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#a78bfa', '#fb7185'] as const;
+const CATEGORY_ORDER: NodeKind[] = ['browser', 'terminal', 'agent', 'files'];
+const CATEGORY_LABELS: Record<NodeKind, string> = {
+  browser: 'Browser',
+  terminal: 'Terminal',
+  agent: 'Agent',
+  files: 'Files',
+};
+
+function createSessionNode(workspaceId: string, kind: 'agent' | 'terminal', index: number): TreeNode {
+  const label = kind === 'agent' ? 'Chat' : 'Terminal';
+  return {
+    id: createUniqueId(),
+    name: `${label} ${index}`,
+    type: 'tab',
+    nodeKind: kind,
+    persisted: true,
+    filePath: `${workspaceId}:${kind}:${index}`,
+  };
+}
+
+function createBrowserTab(name: string, url: string, memoryTier: TreeNode['memoryTier'], memoryMB: number, persisted = false): TreeNode {
+  return {
+    id: createUniqueId(),
+    name,
+    type: 'tab',
+    nodeKind: 'browser',
+    url,
+    persisted,
+    memoryTier,
+    memoryMB,
+  };
+}
+
+function categoryNode(workspaceId: string, kind: NodeKind, children: TreeNode[] = []): TreeNode {
+  return {
+    id: `${workspaceId}:category:${kind}`,
+    name: CATEGORY_LABELS[kind],
+    type: 'folder',
+    nodeKind: kind,
+    expanded: true,
+    children,
+  };
+}
+
+function createWorkspaceNode({
+  id,
+  name,
+  color,
+  browserTabs,
+}: {
+  id: string;
+  name: string;
+  color: string;
+  browserTabs: TreeNode[];
+}): TreeNode {
+  return {
+    id,
+    name,
+    type: 'workspace',
+    expanded: true,
+    activeMemory: true,
+    color,
+    children: [
+      categoryNode(id, 'browser', browserTabs),
+      categoryNode(id, 'terminal', [createSessionNode(id, 'terminal', 1)]),
+      categoryNode(id, 'agent', [createSessionNode(id, 'agent', 1)]),
+      categoryNode(id, 'files', []),
+    ],
+  };
+}
 
 const icons = {
   layers: Layers3,
@@ -173,6 +245,7 @@ const icons = {
   plus: Plus,
   cpu: Cpu,
   chevronRight: ChevronRight,
+  terminal: Terminal,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -187,29 +260,23 @@ function createInitialRoot(): TreeNode {
     type: 'root',
     expanded: true,
     children: [
-      {
+      createWorkspaceNode({
         id: 'ws-research',
         name: 'Research',
-        type: 'workspace',
-        expanded: true,
-        activeMemory: true,
         color: '#60a5fa',
-        children: [
-          { id: createUniqueId(), name: 'Hugging Face', type: 'tab', url: 'https://huggingface.co/models?library=transformers.js', persisted: true, memoryTier: 'hot', memoryMB: 165 },
-          { id: createUniqueId(), name: 'Transformers.js', type: 'tab', url: 'https://huggingface.co/docs/transformers.js', persisted: false, memoryTier: 'warm', memoryMB: 88 },
+        browserTabs: [
+          createBrowserTab('Hugging Face', 'https://huggingface.co/models?library=transformers.js', 'hot', 165, true),
+          createBrowserTab('Transformers.js', 'https://huggingface.co/docs/transformers.js', 'warm', 88),
         ],
-      },
-      {
+      }),
+      createWorkspaceNode({
         id: 'ws-build',
         name: 'Build',
-        type: 'workspace',
-        expanded: true,
-        activeMemory: true,
         color: '#34d399',
-        children: [
-          { id: createUniqueId(), name: 'CopilotKit docs', type: 'tab', url: 'https://docs.copilotkit.ai', persisted: false, memoryTier: 'cool', memoryMB: 44 },
+        browserTabs: [
+          createBrowserTab('CopilotKit docs', 'https://docs.copilotkit.ai', 'cool', 44),
         ],
-      },
+      }),
     ],
   };
 }
@@ -253,17 +320,20 @@ function findNode(node: TreeNode, id: string): TreeNode | null {
   return null;
 }
 
-function flattenTabs(node: TreeNode): TreeNode[] {
-  if (node.type === 'tab') return [node];
-  return (node.children ?? []).flatMap(flattenTabs);
+function flattenTabs(node: TreeNode, kind?: NodeKind): TreeNode[] {
+  if (node.type === 'tab') {
+    if (!kind || node.nodeKind === kind) return [node];
+    return [];
+  }
+  return (node.children ?? []).flatMap((child) => flattenTabs(child, kind));
 }
 
 function countTabs(node: TreeNode): number {
-  return flattenTabs(node).length;
+  return flattenTabs(node, 'browser').length;
 }
 
 function totalMemoryMB(node: TreeNode): number {
-  return flattenTabs(node).reduce((sum, t) => sum + (t.memoryMB ?? 0), 0);
+  return flattenTabs(node, 'browser').reduce((sum, t) => sum + (t.memoryMB ?? 0), 0);
 }
 
 function getWorkspace(root: TreeNode, workspaceId: string): TreeNode | null {
@@ -285,6 +355,77 @@ function findWorkspaceForNode(root: TreeNode, nodeId: string): TreeNode | null {
     if ((workspace.children ?? []).some((child) => findNode(child, nodeId))) return workspace;
   }
   return null;
+}
+
+function getWorkspaceCategory(workspace: TreeNode, kind: NodeKind): TreeNode | null {
+  return (workspace.children ?? []).find((child) => child.type === 'folder' && child.nodeKind === kind) ?? null;
+}
+
+function removeNodeById(node: TreeNode, nodeId: string): TreeNode {
+  if (!node.children) return node;
+  return {
+    ...node,
+    children: node.children
+      .filter((child) => child.id !== nodeId)
+      .map((child) => removeNodeById(child, nodeId)),
+  };
+}
+
+function ensureWorkspaceCategories(workspace: TreeNode): TreeNode {
+  const existing = new Map((workspace.children ?? []).filter((child) => child.type === 'folder' && child.nodeKind).map((child) => [child.nodeKind as NodeKind, child]));
+  const legacyTabChildren = (workspace.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind !== 'agent' && child.nodeKind !== 'terminal');
+  const nextChildren = CATEGORY_ORDER.map((kind) => existing.get(kind) ?? categoryNode(workspace.id, kind, kind === 'browser' ? legacyTabChildren : []));
+  return { ...workspace, children: nextChildren };
+}
+
+function findFirstSessionId(workspace: TreeNode, kind: 'agent' | 'terminal'): string | null {
+  const category = getWorkspaceCategory(workspace, kind);
+  const first = (category?.children ?? []).find((child) => child.type === 'tab' && child.nodeKind === kind);
+  return first?.id ?? null;
+}
+
+function createVirtualFsTreeNodes(prefix: string, paths: string[]): TreeNode[] {
+  const root: TreeNode = { id: `${prefix}:root`, name: 'root', type: 'folder', expanded: true, children: [] };
+  for (const path of paths) {
+    const clean = path.replace(/^\/+/, '');
+    if (!clean) continue;
+    const parts = clean.split('/').filter(Boolean);
+    let cursor = root;
+    for (const [index, part] of parts.entries()) {
+      const nodeId = `${prefix}:${parts.slice(0, index + 1).join('/')}`;
+      let next = (cursor.children ?? []).find((child) => child.id === nodeId);
+      if (!next) {
+        next = { id: nodeId, name: part, type: 'folder', expanded: false };
+        cursor.children = [...(cursor.children ?? []), next];
+      }
+      cursor = next;
+    }
+  }
+  return root.children ?? [];
+}
+
+function buildWorkspaceNodeMap(root: TreeNode): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const workspace of root.children ?? []) {
+    if (workspace.type !== 'workspace') continue;
+    map.set(workspace.id, workspace.id);
+    const stack = [...(workspace.children ?? [])];
+    while (stack.length) {
+      const node = stack.pop();
+      if (!node) continue;
+      map.set(node.id, workspace.id);
+      if (node.children?.length) stack.push(...node.children);
+    }
+  }
+  return map;
+}
+
+function createSystemChatMessage(sessionId: string): ChatMessage {
+  return {
+    id: `${sessionId}:system`,
+    role: 'system',
+    content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.',
+  };
 }
 
 function flattenTreeFiltered(node: TreeNode, query: string, depth = 0): FlatTreeItem[] {
@@ -500,6 +641,124 @@ function FileEditorPanel({
   );
 }
 
+const BASH_INITIAL_CWD = '/workspace';
+const BASH_CWD_PLACEHOLDER_FILE = '.keep';
+type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
+
+function JustBashPanel({
+  sessionId,
+  onFsPathsChanged,
+  bashBySessionRef,
+  historyBySession,
+  setHistoryBySession,
+}: {
+  sessionId: string;
+  onFsPathsChanged: (sessionId: string, paths: string[]) => void;
+  bashBySessionRef: MutableRefObject<Record<string, Bash>>;
+  historyBySession: Record<string, BashEntry[]>;
+  setHistoryBySession: Dispatch<SetStateAction<Record<string, BashEntry[]>>>;
+}) {
+  const [input, setInput] = useState('');
+  const [running, setRunning] = useState(false);
+  const outputRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const history = historyBySession[sessionId] ?? [];
+
+  const getSessionBash = useCallback((id: string) => {
+    if (!bashBySessionRef.current[id]) {
+      // Seed a placeholder file so the configured cwd always exists in the in-memory FS.
+      bashBySessionRef.current[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '' } });
+    }
+    return bashBySessionRef.current[id];
+  }, []);
+
+  // Auto-focus the bash input on mount
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (outputRef.current && typeof outputRef.current.scrollTo === 'function') {
+      outputRef.current.scrollTo({ top: outputRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [history]);
+
+  useEffect(() => {
+    const bash = getSessionBash(sessionId);
+    onFsPathsChanged(sessionId, bash.fs.getAllPaths());
+  }, [getSessionBash, onFsPathsChanged, sessionId]);
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const cmd = input.trim();
+    if (!cmd || running) return;
+    if (cmd === 'clear') {
+      // Keep clear instant in the UI instead of waiting for async shell execution.
+      setHistoryBySession((current) => ({ ...current, [sessionId]: [] }));
+      setInput('');
+      inputRef.current?.focus();
+      return;
+    }
+    const bash = getSessionBash(sessionId);
+    setInput('');
+    setRunning(true);
+    try {
+      const result = await bash.exec(cmd);
+      setHistoryBySession((current) => ({
+        ...current,
+        [sessionId]: [...(current[sessionId] ?? []), { cmd, stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode }],
+      }));
+      onFsPathsChanged(sessionId, bash.fs.getAllPaths());
+    } catch (error) {
+      setHistoryBySession((current) => ({
+        ...current,
+        [sessionId]: [...(current[sessionId] ?? []), { cmd, stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 }],
+      }));
+    } finally {
+      setRunning(false);
+      // Use rAF to ensure focus happens after the disabled→enabled DOM update
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }
+
+  return (
+    <>
+      <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="polite">
+        {history.length === 0 ? (
+          <div className="bash-welcome">
+            <span className="bash-prompt">$</span> Welcome to <strong>just-bash</strong> — a sandboxed shell.
+            <br />Type commands like <code>echo hello</code>, <code>ls</code>, <code>pwd</code>, or <code>clear</code>.
+          </div>
+        ) : null}
+        {history.map((entry, index) => (
+          <div key={index} className="bash-entry">
+            <span className="bash-prompt">$ </span><span className="bash-cmd">{entry.cmd}</span>
+            {entry.stdout ? <div className="bash-result">{entry.stdout}</div> : null}
+            {entry.stderr ? <div className="bash-result bash-stderr">{entry.stderr}</div> : null}
+          </div>
+        ))}
+        {running ? <div className="bash-running"><span className="bash-prompt">$ </span><span className="bash-cmd">{input || '…'}</span></div> : null}
+      </div>
+      <form className="just-bash-compose" onSubmit={handleSubmit}>
+        <span className="bash-prompt">$ </span>
+        <input
+          ref={inputRef}
+          className="bash-input"
+          aria-label="Bash input"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="type a command…"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={running}
+        />
+        {running ? <span className="bash-spinner" aria-label="Running" /> : null}
+      </form>
+    </>
+  );
+}
+
 function ChatPanel({
   installedModels,
   pendingSearch,
@@ -508,6 +767,13 @@ function ChatPanel({
   workspaceName,
   workspaceFiles,
   workspaceCapabilities,
+  activeAgentSessionId,
+  activeTerminalSessionId,
+  activeMode,
+  onSwitchMode,
+  onNewAgentSession,
+  onNewTerminalSession,
+  onTerminalFsPathsChanged,
 }: {
   installedModels: HFModel[];
   pendingSearch: string | null;
@@ -516,17 +782,41 @@ function ChatPanel({
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
   workspaceCapabilities: WorkspaceCapabilities;
+  activeAgentSessionId: string | null;
+  activeTerminalSessionId: string | null;
+  activeMode: 'agent' | 'terminal';
+  onSwitchMode: (mode: 'agent' | 'terminal') => void;
+  onNewAgentSession: () => void;
+  onNewTerminalSession: () => void;
+  onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
 }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ id: createUniqueId(), role: 'system', content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.' }]);
+  const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [input, setInput] = useState('');
-  const [selectedModelId, setSelectedModelId] = useState('');
+  const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
+  const [bashHistoryBySession, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
+  const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const messagesRef = useRef(messages);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const consumedPendingSearchRef = useRef<string | null>(null);
+  const bashBySessionRef = useRef<Record<string, Bash>>({});
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
+  const activeChatSessionId = activeAgentSessionId ?? 'agent:fallback';
+  const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+  const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
 
   useEffect(() => {
-    if (installedModels.length && !selectedModelId) setSelectedModelId(installedModels[0].id);
-  }, [installedModels, selectedModelId]);
+    if (!installedModels.length) return;
+    setSelectedModelBySession((current) => {
+      if (current[activeChatSessionId]) return current;
+      return { ...current, [activeChatSessionId]: installedModels[0].id };
+    });
+  }, [activeChatSessionId, installedModels]);
+
+  useEffect(() => {
+    setMessagesBySession((current) => current[activeChatSessionId]
+      ? current
+      : { ...current, [activeChatSessionId]: [createSystemChatMessage(activeChatSessionId)] });
+  }, [activeChatSessionId]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -537,7 +827,10 @@ function ChatPanel({
   }, [messages]);
 
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
-    setMessages((current) => current.map((message) => message.id === id ? { ...message, ...patch } : message));
+    setMessagesBySession((current) => ({
+      ...current,
+      [activeChatSessionId]: (current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)]).map((message) => message.id === id ? { ...message, ...patch } : message),
+    }));
   }
 
   const sendMessage = useCallback(async (text: string) => {
@@ -546,7 +839,7 @@ function ChatPanel({
     const assistantId = createUniqueId();
     const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId: createUniqueId(), assistantId });
     messagesRef.current = nextMessages;
-    setMessages(nextMessages);
+    setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
     setInput('');
 
     if (!model) {
@@ -616,45 +909,74 @@ function ChatPanel({
     } catch (error) {
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
-  }, [installedModels, onToast, selectedModelId, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, installedModels, onToast, selectedModelId, workspaceName, workspacePromptContext]);
 
   useEffect(() => {
-    if (!pendingSearch) return;
+    if (!pendingSearch) {
+      consumedPendingSearchRef.current = null;
+      return;
+    }
+    if (consumedPendingSearchRef.current === pendingSearch) return;
+    consumedPendingSearchRef.current = pendingSearch;
     void sendMessage(`Search the web for: ${pendingSearch}`);
     onSearchConsumed();
   }, [pendingSearch, onSearchConsumed, sendMessage]);
 
   return (
-    <section className="chat-panel" aria-label="Chat panel">
+    <section className={`chat-panel ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className="chat-header">
         <div className="chat-heading">
-          <span className="panel-eyebrow">Workspace assistant</span>
-          <h2>Agent Chat</h2>
-          <p>I'm your workspace assistant with access to local models, exploration context, and the capability files stored in {workspaceName}.</p>
+          <span className="panel-eyebrow">{showBash ? 'Sandboxed shell' : 'Workspace assistant'}</span>
+          <h2>{showBash ? 'Terminal' : 'Agent Chat'}</h2>
+          <p>{showBash ? 'Run commands in a sandboxed just-bash shell. Files persist while the tab is open.' : `I'm your workspace assistant with access to local models, exploration context, and the capability files stored in ${workspaceName}.`}</p>
+        </div>
+        <div className="chat-mode-controls">
+          <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
+            <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" className={`mode-tab ${!showBash ? 'active' : ''}`} onClick={() => onSwitchMode('agent')}><Icon name="sparkles" size={13} />Chat</button>
+            <button type="button" role="tab" aria-selected={showBash} aria-label="Terminal mode" className={`mode-tab ${showBash ? 'active' : ''}`} onClick={() => onSwitchMode('terminal')}><Icon name="terminal" size={13} />Terminal</button>
+          </div>
+          {!showBash ? <button type="button" className="mode-tab mode-action" aria-label="New chat session" onClick={onNewAgentSession}><Icon name="plus" size={13} />New chat</button> : null}
+          {showBash ? <button type="button" className="mode-tab mode-action" aria-label="New terminal session" onClick={onNewTerminalSession}><Icon name="plus" size={13} />New terminal</button> : null}
         </div>
       </header>
-      <div className="message-list" role="log" aria-live="polite">
-        <div className="chat-empty-state">
-          <Icon name="sparkles" size={14} color="#d1fae5" />
-          <span>Ask about your workspace, browse the web, or run a task.</span>
-        </div>
-        {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
-        <div ref={bottomRef} />
+      <div hidden={!showBash}>
+        {showBash && activeTerminalSessionId ? (
+          <JustBashPanel
+            sessionId={activeTerminalSessionId}
+            onFsPathsChanged={onTerminalFsPathsChanged}
+            bashBySessionRef={bashBySessionRef}
+            historyBySession={bashHistoryBySession}
+            setHistoryBySession={setBashHistoryBySession}
+          />
+        ) : null}
+        {showBash && !activeTerminalSessionId ? <div className="chat-empty-state"><span>No terminal session selected.</span></div> : null}
       </div>
-      <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
-      <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
-        <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
-        <div className="composer-toolbar">
-          <label className="model-pill">
-            <span className="sr-only">Installed model</span>
-            <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)}>
-              <option value="">Choose an installed model</option>
-              {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-            </select>
-          </label>
-          <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
-        </div>
-      </form>
+      <div hidden={showBash}>
+        <>
+          <div className="message-list" role="log" aria-live="polite">
+            <div className="chat-empty-state">
+              <Icon name="sparkles" size={14} color="#d1fae5" />
+              <span>Ask about your workspace, browse the web, or run a task.</span>
+            </div>
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
+            <div ref={bottomRef} />
+          </div>
+          <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
+          <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
+            <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
+            <div className="composer-toolbar">
+              <label className="model-pill">
+                <span className="sr-only">Installed model</span>
+                <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))}>
+                  <option value="">Choose an installed model</option>
+                  {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+              </label>
+              <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
+            </div>
+          </form>
+        </>
+      </div>
     </section>
   );
 }
@@ -891,7 +1213,7 @@ function WorkspaceSwitcherOverlay({
             const isHovered = workspace.id === hoveredId;
             const color = workspace.color ?? '#60a5fa';
             const tabCount = countTabs(workspace);
-            const tabs = (workspace.children ?? []).filter((c) => c.type === 'tab').slice(0, 4);
+            const tabs = flattenTabs(workspace, 'browser').slice(0, 4);
 
             return (
               <div
@@ -917,8 +1239,8 @@ function WorkspaceSwitcherOverlay({
                     )) : (
                       <div className="ws-card-empty">Empty workspace</div>
                     )}
-                    {(workspace.children ?? []).filter((c) => c.type === 'tab').length > 4 && (
-                      <div className="ws-card-more">+{(workspace.children ?? []).filter((c) => c.type === 'tab').length - 4} more</div>
+                    {flattenTabs(workspace, 'browser').length > 4 && (
+                      <div className="ws-card-more">+{flattenTabs(workspace, 'browser').length - 4} more</div>
                     )}
                   </div>
                   {isActive && <div className="ws-card-active-bar" style={{ background: color }} />}
@@ -1033,7 +1355,7 @@ function RenameWorkspaceOverlay({
   );
 }
 
-function SidebarTree({ activeWorkspaceId, openTabId, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile, items }: { activeWorkspaceId: string; openTabId: string | null; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; items: FlatTreeItem[] }) {
+function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabId, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile, onAddAgent, onAddTerminal, items }: { root: TreeNode; workspaceByNodeId: Map<string, string>; activeWorkspaceId: string; openTabId: string | null; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; onAddTerminal: (workspaceId: string) => void; items: FlatTreeItem[] }) {
   return (
     <div className="tree-panel" role="tree" aria-label="Workspace tree">
       {items.map(({ node, depth }) => {
@@ -1044,6 +1366,8 @@ function SidebarTree({ activeWorkspaceId, openTabId, editingFilePath, cursorId, 
         const isEditingFile = isFile && node.filePath === editingFilePath;
         const isSelected = selectedIds.includes(node.id);
         const tabOpacity = node.type === 'tab' ? (node.memoryTier === 'cold' ? 0.5 : node.memoryTier === 'cool' ? 0.65 : 0.9) : undefined;
+        const workspaceParentId = workspaceByNodeId.get(node.id);
+        const workspaceParent = workspaceParentId ? getWorkspace(root, workspaceParentId) : null;
         return (
           <div key={node.id} role="treeitem" className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${cursorId === node.id ? 'cursor' : ''} ${openTabId === node.id ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
             <button type="button" className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={() => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id)}>
@@ -1054,21 +1378,31 @@ function SidebarTree({ activeWorkspaceId, openTabId, editingFilePath, cursorId, 
                   <span className={`tree-chevron ${node.expanded ? 'tree-chevron-expanded' : ''}`}><Icon name="chevronRight" size={11} color="rgba(255,255,255,.25)" /></span>
                   {isWorkspace && node.activeMemory ? <ActiveMemoryPulse /> : null}
                   {isWorkspace && node.persisted ? <span className="persist-badge" title="Persisted" aria-label="Persisted workspace">📌</span> : null}
-                  <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={isWorkspace && node.activeMemory ? '#34d399' : node.color ?? '#60a5fa'} />
+                  {node.nodeKind === 'browser' ? <Icon name="globe" size={12} color="#93c5fd" /> : null}
+                  {node.nodeKind === 'terminal' ? <Icon name="terminal" size={12} color="#86efac" /> : null}
+                  {node.nodeKind === 'agent' ? <Icon name="sparkles" size={12} color="#c4b5fd" /> : null}
+                  {node.nodeKind === 'files' ? <Icon name="file" size={12} color="#a5b4fc" /> : null}
+                  {!node.nodeKind ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={isWorkspace && node.activeMemory ? '#34d399' : node.color ?? '#60a5fa'} /> : null}
                 </>
               ) : (
                 <>
-                  <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />
-                  <Favicon url={node.url} size={13} />
+                  {node.nodeKind === 'browser' ? (
+                    <>
+                      <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />
+                      <Favicon url={node.url} size={13} />
+                    </>
+                  ) : node.nodeKind === 'terminal' ? <Icon name="terminal" size={13} color="#86efac" /> : <Icon name="sparkles" size={13} color="#c4b5fd" />}
                 </>
               )}
               <span className={isWorkspace && !node.persisted ? 'ws-name-temp' : ''}>{node.name}</span>
-              {node.type === 'tab' ? <span className="tree-meta">{fmtMem(node.memoryMB ?? 0)}</span> : null}
+              {node.type === 'tab' && node.nodeKind === 'browser' ? <span className="tree-meta">{fmtMem(node.memoryMB ?? 0)}</span> : null}
               {isWorkspace ? <span className="tree-meta">{countTabs(node)} tabs · {fmtMem(totalMemoryMB(node))}</span> : null}
             </button>
             {node.type === 'tab' ? <button type="button" className="icon-button subtle" aria-label={`Close ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
             {isFile ? <button type="button" className="icon-button subtle" aria-label={`Remove ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
             {isWorkspace ? <button type="button" className="icon-button subtle" aria-label={`Add file to ${node.name}`} onClick={() => onAddFile(node.id)}><Icon name="plus" size={11} /></button> : null}
+            {node.type === 'folder' && node.nodeKind === 'agent' && workspaceParent ? <button type="button" className="icon-button subtle" aria-label={`Add chat to ${workspaceParent.name}`} onClick={() => onAddAgent(workspaceParent.id)}><Icon name="plus" size={11} /></button> : null}
+            {node.type === 'folder' && node.nodeKind === 'terminal' && workspaceParent ? <button type="button" className="icon-button subtle" aria-label={`Add terminal to ${workspaceParent.name}`} onClick={() => onAddTerminal(workspaceParent.id)}><Icon name="plus" size={11} /></button> : null}
           </div>
         );
       })}
@@ -1110,32 +1444,67 @@ function AgentBrowserApp() {
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
+  const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
+  const [activeSessionMode, setActiveSessionMode] = useState<'agent' | 'terminal'>('agent');
+  const [activeAgentSessionId, setActiveAgentSessionId] = useState<string | null>(null);
+  const [activeTerminalSessionId, setActiveTerminalSessionId] = useState<string | null>(null);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const visibleItems = useMemo(() => flattenTreeFiltered(root, treeFilter), [root, treeFilter]);
   const openTab = openTabId ? findNode(root, openTabId) : null;
+  const openBrowserTab = openTab?.type === 'tab' && (openTab.nodeKind ?? 'browser') === 'browser' ? openTab : null;
+  const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const editingFile = editingFilePath ? activeWorkspaceFiles.find((f) => f.path === editingFilePath) ?? null : null;
 
-  // Sync workspace files into the tree as 'file' nodes under each workspace
+  useEffect(() => {
+    if (activeWorkspace.type !== 'workspace') return;
+    const firstAgent = findFirstSessionId(activeWorkspace, 'agent');
+    const firstTerminal = findFirstSessionId(activeWorkspace, 'terminal');
+    setActiveAgentSessionId((current) => current && findNode(activeWorkspace, current) ? current : firstAgent);
+    setActiveTerminalSessionId((current) => current && findNode(activeWorkspace, current) ? current : firstTerminal);
+  }, [activeWorkspace]);
+
+  useEffect(() => {
+    setRoot((current) => ({
+      ...current,
+      children: (current.children ?? []).map((workspace) => workspace.type === 'workspace' ? ensureWorkspaceCategories(workspace) : workspace),
+    }));
+  }, []);
+
+  // Sync workspace files + terminal virtual filesystems into the Files category per workspace.
   useEffect(() => {
     setRoot((current) => {
       const workspaces = current.children ?? [];
       const updated = workspaces.map((ws) => {
+        if (ws.type !== 'workspace') return ws;
+        const normalizedWorkspace = ensureWorkspaceCategories(ws);
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
-        const nonFileChildren = (ws.children ?? []).filter((c) => c.type !== 'file');
         const fileNodes: TreeNode[] = files.map((f) => ({
           id: `file:${ws.id}:${f.path}`,
           name: f.path.split('/').pop() ?? f.path,
           type: 'file' as const,
           filePath: f.path,
         }));
-        return { ...ws, children: [...nonFileChildren, ...fileNodes] };
+        const terminalCategory = getWorkspaceCategory(normalizedWorkspace, 'terminal');
+        const terminalFsNodes: TreeNode[] = (terminalCategory?.children ?? [])
+          .filter((child) => child.type === 'tab' && child.nodeKind === 'terminal')
+          .map((terminalNode) => ({
+            id: `vfs:${ws.id}:${terminalNode.id}`,
+            name: `${terminalNode.name} FS`,
+            type: 'folder',
+            expanded: false,
+            children: createVirtualFsTreeNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? []),
+          }));
+        const nextChildren = (normalizedWorkspace.children ?? []).map((child) => child.nodeKind === 'files'
+          ? { ...child, children: [...fileNodes, ...terminalFsNodes] }
+          : child);
+        return { ...normalizedWorkspace, children: nextChildren };
       });
       return { ...current, children: updated };
     });
-  }, [workspaceFilesByWorkspace]);
+  }, [terminalFsPathsBySession, workspaceFilesByWorkspace]);
 
   const switchWorkspace = useCallback((newId: string) => {
     if (newId === activeWorkspaceId) return;
@@ -1172,21 +1541,21 @@ function AgentBrowserApp() {
   const createWorkspace = useCallback(() => {
     const name = nextWorkspaceName(root);
     const workspaceId = `ws-${createUniqueId()}`;
+    const workspace = createWorkspaceNode({
+      id: workspaceId,
+      name,
+      color: WORKSPACE_COLORS[(root.children ?? []).length % WORKSPACE_COLORS.length],
+      browserTabs: [],
+    });
     setRoot((current) => ({
       ...current,
       children: [
         ...(current.children ?? []),
-        {
-          id: workspaceId,
-          name,
-          type: 'workspace',
-          expanded: true,
-          activeMemory: true,
-          color: WORKSPACE_COLORS[(current.children ?? []).length % WORKSPACE_COLORS.length],
-          children: [],
-        },
+        workspace,
       ],
     }));
+    setActiveAgentSessionId(findFirstSessionId(workspace, 'agent'));
+    setActiveTerminalSessionId(findFirstSessionId(workspace, 'terminal'));
     setWorkspaceFilesByWorkspace((current) => ({ ...current, [workspaceId]: [] }));
     setActiveWorkspaceId(workspaceId);
     setToast({ msg: `Created ${name}`, type: 'success' });
@@ -1202,6 +1571,39 @@ function AgentBrowserApp() {
     setToast({ msg: `Renamed workspace to ${nextName}`, type: 'success' });
     setRenamingWorkspaceId(null);
   }, [renamingWorkspaceId, setToast, workspaceDraftName]);
+
+  const addSessionToWorkspace = useCallback((workspaceId: string, kind: 'agent' | 'terminal') => {
+    let newSessionId: string | null = null;
+    setRoot((current) => {
+      const workspace = getWorkspace(current, workspaceId);
+      if (!workspace) return current;
+      const normalized = ensureWorkspaceCategories(workspace);
+      const category = getWorkspaceCategory(normalized, kind);
+      const nextIndex = (category?.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind === kind).length + 1;
+      const newSession = createSessionNode(workspaceId, kind, nextIndex);
+      newSessionId = newSession.id;
+      return deepUpdate(current, workspaceId, (node) => {
+        const withCategories = ensureWorkspaceCategories(node);
+        return {
+          ...withCategories,
+          expanded: true,
+          children: (withCategories.children ?? []).map((child) => child.nodeKind === kind
+            ? { ...child, expanded: true, children: [...(child.children ?? []), newSession] }
+            : child),
+        };
+      });
+    });
+    switchWorkspace(workspaceId);
+    setOpenTabId(null);
+    setEditingFilePath(null);
+    if (kind === 'agent') {
+      if (newSessionId) setActiveAgentSessionId(newSessionId);
+      setToast({ msg: 'New chat session created', type: 'success' });
+      return;
+    }
+    if (newSessionId) setActiveTerminalSessionId(newSessionId);
+    setToast({ msg: 'New terminal session created', type: 'success' });
+  }, [setToast, switchWorkspace]);
 
   const pasteSelectionIntoWorkspace = useCallback((workspaceId: string) => {
     if (!clipboardIds.length) return;
@@ -1235,18 +1637,35 @@ function AgentBrowserApp() {
 
     if (tabsToMove.size) {
       setRoot((current) => {
-        let movedTabs: TreeNode[] = [];
-        const children = (current.children ?? []).map((workspace) => {
-          const remaining = (workspace.children ?? []).filter((child) => {
-            if (tabsToMove.has(child.id)) {
-              movedTabs = [...movedTabs, child];
-              return false;
-            }
-            return true;
-          });
-          return { ...workspace, children: remaining };
-        }).map((workspace) => workspace.id === workspaceId ? { ...workspace, expanded: true, children: [...(workspace.children ?? []), ...movedTabs] } : workspace);
-        return { ...current, children };
+        const movedTabs: TreeNode[] = [];
+        const withoutMoved = (current.children ?? []).map((workspace) => deepUpdate(ensureWorkspaceCategories(workspace), workspace.id, (node) => ({
+          ...node,
+          children: (node.children ?? []).map((category) => ({
+            ...category,
+            children: (category.children ?? []).filter((child) => {
+              if (tabsToMove.has(child.id)) {
+                movedTabs.push(child);
+                return false;
+              }
+              return true;
+            }),
+          })),
+        })));
+        const children = withoutMoved.map((workspace) => {
+          if (workspace.id !== workspaceId) return workspace;
+          return {
+            ...workspace,
+            expanded: true,
+            children: (workspace.children ?? []).map((category) => ({
+              ...category,
+              expanded: true,
+              children: category.nodeKind
+                ? [...(category.children ?? []), ...movedTabs.filter((tab) => (tab.nodeKind ?? 'browser') === category.nodeKind)]
+                : category.children,
+            })),
+          };
+        });
+        return { ...current, children: children as TreeNode[] };
       });
     }
 
@@ -1261,7 +1680,7 @@ function AgentBrowserApp() {
     value: {
       activePanel,
       activeWorkspace: activeWorkspace.name,
-      openTab: openTab?.name ?? null,
+      openTab: openBrowserTab?.name ?? null,
       installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
       tabsInWorkspace: countTabs(activeWorkspace),
       workspaceFiles: activeWorkspaceFiles.map((file) => file.path),
@@ -1270,7 +1689,7 @@ function AgentBrowserApp() {
       plugins: activeWorkspaceCapabilities.plugins.map((plugin) => plugin.directory),
       hooks: activeWorkspaceCapabilities.hooks.map((hook) => hook.name),
     },
-  }, [activePanel, activeWorkspace, installedModels, openTab, activeWorkspaceCapabilities, activeWorkspaceFiles]);
+  }, [activePanel, activeWorkspace, installedModels, openBrowserTab, activeWorkspaceCapabilities, activeWorkspaceFiles]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1390,7 +1809,11 @@ function AgentBrowserApp() {
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
         event.preventDefault();
-        const targetWorkspace = currentNode?.type === 'workspace' ? currentNode : currentParent?.type === 'workspace' ? currentParent : getWorkspace(root, activeWorkspaceId);
+        const targetWorkspace = currentNode?.type === 'workspace'
+          ? currentNode
+          : currentParent?.type === 'workspace'
+            ? currentParent
+            : (cursorId ? findWorkspaceForNode(root, cursorId) : null) ?? getWorkspace(root, activeWorkspaceId);
         if (targetWorkspace) pasteSelectionIntoWorkspace(targetWorkspace.id);
         return;
       }
@@ -1460,7 +1883,7 @@ function AgentBrowserApp() {
       }
       if (event.key === 'Enter' && cursorId) {
         event.preventDefault();
-        if (currentNode?.type === 'tab') setOpenTabId(currentNode.id);
+        if (currentNode?.type === 'tab') handleOpenTreeTab(currentNode.id);
         if (currentNode?.type === 'file') handleOpenFileNode(currentNode.id);
         if (currentNode && currentNode.type !== 'tab' && currentNode.type !== 'file') {
           setRoot((current) => deepUpdate(current, currentNode.id, (entry) => ({ ...entry, expanded: !entry.expanded })));
@@ -1510,12 +1933,23 @@ function AgentBrowserApp() {
         id: createUniqueId(),
         name: result.value.replace(/^https?:\/\//, '').slice(0, NEW_TAB_NAME_LENGTH),
         type: 'tab',
+        nodeKind: 'browser',
         url: result.value,
         memoryTier: 'hot',
         memoryMB: DEFAULT_NEW_TAB_MEMORY_MB,
       };
-      setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => ({ ...node, expanded: true, children: [...(node.children ?? []), tab] })));
+      setRoot((current) => deepUpdate(current, activeWorkspaceId, (node) => {
+        const workspace = ensureWorkspaceCategories(node);
+        return {
+          ...workspace,
+          expanded: true,
+          children: (workspace.children ?? []).map((child) => child.nodeKind === 'browser'
+            ? { ...child, expanded: true, children: [...(child.children ?? []), tab] }
+            : child),
+        };
+      }));
       setOpenTabId(tab.id);
+      setActiveSessionMode('agent');
       setToast({ msg: `Opened ${result.value}`, type: 'success' });
     } else {
       setPendingSearch(result.value);
@@ -1539,22 +1973,36 @@ function AgentBrowserApp() {
   }
 
   function handleRemoveFileNode(nodeId: string) {
-    // Find which workspace this file belongs to and remove it
-    for (const ws of root.children ?? []) {
-      const fileNode = (ws.children ?? []).find((c) => c.id === nodeId && c.type === 'file');
-      if (fileNode?.filePath) {
-        setWorkspaceFilesByWorkspace((current) => ({
-          ...current,
-          [ws.id]: removeWorkspaceFile(current[ws.id] ?? [], fileNode.filePath!),
-        }));
-        if (editingFilePath === fileNode.filePath) setEditingFilePath(null);
-        setToast({ msg: `Removed ${fileNode.filePath}`, type: 'info' });
-        return;
-      }
+    const node = findNode(root, nodeId);
+    if (!node) return;
+    const ownerWorkspace = findWorkspaceForNode(root, nodeId);
+    if (node.type === 'file' && node.filePath) {
+      if (!ownerWorkspace) return;
+      setWorkspaceFilesByWorkspace((current) => ({
+        ...current,
+        [ownerWorkspace.id]: removeWorkspaceFile(current[ownerWorkspace.id] ?? [], node.filePath!),
+      }));
+      if (editingFilePath === node.filePath) setEditingFilePath(null);
+      setToast({ msg: `Removed ${node.filePath}`, type: 'info' });
+      return;
     }
-    // If not a file node, it's a tab - remove from tree
-    setRoot((current) => ({ ...current, children: (current.children ?? []).map((ws) => ({ ...ws, children: (ws.children ?? []).filter((child) => child.id !== nodeId) })) }));
+    let nextAgentSessionId = activeAgentSessionId;
+    let nextTerminalSessionId = activeTerminalSessionId;
+    setRoot((current) => {
+      const next = removeNodeById(current, nodeId);
+      if (activeAgentSessionId === nodeId) {
+        const workspace = ownerWorkspace ? getWorkspace(next, ownerWorkspace.id) : getWorkspace(next, activeWorkspaceId);
+        nextAgentSessionId = workspace ? findFirstSessionId(workspace, 'agent') : null;
+      }
+      if (activeTerminalSessionId === nodeId) {
+        const workspace = ownerWorkspace ? getWorkspace(next, ownerWorkspace.id) : getWorkspace(next, activeWorkspaceId);
+        nextTerminalSessionId = workspace ? findFirstSessionId(workspace, 'terminal') : null;
+      }
+      return next;
+    });
     if (openTabId === nodeId) setOpenTabId(null);
+    if (activeAgentSessionId === nodeId) setActiveAgentSessionId(nextAgentSessionId ?? null);
+    if (activeTerminalSessionId === nodeId) setActiveTerminalSessionId(nextTerminalSessionId ?? null);
   }
 
   function handleOpenFileNode(nodeId: string) {
@@ -1563,12 +2011,30 @@ function AgentBrowserApp() {
       setEditingFilePath(node.filePath);
       setOpenTabId(null);
       // Switch to the workspace that owns this file
-      for (const ws of root.children ?? []) {
-        if ((ws.children ?? []).some((c) => c.id === nodeId)) {
-          switchWorkspace(ws.id);
-          break;
-        }
-      }
+      const workspace = findWorkspaceForNode(root, nodeId);
+      if (workspace) switchWorkspace(workspace.id);
+    }
+  }
+
+  function handleOpenTreeTab(nodeId: string) {
+    const node = findNode(root, nodeId);
+    if (!node || node.type !== 'tab') return;
+    const workspace = findWorkspaceForNode(root, nodeId);
+    if (workspace) switchWorkspace(workspace.id);
+    setEditingFilePath(null);
+    if ((node.nodeKind ?? 'browser') === 'browser') {
+      setOpenTabId(nodeId);
+      return;
+    }
+    setOpenTabId(null);
+    if (node.nodeKind === 'agent') {
+      setActiveSessionMode('agent');
+      setActiveAgentSessionId(nodeId);
+      return;
+    }
+    if (node.nodeKind === 'terminal') {
+      setActiveSessionMode('terminal');
+      setActiveTerminalSessionId(nodeId);
     }
   }
 
@@ -1577,7 +2043,28 @@ function AgentBrowserApp() {
       return (
         <div key={`ws-${activeWorkspaceId}`} className={`sidebar-content ${slideDir ? `ws-slide-${slideDir}` : ''}`}>
           <MemBar root={root} />
-          <SidebarTree activeWorkspaceId={activeWorkspaceId} openTabId={openTabId} editingFilePath={editingFilePath} cursorId={cursorId} selectedIds={selectedIds} items={visibleItems} onCursorChange={setCursorId} onToggleFolder={(id) => { setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded }))); const toggled = findNode(root, id); if (toggled?.type === 'workspace') switchWorkspace(id); }} onOpenTab={(id) => { setOpenTabId(id); setEditingFilePath(null); for (const ws of root.children ?? []) { if ((ws.children ?? []).some((c) => c.id === id)) { switchWorkspace(ws.id); break; } } }} onCloseTab={handleRemoveFileNode} onOpenFile={handleOpenFileNode} onAddFile={(wsId) => setShowAddFileMenu(wsId)} />
+          <SidebarTree
+            root={root}
+            workspaceByNodeId={workspaceByNodeId}
+            activeWorkspaceId={activeWorkspaceId}
+            openTabId={openTabId}
+            editingFilePath={editingFilePath}
+            cursorId={cursorId}
+            selectedIds={selectedIds}
+            items={visibleItems}
+            onCursorChange={setCursorId}
+            onToggleFolder={(id) => {
+              setRoot((current) => deepUpdate(current, id, (node) => ({ ...node, expanded: !node.expanded })));
+              const toggled = findNode(root, id);
+              if (toggled?.type === 'workspace') switchWorkspace(id);
+            }}
+            onOpenTab={handleOpenTreeTab}
+            onCloseTab={handleRemoveFileNode}
+            onOpenFile={handleOpenFileNode}
+            onAddFile={(wsId) => setShowAddFileMenu(wsId)}
+            onAddAgent={(wsId) => addSessionToWorkspace(wsId, 'agent')}
+            onAddTerminal={(wsId) => addSessionToWorkspace(wsId, 'terminal')}
+          />
         </div>
       );
     }
@@ -1641,7 +2128,51 @@ function AgentBrowserApp() {
           {renderSidebar()}
         </aside>
       ) : null}
-      <main className="content-area">{editingFile ? <FileEditorPanel file={editingFile} onSave={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => { const existing = current[activeWorkspaceId] ?? []; const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing; return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) }; })} onDelete={(path) => setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }))} onClose={() => setEditingFilePath(null)} onToast={setToast} /> : openTab ? <PageOverlay tab={openTab} onClose={() => setOpenTabId(null)} /> : <ChatPanel installedModels={installedModels} pendingSearch={pendingSearch} onSearchConsumed={() => setPendingSearch(null)} onToast={setToast} workspaceName={activeWorkspace.name} workspaceFiles={activeWorkspaceFiles} workspaceCapabilities={activeWorkspaceCapabilities} />}</main>
+      <main className="content-area">
+        {editingFile ? (
+          <FileEditorPanel
+            file={editingFile}
+            onSave={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => {
+              const existing = current[activeWorkspaceId] ?? [];
+              const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing;
+              return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) };
+            })}
+            onDelete={(path) => setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }))}
+            onClose={() => setEditingFilePath(null)}
+            onToast={setToast}
+          />
+        ) : openBrowserTab ? (
+          <PageOverlay tab={openBrowserTab} onClose={() => setOpenTabId(null)} />
+        ) : (
+          <ChatPanel
+            installedModels={installedModels}
+            pendingSearch={pendingSearch}
+            onSearchConsumed={() => setPendingSearch(null)}
+            onToast={setToast}
+            workspaceName={activeWorkspace.name}
+            workspaceFiles={activeWorkspaceFiles}
+            workspaceCapabilities={activeWorkspaceCapabilities}
+            activeAgentSessionId={activeAgentSessionId}
+            activeTerminalSessionId={activeTerminalSessionId}
+            activeMode={activeSessionMode}
+            onSwitchMode={(mode) => {
+              setActiveSessionMode(mode);
+              setOpenTabId(null);
+              if (mode === 'agent' && !activeAgentSessionId) {
+                const first = findFirstSessionId(activeWorkspace, 'agent');
+                if (first) setActiveAgentSessionId(first);
+              }
+              if (mode === 'terminal' && !activeTerminalSessionId) {
+                const first = findFirstSessionId(activeWorkspace, 'terminal');
+                if (first) setActiveTerminalSessionId(first);
+              }
+            }}
+            onNewAgentSession={() => addSessionToWorkspace(activeWorkspaceId, 'agent')}
+            onNewTerminalSession={() => addSessionToWorkspace(activeWorkspaceId, 'terminal')}
+            onTerminalFsPathsChanged={(sessionId, paths) => setTerminalFsPathsBySession((current) => ({ ...current, [sessionId]: paths }))}
+          />
+        )}
+      </main>
       {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('agents', showAddFileMenu)}>AGENTS.md</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('skill', showAddFileMenu)}>Skill</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button></div></div></div></div> : null}
       {showWorkspaces ? <WorkspaceSwitcherOverlay workspaces={root.children ?? []} activeWorkspaceId={activeWorkspaceId} onSwitch={switchWorkspace} onCreateWorkspace={createWorkspace} onRenameWorkspace={openRenameWorkspace} onClose={() => setShowWorkspaces(false)} /> : null}
       {showShortcuts ? <ShortcutOverlay onClose={() => setShowShortcuts(false)} /> : null}

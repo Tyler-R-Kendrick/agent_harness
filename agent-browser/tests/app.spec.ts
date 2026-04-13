@@ -37,6 +37,20 @@ function captureRuntimeErrors(page: Page) {
   return () => expect(errors, errors.join('\n')).toEqual([]);
 }
 
+/** Click the Terminal mode tab (bypassing any overlays). */
+async function switchToTerminalMode(page: Page) {
+  const tab = page.getByRole('tab', { name: 'Terminal mode' });
+  await expect(tab).toBeVisible();
+  await tab.click({ force: true });
+}
+
+/** Click the Chat mode tab (bypassing any overlays). */
+async function switchToChatMode(page: Page) {
+  const tab = page.getByRole('tab', { name: 'Chat mode' });
+  await expect(tab).toBeVisible();
+  await tab.click({ force: true });
+}
+
 // ── Screen capture tests ──────────────────────────────────────────────
 
 test('captures the main workspace screen', async ({ page }) => {
@@ -82,6 +96,32 @@ test('captures startup render without crypto.randomUUID', async ({ page }) => {
   await expect(page.getByLabel('Workspace tree')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/runtime-fallback-render.png', fullPage: true });
+});
+
+test('captures categorized worktree with agent and terminal instances', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: 'Browser' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Terminal' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Agent' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Files' }).first()).toBeVisible();
+
+  await page.getByLabel('Add chat to Research').click();
+  await expect(page.getByRole('button', { name: 'Chat 2', exact: true })).toBeVisible();
+  await page.getByLabel('Add terminal to Research').click();
+  await expect(page.getByRole('button', { name: 'Terminal 2', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Terminal 2', exact: true }).click();
+  await expect(page.getByLabel('Bash input')).toBeVisible();
+  await page.getByLabel('Bash input').fill('touch notes.txt');
+  await page.getByLabel('Bash input').press('Enter');
+  await expect(page.getByLabel('Bash input')).toBeEnabled({ timeout: 10000 });
+
+  await expect(page.getByRole('button', { name: /Terminal 2 FS/ }).first()).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
 });
 
 test('captures the settings screen', async ({ page }) => {
@@ -216,6 +256,150 @@ test('captures workspace file edit and delete flow', async ({ page }) => {
   await page.getByRole('button', { name: 'Save file' }).click({ force: true });
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-file-edit.png', fullPage: true });
+});
+
+// ── User flow: just-bash TUI panel ────────────────────────────────────
+
+test('captures the chat/terminal tab switching UX', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // The panel starts in Chat mode
+  await expect(page.getByLabel('Chat panel')).toBeVisible();
+  const chatTab = page.getByRole('tab', { name: 'Chat mode' });
+  const termTab = page.getByRole('tab', { name: 'Terminal mode' });
+  await expect(chatTab).toBeVisible();
+  await expect(termTab).toBeVisible();
+  await expect(chatTab).toHaveAttribute('aria-selected', 'true');
+  await expect(termTab).toHaveAttribute('aria-selected', 'false');
+
+  // Chat content visible, terminal content hidden
+  await expect(page.getByLabel('Chat input')).toBeVisible();
+  await expect(page.getByLabel('Bash input')).not.toBeVisible();
+
+  // Switch to terminal mode
+  await switchToTerminalMode(page);
+  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+  await expect(termTab).toHaveAttribute('aria-selected', 'true');
+  await expect(chatTab).toHaveAttribute('aria-selected', 'false');
+
+  // Terminal content visible, chat content hidden
+  await expect(page.getByLabel('Bash input')).toBeVisible();
+  await expect(page.getByLabel('Chat input')).not.toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/just-bash-open.png', fullPage: true });
+
+  // Switch back to chat mode
+  await switchToChatMode(page);
+  await expect(page.getByLabel('Chat panel')).toBeVisible();
+  await expect(page.getByLabel('Chat input')).toBeVisible();
+  await expect(page.getByLabel('Bash input')).not.toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/just-bash-closed.png', fullPage: true });
+});
+
+test('terminal auto-focuses bash input on switch', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // Switch to terminal mode
+  await switchToTerminalMode(page);
+  await expect(page.getByLabel('Bash input')).toBeVisible();
+
+  // The bash input should be auto-focused
+  await expect(page.getByLabel('Bash input')).toBeFocused();
+
+  assertNoRuntimeErrors();
+});
+
+test('terminal refocuses input after command execution', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // Switch to terminal mode
+  await switchToTerminalMode(page);
+  const bashInput = page.getByLabel('Bash input');
+  await expect(bashInput).toBeVisible();
+
+  // Type and submit a command
+  await bashInput.fill('echo hello world');
+  await bashInput.press('Enter');
+
+  // Wait for async just-bash execution to complete (input re-enabled)
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
+
+  // Input should be auto-refocused after execution
+  await expect(bashInput).toBeFocused();
+
+  // Output should appear
+  await expect(page.getByLabel('Terminal output')).toContainText('hello world');
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/just-bash-command.png', fullPage: true });
+});
+
+test('captures just-bash TUI pwd command', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  await switchToTerminalMode(page);
+  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+
+  const bashInput = page.getByLabel('Bash input');
+  await bashInput.fill('pwd');
+  await bashInput.press('Enter');
+
+  // Wait for async just-bash execution to complete
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
+
+  // pwd outputs the current working directory (/workspace)
+  await expect(page.getByLabel('Terminal output')).toContainText('pwd');
+  await expect(page.getByLabel('Terminal output')).toContainText('/workspace');
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/just-bash-pwd.png', fullPage: true });
+});
+
+test('captures just-bash TUI clear command', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  await switchToTerminalMode(page);
+  const bashInput = page.getByLabel('Bash input');
+
+  // Run a command via just-bash
+  await bashInput.fill('echo before clear');
+  await bashInput.press('Enter');
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
+  await expect(page.getByLabel('Terminal output')).toContainText('before clear');
+
+  // Run clear (handled in-app, clears history without going through just-bash)
+  await bashInput.fill('clear');
+  await bashInput.press('Enter');
+  await expect(page.getByLabel('Terminal output')).not.toContainText('before clear');
+
+  // Input should be refocused after clear
+  await expect(bashInput).toBeFocused();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/just-bash-clear.png', fullPage: true });
+});
+
+test('terminal shows welcome message when empty', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // Switch to terminal mode
+  await switchToTerminalMode(page);
+  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+
+  // Welcome message should be visible
+  await expect(page.getByLabel('Terminal output')).toContainText('Welcome to just-bash');
+  await expect(page.getByLabel('Terminal output')).toContainText('sandboxed shell');
+
+  assertNoRuntimeErrors();
 });
 
 // ── User flow: switching workspaces ───────────────────────────────────
