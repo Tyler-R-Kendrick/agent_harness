@@ -94,6 +94,32 @@ test('captures startup render without crypto.randomUUID', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/runtime-fallback-render.png', fullPage: true });
 });
 
+test('captures categorized worktree with agent and terminal instances', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: 'Browser' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Terminal' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Agent' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Files' }).first()).toBeVisible();
+
+  await page.getByLabel('Add chat to Research').click();
+  await expect(page.getByRole('button', { name: 'Chat 2', exact: true })).toBeVisible();
+  await page.getByLabel('Add terminal to Research').click();
+  await expect(page.getByRole('button', { name: 'Terminal 2', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Terminal 2', exact: true }).click();
+  await expect(page.getByLabel('Bash input')).toBeVisible();
+  await page.getByLabel('Bash input').fill('touch notes.txt');
+  await page.getByLabel('Bash input').press('Enter');
+  await expect(page.getByLabel('Bash input')).toBeEnabled({ timeout: 10000 });
+
+  await expect(page.getByRole('button', { name: /Terminal 2 FS/ }).first()).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
+});
+
 test('captures the settings screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');

@@ -51,6 +51,24 @@ describe('App', () => {
     expect(screen.getAllByText('Agent Chat').length).toBeGreaterThan(0);
     expect(screen.queryByText('Create task board')).not.toBeInTheDocument();
     expect(screen.queryByText('Open gallery')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Browser' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Terminal' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Agent' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
+  });
+
+  it('supports creating new chat and terminal instances from the tree and panel', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add chat to Research'));
+    expect(screen.getByText('Chat 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Add terminal to Research'));
+    expect(screen.getByText('Terminal 2')).toBeInTheDocument();
   });
 
   it('renders settings and history labels from the navigation', async () => {
