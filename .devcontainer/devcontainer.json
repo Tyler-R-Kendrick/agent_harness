@@ -6,5 +6,11 @@
 				"ms-python.python"
 			]
 		}
+	},
+	"features": {
+		"ghcr.io/devcontainer-community/devcontainer-features/astral.sh-uv:1": {
+			"shellautocompletion": true,
+			"version": "latest"
+		}
 	}
 }

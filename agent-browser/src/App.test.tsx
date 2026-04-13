@@ -247,6 +247,54 @@ describe('App', () => {
     expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Build');
   });
 
+  it('renders only the active workspace tree and swaps to the selected workspace', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByLabelText('Add file to Research')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Add file to Build')).not.toBeInTheDocument();
+    expect(screen.getByText('Hugging Face')).toBeInTheDocument();
+    expect(screen.queryByText('CopilotKit docs')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Build');
+    expect(screen.getByLabelText('Add file to Build')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Add file to Research')).not.toBeInTheDocument();
+    expect(screen.getByText('CopilotKit docs')).toBeInTheDocument();
+    expect(screen.queryByText('Hugging Face')).not.toBeInTheDocument();
+  });
+
+  it('preserves page overlays per workspace when switching', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByText('Hugging Face'));
+    expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://huggingface.co/models?library=transformers.js')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+
+    expect(screen.queryByRole('region', { name: 'Page overlay' })).not.toBeInTheDocument();
+    expect(screen.getByText('CopilotKit docs')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('CopilotKit docs'));
+    expect(screen.getByDisplayValue('https://docs.copilotkit.ai')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '1', ctrlKey: true });
+
+    expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('https://huggingface.co/models?library=transformers.js')).toBeInTheDocument();
+  });
+
   it('supports creating and renaming workspaces from the screenshot controls', async () => {
     vi.useFakeTimers();
     render(<App />);

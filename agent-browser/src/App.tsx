@@ -49,6 +49,13 @@ import type { ChatMessage, HFModel, HistorySession, NodeKind, TreeNode, Workspac
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
+type WorkspaceViewState = {
+  openTabId: string | null;
+  editingFilePath: string | null;
+  activeMode: 'agent' | 'terminal';
+  activeAgentSessionId: string | null;
+  activeTerminalSessionId: string | null;
+};
 
 const TIERS = {
   hot: { color: '#f87171', label: 'Hot' },
@@ -384,6 +391,45 @@ function findFirstSessionId(workspace: TreeNode, kind: 'agent' | 'terminal'): st
   return first?.id ?? null;
 }
 
+function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewState {
+  return {
+    openTabId: null,
+    editingFilePath: null,
+    activeMode: 'agent',
+    activeAgentSessionId: findFirstSessionId(workspace, 'agent'),
+    activeTerminalSessionId: findFirstSessionId(workspace, 'terminal'),
+  };
+}
+
+function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: WorkspaceViewState): WorkspaceViewState {
+  const base = entry ?? createWorkspaceViewEntry(workspace);
+  const activeAgentSessionId = base.activeAgentSessionId && findNode(workspace, base.activeAgentSessionId) ? base.activeAgentSessionId : findFirstSessionId(workspace, 'agent');
+  const activeTerminalSessionId = base.activeTerminalSessionId && findNode(workspace, base.activeTerminalSessionId) ? base.activeTerminalSessionId : findFirstSessionId(workspace, 'terminal');
+  const openTab = base.openTabId ? findNode(workspace, base.openTabId) : null;
+  return {
+    ...base,
+    openTabId: openTab?.type === 'tab' && (openTab.nodeKind ?? 'browser') === 'browser' ? openTab.id : null,
+    activeAgentSessionId,
+    activeTerminalSessionId,
+  };
+}
+
+function createWorkspaceViewState(root: TreeNode): Record<string, WorkspaceViewState> {
+  return Object.fromEntries(
+    (root.children ?? [])
+      .filter((node): node is TreeNode => node.type === 'workspace')
+      .map((workspace) => [workspace.id, createWorkspaceViewEntry(workspace)]),
+  );
+}
+
+function workspaceViewStateEquals(left: WorkspaceViewState, right: WorkspaceViewState): boolean {
+  return left.openTabId === right.openTabId
+    && left.editingFilePath === right.editingFilePath
+    && left.activeMode === right.activeMode
+    && left.activeAgentSessionId === right.activeAgentSessionId
+    && left.activeTerminalSessionId === right.activeTerminalSessionId;
+}
+
 function createVirtualFsTreeNodes(prefix: string, paths: string[]): TreeNode[] {
   const root: TreeNode = { id: `${prefix}:root`, name: 'root', type: 'folder', expanded: true, children: [] };
   for (const path of paths) {
@@ -445,6 +491,15 @@ function flattenTreeFiltered(node: TreeNode, query: string, depth = 0): FlatTree
     }
   }
   return filtered;
+}
+
+function flattenWorkspaceTreeFiltered(workspace: TreeNode, query: string): FlatTreeItem[] {
+  const normalized = query.trim().toLowerCase();
+  const descendants = workspace.expanded && workspace.children ? flattenTreeFiltered(workspace, normalized, 1) : [];
+  if (!normalized) return [{ node: workspace, depth: 0 }, ...descendants];
+  const matches = workspace.name.toLowerCase().includes(normalized);
+  if (!matches && descendants.length === 0) return [];
+  return [{ node: workspace, depth: 0 }, ...descendants];
 }
 
 function nextWorkspaceName(root: TreeNode): string {
@@ -1416,7 +1471,9 @@ function Toast({ toast }: { toast: ToastState }) {
 
 function AgentBrowserApp() {
   const { toast, setToast } = useToast();
-  const [root, setRoot] = useState<TreeNode>(createInitialRoot);
+  const initialRootRef = useRef<TreeNode | null>(null);
+  if (!initialRootRef.current) initialRootRef.current = createInitialRoot();
+  const [root, setRoot] = useState<TreeNode>(initialRootRef.current);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
   const [activePanel, setActivePanel] = useState<'workspaces' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
@@ -1426,8 +1483,6 @@ function AgentBrowserApp() {
   const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [omnibar, setOmnibar] = useState('');
-  const [openTabId, setOpenTabId] = useState<string | null>(null);
-  const [editingFilePath, setEditingFilePath] = useState<string | null>(null);
   const [cursorId, setCursorId] = useState<string | null>(null);
   const [showAddFileMenu, setShowAddFileMenu] = useState<string | null>(null);
   const [addFileName, setAddFileName] = useState('');
@@ -1444,27 +1499,47 @@ function AgentBrowserApp() {
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
+  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useState<Record<string, WorkspaceViewState>>(() => createWorkspaceViewState(initialRootRef.current!));
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
-  const [activeSessionMode, setActiveSessionMode] = useState<'agent' | 'terminal'>('agent');
-  const [activeAgentSessionId, setActiveAgentSessionId] = useState<string | null>(null);
-  const [activeTerminalSessionId, setActiveTerminalSessionId] = useState<string | null>(null);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
-  const visibleItems = useMemo(() => flattenTreeFiltered(root, treeFilter), [root, treeFilter]);
-  const openTab = openTabId ? findNode(root, openTabId) : null;
+  const activeWorkspaceViewState = activeWorkspace.type === 'workspace'
+    ? normalizeWorkspaceViewEntry(activeWorkspace, workspaceViewStateByWorkspace[activeWorkspaceId])
+    : {
+        openTabId: null,
+        editingFilePath: null,
+        activeMode: 'agent',
+        activeAgentSessionId: null,
+        activeTerminalSessionId: null,
+      };
+  const activeSessionMode = activeWorkspaceViewState.activeMode;
+  const activeAgentSessionId = activeWorkspaceViewState.activeAgentSessionId;
+  const activeTerminalSessionId = activeWorkspaceViewState.activeTerminalSessionId;
+  const visibleItems = useMemo(
+    () => activeWorkspace.type === 'workspace' ? flattenWorkspaceTreeFiltered(activeWorkspace, treeFilter) : flattenTreeFiltered(root, treeFilter),
+    [activeWorkspace, root, treeFilter],
+  );
+  const openTab = activeWorkspaceViewState.openTabId ? findNode(activeWorkspace, activeWorkspaceViewState.openTabId) : null;
   const openBrowserTab = openTab?.type === 'tab' && (openTab.nodeKind ?? 'browser') === 'browser' ? openTab : null;
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
-  const editingFile = editingFilePath ? activeWorkspaceFiles.find((f) => f.path === editingFilePath) ?? null : null;
+  const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
 
   useEffect(() => {
-    if (activeWorkspace.type !== 'workspace') return;
-    const firstAgent = findFirstSessionId(activeWorkspace, 'agent');
-    const firstTerminal = findFirstSessionId(activeWorkspace, 'terminal');
-    setActiveAgentSessionId((current) => current && findNode(activeWorkspace, current) ? current : firstAgent);
-    setActiveTerminalSessionId((current) => current && findNode(activeWorkspace, current) ? current : firstTerminal);
-  }, [activeWorkspace]);
+    setWorkspaceViewStateByWorkspace((current) => {
+      const next: Record<string, WorkspaceViewState> = {};
+      let changed = false;
+      for (const workspace of root.children ?? []) {
+        if (workspace.type !== 'workspace') continue;
+        const normalized = normalizeWorkspaceViewEntry(workspace, current[workspace.id]);
+        next[workspace.id] = normalized;
+        if (!current[workspace.id] || !workspaceViewStateEquals(current[workspace.id], normalized)) changed = true;
+      }
+      if (Object.keys(current).some((workspaceId) => !(workspaceId in next))) changed = true;
+      return changed ? next : current;
+    });
+  }, [root]);
 
   useEffect(() => {
     setRoot((current) => ({
@@ -1554,8 +1629,7 @@ function AgentBrowserApp() {
         workspace,
       ],
     }));
-    setActiveAgentSessionId(findFirstSessionId(workspace, 'agent'));
-    setActiveTerminalSessionId(findFirstSessionId(workspace, 'terminal'));
+    setWorkspaceViewStateByWorkspace((current) => ({ ...current, [workspaceId]: createWorkspaceViewEntry(workspace) }));
     setWorkspaceFilesByWorkspace((current) => ({ ...current, [workspaceId]: [] }));
     setActiveWorkspaceId(workspaceId);
     setToast({ msg: `Created ${name}`, type: 'success' });
@@ -1594,14 +1668,30 @@ function AgentBrowserApp() {
       });
     });
     switchWorkspace(workspaceId);
-    setOpenTabId(null);
-    setEditingFilePath(null);
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[workspaceId] ?? {
+        openTabId: null,
+        editingFilePath: null,
+        activeMode: 'agent',
+        activeAgentSessionId: null,
+        activeTerminalSessionId: null,
+      };
+      return {
+        ...current,
+        [workspaceId]: {
+          ...existing,
+          openTabId: null,
+          editingFilePath: null,
+          activeMode: kind,
+          activeAgentSessionId: kind === 'agent' ? newSessionId : existing.activeAgentSessionId,
+          activeTerminalSessionId: kind === 'terminal' ? newSessionId : existing.activeTerminalSessionId,
+        },
+      };
+    });
     if (kind === 'agent') {
-      if (newSessionId) setActiveAgentSessionId(newSessionId);
       setToast({ msg: 'New chat session created', type: 'success' });
       return;
     }
-    if (newSessionId) setActiveTerminalSessionId(newSessionId);
     setToast({ msg: 'New terminal session created', type: 'success' });
   }, [setToast, switchWorkspace]);
 
@@ -1744,8 +1834,16 @@ function AgentBrowserApp() {
         setSelectionAnchorId(null);
         setClipboardIds([]);
         setRenamingWorkspaceId(null);
-        if (editingFilePath) setEditingFilePath(null);
-        if (openTabId) setOpenTabId(null);
+        if (activeWorkspaceViewState.editingFilePath || activeWorkspaceViewState.openTabId) {
+          setWorkspaceViewStateByWorkspace((current) => ({
+            ...current,
+            [activeWorkspaceId]: {
+              ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+              openTabId: null,
+              editingFilePath: null,
+            },
+          }));
+        }
         return;
       }
       if (event.defaultPrevented || isEditableTarget(event.target)) return;
@@ -1892,7 +1990,7 @@ function AgentBrowserApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activePanel, activeWorkspaceId, clipboardIds, createWorkspace, cursorId, editingFilePath, handleOpenFileNode, jumpToWorkspaceByIndex, openTabId, openWorkspaceSwitcher, pasteSelectionIntoWorkspace, root, selectedIds, selectionAnchorId, setToast, switchWorkspace, treeFilter, visibleItems]);
+  }, [activePanel, activeWorkspace, activeWorkspaceId, activeWorkspaceViewState.editingFilePath, activeWorkspaceViewState.openTabId, clipboardIds, createWorkspace, cursorId, handleOpenFileNode, jumpToWorkspaceByIndex, openWorkspaceSwitcher, pasteSelectionIntoWorkspace, root, selectedIds, selectionAnchorId, setToast, switchWorkspace, treeFilter, visibleItems]);
 
   async function installModel(model: HFModel) {
     if (loadingModelId === model.id) return;
@@ -1948,8 +2046,14 @@ function AgentBrowserApp() {
             : child),
         };
       }));
-      setOpenTabId(tab.id);
-      setActiveSessionMode('agent');
+      setWorkspaceViewStateByWorkspace((current) => ({
+        ...current,
+        [activeWorkspaceId]: {
+          ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+          openTabId: tab.id,
+          editingFilePath: null,
+        },
+      }));
       setToast({ msg: `Opened ${result.value}`, type: 'success' });
     } else {
       setPendingSearch(result.value);
@@ -1966,9 +2070,15 @@ function AgentBrowserApp() {
     }));
     setAddFileName('');
     setShowAddFileMenu(null);
-    setEditingFilePath(nextFile.path);
+    setWorkspaceViewStateByWorkspace((current) => ({
+      ...current,
+      [wsId]: {
+        ...(current[wsId] ?? createWorkspaceViewEntry(getWorkspace(root, wsId) ?? activeWorkspace)),
+        openTabId: null,
+        editingFilePath: nextFile.path,
+      },
+    }));
     switchWorkspace(wsId);
-    setOpenTabId(null);
     setToast({ msg: `Added ${nextFile.path}`, type: 'success' });
   }
 
@@ -1982,37 +2092,55 @@ function AgentBrowserApp() {
         ...current,
         [ownerWorkspace.id]: removeWorkspaceFile(current[ownerWorkspace.id] ?? [], node.filePath!),
       }));
-      if (editingFilePath === node.filePath) setEditingFilePath(null);
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[ownerWorkspace.id];
+        if (!existing || existing.editingFilePath !== node.filePath) return current;
+        return {
+          ...current,
+          [ownerWorkspace.id]: {
+            ...existing,
+            editingFilePath: null,
+          },
+        };
+      });
       setToast({ msg: `Removed ${node.filePath}`, type: 'info' });
       return;
     }
-    let nextAgentSessionId = activeAgentSessionId;
-    let nextTerminalSessionId = activeTerminalSessionId;
-    setRoot((current) => {
-      const next = removeNodeById(current, nodeId);
-      if (activeAgentSessionId === nodeId) {
-        const workspace = ownerWorkspace ? getWorkspace(next, ownerWorkspace.id) : getWorkspace(next, activeWorkspaceId);
-        nextAgentSessionId = workspace ? findFirstSessionId(workspace, 'agent') : null;
-      }
-      if (activeTerminalSessionId === nodeId) {
-        const workspace = ownerWorkspace ? getWorkspace(next, ownerWorkspace.id) : getWorkspace(next, activeWorkspaceId);
-        nextTerminalSessionId = workspace ? findFirstSessionId(workspace, 'terminal') : null;
-      }
-      return next;
+    const ownerWorkspaceId = ownerWorkspace?.id ?? activeWorkspaceId;
+    const nextRoot = removeNodeById(root, nodeId);
+    const nextWorkspace = getWorkspace(nextRoot, ownerWorkspaceId);
+    setRoot(nextRoot);
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[ownerWorkspaceId];
+      if (!existing) return current;
+      const nextEntry: WorkspaceViewState = {
+        ...existing,
+        openTabId: existing.openTabId === nodeId ? null : existing.openTabId,
+        activeAgentSessionId: existing.activeAgentSessionId === nodeId ? (nextWorkspace ? findFirstSessionId(nextWorkspace, 'agent') : null) : existing.activeAgentSessionId,
+        activeTerminalSessionId: existing.activeTerminalSessionId === nodeId ? (nextWorkspace ? findFirstSessionId(nextWorkspace, 'terminal') : null) : existing.activeTerminalSessionId,
+      };
+      return workspaceViewStateEquals(existing, nextEntry)
+        ? current
+        : { ...current, [ownerWorkspaceId]: nextEntry };
     });
-    if (openTabId === nodeId) setOpenTabId(null);
-    if (activeAgentSessionId === nodeId) setActiveAgentSessionId(nextAgentSessionId ?? null);
-    if (activeTerminalSessionId === nodeId) setActiveTerminalSessionId(nextTerminalSessionId ?? null);
   }
 
   function handleOpenFileNode(nodeId: string) {
     const node = findNode(root, nodeId);
     if (node?.filePath) {
-      setEditingFilePath(node.filePath);
-      setOpenTabId(null);
       // Switch to the workspace that owns this file
       const workspace = findWorkspaceForNode(root, nodeId);
-      if (workspace) switchWorkspace(workspace.id);
+      if (workspace) {
+        setWorkspaceViewStateByWorkspace((current) => ({
+          ...current,
+          [workspace.id]: {
+            ...(current[workspace.id] ?? createWorkspaceViewEntry(workspace)),
+            openTabId: null,
+            editingFilePath: node.filePath ?? null,
+          },
+        }));
+        switchWorkspace(workspace.id);
+      }
     }
   }
 
@@ -2021,20 +2149,42 @@ function AgentBrowserApp() {
     if (!node || node.type !== 'tab') return;
     const workspace = findWorkspaceForNode(root, nodeId);
     if (workspace) switchWorkspace(workspace.id);
-    setEditingFilePath(null);
+    if (!workspace) return;
     if ((node.nodeKind ?? 'browser') === 'browser') {
-      setOpenTabId(nodeId);
+      setWorkspaceViewStateByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: {
+          ...(current[workspace.id] ?? createWorkspaceViewEntry(workspace)),
+          openTabId: nodeId,
+          editingFilePath: null,
+        },
+      }));
       return;
     }
-    setOpenTabId(null);
     if (node.nodeKind === 'agent') {
-      setActiveSessionMode('agent');
-      setActiveAgentSessionId(nodeId);
+      setWorkspaceViewStateByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: {
+          ...(current[workspace.id] ?? createWorkspaceViewEntry(workspace)),
+          openTabId: null,
+          editingFilePath: null,
+          activeMode: 'agent',
+          activeAgentSessionId: nodeId,
+        },
+      }));
       return;
     }
     if (node.nodeKind === 'terminal') {
-      setActiveSessionMode('terminal');
-      setActiveTerminalSessionId(nodeId);
+      setWorkspaceViewStateByWorkspace((current) => ({
+        ...current,
+        [workspace.id]: {
+          ...(current[workspace.id] ?? createWorkspaceViewEntry(workspace)),
+          openTabId: null,
+          editingFilePath: null,
+          activeMode: 'terminal',
+          activeTerminalSessionId: nodeId,
+        },
+      }));
     }
   }
 
@@ -2042,13 +2192,13 @@ function AgentBrowserApp() {
     if (activePanel === 'workspaces') {
       return (
         <div key={`ws-${activeWorkspaceId}`} className={`sidebar-content ${slideDir ? `ws-slide-${slideDir}` : ''}`}>
-          <MemBar root={root} />
+          <MemBar root={activeWorkspace} />
           <SidebarTree
             root={root}
             workspaceByNodeId={workspaceByNodeId}
             activeWorkspaceId={activeWorkspaceId}
-            openTabId={openTabId}
-            editingFilePath={editingFilePath}
+            openTabId={activeWorkspaceViewState.openTabId}
+            editingFilePath={activeWorkspaceViewState.editingFilePath}
             cursorId={cursorId}
             selectedIds={selectedIds}
             items={visibleItems}
@@ -2132,17 +2282,50 @@ function AgentBrowserApp() {
         {editingFile ? (
           <FileEditorPanel
             file={editingFile}
-            onSave={(nextFile, previousPath) => setWorkspaceFilesByWorkspace((current) => {
-              const existing = current[activeWorkspaceId] ?? [];
-              const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing;
-              return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) };
-            })}
-            onDelete={(path) => setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }))}
-            onClose={() => setEditingFilePath(null)}
+            onSave={(nextFile, previousPath) => {
+              setWorkspaceFilesByWorkspace((current) => {
+                const existing = current[activeWorkspaceId] ?? [];
+                const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing;
+                return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) };
+              });
+              setWorkspaceViewStateByWorkspace((current) => ({
+                ...current,
+                [activeWorkspaceId]: {
+                  ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+                  editingFilePath: nextFile.path,
+                },
+              }));
+            }}
+            onDelete={(path) => {
+              setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }));
+              setWorkspaceViewStateByWorkspace((current) => ({
+                ...current,
+                [activeWorkspaceId]: {
+                  ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+                  editingFilePath: current[activeWorkspaceId]?.editingFilePath === path ? null : current[activeWorkspaceId]?.editingFilePath ?? null,
+                },
+              }));
+            }}
+            onClose={() => setWorkspaceViewStateByWorkspace((current) => ({
+              ...current,
+              [activeWorkspaceId]: {
+                ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+                editingFilePath: null,
+              },
+            }))}
             onToast={setToast}
           />
         ) : openBrowserTab ? (
-          <PageOverlay tab={openBrowserTab} onClose={() => setOpenTabId(null)} />
+          <PageOverlay
+            tab={openBrowserTab}
+            onClose={() => setWorkspaceViewStateByWorkspace((current) => ({
+              ...current,
+              [activeWorkspaceId]: {
+                ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+                openTabId: null,
+              },
+            }))}
+          />
         ) : (
           <ChatPanel
             installedModels={installedModels}
@@ -2156,16 +2339,20 @@ function AgentBrowserApp() {
             activeTerminalSessionId={activeTerminalSessionId}
             activeMode={activeSessionMode}
             onSwitchMode={(mode) => {
-              setActiveSessionMode(mode);
-              setOpenTabId(null);
-              if (mode === 'agent' && !activeAgentSessionId) {
-                const first = findFirstSessionId(activeWorkspace, 'agent');
-                if (first) setActiveAgentSessionId(first);
-              }
-              if (mode === 'terminal' && !activeTerminalSessionId) {
-                const first = findFirstSessionId(activeWorkspace, 'terminal');
-                if (first) setActiveTerminalSessionId(first);
-              }
+              setWorkspaceViewStateByWorkspace((current) => ({
+                ...current,
+                [activeWorkspaceId]: {
+                  ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+                  openTabId: null,
+                  activeMode: mode,
+                  activeAgentSessionId: mode === 'agent'
+                    ? (current[activeWorkspaceId]?.activeAgentSessionId ?? findFirstSessionId(activeWorkspace, 'agent'))
+                    : current[activeWorkspaceId]?.activeAgentSessionId ?? null,
+                  activeTerminalSessionId: mode === 'terminal'
+                    ? (current[activeWorkspaceId]?.activeTerminalSessionId ?? findFirstSessionId(activeWorkspace, 'terminal'))
+                    : current[activeWorkspaceId]?.activeTerminalSessionId ?? null,
+                },
+              }));
             }}
             onNewAgentSession={() => addSessionToWorkspace(activeWorkspaceId, 'agent')}
             onNewTerminalSession={() => addSessionToWorkspace(activeWorkspaceId, 'terminal')}

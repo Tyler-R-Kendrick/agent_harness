@@ -26,10 +26,11 @@ When this repo is running inside a GitHub Codespace, do not use `http://localhos
 
 - Use `http://localhost:<port>` only for tools running inside the container, such as `curl`, Playwright, or server health checks.
 - Use the forwarded Codespaces URL for browser navigation, VS Code Simple Browser, manual debugging, and any redirect URI that must round-trip through the browser.
-- Generate the forwarded base URL with `PORT=<port>` and `BASE_URL="https://${CODESPACE_NAME}-${PORT}.${GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"`.
+- Generate the forwarded base URL by running `skills/agent-harness-context/scripts/codespaces-uri.sh <port>`.
+- Generate a full redirect URI by running `skills/agent-harness-context/scripts/codespaces-uri.sh <port> /auth/callback`.
+- The script queries the required Codespaces environment variables, builds the forwarded URL, and prints the final URI on stdout.
 - If a third-party auth provider needs to call back to the app, or the forwarded URL returns `401`, make the port public first with `gh codespace ports visibility -c "$CODESPACE_NAME" "${PORT}:public"`.
-- Append the app's callback path to `BASE_URL` when a full redirect URI is required, for example `"${BASE_URL}/auth/callback"`.
-- Validate the URL before using it with `curl -I -L -s -o /dev/null -w '%{http_code}\n' "$BASE_URL"`.
+- Or let the script do both steps with `skills/agent-harness-context/scripts/codespaces-uri.sh --public --check <port> /auth/callback`.
 
 ## Scaffolding
 
