@@ -26,6 +26,7 @@ import {
   User,
   X,
 } from 'lucide-react';
+import { Bash } from 'just-bash/browser';
 import './App.css';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
@@ -616,8 +617,6 @@ function FileEditorPanel({
   );
 }
 
-import { Bash } from 'just-bash/browser';
-
 const BASH_INITIAL_CWD = '/workspace';
 type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
 
@@ -639,6 +638,7 @@ function JustBashPanel({
 
   const getSessionBash = useCallback((id: string) => {
     if (!bashBySessionRef.current[id]) {
+      // Seed a placeholder file so the configured cwd always exists in the in-memory FS.
       bashBySessionRef.current[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/.keep`]: '' } });
     }
     return bashBySessionRef.current[id];
@@ -665,6 +665,7 @@ function JustBashPanel({
     const cmd = input.trim();
     if (!cmd || running) return;
     if (cmd === 'clear') {
+      // Keep clear instant in the UI instead of waiting for async shell execution.
       setHistoryBySession((current) => ({ ...current, [sessionId]: [] }));
       setInput('');
       inputRef.current?.focus();
