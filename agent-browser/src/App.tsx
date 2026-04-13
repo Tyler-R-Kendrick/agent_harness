@@ -557,7 +557,7 @@ function JustBashPanel() {
 
   return (
     <>
-      <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="assertive">
+      <div className="just-bash-output" ref={outputRef} aria-label="Terminal output" aria-live="polite">
         {history.length === 0 ? (
           <div className="bash-welcome">
             <span className="bash-prompt">$</span> Welcome to <strong>just-bash</strong> — a sandboxed shell.
@@ -573,7 +573,7 @@ function JustBashPanel() {
         ))}
         {running ? <div className="bash-running"><span className="bash-prompt">$ </span><span className="bash-cmd">{input || '…'}</span></div> : null}
       </div>
-      <form className="just-bash-compose" onSubmit={(e) => { void handleSubmit(e); }}>
+      <form className="just-bash-compose" onSubmit={handleSubmit}>
         <span className="bash-prompt">$ </span>
         <input
           ref={inputRef}

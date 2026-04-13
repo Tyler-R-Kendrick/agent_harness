@@ -15,8 +15,8 @@ const stubNodeZlib: Plugin = {
   load(id) {
     if (id === '\0stub-zlib') {
       return `
-        export function gunzipSync() { throw new Error('gunzip is not supported in the browser'); }
-        export function gzipSync() { throw new Error('gzip is not supported in the browser'); }
+        export function gunzipSync() { throw new Error('gunzipSync is not supported in the browser'); }
+        export function gzipSync() { throw new Error('gzipSync is not supported in the browser'); }
         export const constants = {};
       `;
     }
