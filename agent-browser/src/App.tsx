@@ -420,6 +420,14 @@ function buildWorkspaceNodeMap(root: TreeNode): Map<string, string> {
   return map;
 }
 
+function createSystemChatMessage(sessionId: string): ChatMessage {
+  return {
+    id: `${sessionId}:system`,
+    role: 'system',
+    content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.',
+  };
+}
+
 function flattenTreeFiltered(node: TreeNode, query: string, depth = 0): FlatTreeItem[] {
   const normalized = query.trim().toLowerCase();
   const children = node.children ?? [];
@@ -782,7 +790,6 @@ function ChatPanel({
   onNewTerminalSession: () => void;
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
 }) {
-  const SYSTEM_READY_MESSAGE = 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.';
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [input, setInput] = useState('');
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
@@ -794,7 +801,7 @@ function ChatPanel({
   const bashBySessionRef = useRef<Record<string, Bash>>({});
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
   const activeChatSessionId = activeAgentSessionId ?? 'agent:fallback';
-  const messages = messagesBySession[activeChatSessionId] ?? [{ id: `${activeChatSessionId}:system`, role: 'system', content: SYSTEM_READY_MESSAGE }];
+  const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
 
   useEffect(() => {
@@ -808,7 +815,7 @@ function ChatPanel({
   useEffect(() => {
     setMessagesBySession((current) => current[activeChatSessionId]
       ? current
-      : { ...current, [activeChatSessionId]: [{ id: `${activeChatSessionId}:system`, role: 'system', content: SYSTEM_READY_MESSAGE }] });
+      : { ...current, [activeChatSessionId]: [createSystemChatMessage(activeChatSessionId)] });
   }, [activeChatSessionId]);
 
   useEffect(() => {
@@ -822,7 +829,7 @@ function ChatPanel({
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
     setMessagesBySession((current) => ({
       ...current,
-      [activeChatSessionId]: (current[activeChatSessionId] ?? messagesRef.current).map((message) => message.id === id ? { ...message, ...patch } : message),
+      [activeChatSessionId]: (current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)]).map((message) => message.id === id ? { ...message, ...patch } : message),
     }));
   }
 
@@ -932,7 +939,7 @@ function ChatPanel({
           {showBash ? <button type="button" className="mode-tab mode-action" aria-label="New terminal session" onClick={onNewTerminalSession}><Icon name="plus" size={13} />New terminal</button> : null}
         </div>
       </header>
-      <div hidden={!showBash} aria-hidden={!showBash}>
+      <div hidden={!showBash}>
         {showBash && activeTerminalSessionId ? (
           <JustBashPanel
             sessionId={activeTerminalSessionId}
@@ -944,7 +951,7 @@ function ChatPanel({
         ) : null}
         {showBash && !activeTerminalSessionId ? <div className="chat-empty-state"><span>No terminal session selected.</span></div> : null}
       </div>
-      <div hidden={showBash} aria-hidden={showBash}>
+      <div hidden={showBash}>
         <>
           <div className="message-list" role="log" aria-live="polite">
             <div className="chat-empty-state">
