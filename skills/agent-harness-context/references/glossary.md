@@ -37,11 +37,15 @@ The default main-content assistant surface for the active workspace.
 
 ### Terminal Mode
 
-The chat panel's terminal view, backed by `just-bash`. Terminal sessions are scoped to the active workspace.
+The chat panel's terminal view, backed by `just-bash`. Terminal sessions are scoped to the active workspace, and each one runs against its own isolated in-memory filesystem.
 
 ### Workspace Files
 
 Capability files attached to a workspace, such as `AGENTS.md`, skill files, plugin manifests, and hook files, plus virtual filesystem nodes exposed by workspace terminal sessions.
+
+### Virtual Filesystem
+
+The workspace-scoped filesystem representation shown under Files. It includes persisted workspace capability files plus the filesystem trees emitted by that workspace's terminal sessions.
 
 ### Research / Build
 
@@ -54,6 +58,18 @@ Unless stated otherwise, we ARENT referring to git worktrees; we are referring t
 ### Browser-Runnable ONNX Models
 
 Hugging Face models intended to run in-browser for local inference, typically through Transformers.js-based flows in `agent-browser`.
+
+### Local Models
+
+Browser-runnable ONNX models that the user discovers, installs, and runs locally inside the browser workspace experience. Treat them as local inference assets rather than hosted API models.
+
+### Active Document Surface
+
+A first-class content surface that opens directly in the main area and is meant for active work. Browser tabs, text-like files, notes, and structured docs should be framed this way.
+
+### Media Surface
+
+A viewer or playback surface for assets such as audio, PDFs, DOCX files, images, and video. These are not the default text-editing surfaces; they open for viewing or playback instead.
 
 ### Codespaces Browse URL
 
@@ -78,6 +94,9 @@ Use `localhost` only for tools running inside the container, such as `curl`, Pla
 - Switching workspaces should swap context, not render multiple workspaces into one combined pane.
 - Opening a tab or file from another workspace may auto-switch to that workspace.
 - When switching back, preserve workspace-scoped state instead of leaking view state across workspaces.
+- Describe local model setup as an in-browser installation and activation flow for browser-runnable ONNX models.
+- Describe terminal filesystems as isolated workspace-scoped virtual filesystems, not as the user's host disk.
+- When describing content surfaces, distinguish active or editable document surfaces from viewer-only or playback-only media surfaces.
 - For browser debugging or auth callback setup in Codespaces, generate the URL by running `skills/agent-harness-context/scripts/codespaces-uri.sh`, not by reconstructing environment-variable logic from memory.
 - If docs or tests still describe all workspaces rendering together, treat that as stale language and update it.
 

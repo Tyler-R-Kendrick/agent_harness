@@ -138,7 +138,7 @@ test('captures the extensions screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   await page.getByLabel('Extensions').click();
-  await expect(page.getByRole('heading', { name: 'Extensions' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Marketplace' })).toBeVisible();
   await expect(page.getByLabel('Search extensions')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/extensions-screen.png', fullPage: true });
@@ -148,7 +148,7 @@ test('captures the history screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   await page.getByLabel('History').click();
-  await expect(page.getByText('Recent sessions')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recent' })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/history-screen.png', fullPage: true });
 });
@@ -159,8 +159,8 @@ test('captures the chat panel with composer', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   await expect(page.getByLabel('Chat input')).toBeVisible();
-  await expect(page.getByText('Agent Chat')).toBeVisible();
-  await expect(page.getByText('Workspace assistant', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
+  await expect(page.getByText('Local models, workspace files, and current context.')).toBeVisible();
   // Fill the composer to show the typing state
   await page.getByLabel('Chat input').fill('What local models are available?');
   assertNoRuntimeErrors();
@@ -191,8 +191,56 @@ test('captures the keyboard shortcuts modal', async ({ page }) => {
   await page.keyboard.press('?');
   await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
   await expect(page.getByText('Ctrl+Alt+←/→')).toBeVisible();
+  await expect(page.getByText('Alt+1-5')).toBeVisible();
+  await expect(page.getByText('Ctrl/Cmd+`')).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/keyboard-shortcuts.png', fullPage: true });
+});
+
+test('supports power-user navigation shortcuts across panels and modes', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+  await page.getByLabel('Omnibar').waitFor();
+
+  await page.keyboard.press('Alt+4');
+  await expect(page.getByLabel('Hugging Face search')).toBeVisible();
+
+  await page.keyboard.press('Alt+2');
+  await expect(page.getByRole('heading', { name: 'Recent' })).toBeVisible();
+
+  await page.keyboard.press('Alt+1');
+  await expect(page.getByLabel('Workspace tree')).toBeVisible();
+
+  await page.keyboard.press('Control+Backquote');
+  await expect(page.getByRole('heading', { name: 'Terminal' })).toBeVisible();
+
+  await page.keyboard.press('Control+Backquote');
+  await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
+
+  assertNoRuntimeErrors();
+});
+
+test('lets keyboard navigation enter category contents and wrap workspace cycling', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+  await page.getByLabel('Workspace tree').waitFor();
+
+  await page.keyboard.press('Home');
+  await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Research');
+
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Browser');
+
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Hugging Face');
+
+  await page.keyboard.press('Control+Alt+ArrowLeft');
+  await expect(page.getByLabel('Toggle workspace overlay')).toContainText('Build');
+
+  await page.keyboard.press('Control+Alt+ArrowRight');
+  await expect(page.getByLabel('Toggle workspace overlay')).toContainText('Research');
+
+  assertNoRuntimeErrors();
 });
 
 // ── User flow: page overlay (opening a tab) ───────────────────────────

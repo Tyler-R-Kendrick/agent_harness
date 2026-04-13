@@ -22,6 +22,36 @@ vi.mock('./services/browserInference', () => ({
   },
 }));
 
+vi.mock('just-bash/browser', () => {
+  class MockBash {
+    fsPaths = new Set<string>(['/workspace', '/workspace/.keep']);
+
+    fs = {
+      getAllPaths: () => [...this.fsPaths],
+    };
+
+    async exec(command: string) {
+      const trimmed = command.trim();
+      if (trimmed.startsWith('touch ')) {
+        const filePath = trimmed.slice('touch '.length).trim().replace(/^\/+/, '');
+        if (filePath) this.fsPaths.add(`/workspace/${filePath}`);
+      }
+      if (trimmed === 'pwd') {
+        return { stdout: '/workspace', stderr: '', exitCode: 0 };
+      }
+      if (trimmed === 'ls') {
+        const entries = [...this.fsPaths]
+          .filter((path) => path !== '/workspace' && path !== '/workspace/.keep')
+          .map((path) => path.replace('/workspace/', ''));
+        return { stdout: entries.join('\n'), stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    }
+  }
+
+  return { Bash: MockBash };
+});
+
 describe('App', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -34,6 +64,7 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -48,7 +79,7 @@ describe('App', () => {
     expect(screen.getByLabelText('Primary navigation')).toBeInTheDocument();
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Agent Chat').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
     expect(screen.queryByText('Create task board')).not.toBeInTheDocument();
     expect(screen.queryByText('Open gallery')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Browser' }).length).toBeGreaterThan(0);
@@ -343,6 +374,56 @@ describe('App', () => {
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
     expect(screen.getByText('Ctrl+Alt+←/→')).toBeInTheDocument();
     expect(screen.getByText('Double-click pill')).toBeInTheDocument();
+  });
+
+  it('supports power-user panel and mode shortcuts', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.keyDown(window, { key: '4', altKey: true });
+    expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '2', altKey: true });
+    expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '1', altKey: true });
+    expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '`', code: 'Backquote', ctrlKey: true });
+    expect(screen.getByRole('heading', { name: 'Terminal' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '`', code: 'Backquote', ctrlKey: true });
+    expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
+  });
+
+  it('lets keyboard navigation enter category contents and wrap workspace cycling', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const cursorLabel = () => document.querySelector('.tree-row.cursor .tree-button')?.textContent ?? '';
+
+    fireEvent.keyDown(window, { key: 'Home' });
+    expect(cursorLabel()).toContain('Research');
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(cursorLabel()).toContain('Browser');
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(cursorLabel()).toContain('Hugging Face');
+
+    fireEvent.keyDown(window, { key: 'ArrowLeft', ctrlKey: true, altKey: true });
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Build');
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', ctrlKey: true, altKey: true });
+    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Research');
   });
 
   it('debounces settings searches and aborts the previous request on query changes', async () => {

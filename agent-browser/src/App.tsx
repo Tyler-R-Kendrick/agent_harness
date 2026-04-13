@@ -56,6 +56,7 @@ type WorkspaceViewState = {
   activeAgentSessionId: string | null;
   activeTerminalSessionId: string | null;
 };
+type SidebarPanel = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 
 const TIERS = {
   hot: { color: '#f87171', label: 'Hot' },
@@ -113,6 +114,7 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account'];
 const WORKSPACE_SHORTCUT_GROUPS = [
   {
     title: 'Navigation',
@@ -145,6 +147,13 @@ const WORKSPACE_SHORTCUT_GROUPS = [
     items: [
       { keys: 'Type to filter', description: 'Incremental search' },
       { keys: '?', description: 'This overlay' },
+    ],
+  },
+  {
+    title: 'Panels',
+    items: [
+      { keys: 'Alt+1-5', description: 'Switch sidebar panel' },
+      { keys: 'Ctrl/Cmd+`', description: 'Toggle chat / terminal' },
     ],
   },
   {
@@ -411,6 +420,20 @@ function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: WorkspaceViewS
     openTabId: openTab?.type === 'tab' && (openTab.nodeKind ?? 'browser') === 'browser' ? openTab.id : null,
     activeAgentSessionId,
     activeTerminalSessionId,
+  };
+}
+
+function createModeWorkspaceViewEntry(workspace: TreeNode, entry: WorkspaceViewState | undefined, mode: 'agent' | 'terminal'): WorkspaceViewState | null {
+  const normalized = normalizeWorkspaceViewEntry(workspace, entry);
+  const nextSessionId = mode === 'agent' ? normalized.activeAgentSessionId : normalized.activeTerminalSessionId;
+  if (!nextSessionId) return null;
+  return {
+    ...normalized,
+    openTabId: null,
+    editingFilePath: null,
+    activeMode: mode,
+    activeAgentSessionId: mode === 'agent' ? nextSessionId : normalized.activeAgentSessionId,
+    activeTerminalSessionId: mode === 'terminal' ? nextSessionId : normalized.activeTerminalSessionId,
   };
 }
 
@@ -981,9 +1004,9 @@ function ChatPanel({
     <section className={`chat-panel ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className="chat-header">
         <div className="chat-heading">
-          <span className="panel-eyebrow">{showBash ? 'Sandboxed shell' : 'Workspace assistant'}</span>
-          <h2>{showBash ? 'Terminal' : 'Agent Chat'}</h2>
-          <p>{showBash ? 'Run commands in a sandboxed just-bash shell. Files persist while the tab is open.' : `I'm your workspace assistant with access to local models, exploration context, and the capability files stored in ${workspaceName}.`}</p>
+          <span className="panel-eyebrow">{showBash ? 'Shell' : workspaceName}</span>
+          <h2>{showBash ? 'Terminal' : 'Chat'}</h2>
+          <p>{showBash ? 'Sandboxed just-bash session.' : 'Local models, workspace files, and current context.'}</p>
         </div>
         <div className="chat-mode-controls">
           <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
@@ -1011,19 +1034,19 @@ function ChatPanel({
           <div className="message-list" role="log" aria-live="polite">
             <div className="chat-empty-state">
               <Icon name="sparkles" size={14} color="#d1fae5" />
-              <span>Ask about your workspace, browse the web, or run a task.</span>
+              <span>Ask, search, or run a task.</span>
             </div>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
           <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
-            <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local ONNX model…" rows={2} />
+            <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the model…" rows={1} />
             <div className="composer-toolbar">
               <label className="model-pill">
                 <span className="sr-only">Installed model</span>
                 <select aria-label="Installed model" value={selectedModelId} onChange={(event) => setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))}>
-                  <option value="">Choose an installed model</option>
+                  <option value="">Choose model</option>
                   {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                 </select>
               </label>
@@ -1077,10 +1100,10 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
 
   return (
     <section className="panel-scroll settings-panel" aria-label="Settings">
-      <span className="panel-eyebrow">Settings / Models</span>
+      <span className="panel-eyebrow">Models</span>
 
       <div className="local-model-controls">
-        <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search model registry" />
+        <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search models" />
         <div className="chip-row">
           {TASK_OPTIONS.map((option) => (
             <button
@@ -1129,7 +1152,27 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
 }
 
 function HistoryPanel() {
-  return <section className="panel-scroll history-panel" aria-label="History"><span className="panel-eyebrow">History</span><h2>Recent sessions</h2><p className="muted">Pick up where you left off across research, build, and UX investigations.</p>{mockHistory.map((session) => <article key={session.id} className="list-card history-card"><div className="history-card-header"><div><h3>{session.title}</h3><p className="muted">{session.date}</p></div><span className="badge">{session.events.length} events</span></div><p>{session.preview}</p><ul>{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul></article>)}</section>;
+  return (
+    <section className="panel-scroll history-panel" aria-label="History">
+      <span className="panel-eyebrow">History</span>
+      <h2>Recent</h2>
+      <div className="history-list">
+        {mockHistory.map((session) => (
+          <article key={session.id} className="list-card history-card">
+            <div className="history-card-header">
+              <div>
+                <h3>{session.title}</h3>
+                <p className="muted">{session.date}</p>
+              </div>
+              <span className="badge">{session.events.length} events</span>
+            </div>
+            <p className="history-preview">{session.preview}</p>
+            <ul className="history-events">{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 interface MarketplaceExtension {
@@ -1178,15 +1221,15 @@ function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: strin
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
+      <span className="panel-eyebrow">Extensions</span>
       <div className="extensions-topbar">
-        <Icon name="puzzle" size={16} color="#f59e0b" />
-        <h2>Extensions</h2>
+        <h2>Marketplace</h2>
         <span className="badge">{installedExtensions.size} installed</span>
       </div>
       <div className="extensions-search">
-        <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search extensions…" />
+        <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search marketplace" />
       </div>
-      <div className="extensions-grid">
+      <div className="extensions-list">
         {filtered.map((ext) => {
           const isInstalled = installedExtensions.has(ext.id);
           return (
@@ -1213,7 +1256,10 @@ function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: strin
       </div>
       {capabilities.plugins.length > 0 && (
         <div className="workspace-plugins-section">
-          <h3>Workspace Plugins ({workspaceName})</h3>
+          <div className="panel-section-header">
+            <span>Workspace plugins</span>
+            <span className="muted">{workspaceName}</span>
+          </div>
           {capabilities.plugins.map((plugin) => (
             <div key={plugin.path} className="list-card extension-card">
               <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
@@ -1260,59 +1306,70 @@ function WorkspaceSwitcherOverlay({
 
   return (
     <div className="ws-overlay-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher" onClick={onClose}>
-      <div className="ws-overlay-content" onClick={(e) => e.stopPropagation()}>
-        <div className="ws-overlay-title" role="heading" aria-level={2}>Workspaces</div>
-        <div className="ws-overlay-grid">
+      <div className="modal-card workspace-switcher-card ws-overlay-content" onClick={(e) => e.stopPropagation()}>
+        <div className="workspace-switcher-header">
+          <div className="workspace-switcher-heading">
+            <span className="panel-eyebrow">Workspace switcher</span>
+            <div className="workspace-switcher-title-row">
+              <h2>Workspaces</h2>
+              <span className="badge">{workspaces.length} open</span>
+            </div>
+            <p>Separate contexts for tabs, chat, terminals, and files.</p>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close workspace switcher"><Icon name="x" /></button>
+        </div>
+        <div className="workspace-switcher-body">
+          <div className="workspace-overlay-toolbar">
+            <div className="workspace-switcher-shortcuts" aria-hidden="true">
+              <span className="workspace-hotkey-chip">Ctrl+1-9</span>
+              <span>jump</span>
+              <span className="workspace-hotkey-chip">Ctrl+Alt+←/→</span>
+              <span>cycle</span>
+            </div>
+            <button type="button" className="secondary-button workspace-create-button" onClick={handleCreate}>
+              <Icon name="plus" size={14} />
+              New workspace
+            </button>
+          </div>
+          <div className="workspace-switcher-list">
           {workspaces.map((workspace, index) => {
             const isActive = workspace.id === activeWorkspaceId;
             const isHovered = workspace.id === hoveredId;
             const color = workspace.color ?? '#60a5fa';
             const tabCount = countTabs(workspace);
-            const tabs = flattenTabs(workspace, 'browser').slice(0, 4);
+            const previewTabs = flattenTabs(workspace, 'browser').slice(0, 3);
+            const memoryTotal = totalMemoryMB(workspace);
+            const previewLabel = previewTabs.length ? previewTabs.map((tab) => tab.name).join(' · ') : 'No pages yet';
 
             return (
               <div
                 key={workspace.id}
-                className={`workspace-card ${isActive ? 'active' : ''} ${isHovered ? 'hovered' : ''}`}
+                className={`workspace-card workspace-card-row ${isActive ? 'active' : ''} ${isHovered ? 'hovered' : ''}`}
                 onMouseEnter={() => setHoveredId(workspace.id)}
                 onMouseLeave={() => setHoveredId(null)}
-                onClick={() => handleSwitch(workspace.id)}
               >
-                <div
-                  className="ws-card-thumbnail"
-                  style={{
-                    borderColor: isActive ? color : isHovered ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.06)',
-                    background: isActive ? color + '10' : 'rgba(255,255,255,.03)',
-                  }}
+                <button
+                  type="button"
+                  className="workspace-card-button"
+                  onClick={() => handleSwitch(workspace.id)}
                 >
-                  <div className="ws-card-tab-list">
-                    {tabs.length > 0 ? tabs.map((tab) => (
-                      <div key={tab.id} className="ws-card-tab-row">
-                        <span className="ws-card-tab-dot" style={{ background: color + '30' }} />
-                        <span className="ws-card-tab-name">{tab.name}</span>
-                      </div>
-                    )) : (
-                      <div className="ws-card-empty">Empty workspace</div>
-                    )}
-                    {flattenTabs(workspace, 'browser').length > 4 && (
-                      <div className="ws-card-more">+{flattenTabs(workspace, 'browser').length - 4} more</div>
-                    )}
+                  <span className="workspace-swatch" style={{ background: `${color}1c`, borderColor: `${color}55` }}>
+                    <span className="workspace-swatch-dot" style={{ background: color }} />
+                  </span>
+                  <div className="workspace-card-main">
+                    <div className="workspace-card-title-row">
+                      <span className="workspace-hotkey-chip">{index + 1}</span>
+                      <strong className="ws-card-name" onDoubleClick={(event) => { event.stopPropagation(); onRenameWorkspace(workspace.id); }}>{workspace.name}</strong>
+                      {isActive ? <span className="badge connected">Active</span> : null}
+                    </div>
+                    <span className="ws-card-tab-count">{tabCount} tabs · {memoryTotal.toLocaleString()} MB</span>
+                    <span className="ws-card-tabs">{previewLabel}</span>
                   </div>
-                  {isActive && <div className="ws-card-active-bar" style={{ background: color }} />}
-                </div>
-                <div className="ws-card-label">
-                  <span className="ws-card-badge" style={{ background: color + '25', color, borderColor: color + '40' }}>
-                    {index + 1}
-                  </span>
-                  <span className="ws-card-name" onDoubleClick={(e) => { e.stopPropagation(); onRenameWorkspace(workspace.id); }}>
-                    {workspace.name}
-                  </span>
-                  <span className="ws-card-tab-count">{tabCount}</span>
-                </div>
+                </button>
                 {isHovered && !isActive && workspaces.length > 1 && onDeleteWorkspace && (
                   <button
                     type="button"
-                    className="ws-card-delete"
+                    className="workspace-card-delete"
                     onClick={(e) => { e.stopPropagation(); onDeleteWorkspace(workspace.id); }}
                     aria-label={`Delete workspace ${workspace.name}`}
                   >
@@ -1322,21 +1379,28 @@ function WorkspaceSwitcherOverlay({
               </div>
             );
           })}
-          <div className="workspace-card ws-card-new" onClick={handleCreate}>
-            <div className="ws-card-thumbnail ws-card-new-thumb">
-              <Icon name="plus" size={20} color="rgba(255,255,255,.2)" />
-              <span className="ws-card-new-label">New workspace</span>
-            </div>
-            <div className="ws-card-label">
-              <span className="ws-card-new-hint">Ctrl+Alt+N</span>
-            </div>
+          <div className="workspace-card workspace-card-row ws-card-new">
+            <button type="button" className="workspace-card-button" onClick={handleCreate}>
+              <span className="workspace-swatch workspace-swatch-new">
+                <Icon name="plus" size={14} color="rgba(255,255,255,.65)" />
+              </span>
+              <div className="workspace-card-main">
+                <div className="workspace-card-title-row">
+                  <strong className="ws-card-name">New workspace</strong>
+                </div>
+                <span className="ws-card-tab-count">Empty context</span>
+                <span className="ws-card-tabs">Ctrl+Alt+N</span>
+              </div>
+            </button>
           </div>
         </div>
         <div className="ws-overlay-hints">
-          <span>Ctrl+1-9 switch</span>
-          <span>Ctrl+Alt+←→ cycle</span>
+          <span>Enter open</span>
+          <span>Ctrl+Alt+N new workspace</span>
+          <span>Double-click name rename</span>
           <span>Esc close</span>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -1475,7 +1539,7 @@ function AgentBrowserApp() {
   if (!initialRootRef.current) initialRootRef.current = createInitialRoot();
   const [root, setRoot] = useState<TreeNode>(initialRootRef.current);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
-  const [activePanel, setActivePanel] = useState<'workspaces' | 'history' | 'extensions' | 'settings' | 'account'>('workspaces');
+  const [activePanel, setActivePanel] = useState<SidebarPanel>('workspaces');
   const [collapsed, setCollapsed] = useState(false);
   const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
@@ -1503,7 +1567,7 @@ function AgentBrowserApp() {
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
-  const activeWorkspaceViewState = activeWorkspace.type === 'workspace'
+  const activeWorkspaceViewState: WorkspaceViewState = activeWorkspace.type === 'workspace'
     ? normalizeWorkspaceViewEntry(activeWorkspace, workspaceViewStateByWorkspace[activeWorkspaceId])
     : {
         openTabId: null,
@@ -1591,6 +1655,12 @@ function AgentBrowserApp() {
     window.clearTimeout(slideTimeoutRef.current);
     slideTimeoutRef.current = window.setTimeout(() => setSlideDir(null), 300);
   }, [activeWorkspaceId, root]);
+
+  const switchSidebarPanel = useCallback((panel: SidebarPanel) => {
+    setActivePanel(panel);
+    setCollapsed(false);
+    setShowWorkspaces(false);
+  }, []);
 
   const openWorkspaceSwitcher = useCallback(() => {
     setActivePanel('workspaces');
@@ -1694,6 +1764,20 @@ function AgentBrowserApp() {
     }
     setToast({ msg: 'New terminal session created', type: 'success' });
   }, [setToast, switchWorkspace]);
+
+  const switchSessionMode = useCallback((workspaceId: string, mode: 'agent' | 'terminal') => {
+    const workspace = getWorkspace(root, workspaceId);
+    if (!workspace) return;
+    const nextEntry = createModeWorkspaceViewEntry(workspace, workspaceViewStateByWorkspace[workspaceId], mode);
+    if (!nextEntry) {
+      addSessionToWorkspace(workspaceId, mode);
+      return;
+    }
+    setWorkspaceViewStateByWorkspace((current) => ({
+      ...current,
+      [workspaceId]: createModeWorkspaceViewEntry(workspace, current[workspaceId], mode) ?? nextEntry,
+    }));
+  }, [addSessionToWorkspace, root, workspaceViewStateByWorkspace]);
 
   const pasteSelectionIntoWorkspace = useCallback((workspaceId: string) => {
     if (!clipboardIds.length) return;
@@ -1858,17 +1942,30 @@ function AgentBrowserApp() {
         jumpToWorkspaceByIndex(Number(event.key) - 1);
         return;
       }
+      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-5]$/.test(event.key)) {
+        event.preventDefault();
+        const targetPanel = PANEL_SHORTCUT_ORDER[Number(event.key) - 1];
+        if (targetPanel) switchSidebarPanel(targetPanel);
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.altKey && event.key.toLowerCase() === 'n') {
         event.preventDefault();
         createWorkspace();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'Backquote') {
+        event.preventDefault();
+        switchSessionMode(activeWorkspaceId, activeSessionMode === 'agent' ? 'terminal' : 'agent');
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
         event.preventDefault();
         const workspaces = root.children ?? [];
         const idx = workspaces.findIndex((w) => w.id === activeWorkspaceId);
-        if (event.key === 'ArrowLeft' && idx > 0) switchWorkspace(workspaces[idx - 1].id);
-        if (event.key === 'ArrowRight' && idx < workspaces.length - 1) switchWorkspace(workspaces[idx + 1].id);
+        if (idx < 0 || workspaces.length < 2) return;
+        const offset = event.key === 'ArrowLeft' ? -1 : 1;
+        const target = workspaces[(idx + offset + workspaces.length) % workspaces.length];
+        if (target) switchWorkspace(target.id);
         return;
       }
       if (activePanel !== 'workspaces') return;
@@ -1961,7 +2058,7 @@ function AgentBrowserApp() {
           setRoot((current) => deepUpdate(current, currentNode.id, (entry) => ({ ...entry, expanded: true })));
           return;
         }
-        if (currentNode?.type === 'workspace' && currentNode.children?.length) {
+        if (currentNode && currentNode.type !== 'tab' && currentNode.type !== 'file' && currentNode.children?.length) {
           event.preventDefault();
           setCursorId(currentNode.children[0].id);
           return;
@@ -1990,7 +2087,7 @@ function AgentBrowserApp() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activePanel, activeWorkspace, activeWorkspaceId, activeWorkspaceViewState.editingFilePath, activeWorkspaceViewState.openTabId, clipboardIds, createWorkspace, cursorId, handleOpenFileNode, jumpToWorkspaceByIndex, openWorkspaceSwitcher, pasteSelectionIntoWorkspace, root, selectedIds, selectionAnchorId, setToast, switchWorkspace, treeFilter, visibleItems]);
+  }, [activePanel, activeSessionMode, activeWorkspace, activeWorkspaceId, activeWorkspaceViewState.editingFilePath, activeWorkspaceViewState.openTabId, clipboardIds, createWorkspace, cursorId, handleOpenFileNode, jumpToWorkspaceByIndex, openWorkspaceSwitcher, pasteSelectionIntoWorkspace, root, selectedIds, selectionAnchorId, setToast, switchSessionMode, switchSidebarPanel, switchWorkspace, treeFilter, visibleItems]);
 
   async function installModel(model: HFModel) {
     if (loadingModelId === model.id) return;
@@ -2228,11 +2325,11 @@ function AgentBrowserApp() {
     <div className="app-shell">
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
-          {PRIMARY_NAV.map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else { setActivePanel('workspaces'); setCollapsed(false); } return; } setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+          {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">
-          {SECONDARY_NAV.map(([id, icon, label]) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { setActivePanel(id as typeof activePanel); setCollapsed(false); }} aria-label={label}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+          {SECONDARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => switchSidebarPanel(id as SidebarPanel)} aria-label={label} title={`${label} (Alt+${PRIMARY_NAV.length + index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
         </div>
         <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
@@ -2271,7 +2368,7 @@ function AgentBrowserApp() {
                   <Icon name="x" size={10} />
                 </button>
               ) : (
-                <div className="workspace-helper-text">Type to filter • Ctrl+Alt+N new workspace • Double-click pill to rename</div>
+                <div className="workspace-helper-text">Type to filter. Alt+1-5 switches panels. Ctrl/Cmd+` toggles chat and terminal.</div>
               )}
             </div>
           </header>
@@ -2338,22 +2435,7 @@ function AgentBrowserApp() {
             activeAgentSessionId={activeAgentSessionId}
             activeTerminalSessionId={activeTerminalSessionId}
             activeMode={activeSessionMode}
-            onSwitchMode={(mode) => {
-              setWorkspaceViewStateByWorkspace((current) => ({
-                ...current,
-                [activeWorkspaceId]: {
-                  ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
-                  openTabId: null,
-                  activeMode: mode,
-                  activeAgentSessionId: mode === 'agent'
-                    ? (current[activeWorkspaceId]?.activeAgentSessionId ?? findFirstSessionId(activeWorkspace, 'agent'))
-                    : current[activeWorkspaceId]?.activeAgentSessionId ?? null,
-                  activeTerminalSessionId: mode === 'terminal'
-                    ? (current[activeWorkspaceId]?.activeTerminalSessionId ?? findFirstSessionId(activeWorkspace, 'terminal'))
-                    : current[activeWorkspaceId]?.activeTerminalSessionId ?? null,
-                },
-              }));
-            }}
+            onSwitchMode={(mode) => switchSessionMode(activeWorkspaceId, mode)}
             onNewAgentSession={() => addSessionToWorkspace(activeWorkspaceId, 'agent')}
             onNewTerminalSession={() => addSessionToWorkspace(activeWorkspaceId, 'terminal')}
             onTerminalFsPathsChanged={(sessionId, paths) => setTerminalFsPathsBySession((current) => ({ ...current, [sessionId]: paths }))}

@@ -80,10 +80,9 @@ test.describe('visual regression: reference impl parity', () => {
     await page.locator('aside.sidebar').screenshot({ path: `${SCREENSHOT_DIR}/current-sidebar-workspace.png` });
   });
 
-  // ── Workspace overlay: full-screen blurred backdrop, workspace cards ─────
-  //    with thumbnail preview, color borders, tab count, rename on double-click,
-  //    new workspace card, hint row
-  test('workspace overlay matches reference card design', async ({ page }) => {
+  // ── Workspace overlay: compact switcher dialog with dense workspace rows ──
+  //    command-style shortcuts, quick create action, and keyboard hints
+  test('workspace overlay matches the compact switcher layout', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
     await page.goto('/');
     await page.getByLabel('Omnibar').waitFor();
@@ -97,7 +96,7 @@ test.describe('visual regression: reference impl parity', () => {
     // Title
     await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
 
-    // Workspace cards visible
+    // Workspace rows visible
     const workspaceCards = overlay.locator('.workspace-card');
     await expect(workspaceCards.first()).toBeVisible();
 
@@ -135,6 +134,8 @@ test.describe('visual regression: reference impl parity', () => {
     await expect(shortcuts.getByText('Ctrl+1-9')).toBeVisible();
     await expect(shortcuts.getByText('Ctrl+Alt+←/→')).toBeVisible();
     await expect(shortcuts.getByText('Ctrl+Alt+N')).toBeVisible();
+    await expect(shortcuts.getByText('Alt+1-5')).toBeVisible();
+    await expect(shortcuts.getByText('Ctrl/Cmd+`')).toBeVisible();
     await expect(shortcuts.getByText('Ctrl+X')).toBeVisible();
     await expect(shortcuts.getByText('Ctrl+V')).toBeVisible();
     await expect(shortcuts.getByText('Home / End')).toBeVisible();
@@ -143,8 +144,7 @@ test.describe('visual regression: reference impl parity', () => {
     await page.screenshot({ path: `${SCREENSHOT_DIR}/current-keyboard-shortcuts.png`, fullPage: true });
   });
 
-  // ── Extensions: reference has a marketplace with categories, search, ─────
-  //    extension cards with ratings and install buttons
+  // ── Extensions: compact marketplace list with search and install buttons ──
   test('extensions panel has reference marketplace features', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
     await page.goto('/');
@@ -153,15 +153,14 @@ test.describe('visual regression: reference impl parity', () => {
 
     // The reference extensions marketplace shows extension cards with ratings
     // and install actions. At minimum, the current app should show an extensions view.
-    const sidebar = page.locator('aside.sidebar');
-    await expect(sidebar).toBeVisible();
+    const appShell = page.locator('.app-shell');
+    await expect(appShell).toBeVisible();
 
     assertNoRuntimeErrors();
-    await sidebar.screenshot({ path: `${SCREENSHOT_DIR}/current-extensions.png` });
+    await appShell.screenshot({ path: `${SCREENSHOT_DIR}/current-extensions.png` });
   });
 
-  // ── Settings: reference has provider cards with API key inputs, ──────────
-  //    model checkboxes, HF model search
+  // ── Settings: dense model browser with search and compact filter chips ───
   test('settings panel has reference model config features', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
     await page.goto('/');
@@ -172,7 +171,7 @@ test.describe('visual regression: reference impl parity', () => {
     await expect(page.getByLabel('Hugging Face search')).toBeVisible();
 
     assertNoRuntimeErrors();
-    await page.locator('aside.sidebar').screenshot({ path: `${SCREENSHOT_DIR}/current-settings.png` });
+    await page.locator('.app-shell').screenshot({ path: `${SCREENSHOT_DIR}/current-settings.png` });
   });
 
   // ── Memory bar: reference has tier-colored segmented bar with legend ─────
