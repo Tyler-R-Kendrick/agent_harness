@@ -1,15 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { searchBrowserModels, pickBestDtype, ONNX_DTYPE_PREFERENCE } from './huggingFaceRegistry';
+import { searchBrowserModels } from './huggingFaceRegistry';
 
 const fetchMock = vi.fn();
-const getAvailableDtypesMock = vi.fn();
-
 vi.stubGlobal('fetch', fetchMock);
-vi.mock('@huggingface/transformers', () => ({
-  ModelRegistry: {
-    get_available_dtypes: (...args: unknown[]) => getAvailableDtypesMock(...args),
-  },
-}));
 
 function makeEntry(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -17,62 +10,18 @@ function makeEntry(overrides: Record<string, unknown> = {}): Record<string, unkn
     pipeline_tag: 'text-generation',
     downloads: 100,
     likes: 10,
-    tags: ['transformers.js'],
-    siblings: [{ rfilename: 'onnx/model_q4.onnx' }],
+    tags: ['transformers.js', 'onnx'],
     ...overrides,
   };
 }
 
-describe('pickBestDtype', () => {
-  it('returns q4 when model_q4.onnx exists', () => {
-    expect(pickBestDtype(['onnx/model_q4.onnx', 'onnx/model.onnx'])).toBe('q4');
-  });
-
-  it('prefers higher-priority dtypes', () => {
-    expect(pickBestDtype(['onnx/model.onnx', 'onnx/model_q4f16.onnx'])).toBe('q4f16');
-  });
-
-  it('falls back through the preference list', () => {
-    expect(pickBestDtype(['onnx/model.onnx'])).toBe('fp32');
-  });
-
-  it('recognizes the q8 quantized filename used by Transformers.js', () => {
-    expect(pickBestDtype(['onnx/model_quantized.onnx'])).toBe('q8');
-  });
-
-  it('returns null when no ONNX model files are present', () => {
-    expect(pickBestDtype(['tokenizer.json', 'config.json'])).toBeNull();
-  });
-
-  it('returns null for an empty list', () => {
-    expect(pickBestDtype([])).toBeNull();
-  });
-
-  it('covers all preference entries', () => {
-    for (const dtype of ONNX_DTYPE_PREFERENCE) {
-      const file = dtype === 'fp32'
-        ? 'onnx/model.onnx'
-        : dtype === 'q8'
-          ? 'onnx/model_quantized.onnx'
-          : `onnx/model_${dtype}.onnx`;
-      expect(pickBestDtype([file])).toBe(dtype);
-    }
-  });
-});
-
 describe('searchBrowserModels', () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
     fetchMock.mockReset();
-    getAvailableDtypesMock.mockReset();
-    getAvailableDtypesMock.mockResolvedValue(['q4']);
   });
 
-  it('requests the HF API with reference_impl search params', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [makeEntry()],
-    });
+  it('requests the HF API with reference_impl filters', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => [makeEntry()] });
 
     await searchBrowserModels('', 'text-generation');
 
@@ -81,7 +30,7 @@ describe('searchBrowserModels', () => {
     expect(url.searchParams.get('tags')).toBe('onnx');
     expect(url.searchParams.get('sort')).toBe('downloads');
     expect(url.searchParams.get('direction')).toBe('-1');
-    expect(url.searchParams.get('full')).toBe('true');
+    expect(url.searchParams.get('limit')).toBe('25');
   });
 
   it('passes pipeline_tag when task is provided', async () => {
@@ -93,7 +42,7 @@ describe('searchBrowserModels', () => {
     expect(url.searchParams.get('pipeline_tag')).toBe('text-classification');
   });
 
-  it('omits pipeline_tag when no task filter is selected', async () => {
+  it('omits pipeline_tag when no task is given', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => [makeEntry()] });
 
     await searchBrowserModels('', '');
@@ -111,91 +60,7 @@ describe('searchBrowserModels', () => {
     expect(url.searchParams.get('search')).toBe('qwen');
   });
 
-  it('filters out models with no loadable browser dtypes', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [
-        makeEntry({ id: 'org/good', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
-        makeEntry({ id: 'org/bad', siblings: [{ rfilename: 'onnx/model_q4.onnx' }] }),
-      ],
-    });
-    getAvailableDtypesMock.mockImplementation(async (id: string) => {
-      if (id === 'org/good') return ['q4'];
-      return [];
-    });
-
-    const results = await searchBrowserModels('', 'text-generation');
-
-    expect(results.map((m) => m.id)).toEqual(['org/good']);
-  });
-
-  it('falls back to ONNX sibling inspection when dtype lookup fails', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [makeEntry({ id: 'org/broken', siblings: [{ rfilename: 'onnx/model_q4f16.onnx' }] })],
-    });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    getAvailableDtypesMock.mockRejectedValue(new Error('transient registry failure'));
-
-    const results = await searchBrowserModels('', 'text-generation');
-
-    expect(results).toHaveLength(1);
-    expect(results[0].id).toBe('org/broken');
-    expect(results[0].dtype).toBe('q4f16');
-    expect(warnSpy).toHaveBeenCalledWith(
-      'Falling back to ONNX sibling inspection for org/broken',
-      expect.any(Error),
-    );
-  });
-
-  it('includes models that only have fp32 ONNX files', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model.onnx' }] })],
-    });
-    getAvailableDtypesMock.mockResolvedValue(['fp32']);
-
-    const results = await searchBrowserModels('', 'text-generation');
-
-    expect(results).toHaveLength(1);
-    expect(results[0].dtype).toBe('fp32');
-  });
-
-  it('includes models that only have q8 ONNX files', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [makeEntry({ siblings: [{ rfilename: 'onnx/model_quantized.onnx' }] })],
-    });
-    getAvailableDtypesMock.mockResolvedValue(['q8']);
-
-    const results = await searchBrowserModels('', 'text-generation');
-
-    expect(results).toHaveLength(1);
-    expect(results[0].dtype).toBe('q8');
-  });
-
-  it('stores the best available dtype on the model', async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => [
-        makeEntry({
-          id: 'org/multi',
-          siblings: [
-            { rfilename: 'onnx/model.onnx' },
-            { rfilename: 'onnx/model_q4.onnx' },
-            { rfilename: 'onnx/model_q4f16.onnx' },
-          ],
-        }),
-      ],
-    });
-    getAvailableDtypesMock.mockResolvedValue(['fp32', 'q4f16']);
-
-    const results = await searchBrowserModels('', 'text-generation');
-
-    expect(results[0].dtype).toBe('q4f16');
-  });
-
-  it('maps model fields correctly', async () => {
+  it('maps model fields correctly from the API response', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => [
@@ -204,7 +69,7 @@ describe('searchBrowserModels', () => {
           pipeline_tag: 'summarization',
           downloads: 999,
           likes: 42,
-          siblings: [{ rfilename: 'onnx/model_q4.onnx' }],
+          tags: ['transformers.js', 'onnx'],
         }),
       ],
     });
@@ -217,22 +82,26 @@ describe('searchBrowserModels', () => {
     expect(model.task).toBe('summarization');
     expect(model.downloads).toBe(999);
     expect(model.likes).toBe(42);
+    expect(model.status).toBe('available');
   });
 
-  it('checks available dtypes for each candidate model', async () => {
+  it('returns sizeMB from safetensors.total if available', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => [
-        makeEntry({ id: 'author/one' }),
-        makeEntry({ id: 'author/two' }),
-      ],
+      json: async () => [makeEntry({ safetensors: { total: 500_000_000 } })],
     });
 
-    await searchBrowserModels('', 'text-generation');
+    const [model] = await searchBrowserModels('', '');
 
-    expect(getAvailableDtypesMock).toHaveBeenCalledTimes(2);
-    expect(getAvailableDtypesMock).toHaveBeenNthCalledWith(1, 'author/one');
-    expect(getAvailableDtypesMock).toHaveBeenNthCalledWith(2, 'author/two');
+    expect(model.sizeMB).toBe(500);
+  });
+
+  it('returns sizeMB of 0 when safetensors is absent', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => [makeEntry()] });
+
+    const [model] = await searchBrowserModels('', '');
+
+    expect(model.sizeMB).toBe(0);
   });
 
   it('respects the AbortSignal', async () => {
@@ -248,5 +117,33 @@ describe('searchBrowserModels', () => {
     fetchMock.mockResolvedValue({ ok: false, status: 503 });
 
     await expect(searchBrowserModels('', 'text-generation')).rejects.toThrow('503');
+  });
+
+  it('returns all results from the API without filtering', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        makeEntry({ id: 'org/one' }),
+        makeEntry({ id: 'org/two' }),
+        makeEntry({ id: 'org/three' }),
+      ],
+    });
+
+    const results = await searchBrowserModels('', '', 10);
+
+    // No filtering happens — all entries from the HF API are returned
+    expect(results).toHaveLength(3);
+  });
+
+  it('does not call ModelRegistry or make extra network requests per model', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [makeEntry({ id: 'org/a' }), makeEntry({ id: 'org/b' })],
+    });
+
+    await searchBrowserModels('', 'text-generation');
+
+    // Only one fetch call — no per-model dtype probing
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

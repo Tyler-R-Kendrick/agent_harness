@@ -1,9 +1,9 @@
+// Matches the reference_impl TJS engine protocol (action-based messages, done/error responses).
 import BrowserInferenceWorker from '../workers/browserInference.worker?worker';
-import type { OnnxDtype } from '../types';
 import { createPrefixedId } from '../utils/uniqueId';
 
 export type InferenceCallbacks = {
-  onStatus?: (msg: string) => void;
+  onStatus?: (phase: string, msg: string, pct: number | null) => void;
   onPhase?: (phase: string) => void;
   onToken?: (token: string) => void;
   onDone?: (result: unknown) => void;
@@ -12,63 +12,86 @@ export type InferenceCallbacks = {
 
 class BrowserInferenceEngine {
   private worker: Worker | null = null;
-  private pending = new Map<string, (payload: Record<string, unknown>) => void>();
+  private workerFailed = false;
+  private callbacks = new Map<string, InferenceCallbacks & { resolve: () => void; reject: (err: Error) => void }>();
 
-  private getWorker(): Worker {
-    if (!this.worker) {
+  private getWorker(): Worker | null {
+    if (this.workerFailed) return null;
+    if (this.worker) return this.worker;
+    try {
       this.worker = new BrowserInferenceWorker();
       this.worker.onmessage = (event: MessageEvent<Record<string, unknown>>) => {
-        const id = String(event.data.id ?? '');
-        const callback = this.pending.get(id);
-        if (callback) callback(event.data);
+        const d = event.data;
+        const id = String(d.id ?? '');
+        const cb = this.callbacks.get(id);
+
+        // Status messages (progress) are broadcast to all callbacks, matching reference_impl
+        if (d.type === 'status') {
+          const phase = String(d.phase ?? '');
+          const msg = String(d.msg ?? '');
+          const pct = typeof d.pct === 'number' ? d.pct : null;
+          this.callbacks.forEach((c) => c.onStatus?.(phase, msg, pct));
+        }
+
+        if (!cb) return;
+
+        if (d.type === 'phase' && typeof d.phase === 'string') cb.onPhase?.(d.phase);
+        if (d.type === 'token' && typeof d.token === 'string') cb.onToken?.(d.token);
+
+        if (d.type === 'done') {
+          this.callbacks.delete(id);
+          cb.onDone?.(d.result);
+          cb.resolve();
+        }
+
+        if (d.type === 'error') {
+          const error = new Error(String(d.error ?? 'Worker error'));
+          this.callbacks.delete(id);
+          cb.onError?.(error);
+          cb.reject(error);
+        }
       };
+      this.worker.onerror = (e: ErrorEvent) => {
+        console.warn('TJS Worker error, all pending rejected:', e.message);
+        this.workerFailed = true;
+        this.worker = null;
+        this.callbacks.forEach((cb) => cb.onError?.(new Error('Worker failed: ' + e.message)));
+        this.callbacks.clear();
+      };
+    } catch (e) {
+      console.warn('Cannot create TJS Worker:', e instanceof Error ? e.message : String(e));
+      this.workerFailed = true;
     }
     return this.worker;
   }
 
-  async loadModel(task: string, modelId: string, dtype: OnnxDtype, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
+  async loadModel(task: string, modelId: string, callbacks: Pick<InferenceCallbacks, 'onStatus' | 'onPhase' | 'onError'> = {}) {
     const id = createPrefixedId('load');
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
-      this.pending.set(id, (payload) => {
-        if (payload.type === 'phase' && typeof payload.phase === 'string') callbacks.onPhase?.(payload.phase);
-        if (payload.type === 'status' && typeof payload.msg === 'string') {
-          callbacks.onStatus?.(payload.msg);
-          this.pending.delete(id);
-          resolve();
-        }
-        if (payload.type === 'error') {
-          const error = new Error(String(payload.msg ?? 'Worker error'));
-          callbacks.onError?.(error);
-          this.pending.delete(id);
-          reject(error);
-        }
+      this.callbacks.set(id, {
+        ...callbacks,
+        // `done` fires cb.resolve() below via the unified message handler;
+        // onDone is only needed for generate where the caller may want the result.
+        onDone: undefined,
+        resolve,
+        reject,
       });
-      worker.postMessage({ type: 'load', id, task, modelId, dtype });
+      worker?.postMessage({ id, action: 'load', task, modelId });
+      if (!worker) reject(new Error('Worker unavailable'));
     });
   }
 
-  async generate(input: { task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> }, callbacks: InferenceCallbacks) {
-    const id = createPrefixedId('generate');
+  async generate(
+    input: { task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> },
+    callbacks: InferenceCallbacks,
+  ) {
+    const id = createPrefixedId('gen');
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
-      this.pending.set(id, (payload) => {
-        if (payload.type === 'phase' && typeof payload.phase === 'string') callbacks.onPhase?.(payload.phase);
-        if (payload.type === 'status' && typeof payload.msg === 'string') callbacks.onStatus?.(payload.msg);
-        if (payload.type === 'token' && typeof payload.token === 'string') callbacks.onToken?.(payload.token);
-        if (payload.type === 'done') {
-          this.pending.delete(id);
-          callbacks.onDone?.(payload.result);
-          resolve();
-        }
-        if (payload.type === 'error') {
-          const error = new Error(String(payload.msg ?? 'Worker error'));
-          this.pending.delete(id);
-          callbacks.onError?.(error);
-          reject(error);
-        }
-      });
-      worker.postMessage({ type: 'generate', id, ...input });
+      this.callbacks.set(id, { ...callbacks, resolve, reject });
+      worker?.postMessage({ id, action: 'generate', ...input, options: input.options ?? {} });
+      if (!worker) reject(new Error('Worker unavailable'));
     });
   }
 }
