@@ -5,7 +5,7 @@ import { Theme } from '@radix-ui/themes';
 import '@radix-ui/themes/styles.css';
 import './index.css';
 import App from './App';
-import { COPILOT_RUNTIME_URL } from './config';
+import { COPILOT_RUNTIME_ENABLED, COPILOT_RUNTIME_URL } from './config';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -16,9 +16,13 @@ if ('serviceWorker' in navigator) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Theme appearance="dark" accentColor="jade" grayColor="slate" radius="large" scaling="100%">
-      <CopilotKit runtimeUrl={COPILOT_RUNTIME_URL}>
+      {COPILOT_RUNTIME_ENABLED ? (
+        <CopilotKit runtimeUrl={COPILOT_RUNTIME_URL}>
+          <App />
+        </CopilotKit>
+      ) : (
         <App />
-      </CopilotKit>
+      )}
     </Theme>
   </StrictMode>,
 );

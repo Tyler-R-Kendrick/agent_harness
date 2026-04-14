@@ -11,7 +11,7 @@ Feature: Virtual filesystem per workspace
     When the user adds an "AGENTS.md" file from the workspace tree
     Then the file editor opens with the path "AGENTS.md"
     When the user adds a skill named "review-pr"
-    Then the active workspace contains the file ".agents/skill/review-pr/SKILL.md"
+    Then the active workspace file editor shows ".agents/skill/review-pr/SKILL.md"
 
   Scenario: Merge terminal filesystem nodes into Files
     Given the active workspace has a second terminal session named "Terminal 2"

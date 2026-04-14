@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { Bash } from 'just-bash/browser';
 import './App.css';
+import { COPILOT_RUNTIME_ENABLED } from './config';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
 import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
@@ -115,6 +116,13 @@ const SECONDARY_NAV = [
   ['account', 'user', 'Account'],
 ] as const;
 const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account'];
+const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
+  workspaces: { label: 'Workspaces', icon: 'layers' },
+  history: { label: 'History', icon: 'clock' },
+  extensions: { label: 'Extensions', icon: 'puzzle' },
+  settings: { label: 'Models', icon: 'settings' },
+  account: { label: 'Account', icon: 'user' },
+};
 const WORKSPACE_SHORTCUT_GROUPS = [
   {
     title: 'Navigation',
@@ -701,19 +709,22 @@ function FileEditorPanel({
         <button type="button" className="icon-button" aria-label="Close file editor" onClick={onClose}><Icon name="x" /></button>
       </header>
       <div className="file-editor-body">
-        <label className="file-editor-field">
-          <span>Path</span>
-          <input aria-label="Workspace file path" value={editorPath} onChange={(event) => setEditorPath(event.target.value)} />
-        </label>
+        <div className="file-editor-chrome">
+          <label className="file-editor-pathbar">
+            <span className="sr-only">Path</span>
+            <Icon name="file" size={12} color="#7d8590" />
+            <input aria-label="Workspace file path" value={editorPath} onChange={(event) => setEditorPath(event.target.value)} />
+          </label>
+          <div className="file-editor-toolbar">
+            <button type="button" className="primary-button" onClick={handleSave}>Save file</button>
+            <button type="button" className="secondary-button destructive" onClick={() => { onDelete(file.path); onClose(); onToast({ msg: `Removed ${file.path}`, type: 'info' }); }}>Delete file</button>
+          </div>
+        </div>
+        {validationMessage ? <p className="file-editor-error">{validationMessage}</p> : null}
         <label className="file-editor-field file-editor-content-field">
-          <span>Content</span>
+          <span className="sr-only">Content</span>
           <textarea aria-label="Workspace file content" value={editorContent} onChange={(event) => setEditorContent(event.target.value)} />
         </label>
-        {validationMessage ? <p className="file-editor-error">{validationMessage}</p> : null}
-        <div className="file-editor-toolbar">
-          <button type="button" className="primary-button" onClick={handleSave}>Save file</button>
-          <button type="button" className="secondary-button destructive" onClick={() => { onDelete(file.path); onClose(); onToast({ msg: `Removed ${file.path}`, type: 'info' }); }}>Delete file</button>
-        </div>
       </div>
     </section>
   );
@@ -1004,9 +1015,11 @@ function ChatPanel({
     <section className={`chat-panel ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className="chat-header">
         <div className="chat-heading">
-          <span className="panel-eyebrow">{showBash ? 'Shell' : workspaceName}</span>
-          <h2>{showBash ? 'Terminal' : 'Chat'}</h2>
-          <p>{showBash ? 'Sandboxed just-bash session.' : 'Local models, workspace files, and current context.'}</p>
+          <span className="panel-eyebrow"><Icon name={showBash ? 'terminal' : 'layers'} size={12} color="#8fa6c4" />{showBash ? 'Terminal' : `Workspace / ${workspaceName}`}</span>
+          <div className="chat-title-row">
+            <Icon name={showBash ? 'terminal' : 'sparkles'} size={15} color={showBash ? '#86efac' : '#d1fae5'} />
+            <h2>{showBash ? 'Terminal' : 'Chat'}</h2>
+          </div>
         </div>
         <div className="chat-mode-controls">
           <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
@@ -1034,14 +1047,14 @@ function ChatPanel({
           <div className="message-list" role="log" aria-live="polite">
             <div className="chat-empty-state">
               <Icon name="sparkles" size={14} color="#d1fae5" />
-              <span>Ask, search, or run a task.</span>
+              <span>Ask, search, or run task.</span>
             </div>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {installedModels.length} active local models · {workspaceCapabilities.agents.length} AGENTS.md · {workspaceCapabilities.skills.length} skills · {workspaceCapabilities.plugins.length} plugins · {workspaceCapabilities.hooks.length} hooks · {pendingSearch ? 'web search queued' : 'workspace ready'}</div>
           <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
-            <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the model…" rows={1} />
+            <textarea aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask the local model" rows={1} />
             <div className="composer-toolbar">
               <label className="model-pill">
                 <span className="sr-only">Installed model</span>
@@ -1293,6 +1306,14 @@ function WorkspaceSwitcherOverlay({
   onClose: () => void;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+
+  const filteredWorkspaces = workspaces.filter((workspace) => {
+    if (!query.trim()) return true;
+    const normalized = query.trim().toLowerCase();
+    const tabs = flattenTabs(workspace, 'browser').map((tab) => tab.name.toLowerCase()).join(' ');
+    return workspace.name.toLowerCase().includes(normalized) || tabs.includes(normalized);
+  });
 
   const handleSwitch = (id: string) => {
     onSwitch(id);
@@ -1314,25 +1335,16 @@ function WorkspaceSwitcherOverlay({
               <h2>Workspaces</h2>
               <span className="badge">{workspaces.length} open</span>
             </div>
-            <p>Separate contexts for tabs, chat, terminals, and files.</p>
           </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close workspace switcher"><Icon name="x" /></button>
         </div>
         <div className="workspace-switcher-body">
-          <div className="workspace-overlay-toolbar">
-            <div className="workspace-switcher-shortcuts" aria-hidden="true">
-              <span className="workspace-hotkey-chip">Ctrl+1-9</span>
-              <span>jump</span>
-              <span className="workspace-hotkey-chip">Ctrl+Alt+←/→</span>
-              <span>cycle</span>
-            </div>
-            <button type="button" className="secondary-button workspace-create-button" onClick={handleCreate}>
-              <Icon name="plus" size={14} />
-              New workspace
-            </button>
-          </div>
+          <label className="workspace-switcher-search">
+            <Icon name="search" size={13} color="#71717a" />
+            <input aria-label="Search workspaces" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Switch to..." autoFocus />
+          </label>
           <div className="workspace-switcher-list">
-          {workspaces.map((workspace, index) => {
+          {filteredWorkspaces.map((workspace) => {
             const isActive = workspace.id === activeWorkspaceId;
             const isHovered = workspace.id === hoveredId;
             const color = workspace.color ?? '#60a5fa';
@@ -1358,7 +1370,7 @@ function WorkspaceSwitcherOverlay({
                   </span>
                   <div className="workspace-card-main">
                     <div className="workspace-card-title-row">
-                      <span className="workspace-hotkey-chip">{index + 1}</span>
+                      <span className="workspace-hotkey-chip">{workspaces.indexOf(workspace) + 1}</span>
                       <strong className="ws-card-name" onDoubleClick={(event) => { event.stopPropagation(); onRenameWorkspace(workspace.id); }}>{workspace.name}</strong>
                       {isActive ? <span className="badge connected">Active</span> : null}
                     </div>
@@ -1379,6 +1391,7 @@ function WorkspaceSwitcherOverlay({
               </div>
             );
           })}
+          {!filteredWorkspaces.length ? <div className="workspace-empty-state-row">No workspaces match this query.</div> : null}
           <div className="workspace-card workspace-card-row ws-card-new">
             <button type="button" className="workspace-card-button" onClick={handleCreate}>
               <span className="workspace-swatch workspace-swatch-new">
@@ -1394,11 +1407,19 @@ function WorkspaceSwitcherOverlay({
             </button>
           </div>
         </div>
-        <div className="ws-overlay-hints">
-          <span>Enter open</span>
-          <span>Ctrl+Alt+N new workspace</span>
-          <span>Double-click name rename</span>
-          <span>Esc close</span>
+        <div className="workspace-switcher-actions">
+          <div className="workspace-switcher-shortcuts" aria-hidden="true">
+            <span className="workspace-hotkey-chip">Ctrl+1-9</span>
+            <span>jump</span>
+            <span className="workspace-hotkey-chip">Ctrl+Alt+←/→</span>
+            <span>cycle</span>
+          </div>
+          <div className="ws-overlay-hints">
+            <span>Enter open</span>
+            <span>Ctrl+Alt+N new workspace</span>
+            <span>Double-click name rename</span>
+            <span>Esc close</span>
+          </div>
         </div>
       </div>
       </div>
@@ -1589,6 +1610,7 @@ function AgentBrowserApp() {
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
+  const activePanelMeta = SIDEBAR_PANEL_META[activePanel];
 
   useEffect(() => {
     setWorkspaceViewStateByWorkspace((current) => {
@@ -1849,7 +1871,9 @@ function AgentBrowserApp() {
     setToast({ msg: `Pasted ${clipboardIds.length} item${clipboardIds.length === 1 ? '' : 's'} into ${destination.name}`, type: 'success' });
   }, [clipboardIds, root, setToast, workspaceFilesByWorkspace]);
 
-  useCopilotReadable({
+  const useReadable = COPILOT_RUNTIME_ENABLED ? useCopilotReadable : (() => undefined);
+
+  useReadable({
     description: 'Current agent browser workspace context',
     value: {
       activePanel,
@@ -2337,7 +2361,7 @@ function AgentBrowserApp() {
         <aside className="sidebar">
           <header className="sidebar-header">
             <div className="sidebar-title-row">
-              <span className="panel-eyebrow">{activePanel === 'settings' ? 'Settings / Models' : activePanel === 'history' ? 'History' : activePanel === 'extensions' ? 'Extensions' : 'Workspaces'}</span>
+              <span className="panel-eyebrow"><Icon name={activePanelMeta.icon} size={12} color="#8fa6c4" />{activePanelMeta.label}</span>
             </div>
             <form className="omnibar" onSubmit={handleOmnibarSubmit}>
               <Icon name="search" size={13} color="#71717a" />
@@ -2354,8 +2378,8 @@ function AgentBrowserApp() {
                 >
                   <span className="workspace-swatch" style={{ background: activeWorkspace.color ?? '#60a5fa' }} />
                   <span className="workspace-toggle-copy">
-                    <span className="workspace-toggle-label">Workspace</span>
                     <strong>{activeWorkspace.name}</strong>
+                    <span className="workspace-toggle-meta">{countTabs(activeWorkspace)} tabs</span>
                   </span>
                 </button>
                 <button type="button" className="workspace-hotkey-button" aria-label="Open keyboard shortcuts" onClick={() => setShowShortcuts(true)}>
@@ -2368,7 +2392,7 @@ function AgentBrowserApp() {
                   <Icon name="x" size={10} />
                 </button>
               ) : (
-                <div className="workspace-helper-text">Type to filter. Alt+1-5 switches panels. Ctrl/Cmd+` toggles chat and terminal.</div>
+                <div className="workspace-helper-text">Type to filter. Alt+1-5 panels. Ctrl/Cmd+` mode.</div>
               )}
             </div>
           </header>

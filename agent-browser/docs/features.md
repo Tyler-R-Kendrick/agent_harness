@@ -45,7 +45,7 @@ How to interact:
 - Type a message in the chat composer textarea.
 - Select an installed local model from the model pill dropdown.
 - Click the green **Send** button or press Enter to submit.
-- The workspace assistant header shows the current context (active models, skills, plugins, hooks).
+- The workspace assistant header stays compact and keeps the current context visible without a large hero block.
 
 ## Settings / model registry
 
@@ -102,7 +102,7 @@ Playwright test: `captures the workspace switcher modal`
 How to interact:
 - Click the **workspace pill toggle** to open the switcher modal.
 - Search workspaces from the top of the overlay.
-- Each workspace row shows its name, jump hint, tab count, and memory usage.
+- Each workspace row is rendered as a dense quick-pick entry with its jump hint, tab count, and memory usage.
 - Click a workspace row to switch to it and close the modal.
 - Use **Ctrl+1…9** to jump directly, **Ctrl+Alt+←/→** to cycle, and **Ctrl+Alt+N** to create a new empty workspace.
 - Double-click the workspace pill (or a workspace row) to rename a workspace.
@@ -155,7 +155,7 @@ Playwright test: `captures workspace file edit and delete flow`
 How to interact:
 - Click the **+** button on a workspace node in the tree to add files directly as tree items.
 - Click a file node in the tree to open the **file editor** in the main content area.
-- Edit the file path and content, then click **Save file** to persist to browser storage.
+- Edit the path in the compact path bar, change content in the editor surface, then click **Save file** to persist to browser storage.
 - Click **Delete file** to remove a file from the workspace.
 
 ## Workspace switching

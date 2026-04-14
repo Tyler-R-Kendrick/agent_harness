@@ -160,7 +160,7 @@ test('captures the chat panel with composer', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByLabel('Chat input')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
-  await expect(page.getByText('Local models, workspace files, and current context.')).toBeVisible();
+  await expect(page.getByText('Workspace / Research')).toBeVisible();
   // Fill the composer to show the typing state
   await page.getByLabel('Chat input').fill('What local models are available?');
   assertNoRuntimeErrors();

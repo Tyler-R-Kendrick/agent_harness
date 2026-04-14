@@ -19,27 +19,35 @@ const TAB_URLS = {
   'CopilotKit docs': 'https://docs.copilotkit.ai',
 };
 
-export function buildInferenceWorkerStub() {
+export function buildInferenceWorkerModuleStub() {
   return `
-    self.onmessage = function(event) {
-      var data = event.data || {};
-      var id = data.id;
-      if (data.action === 'load') {
-        postMessage({ type: 'status', phase: 'model', id: id, msg: 'Loading...', pct: null });
-        setTimeout(function() {
-          postMessage({ type: 'done', id: id, result: { loaded: true, modelId: data.modelId } });
-        }, 250);
-        return;
+    export default class MockBrowserInferenceWorker {
+      constructor() {
+        this.onmessage = null;
+        this.onerror = null;
       }
-      if (data.action === 'generate') {
-        var prompt = JSON.stringify(data.prompt || []);
-        var hasWorkspaceContext = prompt.indexOf('Active workspace: Research') !== -1 || prompt.indexOf('Active workspace: Build') !== -1 || prompt.indexOf('Active workspace: Ops') !== -1 || prompt.indexOf('Active workspace: Workspace 3') !== -1;
-        var response = 'model=' + String(data.modelId || '') + ';workspace=' + (hasWorkspaceContext ? 'present' : 'missing');
-        postMessage({ type: 'phase', id: id, phase: 'thinking' });
-        postMessage({ type: 'token', id: id, token: response });
-        postMessage({ type: 'done', id: id, result: { text: response } });
+
+      postMessage(data) {
+        var id = data.id;
+        if (data.action === 'load') {
+          this.onmessage && this.onmessage({ data: { type: 'status', phase: 'model', id: id, msg: 'Loading...', pct: null } });
+          setTimeout(() => {
+            this.onmessage && this.onmessage({ data: { type: 'done', id: id, result: { loaded: true, modelId: data.modelId } } });
+          }, 250);
+          return;
+        }
+        if (data.action === 'generate') {
+          var prompt = JSON.stringify(data.prompt || []);
+          var hasWorkspaceContext = prompt.indexOf('Active workspace: Research') !== -1 || prompt.indexOf('Active workspace: Build') !== -1 || prompt.indexOf('Active workspace: Ops') !== -1 || prompt.indexOf('Active workspace: Workspace 3') !== -1;
+          var response = 'model=' + String(data.modelId || '') + ';workspace=' + (hasWorkspaceContext ? 'present' : 'missing');
+          this.onmessage && this.onmessage({ data: { type: 'phase', id: id, phase: 'thinking' } });
+          this.onmessage && this.onmessage({ data: { type: 'token', id: id, token: response } });
+          this.onmessage && this.onmessage({ data: { type: 'done', id: id, result: { text: response } } });
+        }
       }
-    };
+
+      terminate() {}
+    }
   `;
 }
 
@@ -141,6 +149,7 @@ export async function closeWorkspaceSwitcher(page) {
 export async function switchWorkspace(page, workspaceName) {
   const workspacePill = page.getByLabel('Toggle workspace overlay');
   if (await workspacePill.textContent() && (await workspacePill.textContent()).includes(workspaceName)) {
+    await expectWorkspaceTree(page, workspaceName);
     return;
   }
 
@@ -148,6 +157,7 @@ export async function switchWorkspace(page, workspaceName) {
   const dialog = page.getByRole('dialog', { name: 'Workspace switcher' });
   await dialog.locator('.workspace-card-button').filter({ hasText: workspaceName }).first().click();
   await expect(workspacePill).toContainText(workspaceName);
+  await expectWorkspaceTree(page, workspaceName);
 }
 
 export async function expectWorkspaceTree(page, workspaceName) {
@@ -156,8 +166,21 @@ export async function expectWorkspaceTree(page, workspaceName) {
 }
 
 export async function ensureTerminalMode(page) {
-  await page.getByRole('tab', { name: 'Terminal mode' }).click({ force: true });
-  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+  const input = page.getByLabel('Bash input');
+  await page.getByRole('tab', { name: 'Terminal mode' }).dispatchEvent('click');
+  if (!(await input.isVisible().catch(() => false))) {
+    const newTerminalButton = page.getByLabel('New terminal session');
+    if (await newTerminalButton.count()) {
+      await newTerminalButton.dispatchEvent('click');
+    }
+  }
+  if (!(await input.isVisible().catch(() => false))) {
+    const addTerminalButton = page.locator('[aria-label^="Add terminal to "]').first();
+    if (await addTerminalButton.count()) {
+      await addTerminalButton.dispatchEvent('click');
+    }
+  }
+  await expect(input).toBeVisible();
 }
 
 export async function runTerminalCommand(page, command) {
@@ -216,7 +239,7 @@ export async function ensureSecondTerminalSession(page, workspaceName, sessionNa
 
 export async function openTerminalSession(page, sessionName) {
   await page.getByRole('button', { name: sessionName, exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+  await expect(page.getByLabel('Bash input')).toBeVisible();
 }
 
 export async function openBrowserTab(page, tabName) {
@@ -224,6 +247,9 @@ export async function openBrowserTab(page, tabName) {
 }
 
 export async function installModelFromSettings(page, modelName) {
+  const searchInput = page.getByLabel('Hugging Face search');
+  await expect(searchInput).toBeVisible();
+  await searchInput.fill(modelName);
   const modelButton = page.getByRole('button', { name: new RegExp(escapeRegExp(modelName), 'i') }).first();
   await expect(modelButton).toBeVisible({ timeout: 8000 });
   await modelButton.click();

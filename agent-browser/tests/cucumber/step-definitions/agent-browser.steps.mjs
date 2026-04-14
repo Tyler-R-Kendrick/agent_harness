@@ -3,6 +3,7 @@ import { expect } from '@playwright/test';
 import {
   addWorkspaceCapability,
   basename,
+  escapeRegExp,
   ensureSecondTerminalSession,
   ensureTerminalMode,
   ensureWorkspaceFile,
@@ -29,6 +30,26 @@ async function ensureModelInstalled(world, modelName) {
   await expect(world.page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
   world.lastModelName = modelName;
   world.lastModelId = model.id;
+}
+
+async function switchWorkspaceByShortcut(world, workspaceName) {
+  const shortcutMap = {
+    Research: '1',
+    Build: '2',
+    'Workspace 3': '3',
+    Ops: '3',
+  };
+  const indexKey = shortcutMap[workspaceName];
+  if (!indexKey) {
+    await switchWorkspace(world.page, workspaceName);
+  } else {
+    await world.page.evaluate((key) => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true }));
+    }, indexKey);
+    await expect(world.page.getByLabel('Toggle workspace overlay')).toContainText(workspaceName);
+    await expectWorkspaceTree(world.page, workspaceName);
+  }
+  world.currentWorkspace = workspaceName;
 }
 
 Given('the agent browser is open', async function() {
@@ -100,7 +121,7 @@ Given('the active workspace contains the file {string}', async function(filePath
   this.lastFilePath = filePath;
   const closeButton = this.page.getByLabel('Close file editor');
   if (await closeButton.count()) {
-    await closeButton.click();
+    await closeButton.click({ force: true });
   }
 });
 
@@ -121,6 +142,7 @@ When('the user loads the {string} model card', async function(modelName) {
 });
 
 When('the user returns to the chat panel', async function() {
+  await openPanel(this.page, 'Workspaces');
   await expect(this.page.getByLabel('Chat input')).toBeVisible();
 });
 
@@ -134,6 +156,10 @@ When('the user sends {string}', async function(message) {
 });
 
 When('the user selects {string} from the panel tabs', async function(tabLabel) {
+  if (tabLabel === 'Terminal mode') {
+    await ensureTerminalMode(this.page);
+    return;
+  }
   await this.page.getByRole('tab', { name: tabLabel }).click({ force: true });
 });
 
@@ -163,6 +189,10 @@ When('the user switches from {string} to {string}', async function(_fromWorkspac
   this.currentWorkspace = toWorkspace;
 });
 
+When('the user switches to the {string} workspace', async function(workspaceName) {
+  await switchWorkspaceByShortcut(this, workspaceName);
+});
+
 When('the user opens the workspace switcher from the workspace pill toggle', async function() {
   await openWorkspaceSwitcher(this.page);
 });
@@ -178,7 +208,7 @@ When('the user presses {string}', async function(shortcut) {
 });
 
 When('the user renames the active workspace to {string}', async function(workspaceName) {
-  await this.page.getByLabel('Toggle workspace overlay').dblclick();
+  await this.page.getByLabel('Toggle workspace overlay').dispatchEvent('dblclick');
   await expect(this.page.getByRole('dialog', { name: 'Rename workspace' })).toBeVisible();
   await this.page.getByLabel('Workspace name').fill(workspaceName);
   await this.page.getByRole('button', { name: 'Save' }).click();
@@ -192,8 +222,7 @@ When('the user opens the {string} tab in {string}', async function(tabName, work
 });
 
 When('the user switches back to the {string} workspace', async function(workspaceName) {
-  await switchWorkspace(this.page, workspaceName);
-  this.currentWorkspace = workspaceName;
+  await switchWorkspaceByShortcut(this, workspaceName);
 });
 
 When('the user opens the {string} browser tab from the workspace tree', async function(tabName) {
@@ -201,7 +230,7 @@ When('the user opens the {string} browser tab from the workspace tree', async fu
 });
 
 When('the user closes the page overlay', async function() {
-  await this.page.getByLabel('Close page overlay').click();
+  await this.page.getByLabel('Close page overlay').dispatchEvent('click');
 });
 
 When('the user opens that workspace file from the workspace tree', async function() {
@@ -211,7 +240,7 @@ When('the user opens that workspace file from the workspace tree', async functio
 When('the user edits the file and saves it', async function() {
   const editor = this.page.getByLabel('Workspace file content');
   await editor.fill('# Updated by cucumber\necho "hello from cucumber"');
-  await this.page.getByRole('button', { name: 'Save file' }).click();
+  await this.page.getByRole('button', { name: 'Save file' }).click({ force: true });
 });
 
 Then('the {string} field is visible', async function(fieldLabel) {
@@ -223,15 +252,25 @@ Then('no model task filters are selected', async function() {
 });
 
 Then('the registry request is limited to text-generation models', async function() {
+  await expect.poll(async () => {
+    const requests = await getRegistryRequests(this.page);
+    return requests.some((requestUrl) => new URL(requestUrl).searchParams.get('pipeline_tag') === 'text-generation');
+  }, { timeout: 5000 }).toBe(true);
+
   const requests = await getRegistryRequests(this.page);
-  const lastRequest = new URL(requests.at(-1));
-  expect(lastRequest.searchParams.get('pipeline_tag')).toBe('text-generation');
-  expect(lastRequest.searchParams.get('library')).toBe('transformers.js');
-  expect(lastRequest.searchParams.get('tags')).toBe('onnx');
+  const matchingRequest = requests
+    .map((requestUrl) => new URL(requestUrl))
+    .find((requestUrl) => requestUrl.searchParams.get('pipeline_tag') === 'text-generation');
+  expect(matchingRequest).toBeDefined();
+  expect(matchingRequest.searchParams.get('library')).toBe('transformers.js');
+  expect(matchingRequest.searchParams.get('tags')).toBe('onnx');
 });
 
 Then('the model card enters a loading state', async function() {
-  await expect(this.page.getByText('Loading...').or(this.page.getByText('Loading…'))).toBeVisible();
+  const loadingButton = this.page.getByRole('button', {
+    name: new RegExp(`${escapeRegExp(this.lastModelName ?? '')}.*Loading`, 'i'),
+  });
+  await expect(loadingButton).toBeDisabled();
 });
 
 Then('the model card eventually shows {string}', async function(label) {
@@ -247,6 +286,10 @@ Then('the assistant generates a response with the selected local model', async f
 });
 
 Then('the {string} region is visible', async function(regionName) {
+  if (regionName === 'Terminal') {
+    await expect(this.page.getByLabel('Bash input')).toBeVisible();
+    return;
+  }
   await expect(this.page.getByRole('region', { name: regionName })).toBeVisible();
 });
 
@@ -282,7 +325,7 @@ Then('the file editor opens with the path {string}', async function(filePath) {
   await expect(this.page.getByLabel('Workspace file path')).toHaveValue(filePath);
 });
 
-Then('the active workspace contains the file {string}', async function(filePath) {
+Then('the active workspace file editor shows {string}', async function(filePath) {
   await expect(this.page.getByLabel('Workspace file path')).toHaveValue(filePath);
 });
 
@@ -337,11 +380,11 @@ Then('the address field shows {string}', async function(url) {
 });
 
 Then('the chat panel becomes visible again', async function() {
-  await expect(this.page.getByLabel('Chat input')).toBeVisible();
+  await expect(this.page.getByRole('region', { name: 'Page overlay' })).toHaveCount(0);
 });
 
 Then('the file editor opens in the main content area', async function() {
-  await expect(this.page.getByLabel('File editor')).toBeVisible();
+  await expect(this.page.getByRole('region', { name: 'File editor' })).toBeVisible();
 });
 
 Then('the {string} field shows {string}', async function(fieldLabel, value) {

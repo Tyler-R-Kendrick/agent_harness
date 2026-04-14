@@ -1,7 +1,7 @@
 import { After, AfterAll, Before, BeforeAll, Status, setDefaultTimeout } from '@cucumber/cucumber';
 import { chromium } from '@playwright/test';
 import {
-  buildInferenceWorkerStub,
+  buildInferenceWorkerModuleStub,
   installRegistryMock,
   isCriticalAssetUrl,
   isCriticalConsoleError,
@@ -53,11 +53,11 @@ Before({ tags: 'not @product-contract' }, async function() {
     }
   });
 
-  await this.context.route(/\/assets\/browserInference\.worker[^/]*\.js/, async (route) => {
+  await this.context.route(/browserInference\.worker\.ts\?worker/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/javascript',
-      body: buildInferenceWorkerStub(),
+      body: buildInferenceWorkerModuleStub(),
     });
   });
   await installRegistryMock(this.page);
