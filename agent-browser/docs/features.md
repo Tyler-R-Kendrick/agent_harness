@@ -11,7 +11,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 - Workspace switching and creation: `Research` and `Build` are separate workspaces, and users can switch, cycle, rename, or create workspaces without losing workspace-scoped state.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
 
-## Exploration + chat shell
+## Workspace shell
 
 Playwright test: `captures the main workspace screen`
 
@@ -33,7 +33,7 @@ How to interact:
 - Use the **workspace pill toggle** under the omnibar to open the workspace overlay.
 - Use the **?** button next to it to open the screenshot-style hotkeys modal.
 - Type directly while focused in Workspaces to incrementally filter the tree.
-- Send a prompt from the composer at the bottom using the model pill and green send button.
+- Send a prompt from the composer at the bottom using the model pill and Send button.
 
 ## Chat composer
 
@@ -44,8 +44,8 @@ Playwright test: `captures the chat panel with composer`
 How to interact:
 - Type a message in the chat composer textarea.
 - Select an installed local model from the model pill dropdown.
-- Click the green **Send** button or press Enter to submit.
-- The workspace assistant header stays compact and keeps the current context visible without a large hero block.
+- Click the **Send** button or press Enter to submit.
+- The chat header stays compact and keeps the current workspace context visible without a large hero block.
 
 ## Settings / model registry
 
@@ -55,7 +55,7 @@ Playwright test: `captures the settings screen`
 
 How to interact:
 - Open **Settings** from the bottom of the activity bar.
-- Use the Local tab styling to browse browser-runnable ONNX models.
+- Use the search field and task chips to browse browser-runnable ONNX models.
 - Search the registry across all supported browser models, then optionally narrow results with the task chips.
 - Use the Load button on a result card to install a model for local inference.
 
@@ -68,7 +68,7 @@ Playwright test: `captures the extensions screen`
 How to interact:
 - Open **Extensions** from the activity bar.
 - Review which plugin manifests were discovered from the active workspace.
-- Return to **Exploration** when you need to add or edit plugin manifest files.
+- Return to **Workspaces** when you need to add or edit plugin manifest files.
 
 ## History panel
 

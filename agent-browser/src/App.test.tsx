@@ -388,7 +388,7 @@ describe('App', () => {
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '2', altKey: true });
-    expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });
     expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();

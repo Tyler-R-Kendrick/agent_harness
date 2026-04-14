@@ -892,6 +892,8 @@ function ChatPanel({
   const activeChatSessionId = activeAgentSessionId ?? 'agent:fallback';
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
+  const hasInstalledModels = installedModels.length > 0;
+  const canSubmit = Boolean(input.trim()) && Boolean(selectedModelId);
 
   useEffect(() => {
     if (!installedModels.length) return;
@@ -1063,8 +1065,10 @@ function ChatPanel({
                   {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
                 </select>
               </label>
-              <button type="submit" className="primary-button accent"><Icon name="send" size={14} color="#07130f" />Send</button>
+              <button type="submit" className="primary-button accent" disabled={!canSubmit}><Icon name="send" size={14} color="#07130f" />Send</button>
             </div>
+            {!hasInstalledModels ? <div className="composer-status">No local model loaded. Open Models to load one.</div> : null}
+            {hasInstalledModels && !selectedModelId ? <div className="composer-status">Choose a loaded model to send the next prompt.</div> : null}
           </form>
         </>
       </div>
@@ -1113,10 +1117,13 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
 
   return (
     <section className="panel-scroll settings-panel" aria-label="Settings">
-      <span className="panel-eyebrow">Models</span>
+      <div className="panel-topbar">
+        <h2>Registry</h2>
+        <span className="badge">{installedModels.length} loaded</span>
+      </div>
 
       <div className="local-model-controls">
-        <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search models" />
+        <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search Hugging Face" />
         <div className="chip-row">
           {TASK_OPTIONS.map((option) => (
             <button
@@ -1152,13 +1159,13 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
 
       <div className="model-section settings-result-list">
         <div className="panel-section-header">
-          <span>{searchQuery || task ? `Results (${hfResults.length})` : `Popular on HF (${hfResults.length})`}</span>
+          <span>{searchQuery || task ? `Results (${hfResults.length})` : `Registry (${hfResults.length})`}</span>
           <span className="muted">{installedModels.length} models loaded</span>
         </div>
         {hfResults.map((model) => (
           <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
         ))}
-        {!hfResults.length && !recommended.length && <p className="muted">Search the model registry to find browser-runnable ONNX models.</p>}
+        {!hfResults.length && !recommended.length && <p className="muted">No browser-runnable ONNX models match the current filter.</p>}
       </div>
     </section>
   );
@@ -1167,8 +1174,10 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
 function HistoryPanel() {
   return (
     <section className="panel-scroll history-panel" aria-label="History">
-      <span className="panel-eyebrow">History</span>
-      <h2>Recent</h2>
+      <div className="panel-topbar">
+        <h2>Recent activity</h2>
+        <span className="badge">{mockHistory.length} sessions</span>
+      </div>
       <div className="history-list">
         {mockHistory.map((session) => (
           <article key={session.id} className="list-card history-card">
@@ -1234,13 +1243,12 @@ function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: strin
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
-      <span className="panel-eyebrow">Extensions</span>
-      <div className="extensions-topbar">
+      <div className="panel-topbar extensions-topbar">
         <h2>Marketplace</h2>
         <span className="badge">{installedExtensions.size} installed</span>
       </div>
       <div className="extensions-search">
-        <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search marketplace" />
+        <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
       </div>
       <div className="extensions-list">
         {filtered.map((ext) => {
@@ -1954,6 +1962,11 @@ function AgentBrowserApp() {
         }
         return;
       }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'Backquote') {
+        event.preventDefault();
+        switchSessionMode(activeWorkspaceId, activeSessionMode === 'agent' ? 'terminal' : 'agent');
+        return;
+      }
       if (event.defaultPrevented || isEditableTarget(event.target)) return;
       if (event.key === '?') { event.preventDefault(); setShowShortcuts(true); return; }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o' && !event.altKey) {
@@ -1975,11 +1988,6 @@ function AgentBrowserApp() {
       if ((event.ctrlKey || event.metaKey) && event.altKey && event.key.toLowerCase() === 'n') {
         event.preventDefault();
         createWorkspace();
-        return;
-      }
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === 'Backquote') {
-        event.preventDefault();
-        switchSessionMode(activeWorkspaceId, activeSessionMode === 'agent' ? 'terminal' : 'agent');
         return;
       }
       if ((event.ctrlKey || event.metaKey) && event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {

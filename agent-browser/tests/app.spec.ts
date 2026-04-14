@@ -148,7 +148,7 @@ test('captures the history screen', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
   await page.getByLabel('History').click();
-  await expect(page.getByRole('heading', { name: 'Recent' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/history-screen.png', fullPage: true });
 });
@@ -189,10 +189,11 @@ test('captures the keyboard shortcuts modal', async ({ page }) => {
   await page.getByLabel('Omnibar').waitFor();
   // Press ? to open keyboard shortcuts overlay
   await page.keyboard.press('?');
-  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible();
-  await expect(page.getByText('Ctrl+Alt+←/→')).toBeVisible();
-  await expect(page.getByText('Alt+1-5')).toBeVisible();
-  await expect(page.getByText('Ctrl/Cmd+`')).toBeVisible();
+  const shortcutsDialog = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(shortcutsDialog).toBeVisible();
+  await expect(shortcutsDialog.getByText('Ctrl+Alt+←/→', { exact: true })).toBeVisible();
+  await expect(shortcutsDialog.getByText('Alt+1-5', { exact: true })).toBeVisible();
+  await expect(shortcutsDialog.getByText('Ctrl/Cmd+`', { exact: true })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/keyboard-shortcuts.png', fullPage: true });
 });
@@ -206,7 +207,7 @@ test('supports power-user navigation shortcuts across panels and modes', async (
   await expect(page.getByLabel('Hugging Face search')).toBeVisible();
 
   await page.keyboard.press('Alt+2');
-  await expect(page.getByRole('heading', { name: 'Recent' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
 
   await page.keyboard.press('Alt+1');
   await expect(page.getByLabel('Workspace tree')).toBeVisible();

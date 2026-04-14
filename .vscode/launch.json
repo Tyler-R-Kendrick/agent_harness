@@ -1,0 +1,27 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "msedge",
+            "request": "launch",
+            "name": "Launch Edge against localhost",
+            "url": "http://localhost:8080",
+            "webRoot": "${workspaceFolder}"
+        },
+        {
+            "name": "Vite in Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://+:5173",
+            "webRoot": "${workspaceFolder}",                
+            "serverReadyAction": {
+                "pattern": "listening on port ([0-9]+)",
+                "uriFormat": "http://+:%s",
+                "action": "openExternally"
+            }
+        },
+    ]
+}
