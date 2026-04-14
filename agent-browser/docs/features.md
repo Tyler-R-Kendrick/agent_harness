@@ -91,6 +91,7 @@ How to interact:
 - Click any tab in the workspace tree to open it as a page overlay.
 - Use the address bar and navigation controls (back, forward, refresh) at the top.
 - Toggle the element inspector or page chat panel from the toolbar buttons.
+- Page overlays are workspace-scoped, so switching away and back restores the last open page for that workspace.
 - Close the overlay to return to the main chat view.
 
 ## Workspace switcher
@@ -169,5 +170,5 @@ How to interact:
 - Use **Ctrl+Alt+←/→** to switch with the keyboard — the direction of the slide matches the spatial position, and cycling wraps around at the ends.
 - Use **Ctrl+1…9** to jump directly by workspace position.
 - Use **Ctrl+Alt+N** to create a new empty workspace and **Double-click pill** to rename the current workspace.
-- Each workspace has its own set of tabs, files, and context.
+- Each workspace has its own tabs, files, terminal/chat sessions, and restored page overlays.
 - The workspace tree highlights the active workspace and file nodes follow the active workspace context.

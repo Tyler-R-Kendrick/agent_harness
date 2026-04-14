@@ -244,6 +244,31 @@ test('lets keyboard navigation enter category contents and wrap workspace cyclin
   assertNoRuntimeErrors();
 });
 
+test('restores page overlays when switching back to a workspace', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+  await page.getByLabel('Workspace tree').waitFor();
+
+  await page.getByRole('button', { name: /Hugging Face/ }).first().click();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
+  await expect(page.getByLabel('Address')).toHaveValue('https://huggingface.co/models?library=transformers.js');
+
+  await page.keyboard.press('Control+2');
+  await expect(page.getByRole('button', { name: /CopilotKit docs/ }).first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeHidden();
+
+  await page.getByRole('button', { name: /CopilotKit docs/ }).first().click();
+  await expect(page.getByLabel('Address')).toHaveValue('https://docs.copilotkit.ai');
+
+  await page.keyboard.press('Control+1');
+  await expect(page.getByLabel('Address')).toHaveValue('https://huggingface.co/models?library=transformers.js');
+
+  await page.keyboard.press('Control+2');
+  await expect(page.getByLabel('Address')).toHaveValue('https://docs.copilotkit.ai');
+
+  assertNoRuntimeErrors();
+});
+
 // ── User flow: page overlay (opening a tab) ───────────────────────────
 
 test('captures the page overlay when opening a tab', async ({ page }) => {

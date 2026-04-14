@@ -101,7 +101,7 @@ test.describe('visual regression: reference impl parity', () => {
     await expect(workspaceCards.first()).toBeVisible();
 
     // New workspace button
-    await expect(overlay.getByText(/new workspace/i)).toBeVisible();
+    await expect(overlay.getByRole('button', { name: /new workspace/i })).toBeVisible();
 
     // Hint row with shortcuts
     await expect(overlay.getByText(/Ctrl\+1-9/)).toBeVisible();

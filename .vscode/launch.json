@@ -5,23 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "msedge",
+            "name": "Run Browser",
+            "type": "node-terminal",
             "request": "launch",
-            "name": "Launch Edge against localhost",
-            "url": "http://localhost:8080",
-            "webRoot": "${workspaceFolder}"
+            "command": "npm run dev",
+            "cwd": "${workspaceFolder}/agent-browser"
         },
         {
-            "name": "Vite in Chrome",
             "type": "chrome",
             "request": "launch",
-            "url": "http://+:5173",
-            "webRoot": "${workspaceFolder}",                
-            "serverReadyAction": {
-                "pattern": "listening on port ([0-9]+)",
-                "uriFormat": "http://+:%s",
-                "action": "openExternally"
-            }
-        },
+            "name": "Run Browser (Chrome)",
+            "url": "http://127.0.0.1:5173",
+            "webRoot": "${workspaceFolder}/agent-browser"
+        }
     ]
 }

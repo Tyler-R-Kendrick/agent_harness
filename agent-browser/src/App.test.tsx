@@ -274,7 +274,10 @@ describe('App', () => {
     expect(screen.getByRole('dialog', { name: 'Workspace switcher' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+      vi.advanceTimersByTime(300);
+    });
     expect(screen.getByLabelText('Toggle workspace overlay')).toHaveTextContent('Build');
   });
 
@@ -310,7 +313,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByText('Hugging Face'));
     expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
-    expect(screen.getByDisplayValue('https://huggingface.co/models?library=transformers.js')).toBeInTheDocument();
+    expect(screen.getByLabelText('Address')).toHaveValue('https://huggingface.co/models?library=transformers.js');
 
     fireEvent.keyDown(window, { key: '2', ctrlKey: true });
 
@@ -318,12 +321,15 @@ describe('App', () => {
     expect(screen.getByText('CopilotKit docs')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('CopilotKit docs'));
-    expect(screen.getByDisplayValue('https://docs.copilotkit.ai')).toBeInTheDocument();
+    expect(screen.getByLabelText('Address')).toHaveValue('https://docs.copilotkit.ai');
 
-    fireEvent.keyDown(window, { key: '1', ctrlKey: true });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: '1', ctrlKey: true });
+      vi.advanceTimersByTime(300);
+    });
 
     expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
-    expect(screen.getByDisplayValue('https://huggingface.co/models?library=transformers.js')).toBeInTheDocument();
+    expect(screen.getByLabelText('Address')).toHaveValue('https://huggingface.co/models?library=transformers.js');
   });
 
   it('supports creating and renaming workspaces from the screenshot controls', async () => {

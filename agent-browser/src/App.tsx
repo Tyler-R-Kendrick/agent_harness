@@ -1619,6 +1619,15 @@ function AgentBrowserApp() {
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
   const activePanelMeta = SIDEBAR_PANEL_META[activePanel];
+  const handleTerminalFsPathsChanged = useCallback((sessionId: string, paths: string[]) => {
+    setTerminalFsPathsBySession((current) => {
+      const existing = current[sessionId] ?? [];
+      if (existing.length === paths.length && existing.every((entry, index) => entry === paths[index])) {
+        return current;
+      }
+      return { ...current, [sessionId]: paths };
+    });
+  }, []);
 
   useEffect(() => {
     setWorkspaceViewStateByWorkspace((current) => {
@@ -2446,6 +2455,7 @@ function AgentBrowserApp() {
           />
         ) : openBrowserTab ? (
           <PageOverlay
+            key={openBrowserTab.id}
             tab={openBrowserTab}
             onClose={() => setWorkspaceViewStateByWorkspace((current) => ({
               ...current,
@@ -2470,7 +2480,7 @@ function AgentBrowserApp() {
             onSwitchMode={(mode) => switchSessionMode(activeWorkspaceId, mode)}
             onNewAgentSession={() => addSessionToWorkspace(activeWorkspaceId, 'agent')}
             onNewTerminalSession={() => addSessionToWorkspace(activeWorkspaceId, 'terminal')}
-            onTerminalFsPathsChanged={(sessionId, paths) => setTerminalFsPathsBySession((current) => ({ ...current, [sessionId]: paths }))}
+            onTerminalFsPathsChanged={handleTerminalFsPathsChanged}
           />
         )}
       </main>

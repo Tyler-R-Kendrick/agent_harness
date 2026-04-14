@@ -5,7 +5,8 @@
 		"vscode": {
 			"extensions": [
 				"ms-python.python",
-				"GitHub.copilot-chat"
+				"GitHub.copilot-chat",
+				"ms-vscode.js-debug-nightly"
 			]
 		}
 	},
