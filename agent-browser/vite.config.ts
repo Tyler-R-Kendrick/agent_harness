@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
+import path from 'node:path';
 
 // just-bash/browser imports gunzipSync from node:zlib for gzip/gunzip/zcat.
 // Those commands are documented as unsupported in browsers. This plugin stubs
@@ -26,6 +27,16 @@ const stubNodeZlib: Plugin = {
 
 export default defineConfig({
   plugins: [stubNodeZlib, react()],
+  resolve: {
+    alias: process.env.VITE_ALLOW_SANDBOX_SAME_ORIGIN?.trim().toLowerCase() === 'true'
+      ? []
+      : [
+          {
+            find: '@webcontainer/api',
+            replacement: path.resolve(__dirname, 'src/sandbox/adapters/webcontainer-api.stub.ts'),
+          },
+        ],
+  },
   worker: {
     format: 'es',
   },

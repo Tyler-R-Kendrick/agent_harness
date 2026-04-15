@@ -46,10 +46,14 @@ import {
 import { Bash } from 'just-bash/browser';
 import './App.css';
 import { COPILOT_RUNTIME_ENABLED } from './config';
+import { getSandboxFeatureFlags } from './features/flags';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { browserInferenceEngine } from './services/browserInference';
 import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
 import { appendPendingLocalTurn, createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
+import { parseSandboxPrompt } from './sandbox/prompt';
+import { createSandboxExecutionService } from './sandbox/service';
+import { buildRunSummaryInput } from './sandbox/summarize-run';
 import {
   buildWorkspacePromptContext,
   createWorkspaceFileTemplate,
@@ -894,12 +898,13 @@ function ChatPanel({
   const consumedPendingSearchRef = useRef<string | null>(null);
   const bashBySessionRef = useRef<Record<string, Bash>>({});
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
+  const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
   const effectiveSelectedModelId = selectedModelId || installedModels[0]?.id || '';
   const hasInstalledModels = installedModels.length > 0;
-  const canSubmit = Boolean(input.trim()) && Boolean(effectiveSelectedModelId);
+  const canSubmit = Boolean(input.trim()) && (Boolean(effectiveSelectedModelId) || Boolean(parseSandboxPrompt(input)));
   const contextSummary = `${installedModels.length} active local models · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
 
@@ -959,6 +964,74 @@ function ChatPanel({
     }));
   }
 
+  const runSandboxPrompt = useCallback(async (text: string, assistantId: string) => {
+    const parsed = parseSandboxPrompt(text);
+    if (!parsed) {
+      return false;
+    }
+    if (!sandboxFlags.secureBrowserSandboxExec) {
+      updateMessage(assistantId, {
+        status: 'error',
+        content: 'Sandbox execution is disabled. Set VITE_SECURE_BROWSER_SANDBOX_EXEC=true to enable the browser sandbox tool path.',
+      });
+      return true;
+    }
+    if (!activeSessionId) {
+      updateMessage(assistantId, {
+        status: 'error',
+        content: 'Open or create a session before running sandbox tools.',
+      });
+      return true;
+    }
+
+    const bash = getSessionBash(activeSessionId);
+    const service = createSandboxExecutionService({
+      flags: sandboxFlags,
+      persistenceTarget: {
+        mkdir: (path, options) => bash.fs.mkdir(path, options),
+        writeFile: (path, content, encoding) => bash.fs.writeFile(path, content, encoding ?? 'utf-8'),
+      },
+    });
+
+    try {
+      const session = await service.createSession();
+      const result = await session.run(parsed.request);
+      const summary = buildRunSummaryInput(result);
+      onTerminalFsPathsChanged(activeSessionId, bash.fs.getAllPaths());
+      updateMessage(assistantId, {
+        status: result.status === 'succeeded' ? 'complete' : 'error',
+        isError: result.status !== 'succeeded',
+        loadingStatus: null,
+        streamedContent: [
+          `Sandbox run ${summary.metadata.status} (exit ${summary.metadata.exitCode}).`,
+          summary.stdout.length ? `stdout:\n${summary.stdout.join('')}` : null,
+          summary.stderr.length ? `stderr:\n${summary.stderr.join('')}` : null,
+          summary.persistedArtifactPaths.length ? `saved files:\n${summary.persistedArtifactPaths.join('\n')}` : null,
+        ].filter(Boolean).join('\n\n'),
+        cards: [{
+          app: 'Browser Sandbox',
+          args: {
+            command: parsed.commandLine,
+            adapter: summary.metadata.adapter,
+            status: summary.metadata.status,
+            exitCode: summary.metadata.exitCode,
+            artifacts: summary.counts.artifactCount,
+            persistedArtifactPaths: summary.persistedArtifactPaths,
+          },
+        }],
+      });
+      await session.dispose();
+    } catch (error) {
+      updateMessage(assistantId, {
+        status: 'error',
+        isError: true,
+        loadingStatus: null,
+        content: error instanceof Error ? error.message : 'Sandbox execution failed.',
+      });
+    }
+    return true;
+  }, [activeSessionId, getSessionBash, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     const model = installedModels.find((entry) => entry.id === effectiveSelectedModelId);
@@ -967,6 +1040,10 @@ function ChatPanel({
     messagesRef.current = nextMessages;
     setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
     setInput('');
+
+    if (await runSandboxPrompt(text, assistantId)) {
+      return;
+    }
 
     if (!model) {
       updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model from Settings before sending a prompt.' });
@@ -1035,7 +1112,7 @@ function ChatPanel({
     } catch (error) {
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
     }
-  }, [activeChatSessionId, effectiveSelectedModelId, installedModels, onToast, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, effectiveSelectedModelId, installedModels, onToast, runSandboxPrompt, workspaceName, workspacePromptContext]);
 
   const runTerminalCommand = useCallback(async (command: string) => {
     const cmd = command.trim();

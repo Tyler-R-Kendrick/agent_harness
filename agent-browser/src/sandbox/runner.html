@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="__SANDBOX_CSP__" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sandbox Runner</title>
+  </head>
+  <body>
+    <script>
+      window.__SANDBOX_RUNNER_CONFIG__ = __SANDBOX_RUNNER_CONFIG_JSON__;
+      window.__SANDBOX_RUNNER_SCRIPT__ = '__SANDBOX_RUNNER_SCRIPT_URL__';
+    </script>
+    <script type="module">
+      __SANDBOX_RUNNER_BOOTSTRAP__
+    </script>
+  </body>
+</html>

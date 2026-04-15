@@ -6,6 +6,13 @@ import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
 const searchBrowserModelsMock = vi.fn();
 const loadModelMock = vi.fn();
 const generateMock = vi.fn();
+const getSandboxFeatureFlagsMock = vi.fn(() => ({
+  secureBrowserSandboxExec: false,
+  disableWebContainerAdapter: false,
+  allowSameOriginForWebContainer: false,
+}));
+const createSandboxExecutionServiceMock = vi.fn();
+const buildRunSummaryInputMock = vi.fn();
 
 vi.mock('@copilotkit/react-core', () => ({
   useCopilotReadable: () => undefined,
@@ -20,6 +27,18 @@ vi.mock('./services/browserInference', () => ({
     loadModel: (...args: unknown[]) => loadModelMock(...args),
     generate: (...args: unknown[]) => generateMock(...args),
   },
+}));
+
+vi.mock('./features/flags', () => ({
+  getSandboxFeatureFlags: () => getSandboxFeatureFlagsMock(),
+}));
+
+vi.mock('./sandbox/service', () => ({
+  createSandboxExecutionService: (...args: unknown[]) => createSandboxExecutionServiceMock(...args),
+}));
+
+vi.mock('./sandbox/summarize-run', () => ({
+  buildRunSummaryInput: (...args: unknown[]) => buildRunSummaryInputMock(...args),
 }));
 
 vi.mock('just-bash/browser', () => {
@@ -61,6 +80,13 @@ describe('App', () => {
     searchBrowserModelsMock.mockResolvedValue([]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
+    getSandboxFeatureFlagsMock.mockReturnValue({
+      secureBrowserSandboxExec: false,
+      disableWebContainerAdapter: false,
+      allowSameOriginForWebContainer: false,
+    });
+    createSandboxExecutionServiceMock.mockReset();
+    buildRunSummaryInputMock.mockReset();
   });
 
   afterEach(() => {
@@ -261,12 +287,78 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the workspace rules.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
+    await act(async () => {
+      await Promise.resolve();
+    });
+
     expect(generateMock).toHaveBeenCalledTimes(1);
     const prompt = generateMock.mock.calls[0][0].prompt as Array<{ role: string; content: string }>;
     expect(prompt).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: 'system', content: expect.stringContaining('Active workspace: Research') }),
       expect.objectContaining({ role: 'system', content: expect.stringContaining('Always run workspace checks first.') }),
     ]));
+  });
+
+  it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {
+    vi.useFakeTimers();
+    getSandboxFeatureFlagsMock.mockReturnValue({
+      secureBrowserSandboxExec: true,
+      disableWebContainerAdapter: false,
+      allowSameOriginForWebContainer: false,
+    });
+    const dispose = vi.fn().mockResolvedValue(undefined);
+    const run = vi.fn().mockResolvedValue({
+      sessionId: 'sandbox-session',
+      runId: 'sandbox-run',
+      adapter: 'mock',
+      status: 'succeeded',
+      exitCode: 0,
+      artifacts: [{ path: 'dist/out.txt', content: 'hello', encoding: 'utf-8' }],
+      persistedArtifactPaths: ['/workspace/generated/dist/out.txt'],
+      metrics: undefined,
+      transcript: {
+        sessionId: 'sandbox-session',
+        runId: 'sandbox-run',
+        adapter: 'mock',
+        startedAt: 1,
+        endedAt: 2,
+        events: [],
+      },
+      usedLegacyFallback: false,
+    });
+    createSandboxExecutionServiceMock.mockReturnValue({
+      createSession: vi.fn().mockResolvedValue({ run, dispose, abort: vi.fn().mockResolvedValue(undefined), sessionId: 'sandbox-session' }),
+    });
+    buildRunSummaryInputMock.mockReturnValue({
+      metadata: { adapter: 'mock', status: 'succeeded', exitCode: 0 },
+      counts: { artifactCount: 1 },
+      stdout: ['hello from sandbox'],
+      stderr: [],
+      logs: [],
+      testResults: [],
+      persistedArtifactPaths: ['/workspace/generated/dist/out.txt'],
+    });
+
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: {
+        value: "/sandbox node index.js\ncapture: dist/out.txt\npersist: /workspace/generated\n\n```js file=index.js\nconsole.log('hello')\n```",
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(createSandboxExecutionServiceMock).toHaveBeenCalled();
+    expect(run).toHaveBeenCalled();
+    expect(screen.getByText(/Sandbox run succeeded/)).toBeInTheDocument();
+    expect(screen.getByText(/saved files:/i)).toBeInTheDocument();
   });
 
   it('adds accessible labels to page overlay close button', async () => {

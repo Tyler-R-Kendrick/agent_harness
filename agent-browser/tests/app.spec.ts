@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const SANDBOX_RUNTIME_FLAG_OVERRIDES_STORAGE_KEY = 'agent-browser.sandbox.flags';
+
 function captureRuntimeErrors(page: Page) {
   const errors: string[] = [];
   const isLocalUrl = (url: string) => url.startsWith('http://127.0.0.1:4173/') || url.startsWith('http://localhost:4173/');
@@ -199,12 +201,60 @@ test('captures the chat panel with composer', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Chat mode' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Terminal mode' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'New chat session' })).toBeVisible();
-  await expect(page.getByText('Workspace / Research')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New session' })).toBeVisible();
+  await expect(page.getByText(/workspace\/research/i)).toBeVisible();
   // Fill the composer to show the typing state
   await page.getByLabel('Chat input').fill('What local models are available?');
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/chat-composer.png', fullPage: true });
+});
+
+test('captures a sandbox tool run and persists generated files', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.addInitScript((storageKey: string) => {
+    if (window.top !== window) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify({
+        VITE_SECURE_BROWSER_SANDBOX_EXEC: 'true',
+      }));
+    } catch {
+      // Ignore frames that intentionally do not expose storage.
+    }
+  }, SANDBOX_RUNTIME_FLAG_OVERRIDES_STORAGE_KEY);
+  await page.goto('/');
+
+  await expect(page.getByLabel('Chat input')).toBeVisible();
+  await page.getByLabel('Chat input').fill([
+    '/sandbox node index.js',
+    'capture: dist/out.txt',
+    'persist: /workspace/generated',
+    '',
+    '```js file=index.js',
+    "console.log('hello from sandbox')",
+    '```',
+  ].join('\n'));
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByText(/Sandbox run succeeded/i)).toBeVisible({ timeout: 10000 });
+  const sandboxTranscriptEntry = page.locator('.message-bubble').filter({ hasText: 'saved files:' }).last();
+  await expect(sandboxTranscriptEntry).toContainText('/workspace/generated/dist/out.txt');
+
+  await switchToTerminalMode(page);
+  const bashInput = page.getByLabel('Bash input');
+  await expect(bashInput).toBeVisible();
+  await bashInput.fill('cat /workspace/generated/dist/out.txt');
+  await bashInput.press('Enter');
+  await expect(bashInput).toBeEnabled({ timeout: 10000 });
+  await expect(page.getByLabel('Terminal output')).toContainText('hello from sandbox');
+
+  await page.evaluate((storageKey: string) => {
+    window.localStorage.removeItem(storageKey);
+  }, SANDBOX_RUNTIME_FLAG_OVERRIDES_STORAGE_KEY);
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/sandbox-tool-run.png', fullPage: true });
 });
 
 // ── User flow: workspace switcher modal ───────────────────────────────

@@ -7,6 +7,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 
 - Local model installation and usage: Settings lets users search browser-runnable ONNX models, load them for local inference, and use installed models from the chat composer.
 - In-browser terminal with isolated filesystem: Terminal mode runs `just-bash` in the browser, with each terminal session using its own sandboxed in-memory filesystem.
+- Feature-gated sandbox tool execution: when `VITE_SECURE_BROWSER_SANDBOX_EXEC=true`, chat can run a `/sandbox ...` tool request inside a hidden sandboxed iframe, summarize structured results, and persist successful generated files into the active workspace `just-bash` filesystem.
 - Virtual filesystem per workspace: The Files category renders as a compute surface, mounts workspace-root and top-level directories as drives, and merges persisted workspace files with per-terminal filesystem trees per workspace.
 - Workspace switching and creation: `Research` and `Build` are separate workspaces, and users can switch, cycle, rename, or create workspaces without losing workspace-scoped state.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
@@ -46,6 +47,19 @@ How to interact:
 - Select an installed local model from the model pill dropdown.
 - Click the **Send** button or press Enter to submit.
 - The chat header stays compact and keeps the current workspace context visible without a large hero block.
+
+## Sandbox tool execution
+
+Playwright test: `captures a sandbox tool run and persists generated files`
+
+![Sandbox tool run screenshot](./screenshots/sandbox-tool-run.png)
+
+How to interact:
+- Enable the feature with `VITE_SECURE_BROWSER_SANDBOX_EXEC=true`.
+- Send a `/sandbox ...` prompt from the chat composer with fenced files plus optional `capture:` and `persist:` directives.
+- The run executes inside a hidden sandboxed iframe and returns structured output to the main app as plain text plus a tool card summary.
+- Successful captured artifacts can be written into the active workspace `just-bash` filesystem, where they appear under the Files category for that session.
+- The current default keeps `allow-same-origin` off unless separately enabled, so the sandbox uses the narrowest browser boundary first and only opts into WebContainer-specific permissions when explicitly configured.
 
 ## Settings / model registry
 
