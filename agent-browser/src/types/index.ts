@@ -13,6 +13,7 @@ export interface TreeNode {
   name: string;
   type: NodeType;
   nodeKind?: NodeKind;
+  isDrive?: boolean;
   children?: TreeNode[];
   expanded?: boolean;
   persisted?: boolean;

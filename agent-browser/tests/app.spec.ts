@@ -64,12 +64,14 @@ test('captures the main workspace screen', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: 'Add file' })).toBeVisible();
   await page.getByRole('button', { name: 'AGENTS.md' }).click();
   // AGENTS.md should appear in the tree and open in the file editor
-  await expect(page.getByLabel('Workspace file path')).toHaveValue('AGENTS.md');
+  await expect(page.getByRole('region', { name: 'File editor' }).getByText('AGENTS.md').first()).toBeVisible();
   // Add a skill
   await page.getByLabel('Add file to Research').click();
   await page.getByLabel('Capability name').fill('review-pr');
   await page.getByRole('button', { name: 'Skill' }).click();
-  await expect(page.getByLabel('Workspace file path')).toHaveValue('.agents/skill/review-pr/SKILL.md');
+  await expect(page.getByRole('region', { name: 'File editor' }).getByText('SKILL.md').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '.agents', exact: true })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
 });
@@ -130,6 +132,8 @@ test('captures categorized worktree with agent and terminal instances', async ({
   await expect(page.getByLabel('Bash input')).toBeEnabled({ timeout: 10000 });
 
   await expect(page.getByRole('button', { name: /Session 2 FS/ }).first()).toBeVisible();
+  await page.getByRole('button', { name: /Session 2 FS/ }).first().click();
+  await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toHaveCount(2);
 
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });

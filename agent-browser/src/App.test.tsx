@@ -91,6 +91,38 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
+  it('renders Files as a compute surface and mounts workspace directories as drives', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const filesButton = screen.getAllByRole('button', { name: 'Files' })[0];
+    expect(filesButton.querySelector('[data-icon="cpu"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-pr' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(screen.getByRole('button', { name: 'Workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '.agents' })).toBeInTheDocument();
+    expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
+    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+  });
+
   it('supports creating new chat and terminal instances from the tree and panel', async () => {
     vi.useFakeTimers();
     render(<App />);

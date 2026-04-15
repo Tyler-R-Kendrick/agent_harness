@@ -22,6 +22,7 @@ import {
   Folder,
   FolderOpen,
   Globe,
+  HardDrive,
   History,
   Keyboard,
   Layers3,
@@ -61,6 +62,7 @@ import {
   WORKSPACE_FILES_STORAGE_KEY,
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
+import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import { createUniqueId } from './utils/uniqueId';
 import type { ChatMessage, HFModel, HistorySession, NodeKind, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
@@ -289,6 +291,7 @@ const icons = {
   keyboard: Keyboard,
   folder: Folder,
   folderOpen: FolderOpen,
+  hardDrive: HardDrive,
   file: File,
   x: X,
   send: SendHorizontal,
@@ -342,7 +345,7 @@ function createInitialRoot(): TreeNode {
 
 function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof icons; size?: number; color?: string; className?: string }) {
   const IconComponent: LucideIcon = icons[name];
-  return <IconComponent size={size} color={color} className={className} aria-hidden="true" strokeWidth={1.8} />;
+  return <IconComponent size={size} color={color} className={className} aria-hidden="true" strokeWidth={1.8} data-icon={name} />;
 }
 
 function Favicon({ url, size = 14 }: { url?: string; size?: number }) {
@@ -500,26 +503,6 @@ function workspaceViewStateEquals(left: WorkspaceViewState, right: WorkspaceView
     && left.activeMode === right.activeMode
     && left.activeSessionIds.length === right.activeSessionIds.length
     && left.activeSessionIds.every((id, index) => id === right.activeSessionIds[index]);
-}
-
-function createVirtualFsTreeNodes(prefix: string, paths: string[]): TreeNode[] {
-  const root: TreeNode = { id: `${prefix}:root`, name: 'root', type: 'folder', expanded: true, children: [] };
-  for (const path of paths) {
-    const clean = path.replace(/^\/+/, '');
-    if (!clean) continue;
-    const parts = clean.split('/').filter(Boolean);
-    let cursor = root;
-    for (const [index, part] of parts.entries()) {
-      const nodeId = `${prefix}:${parts.slice(0, index + 1).join('/')}`;
-      let next = (cursor.children ?? []).find((child) => child.id === nodeId);
-      if (!next) {
-        next = { id: nodeId, name: part, type: 'folder', expanded: false };
-        cursor.children = [...(cursor.children ?? []), next];
-      }
-      cursor = next;
-    }
-  }
-  return root.children ?? [];
 }
 
 function buildWorkspaceNodeMap(root: TreeNode): Map<string, string> {
@@ -1697,8 +1680,8 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
                   {isWorkspace && node.persisted ? <span className="persist-badge" title="Persisted" aria-label="Persisted workspace">📌</span> : null}
                   {node.nodeKind === 'browser' ? <Icon name="globe" size={12} color="#93c5fd" /> : null}
                   {node.nodeKind === 'session' ? <Icon name="terminal" size={12} color="#86efac" /> : null}
-                  {node.nodeKind === 'files' ? <Icon name="file" size={12} color="#a5b4fc" /> : null}
-                  {!node.nodeKind ? <Icon name={node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={isWorkspace && node.activeMemory ? '#34d399' : node.color ?? '#60a5fa'} /> : null}
+                  {node.nodeKind === 'files' ? <Icon name="cpu" size={12} color="#a5b4fc" /> : null}
+                  {!node.nodeKind ? <Icon name={node.isDrive ? 'hardDrive' : node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={node.isDrive ? '#a5b4fc' : isWorkspace && node.activeMemory ? '#34d399' : node.color ?? '#60a5fa'} /> : null}
                 </>
               ) : (
                 <>
@@ -1946,12 +1929,7 @@ function AgentBrowserApp() {
         if (ws.type !== 'workspace') return ws;
         const normalizedWorkspace = ensureWorkspaceCategories(ws);
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
-        const fileNodes: TreeNode[] = files.map((f) => ({
-          id: `file:${ws.id}:${f.path}`,
-          name: f.path.split('/').pop() ?? f.path,
-          type: 'file' as const,
-          filePath: f.path,
-        }));
+        const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
         const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
         const terminalFsNodes: TreeNode[] = (sessionCategory?.children ?? [])
           .filter((child) => child.type === 'tab' && child.nodeKind === 'session')
@@ -1960,7 +1938,7 @@ function AgentBrowserApp() {
             name: `${terminalNode.name} FS`,
             type: 'folder',
             expanded: false,
-            children: createVirtualFsTreeNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? []),
+            children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? []),
           }));
         const nextChildren = (normalizedWorkspace.children ?? []).map((child) => child.nodeKind === 'files'
           ? { ...child, children: [...fileNodes, ...terminalFsNodes] }

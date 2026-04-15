@@ -7,7 +7,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 
 - Local model installation and usage: Settings lets users search browser-runnable ONNX models, load them for local inference, and use installed models from the chat composer.
 - In-browser terminal with isolated filesystem: Terminal mode runs `just-bash` in the browser, with each terminal session using its own sandboxed in-memory filesystem.
-- Virtual filesystem per workspace: The Files category merges persisted workspace files with per-terminal filesystem trees so each workspace has its own virtual filesystem surface.
+- Virtual filesystem per workspace: The Files category renders as a compute surface, mounts workspace-root and top-level directories as drives, and merges persisted workspace files with per-terminal filesystem trees per workspace.
 - Workspace switching and creation: `Research` and `Build` are separate workspaces, and users can switch, cycle, rename, or create workspaces without losing workspace-scoped state.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
 
@@ -27,7 +27,7 @@ How to interact:
 - The sidebar shows the **active workspace root** with its Browser, Terminal, Agent, and Files categories in a compact tree.
 - Click the workspace root or any category folder to expand or collapse that part of the tree.
 - Click a tab in the active workspace to open it as a page overlay.
-- Click the **+** button next to the active workspace to add files (AGENTS.md, skill, plugin, hook) directly into the tree.
+- Click the **+** button next to the active workspace to add files (AGENTS.md, skill, plugin, hook) directly into the mounted drives under Files.
 - Click a file node in the tree to open the **file editor** in the content area.
 - Use the omnibar to search or navigate.
 - Use the **workspace pill toggle** under the omnibar to open the workspace overlay.
