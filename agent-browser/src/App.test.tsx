@@ -299,6 +299,72 @@ describe('App', () => {
     ]));
   });
 
+  it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
+    vi.useFakeTimers();
+    let activeSignal: AbortSignal | undefined;
+    generateMock.mockImplementation(async (_input, callbacks, signal?: AbortSignal) => {
+      activeSignal = signal;
+      callbacks.onPhase?.('thinking');
+      callbacks.onToken?.('Partial draft');
+      return new Promise<void>((resolve, reject) => {
+        signal?.addEventListener('abort', () => {
+          const error = new Error('Generation stopped.');
+          error.name = 'AbortError';
+          reject(error);
+          resolve();
+        }, { once: true });
+      });
+    });
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Write a long answer.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Stop response' })).toBeInTheDocument();
+    expect(screen.getByText('Partial draft')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop response' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(activeSignal?.aborted).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Stop response' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.getByText('Stopped')).toBeInTheDocument();
+    expect(screen.queryByText('Generation stopped.')).not.toBeInTheDocument();
+  });
+
   it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {
     vi.useFakeTimers();
     getSandboxFeatureFlagsMock.mockReturnValue({

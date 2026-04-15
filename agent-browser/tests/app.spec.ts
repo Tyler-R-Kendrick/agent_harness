@@ -209,6 +209,52 @@ test('captures the chat panel with composer', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/chat-composer.png', fullPage: true });
 });
 
+test('captures the stop-response state in chat', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.route(/browserInference\.worker/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: `
+self.onmessage = (event) => {
+  const data = event.data || {};
+  const id = String(data.id || '');
+  if (!id) return;
+  if (data.action === 'load') {
+    self.postMessage({ type: 'done', id, result: { loaded: true } });
+    return;
+  }
+  if (data.action === 'generate') {
+    self.postMessage({ type: 'phase', id, phase: 'thinking' });
+    setTimeout(() => {
+      self.postMessage({ type: 'token', id, token: 'Draft answer in progress' });
+    }, 20);
+  }
+};`,
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel('Settings').click();
+  await expect(page.getByRole('button', { name: /Load/i }).first()).toBeVisible();
+  await page.getByRole('button', { name: /Load/i }).first().click();
+  await expect(page.getByText(/loaded/i)).toBeVisible();
+
+  await page.getByLabel('Workspaces').click();
+  await expect(page.getByLabel('Chat input')).toBeVisible();
+  await page.getByLabel('Chat input').fill('Write a long answer.');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByRole('button', { name: 'Stop response' })).toBeVisible();
+  await expect(page.getByText('Draft answer in progress')).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/chat-stop-response.png', fullPage: true });
+
+  await page.getByRole('button', { name: 'Stop response' }).click();
+  await expect(page.getByText('Stopped')).toBeVisible();
+});
+
 test('captures a sandbox tool run and persists generated files', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.addInitScript((storageKey: string) => {

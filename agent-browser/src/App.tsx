@@ -37,6 +37,7 @@ import {
   Search,
   SendHorizontal,
   Settings,
+  Square,
   Sparkles,
   Terminal,
   Trash2,
@@ -659,6 +660,7 @@ function ChatMessageView({ message, agentName }: { message: ChatMessage; agentNa
   const senderLabel = isSystem ? 'system' : isUser ? 'you' : isTerminalMessage ? 'terminal' : agentName;
   const isStreaming = message.status === 'streaming';
   const isError = message.isError ?? message.status === 'error';
+  const isStopped = message.statusText === 'stopped';
   return (
     <div className={`message ${message.role}${isTerminalMessage ? ' terminal-message' : ''}${isError ? ' message-error' : ''}`}>
       {!isSystem && (
@@ -667,6 +669,12 @@ function ChatMessageView({ message, agentName }: { message: ChatMessage; agentNa
         </div>
       )}
       {(message.thinkingContent || message.isThinking) && <ThinkingBlock content={message.thinkingContent} duration={message.thinkingDuration} isThinking={message.isThinking} />}
+      {isStopped && (
+        <div className="message-step message-step-static">
+          <span className="message-step-dot" />
+          <span className="message-step-text">Stopped</span>
+        </div>
+      )}
       {message.loadingStatus && (
         <div className="message-step">
           <span className="message-step-dot" />
@@ -852,6 +860,10 @@ const BASH_CWD_PLACEHOLDER_FILE = '.keep';
 const BASH_CWD_SENTINEL = '__JUSTBASH_CWD';
 type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
 
+function cleanStreamedAssistantContent(content: string): string {
+  return content.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim();
+}
+
 function ChatPanel({
   installedModels,
   pendingSearch,
@@ -890,6 +902,7 @@ function ChatPanel({
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
   const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
+  const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -897,6 +910,12 @@ function ChatPanel({
   const messagesRef = useRef<ChatMessage[]>([]);
   const consumedPendingSearchRef = useRef<string | null>(null);
   const bashBySessionRef = useRef<Record<string, Bash>>({});
+  const activeGenerationRef = useRef<{
+    assistantId: string;
+    sessionId: string;
+    cancel: () => void;
+    finalizeCancelled: () => void;
+  } | null>(null);
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
@@ -904,7 +923,9 @@ function ChatPanel({
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
   const effectiveSelectedModelId = selectedModelId || installedModels[0]?.id || '';
   const hasInstalledModels = installedModels.length > 0;
-  const canSubmit = Boolean(input.trim()) && (Boolean(effectiveSelectedModelId) || Boolean(parseSandboxPrompt(input)));
+  const hasActiveGeneration = activeGenerationSessionId !== null;
+  const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
+  const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (Boolean(effectiveSelectedModelId) || Boolean(parseSandboxPrompt(input)));
   const contextSummary = `${installedModels.length} active local models · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
 
@@ -950,6 +971,28 @@ function ChatPanel({
     }
     chatInputRef.current?.focus();
   }, [activeChatSessionId, activeSessionId, showBash]);
+
+  const clearActiveGeneration = useCallback((assistantId?: string) => {
+    const activeGeneration = activeGenerationRef.current;
+    if (!activeGeneration) return;
+    if (assistantId && activeGeneration.assistantId !== assistantId) return;
+    activeGenerationRef.current = null;
+    setActiveGenerationSessionId(null);
+  }, []);
+
+  const stopActiveGeneration = useCallback(() => {
+    const activeGeneration = activeGenerationRef.current;
+    if (!activeGeneration) return;
+    activeGeneration.cancel();
+    activeGeneration.finalizeCancelled();
+    clearActiveGeneration(activeGeneration.assistantId);
+    requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, [clearActiveGeneration]);
+
+  useEffect(() => () => {
+    activeGenerationRef.current?.cancel();
+    activeGenerationRef.current = null;
+  }, []);
 
   function appendSharedMessages(nextEntries: ChatMessage[]) {
     const nextMessages = [...messagesRef.current, ...nextEntries];
@@ -1033,7 +1076,7 @@ function ChatPanel({
   }, [activeSessionId, getSessionBash, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || activeGenerationRef.current) return;
     const model = installedModels.find((entry) => entry.id === effectiveSelectedModelId);
     const assistantId = createUniqueId();
     const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId: createUniqueId(), assistantId });
@@ -1065,6 +1108,27 @@ function ChatPanel({
     let thinkingBuffer = '';
     let inThinking = false;
     let thinkingStart = 0;
+    const controller = new AbortController();
+
+    activeGenerationRef.current = {
+      assistantId,
+      sessionId: activeChatSessionId,
+      cancel: () => controller.abort('Generation stopped.'),
+      finalizeCancelled: () => {
+        const streamedContent = cleanStreamedAssistantContent(tokenBuffer);
+        updateMessage(assistantId, {
+          status: 'complete',
+          statusText: 'stopped',
+          isThinking: false,
+          loadingStatus: null,
+          thinkingContent: thinkingBuffer || undefined,
+          thinkingDuration: thinkingBuffer ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
+          streamedContent: streamedContent || undefined,
+          content: streamedContent ? '' : 'Response stopped.',
+        });
+      },
+    };
+    setActiveGenerationSessionId(activeChatSessionId);
 
     try {
       await browserInferenceEngine.generate(
@@ -1088,7 +1152,7 @@ function ChatPanel({
                 isThinking: false,
                 thinkingContent: thinkingBuffer,
                 thinkingDuration: Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)),
-                streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(),
+                streamedContent: cleanStreamedAssistantContent(tokenBuffer),
                 status: 'streaming',
               });
               return;
@@ -1099,7 +1163,7 @@ function ChatPanel({
               return;
             }
             tokenBuffer += token;
-            updateMessage(assistantId, { streamedContent: tokenBuffer.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim(), status: 'streaming' });
+            updateMessage(assistantId, { streamedContent: cleanStreamedAssistantContent(tokenBuffer), status: 'streaming' });
           },
           onDone: (result) => updateMessage(assistantId, {
             status: 'complete',
@@ -1108,11 +1172,20 @@ function ChatPanel({
           }),
           onError: (error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
         },
+        controller.signal,
       );
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
       onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
+    } finally {
+      clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, effectiveSelectedModelId, installedModels, onToast, runSandboxPrompt, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, clearActiveGeneration, effectiveSelectedModelId, installedModels, onToast, runSandboxPrompt, workspaceName, workspacePromptContext]);
 
   const runTerminalCommand = useCallback(async (command: string) => {
     const cmd = command.trim();
@@ -1190,11 +1263,14 @@ function ChatPanel({
       consumedPendingSearchRef.current = null;
       return;
     }
+    if (activeGenerationRef.current) {
+      return;
+    }
     if (consumedPendingSearchRef.current === pendingSearch) return;
     consumedPendingSearchRef.current = pendingSearch;
     void sendMessage(`Search the web for: ${pendingSearch}`);
     onSearchConsumed();
-  }, [pendingSearch, onSearchConsumed, sendMessage]);
+  }, [activeGenerationSessionId, pendingSearch, onSearchConsumed, sendMessage]);
 
   return (
     <section className={`chat-panel shared-console ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
@@ -1256,12 +1332,18 @@ function ChatPanel({
             </div>
           </form>
         ) : (
-          <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); void sendMessage(input); }}>
+          <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } void sendMessage(input); }}>
             <div className="composer-rail">
               <label className="composer-input-shell shared-input-shell">
-                <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={hasInstalledModels ? 'Ask the local model…' : 'Install a model to start chatting'} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (canSubmit) void sendMessage(input); } }} />
-                <button type="submit" className="composer-send-btn" aria-label="Send" title="Send" disabled={!canSubmit}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={hasInstalledModels ? 'Ask the local model…' : 'Install a model to start chatting'} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } if (canSubmit) void sendMessage(input); } }} />
+                <button
+                  type="submit"
+                  className={`composer-send-btn${isActiveSessionGenerating ? ' composer-send-btn-stop' : ''}`}
+                  aria-label={isActiveSessionGenerating ? 'Stop response' : 'Send'}
+                  title={isActiveSessionGenerating ? 'Stop response' : 'Send'}
+                  disabled={!isActiveSessionGenerating && !canSubmit}
+                >
+                  {isActiveSessionGenerating ? <Square size={13} fill="currentColor" /> : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                 </button>
               </label>
             </div>

@@ -639,6 +639,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   50% { opacity: 0.3; }
 }
 .message-step-text { color: #7dd3fc; }
+.message-step-static .message-step-dot {
+  animation: none;
+  background: #fbbf24;
+}
+.message-step-static .message-step-text { color: #fcd34d; }
 .message-tool-call {
   border: 1px solid rgba(167, 139, 250, 0.2);
   background: rgba(109, 40, 217, 0.08);
@@ -762,6 +767,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   transition: background 0.15s, opacity 0.15s;
 }
 .composer-send-btn:hover { background: var(--accent-strong); }
+.composer-send-btn-stop {
+  background: rgba(239, 68, 68, 0.92);
+}
+.composer-send-btn-stop:hover {
+  background: #dc2626;
+}
 .composer-send-btn:disabled { opacity: 0.32; cursor: default; background: rgba(255,255,255,.12); color: var(--text-muted); }
 .composer-toolbar {
   display: flex;

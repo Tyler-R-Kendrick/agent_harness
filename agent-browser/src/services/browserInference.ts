@@ -10,10 +10,48 @@ export type InferenceCallbacks = {
   onError?: (error: Error) => void;
 };
 
+type PendingInferenceRequest = InferenceCallbacks & {
+  resolve: () => void;
+  reject: (err: Error) => void;
+  cleanup?: () => void;
+};
+
+function createAbortError(message: string): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException(message, 'AbortError');
+  }
+  const error = new Error(message);
+  error.name = 'AbortError';
+  return error;
+}
+
 class BrowserInferenceEngine {
   private worker: Worker | null = null;
   private workerFailed = false;
-  private callbacks = new Map<string, InferenceCallbacks & { resolve: () => void; reject: (err: Error) => void }>();
+  private callbacks = new Map<string, PendingInferenceRequest>();
+
+  private disposeWorker() {
+    if (!this.worker) return;
+    this.worker.onmessage = null;
+    this.worker.onerror = null;
+    this.worker.terminate();
+    this.worker = null;
+  }
+
+  private deleteCallback(id: string) {
+    const callback = this.callbacks.get(id);
+    if (!callback) return null;
+    this.callbacks.delete(id);
+    callback.cleanup?.();
+    return callback;
+  }
+
+  private abortRequest(id: string, message = 'Generation stopped.') {
+    const callback = this.deleteCallback(id);
+    if (!callback) return;
+    this.disposeWorker();
+    callback.reject(createAbortError(message));
+  }
 
   private getWorker(): Worker | null {
     if (this.workerFailed) return null;
@@ -39,14 +77,14 @@ class BrowserInferenceEngine {
         if (d.type === 'token' && typeof d.token === 'string') cb.onToken?.(d.token);
 
         if (d.type === 'done') {
-          this.callbacks.delete(id);
+          this.deleteCallback(id);
           cb.onDone?.(d.result);
           cb.resolve();
         }
 
         if (d.type === 'error') {
           const error = new Error(String(d.error ?? 'Worker error'));
-          this.callbacks.delete(id);
+          this.deleteCallback(id);
           cb.onError?.(error);
           cb.reject(error);
         }
@@ -54,8 +92,11 @@ class BrowserInferenceEngine {
       this.worker.onerror = (e: ErrorEvent) => {
         console.warn('TJS Worker error, all pending rejected:', e.message);
         this.workerFailed = true;
-        this.worker = null;
-        this.callbacks.forEach((cb) => cb.onError?.(new Error('Worker failed: ' + e.message)));
+        this.disposeWorker();
+        this.callbacks.forEach((cb) => {
+          cb.cleanup?.();
+          cb.onError?.(new Error('Worker failed: ' + e.message));
+        });
         this.callbacks.clear();
       };
     } catch (e) {
@@ -85,13 +126,35 @@ class BrowserInferenceEngine {
   async generate(
     input: { task: string; modelId: string; prompt: unknown; options?: Record<string, unknown> },
     callbacks: InferenceCallbacks,
+    signal?: AbortSignal,
   ) {
     const id = createPrefixedId('gen');
     const worker = this.getWorker();
     return new Promise<void>((resolve, reject) => {
-      this.callbacks.set(id, { ...callbacks, resolve, reject });
+      const abortHandler = () => {
+        this.abortRequest(id, typeof signal?.reason === 'string' ? signal.reason : 'Generation stopped.');
+      };
+
+      this.callbacks.set(id, {
+        ...callbacks,
+        resolve,
+        reject,
+        cleanup: signal ? () => signal.removeEventListener('abort', abortHandler) : undefined,
+      });
+
+      if (signal) {
+        signal.addEventListener('abort', abortHandler, { once: true });
+        if (signal.aborted) {
+          abortHandler();
+          return;
+        }
+      }
+
       worker?.postMessage({ id, action: 'generate', ...input, options: input.options ?? {} });
-      if (!worker) reject(new Error('Worker unavailable'));
+      if (!worker) {
+        this.deleteCallback(id);
+        reject(new Error('Worker unavailable'));
+      }
     });
   }
 }
