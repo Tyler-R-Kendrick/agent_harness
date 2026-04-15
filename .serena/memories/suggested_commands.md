@@ -1,0 +1,9 @@
+- Install app deps: npm ci --prefix /workspaces/agent_harness/agent-browser
+- Start dev server manually: npm --prefix /workspaces/agent_harness/agent-browser run dev
+- Run app tests: npm --prefix /workspaces/agent_harness/agent-browser run test
+- Run coverage: npm --prefix /workspaces/agent_harness/agent-browser run test:coverage
+- Run lint: npm --prefix /workspaces/agent_harness/agent-browser run lint
+- Resolve Codespaces URL: /workspaces/agent_harness/skills/agent-harness-context/scripts/codespaces-uri.sh 5173
+- Resolve and publish Codespaces URL if needed: /workspaces/agent_harness/skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5173
+- Start workspace auto-dev launcher manually: /workspaces/agent_harness/scripts/run-agent-browser-dev-server.sh
+- Install local preview helper extension manually: /workspaces/agent_harness/scripts/install-agent-browser-preview-extension.sh

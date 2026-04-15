@@ -1,0 +1,26 @@
+{
+  "name": "agent-browser-preview-extension",
+  "displayName": "Agent Browser Preview Extension",
+  "description": "Opens the agent-browser preview in Simple Browser when the workspace starts.",
+  "version": "0.0.1",
+  "publisher": "tyler-r-kendrick",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:agentHarness.openAgentBrowserPreview"
+  ],
+  "main": "./main.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentHarness.openAgentBrowserPreview",
+        "title": "Agent Harness: Open Agent Browser Preview"
+      }
+    ]
+  }
+}

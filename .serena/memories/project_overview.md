@@ -1,0 +1,4 @@
+- Purpose: agent_harness repo centered on agent-browser, a React+Vite prototype for multi-workspace agent/browser UI behavior.
+- Main app: /workspaces/agent_harness/agent-browser.
+- Supporting context: skills/, reference_impl/, AGENTS.md, repo-root devcontainer and VS Code workspace config.
+- Browser debugging in Codespaces must use forwarded URLs from skills/agent-harness-context/scripts/codespaces-uri.sh, not localhost for browser navigation.

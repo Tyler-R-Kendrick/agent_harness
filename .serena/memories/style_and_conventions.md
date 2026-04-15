@@ -1,0 +1,4 @@
+- Prefer minimal focused changes; preserve existing repo conventions.
+- Use forwarded Codespaces URLs for browser-facing flows; localhost only for in-container tools.
+- Keep agent-browser test server flow on 4173 separate from the main dev server on 5173.
+- Repo guidance expects Playwright validation for browser-facing changes and concise docs updates in AGENTS.md / app README when workflow changes.

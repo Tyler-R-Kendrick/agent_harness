@@ -61,13 +61,16 @@ test.describe('visual regression: reference impl parity', () => {
     await page.goto('/');
     await page.waitForSelector('[aria-label="Omnibar"]');
 
-    // Omnibar
+    // Navigation row: back / forward / refresh
+    await expect(page.getByLabel('Go back')).toBeVisible();
+    await expect(page.getByLabel('Go forward')).toBeVisible();
+    await expect(page.getByLabel('Reload')).toBeVisible();
+
+    // Omnibar (smaller, styled like chat input)
     await expect(page.getByLabel('Omnibar')).toBeVisible();
 
-    // Workspace toggle pill showing active workspace name + color swatch
+    // Workspace controls now live below the omnibar on the right
     await expect(page.getByLabel('Toggle workspace overlay')).toBeVisible();
-
-    // Hotkey button (?)
     await expect(page.getByLabel('Open keyboard shortcuts')).toBeVisible();
 
     // Workspace tree visible

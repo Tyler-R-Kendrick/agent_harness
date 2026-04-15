@@ -1,73 +1,27 @@
-# React + TypeScript + Vite
+# agent-browser
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The `agent-browser` app is a React and Vite workspace inside the `agent_harness` repository.
 
-Currently, two official plugins are available:
+## Hot reload in Codespaces
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Opening the repository in VS Code should start the Vite dev server automatically through `.vscode/tasks.json`. In Codespaces, the workspace also installs a small local helper extension that opens VS Code Simple Browser to the forwarded URL for port `5173`.
 
-## React Compiler
+The browser-facing URL should always come from `../skills/agent-harness-context/scripts/codespaces-uri.sh 5173`. The preview helper first validates that forwarded URL, and if it is not yet browser-accessible it retries with `--public --check` before opening Simple Browser. Use `http://localhost:5173` only for tooling that runs inside the container, such as `curl`, Playwright, or local health checks.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+If the helper extension was installed during the current session, reload the VS Code window once so the startup activation runs.
 
-## Expanding the ESLint configuration
+## Commands
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- `npm run dev` starts the hot-reload server on port `5173`.
+- `npm run dev:cucumber` starts the test server on port `4173`.
+- `npm run build` produces the production bundle.
+- `npm run test` runs the Vitest suite.
+- `npm run test:coverage` runs Vitest with coverage.
+- `npm run test:cucumber` starts the dedicated test server and runs the Cucumber tests.
+- `npm run lint` runs TypeScript in no-emit mode.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Manual fallbacks
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Run the `Agent Harness: Open Agent Browser Preview` command if the preview did not open automatically.
+- Use `.vscode/launch.json` if you want to start or debug the dev server manually.
+- Run `../skills/agent-harness-context/scripts/codespaces-uri.sh 5173` if you need to inspect or reuse the forwarded URL directly.

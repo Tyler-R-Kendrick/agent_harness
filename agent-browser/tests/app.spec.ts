@@ -74,6 +74,19 @@ test('captures the main workspace screen', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
 });
 
+test('closes AGENTS.md after save', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+  await page.getByLabel('Add file to Research').click();
+  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  await expect(page.getByLabel('Workspace file path')).toHaveValue('AGENTS.md');
+  await page.getByLabel('Workspace file content').fill('# Rules\nAlways verify workspace instructions.');
+  await page.getByRole('button', { name: 'Save file' }).click({ force: true });
+  await expect(page.getByLabel('Workspace file path')).toHaveCount(0);
+  await expect(page.getByLabel('Chat panel')).toBeVisible();
+  assertNoRuntimeErrors();
+});
+
 test('captures startup render without crypto.randomUUID', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.addInitScript(() => {
@@ -103,22 +116,20 @@ test('captures categorized worktree with agent and terminal instances', async ({
   await page.goto('/');
 
   await expect(page.getByRole('button', { name: 'Browser' }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Terminal' }).first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Agent' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sessions' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Files' }).first()).toBeVisible();
 
-  await page.getByLabel('Add chat to Research').click();
-  await expect(page.getByRole('button', { name: 'Chat 2', exact: true })).toBeVisible();
-  await page.getByLabel('Add terminal to Research').click();
-  await expect(page.getByRole('button', { name: 'Terminal 2', exact: true })).toBeVisible();
+  await page.getByLabel('Add session to Research').click();
+  await expect(page.getByRole('button', { name: 'Session 2', exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Terminal 2', exact: true }).click();
+  await page.getByRole('button', { name: 'Session 2', exact: true }).click();
+  await page.getByRole('tab', { name: 'Terminal mode' }).click();
   await expect(page.getByLabel('Bash input')).toBeVisible();
   await page.getByLabel('Bash input').fill('touch notes.txt');
   await page.getByLabel('Bash input').press('Enter');
   await expect(page.getByLabel('Bash input')).toBeEnabled({ timeout: 10000 });
 
-  await expect(page.getByRole('button', { name: /Terminal 2 FS/ }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Session 2 FS/ }).first()).toBeVisible();
 
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
@@ -130,6 +141,28 @@ test('captures the settings screen', async ({ page }) => {
   await page.getByLabel('Settings').click();
   await expect(page.getByLabel('Hugging Face search')).toBeVisible();
   await expect(page.locator('.chip.active')).toHaveCount(0);
+
+  // Wait for models to load
+  await page.waitForTimeout(2000);
+
+  // Panel itself must NOT scroll
+  const panelScrollable = await page.evaluate(() => {
+    const el = document.querySelector('.settings-panel');
+    return el ? el.scrollHeight > el.clientHeight : true;
+  });
+  expect(panelScrollable).toBe(false);
+
+  // Recommended section is expanded by default
+  const recommendedToggle = page.locator('.collapsible-section .section-toggle[aria-expanded="true"]').first();
+  await expect(recommendedToggle).toBeVisible();
+
+  // Registry section is collapsed by default
+  const registryToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(registryToggle).toHaveAttribute('aria-expanded', 'false');
+
+  // At least one model card visible in the expanded recommended section
+  await expect(page.locator('.model-card').first()).toBeVisible();
+
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
 });
@@ -160,6 +193,9 @@ test('captures the chat panel with composer', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByLabel('Chat input')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Chat mode' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Terminal mode' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New chat session' })).toBeVisible();
   await expect(page.getByText('Workspace / Research')).toBeVisible();
   // Fill the composer to show the typing state
   await page.getByLabel('Chat input').fill('What local models are available?');
@@ -227,19 +263,16 @@ test('lets keyboard navigation enter category contents and wrap workspace cyclin
   await page.getByLabel('Workspace tree').waitFor();
 
   await page.keyboard.press('Home');
-  await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Research');
-
-  await page.keyboard.press('ArrowRight');
   await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Browser');
 
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Hugging Face');
 
   await page.keyboard.press('Control+Alt+ArrowLeft');
-  await expect(page.getByLabel('Toggle workspace overlay')).toContainText('Build');
+  await expect(page.getByLabel('Toggle workspace overlay')).toHaveAttribute('title', 'Build');
 
   await page.keyboard.press('Control+Alt+ArrowRight');
-  await expect(page.getByLabel('Toggle workspace overlay')).toContainText('Research');
+  await expect(page.getByLabel('Toggle workspace overlay')).toHaveAttribute('title', 'Research');
 
   assertNoRuntimeErrors();
 });
@@ -481,7 +514,7 @@ test('terminal shows welcome message when empty', async ({ page }) => {
 test('captures workspace switching via hotkeys', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
-  // Verify we start on Research workspace by checking tree has Research tabs
+  // Verify we start on the Research workspace by checking its seeded tab
   await expect(page.getByRole('button', { name: /Hugging Face/ }).first()).toBeVisible();
   // Use the target workspace hotkey to switch
   await page.keyboard.press('Control+Alt+ArrowRight');
@@ -629,3 +662,100 @@ test('installs gpt-2 and shows Installed state without console errors', async ({
 
   await page.screenshot({ path: 'docs/screenshots/gpt2-installed.png' });
 });
+
+// ── Regression: panel coexistence ─────────────────────────────────────
+
+test('browser panel does not replace session panel when opened after a terminal session and file pane', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // Step 1: open a terminal session pane — switch the default session to terminal mode
+  await switchToTerminalMode(page);
+  await expect(page.getByRole('heading', { name: 'Terminal' })).toBeVisible();
+
+  // Step 2: open a file pane — add AGENTS.md which opens the file editor
+  await page.getByLabel('Add file to Research').click();
+  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  await expect(page.getByLabel('File editor')).toBeVisible();
+  // terminal session (Chat panel / Terminal) should still be visible alongside the file editor
+  await expect(page.getByLabel('Terminal')).toBeVisible();
+
+  // Step 3: open a browser panel pane — single-click Hugging Face
+  await page.getByRole('button', { name: 'Hugging Face' }).first().click();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
+
+  // All three panels must still be present in the split view
+  await expect(page.getByLabel('File editor')).toBeVisible();
+  await expect(page.getByLabel('Terminal')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/panel-coexistence-regression.png', fullPage: true });
+});
+
+test('file editor stays visible when a browser panel is added', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // Open the file editor
+  await page.getByLabel('Add file to Research').click();
+  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  await expect(page.getByLabel('File editor')).toBeVisible();
+
+  // Now single-click a browser tab — should ADD it as a new pane, not replace the file editor
+  await page.getByRole('button', { name: 'Hugging Face' }).first().click();
+
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
+  await expect(page.getByLabel('File editor')).toBeVisible();
+  // Both panels must exist in a split-view container
+  await expect(page.locator('.browser-split-view')).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/file-browser-split-regression.png', fullPage: true });
+});
+
+test('session panel stays visible when a browser tab is opened', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  // The default session panel (Chat panel) is already active
+  await expect(page.getByLabel('Chat panel')).toBeVisible();
+
+  // Open a browser tab via single-click
+  await page.getByRole('button', { name: 'Hugging Face' }).first().click();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
+
+  // Session panel must still be visible alongside the browser panel
+  await expect(page.getByLabel('Chat panel')).toBeVisible();
+  await expect(page.locator('.browser-split-view')).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/session-browser-coexistence-regression.png', fullPage: true });
+});
+
+test('title bar controls remain clickable while split panels are draggable', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  const fileEditorPanel = page.locator('section[aria-label="File editor"]');
+  await page.goto('/');
+
+  await page.getByLabel('Add file to Research').click();
+  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  await expect(fileEditorPanel).toBeVisible();
+
+  await page.getByRole('button', { name: 'Hugging Face' }).first().click();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
+  await expect(page.locator('.panel-drag-cell')).toHaveCount(3);
+
+  await page.getByRole('tab', { name: 'Terminal mode' }).click();
+  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Close page overlay' }).click();
+  await expect(page.getByRole('region', { name: 'Page overlay' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Close file editor' }).click();
+  await expect(fileEditorPanel).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+
+  assertNoRuntimeErrors();
+});
+

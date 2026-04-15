@@ -2,7 +2,7 @@
 set -uo pipefail
 
 log() {
-  echo "[devcontainer post-start] $*"
+  echo "[devcontainer post-create] $*"
 }
 
 run_with_timeout() {
@@ -22,6 +22,8 @@ run_with_timeout() {
 }
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # ── Serena ────────────────────────────────────────────────────────────────────
 log "Installing or upgrading Serena agent via uv"
@@ -53,4 +55,19 @@ else
   log "Skipping RTK init: 'rtk' not on PATH"
 fi
 
-log "Post-start complete"
+# ── Agent Browser ------------------------------------------------------------
+if [ ! -d "$REPO_ROOT/agent-browser/node_modules" ] || [ ! -f "$REPO_ROOT/agent-browser/node_modules/.package-lock.json" ] || [ "$REPO_ROOT/agent-browser/package-lock.json" -nt "$REPO_ROOT/agent-browser/node_modules/.package-lock.json" ]; then
+  log "Installing agent-browser dependencies"
+  run_with_timeout 300 npm ci --prefix "$REPO_ROOT/agent-browser"
+else
+  log "agent-browser dependencies are current"
+fi
+
+if [ -x "$REPO_ROOT/scripts/install-agent-browser-preview-extension.sh" ]; then
+  log "Installing agent-browser preview helper extension"
+  run_with_timeout 120 "$REPO_ROOT/scripts/install-agent-browser-preview-extension.sh"
+else
+  log "Skipping preview helper extension install: script is not executable"
+fi
+
+log "Post-create complete"

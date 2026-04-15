@@ -1,0 +1,4 @@
+- For agent-browser changes, run relevant checks: at least npm --prefix /workspaces/agent_harness/agent-browser run lint and npm --prefix /workspaces/agent_harness/agent-browser run test.
+- Use Playwright or equivalent browser validation for browser-facing behavior when applicable.
+- In Codespaces, confirm the forwarded URL path with codespaces-uri.sh rather than validating only localhost.
+- Keep documentation aligned in AGENTS.md and agent-browser/README.md when workflow changes.

@@ -1,0 +1,219 @@
+- generic [ref=e4]:
+  - navigation "Primary navigation" [ref=e5]:
+    - generic [ref=e6]:
+      - button "Workspaces" [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+      - button "History" [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+      - button "Extensions" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+    - generic [ref=e20]:
+      - button "Settings" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Account" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+    - button "Collapse sidebar" [ref=e29] [cursor=pointer]:
+      - img [ref=e30]
+  - complementary [ref=e33]:
+    - generic [ref=e36]:
+      - generic [ref=e37]:
+        - button "Go back" [ref=e38] [cursor=pointer]:
+          - img [ref=e39]
+        - button "Go forward" [ref=e41] [cursor=pointer]:
+          - img [ref=e42]
+        - button "Reload" [ref=e44] [cursor=pointer]:
+          - img [ref=e45]
+        - button "New tab" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+        - button "Split view" [ref=e52] [cursor=pointer]:
+          - img [ref=e53]
+      - generic [ref=e57]:
+        - img [ref=e58]
+        - textbox "Omnibar" [ref=e61]:
+          - /placeholder: Search or enter URL
+      - generic [ref=e62]:
+        - generic [ref=e63]: 2 pages · 2 active · 1 saved
+        - generic [ref=e64]:
+          - button "Toggle workspace overlay" [ref=e65] [cursor=pointer]:
+            - img [ref=e66]
+          - button "Open keyboard shortcuts" [ref=e69] [cursor=pointer]:
+            - img [ref=e70]
+    - generic [ref=e72]:
+      - generic "Memory distribution" [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]: Memory
+          - generic [ref=e76]: 253 MB / 2 GB
+        - generic [ref=e77]:
+          - 'generic "Hot: 165MB" [ref=e78]'
+          - 'generic "Warm: 88MB" [ref=e79]'
+        - generic [ref=e80]:
+          - generic [ref=e81]: Hot
+          - generic [ref=e83]: Warm
+          - generic [ref=e85]: Cool
+          - generic [ref=e87]: Cold
+      - tree "Workspace tree" [ref=e89]:
+        - treeitem "Browser" [ref=e90]:
+          - button "Browser" [ref=e91] [cursor=pointer]:
+            - img [ref=e93]
+            - img [ref=e95]
+            - generic [ref=e98]: Browser
+        - treeitem "Hugging Face 165 MB Close Hugging Face" [ref=e99]:
+          - button "Hugging Face 165 MB" [ref=e100] [cursor=pointer]:
+            - img [ref=e102]
+            - generic [ref=e103]: Hugging Face
+            - generic [ref=e104]: 165 MB
+          - button "Close Hugging Face" [ref=e105] [cursor=pointer]:
+            - img [ref=e106]
+        - treeitem "Transformers.js 88 MB Close Transformers.js" [ref=e109]:
+          - button "Transformers.js 88 MB" [ref=e110] [cursor=pointer]:
+            - img [ref=e112]
+            - generic [ref=e113]: Transformers.js
+            - generic [ref=e114]: 88 MB
+          - button "Close Transformers.js" [ref=e115] [cursor=pointer]:
+            - img [ref=e116]
+        - treeitem "Sessions Add session to Research" [ref=e119]:
+          - button "Sessions" [ref=e120] [cursor=pointer]:
+            - img [ref=e122]
+            - img [ref=e124]
+            - generic [ref=e126]: Sessions
+          - button "Add session to Research" [ref=e127] [cursor=pointer]:
+            - img [ref=e128]
+        - treeitem "Session 1 Close Session 1" [ref=e129]:
+          - button "Session 1" [ref=e130] [cursor=pointer]:
+            - img [ref=e131]
+            - generic [ref=e133]: Session 1
+          - button "Close Session 1" [ref=e134] [cursor=pointer]:
+            - img [ref=e135]
+        - treeitem "Session 2 Close Session 2" [selected] [ref=e203]:
+          - button "Session 2" [ref=e204] [cursor=pointer]:
+            - img [ref=e205]
+            - generic [ref=e207]: Session 2
+          - button "Close Session 2" [ref=e208] [cursor=pointer]:
+            - img [ref=e209]
+        - treeitem "Files Add file to Research" [ref=e138]:
+          - button "Files" [ref=e139] [cursor=pointer]:
+            - img [ref=e141]
+            - img [ref=e143]
+            - generic [ref=e146]: Files
+          - button "Add file to Research" [ref=e147] [cursor=pointer]:
+            - img [ref=e148]
+        - treeitem "AGENTS.md Remove AGENTS.md" [ref=e430]:
+          - button "AGENTS.md" [ref=e431] [cursor=pointer]:
+            - img [ref=e432]
+            - generic [ref=e435]: AGENTS.md
+          - button "Remove AGENTS.md" [ref=e436] [cursor=pointer]:
+            - img [ref=e437]
+        - treeitem "Session 1 FS" [ref=e149]:
+          - button "Session 1 FS" [ref=e150] [cursor=pointer]:
+            - img [ref=e152]
+            - img [ref=e154]
+            - generic [ref=e156]: Session 1 FS
+        - treeitem "Session 2 FS" [ref=e212]:
+          - button "Session 2 FS" [ref=e213] [cursor=pointer]:
+            - img [ref=e215]
+            - img [ref=e217]
+            - generic [ref=e219]: Session 2 FS
+  - main [ref=e157]:
+    - generic "Split panels" [ref=e316]:
+      - generic [ref=e317]:
+        - button "Drag to reorder panel File editor" [ref=e440]:
+          - generic "Drag to reorder panel" [ref=e441]
+          - region "File editor" [ref=e442]:
+            - generic [ref=e443]:
+              - generic [ref=e444]:
+                - img [ref=e445]
+                - generic [ref=e448]: AGENTS.md
+              - button "Close file editor" [ref=e449] [cursor=pointer]:
+                - img [ref=e450]
+            - generic [ref=e453]:
+              - generic [ref=e454]:
+                - generic [ref=e455]:
+                  - img [ref=e456]
+                  - generic [ref=e459]: AGENTS.md
+                - generic [ref=e460]:
+                  - button "Edit file name" [ref=e461] [cursor=pointer]: Edit
+                  - button "Save file" [ref=e462] [cursor=pointer]:
+                    - img [ref=e463]
+                  - button "Delete file" [ref=e467] [cursor=pointer]:
+                    - img [ref=e468]
+              - generic [ref=e471]:
+                - generic [ref=e472]: Content
+                - textbox "Workspace file content" [ref=e473]: "# Workspace agent instructions ## Goals - Describe the expected outcomes for this workspace. ## Constraints - Add safety, testing, or review rules the harness should respect."
+        - button "Drag to reorder panel Chat panel" [ref=e318]:
+          - generic "Drag to reorder panel" [ref=e319]
+          - region "Chat panel" [ref=e320]:
+            - generic [ref=e321]:
+              - generic [ref=e322]:
+                - generic [ref=e323]:
+                  - img [ref=e324]
+                  - generic [ref=e328]: workspace/Research
+                  - generic [ref=e329]: /workspace
+                - generic [ref=e330]:
+                  - img [ref=e331]
+                  - heading "Chat" [level=2] [ref=e334]
+                  - button "Install model" [ref=e335] [cursor=pointer]
+              - generic [ref=e336]:
+                - generic [ref=e337]:
+                  - tablist "Panel mode" [ref=e338]:
+                    - tab "Chat mode" [selected] [ref=e339] [cursor=pointer]:
+                      - img [ref=e340]
+                      - text: Chat
+                    - tab "Terminal mode" [ref=e343] [cursor=pointer]:
+                      - img [ref=e344]
+                      - text: Terminal
+                  - button "New session" [ref=e346] [cursor=pointer]:
+                    - img [ref=e347]
+                    - text: New session
+                - button "Close chat panel" [ref=e348] [cursor=pointer]:
+                  - img [ref=e349]
+            - generic [ref=e352]:
+              - log "Chat transcript" [ref=e353]:
+                - generic [ref=e355]: Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.
+              - generic [ref=e356]: "Context: 0 active local models · 1 AGENTS.md · 0 skills · 0 plugins · 0 hooks · workspace ready"
+              - generic [ref=e357]:
+                - generic [ref=e359]:
+                  - textbox "Chat input" [ref=e360]:
+                    - /placeholder: Install a model to start chatting
+                  - button "Send" [disabled] [ref=e361]:
+                    - img [ref=e362]
+                - button "No local model loaded. Open Models to load one." [ref=e364] [cursor=pointer]
+        - button "Drag to reorder panel Chat panel" [ref=e365]:
+          - generic "Drag to reorder panel" [ref=e366]
+          - region "Chat panel" [ref=e367]:
+            - generic [ref=e368]:
+              - generic [ref=e369]:
+                - generic [ref=e370]:
+                  - img [ref=e371]
+                  - generic [ref=e375]: workspace/Research
+                  - generic [ref=e376]: /workspace
+                - generic [ref=e377]:
+                  - img [ref=e378]
+                  - heading "Chat" [level=2] [ref=e381]
+                  - button "Install model" [ref=e382] [cursor=pointer]
+              - generic [ref=e383]:
+                - generic [ref=e384]:
+                  - tablist "Panel mode" [ref=e385]:
+                    - tab "Chat mode" [selected] [ref=e386] [cursor=pointer]:
+                      - img [ref=e387]
+                      - text: Chat
+                    - tab "Terminal mode" [ref=e390] [cursor=pointer]:
+                      - img [ref=e391]
+                      - text: Terminal
+                  - button "New session" [ref=e393] [cursor=pointer]:
+                    - img [ref=e394]
+                    - text: New session
+                - button "Close chat panel" [ref=e395] [cursor=pointer]:
+                  - img [ref=e396]
+            - generic [ref=e399]:
+              - log "Chat transcript" [ref=e400]:
+                - generic [ref=e402]: Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.
+              - generic [ref=e403]: "Context: 0 active local models · 1 AGENTS.md · 0 skills · 0 plugins · 0 hooks · workspace ready"
+              - generic [ref=e404]:
+                - generic [ref=e406]:
+                  - textbox "Chat input" [ref=e407]:
+                    - /placeholder: Install a model to start chatting
+                  - button "Send" [disabled] [ref=e408]:
+                    - img [ref=e409]
+                - button "No local model loaded. Open Models to load one." [ref=e411] [cursor=pointer]
+    - status [ref=e412]
+  - generic: Added AGENTS.md

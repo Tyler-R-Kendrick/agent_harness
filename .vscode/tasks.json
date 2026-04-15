@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "agent-browser: auto dev server",
+      "type": "shell",
+      "command": "./scripts/run-agent-browser-dev-server.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "runOptions": {
+        "runOn": "folderOpen"
+      },
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "."
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[agent-browser dev\\] (Starting Vite dev server on port 5173|Reusing existing server on port 5173)$",
+          "endsPattern": "^\\[agent-browser dev\\] Ready$"
+        }
+      }
+    }
+  ]
+}

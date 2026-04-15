@@ -1,12 +1,18 @@
 {
 	"image": "mcr.microsoft.com/devcontainers/universal:2",
+	"hostRequirements": {
+		"storage": "64gb"
+	},
+	"postCreateCommand": "bash .devcontainer/post-create.sh",
 	"postStartCommand": "bash .devcontainer/post-start.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"ms-python.python",
 				"GitHub.copilot-chat",
-				"ms-vscode.js-debug-nightly"
+				"ms-vscode.js-debug-nightly",
+				"ms-playwright.playwright",
+				"vitest.explorer"
 			]
 		}
 	},
