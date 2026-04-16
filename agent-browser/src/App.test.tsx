@@ -2,10 +2,13 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
+import type { CopilotRuntimeState } from './services/copilotApi';
 
 const searchBrowserModelsMock = vi.fn();
 const loadModelMock = vi.fn();
 const generateMock = vi.fn();
+const fetchCopilotStateMock = vi.fn();
+const streamCopilotChatMock = vi.fn();
 const getSandboxFeatureFlagsMock = vi.fn(() => ({
   secureBrowserSandboxExec: false,
   disableWebContainerAdapter: false,
@@ -27,6 +30,11 @@ vi.mock('./services/browserInference', () => ({
     loadModel: (...args: unknown[]) => loadModelMock(...args),
     generate: (...args: unknown[]) => generateMock(...args),
   },
+}));
+
+vi.mock('./services/copilotApi', () => ({
+  fetchCopilotState: (...args: unknown[]) => fetchCopilotStateMock(...args),
+  streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
 }));
 
 vi.mock('./features/flags', () => ({
@@ -72,14 +80,32 @@ vi.mock('just-bash/browser', () => {
 });
 
 describe('App', () => {
+  const createCopilotState = (overrides: Partial<CopilotRuntimeState> = {}): CopilotRuntimeState => ({
+    available: true,
+    authenticated: false,
+    authType: 'oauth',
+    host: 'https://github.com',
+    login: undefined,
+    statusMessage: undefined,
+    error: undefined,
+    models: [],
+    signInCommand: 'copilot login',
+    signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+    ...overrides,
+  });
+
   beforeEach(() => {
     window.localStorage.clear();
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
+    fetchCopilotStateMock.mockReset();
+    streamCopilotChatMock.mockReset();
     searchBrowserModelsMock.mockResolvedValue([]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState());
+    streamCopilotChatMock.mockResolvedValue(undefined);
     getSandboxFeatureFlagsMock.mockReturnValue({
       secureBrowserSandboxExec: false,
       disableWebContainerAdapter: false,
@@ -108,6 +134,7 @@ describe('App', () => {
     expect(screen.getByRole('tab', { name: 'Chat mode' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Terminal mode' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
     expect(screen.getByRole('button', { name: 'Install model' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
     expect(screen.queryByText('Create task board')).not.toBeInTheDocument();
@@ -172,6 +199,129 @@ describe('App', () => {
 
     expect(screen.getByLabelText('Settings')).toBeInTheDocument();
     expect(screen.getByLabelText('History')).toBeInTheDocument();
+  });
+
+  it('renders settings as a collapsible settings surface', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: true,
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+
+    const providersToggle = screen.getByRole('button', { name: /Providers/i });
+    expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeInTheDocument();
+
+    fireEvent.click(providersToggle);
+
+    expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Refresh status' })).not.toBeInTheDocument();
+  });
+
+  it('defaults to GHCP when it is the only ready agent', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: true,
+        billingMultiplier: 1,
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp');
+    expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
+    expect(screen.getByLabelText('Chat input')).toHaveAttribute('placeholder', 'Ask GHCP…');
+  });
+
+  it('defaults to Codi when a local model is installed even if GHCP is ready', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: true,
+      }],
+    }));
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+    expect(screen.getByRole('combobox', { name: 'Codi model' })).toHaveValue('hf-test-model');
+    expect(screen.getByLabelText('Chat input')).toHaveAttribute('placeholder', 'Ask Codi…');
+  });
+
+  it('shows the Copilot sign-in path in settings without making it the default provider', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('link', { name: 'Sign in to Copilot' })).toHaveAttribute('href', 'https://docs.github.com/copilot/how-tos/copilot-cli');
+    expect(screen.getByLabelText('GitHub Copilot sign-in command')).toHaveValue('copilot login');
   });
 
   it('adds workspace capability files and persists them to local storage', async () => {
@@ -297,6 +447,8 @@ describe('App', () => {
       expect.objectContaining({ role: 'system', content: expect.stringContaining('Active workspace: Research') }),
       expect.objectContaining({ role: 'system', content: expect.stringContaining('Always run workspace checks first.') }),
     ]));
+    expect(prompt.map((entry) => entry.content).join('\n')).not.toContain('Copilot bridge');
+    expect(prompt.map((entry) => entry.content).join('\n')).not.toContain('GitHub Copilot');
   });
 
   it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
@@ -363,6 +515,51 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
     expect(screen.getByText('Stopped')).toBeInTheDocument();
     expect(screen.queryByText('Generation stopped.')).not.toBeInTheDocument();
+  });
+
+  it('streams responses through GitHub Copilot when it is the selected provider', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: false,
+      }],
+    }));
+    streamCopilotChatMock.mockImplementation(async (_request, callbacks) => {
+      callbacks.onReasoning?.('Inspecting workspace instructions');
+      callbacks.onToken?.('Copilot response');
+      callbacks.onDone?.('Copilot response');
+      return Promise.resolve();
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the current workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(streamCopilotChatMock).toHaveBeenCalledTimes(1);
+    expect(streamCopilotChatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'gpt-4.1',
+        prompt: expect.stringContaining('Active workspace: Research'),
+      }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByText('Copilot response')).toBeInTheDocument();
   });
 
   it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {

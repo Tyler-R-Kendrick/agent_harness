@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 import path from 'node:path';
+import { createCopilotApiMiddleware } from './server/copilotMiddleware';
 
 // just-bash/browser imports gunzipSync from node:zlib for gzip/gunzip/zcat.
 // Those commands are documented as unsupported in browsers. This plugin stubs
@@ -25,8 +26,18 @@ const stubNodeZlib: Plugin = {
   },
 };
 
+const copilotApiPlugin: Plugin = {
+  name: 'copilot-api',
+  configureServer(server) {
+    server.middlewares.use(createCopilotApiMiddleware());
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use(createCopilotApiMiddleware());
+  },
+};
+
 export default defineConfig({
-  plugins: [stubNodeZlib, react()],
+  plugins: [stubNodeZlib, copilotApiPlugin, react()],
   resolve: {
     alias: process.env.VITE_ALLOW_SANDBOX_SAME_ORIGIN?.trim().toLowerCase() === 'true'
       ? []

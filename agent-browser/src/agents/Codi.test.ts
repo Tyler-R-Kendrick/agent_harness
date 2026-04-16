@@ -1,0 +1,175 @@
+import { describe, expect, it, vi } from 'vitest';
+
+const generateMock = vi.fn();
+const toAiSdkMessagesMock = vi.fn((messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>) => messages.map((message): { id: string; role: string; parts: Array<Record<string, unknown>> } => ({
+  id: message.id,
+  role: message.role,
+  parts: [{ type: 'text', text: message.streamedContent || message.content }],
+})));
+
+vi.mock('../services/browserInference', () => ({
+  browserInferenceEngine: {
+    generate: (...args: unknown[]) => generateMock(...args),
+  },
+}));
+
+vi.mock('../services/chatComposition', () => ({
+  toAiSdkMessages: (messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>) => toAiSdkMessagesMock(messages),
+}));
+
+import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+
+describe('Codi', () => {
+  it('detects whether any Codi models are installed', () => {
+    expect(hasCodiModels([])).toBe(false);
+    expect(hasCodiModels([{ id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' }])).toBe(true);
+  });
+
+  it('builds a workspace-aware prompt without Copilot-specific metadata', () => {
+    const prompt = buildCodiPrompt({
+      workspaceName: 'Research',
+      workspacePromptContext: 'AGENTS.md says: Always validate before shipping.',
+      messages: [
+        { id: 'system-1', role: 'system', content: 'ready' },
+        { id: 'user-1', role: 'user', content: 'Summarize the workspace.' },
+      ],
+    });
+
+    const content = prompt.map((message) => message.content).join('\n\n');
+    expect(content).toContain('Active workspace: Research');
+    expect(content).toContain('Always validate before shipping.');
+    expect(content).not.toContain('Copilot bridge');
+    expect(content).not.toContain('GitHub Copilot');
+  });
+
+  it('ignores non-text AI message parts when building the prompt body', () => {
+    toAiSdkMessagesMock.mockReturnValueOnce([
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        parts: [{ type: 'tool-call' }],
+      },
+    ]);
+
+    const prompt = buildCodiPrompt({
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+      messages: [{ id: 'assistant-1', role: 'assistant', content: 'ignored' }],
+    });
+
+    expect(prompt.at(-1)).toEqual({ role: 'assistant', content: '' });
+  });
+
+  it('resolves the selected model to the first installed model when the stored selection is stale', () => {
+    expect(resolveCodiModelId([
+      { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      { id: 'model-b', name: 'Model B', author: 'B', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+    ], 'missing-model')).toBe('model-a');
+  });
+
+  it('preserves the selected model when it is still installed and falls back to empty when none are available', () => {
+    expect(resolveCodiModelId([
+      { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+    ], 'model-a')).toBe('model-a');
+    expect(resolveCodiModelId([], 'missing-model')).toBe('');
+  });
+
+  it('streams reasoning and final text through the Codi adapter', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onPhase?.('thinking');
+      callbacks.onToken?.('<think>plan');
+      callbacks.onToken?.(' more');
+      callbacks.onToken?.('</think>answer');
+      callbacks.onToken?.(' done');
+      callbacks.onDone?.({ generated_text: 'ignored because tokens win' });
+    });
+
+    const onPhase = vi.fn();
+    const onReasoning = vi.fn();
+    const onToken = vi.fn();
+    const onDone = vi.fn();
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onPhase, onReasoning, onToken, onDone });
+
+    expect(onPhase).toHaveBeenCalledWith('thinking');
+    expect(onReasoning).toHaveBeenNthCalledWith(1, 'plan');
+    expect(onReasoning).toHaveBeenNthCalledWith(2, 'plan more');
+    expect(onReasoning).toHaveBeenNthCalledWith(3, 'plan more');
+    expect(onToken).toHaveBeenNthCalledWith(1, 'answer');
+    expect(onToken).toHaveBeenNthCalledWith(2, 'answer done');
+    expect(onDone).toHaveBeenCalledWith('answer done');
+  });
+
+  it('falls back to formatted output and forwards engine errors', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onDone?.({ generated_text: 'formatted result' });
+    });
+
+    const onDone = vi.fn();
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onDone });
+
+    expect(onDone).toHaveBeenCalledWith('formatted result');
+
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onError?.(new Error('engine failed'));
+    });
+
+    const onError = vi.fn();
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onError });
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'engine failed' }));
+  });
+
+  it('handles a completed reasoning block with no trailing answer token', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onToken?.('<think>plan');
+      callbacks.onToken?.('</think>');
+      callbacks.onDone?.({ generated_text: 'fallback after thinking' });
+    });
+
+    const onToken = vi.fn();
+    const onDone = vi.fn();
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onToken, onDone });
+
+    expect(onToken).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledWith('fallback after thinking');
+  });
+
+  it('supports reasoning blocks that end with an answer even when no token callback is provided', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onToken?.('<think>plan');
+      callbacks.onToken?.('</think>answer');
+      callbacks.onDone?.({ generated_text: 'ignored' });
+    });
+
+    const onDone = vi.fn();
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onDone });
+
+    expect(onDone).toHaveBeenCalledWith('answer');
+  });
+});

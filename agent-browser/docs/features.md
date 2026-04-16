@@ -5,7 +5,8 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 
 ## Key capabilities
 
-- Local model installation and usage: Settings lets users search browser-runnable ONNX models, load them for local inference, and use installed models from the chat composer.
+- Codi local-agent installation and usage: Settings lets users search browser-runnable ONNX models, load them for Codi, and default the chat composer to Codi when a local model is registered.
+- GHCP ambient-agent availability: Settings checks for ambient GitHub Copilot access and exposes it as the separate GHCP chat agent when enabled models are available.
 - In-browser terminal with isolated filesystem: Terminal mode runs `just-bash` in the browser, with each terminal session using its own sandboxed in-memory filesystem.
 - Feature-gated sandbox tool execution: when `VITE_SECURE_BROWSER_SANDBOX_EXEC=true`, chat can run a `/sandbox ...` tool request inside a hidden sandboxed iframe, summarize structured results, and persist successful generated files into the active workspace `just-bash` filesystem.
 - Virtual filesystem per workspace: The Files category renders as a compute surface, mounts workspace-root and top-level directories as drives, and merges persisted workspace files with per-terminal filesystem trees per workspace.
@@ -34,7 +35,7 @@ How to interact:
 - Use the **workspace pill toggle** under the omnibar to open the workspace overlay.
 - Use the **?** button next to it to open the screenshot-style hotkeys modal.
 - Type directly while focused in Workspaces to incrementally filter the tree.
-- Send a prompt from the composer at the bottom using the model pill and Send button.
+- Send a prompt from the composer at the bottom using the agent pill, optional model pill, and Send button.
 
 ## Chat composer
 
@@ -44,7 +45,8 @@ Playwright test: `captures the chat panel with composer`
 
 How to interact:
 - Type a message in the chat composer textarea.
-- Select an installed local model from the model pill dropdown.
+- Select `Codi` or `GHCP` from the agent pill.
+- When `Codi` is active, select an installed local model from the model pill dropdown.
 - Click the **Send** button or press Enter to submit.
 - The chat header stays compact and keeps the current workspace context visible without a large hero block.
 
@@ -69,9 +71,10 @@ Playwright test: `captures the settings screen`
 
 How to interact:
 - Open **Settings** from the bottom of the activity bar.
+- Review the GHCP status card to see whether ambient GitHub Copilot access is available as the GHCP agent.
 - Use the search field and task chips to browse browser-runnable ONNX models.
 - Search the registry across all supported browser models, then optionally narrow results with the task chips.
-- Use the Load button on a result card to install a model for local inference.
+- Use the Load button on a result card to install a model for Codi.
 
 ## Extensions panel
 

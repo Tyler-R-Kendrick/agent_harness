@@ -6,6 +6,23 @@ import { fileURLToPath } from 'url';
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
 const SCREENSHOT_DIR = path.resolve(_dirname, '../docs/screenshots/regression');
+const DEFAULT_COPILOT_STATUS = {
+  available: true,
+  authenticated: false,
+  models: [],
+  signInCommand: 'copilot login',
+  signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+};
+
+async function mockCopilotStatus(page: Page, overrides: Partial<typeof DEFAULT_COPILOT_STATUS> = {}) {
+  await page.route('**/api/copilot/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...DEFAULT_COPILOT_STATUS, ...overrides }),
+    });
+  });
+}
 
 function ensureScreenshotDir(): void {
   if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -27,6 +44,13 @@ function captureRuntimeErrors(page: Page) {
 test.describe('visual regression: reference impl parity', () => {
   test.beforeAll(() => {
     ensureScreenshotDir();
+  });
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (testInfo.title === 'settings panel has reference model config features') {
+      return;
+    }
+    await mockCopilotStatus(page);
   });
 
   // ── Activity bar: reference uses 42px-wide column, inline SVG icons, ────
@@ -164,17 +188,19 @@ test.describe('visual regression: reference impl parity', () => {
   });
 
   // ── Settings: dense model browser with search and compact filter chips ───
-  test('settings panel has reference model config features', async ({ page }) => {
+  test('settings panel has reference model config features', async ({ browser }) => {
+    const page = await browser.newPage();
+    await mockCopilotStatus(page);
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
     await page.goto('/');
     await page.getByLabel('Settings').click();
     await page.waitForTimeout(500);
 
-    // HF model search should be present
     await expect(page.getByLabel('Hugging Face search')).toBeVisible();
 
     assertNoRuntimeErrors();
     await page.locator('.app-shell').screenshot({ path: `${SCREENSHOT_DIR}/current-settings.png` });
+    await page.close();
   });
 
   // ── Memory bar: reference has tier-colored segmented bar with legend ─────

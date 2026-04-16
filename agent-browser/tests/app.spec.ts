@@ -2,6 +2,24 @@ import { expect, test, type Page } from '@playwright/test';
 
 const SANDBOX_RUNTIME_FLAG_OVERRIDES_STORAGE_KEY = 'agent-browser.sandbox.flags';
 
+const DEFAULT_COPILOT_STATUS = {
+  available: true,
+  authenticated: false,
+  models: [],
+  signInCommand: 'copilot login',
+  signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+};
+
+async function mockCopilotStatus(page: Page, overrides: Partial<typeof DEFAULT_COPILOT_STATUS> = {}) {
+  await page.route('**/api/copilot/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...DEFAULT_COPILOT_STATUS, ...overrides }),
+    });
+  });
+}
+
 function captureRuntimeErrors(page: Page) {
   const errors: string[] = [];
   const isLocalUrl = (url: string) => url.startsWith('http://127.0.0.1:4173/') || url.startsWith('http://localhost:4173/');
@@ -38,6 +56,13 @@ function captureRuntimeErrors(page: Page) {
 
   return () => expect(errors, errors.join('\n')).toEqual([]);
 }
+
+test.beforeEach(async ({ page }, testInfo) => {
+  if (testInfo.title === 'captures the settings screen') {
+    return;
+  }
+  await mockCopilotStatus(page);
+});
 
 /** Click the Terminal mode tab (bypassing any overlays). */
 async function switchToTerminalMode(page: Page) {
@@ -141,36 +166,102 @@ test('captures categorized worktree with agent and terminal instances', async ({
   await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
 });
 
-test('captures the settings screen', async ({ page }) => {
+test('captures the settings screen', async ({ browser }) => {
+  const page = await browser.newPage();
+  await mockCopilotStatus(page, {
+    authenticated: true,
+    login: 'octocat',
+    models: Array.from({ length: 4 }, (_entry, index) => ({
+      id: `gpt-4.${index + 1}`,
+      name: `GPT-4.${index + 1}`,
+      reasoning: true,
+      vision: index % 2 === 0,
+      billingMultiplier: 1,
+    })),
+  });
+  await page.route('https://huggingface.co/api/models**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(Array.from({ length: 10 }, (_entry, index) => ({
+        id: `test-org/model-${index + 1}`,
+        pipeline_tag: 'text-generation',
+        downloads: 1000 - index,
+        likes: 100 - index,
+        tags: ['onnx', 'transformers.js'],
+        safetensors: { total: 42_000_000 },
+      }))),
+    });
+  });
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.setViewportSize({ width: 1280, height: 420 });
   await page.goto('/');
   await page.getByLabel('Settings').click();
   await expect(page.getByLabel('Hugging Face search')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh status' })).toBeVisible();
   await expect(page.locator('.chip.active')).toHaveCount(0);
 
-  // Wait for models to load
-  await page.waitForTimeout(2000);
+  await page.getByLabel('Hugging Face search').fill('qwen');
+  const resultsToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(resultsToggle).toContainText('Results');
+  await expect(resultsToggle).toHaveAttribute('aria-expanded', 'true');
 
-  // Panel itself must NOT scroll
-  const panelScrollable = await page.evaluate(() => {
-    const el = document.querySelector('.settings-panel');
-    return el ? el.scrollHeight > el.clientHeight : true;
-  });
-  expect(panelScrollable).toBe(false);
+  const settingsPanel = page.locator('.settings-panel');
+  const panelOverflowY = await settingsPanel.evaluate((element) => window.getComputedStyle(element).overflowY);
+  expect(['auto', 'scroll']).toContain(panelOverflowY);
 
-  // Recommended section is expanded by default
+  const resultsBody = page.locator('.settings-result-list .section-scroll-body');
+  await expect(resultsBody.locator('.model-card').nth(5)).toBeVisible();
+  const resultsScrollState = await resultsBody.evaluate((element) => ({
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+    overflowY: window.getComputedStyle(element).overflowY,
+  }));
+  expect(resultsScrollState.scrollHeight).toBeGreaterThan(resultsScrollState.clientHeight);
+  expect(['auto', 'scroll']).toContain(resultsScrollState.overflowY);
+
+  const providersToggle = page.getByRole('button', { name: /Providers/i });
+  await expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
+  await providersToggle.click();
+  await expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
+  await providersToggle.click();
+  await expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
+
   const recommendedToggle = page.locator('.collapsible-section .section-toggle[aria-expanded="true"]').first();
   await expect(recommendedToggle).toBeVisible();
 
-  // Registry section is collapsed by default
   const registryToggle = page.locator('.settings-result-list .section-toggle');
-  await expect(registryToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(registryToggle).toHaveAttribute('aria-expanded', 'true');
 
-  // At least one model card visible in the expanded recommended section
   await expect(page.locator('.model-card').first()).toBeVisible();
 
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
+  await page.close();
+});
+
+test('captures GHCP as the default chat provider when it is the only ready agent', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.unroute('**/api/copilot/status');
+  await mockCopilotStatus(page, {
+    authenticated: true,
+    models: [{
+      id: 'gpt-4.1',
+      name: 'GPT-4.1',
+      reasoning: true,
+      vision: true,
+      billingMultiplier: 1,
+    }],
+  });
+
+  await page.goto('/');
+  await expect(page.getByLabel('Agent provider')).toHaveValue('ghcp');
+  await expect(page.getByLabel('GHCP model')).toHaveValue('gpt-4.1');
+  await expect(page.getByLabel('Chat input')).toHaveAttribute('placeholder', 'Ask GHCP…');
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/chat-ghcp-default.png', fullPage: true });
 });
 
 test('captures the extensions screen', async ({ page }) => {

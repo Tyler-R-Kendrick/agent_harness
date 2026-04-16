@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -46,12 +46,24 @@ import {
 } from 'lucide-react';
 import { Bash } from 'just-bash/browser';
 import './App.css';
+import {
+  getAgentDisplayName,
+  getAgentInputPlaceholder,
+  getAgentProviderSummary,
+  getDefaultAgentProvider,
+  hasCodiModels,
+  hasGhcpAccess,
+  resolveAgentModelIds,
+  streamCodiChat,
+  streamGhcpChat,
+  type AgentProvider,
+} from './agents';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
-import { searchBrowserModels } from './services/huggingFaceRegistry';
+import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { browserInferenceEngine } from './services/browserInference';
-import { formatBrowserInferenceResult } from './services/browserInferenceRuntime';
-import { appendPendingLocalTurn, createCopilotBridgeSnapshot, toAiSdkMessages, toChatSdkTranscript } from './services/chatComposition';
+import { searchBrowserModels } from './services/huggingFaceRegistry';
+import { appendPendingLocalTurn } from './services/chatComposition';
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
@@ -139,7 +151,15 @@ const LOCAL_MODELS_SEED: HFModel[] = [
   { id: 'Xenova/whisper-tiny.en', name: 'whisper-tiny.en', author: 'Xenova', task: 'automatic-speech-recognition', downloads: 25000, likes: 28, tags: ['transformers.js'], sizeMB: 0, status: 'available' },
   { id: 'Xenova/detr-resnet-50', name: 'detr-resnet-50', author: 'Xenova', task: 'object-detection', downloads: 15000, likes: 20, tags: ['transformers.js'], sizeMB: 0, status: 'available' },
 ];
-const MAX_CONTEXT_MESSAGES = 7;
+
+const EMPTY_COPILOT_STATE: CopilotRuntimeState = {
+  available: false,
+  authenticated: false,
+  models: [],
+  signInCommand: 'copilot login',
+  signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+};
+
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
 const PANEL_MIN_WIDTH_PX = 320;
@@ -159,7 +179,7 @@ const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof type
   workspaces: { label: 'Workspaces', icon: 'layers' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
-  settings: { label: 'Models', icon: 'settings' },
+  settings: { label: 'Settings', icon: 'settings' },
   account: { label: 'Account', icon: 'user' },
 };
 const WORKSPACE_SHORTCUT_GROUPS = [
@@ -866,6 +886,7 @@ function cleanStreamedAssistantContent(content: string): string {
 
 function ChatPanel({
   installedModels,
+  copilotState,
   pendingSearch,
   onSearchConsumed,
   onToast,
@@ -882,6 +903,7 @@ function ChatPanel({
   dragHandleProps,
 }: {
   installedModels: HFModel[];
+  copilotState: CopilotRuntimeState;
   pendingSearch: string | null;
   onSearchConsumed: () => void;
   onToast: (toast: Exclude<ToastState, null>) => void;
@@ -900,6 +922,8 @@ function ChatPanel({
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [input, setInput] = useState('');
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
+  const [selectedProviderBySession, setSelectedProviderBySession] = useState<Record<string, AgentProvider>>({});
+  const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useState<Record<string, string>>({});
   const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
@@ -920,22 +944,29 @@ function ChatPanel({
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+  const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState });
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
-  const effectiveSelectedModelId = selectedModelId || installedModels[0]?.id || '';
-  const hasInstalledModels = installedModels.length > 0;
+  const selectedCopilotModelId = selectedCopilotModelBySession[activeChatSessionId] ?? '';
+  const { codiModelId: effectiveSelectedModelId, ghcpModelId: effectiveSelectedCopilotModelId } = resolveAgentModelIds({
+    installedModels,
+    selectedCodiModelId: selectedModelId,
+    copilotModels: copilotState.models,
+    selectedGhcpModelId: selectedCopilotModelId,
+  });
+  const activeLocalModel = installedModels.find((model) => model.id === effectiveSelectedModelId);
+  const activeCopilotModel = copilotState.models.find((model) => model.id === effectiveSelectedCopilotModelId);
+  const hasInstalledModels = hasCodiModels(installedModels);
+  const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
-  const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (Boolean(effectiveSelectedModelId) || Boolean(parseSandboxPrompt(input)));
-  const contextSummary = `${installedModels.length} active local models · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
+    Boolean(parseSandboxPrompt(input))
+    || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
+    || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+  );
+  const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
+  const contextSummary = `${providerSummary} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
-
-  useEffect(() => {
-    if (!installedModels.length) return;
-    setSelectedModelBySession((current) => {
-      if (current[activeChatSessionId]) return current;
-      return { ...current, [activeChatSessionId]: installedModels[0].id };
-    });
-  }, [activeChatSessionId, installedModels]);
 
   useEffect(() => {
     setMessagesBySession((current) => current[activeChatSessionId]
@@ -1077,7 +1108,6 @@ function ChatPanel({
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || activeGenerationRef.current) return;
-    const model = installedModels.find((entry) => entry.id === effectiveSelectedModelId);
     const assistantId = createUniqueId();
     const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId: createUniqueId(), assistantId });
     messagesRef.current = nextMessages;
@@ -1088,25 +1118,23 @@ function ChatPanel({
       return;
     }
 
-    if (!model) {
-      updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model from Settings before sending a prompt.' });
+    if (selectedProvider === 'ghcp' && !hasAvailableCopilotModels) {
+      updateMessage(assistantId, {
+        status: 'error',
+        content: copilotState.authenticated
+          ? 'GHCP has no enabled models for this environment. Open Models to refresh or switch to Codi.'
+          : 'Sign in to GHCP from Models before sending a prompt.',
+      });
       return;
     }
 
-    const aiMessages = toAiSdkMessages(nextMessages);
-    const chatTranscript = toChatSdkTranscript(nextMessages);
-    const copilotBridge = createCopilotBridgeSnapshot(nextMessages);
-    const prompt = [
-      { role: 'system', content: 'You are a helpful agent-first browser assistant. Be concise and clear.' },
-      { role: 'system', content: `Active workspace: ${workspaceName}` },
-      { role: 'system', content: workspacePromptContext },
-      ...aiMessages.slice(-MAX_CONTEXT_MESSAGES).map((message) => ({ role: message.role, content: message.parts.map((part) => ('text' in part ? String(part.text) : '')).join('') })),
-      { role: 'system', content: `Chat transcript length: ${chatTranscript.length}; Copilot bridge: ${copilotBridge.runtimeUrl}; messages: ${copilotBridge.messageCount}` },
-    ];
+    if (selectedProvider === 'codi' && !activeLocalModel) {
+      updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      return;
+    }
 
     let tokenBuffer = '';
     let thinkingBuffer = '';
-    let inThinking = false;
     let thinkingStart = 0;
     const controller = new AbortController();
 
@@ -1131,49 +1159,58 @@ function ChatPanel({
     setActiveGenerationSessionId(activeChatSessionId);
 
     try {
-      await browserInferenceEngine.generate(
-        { task: model.task, modelId: model.id, prompt },
-        {
-          onPhase: (phase) => updateMessage(assistantId, { loadingStatus: phase }),
-          onToken: (token) => {
-            if (!inThinking && token.includes('<think>')) {
-              inThinking = true;
-              thinkingStart = Date.now();
-              thinkingBuffer += token.split('<think>')[1] ?? '';
-              updateMessage(assistantId, { isThinking: true, thinkingContent: thinkingBuffer, status: 'streaming' });
-              return;
-            }
-            if (inThinking && token.includes('</think>')) {
-              const [before, after = ''] = token.split('</think>');
-              thinkingBuffer += before;
-              tokenBuffer += after;
-              inThinking = false;
-              updateMessage(assistantId, {
-                isThinking: false,
-                thinkingContent: thinkingBuffer,
-                thinkingDuration: Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)),
-                streamedContent: cleanStreamedAssistantContent(tokenBuffer),
-                status: 'streaming',
-              });
-              return;
-            }
-            if (inThinking) {
-              thinkingBuffer += token;
-              updateMessage(assistantId, { isThinking: true, thinkingContent: thinkingBuffer, status: 'streaming' });
-              return;
-            }
-            tokenBuffer += token;
-            updateMessage(assistantId, { streamedContent: cleanStreamedAssistantContent(tokenBuffer), status: 'streaming' });
-          },
-          onDone: (result) => updateMessage(assistantId, {
-            status: 'complete',
-            streamedContent: (tokenBuffer.trim() || formatBrowserInferenceResult(result)).trim(),
-            loadingStatus: null,
-          }),
-          onError: (error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
+      const streamCallbacks = {
+        onPhase: (phase: string) => updateMessage(assistantId, { loadingStatus: phase }),
+        onReasoning: (content: string) => {
+          if (!thinkingStart) thinkingStart = Date.now();
+          thinkingBuffer = content;
+          updateMessage(assistantId, {
+            status: 'streaming',
+            isThinking: true,
+            thinkingContent: thinkingBuffer,
+          });
         },
-        controller.signal,
-      );
+        onToken: (content: string) => {
+          tokenBuffer = content;
+          updateMessage(assistantId, {
+            status: 'streaming',
+            streamedContent: cleanStreamedAssistantContent(tokenBuffer),
+            isThinking: false,
+            thinkingContent: thinkingBuffer || undefined,
+            thinkingDuration: thinkingBuffer ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
+          });
+        },
+        onDone: (finalContent?: string) => {
+          const resolvedContent = cleanStreamedAssistantContent(finalContent ?? tokenBuffer);
+          updateMessage(assistantId, {
+            status: 'complete',
+            isThinking: false,
+            loadingStatus: null,
+            thinkingContent: thinkingBuffer || undefined,
+            thinkingDuration: thinkingBuffer ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
+            streamedContent: resolvedContent || undefined,
+            content: resolvedContent ? '' : (selectedProvider === 'ghcp' ? 'GHCP returned an empty response.' : 'Codi returned an empty response.'),
+          });
+        },
+        onError: (error: Error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
+      };
+
+      if (selectedProvider === 'ghcp') {
+        await streamGhcpChat({
+          modelId: effectiveSelectedCopilotModelId,
+          workspaceName,
+          workspacePromptContext,
+          messages: nextMessages,
+          latestUserInput: text,
+        }, streamCallbacks, controller.signal);
+      } else {
+        await streamCodiChat({
+          model: activeLocalModel!,
+          messages: nextMessages,
+          workspaceName,
+          workspacePromptContext,
+        }, streamCallbacks, controller.signal);
+      }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -1181,11 +1218,11 @@ function ChatPanel({
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
-      onToast({ msg: error instanceof Error ? error.message : 'Local inference failed', type: 'error' });
+      onToast({ msg: error instanceof Error ? error.message : 'Agent request failed', type: 'error' });
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, clearActiveGeneration, effectiveSelectedModelId, installedModels, onToast, runSandboxPrompt, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, hasAvailableCopilotModels, onToast, runSandboxPrompt, selectedProvider, workspaceName, workspacePromptContext]);
 
   const runTerminalCommand = useCallback(async (command: string) => {
     const cmd = command.trim();
@@ -1285,15 +1322,39 @@ function ChatPanel({
             <Icon name={showBash ? 'terminal' : 'sparkles'} size={15} color={showBash ? '#86efac' : '#d1fae5'} />
             <h2>{showBash ? 'Terminal' : 'Chat'}</h2>
             {!showBash && (
-              hasInstalledModels ? (
+              <>
                 <label className="header-model-selector" {...panelTitlebarControlProps}>
-                  <select aria-label="Installed model" value={effectiveSelectedModelId} onChange={(event) => setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
-                    {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                  <select aria-label="Agent provider" value={selectedProvider} onChange={(event) => setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value as AgentProvider }))} {...panelTitlebarControlProps}>
+                    <option value="codi">Codi</option>
+                    <option value="ghcp">GHCP</option>
                   </select>
                 </label>
-              ) : (
-                <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
-              )
+                {selectedProvider === 'ghcp'
+                  ? (hasAvailableCopilotModels
+                      ? (
+                        <label className="header-model-selector" {...panelTitlebarControlProps}>
+                          <select aria-label="GHCP model" value={effectiveSelectedCopilotModelId} onChange={(event) => setSelectedCopilotModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                            {copilotState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                          </select>
+                        </label>
+                      )
+                      : (
+                        <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                          {copilotState.authenticated ? 'GHCP models' : 'Sign in'}
+                        </button>
+                      ))
+                  : (hasInstalledModels
+                      ? (
+                        <label className="header-model-selector" {...panelTitlebarControlProps}>
+                          <select aria-label="Codi model" value={effectiveSelectedModelId} onChange={(event) => setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                            {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                          </select>
+                        </label>
+                      )
+                      : (
+                        <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
+                      ))}
+              </>
             )}
           </div>
         </div>
@@ -1310,7 +1371,7 @@ function ChatPanel({
       </header>
       <div className="shared-console-body">
         <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-          {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={installedModels.find((m) => m.id === effectiveSelectedModelId)?.name ?? 'agent'} />)}
+          {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} />)}
           <div ref={bottomRef} />
         </div>
         <div className="context-strip">Context: {contextSummary}</div>
@@ -1335,7 +1396,7 @@ function ChatPanel({
           <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } void sendMessage(input); }}>
             <div className="composer-rail">
               <label className="composer-input-shell shared-input-shell">
-                <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={hasInstalledModels ? 'Ask the local model…' : 'Install a model to start chatting'} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } if (canSubmit) void sendMessage(input); } }} />
+                <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels })} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } if (canSubmit) void sendMessage(input); } }} />
                 <button
                   type="submit"
                   className={`composer-send-btn${isActiveSessionGenerating ? ' composer-send-btn-stop' : ''}`}
@@ -1347,7 +1408,11 @@ function ChatPanel({
                 </button>
               </label>
             </div>
-            {!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>No local model loaded. Open Models to load one.</button> : null}
+            {selectedProvider === 'ghcp'
+              ? (!hasAvailableCopilotModels
+                  ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
+                  : null)
+              : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>No Codi model loaded. Open Models to load one.</button> : null)}
           </form>
         )}
       </div>
@@ -1380,19 +1445,77 @@ function ModelCard({ model, isInstalled, isLoading, onInstall, onDelete }: { mod
   );
 }
 
-function SettingsPanel({ registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete }: { registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void }) {
+function CopilotModelCard({ model }: { model: CopilotModelSummary }) {
+  return (
+    <div className="model-card copilot-model-card">
+      <div className="model-card-icon"><Icon name="sparkles" size={15} color="#7dd3fc" /></div>
+      <div className="model-card-body">
+        <strong>{model.name}</strong>
+        <div className="copilot-model-meta">
+          <span className="chip mini">{model.id}</span>
+          {model.reasoning ? <span className="chip mini">Reasoning</span> : null}
+          {model.vision ? <span className="chip mini">Vision</span> : null}
+          {typeof model.billingMultiplier === 'number' ? <span className="chip mini">{model.billingMultiplier}x billing</span> : null}
+        </div>
+        <p>{model.policyState ? `Policy: ${model.policyState}` : 'Enabled for this Copilot account.'}</p>
+      </div>
+      <span className="badge connected">Enabled</span>
+    </div>
+  );
+}
+
+function SettingsSection({
+  title,
+  defaultOpen = true,
+  forceOpen = false,
+  className,
+  bodyClassName,
+  scrollBody = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  forceOpen?: boolean;
+  className?: string;
+  bodyClassName?: string;
+  scrollBody?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const expanded = forceOpen || open;
+  const bodyClassNames = [scrollBody ? 'section-scroll-body' : 'settings-section-body', bodyClassName].filter(Boolean).join(' ');
+
+  return (
+    <section className={`model-section collapsible-section settings-section${className ? ` ${className}` : ''}`}>
+      <button
+        type="button"
+        className="panel-section-header section-toggle"
+        aria-expanded={expanded}
+        onClick={() => {
+          if (!forceOpen) {
+            setOpen((value) => !value);
+          }
+        }}
+        style={forceOpen ? { cursor: 'default' } : undefined}
+      >
+        <span>{title}</span>
+        <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={12} color="#94a3b8" />
+      </button>
+      {expanded ? <div className={bodyClassNames}>{children}</div> : null}
+    </section>
+  );
+}
+
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete }: { copilotState: CopilotRuntimeState; isCopilotLoading: boolean; onRefreshCopilot: () => void; registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [recommendedOpen, setRecommendedOpen] = useState(true);
-  const [registryOpen, setRegistryOpen] = useState(false);
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
+  const copilotReady = hasGhcpAccess(copilotState);
   // Recommended = seed models not yet installed, only shown when no filter active
   const recommended = !isFiltering ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
   const recommendedIds = new Set(recommended.map((m) => m.id));
   // HF results, deduped against installed + recommended
   const hfResults = registryModels.filter((r) => !installedIds.has(r.id) && !recommendedIds.has(r.id));
-  // When filtering, registry is always expanded
-  const registryExpanded = isFiltering || registryOpen;
 
   function handleSearch(value: string) {
     setSearchQuery(value);
@@ -1400,82 +1523,100 @@ function SettingsPanel({ registryModels, installedModels, task, loadingModelId, 
   }
 
   return (
-    <section className="settings-panel" aria-label="Settings">
+    <section className="panel-scroll settings-panel" aria-label="Settings">
       <div className="panel-topbar">
-        <h2>Registry</h2>
-        <span className="badge">{installedModels.length} loaded</span>
+        <div className="settings-heading">
+          <h2>Settings</h2>
+          <p className="muted">Manage GHCP availability and browser-runnable ONNX local models.</p>
+        </div>
+        <span className="badge">{copilotState.models.length} GHCP · {installedModels.length} Codi</span>
       </div>
 
-      <div className="local-model-controls">
-        <label className="shared-input-shell settings-search-shell">
-          <Icon name="search" size={13} color="#7d8594" />
-          <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search Hugging Face" />
-        </label>
-        <div className="chip-row">
-          {TASK_OPTIONS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={`chip ${task === option ? 'active' : ''}`}
-              aria-pressed={task === option}
-              onClick={() => onTaskChange(task === option ? '' : option)}
-            >
-              {HF_TASK_LABELS[option] ?? option}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {installedModels.length > 0 && (
-        <div className="model-section">
-          <div className="panel-section-header"><span>Loaded ({installedModels.length})</span></div>
-          {installedModels.map((model) => (
-            <ModelCard key={model.id} model={model} isInstalled={true} isLoading={false} onInstall={() => undefined} onDelete={() => onDelete(model.id)} />
-          ))}
-        </div>
-      )}
-
-      {!isFiltering && recommended.length > 0 && (
-        <div className="model-section collapsible-section">
-          <button
-            type="button"
-            className="panel-section-header section-toggle"
-            aria-expanded={recommendedOpen}
-            onClick={() => setRecommendedOpen((v) => !v)}
-          >
-            <span>Recommended ({recommended.length})</span>
-            <Icon name={recommendedOpen ? 'chevronDown' : 'chevronRight'} size={12} color="#94a3b8" />
-          </button>
-          {recommendedOpen && (
-            <div className="section-scroll-body">
-              {recommended.map((model) => (
-                <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
-              ))}
+      <SettingsSection title="Providers">
+        <div className="provider-list">
+          <article className="provider-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>GitHub Copilot</strong>
+                <p>Checks for ambient GitHub Copilot auth in this environment and exposes it as the GHCP chat agent when enabled models are available.</p>
+              </div>
+              <span className={`badge${copilotReady ? ' connected' : ''}`}>{isCopilotLoading ? 'Checking…' : (copilotReady ? 'GHCP ready' : (copilotState.authenticated ? 'Signed in' : 'Sign-in required'))}</span>
             </div>
-          )}
+            {copilotState.statusMessage ? <p className="muted">{copilotState.statusMessage}</p> : null}
+            {copilotState.error ? <p className="file-editor-error">{copilotState.error}</p> : null}
+            {!copilotReady ? (
+              <>
+                <div className="provider-actions">
+                  <a className="secondary-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Copilot</a>
+                  <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                </div>
+                <label className="provider-command-field">
+                  <span>Run this in the dev container</span>
+                  <input aria-label="GitHub Copilot sign-in command" value={copilotState.signInCommand} readOnly />
+                </label>
+              </>
+            ) : (
+              <div className="provider-actions">
+                <span className="badge connected">GHCP available</span>
+                <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
+            )}
+          </article>
         </div>
+      </SettingsSection>
+
+      {copilotState.models.length > 0 && (
+        <SettingsSection title={`GitHub Copilot models (${copilotState.models.length})`} defaultOpen={false} scrollBody>
+          {copilotState.models.map((model) => (
+            <CopilotModelCard key={model.id} model={model} />
+          ))}
+        </SettingsSection>
       )}
 
-      <div className="model-section collapsible-section settings-result-list">
-        <button
-          type="button"
-          className="panel-section-header section-toggle"
-          aria-expanded={registryExpanded}
-          onClick={() => { if (!isFiltering) setRegistryOpen((v) => !v); }}
-          style={isFiltering ? { cursor: 'default' } : undefined}
-        >
-          <span>{isFiltering ? `Results (${hfResults.length})` : `Registry (${hfResults.length})`}</span>
-          {!isFiltering && <Icon name={registryExpanded ? 'chevronDown' : 'chevronRight'} size={12} color="#94a3b8" />}
-        </button>
-        {registryExpanded && (
-          <div className="section-scroll-body">
-            {hfResults.map((model) => (
+      <SettingsSection title="Local models">
+        <div className="local-model-controls">
+          <label className="shared-input-shell settings-search-shell">
+            <Icon name="search" size={13} color="#7d8594" />
+            <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search Hugging Face" />
+          </label>
+          <div className="chip-row">
+            {TASK_OPTIONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`chip ${task === option ? 'active' : ''}`}
+                aria-pressed={task === option}
+                onClick={() => onTaskChange(task === option ? '' : option)}
+              >
+                {HF_TASK_LABELS[option] ?? option}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {installedModels.length > 0 && (
+          <SettingsSection title={`Loaded (${installedModels.length})`} className="settings-subsection" scrollBody>
+            {installedModels.map((model) => (
+              <ModelCard key={model.id} model={model} isInstalled={true} isLoading={false} onInstall={() => undefined} onDelete={() => onDelete(model.id)} />
+            ))}
+          </SettingsSection>
+        )}
+
+        {!isFiltering && recommended.length > 0 && (
+          <SettingsSection title={`Recommended (${recommended.length})`} className="settings-subsection" scrollBody>
+            {recommended.map((model) => (
               <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
             ))}
-            {!hfResults.length && !recommended.length && <p className="muted">No browser-runnable ONNX models match the current filter.</p>}
-          </div>
+          </SettingsSection>
         )}
-      </div>
+
+        <SettingsSection title={isFiltering ? `Results (${hfResults.length})` : `Registry (${hfResults.length})`} defaultOpen={isFiltering} forceOpen={isFiltering} className="settings-subsection settings-result-list" scrollBody>
+          {hfResults.map((model) => (
+            <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
+          ))}
+          {!hfResults.length && !recommended.length && <p className="muted">No browser-runnable ONNX models match the current filter.</p>}
+        </SettingsSection>
+      </SettingsSection>
     </section>
   );
 }
@@ -2003,6 +2144,8 @@ function AgentBrowserApp() {
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
+  const [copilotState, setCopilotState] = useState<CopilotRuntimeState>(EMPTY_COPILOT_STATE);
+  const [isCopilotStateLoading, setIsCopilotStateLoading] = useState(true);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [omnibar, setOmnibar] = useState('');
   const [cursorId, setCursorId] = useState<string | null>(null);
@@ -2057,6 +2200,31 @@ function AgentBrowserApp() {
       return { ...current, [sessionId]: paths };
     });
   }, []);
+
+  const refreshCopilotState = useCallback(async (showErrors = false) => {
+    setIsCopilotStateLoading(true);
+    try {
+      const state = await fetchCopilotState();
+      setCopilotState(state);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') return;
+      const message = error instanceof Error ? error.message : 'Failed to check GitHub Copilot status.';
+      setCopilotState({
+        ...EMPTY_COPILOT_STATE,
+        error: message,
+      });
+      if (showErrors) {
+        setToast({ msg: message, type: 'warning' });
+      }
+    } finally {
+      setIsCopilotStateLoading(false);
+    }
+  }, [setToast]);
+
+  useEffect(() => {
+    void refreshCopilotState(false);
+  }, [refreshCopilotState]);
 
   useEffect(() => {
     setWorkspaceViewStateByWorkspace((current) => {
@@ -2316,6 +2484,11 @@ function AgentBrowserApp() {
       activePanel,
       activeWorkspace: activeWorkspace.name,
       openTab: openBrowserTabs[0]?.name ?? null,
+      defaultProvider: getDefaultAgentProvider({ installedModels, copilotState }),
+      copilot: {
+        authenticated: copilotState.authenticated,
+        models: copilotState.models.map((model) => model.id),
+      },
       installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
       tabsInWorkspace: countTabs(activeWorkspace),
       workspaceFiles: activeWorkspaceFiles.map((file) => file.path),
@@ -2324,7 +2497,7 @@ function AgentBrowserApp() {
       plugins: activeWorkspaceCapabilities.plugins.map((plugin) => plugin.directory),
       hooks: activeWorkspaceCapabilities.hooks.map((hook) => hook.name),
     },
-  }, [activePanel, activeWorkspace, installedModels, openBrowserTabs, activeWorkspaceCapabilities, activeWorkspaceFiles]);
+  }, [activePanel, activeWorkspace, activeWorkspaceCapabilities, activeWorkspaceFiles, copilotState, installedModels, openBrowserTabs]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -2786,7 +2959,7 @@ function AgentBrowserApp() {
     }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
-    if (activePanel === 'settings') return <SettingsPanel registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} />;
+    if (activePanel === 'settings') return <SettingsPanel copilotState={copilotState} isCopilotLoading={isCopilotStateLoading} onRefreshCopilot={() => void refreshCopilotState(true)} registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 
@@ -2925,6 +3098,7 @@ function AgentBrowserApp() {
               <ChatPanel
                 key={panel.id}
                 installedModels={installedModels}
+                copilotState={copilotState}
                 pendingSearch={pendingSearch}
                 onSearchConsumed={() => setPendingSearch(null)}
                 onToast={setToast}

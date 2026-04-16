@@ -1,7 +1,5 @@
-import type { CopilotKitProps } from '@copilotkit/react-core';
 import type { UIMessage } from 'ai';
 import type { Message as ChatSdkMessage } from 'chat';
-import { COPILOT_RUNTIME_URL } from '../config';
 import type { ChatMessage } from '../types';
 
 export function toAiSdkMessages(messages: ChatMessage[]): UIMessage[] {
@@ -18,10 +16,6 @@ export function toChatSdkTranscript(messages: ChatMessage[]): Array<Partial<Chat
     text: message.streamedContent || message.content,
     role: message.role,
   }));
-}
-
-export function createCopilotBridgeSnapshot(messages: ChatMessage[]): Pick<CopilotKitProps, 'runtimeUrl'> & { messageCount: number } {
-  return { runtimeUrl: COPILOT_RUNTIME_URL, messageCount: messages.length };
 }
 
 export function appendPendingLocalTurn(
