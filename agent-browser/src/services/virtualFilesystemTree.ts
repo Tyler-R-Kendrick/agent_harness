@@ -1,6 +1,6 @@
 import type { TreeNode, WorkspaceFile } from '../types';
 
-export const WORKSPACE_DRIVE_NAME = 'Workspace';
+export const WORKSPACE_DRIVE_NAME = '//workspace';
 
 type TerminalBranchNode = TreeNode & { children: TreeNode[] };
 type WorkspaceBranchNode = TreeNode & { children: TreeNode[] };
@@ -16,12 +16,16 @@ function createFolderNode(id: string, name: string, isDrive = false): TreeNode {
   };
 }
 
+export function normalizeDriveName(segment: string): string {
+  return segment.toLowerCase();
+}
+
 function displayDriveName(segment: string): string {
-  return segment === 'workspace' ? WORKSPACE_DRIVE_NAME : segment;
+  return `//${normalizeDriveName(segment)}`;
 }
 
 function driveSortRank(name: string): number {
-  return name === WORKSPACE_DRIVE_NAME ? 0 : 1;
+  return (name === WORKSPACE_DRIVE_NAME || name === 'workspace') ? 0 : 1;
 }
 
 function ensureChildFolder(parent: TreeNode, id: string, name: string): WorkspaceBranchNode {
@@ -57,7 +61,8 @@ export function buildWorkspaceCapabilityDriveNodes(prefix: string, files: Worksp
       continue;
     }
 
-    const [driveSegment, ...rest] = segments;
+    const [rawDriveSegment, ...rest] = segments;
+    const driveSegment = normalizeDriveName(rawDriveSegment);
     const driveId = `${prefix}:drive:${driveSegment}`;
     const drive = directoryDrives.get(driveSegment) ?? createFolderNode(driveId, displayDriveName(driveSegment), true);
     if (!directoryDrives.has(driveSegment)) directoryDrives.set(driveSegment, drive);
@@ -91,9 +96,10 @@ export function buildMountedTerminalDriveNodes(prefix: string, paths: string[]):
     const segments = rawPath.replace(/^\/+/, '').split('/').filter(Boolean);
     if (!segments.length) continue;
 
-    const [driveSegment, ...rest] = segments;
+    const [rawDriveSegment, ...rest] = segments;
+    const driveSegment = normalizeDriveName(rawDriveSegment);
     const driveId = `${prefix}:drive:${driveSegment}`;
-    const drive = drives.get(driveSegment) ?? createFolderNode(driveId, displayDriveName(driveSegment), true);
+    const drive = drives.get(driveSegment) ?? createFolderNode(driveId, driveSegment, false);
     if (!drives.has(driveSegment)) drives.set(driveSegment, drive);
     if (!rest.length) continue;
 

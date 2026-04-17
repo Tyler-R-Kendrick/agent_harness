@@ -1,8 +1,8 @@
-import { browserInferenceEngine } from '../services/browserInference';
-import { formatBrowserInferenceResult } from '../services/browserInferenceRuntime';
-import { toAiSdkMessages } from '../services/chatComposition';
-import type { ChatMessage, HFModel } from '../types';
-import type { AgentStreamCallbacks } from './types';
+import { browserInferenceEngine } from '../../services/browserInference';
+import { formatBrowserInferenceResult } from '../../services/browserInferenceRuntime';
+import { toAiSdkMessages } from '../../services/chatComposition';
+import type { ChatMessage, HFModel } from '../../types';
+import type { AgentStreamCallbacks } from '../types';
 
 export const CODI_LABEL = 'Codi';
 const MAX_CONTEXT_MESSAGES = 7;

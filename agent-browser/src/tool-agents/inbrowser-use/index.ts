@@ -14,7 +14,7 @@ import { tool } from 'ai';
 import { z } from 'zod/v4';
 import type { LanguageModel, ToolSet } from 'ai';
 import type { PlaywrightLikePage } from 'inbrowser-use';
-import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from '../services/agentRunner';
+import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from '../../services/agentRunner';
 
 // ── Instructions ──────────────────────────────────────────────────────────────
 

@@ -39,20 +39,32 @@ const copilotApiPlugin: Plugin = {
 export default defineConfig({
   plugins: [stubNodeZlib, copilotApiPlugin, react()],
   resolve: {
-    alias: process.env.VITE_ALLOW_SANDBOX_SAME_ORIGIN?.trim().toLowerCase() === 'true'
-      ? []
-      : [
-          {
-            find: '@webcontainer/api',
-            replacement: path.resolve(__dirname, 'src/sandbox/adapters/webcontainer-api.stub.ts'),
-          },
-        ],
-  },
-  worker: {
-    format: 'es',
+    alias: [
+      {
+        find: 'inbrowser-use',
+        replacement: path.resolve(__dirname, '../lib/inbrowser-use/src/index.ts'),
+      },
+      ...(process.env.VITE_ALLOW_SANDBOX_SAME_ORIGIN?.trim().toLowerCase() === 'true'
+        ? []
+        : [
+            {
+              find: '@webcontainer/api',
+              replacement: path.resolve(__dirname, 'src/sandbox/adapters/webcontainer-api.stub.ts'),
+            },
+          ]),
+    ],
   },
   build: {
     target: 'es2020',
     sourcemap: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        toolAgentHarness: path.resolve(__dirname, 'tool-agent-harness.html'),
+      },
+    },
+  },
+  worker: {
+    format: 'es',
   },
 });

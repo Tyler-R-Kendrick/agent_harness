@@ -55,6 +55,8 @@ vi.mock('just-bash/browser', () => {
 
     fs = {
       getAllPaths: () => [...this.fsPaths],
+      mkdir: (path: string) => { this.fsPaths.add(path); return Promise.resolve(); },
+      writeFile: (path: string) => { this.fsPaths.add(path); return Promise.resolve(); },
     };
 
     async exec(command: string) {
@@ -62,6 +64,27 @@ vi.mock('just-bash/browser', () => {
       if (trimmed.startsWith('touch ')) {
         const filePath = trimmed.slice('touch '.length).trim().replace(/^\/+/, '');
         if (filePath) this.fsPaths.add(`/workspace/${filePath}`);
+      }
+      // rm -rf "/path"
+      const rmMatch = trimmed.match(/^rm\b.*?"([^"]+)"\s*$/);
+      if (rmMatch) {
+        const target = rmMatch[1];
+        for (const path of [...this.fsPaths]) {
+          if (path === target || path.startsWith(target + '/')) this.fsPaths.delete(path);
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      }
+      // mv "oldPath" "newPath"
+      const mvMatch = trimmed.match(/^mv\s+"([^"]+)"\s+"([^"]+)"\s*$/);
+      if (mvMatch) {
+        const [, fromPath, toPath] = mvMatch;
+        for (const path of [...this.fsPaths]) {
+          if (path === fromPath || path.startsWith(fromPath + '/')) {
+            this.fsPaths.delete(path);
+            this.fsPaths.add(path === fromPath ? toPath : toPath + path.slice(fromPath.length));
+          }
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
       }
       if (trimmed === 'pwd') {
         return { stdout: '/workspace', stderr: '', exitCode: 0 };
@@ -170,8 +193,8 @@ describe('App', () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole('button', { name: 'Workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '.agents' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '//workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '//.agents' })).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
     expect(screen.getByText('SKILL.md')).toBeInTheDocument();
   });
@@ -1034,7 +1057,8 @@ describe('App', () => {
     // Ctrl+click on an already-open tab removes it from the split view
     fireEvent.click(screen.getAllByText('Hugging Face')[0], { ctrlKey: true });
     expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(1);
-    expect(screen.getByLabelText('Close Transformers.js')).toBeInTheDocument();
+    // Tab remains in the sidebar tree (close is now via context menu)
+    expect(screen.getAllByText('Transformers.js').length).toBeGreaterThanOrEqual(1);
   });
 
   it('splits session panes side by side on ctrl+click', async () => {
@@ -1381,5 +1405,1230 @@ describe('App', () => {
     // Both panel types must still be rendered after interaction
     expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
+  });
+
+  // ── Session FS context menu ──────────────────────────────────────
+
+  it('right-clicking a session FS drive node opens the context menu with a New toolbar button; clicking New shows scaffold options', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const driveButton = screen.getByRole('button', { name: '//session-1-fs' });
+    const treeRow = driveButton.closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New' })).toBeInTheDocument();
+
+    // Open the New sub-menu
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Add File' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add Folder' })).toBeInTheDocument();
+    expect(document.querySelector('.ctx-menu-sep')).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Add AGENTS.md' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add agent-skill' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add agent-hook' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add agent-eval' })).toBeInTheDocument();
+  });
+
+  it('context menu "Add File" opens the session FS modal pre-set to file mode', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add to session filesystem' })).toBeInTheDocument();
+    // File-only mode: only "Create file" button, no combined File/Folder choice
+    expect(screen.getByRole('button', { name: 'Create file' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create folder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'File' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Folder' })).not.toBeInTheDocument();
+  });
+
+  it('context menu "Add Folder" opens the session FS modal pre-set to folder mode', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add Folder' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add to session filesystem' })).toBeInTheDocument();
+    // Folder-only mode: only "Create folder" button
+    expect(screen.getByRole('button', { name: 'Create folder' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create file' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'File' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Folder' })).not.toBeInTheDocument();
+  });
+
+  it('context menu "Add AGENTS.md" scaffolds the file into the session FS and shows a success toast', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add AGENTS.md' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Created /workspace/AGENTS.md')).toBeInTheDocument();
+  });
+
+  it('context menu "Add agent-skill" scaffolds a SKILL.md file and shows a success toast', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add agent-skill' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/Created.*SKILL\.md/)).toBeInTheDocument();
+  });
+
+  it('pressing Escape closes the context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(screen.queryByRole('menu', { name: 'Context menu' })).not.toBeInTheDocument();
+  });
+
+  it('clicking outside the context menu closes it', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+
+    fireEvent.pointerDown(document.body);
+
+    expect(screen.queryByRole('menu', { name: 'Context menu' })).not.toBeInTheDocument();
+  });
+
+  it('focuses the first context menu item when the menu opens', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+
+    // The New toolbar button is the first menuitem when the drive root menu opens
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'New' }));
+  });
+
+  it('ArrowDown/ArrowUp move focus through context menu items', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+
+    const menu = screen.getByRole('menu', { name: 'Context menu' });
+    // New toolbar button is focused first
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    // First sub-menu item is focused automatically
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add File' }));
+
+    // ArrowDown moves to second item
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add Folder' }));
+
+    // ArrowDown skips the separator to the third actionable item
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add AGENTS.md' }));
+
+    // ArrowUp returns to previous item
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add Folder' }));
+  });
+
+  it('ArrowDown wraps from last context menu item back to first', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    const menu = screen.getByRole('menu', { name: 'Context menu' });
+    screen.getByRole('menuitem', { name: 'Add agent-eval' }).focus();
+
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add File' }));
+  });
+
+  it('Enter in session FS file-mode input creates the file', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
+
+    const input = screen.getByRole('textbox', { name: 'Entry name' });
+    fireEvent.change(input, { target: { value: 'notes.md' } });
+
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await Promise.resolve();
+    });
+
+    // Modal closes and toast appears
+    expect(screen.queryByRole('dialog', { name: 'Add to session filesystem' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Created.*notes\.md/)).toBeInTheDocument();
+  });
+
+  it('Enter in session FS folder-mode input creates the folder', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add Folder' }));
+
+    const input = screen.getByRole('textbox', { name: 'Entry name' });
+    fireEvent.change(input, { target: { value: 'my-dir' } });
+
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Add to session filesystem' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Created.*my-dir/)).toBeInTheDocument();
+  });
+
+  it('Enter in session FS file-mode input (via context menu) creates the file', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    // Open the context menu and choose Add File
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
+
+    const input = screen.getByRole('textbox', { name: 'Entry name' });
+    fireEvent.change(input, { target: { value: 'combined.txt' } });
+
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Add to session filesystem' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Created.*combined\.txt/)).toBeInTheDocument();
+  });
+
+  it('Escape in session FS modal input closes the modal without creating anything', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(treeRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add to session filesystem' })).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Entry name' }), { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Add to session filesystem' })).not.toBeInTheDocument();
+  });
+
+  // ── Session FS rename / delete ────────────────────────────────────
+
+  async function expandSessionFsDrive() {
+    // The //session-1-fs drive starts collapsed; click to expand it
+    fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  it('context menu on a non-root VFS node shows Rename and Delete items', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('context menu on the session FS drive root does not show Rename or Delete', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(driveRow);
+
+    expect(screen.queryByRole('menuitem', { name: 'Rename' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('clicking Rename opens a modal with the current node name pre-filled', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    expect(screen.getByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'New name' })).toHaveValue('workspace');
+  });
+
+  it('submitting the rename modal renames the path and shows a toast', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), { target: { value: 'my-workspace' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Rename' })).not.toBeInTheDocument();
+    expect(screen.getByText('Renamed to my-workspace')).toBeInTheDocument();
+  });
+
+  it('Enter in the rename input submits the rename', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    const input = screen.getByRole('textbox', { name: 'New name' });
+    fireEvent.change(input, { target: { value: 'renamed-dir' } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Rename' })).not.toBeInTheDocument();
+    expect(screen.getByText('Renamed to renamed-dir')).toBeInTheDocument();
+  });
+
+  it('Escape in the rename input cancels without renaming', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'New name' }), { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Rename' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Renamed to/)).not.toBeInTheDocument();
+  });
+
+  it('clicking Delete removes the node and shows a success toast', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Deleted /workspace')).toBeInTheDocument();
+  });
+
+  // ── Browser tab context menu ───────────────────────────────────
+
+  it('right-clicking a browser tab shows Bookmark, Mute, Copy URI, and Close items', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const tabRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    // HF starts persisted=true so label is "Remove Bookmark"
+    expect(screen.getByRole('menuitem', { name: /bookmark/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Mute' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Copy URI' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('clicking Bookmark in browser context menu toggles the bookmark and shows a toast', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Transformers.js starts without persisted, so "Bookmark" action
+    const tabRow = screen.getByText('Transformers.js').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Bookmark' }));
+
+    expect(screen.getByText('Bookmarked Transformers.js')).toBeInTheDocument();
+  });
+
+  it('clicking Mute in browser context menu toggles muted and shows a toast', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const tabRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mute' }));
+
+    expect(screen.getByText('Muted Hugging Face')).toBeInTheDocument();
+  });
+
+  it('clicking Copy URI copies the tab URL to clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const tabRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Copy URI' }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith('https://huggingface.co/models?library=transformers.js');
+    expect(screen.getByText('URI copied to clipboard')).toBeInTheDocument();
+  });
+
+  it('clicking Close in browser context menu removes the tab', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    expect(screen.getByText('Transformers.js')).toBeInTheDocument();
+
+    const tabRow = screen.getByText('Transformers.js').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Close' }));
+
+    expect(screen.queryByText('Transformers.js')).not.toBeInTheDocument();
+  });
+
+  // ── Session tab context menu ───────────────────────────────────
+
+  it('right-clicking a session tab shows Share, Rename, and Remove items', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeInTheDocument();
+  });
+
+  it('clicking Share in session context menu copies session info to clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Session 1'));
+    expect(screen.getByText('Session link copied to clipboard')).toBeInTheDocument();
+  });
+
+  it('clicking Rename in session context menu opens a rename dialog pre-filled with the session name', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    expect(screen.getByRole('dialog', { name: 'Rename session' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Session name' })).toHaveValue('Session 1');
+  });
+
+  it('submitting the rename session dialog changes the session name', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Session name' }), { target: { value: 'My Session' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument();
+    expect(screen.getByText('My Session')).toBeInTheDocument();
+  });
+
+  it('Enter in session rename input submits the rename', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    const input = screen.getByRole('textbox', { name: 'Session name' });
+    fireEvent.change(input, { target: { value: 'Renamed Session' } });
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument();
+    expect(screen.getByText('Renamed Session')).toBeInTheDocument();
+  });
+
+  it('Escape in session rename input cancels without renaming', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session name' }), { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument();
+    expect(screen.getByText('Session 1')).toBeInTheDocument();
+  });
+
+  it('clicking Remove in session context menu removes the session', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Add a second session so removing Session 1 doesn’t break the panel
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+    expect(screen.getByText('Session 2')).toBeInTheDocument();
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+
+    expect(screen.queryByText('Session 1')).not.toBeInTheDocument();
+  });
+
+  // ── Ellipsis (more-actions) button ──────────────────────────
+
+  it('each browser tab row has a "More actions" ellipsis button', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    expect(screen.getByRole('button', { name: 'More actions for Hugging Face' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More actions for Transformers.js' })).toBeInTheDocument();
+  });
+
+  it('each session tab row has a "More actions" ellipsis button', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    expect(screen.getByRole('button', { name: 'More actions for Session 1' })).toBeInTheDocument();
+  });
+
+  it('clicking the ellipsis button opens the context menu for that node', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Hugging Face' }));
+
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /bookmark/i })).toBeInTheDocument();
+  });
+
+  it('ellipsis button on a session row opens the session context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Session 1' }));
+
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+  });
+
+  // ── Context menu toolbar (top icon-button bar) ──────────────────────────
+
+  it('browser tab context menu has a toolbar with Bookmark, Mute, Copy URI and Close icon buttons', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const tabRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+
+    const menu = screen.getByRole('menu', { name: 'Context menu' });
+    expect(menu.querySelector('.ctx-menu-toolbar')).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: /bookmark/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Mute' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Copy URI' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('session tab context menu has a toolbar with Share, Rename and Remove icon buttons', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+
+    const menu = screen.getByRole('menu', { name: 'Context menu' });
+    expect(menu.querySelector('.ctx-menu-toolbar')).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Share' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeInTheDocument();
+  });
+
+  it('VFS drive root context menu has a toolbar with a New icon button', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(driveRow);
+
+    const menu = screen.getByRole('menu', { name: 'Context menu' });
+    expect(menu.querySelector('.ctx-menu-toolbar')).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'New' })).toBeInTheDocument();
+  });
+
+  it('VFS non-root context menu has a toolbar with Rename, Delete and New icon buttons', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
+    await act(async () => { await Promise.resolve(); });
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+
+    const menu = screen.getByRole('menu', { name: 'Context menu' });
+    expect(menu.querySelector('.ctx-menu-toolbar')).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New' })).toBeInTheDocument();
+  });
+
+  it('clicking the New toolbar button shows the scaffold sub-menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(driveRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Add File' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add Folder' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add AGENTS.md' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add agent-skill' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add agent-hook' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add agent-eval' })).toBeInTheDocument();
+  });
+
+  it('clicking the Back button in the sub-menu returns to the main toolbar view', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(driveRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
+
+    // sub-menu is open, add items visible
+    expect(screen.getByRole('menuitem', { name: 'Add File' })).toBeInTheDocument();
+
+    // click Back
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    // back to toolbar view, add items gone, New button back
+    expect(screen.queryByRole('menuitem', { name: 'Add File' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New' })).toBeInTheDocument();
+  });
+
+  // ── Properties context menu item ─────────────────────────────────────────
+
+  it('Properties is a list item in a browser tab context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
+  });
+
+  it('Properties is a list item in a session tab context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
+  });
+
+  it('Properties is a list item in a VFS node context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
+  });
+
+  it('clicking Properties on a browser tab opens the Properties dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    expect(screen.getByRole('dialog', { name: 'Properties' })).toBeInTheDocument();
+  });
+
+  it('browser tab Properties dialog shows URL, memory size, and a Permissions section', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toHaveTextContent('https://huggingface.co/models?library=transformers.js');
+    expect(dialog).toHaveTextContent('165');
+    expect(screen.getByRole('table', { name: 'Permissions' })).toBeInTheDocument();
+  });
+
+  it('Properties permissions table has one row per identity', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    // table has at least 2 rows (header + at least one identity)
+    const rows = screen.getByRole('table', { name: 'Permissions' }).querySelectorAll('tr');
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('clicking Properties on a VFS node shows the path in the dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toHaveTextContent('session-1-fs');
+    expect(screen.getByRole('table', { name: 'Permissions' })).toBeInTheDocument();
+  });
+
+  // ── History context menu item ─────────────────────────────────────────────
+
+  it('History is a list item in a browser tab context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    expect(screen.getByRole('menuitem', { name: 'History' })).toBeInTheDocument();
+  });
+
+  it('History is a list item in a session tab context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    expect(screen.getByRole('menuitem', { name: 'History' })).toBeInTheDocument();
+  });
+
+  it('History is a list item in a VFS node context menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    expect(screen.getByRole('menuitem', { name: 'History' })).toBeInTheDocument();
+  });
+
+  it('clicking History on a browser tab opens the Browser history dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByRole('dialog', { name: 'Browser history' })).toBeInTheDocument();
+  });
+
+  it('Browser history dialog shows the initial URL as a navigation entry', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Browser history' });
+    expect(dialog).toHaveTextContent('huggingface.co');
+    expect(screen.getByRole('img', { name: 'Commit graph' })).toBeInTheDocument();
+  });
+
+  it('Browser history dialog shows Back and Forward navigation buttons', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Forward' })).toBeInTheDocument();
+  });
+
+  it('clicking History on a VFS node opens the Version history dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByRole('dialog', { name: 'Version history' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Commit graph' })).toBeInTheDocument();
+  });
+
+  it('Version history dialog shows a Rollback button for commits', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    // The initial commit is always present; it should have a Rollback button
+    expect(screen.getAllByRole('button', { name: /Roll back/i }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rolling back to the initial commit creates a new branch in the version history', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const rollbackBtn = screen.getAllByRole('button', { name: /Roll back/i })[0];
+    await act(async () => {
+      fireEvent.click(rollbackBtn);
+      await Promise.resolve();
+    });
+
+    // A new branch name containing 'rollback' should appear
+    expect(screen.getByRole('dialog', { name: 'Version history' })).toHaveTextContent('rollback');
+  });
+
+  it('clicking History on a session opens the Session history dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByRole('dialog', { name: 'Session history' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Commit graph' })).toBeInTheDocument();
+  });
+
+  it('Session history dialog shows a "Branch from here" button for each snapshot', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getAllByRole('button', { name: /Branch from here/i }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('clicking "Branch from here" in session history creates a new branch and shows it in the graph', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const branchBtn = screen.getAllByRole('button', { name: /Branch from here/i })[0];
+    await act(async () => {
+      fireEvent.click(branchBtn);
+      await Promise.resolve();
+    });
+
+    // A new branch should appear in the dialog
+    const dialog = screen.getByRole('dialog', { name: 'Session history' });
+    expect(dialog).toHaveTextContent('branch');
+  });
+
+  // ── File node: Move / Symlink / Duplicate ─────────────────────────────────
+
+  /** Helper: add AGENTS.md to the Research workspace and return its treeitem element. */
+  async function addAgentsMdAndGetTreeItem() {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    await act(async () => { vi.advanceTimersByTime(150); await Promise.resolve(); });
+
+    // AGENTS.md appears both in the add-file modal and in the tree; pick the treeitem one
+    const treeitem = screen.getAllByText('AGENTS.md')
+      .map((el) => el.closest('[role="treeitem"]'))
+      .find((el): el is Element => el !== null);
+    if (!treeitem) throw new Error('AGENTS.md treeitem not found');
+    return treeitem;
+  }
+
+  it('file context menu has a "Move" top button', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    expect(screen.getByRole('menuitem', { name: 'Move' })).toBeInTheDocument();
+  });
+
+  it('file context menu Move button has split dropdown showing Symlink and Duplicate', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('button', { name: 'Move options' }));
+    expect(screen.getByRole('menuitem', { name: 'Symlink' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument();
+  });
+
+  it('clicking Move opens the file-op modal with "Move" as the operation', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+    const dialog = screen.getByRole('dialog', { name: 'Move file' });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Move');
+    expect(screen.getByRole('textbox', { name: /target directory/i })).toBeInTheDocument();
+  });
+
+  it('clicking Symlink (from split dropdown) opens the file-op modal with "Symlink" as the operation', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('button', { name: 'Move options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Symlink' }));
+    const dialog = screen.getByRole('dialog', { name: 'Symlink file' });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Symlink');
+  });
+
+  it('clicking Duplicate (from split dropdown) opens the file-op modal with "Duplicate" as the operation', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('button', { name: 'Move options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+    const dialog = screen.getByRole('dialog', { name: 'Duplicate file' });
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it('confirming a Move updates the file path in the workspace', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    fireEvent.change(screen.getByRole('textbox', { name: /target directory/i }), {
+      target: { value: 'docs' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    await act(async () => { await Promise.resolve(); });
+
+    // The file should no longer appear under its original path name only
+    expect(screen.queryByRole('dialog', { name: 'Move file' })).not.toBeInTheDocument();
+    // Toast confirms the move
+    expect(document.querySelector('.toast')?.textContent).toMatch(/moved/i);
+  });
+
+  it('confirming a Symlink adds a symlink reference file in the target directory', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('button', { name: 'Move options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Symlink' }));
+
+    fireEvent.change(screen.getByRole('textbox', { name: /target directory/i }), {
+      target: { value: 'links' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByRole('dialog', { name: 'Symlink file' })).not.toBeInTheDocument();
+    expect(document.querySelector('.toast')?.textContent).toMatch(/symlink/i);
+  });
+
+  it('confirming a Duplicate creates a copy of the file in the target directory', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('button', { name: 'Move options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+
+    fireEvent.change(screen.getByRole('textbox', { name: /target directory/i }), {
+      target: { value: 'copies' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByRole('dialog', { name: 'Duplicate file' })).not.toBeInTheDocument();
+    expect(document.querySelector('.toast')?.textContent).toMatch(/duplicated/i);
+  });
+
+  it('file Properties dialog lists Move, Symlink and Duplicate in the permissions table', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toHaveTextContent('Move');
+    expect(dialog).toHaveTextContent('Symlink');
+    expect(dialog).toHaveTextContent('Duplicate');
+  });
+
+  it('browser tab Properties dialog lists all browser context-menu actions in permissions', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Hugging Face').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toHaveTextContent('Bookmark');
+    expect(dialog).toHaveTextContent('Mute');
+    expect(dialog).toHaveTextContent('Copy URI');
+    expect(dialog).toHaveTextContent('Close');
+  });
+
+  it('session Properties dialog lists all session context-menu actions in permissions', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toHaveTextContent('Share');
+    expect(dialog).toHaveTextContent('Rename');
+    expect(dialog).toHaveTextContent('Remove');
+  });
+
+  // ── Browser add button ────────────────────────────────────────────────────
+
+  it('Browser folder has an "Add browser tab" button matching Sessions and Files', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    expect(screen.getByLabelText('Add browser tab to Research')).toBeInTheDocument();
+  });
+
+  it('clicking Add browser tab opens a URI prompt dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByLabelText('Add browser tab to Research'));
+
+    const dialog = screen.getByRole('dialog', { name: 'New browser tab' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /url/i })).toBeInTheDocument();
+  });
+
+  it('confirming the URI prompt creates a new tab with the entered URL', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Count browser tab treeitems before (they sit under the Browser folder)
+    const browserFolder = screen.getByRole('button', { name: 'Browser' }).closest('[role="treeitem"]')!;
+    const getBrowserTabCount = () =>
+      screen.getAllByRole('treeitem').filter((el) => {
+        const btn = el.querySelector<HTMLElement>('.tree-button');
+        return btn && el !== browserFolder && browserFolder.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING;
+      }).length;
+    const before = getBrowserTabCount();
+
+    fireEvent.click(screen.getByLabelText('Add browser tab to Research'));
+    fireEvent.change(screen.getByRole('textbox', { name: /url/i }), {
+      target: { value: 'https://example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await act(async () => { vi.advanceTimersByTime(50); await Promise.resolve(); });
+
+    // A new treeitem for the new tab should have appeared
+    expect(screen.queryByRole('dialog', { name: 'New browser tab' })).not.toBeInTheDocument();
+    // The toast confirms the tab was opened
+    expect(document.querySelector('.toast')?.textContent).toMatch(/example\.com/i);
+  });
+
+  it('cancelling the URI prompt does not create a new tab', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const before = screen.getAllByRole('treeitem').filter(
+      (el) => el.querySelector('[data-icon="globe"]')
+    ).length;
+
+    fireEvent.click(screen.getByLabelText('Add browser tab to Research'));
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    const after = screen.getAllByRole('treeitem').filter(
+      (el) => el.querySelector('[data-icon="globe"]')
+    ).length;
+    expect(after).toBe(before);
+    expect(screen.queryByRole('dialog', { name: 'New browser tab' })).not.toBeInTheDocument();
   });
 });

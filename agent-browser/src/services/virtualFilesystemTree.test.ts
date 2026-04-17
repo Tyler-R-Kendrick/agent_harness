@@ -18,8 +18,8 @@ describe('virtualFilesystemTree', () => {
 
     expect(drives.map((node) => ({ name: node.name, isDrive: node.isDrive }))).toEqual([
       { name: WORKSPACE_DRIVE_NAME, isDrive: true },
-      { name: '.agents', isDrive: true },
-      { name: 'docs', isDrive: true },
+      { name: '//.agents', isDrive: true },
+      { name: '//docs', isDrive: true },
     ]);
 
     expect(drives[0].children).toEqual([
@@ -52,8 +52,8 @@ describe('virtualFilesystemTree', () => {
     ]);
 
     expect(drives.map((node) => ({ name: node.name, isDrive: node.isDrive }))).toEqual([
-      { name: WORKSPACE_DRIVE_NAME, isDrive: true },
-      { name: 'tmp', isDrive: true },
+      { name: 'workspace', isDrive: false },
+      { name: 'tmp', isDrive: false },
     ]);
 
     expect(drives[0].children).toEqual(expect.arrayContaining([
@@ -74,7 +74,7 @@ describe('virtualFilesystemTree', () => {
     ]);
 
     expect(drives.map((node) => node.name)).toEqual([
-      WORKSPACE_DRIVE_NAME,
+      'workspace',
       'tmp',
     ]);
     expect(drives[1].children).toEqual([

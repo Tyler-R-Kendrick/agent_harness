@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
-import { AGENT_INSTRUCTIONS, createInBrowserUseTools, createInBrowserUseAgent, runInBrowserUseAgent } from './inbrowser-use';
+import { AGENT_INSTRUCTIONS, createInBrowserUseTools, createInBrowserUseAgent, runInBrowserUseAgent } from '.';
 
 // Mock agentRunner so tests don't hit a real LLM
-vi.mock('../services/agentRunner', () => ({
+vi.mock('../../services/agentRunner', () => ({
   runToolAgent: vi.fn().mockResolvedValue({ text: 'done', steps: 1 }),
 }));
-import { runToolAgent } from '../services/agentRunner';
+import { runToolAgent } from '../../services/agentRunner';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

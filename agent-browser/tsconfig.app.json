@@ -16,7 +16,11 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "inbrowser-use": ["../lib/inbrowser-use/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

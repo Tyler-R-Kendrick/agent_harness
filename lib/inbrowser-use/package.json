@@ -1,0 +1,22 @@
+{
+  "name": "inbrowser-use",
+  "version": "0.1.0",
+  "description": "Playwright-shaped in-app DOM control runtime running inside a website",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.1.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.1.0"
+  }
+}

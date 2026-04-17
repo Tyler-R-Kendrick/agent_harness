@@ -23,6 +23,7 @@ export interface TreeNode {
   url?: string;
   color?: string;
   filePath?: string;
+  muted?: boolean;
 }
 
 export interface McpCard {
@@ -76,6 +77,53 @@ export interface HistorySession {
 }
 
 export type IntegrationKind = 'agents' | 'skills' | 'plugins' | 'hooks' | 'mcps';
+
+// ── Identity & Permissions ────────────────────────────────────────────────────
+
+export type IdentityType = 'user' | 'agent';
+
+export interface Identity {
+  id: string;
+  name: string;
+  type: IdentityType;
+}
+
+export interface ActionPermission {
+  action: string;
+  allowed: boolean;
+}
+
+export interface IdentityPermissions {
+  identity: Identity;
+  permissions: ActionPermission[];
+}
+
+// ── Node metadata ─────────────────────────────────────────────────────────────
+
+export interface NodeMetadata {
+  /** Human-readable location (URL, VFS path, or session path) */
+  location: string;
+  /** Size description – e.g. "128 MB" for browser tabs, bytes for files */
+  sizeLabel: string;
+  sizeBytes?: number;
+  createdAt: number;
+  modifiedAt: number;
+  accessedAt: number;
+  identityPermissions: IdentityPermissions[];
+}
+
+// ── Browser navigation history ───────────────────────────────────────────────
+
+export interface BrowserNavEntry {
+  url: string;
+  title: string;
+  timestamp: number;
+}
+
+export interface BrowserNavHistory {
+  entries: BrowserNavEntry[];
+  currentIndex: number;
+}
 
 export type WorkspaceFileKind = 'agents' | 'skill' | 'plugin' | 'hook';
 

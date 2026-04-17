@@ -14,22 +14,29 @@ import { useCopilotReadable } from '@copilotkit/react-core';
 import {
   ArrowLeft,
   ArrowRight,
+  Bookmark,
+  BookmarkMinus,
   ChevronDown,
   ChevronRight,
   Copy,
   Cpu,
   File,
   Folder,
+  FolderInput,
   FolderOpen,
   Globe,
   HardDrive,
   History,
+  Info,
   Keyboard,
   Layers3,
+  Link,
   LoaderCircle,
   LucideIcon,
   MessageSquare,
+  MoreHorizontal,
   PanelRightOpen,
+  Pencil,
   Plus,
   Puzzle,
   RefreshCcw,
@@ -37,15 +44,27 @@ import {
   Search,
   SendHorizontal,
   Settings,
+  Share2,
   Square,
   Sparkles,
   Terminal,
   Trash2,
   User,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import { Bash } from 'just-bash/browser';
 import './App.css';
+import {
+  branchDAG,
+  commitToDAG,
+  computeLanes,
+  createVersionDAG,
+  getTopologicalOrder,
+  rollbackToCommit,
+  type VersionDAG,
+} from './services/versionHistory';
 import {
   getAgentDisplayName,
   getAgentInputPlaceholder,
@@ -57,7 +76,7 @@ import {
   streamCodiChat,
   streamGhcpChat,
   type AgentProvider,
-} from './agents';
+} from './chat-agents';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
@@ -81,7 +100,7 @@ import {
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import { createUniqueId } from './utils/uniqueId';
-import type { ChatMessage, HFModel, HistorySession, NodeKind, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -97,6 +116,22 @@ type SessionPanel = { type: 'session'; id: string };
 type FilePanel = { type: 'file'; file: WorkspaceFile };
 type Panel = BrowserPanel | SessionPanel | FilePanel;
 type PanelDragHandleProps = React.HTMLAttributes<HTMLElement>;
+
+const DEFAULT_IDENTITIES: Identity[] = [
+  { id: 'user-1', name: 'You', type: 'user' },
+  { id: 'agent-1', name: 'Agent', type: 'agent' },
+];
+
+function defaultPermissionsFor(actions: string[]): IdentityPermissions[] {
+  return DEFAULT_IDENTITIES.map((identity) => ({
+    identity,
+    permissions: actions.map((action) => ({
+      action,
+      // Agents cannot delete/remove/close/rename by default
+      allowed: identity.type === 'user' || !['Close', 'Remove', 'Delete', 'Rename'].includes(action),
+    })),
+  }));
+}
 
 function stopPanelTitlebarControlDrag(event: React.SyntheticEvent<HTMLElement>) {
   event.stopPropagation();
@@ -900,6 +935,7 @@ function ChatPanel({
   onClose,
   onTerminalFsPathsChanged,
   onOpenSettings,
+  bashBySessionRef,
   dragHandleProps,
 }: {
   installedModels: HFModel[];
@@ -917,6 +953,7 @@ function ChatPanel({
   onClose: () => void;
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
   onOpenSettings: () => void;
+  bashBySessionRef: React.RefObject<Record<string, Bash>>;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
@@ -933,7 +970,6 @@ function ChatPanel({
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
   const consumedPendingSearchRef = useRef<string | null>(null);
-  const bashBySessionRef = useRef<Record<string, Bash>>({});
   const activeGenerationRef = useRef<{
     assistantId: string;
     sessionId: string;
@@ -1954,7 +1990,512 @@ function RenameWorkspaceOverlay({
   );
 }
 
-function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, activeSessionIds, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onCloseTab, onOpenFile, onAddFile, onAddAgent, items }: { root: TreeNode; workspaceByNodeId: Map<string, string>; activeWorkspaceId: string; openTabIds: string[]; activeSessionIds: string[]; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string, multi?: boolean) => void; onCloseTab: (id: string) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; items: FlatTreeItem[] }) {
+// ── GitGraph ─────────────────────────────────────────────────────────────────
+
+function GitGraph({ dag, onSelectCommit, selectedCommitId }: {
+  dag: VersionDAG;
+  onSelectCommit?: (commitId: string) => void;
+  selectedCommitId?: string | null;
+}) {
+  const commits = getTopologicalOrder(dag);
+  const lanes = computeLanes(dag);
+  const numLanes = Math.max(1, Object.keys(dag.branches).length);
+  const COL_W = 28, ROW_H = 40, R = 7, PAD = 16;
+  const svgW = numLanes * COL_W + PAD * 2 + 160;
+  const svgH = commits.length * ROW_H + PAD * 2;
+
+  const cx = (branchId: string) => PAD + (lanes.get(branchId) ?? 0) * COL_W + R;
+  const cy = (idx: number) => PAD + idx * ROW_H + R;
+
+  const branchColors = Object.fromEntries(Object.values(dag.branches).map((b) => [b.id, b.color]));
+
+  return (
+    <svg width={svgW} height={svgH} aria-label="Commit graph" role="img" className="gitgraph-svg">
+      {commits.map((commit, i) => {
+        const x = cx(commit.branchId);
+        const y = cy(i);
+        const color = branchColors[commit.branchId] ?? '#60a5fa';
+        return commit.parentIds.map((parentId) => {
+          const parentIdx = commits.findIndex((c) => c.id === parentId);
+          if (parentIdx < 0) return null;
+          const px = cx(commits[parentIdx].branchId);
+          const py = cy(parentIdx);
+          return (
+            <path key={`${commit.id}-${parentId}`} d={`M${x},${y} C${x},${(y + py) / 2} ${px},${(y + py) / 2} ${px},${py}`}
+              fill="none" stroke={color} strokeWidth={2} opacity={0.7} />
+          );
+        });
+      })}
+      {commits.map((commit, i) => {
+        const x = cx(commit.branchId);
+        const y = cy(i);
+        const color = branchColors[commit.branchId] ?? '#60a5fa';
+        const isSelected = commit.id === selectedCommitId;
+        const isCurrent = commit.id === dag.currentCommitId;
+        return (
+          <g key={commit.id} onClick={() => onSelectCommit?.(commit.id)} style={{ cursor: 'pointer' }}>
+            <circle cx={x} cy={y} r={R + 2} fill="transparent" />
+            <circle cx={x} cy={y} r={isSelected || isCurrent ? R : R - 1}
+              fill={isCurrent ? '#fff' : color}
+              stroke={color} strokeWidth={isCurrent ? 2 : 1.5} />
+            <text x={x + R + 6} y={y + 4} fontSize={11} fill={isSelected ? '#fff' : '#a9b1ba'} fontFamily="inherit">
+              {commit.message.length > 22 ? commit.message.slice(0, 22) + '…' : commit.message}
+            </text>
+          </g>
+        );
+      })}
+      {Object.values(dag.branches).map((branch) => {
+        const headCommit = dag.commits[branch.headCommitId];
+        if (!headCommit) return null;
+        const headIdx = commits.findIndex((c) => c.id === branch.headCommitId);
+        if (headIdx < 0) return null;
+        const x = cx(branch.id);
+        const y = cy(headIdx) - R - 6;
+        return (
+          <text key={branch.id} x={x} y={y} textAnchor="middle" fontSize={9} fill={branch.color} fontWeight={600} fontFamily="inherit">
+            {branch.name}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ── Properties modal ──────────────────────────────────────────────────────────
+
+function PropertiesModal({ metadata, nodeName, onClose }: { metadata: NodeMetadata; nodeName: string; onClose: () => void }) {
+  const fmt = (ts: number) => new Date(ts).toLocaleString();
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Properties">
+      <div className="modal-card props-modal">
+        <div className="modal-header">
+          <h2>{nodeName} — Properties</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close Properties"><X size={14} /></button>
+        </div>
+        <div className="props-body">
+          <section className="props-section">
+            <dl className="props-dl">
+              <dt>Location</dt><dd className="props-mono">{metadata.location}</dd>
+              <dt>Size</dt><dd>{metadata.sizeLabel}</dd>
+              <dt>Created</dt><dd>{fmt(metadata.createdAt)}</dd>
+              <dt>Modified</dt><dd>{fmt(metadata.modifiedAt)}</dd>
+              <dt>Accessed</dt><dd>{fmt(metadata.accessedAt)}</dd>
+            </dl>
+          </section>
+          <section className="props-section">
+            <h3>Permissions</h3>
+            <table role="table" aria-label="Permissions" className="props-table">
+              <thead>
+                <tr>
+                  <th>Identity</th>
+                  {metadata.identityPermissions[0]?.permissions.map((p) => <th key={p.action}>{p.action}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {metadata.identityPermissions.map(({ identity, permissions }) => (
+                  <tr key={identity.id}>
+                    <td>
+                      <span className={`identity-badge identity-badge--${identity.type}`}>{identity.name}</span>
+                    </td>
+                    {permissions.map((p) => (
+                      <td key={p.action} className={p.allowed ? 'perm-allow' : 'perm-deny'} title={p.allowed ? 'Allowed' : 'Denied'}>
+                        {p.allowed ? '✓' : '✗'}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── History modals ────────────────────────────────────────────────────────────
+
+function BrowserHistoryModal({ nodeId, navHistory, onBack, onForward, onClose }: {
+  nodeId: string;
+  navHistory: BrowserNavHistory;
+  onBack: () => void;
+  onForward: () => void;
+  onClose: () => void;
+}) {
+  // Build a minimal VersionDAG from nav history entries for the gitgraph
+  const dag = useMemo<VersionDAG>(() => {
+    if (navHistory.entries.length === 0) {
+      return createVersionDAG('(empty)', 'system', 'Start', Date.now());
+    }
+    let d = createVersionDAG(navHistory.entries[0].url, 'system', navHistory.entries[0].title || navHistory.entries[0].url, navHistory.entries[0].timestamp);
+    for (let i = 1; i < navHistory.entries.length; i++) {
+      const e = navHistory.entries[i];
+      d = commitToDAG(d, e.url, 'system', e.title || e.url, e.timestamp);
+    }
+    return d;
+  }, [navHistory]);
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Browser history">
+      <div className="modal-card history-modal">
+        <div className="modal-header">
+          <h2>Browser history</h2>
+          <div className="history-nav-btns">
+            <button type="button" className="secondary-button" onClick={onBack} disabled={navHistory.currentIndex <= 0} aria-label="Back">← Back</button>
+            <button type="button" className="secondary-button" onClick={onForward} disabled={navHistory.currentIndex >= navHistory.entries.length - 1} aria-label="Forward">Forward →</button>
+          </div>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close Browser history"><X size={14} /></button>
+        </div>
+        <div className="history-body">
+          <div className="history-graph-area">
+            <GitGraph dag={dag} selectedCommitId={dag.currentCommitId} />
+          </div>
+          <ul className="history-entry-list">
+            {[...navHistory.entries].reverse().map((entry, i) => {
+              const realIdx = navHistory.entries.length - 1 - i;
+              return (
+                <li key={realIdx} className={`history-entry ${realIdx === navHistory.currentIndex ? 'history-entry--current' : ''}`}>
+                  <span className="history-entry-url">{entry.url}</span>
+                  <span className="history-entry-time">{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VersionHistoryModal({ dag, dialogLabel, rowActions, onClose }: {
+  dag: VersionDAG;
+  dialogLabel: string;
+  rowActions: (commitId: string, isCurrentHead: boolean) => React.ReactNode;
+  onClose: () => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const commits = useMemo(() => getTopologicalOrder(dag).reverse(), [dag]);
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={dialogLabel}>
+      <div className="modal-card history-modal">
+        <div className="modal-header">
+          <h2>{dialogLabel}</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label={`Close ${dialogLabel}`}><X size={14} /></button>
+        </div>
+        <div className="history-body">
+          <div className="history-graph-area">
+            <GitGraph dag={dag} selectedCommitId={selectedId ?? dag.currentCommitId} onSelectCommit={setSelectedId} />
+          </div>
+          <ul className="history-entry-list">
+            {commits.map((commit) => {
+              const branch = dag.branches[commit.branchId];
+              const isHead = commit.id === dag.currentCommitId;
+              return (
+                <li key={commit.id} className={`history-entry ${isHead ? 'history-entry--current' : ''}`}
+                  onClick={() => setSelectedId(commit.id)}>
+                  <div className="history-entry-row">
+                    <span className="history-entry-branch" style={{ color: branch?.color }}>{branch?.name ?? commit.branchId}</span>
+                    <span className="history-entry-msg">{commit.message}</span>
+                    {isHead && <span className="history-entry-badge">HEAD</span>}
+                  </div>
+                  <div className="history-entry-meta">
+                    <span>{commit.authorId}</span>
+                    <span>{new Date(commit.timestamp).toLocaleString()}</span>
+                    <div className="history-entry-actions">
+                      {rowActions(commit.id, isHead)}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type ContextMenuEntry = { label: string; onClick: () => void } | 'separator';
+type ContextMenuSplitOption = { icon: LucideIcon; label: string; onClick: () => void };
+type ContextMenuTopButton = { icon: LucideIcon; label: string } & (
+  | { onClick: () => void; subMenu?: never; splitOptions?: never }
+  | { subMenu: ContextMenuEntry[]; onClick?: never; splitOptions?: never }
+  | { onClick: () => void; splitOptions: ContextMenuSplitOption[]; subMenu?: never }
+);
+
+type FileOpKind = 'move' | 'symlink' | 'duplicate';
+
+function FileOpModal({ node, op, onConfirm, onClose }: {
+  node: TreeNode;
+  op: FileOpKind;
+  onConfirm: (targetDir: string) => void;
+  onClose: () => void;
+}) {
+  const [targetDir, setTargetDir] = useState('');
+  const opLabel = op === 'move' ? 'Move' : op === 'symlink' ? 'Symlink' : 'Duplicate';
+  const dialogLabel = `${opLabel} file`;
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={dialogLabel} onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span>{opLabel}: <strong>{node.name}</strong></span>
+          <button type="button" className="icon-button" onClick={onClose} aria-label={`Close ${dialogLabel}`}><X size={14} /></button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span>Target directory</span>
+            <input
+              type="text"
+              aria-label="Target directory"
+              value={targetDir}
+              onChange={(e) => setTargetDir(e.target.value)}
+              placeholder="e.g. docs/"
+              autoFocus
+              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid rgba(255,255,255,.2)', background: 'rgba(0,0,0,.3)', color: 'inherit' }}
+            />
+          </label>
+        </div>
+        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 12px' }}>
+          <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+          <button type="button" className="primary-button" onClick={() => onConfirm(targetDir)} aria-label="Confirm">{opLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewTabModal({ onConfirm, onClose }: {
+  onConfirm: (url: string) => void;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState('');
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="New browser tab" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span>New browser tab</span>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close New browser tab"><X size={14} /></button>
+        </div>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span>URL</span>
+            <input
+              type="url"
+              aria-label="URL"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') onConfirm(url); }}
+              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid rgba(255,255,255,.2)', background: 'rgba(0,0,0,.3)', color: 'inherit' }}
+            />
+          </label>
+        </div>
+        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 12px' }}>
+          <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
+          <button type="button" className="primary-button" onClick={() => onConfirm(url)} aria-label="Open">Open</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContextMenu({ x, y, entries, topButtons, onClose }: { x: number; y: number; entries: ContextMenuEntry[]; topButtons?: ContextMenuTopButton[]; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [activeSubMenu, setActiveSubMenu] = useState<ContextMenuEntry[] | null>(null);
+  const [subMenuLabel, setSubMenuLabel] = useState('');
+  const [openSplitIndex, setOpenSplitIndex] = useState<number | null>(null);
+
+  // Focus the first menu item when the menu opens, or when sub-menu changes
+  useEffect(() => {
+    const firstItem = ref.current?.querySelector<HTMLButtonElement>('[role="menuitem"]');
+    firstItem?.focus();
+  }, [activeSubMenu]);
+
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) onClose();
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose();
+    }
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [onClose]);
+
+  function handleKeyDown(event: React.KeyboardEvent) {
+    const items = [...(ref.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+    const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      items[(currentIndex + 1) % items.length]?.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      items[(currentIndex - 1 + items.length) % items.length]?.focus();
+    }
+  }
+
+  const displayEntries = activeSubMenu ?? entries;
+  const style: React.CSSProperties = { left: x, top: y };
+
+  return (
+    <div ref={ref} className="ctx-menu" style={style} role="menu" aria-label="Context menu" onKeyDown={handleKeyDown}>
+      {topButtons && !activeSubMenu && (
+        <>
+          <div className="ctx-menu-toolbar" role="group" aria-label="Quick actions">
+            {topButtons.map((btn, i) =>
+              btn.subMenu
+                ? <button key={i} type="button" role="menuitem" className="ctx-menu-toolbar-btn" aria-label={btn.label} onClick={() => { setSubMenuLabel(btn.label); setActiveSubMenu(btn.subMenu!); }}>
+                    <btn.icon size={16} strokeWidth={1.5} /><span>{btn.label}</span>
+                  </button>
+                : btn.splitOptions
+                  ? <span key={i} className="ctx-split-btn" role="group" aria-label={btn.label}>
+                      <button type="button" role="menuitem" className="ctx-menu-toolbar-btn ctx-split-main" aria-label={btn.label} onClick={() => { btn.onClick(); onClose(); }}>
+                        <btn.icon size={16} strokeWidth={1.5} /><span>{btn.label}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="ctx-split-chevron"
+                        aria-label={`${btn.label} options`}
+                        aria-expanded={openSplitIndex === i}
+                        onClick={(e) => { e.stopPropagation(); setOpenSplitIndex(openSplitIndex === i ? null : i); }}
+                      >
+                        <ChevronDown size={10} />
+                      </button>
+                      {openSplitIndex === i && (
+                        <div className="ctx-split-dropdown" role="menu">
+                          {btn.splitOptions.map((opt, oi) => (
+                            <button key={oi} type="button" role="menuitem" className="ctx-menu-item" onClick={() => { opt.onClick(); onClose(); }}>
+                              <opt.icon size={13} strokeWidth={1.5} />{opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </span>
+                  : <button key={i} type="button" role="menuitem" className="ctx-menu-toolbar-btn" aria-label={btn.label} onClick={() => { btn.onClick(); onClose(); }}>
+                      <btn.icon size={16} strokeWidth={1.5} /><span>{btn.label}</span>
+                    </button>
+            )}
+          </div>
+          {displayEntries.length > 0 && <div className="ctx-menu-sep" role="separator" />}
+        </>
+      )}
+      {activeSubMenu && (
+        <>
+          <button type="button" role="button" className="ctx-menu-back-btn" aria-label="Back" onClick={() => setActiveSubMenu(null)}>
+            <ArrowLeft size={11} />{subMenuLabel}
+          </button>
+          <div className="ctx-menu-sep" role="separator" />
+        </>
+      )}
+      {displayEntries.map((entry, i) =>
+        entry === 'separator'
+          ? <div key={i} className="ctx-menu-sep" role="separator" />
+          : <button key={i} type="button" className="ctx-menu-item" role="menuitem" onClick={() => { entry.onClick(); onClose(); }}>{entry.label}</button>
+      )}
+    </div>
+  );
+}
+
+// — Session FS scaffold templates ——————————————————————————
+
+function makeAgentsMd(basePath: string): { path: string; content: string } {
+  return {
+    path: `${basePath}/AGENTS.md`,
+    content: [
+      '# Agent Instructions',
+      '',
+      '## Goals',
+      '- Describe the expected outcomes for this session.',
+      '',
+      '## Constraints',
+      '- Add safety, testing, or review rules the agent should respect.',
+    ].join('\n'),
+  };
+}
+
+function makeAgentSkill(basePath: string): { path: string; content: string } {
+  return {
+    path: `${basePath}/.agents/skills/new-skill/SKILL.md`,
+    content: [
+      '---',
+      'name: new-skill',
+      'description: Describe when this skill should be loaded.',
+      '---',
+      '',
+      '# New Skill',
+      '',
+      '## Workflow',
+      '1. Explain what to do.',
+      '2. Explain how to validate the result.',
+    ].join('\n'),
+  };
+}
+
+function makeAgentHook(basePath: string): { path: string; content: string } {
+  return {
+    path: `${basePath}/.agents/hooks/pre-tool.sh`,
+    content: [
+      '#!/usr/bin/env bash',
+      '# Pre-tool hook — compatible with Claude Code, OpenAI Codex, GitHub Copilot',
+      '# Environment variables:',
+      '#   AGENT_TOOL  — name of the tool being called (read, write, bash, …)',
+      '#   AGENT_INPUT — JSON-encoded input to the tool',
+      '#   AGENT_CWD   — current working directory',
+      '# Exit 0 to allow execution, non-zero to block (where supported).',
+      'set -euo pipefail',
+      '',
+      'echo "Pre-tool hook: ${AGENT_TOOL:-unknown}"',
+      'exit 0',
+    ].join('\n'),
+  };
+}
+
+function makeAgentEval(basePath: string): { path: string; content: string } {
+  return {
+    path: `${basePath}/.agents/evals/new-eval.yaml`,
+    content: [
+      '# Agent Eval Suite — following AgentEvals.io standards',
+      'name: new-eval',
+      'version: "1.0"',
+      'description: Describe what this eval suite tests.',
+      'cases:',
+      '  - id: case-001',
+      '    description: Example case',
+      '    prompt: |',
+      '      What is 2 + 2?',
+      '    assertions:',
+      '      - type: contains',
+      '        value: "4"',
+    ].join('\n'),
+  };
+}
+
+/** Parse a vfs node id into the session tab id and the filesystem path to create inside. */
+function parseVfsNodeId(nodeId: string): { sessionId: string; basePath: string; isDriveRoot: boolean } | null {
+  if (!nodeId.startsWith('vfs:')) return null;
+  const withoutPrefix = nodeId.slice('vfs:'.length); // e.g. `ws-research:abc-123` or `ws-research:abc-123:drive:workspace:notes`
+  const driveMarker = ':drive:';
+  const di = withoutPrefix.indexOf(driveMarker);
+  if (di === -1) {
+    // This IS the session FS drive node itself — default to /workspace
+    const parts = withoutPrefix.split(':');
+    return { sessionId: parts[parts.length - 1], basePath: '/workspace', isDriveRoot: true };
+  }
+  const prefix = withoutPrefix.slice(0, di); // `ws-research:abc-123`
+  const prefixParts = prefix.split(':');
+  const sessionId = prefixParts[prefixParts.length - 1];
+  const drivePath = withoutPrefix.slice(di + driveMarker.length); // `workspace` or `workspace:sub` or `tmp:cache`
+  const basePath = '/' + drivePath.split(':').join('/');
+  return { sessionId, basePath, isDriveRoot: false };
+}
+
+function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, activeSessionIds, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onOpenFile, onAddFile, onAddAgent, onAddBrowserTab, onNodeContextMenu, items }: { root: TreeNode; workspaceByNodeId: Map<string, string>; activeWorkspaceId: string; openTabIds: string[]; activeSessionIds: string[]; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string, multi?: boolean) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; onAddBrowserTab: (workspaceId: string) => void; onNodeContextMenu: (x: number, y: number, node: TreeNode) => void; items: FlatTreeItem[] }) {
   return (
     <div className="tree-panel" role="tree" aria-label="Workspace tree">
       {items.map(({ node, depth }) => {
@@ -1968,8 +2509,17 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
         const tabOpacity = node.type === 'tab' ? (node.memoryTier === 'cold' ? 0.5 : node.memoryTier === 'cool' ? 0.65 : 0.9) : undefined;
         const workspaceParentId = workspaceByNodeId.get(node.id);
         const workspaceParent = workspaceParentId ? getWorkspace(root, workspaceParentId) : null;
+        const isVfsNode = node.id.startsWith('vfs:') && !node.nodeKind;
+        const hasContextMenu = node.type === 'tab' || isVfsNode || isFile;
+        const openEllipsis = (e: React.MouseEvent<HTMLButtonElement>) => {
+          e.stopPropagation();
+          const rect = e.currentTarget.getBoundingClientRect();
+          onNodeContextMenu(rect.right, rect.bottom, node);
+        };
         return (
-          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}>
+          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
+            onContextMenu={hasContextMenu ? (e) => { e.preventDefault(); onNodeContextMenu(e.clientX, e.clientY, node); } : undefined}
+          >
             <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
               {isFile ? (
                 <Icon name="file" size={12} color="#a5b4fc" />
@@ -1997,10 +2547,11 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
               {node.type === 'tab' && node.nodeKind === 'browser' ? <span className="tree-meta">{fmtMem(node.memoryMB ?? 0)}</span> : null}
               {isWorkspace ? <span className="tree-meta">{countTabs(node)} tabs · {fmtMem(totalMemoryMB(node))}</span> : null}
             </button>
-            {node.type === 'tab' ? <button type="button" className="icon-button subtle" aria-label={`Close ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
-            {isFile ? <button type="button" className="icon-button subtle" aria-label={`Remove ${node.name}`} onClick={() => onCloseTab(node.id)}><Icon name="x" size={12} /></button> : null}
+            {hasContextMenu ? <button type="button" className="icon-button subtle tree-row-ellipsis" tabIndex={isCursor ? 0 : -1} aria-label={`More actions for ${node.name}`} onClick={openEllipsis}><MoreHorizontal size={13} /></button> : null}
+            {node.type === 'folder' && node.nodeKind === 'browser' && workspaceParent ? <button type="button" className="icon-button subtle" aria-label={`Add browser tab to ${workspaceParent.name}`} onClick={() => onAddBrowserTab(workspaceParent.id)}><Icon name="plus" size={11} /></button> : null}
             {node.type === 'folder' && node.nodeKind === 'files' && workspaceParent ? <button type="button" className="icon-button subtle" aria-label={`Add file to ${workspaceParent.name}`} onClick={() => onAddFile(workspaceParent.id)}><Icon name="plus" size={11} /></button> : null}
             {node.type === 'folder' && node.nodeKind === 'session' && workspaceParent ? <button type="button" className="icon-button subtle" aria-label={`Add session to ${workspaceParent.name}`} onClick={() => onAddAgent(workspaceParent.id)}><Icon name="plus" size={11} /></button> : null}
+
           </div>
         );
       })}
@@ -2166,6 +2717,34 @@ function AgentBrowserApp() {
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
   const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useState<Record<string, WorkspaceViewState>>(() => createWorkspaceViewState(initialRootRef.current!));
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
+  const bashBySessionRef = useRef<Record<string, Bash>>({});
+  const [addSessionFsMenu, setAddSessionFsMenu] = useState<{ sessionId: string; basePath: string; kind?: 'file' | 'folder' } | null>(null);
+  const [addSessionFsName, setAddSessionFsName] = useState('');
+  const [renameSessionFsMenu, setRenameSessionFsMenu] = useState<{ sessionId: string; path: string } | null>(null);
+  const [renameSessionFsName, setRenameSessionFsName] = useState('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entries: ContextMenuEntry[]; topButtons?: ContextMenuTopButton[] } | null>(null);
+  const [renamingSessionNodeId, setRenamingSessionNodeId] = useState<string | null>(null);
+  const [sessionRenameDraft, setSessionRenameDraft] = useState('');
+  // ── Properties / History ──────────────────────────────────────────────────
+  const [propertiesNode, setPropertiesNode] = useState<TreeNode | null>(null);
+  const [historyNode, setHistoryNode] = useState<TreeNode | null>(null);
+  const [fileOpModal, setFileOpModal] = useState<{ node: TreeNode; op: FileOpKind } | null>(null);
+  const [newTabWorkspaceId, setNewTabWorkspaceId] = useState<string | null>(null);
+  const [versionHistories, setVersionHistories] = useState<Record<string, VersionDAG>>({});
+  const [browserNavHistories, setBrowserNavHistories] = useState<Record<string, BrowserNavHistory>>(() => {
+    const initial: Record<string, BrowserNavHistory> = {};
+    function seedBrowserTabs(nodes: typeof initialRootRef.current['children']) {
+      if (!nodes) return;
+      for (const child of nodes) {
+        if (child.type === 'tab' && child.nodeKind === 'browser' && child.url) {
+          initial[child.id] = { entries: [{ url: child.url, title: child.name, timestamp: Date.now() }], currentIndex: 0 };
+        }
+        if (child.children) seedBrowserTabs(child.children as typeof nodes);
+      }
+    }
+    if (initialRootRef.current?.children) seedBrowserTabs(initialRootRef.current.children as typeof initialRootRef.current['children']);
+    return initial;
+  });
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
@@ -2262,8 +2841,9 @@ function AgentBrowserApp() {
           .filter((child) => child.type === 'tab' && child.nodeKind === 'session')
           .map((terminalNode) => ({
             id: `vfs:${ws.id}:${terminalNode.id}`,
-            name: `${terminalNode.name} FS`,
+            name: `//${terminalNode.name.toLowerCase().replace(/\s+/g, '-')}-fs`,
             type: 'folder',
+            isDrive: true,
             expanded: false,
             children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? []),
           }));
@@ -2354,7 +2934,12 @@ function AgentBrowserApp() {
       if (!workspace) return current;
       const normalized = ensureWorkspaceCategories(workspace);
       const category = getWorkspaceCategory(normalized, 'session');
-      const nextIndex = (category?.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind === 'session').length + 1;
+      const existingSessions = (category?.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind === 'session');
+      const existingIndexes = existingSessions.map((child) => {
+        const match = child.name.match(/^Session (\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      });
+      const nextIndex = (existingIndexes.length ? Math.max(...existingIndexes) : 0) + 1;
       const newSession = createSessionNode(workspaceId, nextIndex);
       newSessionId = newSession.id;
       return deepUpdate(current, workspaceId, (node) => {
@@ -2388,6 +2973,34 @@ function AgentBrowserApp() {
     });
     setToast({ msg: 'New session created', type: 'success' });
   }, [setToast, switchWorkspace]);
+
+  const addBrowserTabToWorkspace = useCallback((workspaceId: string) => {
+    setNewTabWorkspaceId(workspaceId);
+  }, []);
+
+  const confirmNewBrowserTab = useCallback((workspaceId: string, url: string) => {
+    const trimmed = url.trim() || 'about:blank';
+    let normalized = trimmed;
+    if (trimmed !== 'about:blank' && !/^[a-z][a-z\d+\-.]*:/i.test(trimmed)) {
+      normalized = `https://${trimmed}`;
+    }
+    const title = (() => { try { return new URL(normalized).hostname || normalized; } catch { return normalized; } })();
+    const newTab = createBrowserTab(title, normalized, 'hot', 0);
+    setRoot((current) => deepUpdate(current, workspaceId, (node) => {
+      const withCategories = ensureWorkspaceCategories(node);
+      return {
+        ...withCategories,
+        expanded: true,
+        children: (withCategories.children ?? []).map((child) =>
+          child.nodeKind === 'browser'
+            ? { ...child, expanded: true, children: [...(child.children ?? []), newTab] }
+            : child
+        ),
+      };
+    }));
+    setNewTabWorkspaceId(null);
+    setToast({ msg: `Opened ${normalized}`, type: 'success' });
+  }, [setToast]);
 
   const switchSessionMode = useCallback((workspaceId: string, mode: 'agent' | 'terminal') => {
     const workspace = getWorkspace(root, workspaceId);
@@ -2812,6 +3425,305 @@ function AgentBrowserApp() {
     setToast({ msg: `Added ${nextFile.path}`, type: 'success' });
   }
 
+  async function handleAddToSessionFs(sessionId: string, basePath: string, isFolder: boolean) {
+    const bash = bashBySessionRef.current[sessionId];
+    if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
+    const name = addSessionFsName.trim();
+    if (!name) return;
+    const path = `${basePath.replace(/\/$/, '')}/${name}`;
+    if (isFolder) {
+      await bash.fs.mkdir(path, { recursive: true });
+    } else {
+      await bash.fs.writeFile(path, '', 'utf-8');
+    }
+    handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
+    setAddSessionFsName('');
+    setAddSessionFsMenu(null);
+    setToast({ msg: `Created ${path}`, type: 'success' });
+  }
+
+  async function handleScaffoldToSessionFs(sessionId: string, template: { path: string; content: string }) {
+    const bash = bashBySessionRef.current[sessionId];
+    if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
+    const dir = template.path.slice(0, template.path.lastIndexOf('/'));
+    if (dir) await bash.fs.mkdir(dir, { recursive: true });
+    await bash.fs.writeFile(template.path, template.content, 'utf-8');
+    handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
+    setToast({ msg: `Created ${template.path}`, type: 'success' });
+  }
+
+  async function handleDeleteSessionFsNode(sessionId: string, path: string) {
+    const bash = bashBySessionRef.current[sessionId];
+    if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
+    await bash.exec(`rm -rf "${path}"`);
+    handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
+    setToast({ msg: `Deleted ${path}`, type: 'success' });
+  }
+
+  async function handleRenameSessionFsNode(sessionId: string, oldPath: string, newName: string) {
+    const bash = bashBySessionRef.current[sessionId];
+    if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
+    const dir = oldPath.slice(0, oldPath.lastIndexOf('/'));
+    const newPath = `${dir}/${newName}`;
+    await bash.exec(`mv "${oldPath}" "${newPath}"`);
+    handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
+    setRenameSessionFsMenu(null);
+    setRenameSessionFsName('');
+    setToast({ msg: `Renamed to ${newName}`, type: 'success' });
+  }
+
+  // ── Browser tab actions ───────────────────────────────────────────────────
+
+  function handleBookmarkTab(nodeId: string) {
+    const node = findNode(root, nodeId);
+    if (!node) return;
+    const next = !node.persisted;
+    setRoot((current) => deepUpdate(current, nodeId, (n) => ({ ...n, persisted: next })));
+    setToast({ msg: next ? `Bookmarked ${node.name}` : `Removed bookmark from ${node.name}`, type: 'success' });
+  }
+
+  function handleMuteTab(nodeId: string) {
+    const node = findNode(root, nodeId);
+    if (!node) return;
+    const next = !node.muted;
+    setRoot((current) => deepUpdate(current, nodeId, (n) => ({ ...n, muted: next })));
+    setToast({ msg: next ? `Muted ${node.name}` : `Unmuted ${node.name}`, type: 'info' });
+  }
+
+  async function handleCopyUri(node: TreeNode) {
+    try {
+      await navigator.clipboard.writeText(node.url ?? '');
+      setToast({ msg: 'URI copied to clipboard', type: 'success' });
+    } catch {
+      setToast({ msg: 'Failed to copy URI', type: 'error' });
+    }
+  }
+
+  // ── Session tab actions ───────────────────────────────────────────────────
+
+  async function handleShareSession(node: TreeNode) {
+    const ws = findWorkspaceForNode(root, node.id);
+    const text = `Session: ${node.name} (workspace: ${ws?.name ?? 'Unknown'})`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setToast({ msg: 'Session link copied to clipboard', type: 'success' });
+    } catch {
+      setToast({ msg: 'Failed to copy session link', type: 'error' });
+    }
+  }
+
+  function openRenameSessionDialog(node: TreeNode) {
+    setSessionRenameDraft(node.name);
+    setRenamingSessionNodeId(node.id);
+  }
+
+  function handleRenameSessionNode(name: string) {
+    if (!renamingSessionNodeId || !name.trim()) return;
+    setRoot((current) => deepUpdate(current, renamingSessionNodeId, (n) => ({ ...n, name: name.trim() })));
+    setRenamingSessionNodeId(null);
+    setSessionRenameDraft('');
+    setToast({ msg: `Renamed to ${name.trim()}`, type: 'success' });
+  }
+
+  // ── Context menu entry builders ───────────────────────────────────────────
+
+  function buildNewVfsSubMenu(vfsArgs: { sessionId: string; basePath: string; isDriveRoot: boolean }): ContextMenuEntry[] {
+    return [
+      { label: 'Add File', onClick: () => setAddSessionFsMenu({ ...vfsArgs, kind: 'file' }) },
+      { label: 'Add Folder', onClick: () => setAddSessionFsMenu({ ...vfsArgs, kind: 'folder' }) },
+      'separator',
+      { label: 'Add AGENTS.md', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentsMd(vfsArgs.basePath)) },
+      { label: 'Add agent-skill', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentSkill(vfsArgs.basePath)) },
+      { label: 'Add agent-hook', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentHook(vfsArgs.basePath)) },
+      { label: 'Add agent-eval', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentEval(vfsArgs.basePath)) },
+    ];
+  }
+
+  function buildBrowserContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    return {
+      topButtons: [
+        { icon: node.persisted ? BookmarkMinus : Bookmark, label: node.persisted ? 'Remove Bookmark' : 'Bookmark', onClick: () => handleBookmarkTab(node.id) },
+        { icon: node.muted ? Volume2 : VolumeX, label: node.muted ? 'Unmute' : 'Mute', onClick: () => handleMuteTab(node.id) },
+        { icon: Copy, label: 'Copy URI', onClick: () => void handleCopyUri(node) },
+        { icon: X, label: 'Close', onClick: () => handleRemoveFileNode(node.id) },
+      ],
+      entries: [
+        { label: 'History', onClick: () => setHistoryNode(node) },
+        'separator',
+        { label: 'Properties', onClick: () => setPropertiesNode(node) },
+      ],
+    };
+  }
+
+  function buildSessionContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    return {
+      topButtons: [
+        { icon: Share2, label: 'Share', onClick: () => void handleShareSession(node) },
+        { icon: Pencil, label: 'Rename', onClick: () => openRenameSessionDialog(node) },
+        { icon: Trash2, label: 'Remove', onClick: () => handleRemoveFileNode(node.id) },
+      ],
+      entries: [
+        { label: 'History', onClick: () => setHistoryNode(node) },
+        'separator',
+        { label: 'Properties', onClick: () => setPropertiesNode(node) },
+      ],
+    };
+  }
+
+  function buildVfsContextMenu(vfsArgs: { sessionId: string; basePath: string; isDriveRoot: boolean }, sourceNode?: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    const newButton: ContextMenuTopButton = { icon: Plus, label: 'New', subMenu: buildNewVfsSubMenu(vfsArgs) };
+    const nodeName = sourceNode?.name ?? vfsArgs.basePath.split('/').pop() ?? 'root';
+    const fakeId = `vfs-hist:${vfsArgs.sessionId}:${vfsArgs.basePath}`;
+    const entries: ContextMenuEntry[] = [
+      { label: 'History', onClick: () => {
+        const fakeNode: TreeNode = { id: fakeId, name: nodeName, type: 'folder' };
+        setHistoryNode(fakeNode);
+      } },
+      'separator',
+      { label: 'Properties', onClick: () => {
+        const fakeNode: TreeNode = { id: fakeId, name: nodeName, type: 'folder' };
+        setPropertiesNode(fakeNode);
+      } },
+    ];
+    if (vfsArgs.isDriveRoot) {
+      return { topButtons: [newButton], entries };
+    }
+    return {
+      topButtons: [
+        { icon: Pencil, label: 'Rename', onClick: () => { setRenameSessionFsName(vfsArgs.basePath.slice(vfsArgs.basePath.lastIndexOf('/') + 1)); setRenameSessionFsMenu({ sessionId: vfsArgs.sessionId, path: vfsArgs.basePath }); } },
+        { icon: Trash2, label: 'Delete', onClick: () => void handleDeleteSessionFsNode(vfsArgs.sessionId, vfsArgs.basePath) },
+        newButton,
+      ],
+      entries,
+    };
+  }
+
+  function buildFileContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    return {
+      topButtons: [
+        {
+          icon: FolderInput,
+          label: 'Move',
+          onClick: () => setFileOpModal({ node, op: 'move' }),
+          splitOptions: [
+            { icon: Link, label: 'Symlink', onClick: () => setFileOpModal({ node, op: 'symlink' }) },
+            { icon: Copy, label: 'Duplicate', onClick: () => setFileOpModal({ node, op: 'duplicate' }) },
+          ],
+        },
+        { icon: Trash2, label: 'Remove', onClick: () => handleRemoveFileNode(node.id) },
+      ],
+      entries: [
+        { label: 'History', onClick: () => setHistoryNode(node) },
+        'separator',
+        { label: 'Properties', onClick: () => setPropertiesNode(node) },
+      ],
+    };
+  }
+
+  function handleNodeContextMenu(x: number, y: number, node: TreeNode) {
+    if (node.id.startsWith('vfs:') && !node.nodeKind) {
+      const vfsArgs = parseVfsNodeId(node.id);
+      if (vfsArgs) setContextMenu({ x, y, ...buildVfsContextMenu(vfsArgs, node) });
+      return;
+    }
+    if (node.nodeKind === 'browser') {
+      setContextMenu({ x, y, ...buildBrowserContextMenu(node) });
+      return;
+    }
+    if (node.nodeKind === 'session') {
+      setContextMenu({ x, y, ...buildSessionContextMenu(node) });
+      return;
+    }
+    if (node.type === 'file') {
+      setContextMenu({ x, y, ...buildFileContextMenu(node) });
+    }
+  }
+
+  // ── Properties ─────────────────────────────────────────────────────────────
+
+  function buildNodeMetadata(node: TreeNode): NodeMetadata {
+    const now = Date.now();
+    if (node.nodeKind === 'browser') {
+      return {
+        location: node.url ?? '(no URL)',
+        sizeLabel: `${node.memoryMB ?? 0} MB`,
+        createdAt: now,
+        modifiedAt: now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor(['Bookmark', 'Mute', 'Copy URI', 'Close']),
+      };
+    }
+    if (node.nodeKind === 'session') {
+      return {
+        location: node.filePath ?? node.id,
+        sizeLabel: 'N/A',
+        createdAt: now,
+        modifiedAt: now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor(['Share', 'Rename', 'Remove']),
+      };
+    }
+    // VFS node — use node.name which may be '//session-1-fs' or sub-path name
+    const vfsArgs = node.id.startsWith('vfs:') ? parseVfsNodeId(node.id) : null;
+    if (node.type === 'file') {
+      return {
+        location: node.filePath ?? node.name,
+        sizeLabel: 'N/A',
+        createdAt: now,
+        modifiedAt: now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor(['Move', 'Symlink', 'Duplicate', 'Remove']),
+      };
+    }
+    return {
+      location: `${node.name}${vfsArgs?.basePath ? ` (${vfsArgs.basePath})` : ''}`,
+      sizeLabel: 'N/A',
+      createdAt: now,
+      modifiedAt: now,
+      accessedAt: now,
+      identityPermissions: defaultPermissionsFor(['Add File', 'Add Folder', 'Rename', 'Delete']),
+    };
+  }
+
+  // ── Version / Session History ───────────────────────────────────────────────
+
+  function getOrCreateVersionHistory(nodeId: string, label: string): VersionDAG {
+    return versionHistories[nodeId] ?? createVersionDAG('(initial)', 'user-1', label, Date.now());
+  }
+
+  function updateVersionHistory(nodeId: string, dag: VersionDAG) {
+    setVersionHistories((prev) => ({ ...prev, [nodeId]: dag }));
+  }
+
+  function handleVfsRollback(nodeId: string, commitId: string) {
+    const dag = getOrCreateVersionHistory(nodeId, 'Initial state');
+    const next = rollbackToCommit(dag, commitId, 'user-1', Date.now());
+    updateVersionHistory(nodeId, next);
+  }
+
+  function handleSessionBranch(nodeId: string, commitId: string) {
+    const dag = getOrCreateVersionHistory(nodeId, 'Initial snapshot');
+    const branchName = `branch/${new Date().toISOString().slice(0, 10)}`;
+    const next = branchDAG(dag, branchName, commitId, Date.now());
+    updateVersionHistory(nodeId, next);
+  }
+
+  function handleBrowserBack(tabId: string) {
+    setBrowserNavHistories((prev) => {
+      const h = prev[tabId];
+      if (!h || h.currentIndex <= 0) return prev;
+      return { ...prev, [tabId]: { ...h, currentIndex: h.currentIndex - 1 } };
+    });
+  }
+
+  function handleBrowserForward(tabId: string) {
+    setBrowserNavHistories((prev) => {
+      const h = prev[tabId];
+      if (!h || h.currentIndex >= h.entries.length - 1) return prev;
+      return { ...prev, [tabId]: { ...h, currentIndex: h.currentIndex + 1 } };
+    });
+  }
+
   function handleRemoveFileNode(nodeId: string) {
     const node = findNode(root, nodeId);
     if (!node) return;
@@ -2854,6 +3766,61 @@ function AgentBrowserApp() {
         ? current
         : { ...current, [ownerWorkspaceId]: nextEntry };
     });
+  }
+
+  // ── File operations (Move / Symlink / Duplicate) ──────────────────────────
+
+  function handleFileMove(node: TreeNode, targetDir: string) {
+    if (!node.filePath) return;
+    const fileName = node.filePath.split('/').pop() ?? node.name;
+    const newPath = targetDir.trim() ? `${targetDir.trim()}/${fileName}` : fileName;
+    const ownerWorkspace = findWorkspaceForNode(root, node.id);
+    if (!ownerWorkspace) return;
+    setWorkspaceFilesByWorkspace((prev) => ({
+      ...prev,
+      [ownerWorkspace.id]: (prev[ownerWorkspace.id] ?? []).map((f) =>
+        f.path === node.filePath ? { ...f, path: newPath } : f
+      ),
+    }));
+    setFileOpModal(null);
+    setToast({ msg: `Moved to ${newPath}`, type: 'success' });
+  }
+
+  function handleFileSymlink(node: TreeNode, targetDir: string) {
+    if (!node.filePath) return;
+    const fileName = node.filePath.split('/').pop() ?? node.name;
+    const linkPath = targetDir.trim() ? `${targetDir.trim()}/${fileName}` : fileName;
+    const ownerWorkspace = findWorkspaceForNode(root, node.id);
+    if (!ownerWorkspace) return;
+    const symlink: WorkspaceFile = { path: linkPath, content: `\u2192 ${node.filePath}`, updatedAt: new Date().toISOString() };
+    setWorkspaceFilesByWorkspace((prev) => ({
+      ...prev,
+      [ownerWorkspace.id]: [...(prev[ownerWorkspace.id] ?? []), symlink],
+    }));
+    setFileOpModal(null);
+    setToast({ msg: `Symlink created at ${linkPath}`, type: 'success' });
+  }
+
+  function handleFileDuplicate(node: TreeNode, targetDir: string) {
+    if (!node.filePath) return;
+    const fileName = node.filePath.split('/').pop() ?? node.name;
+    const copyPath = targetDir.trim() ? `${targetDir.trim()}/${fileName}` : fileName;
+    const ownerWorkspace = findWorkspaceForNode(root, node.id);
+    if (!ownerWorkspace) return;
+    const original = (workspaceFilesByWorkspace[ownerWorkspace.id] ?? []).find((f) => f.path === node.filePath);
+    const dupe: WorkspaceFile = { path: copyPath, content: original?.content ?? '', updatedAt: new Date().toISOString() };
+    setWorkspaceFilesByWorkspace((prev) => ({
+      ...prev,
+      [ownerWorkspace.id]: [...(prev[ownerWorkspace.id] ?? []), dupe],
+    }));
+    setFileOpModal(null);
+    setToast({ msg: `Duplicated to ${copyPath}`, type: 'success' });
+  }
+
+  function handleFileOp(node: TreeNode, op: FileOpKind, targetDir: string) {
+    if (op === 'move') handleFileMove(node, targetDir);
+    else if (op === 'symlink') handleFileSymlink(node, targetDir);
+    else handleFileDuplicate(node, targetDir);
   }
 
   function handleOpenFileNode(nodeId: string) {
@@ -2949,10 +3916,11 @@ function AgentBrowserApp() {
               if (toggled?.type === 'workspace') switchWorkspace(id);
             }}
             onOpenTab={handleOpenTreeTab}
-            onCloseTab={handleRemoveFileNode}
             onOpenFile={handleOpenFileNode}
             onAddFile={(wsId) => setShowAddFileMenu(wsId)}
             onAddAgent={(wsId) => addSessionToWorkspace(wsId)}
+            onAddBrowserTab={(wsId) => addBrowserTabToWorkspace(wsId)}
+            onNodeContextMenu={handleNodeContextMenu}
           />
         </div>
       );
@@ -3121,6 +4089,7 @@ function AgentBrowserApp() {
                 })}
                 onTerminalFsPathsChanged={handleTerminalFsPathsChanged}
                 onOpenSettings={() => switchSidebarPanel('settings')}
+                bashBySessionRef={bashBySessionRef}
                 dragHandleProps={dragHandleProps}
               />
             );
@@ -3135,9 +4104,105 @@ function AgentBrowserApp() {
         })()}
       </main>
       {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('agents', showAddFileMenu)}>AGENTS.md</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('skill', showAddFileMenu)}>Skill</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button></div></div></div></div> : null}
+      {addSessionFsMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add to session filesystem"><div className="modal-card compact"><div className="modal-header"><h2>Add to {addSessionFsMenu.basePath}</h2><button type="button" className="icon-button" onClick={() => { setAddSessionFsMenu(null); setAddSessionFsName(''); }}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name</span><input aria-label="Entry name" value={addSessionFsName} onChange={(event) => setAddSessionFsName(event.target.value)} placeholder="e.g. notes.md" autoFocus onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, addSessionFsMenu.kind === 'folder'); } if (event.key === 'Escape') { setAddSessionFsMenu(null); setAddSessionFsName(''); } }} /></label><div className="add-file-buttons">{addSessionFsMenu.kind === 'file' ? <button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, false)}>Create file</button> : addSessionFsMenu.kind === 'folder' ? <button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, true)}>Create folder</button> : <><button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, false)}>File</button><button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, true)}>Folder</button></>}</div></div></div></div> : null}
       {showWorkspaces ? <WorkspaceSwitcherOverlay workspaces={root.children ?? []} activeWorkspaceId={activeWorkspaceId} onSwitch={switchWorkspace} onCreateWorkspace={createWorkspace} onRenameWorkspace={openRenameWorkspace} onClose={() => setShowWorkspaces(false)} /> : null}
       {showShortcuts ? <ShortcutOverlay onClose={() => setShowShortcuts(false)} /> : null}
       {renamingWorkspaceId ? <RenameWorkspaceOverlay value={workspaceDraftName} onChange={setWorkspaceDraftName} onSave={saveWorkspaceRename} onClose={() => setRenamingWorkspaceId(null)} /> : null}
+      {renameSessionFsMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Rename"><div className="modal-card compact"><div className="modal-header"><h2>Rename</h2><button type="button" className="icon-button" onClick={() => { setRenameSessionFsMenu(null); setRenameSessionFsName(''); }}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>New name</span><input aria-label="New name" value={renameSessionFsName} onChange={(event) => setRenameSessionFsName(event.target.value)} autoFocus onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void handleRenameSessionFsNode(renameSessionFsMenu.sessionId, renameSessionFsMenu.path, renameSessionFsName); } if (event.key === 'Escape') { setRenameSessionFsMenu(null); setRenameSessionFsName(''); } }} /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => void handleRenameSessionFsNode(renameSessionFsMenu.sessionId, renameSessionFsMenu.path, renameSessionFsName)}>Rename</button></div></div></div></div> : null}
+      {renamingSessionNodeId ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Rename session">
+          <div className="modal-card compact">
+            <div className="modal-header">
+              <h2>Rename session</h2>
+              <button type="button" className="icon-button" onClick={() => { setRenamingSessionNodeId(null); setSessionRenameDraft(''); }}><Icon name="x" /></button>
+            </div>
+            <div className="add-file-form">
+              <label className="file-editor-field">
+                <span>Name</span>
+                <input aria-label="Session name" value={sessionRenameDraft} onChange={(e) => setSessionRenameDraft(e.target.value)} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRenameSessionNode(sessionRenameDraft); } if (e.key === 'Escape') { setRenamingSessionNodeId(null); setSessionRenameDraft(''); } }} />
+              </label>
+              <div className="add-file-buttons">
+                <button type="button" className="secondary-button" onClick={() => handleRenameSessionNode(sessionRenameDraft)}>Rename</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {contextMenu ? <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)} entries={contextMenu.entries} topButtons={contextMenu.topButtons} /> : null}
+
+      {/* ── Properties modal ── */}
+      {propertiesNode ? (
+        <PropertiesModal
+          nodeName={propertiesNode.name}
+          metadata={buildNodeMetadata(propertiesNode)}
+          onClose={() => setPropertiesNode(null)}
+        />
+      ) : null}
+
+      {/* ── History modals ── */}
+      {historyNode && historyNode.nodeKind === 'browser' ? (
+        <BrowserHistoryModal
+          nodeId={historyNode.id}
+          navHistory={browserNavHistories[historyNode.id] ?? { entries: [{ url: historyNode.url ?? '', title: historyNode.name, timestamp: Date.now() }], currentIndex: 0 }}
+          onBack={() => handleBrowserBack(historyNode.id)}
+          onForward={() => handleBrowserForward(historyNode.id)}
+          onClose={() => setHistoryNode(null)}
+        />
+      ) : null}
+
+      {historyNode && historyNode.nodeKind === 'session' ? (() => {
+        const currentDag = versionHistories[historyNode.id] ?? createVersionDAG('(initial)', 'user-1', 'Initial snapshot', Date.now());
+        return (
+          <VersionHistoryModal
+            dag={currentDag}
+            dialogLabel="Session history"
+            rowActions={(commitId) => (
+              <button type="button" className="secondary-button btn-xs" onClick={() => {
+                const branchName = `branch/${new Date().toISOString().slice(0, 10)}`;
+                updateVersionHistory(historyNode.id, branchDAG(currentDag, branchName, commitId, Date.now()));
+              }} aria-label="Branch from here">
+                Branch from here
+              </button>
+            )}
+            onClose={() => setHistoryNode(null)}
+          />
+        );
+      })() : null}
+
+      {historyNode && (historyNode.id.startsWith('vfs:') || (historyNode.type !== 'tab')) && historyNode.nodeKind !== 'browser' && historyNode.nodeKind !== 'session' ? (() => {
+        const currentDag = versionHistories[historyNode.id] ?? createVersionDAG('(initial)', 'user-1', `Initial state of ${historyNode.name}`, Date.now());
+        return (
+          <VersionHistoryModal
+            dag={currentDag}
+            dialogLabel="Version history"
+            rowActions={(commitId) => (
+              <button type="button" className="secondary-button btn-xs" onClick={() => {
+                updateVersionHistory(historyNode.id, rollbackToCommit(currentDag, commitId, 'user-1', Date.now()));
+              }} aria-label={`Roll back to ${commitId}`}>
+                Roll back
+              </button>
+            )}
+            onClose={() => setHistoryNode(null)}
+          />
+        );
+      })() : null}
+
+      {fileOpModal ? (
+        <FileOpModal
+          node={fileOpModal.node}
+          op={fileOpModal.op}
+          onConfirm={(targetDir) => handleFileOp(fileOpModal.node, fileOpModal.op, targetDir)}
+          onClose={() => setFileOpModal(null)}
+        />
+      ) : null}
+
+      {newTabWorkspaceId ? (
+        <NewTabModal
+          onConfirm={(url) => confirmNewBrowserTab(newTabWorkspaceId, url)}
+          onClose={() => setNewTabWorkspaceId(null)}
+        />
+      ) : null}
+
       <Toast toast={toast} />
     </div>
   );

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>InBrowserUse Tool-Agent Harness</title>
+  </head>
+  <body>
+    <label for="name">Name</label>
+    <input id="name" type="text" placeholder="Your name" />
+
+    <button id="btn" onclick="document.getElementById('result').textContent = 'clicked'">Click me</button>
+
+    <select id="color">
+      <option value="">--</option>
+      <option value="red">Red</option>
+      <option value="green">Green</option>
+      <option value="blue">Blue</option>
+    </select>
+
+    <span id="result"></span>
+
+    <script type="module" src="/src/tool-agents/harness.ts"></script>
+  </body>
+</html>

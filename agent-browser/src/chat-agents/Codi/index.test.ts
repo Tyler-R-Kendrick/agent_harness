@@ -7,17 +7,17 @@ const toAiSdkMessagesMock = vi.fn((messages: Array<{ id: string; role: string; c
   parts: [{ type: 'text', text: message.streamedContent || message.content }],
 })));
 
-vi.mock('../services/browserInference', () => ({
+vi.mock('../../services/browserInference', () => ({
   browserInferenceEngine: {
     generate: (...args: unknown[]) => generateMock(...args),
   },
 }));
 
-vi.mock('../services/chatComposition', () => ({
+vi.mock('../../services/chatComposition', () => ({
   toAiSdkMessages: (messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>) => toAiSdkMessagesMock(messages),
 }));
 
-import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from '.';
 
 describe('Codi', () => {
   it('detects whether any Codi models are installed', () => {

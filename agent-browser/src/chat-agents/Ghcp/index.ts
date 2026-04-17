@@ -1,7 +1,7 @@
-import { streamCopilotChat, type CopilotModelSummary, type CopilotRuntimeState } from '../services/copilotApi';
-import { toChatSdkTranscript } from '../services/chatComposition';
-import type { ChatMessage } from '../types';
-import type { AgentStreamCallbacks } from './types';
+import { streamCopilotChat, type CopilotModelSummary, type CopilotRuntimeState } from '../../services/copilotApi';
+import { toChatSdkTranscript } from '../../services/chatComposition';
+import type { ChatMessage } from '../../types';
+import type { AgentStreamCallbacks } from '../types';
 
 export const GHCP_LABEL = 'GHCP';
 

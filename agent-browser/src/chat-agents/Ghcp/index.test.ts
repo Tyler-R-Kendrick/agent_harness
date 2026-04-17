@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 const streamCopilotChatMock = vi.fn();
 
-vi.mock('../services/copilotApi', async () => {
-  const actual = await vi.importActual<typeof import('../services/copilotApi')>('../services/copilotApi');
+vi.mock('../../services/copilotApi', async () => {
+  const actual = await vi.importActual<typeof import('../../services/copilotApi')>('../../services/copilotApi');
   return {
     ...actual,
     streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
   };
 });
 
-import { buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
+import { buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from '.';
 
 describe('GHCP', () => {
   it('detects GHCP availability and resolves model ids', () => {
