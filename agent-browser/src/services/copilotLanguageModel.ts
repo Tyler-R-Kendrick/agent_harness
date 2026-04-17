@@ -103,6 +103,10 @@ function extractPromptText(options: LanguageModelV3CallOptions): string {
 type CopilotStreamEvent =
   | { type: 'token'; delta: string }
   | { type: 'reasoning'; delta: string }
+  | { type: 'reasoning_step'; id?: string; title: string; body?: string }
+  | { type: 'tool_call_start'; id?: string; tool: string; args?: Record<string, unknown> }
+  | { type: 'tool_call_end'; id?: string }
+  | { type: 'search'; id?: string; title?: string; query?: string }
   | { type: 'final'; content: string }
   | { type: 'done'; aborted?: boolean }
   | { type: 'error'; message: string };
@@ -212,6 +216,12 @@ export class CopilotLanguageModel implements LanguageModelV3 {
             }
             if (event.type === 'reasoning') {
               controller.enqueue({ type: 'raw', rawValue: { reasoning: event.delta } });
+            }
+            if (event.type === 'reasoning_step') {
+              controller.enqueue({ type: 'raw', rawValue: { reasoningStep: event } });
+            }
+            if (event.type === 'search') {
+              controller.enqueue({ type: 'raw', rawValue: { search: event } });
             }
             if (event.type === 'final') fullText = event.content;
             if (event.type === 'error') throw new Error(event.message);

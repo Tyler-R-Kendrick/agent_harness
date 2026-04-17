@@ -585,6 +585,78 @@ describe('App', () => {
     expect(screen.getByText('Copilot response')).toBeInTheDocument();
   });
 
+  it('opens the activity panel for structured reasoning steps and allows pinning it', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: false,
+      }],
+    }));
+    streamCopilotChatMock.mockImplementation(async (_request, callbacks) => {
+      callbacks.onReasoningStep?.({
+        id: 'step-1',
+        kind: 'thinking',
+        title: 'Pulling together current sources',
+        body: 'I am pulling together current sources so the response stays anchored in what changed.',
+        startedAt: 1000,
+        status: 'done',
+      });
+      callbacks.onReasoningStepEnd?.('step-1');
+      callbacks.onReasoningStep?.({
+        id: 'step-2',
+        kind: 'search',
+        title: 'Searching openreview.net',
+        sources: [{ domain: 'openreview.net', url: 'https://openreview.net' }],
+        startedAt: 1010,
+        status: 'done',
+      });
+      callbacks.onReasoningStepEnd?.('step-2');
+      callbacks.onToken?.('Runtime intelligence is moving into the loop.');
+      callbacks.onDone?.('Runtime intelligence is moving into the loop.');
+      return Promise.resolve();
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the architectural shift.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Panel should NOT open automatically — only on user click
+    expect(screen.queryByRole('complementary', { name: 'Activity panel' })).not.toBeInTheDocument();
+
+    // Clicking the reasoning pill opens the Activity panel overlay
+    const pill = screen.getByRole('button', { name: /Thought for/i });
+    fireEvent.click(pill);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('complementary', { name: 'Activity panel' })).toBeInTheDocument();
+    expect(screen.getAllByText('Searching openreview.net').length).toBeGreaterThan(0);
+
+    // Close via the back button
+    const backButton = screen.getByRole('button', { name: 'Back to chat' });
+    fireEvent.click(backButton);
+
+    expect(screen.queryByRole('complementary', { name: 'Activity panel' })).not.toBeInTheDocument();
+    expect(screen.getByText('Runtime intelligence is moving into the loop.')).toBeInTheDocument();
+  });
+
   it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {
     vi.useFakeTimers();
     getSandboxFeatureFlagsMock.mockReturnValue({

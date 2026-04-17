@@ -1,3 +1,5 @@
+import type { ReasoningStep, ReasoningStepKind, SourceChip } from '../types';
+
 export type AgentProvider = 'copilot' | 'local';
 
 export interface CopilotModelSummary {
@@ -30,15 +32,53 @@ export interface CopilotChatRequest {
 export interface CopilotChatCallbacks {
   onToken?: (delta: string) => void;
   onReasoning?: (delta: string) => void;
+  onReasoningStep?: (step: ReasoningStep) => void;
+  onReasoningStepUpdate?: (id: string, patch: Partial<ReasoningStep>) => void;
+  onReasoningStepEnd?: (id: string) => void;
   onDone?: (finalContent?: string) => void;
 }
 
 type CopilotStreamEvent =
   | { type: 'token'; delta: string }
   | { type: 'reasoning'; delta: string }
+  | { type: 'reasoning_step'; id?: string; kind?: ReasoningStepKind; title: string; body?: string; status?: 'active' | 'done'; sources?: Array<string | SourceChip> }
+  | { type: 'tool_call_start'; id?: string; tool: string; args?: Record<string, unknown> }
+  | { type: 'tool_call_end'; id?: string }
+  | { type: 'search'; id?: string; title?: string; query?: string; status?: 'active' | 'done'; sources?: Array<string | SourceChip> }
   | { type: 'final'; content: string }
   | { type: 'done'; aborted?: boolean }
   | { type: 'error'; message: string };
+
+function normalizeSourceChip(source: string | SourceChip): SourceChip {
+  if (typeof source !== 'string') {
+    return {
+      domain: source.domain,
+      url: source.url,
+      faviconUrl: source.faviconUrl,
+    };
+  }
+
+  try {
+    const parsed = new URL(source.startsWith('http') ? source : `https://${source}`);
+    return {
+      url: parsed.toString(),
+      domain: parsed.hostname,
+      faviconUrl: `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`,
+    };
+  } catch {
+    return { domain: source };
+  }
+}
+
+function summarizeToolArgs(args?: Record<string, unknown>): string | undefined {
+  if (!args) return undefined;
+  const entries = Object.entries(args);
+  if (!entries.length) return undefined;
+  return entries
+    .slice(0, 4)
+    .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+    .join('\n');
+}
 
 function createHttpError(message: string, status?: number) {
   const error = new Error(message);
@@ -95,6 +135,50 @@ export async function streamCopilotChat(request: CopilotChatRequest, callbacks: 
       case 'reasoning':
         callbacks.onReasoning?.(event.delta);
         break;
+      case 'reasoning_step':
+        callbacks.onReasoningStep?.({
+          id: event.id ?? `reasoning-${Math.random().toString(36).slice(2, 10)}`,
+          kind: event.kind ?? 'thinking',
+          title: event.title,
+          body: event.body,
+          sources: event.sources?.map(normalizeSourceChip),
+          startedAt: Date.now(),
+          status: event.status ?? 'active',
+        });
+        if (event.status === 'done' && event.id) callbacks.onReasoningStepEnd?.(event.id);
+        break;
+      case 'tool_call_start': {
+        const toolStepId = event.id ?? `tool-${Math.random().toString(36).slice(2, 10)}`;
+        callbacks.onReasoningStep?.({
+          id: toolStepId,
+          kind: 'tool',
+          title: event.tool,
+          body: summarizeToolArgs(event.args),
+          startedAt: Date.now(),
+          status: 'active',
+        });
+        break;
+      }
+      case 'tool_call_end':
+        if (event.id) {
+          callbacks.onReasoningStepUpdate?.(event.id, { endedAt: Date.now(), status: 'done' });
+          callbacks.onReasoningStepEnd?.(event.id);
+        }
+        break;
+      case 'search': {
+        const searchStepId = event.id ?? `search-${Math.random().toString(36).slice(2, 10)}`;
+        const searchTitle = event.title ?? event.query ?? 'Searching';
+        callbacks.onReasoningStep?.({
+          id: searchStepId,
+          kind: 'search',
+          title: searchTitle,
+          sources: event.sources?.map(normalizeSourceChip),
+          startedAt: Date.now(),
+          status: event.status ?? 'active',
+        });
+        if (event.status === 'done') callbacks.onReasoningStepEnd?.(searchStepId);
+        break;
+      }
       case 'final':
         finalContent = event.content;
         break;

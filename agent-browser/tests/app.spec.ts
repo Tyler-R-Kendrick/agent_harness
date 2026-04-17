@@ -364,6 +364,144 @@ self.onmessage = (event) => {
   await expect(page.getByText('Stopped')).toBeVisible();
 });
 
+test('captures the active and completed reasoning activity flow', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.setViewportSize({ width: 1440, height: 960 });
+  const faviconSvg = 'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"%3E%3Crect width="16" height="16" rx="4" fill="%238fd7ff"/%3E%3C/svg%3E';
+  await page.goto('/');
+  await expect(page.getByLabel('Omnibar')).toBeVisible();
+  await page.evaluate((favicon) => {
+    const main = document.querySelector('.shared-console-main');
+    const messageList = document.querySelector('.message-list');
+    if (!(main instanceof HTMLElement) || !(messageList instanceof HTMLElement)) {
+      throw new Error('Chat layout missing');
+    }
+
+    messageList.innerHTML = `
+      <div class="message user">
+        <div class="message-sender message-sender-user"><span class="sender-name">you</span></div>
+        <div class="message-bubble">Explain the shift toward runtime intelligence.</div>
+      </div>
+      <div class="message assistant">
+        <div class="message-sender message-sender-agent"><span class="sender-name">gpt-4.1</span></div>
+        <div class="op-trigger-block">
+          <button type="button" class="op-trigger op-trigger-active reasoning-pill-thinking">
+            <span>Thinking\u2026</span>
+          </button>
+        </div>
+      </div>`;
+
+    const existingPane = main.querySelector('.op-pane');
+    existingPane?.remove();
+    main.insertAdjacentHTML('beforeend', `
+      <aside class="op-pane" aria-label="Activity panel">
+        <header class="op-pane-header">
+          <button type="button" class="op-pane-back" aria-label="Back to chat">&#8592;</button>
+          <div class="op-pane-title">Thoughts</div>
+          <span class="op-pane-duration">4s</span>
+        </header>
+        <div class="op-pane-body">
+          <div class="op-timeline">
+            <div class="op-timeline-item op-timeline-item-done">
+              <span class="op-timeline-rail" aria-hidden="true"></span>
+              <span class="op-timeline-dot" aria-hidden="true"></span>
+              <div class="op-timeline-content">
+                <div class="op-timeline-title-row"><strong>Pulling together current sources</strong></div>
+                <p>I am pulling together current sources so the response stays grounded in what changed.</p>
+              </div>
+            </div>
+            <div class="op-timeline-item op-timeline-item-active">
+              <span class="op-timeline-rail" aria-hidden="true"></span>
+              <span class="op-timeline-dot" aria-hidden="true"></span>
+              <div class="op-timeline-content">
+                <div class="op-timeline-title-row"><strong>Looking up benchmark lines on openreview.net</strong></div>
+                <div class="op-source-row">
+                  <span class="op-source-chip"><img src="${favicon}" alt="" aria-hidden="true" width="14" height="14" /><span>openreview.net</span></span>
+                  <span class="op-source-chip"><img src="${favicon}" alt="" aria-hidden="true" width="14" height="14" /><span>cdn.openai.com</span></span>
+                  <span class="op-source-chip op-source-chip-more">1 more</span>
+                </div>
+                <p>Checking benchmark lines against system card evidence.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>`);
+  }, faviconSvg);
+
+  await expect(page.getByRole('complementary', { name: 'Activity panel' })).toBeVisible();
+  await expect(page.locator('.op-pane .op-timeline-item-active .op-timeline-title-row strong')).toHaveText('Looking up benchmark lines on openreview.net');
+  await page.screenshot({ path: 'docs/screenshots/thinking-activity-active.png', fullPage: true });
+
+  await page.evaluate((favicon) => {
+    const messageList = document.querySelector('.message-list');
+    const opPaneBody = document.querySelector('.op-pane-body');
+    if (!(messageList instanceof HTMLElement) || !(opPaneBody instanceof HTMLElement)) {
+      throw new Error('Reasoning surfaces missing');
+    }
+
+    messageList.innerHTML = `
+      <div class="message user">
+        <div class="message-sender message-sender-user"><span class="sender-name">you</span></div>
+        <div class="message-bubble">Explain the shift toward runtime intelligence.</div>
+      </div>
+      <div class="message assistant">
+        <div class="message-sender message-sender-agent"><span class="sender-name">gpt-4.1</span></div>
+        <div class="op-trigger-block">
+          <button type="button" class="op-trigger" aria-label="Thought for 1m 4s">
+            <span>Thought for 1m 4s</span>
+            <span class="op-trigger-chevron">&#8964;</span>
+          </button>
+        </div>
+        <div class="message-bubble">Runtime intelligence is moving into the loop.</div>
+      </div>`;
+
+    opPaneBody.innerHTML = `
+      <div class="op-timeline">
+        <div class="op-timeline-item op-timeline-item-done">
+          <span class="op-timeline-rail" aria-hidden="true"></span>
+          <span class="op-timeline-dot" aria-hidden="true"></span>
+          <div class="op-timeline-content">
+            <div class="op-timeline-title-row"><strong>Pulling together current sources</strong></div>
+            <p>I am pulling together current sources so the response stays grounded in what changed.</p>
+          </div>
+        </div>
+        <div class="op-timeline-item op-timeline-item-done">
+          <span class="op-timeline-rail" aria-hidden="true"></span>
+          <span class="op-timeline-dot" aria-hidden="true"></span>
+          <div class="op-timeline-content">
+            <div class="op-timeline-title-row"><strong>Looking up benchmark lines on openreview.net</strong></div>
+            <div class="op-source-row">
+              <span class="op-source-chip"><img src="${favicon}" alt="" aria-hidden="true" width="14" height="14" /><span>openreview.net</span></span>
+              <span class="op-source-chip"><img src="${favicon}" alt="" aria-hidden="true" width="14" height="14" /><span>cdn.openai.com</span></span>
+              <span class="op-source-chip op-source-chip-more">1 more</span>
+            </div>
+            <p>Checking benchmark lines against system card evidence.</p>
+          </div>
+        </div>
+      </div>`;
+
+    const opPane = document.querySelector('.op-pane');
+    if (opPane && !opPane.querySelector('.op-pane-footer')) {
+      opPane.insertAdjacentHTML('beforeend', '<footer class="op-pane-footer"><span>Thought for 1m 4s</span><span>Done</span></footer>');
+    }
+    const durationEl = opPane?.querySelector('.op-pane-duration');
+    if (durationEl instanceof HTMLElement) durationEl.textContent = '1m 4s';
+  }, faviconSvg);
+
+  await expect(page.getByText('Runtime intelligence is moving into the loop.')).toBeVisible();
+  await expect(page.locator('.op-pane .op-source-chip span').first()).toHaveText('openreview.net');
+  await page.screenshot({ path: 'docs/screenshots/thinking-activity-complete.png', fullPage: true });
+
+  // Phase 3: close the overlay — show the inline pill in context
+  await page.evaluate(() => {
+    document.querySelector('.op-pane')?.remove();
+  });
+
+  await expect(page.getByRole('button', { name: /Thought for 1m 4s/i })).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/thinking-inline-pill.png', fullPage: true });
+  assertNoRuntimeErrors();
+});
+
 test('captures a sandbox tool run and persists generated files', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.addInitScript((storageKey: string) => {

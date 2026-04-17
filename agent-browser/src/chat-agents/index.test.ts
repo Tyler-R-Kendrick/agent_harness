@@ -63,10 +63,10 @@ describe('getDefaultAgentProvider', () => {
 
 describe('agent helpers', () => {
   it('returns display names and placeholders for both agents', () => {
-    expect(getAgentDisplayName({ provider: 'codi', activeCodiModelName: 'Qwen' })).toBe('Qwen');
-    expect(getAgentDisplayName({ provider: 'codi' })).toBe('Codi');
-    expect(getAgentDisplayName({ provider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('GPT-4.1');
-    expect(getAgentDisplayName({ provider: 'ghcp' })).toBe('GHCP');
+    expect(getAgentDisplayName({ provider: 'codi', activeCodiModelName: 'Qwen' })).toBe('Codi: Qwen');
+    expect(getAgentDisplayName({ provider: 'codi' })).toBe('Codi: Codi');
+    expect(getAgentDisplayName({ provider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('GHCP: GPT-4.1');
+    expect(getAgentDisplayName({ provider: 'ghcp' })).toBe('GHCP: Copilot');
 
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Codi…');
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Install a Codi model to start chatting');

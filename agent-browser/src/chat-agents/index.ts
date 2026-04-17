@@ -29,8 +29,8 @@ export function getAgentDisplayName({
   activeGhcpModelName?: string;
 }): string {
   return provider === 'ghcp'
-    ? (activeGhcpModelName ?? GHCP_LABEL)
-    : (activeCodiModelName ?? CODI_LABEL);
+    ? `${GHCP_LABEL}: ${activeGhcpModelName ?? 'Copilot'}`
+    : `${CODI_LABEL}: ${activeCodiModelName ?? 'Codi'}`;
 }
 
 export function getAgentInputPlaceholder({

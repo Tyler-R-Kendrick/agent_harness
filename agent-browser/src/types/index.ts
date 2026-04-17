@@ -3,6 +3,8 @@ export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
 export type NodeKind = 'browser' | 'terminal' | 'agent' | 'files' | 'session' | 'clipboard';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
+export type ReasoningStepKind = 'thinking' | 'search' | 'tool' | 'summary';
+export type ReasoningStepStatus = 'active' | 'done';
 export type ModelStatus = 'available' | 'installed' | 'loading';
 export type PanelId = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 /** ONNX quantization dtype values understood by Transformers.js. */
@@ -31,6 +33,25 @@ export interface McpCard {
   args: Record<string, unknown>;
 }
 
+export interface SourceChip {
+  url?: string;
+  domain: string;
+  faviconUrl?: string;
+}
+
+export interface ReasoningStep {
+  id: string;
+  kind: ReasoningStepKind;
+  title: string;
+  body?: string;
+  sources?: SourceChip[];
+  startedAt: number;
+  endedAt?: number;
+  status: ReasoningStepStatus;
+  parentStepId?: string;
+  branchId?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
@@ -42,6 +63,9 @@ export interface ChatMessage {
   thinkingDuration?: number;
   isThinking?: boolean;
   cards?: McpCard[];
+  reasoningSteps?: ReasoningStep[];
+  currentStepId?: string;
+  reasoningStartedAt?: number;
   loadingStatus?: string | null;
   statusText?: string | null;
   isError?: boolean;

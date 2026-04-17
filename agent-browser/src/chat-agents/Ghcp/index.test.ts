@@ -80,7 +80,7 @@ describe('GHCP', () => {
         modelId: 'gpt-4.1',
         prompt: expect.stringContaining('Active workspace: Research'),
       }),
-      callbacks,
+      expect.objectContaining({ onToken: expect.any(Function) }),
       signal,
     );
   });

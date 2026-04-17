@@ -2,6 +2,7 @@ import { browserInferenceEngine } from '../../services/browserInference';
 import { formatBrowserInferenceResult } from '../../services/browserInferenceRuntime';
 import { toAiSdkMessages } from '../../services/chatComposition';
 import type { ChatMessage, HFModel } from '../../types';
+import { createReasoningStepSplitter } from '../reasoningSplitter';
 import type { AgentStreamCallbacks } from '../types';
 
 export const CODI_LABEL = 'Codi';
@@ -55,8 +56,13 @@ export async function streamCodiChat(
   signal?: AbortSignal,
 ): Promise<void> {
   let tokenBuffer = '';
-  let reasoningBuffer = '';
   let inReasoning = false;
+  const reasoningSplitter = createReasoningStepSplitter({
+    markers: false,
+    onStepStart: callbacks.onReasoningStep,
+    onStepUpdate: callbacks.onReasoningStepUpdate,
+    onStepEnd: callbacks.onReasoningStepEnd,
+  });
 
   await browserInferenceEngine.generate(
     {
@@ -70,15 +76,20 @@ export async function streamCodiChat(
         if (!inReasoning && token.includes('<think>')) {
           inReasoning = true;
           const reasoningDelta = token.split('<think>')[1] ?? '';
-          reasoningBuffer += reasoningDelta;
-          if (reasoningDelta) callbacks.onReasoning?.(reasoningDelta);
+          if (reasoningDelta) {
+            reasoningSplitter.push(reasoningDelta);
+            callbacks.onReasoning?.(reasoningDelta);
+          }
           return;
         }
 
         if (inReasoning && token.includes('</think>')) {
           const [before, after = ''] = token.split('</think>');
-          reasoningBuffer += before;
-          if (before) callbacks.onReasoning?.(before);
+          if (before) {
+            reasoningSplitter.push(before);
+            callbacks.onReasoning?.(before);
+          }
+          reasoningSplitter.finish();
           tokenBuffer += after;
           inReasoning = false;
           if (after) {
@@ -88,7 +99,7 @@ export async function streamCodiChat(
         }
 
         if (inReasoning) {
-          reasoningBuffer += token;
+          reasoningSplitter.push(token);
           callbacks.onReasoning?.(token);
           return;
         }
@@ -97,6 +108,7 @@ export async function streamCodiChat(
         callbacks.onToken?.(token);
       },
       onDone: (result) => {
+        reasoningSplitter.finish();
         const finalContent = (tokenBuffer.trim() || formatBrowserInferenceResult(result)).trim();
         callbacks.onDone?.(finalContent);
       },

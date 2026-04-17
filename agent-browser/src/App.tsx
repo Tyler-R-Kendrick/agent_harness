@@ -28,7 +28,6 @@ import {
   Globe,
   HardDrive,
   History,
-  Info,
   Keyboard,
   Layers3,
   Link,
@@ -80,6 +79,8 @@ import {
 } from './chat-agents';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
+import { ActivityPanel, InlineReasoning } from './features/reasoning/ReasoningUi';
+import { MarkdownContent } from './utils/MarkdownContent';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { browserInferenceEngine } from './services/browserInference';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
@@ -102,7 +103,7 @@ import {
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import { createUniqueId } from './utils/uniqueId';
-import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -667,21 +668,27 @@ function useToast() {
   return { toast, setToast };
 }
 
-function ThinkingBlock({ content, duration, isThinking }: { content?: string; duration?: number; isThinking?: boolean }) {
-  const [open, setOpen] = useState(Boolean(isThinking));
-  useEffect(() => { if (isThinking) setOpen(true); }, [isThinking]);
-  if (!content && !isThinking) return null;
-  return (
-    <div className={`thinking-block ${isThinking ? 'thinking-active' : ''}`}>
-      <button type="button" className="thinking-header" onClick={() => !isThinking && setOpen((current) => !current)} aria-expanded={open}>
-        <span className="thinking-title">
-          <Icon name={isThinking ? 'loader' : 'sparkles'} size={13} color="#a78bfa" className={isThinking ? 'spin' : ''} />
-          {isThinking ? 'Thinking' : `Thought for ${duration ?? 0}s`}
-        </span>
-      </button>
-      {open && <div className={`thinking-content ${isThinking ? 'stream-cursor' : ''}`}>{content}</div>}
-    </div>
-  );
+function upsertReasoningStep(steps: ReasoningStep[], step: ReasoningStep): ReasoningStep[] {
+  const existingIndex = steps.findIndex((candidate) => candidate.id === step.id);
+  if (existingIndex === -1) return [...steps, step];
+  const next = [...steps];
+  next[existingIndex] = { ...next[existingIndex], ...step };
+  return next;
+}
+
+function patchReasoningStep(steps: ReasoningStep[], id: string, patch: Partial<ReasoningStep>): ReasoningStep[] {
+  return steps.map((step) => (step.id === id ? { ...step, ...patch } : step));
+}
+
+function finalizeReasoningSteps(steps: ReasoningStep[], endedAt = Date.now()): ReasoningStep[] {
+  return steps.map((step) => (step.status === 'active' ? { ...step, status: 'done', endedAt: step.endedAt ?? endedAt } : step));
+}
+
+function getActiveReasoningStepId(steps: ReasoningStep[]): string | undefined {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    if (steps[index]?.status === 'active') return steps[index].id;
+  }
+  return undefined;
 }
 
 function fmtMem(mb: number): string {
@@ -725,7 +732,17 @@ function MemBar({ root }: { root: TreeNode }) {
   );
 }
 
-function ChatMessageView({ message, agentName }: { message: ChatMessage; agentName: string }) {
+function ChatMessageView({
+  message,
+  agentName,
+  activitySelected,
+  onOpenActivity,
+}: {
+  message: ChatMessage;
+  agentName: string;
+  activitySelected?: boolean;
+  onOpenActivity?: (messageId: string) => void;
+}) {
   const content = message.streamedContent || message.content;
   const isTerminalMessage = message.statusText?.startsWith('terminal') ?? false;
   const isUser = message.role === 'user';
@@ -734,6 +751,7 @@ function ChatMessageView({ message, agentName }: { message: ChatMessage; agentNa
   const isStreaming = message.status === 'streaming';
   const isError = message.isError ?? message.status === 'error';
   const isStopped = message.statusText === 'stopped';
+  const hasReasoning = Boolean(message.reasoningSteps?.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
   return (
     <div className={`message ${message.role}${isTerminalMessage ? ' terminal-message' : ''}${isError ? ' message-error' : ''}`}>
       {!isSystem && (
@@ -741,26 +759,30 @@ function ChatMessageView({ message, agentName }: { message: ChatMessage; agentNa
           <span className="sender-name">{senderLabel}</span>
         </div>
       )}
-      {(message.thinkingContent || message.isThinking) && <ThinkingBlock content={message.thinkingContent} duration={message.thinkingDuration} isThinking={message.isThinking} />}
+      {hasReasoning ? <InlineReasoning message={message} selected={activitySelected} onOpenActivity={onOpenActivity} /> : null}
       {isStopped && (
         <div className="message-step message-step-static">
           <span className="message-step-dot" />
           <span className="message-step-text">Stopped</span>
         </div>
       )}
-      {message.loadingStatus && (
+      {message.loadingStatus && !hasReasoning && (
         <div className="message-step">
           <span className="message-step-dot" />
           <span className="message-step-text">{message.loadingStatus}</span>
         </div>
       )}
-      {(message.cards ?? []).map((card, i) => (
+      {!(message.reasoningSteps?.length) && (message.cards ?? []).map((card, i) => (
         <div key={i} className="message-tool-call">
           <span className="tool-call-label">⚙ {card.app}</span>
           <pre className="tool-call-args">{JSON.stringify(card.args, null, 2)}</pre>
         </div>
       ))}
-      {content ? <div className={`message-bubble${isTerminalMessage ? ' terminal-bubble' : ''}${isError ? ' message-bubble-error' : ''}`}>{content}{isStreaming && !message.isThinking && <span className="stream-cursor" />}</div> : null}
+      {content ? (
+        (isUser || isTerminalMessage || isError)
+          ? <div className={`message-bubble${isTerminalMessage ? ' terminal-bubble' : ''}${isError ? ' message-bubble-error' : ''}`}>{content}{isStreaming && !message.isThinking && <span className="stream-cursor" />}</div>
+          : <div className={`message-bubble message-bubble-markdown${isError ? ' message-bubble-error' : ''}`}><MarkdownContent content={content} className="markdown-content" />{isStreaming && !message.isThinking && <span className="stream-cursor" />}</div>
+      ) : null}
     </div>
   );
 }
@@ -971,7 +993,7 @@ function ChatPanel({
   onClose: () => void;
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
   onOpenSettings: () => void;
-  bashBySessionRef: React.RefObject<Record<string, Bash>>;
+  bashBySessionRef: React.MutableRefObject<Record<string, Bash>>;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
@@ -982,6 +1004,7 @@ function ChatPanel({
   const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
+  const [activeActivityMessageIdBySession, setActiveActivityMessageIdBySession] = useState<Record<string, string | null>>({});
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -1013,6 +1036,10 @@ function ChatPanel({
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
+  const activeActivityMessageId = activeActivityMessageIdBySession[activeChatSessionId] ?? null;
+  const activeActivityMessage = !showBash && activeActivityMessageId
+    ? messages.find((message) => message.id === activeActivityMessageId) ?? null
+    : null;
   const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
     Boolean(parseSandboxPrompt(input))
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
@@ -1033,14 +1060,31 @@ function ChatPanel({
   }, [messages]);
 
   useEffect(() => {
+    if (!activeActivityMessageId) return;
+    if (messages.some((message) => message.id === activeActivityMessageId)) return;
+    setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: null }));
+  }, [activeActivityMessageId, activeChatSessionId, messages]);
+
+  useEffect(() => {
+    if (!activeActivityMessage) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: null }));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeActivityMessage, activeChatSessionId]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const getSessionBash = useCallback((id: string) => {
-    if (!bashBySessionRef.current[id]) {
-      bashBySessionRef.current[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '' } });
+    const bashSessions = bashBySessionRef.current;
+    if (!bashSessions[id]) {
+      bashSessions[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '' } });
     }
-    return bashBySessionRef.current[id];
+    return bashSessions[id];
   }, []);
 
   useEffect(() => {
@@ -1091,6 +1135,10 @@ function ChatPanel({
       [activeChatSessionId]: (current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)]).map((message) => message.id === id ? { ...message, ...patch } : message),
     }));
   }
+
+  const selectActivityMessage = useCallback((messageId: string) => {
+    setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: messageId }));
+  }, [activeChatSessionId]);
 
   const runSandboxPrompt = useCallback(async (text: string, assistantId: string) => {
     const parsed = parseSandboxPrompt(text);
@@ -1190,24 +1238,39 @@ function ChatPanel({
     let tokenBuffer = '';
     let thinkingBuffer = '';
     let thinkingStart = 0;
+    let reasoningSteps: ReasoningStep[] = [];
+    let hasStructuredReasoning = false;
     const controller = new AbortController();
+
+    const ensureThinkingStarted = () => {
+      if (!thinkingStart) thinkingStart = Date.now();
+    };
+
+    const buildReasoningPatch = (patch: Partial<ChatMessage> = {}): Partial<ChatMessage> => ({
+      reasoningSteps: reasoningSteps.length ? reasoningSteps : undefined,
+      currentStepId: getActiveReasoningStepId(reasoningSteps),
+      reasoningStartedAt: thinkingStart || undefined,
+      thinkingContent: hasStructuredReasoning ? undefined : (thinkingBuffer || undefined),
+      thinkingDuration: thinkingStart ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
+      isThinking: Boolean(getActiveReasoningStepId(reasoningSteps)) || (!hasStructuredReasoning && Boolean(thinkingBuffer) && !tokenBuffer),
+      ...patch,
+    });
 
     activeGenerationRef.current = {
       assistantId,
       sessionId: activeChatSessionId,
       cancel: () => controller.abort('Generation stopped.'),
       finalizeCancelled: () => {
+        reasoningSteps = finalizeReasoningSteps(reasoningSteps);
         const streamedContent = cleanStreamedAssistantContent(tokenBuffer);
-        updateMessage(assistantId, {
+        updateMessage(assistantId, buildReasoningPatch({
           status: 'complete',
           statusText: 'stopped',
           isThinking: false,
           loadingStatus: null,
-          thinkingContent: thinkingBuffer || undefined,
-          thinkingDuration: thinkingBuffer ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
           streamedContent: streamedContent || undefined,
           content: streamedContent ? '' : 'Response stopped.',
-        });
+        }));
       },
     };
     setActiveGenerationSessionId(activeChatSessionId);
@@ -1216,35 +1279,45 @@ function ChatPanel({
       const streamCallbacks = {
         onPhase: (phase: string) => updateMessage(assistantId, { loadingStatus: phase }),
         onReasoning: (content: string) => {
-          if (!thinkingStart) thinkingStart = Date.now();
+          ensureThinkingStarted();
+          if (hasStructuredReasoning) return;
           thinkingBuffer += content;
-          updateMessage(assistantId, {
-            status: 'streaming',
-            isThinking: true,
-            thinkingContent: thinkingBuffer,
-          });
+          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onReasoningStep: (step: ReasoningStep) => {
+          ensureThinkingStarted();
+          hasStructuredReasoning = true;
+          reasoningSteps = upsertReasoningStep(reasoningSteps, step);
+          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onReasoningStepUpdate: (id: string, patch: Partial<ReasoningStep>) => {
+          ensureThinkingStarted();
+          hasStructuredReasoning = true;
+          reasoningSteps = patchReasoningStep(reasoningSteps, id, patch);
+          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onReasoningStepEnd: (id: string) => {
+          reasoningSteps = patchReasoningStep(reasoningSteps, id, { status: 'done', endedAt: Date.now() });
+          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
         },
         onToken: (content: string) => {
           tokenBuffer += content;
-          updateMessage(assistantId, {
+          updateMessage(assistantId, buildReasoningPatch({
             status: 'streaming',
             streamedContent: cleanStreamedAssistantContent(tokenBuffer),
-            isThinking: false,
-            thinkingContent: thinkingBuffer || undefined,
-            thinkingDuration: thinkingBuffer ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
-          });
+            loadingStatus: null,
+          }));
         },
         onDone: (finalContent?: string) => {
+          reasoningSteps = finalizeReasoningSteps(reasoningSteps);
           const resolvedContent = cleanStreamedAssistantContent(finalContent ?? tokenBuffer);
-          updateMessage(assistantId, {
+          updateMessage(assistantId, buildReasoningPatch({
             status: 'complete',
             isThinking: false,
             loadingStatus: null,
-            thinkingContent: thinkingBuffer || undefined,
-            thinkingDuration: thinkingBuffer ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
             streamedContent: resolvedContent || undefined,
             content: resolvedContent ? '' : (selectedProvider === 'ghcp' ? 'GHCP returned an empty response.' : 'Codi returned an empty response.'),
-          });
+          }));
         },
         onError: (error: Error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
       };
@@ -1424,51 +1497,56 @@ function ChatPanel({
         </div>
       </header>
       <div className="shared-console-body">
-        <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-          {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} />)}
-          <div ref={bottomRef} />
+        <div className="shared-console-main">
+          {!showBash && activeActivityMessage ? (
+            <ActivityPanel message={activeActivityMessage} onClose={() => setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+          ) : null}
+          <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} />)}
+            <div ref={bottomRef} />
+          </div>
+          <div className="context-strip">Context: {contextSummary}</div>
+          {showBash ? (
+            <form className="chat-compose terminal-compose" onSubmit={(event) => { event.preventDefault(); void runTerminalCommand(input); }}>
+              <div className="terminal-compose-row">
+                <span className="bash-prompt">$</span>
+                <input
+                  ref={terminalInputRef}
+                  className="bash-input"
+                  aria-label="Bash input"
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder={activeSessionId ? 'type a command…' : 'create or select a session'}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={!activeSessionId}
+                />
+              </div>
+            </form>
+          ) : (
+            <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } void sendMessage(input); }}>
+              <div className="composer-rail">
+                <label className="composer-input-shell shared-input-shell">
+                  <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels })} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } if (canSubmit) void sendMessage(input); } }} />
+                  <button
+                    type="submit"
+                    className={`composer-send-btn${isActiveSessionGenerating ? ' composer-send-btn-stop' : ''}`}
+                    aria-label={isActiveSessionGenerating ? 'Stop response' : 'Send'}
+                    title={isActiveSessionGenerating ? 'Stop response' : 'Send'}
+                    disabled={!isActiveSessionGenerating && !canSubmit}
+                  >
+                    {isActiveSessionGenerating ? <Square size={13} fill="currentColor" /> : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </button>
+                </label>
+              </div>
+              {selectedProvider === 'ghcp'
+                ? (!hasAvailableCopilotModels
+                    ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
+                    : null)
+                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>No Codi model loaded. Open Models to load one.</button> : null)}
+            </form>
+          )}
         </div>
-        <div className="context-strip">Context: {contextSummary}</div>
-        {showBash ? (
-          <form className="chat-compose terminal-compose" onSubmit={(event) => { event.preventDefault(); void runTerminalCommand(input); }}>
-            <div className="terminal-compose-row">
-              <span className="bash-prompt">$</span>
-              <input
-                ref={terminalInputRef}
-                className="bash-input"
-                aria-label="Bash input"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder={activeSessionId ? 'type a command…' : 'create or select a session'}
-                autoComplete="off"
-                spellCheck={false}
-                disabled={!activeSessionId}
-              />
-            </div>
-          </form>
-        ) : (
-          <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } void sendMessage(input); }}>
-            <div className="composer-rail">
-              <label className="composer-input-shell shared-input-shell">
-                <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels })} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } if (canSubmit) void sendMessage(input); } }} />
-                <button
-                  type="submit"
-                  className={`composer-send-btn${isActiveSessionGenerating ? ' composer-send-btn-stop' : ''}`}
-                  aria-label={isActiveSessionGenerating ? 'Stop response' : 'Send'}
-                  title={isActiveSessionGenerating ? 'Stop response' : 'Send'}
-                  disabled={!isActiveSessionGenerating && !canSubmit}
-                >
-                  {isActiveSessionGenerating ? <Square size={13} fill="currentColor" /> : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                </button>
-              </label>
-            </div>
-            {selectedProvider === 'ghcp'
-              ? (!hasAvailableCopilotModels
-                  ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
-                  : null)
-              : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>No Codi model loaded. Open Models to load one.</button> : null)}
-          </form>
-        )}
       </div>
     </section>
   );
@@ -2133,8 +2211,7 @@ function PropertiesModal({ metadata, nodeName, onClose }: { metadata: NodeMetada
 
 // ── History modals ────────────────────────────────────────────────────────────
 
-function BrowserHistoryModal({ nodeId, navHistory, onBack, onForward, onClose }: {
-  nodeId: string;
+function BrowserHistoryModal({ navHistory, onBack, onForward, onClose }: {
   navHistory: BrowserNavHistory;
   onBack: () => void;
   onForward: () => void;
@@ -2247,8 +2324,7 @@ type PickerRow = { name: string; isUp: boolean };
 
 const FILE_OP_LIST_ID = 'file-op-picker-list';
 
-function FileOpPicker({ node, op, directories, onConfirm, onClose }: {
-  node: TreeNode;
+function FileOpPicker({ op, directories, onConfirm, onClose }: {
   op: FileOpKind;
   directories: string[];
   onConfirm: (targetDir: string) => void;
@@ -2434,8 +2510,7 @@ function FileOpPicker({ node, op, directories, onConfirm, onClose }: {
   );
 }
 
-function FileOpModal({ node, op, directories, onConfirm, onClose }: {
-  node: TreeNode;
+function FileOpModal({ op, directories, onConfirm, onClose }: {
   op: FileOpKind;
   directories: string[];
   onConfirm: (targetDir: string) => void;
@@ -2443,7 +2518,6 @@ function FileOpModal({ node, op, directories, onConfirm, onClose }: {
 }) {
   return (
     <FileOpPicker
-      node={node}
       op={op}
       directories={directories}
       onConfirm={onConfirm}
@@ -2971,16 +3045,16 @@ function AgentBrowserApp() {
   const lastClipboardTextRef = useRef<string>('');
   const [browserNavHistories, setBrowserNavHistories] = useState<Record<string, BrowserNavHistory>>(() => {
     const initial: Record<string, BrowserNavHistory> = {};
-    function seedBrowserTabs(nodes: typeof initialRootRef.current['children']) {
+    function seedBrowserTabs(nodes?: TreeNode[]) {
       if (!nodes) return;
       for (const child of nodes) {
         if (child.type === 'tab' && child.nodeKind === 'browser' && child.url) {
           initial[child.id] = { entries: [{ url: child.url, title: child.name, timestamp: Date.now() }], currentIndex: 0 };
         }
-        if (child.children) seedBrowserTabs(child.children as typeof nodes);
+        if (child.children) seedBrowserTabs(child.children);
       }
     }
-    if (initialRootRef.current?.children) seedBrowserTabs(initialRootRef.current.children as typeof initialRootRef.current['children']);
+    if (initialRootRef.current?.children) seedBrowserTabs(initialRootRef.current.children);
     return initial;
   });
 
@@ -4013,25 +4087,8 @@ function AgentBrowserApp() {
 
   // ── Version / Session History ───────────────────────────────────────────────
 
-  function getOrCreateVersionHistory(nodeId: string, label: string): VersionDAG {
-    return versionHistories[nodeId] ?? createVersionDAG('(initial)', 'user-1', label, Date.now());
-  }
-
   function updateVersionHistory(nodeId: string, dag: VersionDAG) {
     setVersionHistories((prev) => ({ ...prev, [nodeId]: dag }));
-  }
-
-  function handleVfsRollback(nodeId: string, commitId: string) {
-    const dag = getOrCreateVersionHistory(nodeId, 'Initial state');
-    const next = rollbackToCommit(dag, commitId, 'user-1', Date.now());
-    updateVersionHistory(nodeId, next);
-  }
-
-  function handleSessionBranch(nodeId: string, commitId: string) {
-    const dag = getOrCreateVersionHistory(nodeId, 'Initial snapshot');
-    const branchName = `branch/${new Date().toISOString().slice(0, 10)}`;
-    const next = branchDAG(dag, branchName, commitId, Date.now());
-    updateVersionHistory(nodeId, next);
   }
 
   function handleBrowserBack(tabId: string) {
@@ -4477,7 +4534,6 @@ function AgentBrowserApp() {
       {/* ── History modals ── */}
       {historyNode && historyNode.nodeKind === 'browser' ? (
         <BrowserHistoryModal
-          nodeId={historyNode.id}
           navHistory={browserNavHistories[historyNode.id] ?? { entries: [{ url: historyNode.url ?? '', title: historyNode.name, timestamp: Date.now() }], currentIndex: 0 }}
           onBack={() => handleBrowserBack(historyNode.id)}
           onForward={() => handleBrowserForward(historyNode.id)}
@@ -4536,7 +4592,6 @@ function AgentBrowserApp() {
         const dirs = collectWorkspaceDirectories(wsFiles);
         return (
           <FileOpModal
-            node={fileOpModal.node}
             op={fileOpModal.op}
             directories={dirs}
             onConfirm={(targetDir) => handleFileOp(fileOpModal.node, fileOpModal.op, targetDir)}
