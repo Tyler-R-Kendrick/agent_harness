@@ -44,6 +44,12 @@ export interface ReasoningStep {
   kind: ReasoningStepKind;
   title: string;
   body?: string;
+  toolName?: string;
+  toolCallId?: string;
+  toolSummary?: string;
+  toolArgs?: unknown;
+  toolResult?: string;
+  isError?: boolean;
   sources?: SourceChip[];
   startedAt: number;
   endedAt?: number;

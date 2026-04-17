@@ -14,52 +14,38 @@
 import type {
   LanguageModelV3,
   LanguageModelV3CallOptions,
+  LanguageModelV3FinishReason,
   LanguageModelV3GenerateResult,
   LanguageModelV3StreamResult,
   LanguageModelV3StreamPart,
-  LanguageModelV3FinishReason,
   LanguageModelV3FunctionTool,
+  LanguageModelV3ToolResultOutput,
+  LanguageModelV3Usage,
 } from '@ai-sdk/provider';
+import { buildReActToolsSection, parseToolCall } from './reactToolCalling';
 
-// ── ReAct tool helpers ────────────────────────────────────────────────────────
+const EMPTY_USAGE: LanguageModelV3Usage = {
+  inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: 0, text: 0, reasoning: 0 },
+};
 
-function buildReActToolsSection(tools: LanguageModelV3FunctionTool[]): string {
-  if (!tools.length) return '';
+const STOP_FINISH: LanguageModelV3FinishReason = { unified: 'stop', raw: 'stop' };
+const OTHER_FINISH: LanguageModelV3FinishReason = { unified: 'other', raw: 'aborted' };
+const TOOL_CALL_FINISH: LanguageModelV3FinishReason = { unified: 'tool-calls', raw: 'tool-calls' };
 
-  const lines = [
-    '## Tools',
-    '',
-    'You have access to the following tools. To call a tool, output EXACTLY:',
-    '<tool_call>{"tool": "<name>", "args": {<arguments>}}</tool_call>',
-    '',
-    'Then stop immediately. Wait for the tool result before continuing.',
-    '',
-    'Available tools:',
-  ];
-
-  for (const t of tools) {
-    const params = t.parameters as Record<string, unknown>;
-    const props = (params.properties as Record<string, { description?: string; type?: string }>) ?? {};
-    const paramList = Object.entries(props)
-      .map(([k, v]) => `${k}: ${v.type ?? 'any'}${v.description ? ` (${v.description})` : ''}`)
-      .join(', ');
-    lines.push(`- ${t.name}(${paramList})${t.description ? `: ${t.description}` : ''}`);
+function stringifyToolOutput(output: LanguageModelV3ToolResultOutput): string {
+  switch (output.type) {
+    case 'text':
+    case 'error-text':
+      return output.value;
+    case 'json':
+    case 'error-json':
+      return JSON.stringify(output.value);
+    case 'execution-denied':
+      return output.reason ?? 'Execution denied.';
   }
 
-  return lines.join('\n');
-}
-
-type ParsedToolCall = { toolName: string; args: Record<string, unknown> } | null;
-
-function parseToolCall(text: string): ParsedToolCall {
-  const match = /<tool_call>([\s\S]*?)<\/tool_call>/.exec(text);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[1]) as { tool: string; args?: Record<string, unknown> };
-    return { toolName: parsed.tool, args: parsed.args ?? {} };
-  } catch {
-    return null;
-  }
+  return JSON.stringify(output);
 }
 
 // ── Prompt extraction ─────────────────────────────────────────────────────────
@@ -83,12 +69,7 @@ function extractPromptText(options: LanguageModelV3CallOptions): string {
       for (const part of message.content) {
         if (part.type === 'text') parts.push(`[${message.role}]\n${part.text}`);
         if (part.type === 'tool-result') {
-          const output = Array.isArray(part.content)
-            ? part.content
-                .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
-                .map((c) => c.text)
-                .join('')
-            : String(part.content ?? '');
+          const output = stringifyToolOutput(part.output);
           parts.push(`[tool_result name="${part.toolName}"]\n${output}`);
         }
       }
@@ -153,6 +134,7 @@ export class CopilotLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = 'v3' as const;
   readonly provider = 'copilot';
   readonly modelId: string;
+  readonly supportedUrls = {};
 
   constructor(modelId: string) {
     this.modelId = modelId;
@@ -161,13 +143,13 @@ export class CopilotLanguageModel implements LanguageModelV3 {
   async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
     const prompt = extractPromptText(options);
     let text = '';
-    let finishReason: LanguageModelV3FinishReason = { type: 'stop' };
+    let finishReason: LanguageModelV3FinishReason = STOP_FINISH;
 
     for await (const event of streamCopilotProxy(this.modelId, prompt, options.abortSignal)) {
       if (event.type === 'token') text += event.delta;
       if (event.type === 'final') text = event.content;
       if (event.type === 'error') throw new Error(event.message);
-      if (event.type === 'done' && event.aborted) finishReason = { type: 'other' };
+      if (event.type === 'done' && event.aborted) finishReason = OTHER_FINISH;
     }
 
     // Parse ReAct tool call from text output
@@ -179,18 +161,18 @@ export class CopilotLanguageModel implements LanguageModelV3 {
             type: 'tool-call' as const,
             toolCallId: `tc-${Date.now()}`,
             toolName: toolCall.toolName,
-            input: toolCall.args,
+            input: JSON.stringify(toolCall.args),
           },
         ],
-        usage: { inputTokens: 0, outputTokens: 0 },
-        finishReason: { type: 'tool-calls' },
+        usage: EMPTY_USAGE,
+        finishReason: TOOL_CALL_FINISH,
         warnings: [],
       };
     }
 
     return {
       content: [{ type: 'text' as const, text }],
-      usage: { inputTokens: 0, outputTokens: 0 },
+      usage: EMPTY_USAGE,
       finishReason,
       warnings: [],
     };
@@ -230,8 +212,8 @@ export class CopilotLanguageModel implements LanguageModelV3 {
           controller.enqueue({ type: 'text-end', id: textId });
           controller.enqueue({
             type: 'finish',
-            finishReason: { type: 'stop' },
-            usage: { inputTokens: 0, outputTokens: 0 },
+            finishReason: STOP_FINISH,
+            usage: EMPTY_USAGE,
           });
         } catch (err) {
           controller.enqueue({ type: 'error', error: err });

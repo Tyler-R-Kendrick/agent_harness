@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { AGENT_INSTRUCTIONS, createInBrowserUseTools, createInBrowserUseAgent, runInBrowserUseAgent } from '.';
 
 // Mock agentRunner so tests don't hit a real LLM

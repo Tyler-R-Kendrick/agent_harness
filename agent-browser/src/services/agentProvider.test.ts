@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { LanguageModel } from 'ai';
+import { describe, expect, it, vi } from 'vitest';
 
 // Mock the gateway module before importing agentProvider
 vi.mock('@ai-sdk/gateway', () => {

@@ -149,7 +149,7 @@ export class InAppLocator implements PlaywrightLikeLocator {
     return this._chain({ kind: 'label', text, options });
   }
 
-  getByPlaceholder(text: string | RegExp, options?: TextOptions): InAppLocator {
+  getByPlaceholder(text: string | RegExp, _options?: TextOptions): InAppLocator {
     return this._chain({ kind: 'placeholder', text });
   }
 
@@ -633,7 +633,7 @@ export class InAppFrameLocator implements PlaywrightLikeFrameLocator {
     return this._locator([{ kind: 'label', text, options }]);
   }
 
-  getByPlaceholder(text: string | RegExp, options?: TextOptions): InAppLocator {
+  getByPlaceholder(text: string | RegExp, _options?: TextOptions): InAppLocator {
     return this._locator([{ kind: 'placeholder', text }]);
   }
 

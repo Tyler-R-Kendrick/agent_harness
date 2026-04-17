@@ -3,7 +3,7 @@
  *
  * Unified tool-loop executor for all agents.
  *
- * Uses the AI SDK's `generateText` with `maxSteps` to run a full agentic
+ * Uses the AI SDK's `generateText` with `stopWhen` to run a full agentic
  * tool loop — the LLM calls tools, gets results, and continues until it
  * produces a final text response.
  *
@@ -17,7 +17,7 @@
  * A2A routing: the caller composes multiple agent runs (runToolAgent chains).
  */
 
-import { generateText, type LanguageModel, type ToolSet } from 'ai';
+import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -44,8 +44,10 @@ export type AgentRunCallbacks = {
   onDone?: (text: string) => void;
   /** Called if the run throws an error. */
   onError?: (error: Error) => void;
-  /** Called whenever the LLM calls a tool, before execution. */
-  onToolCall?: (toolName: string, args: unknown) => void;
+  /** Called whenever the runner observes a tool call in a completed step. */
+  onToolCall?: (toolName: string, args: unknown, toolCallId?: string) => void;
+  /** Called whenever the runner observes the result for a tool call. */
+  onToolResult?: (toolName: string, args: unknown, result: unknown, isError: boolean, toolCallId?: string) => void;
 };
 
 export type AgentRunResult = {
@@ -78,12 +80,26 @@ export async function runToolAgent(
       tools,
       system: instructions,
       messages,
-      maxSteps,
+      stopWhen: stepCountIs(maxSteps),
       abortSignal: signal,
       onStepFinish: (step) => {
         if (step.toolCalls?.length) {
           for (const call of step.toolCalls) {
-            callbacks.onToolCall?.(call.toolName, call.input);
+            callbacks.onToolCall?.(call.toolName, call.input, 'toolCallId' in call ? call.toolCallId : undefined);
+          }
+        }
+
+        if (step.toolResults?.length) {
+          for (const result of step.toolResults) {
+            const toolCallId = 'toolCallId' in result ? result.toolCallId : undefined;
+            const toolName = 'toolName' in result ? result.toolName : 'unknown-tool';
+            const args = 'input' in result ? result.input : undefined;
+            const resultRecord = result as { output?: unknown; result?: unknown };
+            const output = 'output' in result
+              ? resultRecord.output
+              : resultRecord.result;
+            const isError = 'isError' in result ? Boolean(result.isError) : false;
+            callbacks.onToolResult?.(toolName, args, output, isError, toolCallId);
           }
         }
       },

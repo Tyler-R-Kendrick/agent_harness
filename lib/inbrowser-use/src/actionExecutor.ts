@@ -46,7 +46,7 @@ export class ActionExecutor {
     return node?.actions?.[action];
   }
 
-  async click(el: HTMLElement, options?: ClickOptions): Promise<void> {
+  async click(el: HTMLElement, _options?: ClickOptions): Promise<void> {
     const componentClick = this._getComponentAction(el, 'click');
     if (componentClick) {
       await componentClick();
@@ -55,7 +55,7 @@ export class ActionExecutor {
     el.click();
   }
 
-  async fill(el: HTMLElement, value: string, options?: FillOptions): Promise<void> {
+  async fill(el: HTMLElement, value: string, _options?: FillOptions): Promise<void> {
     const componentFill =
       this._getComponentAction(el, 'fill') ?? this._getComponentAction(el, 'setValue');
     if (componentFill) {
@@ -226,19 +226,21 @@ export class ActionExecutor {
       throw new Error(`selectOption() requires a <select> element`);
     }
 
+    const selectEl = el as HTMLSelectElement;
+
     if (typeof value === 'string') {
-      el.value = value;
+      selectEl.value = value;
     } else if (Array.isArray(value)) {
       const values = (value as Array<string | { value?: string; label?: string }>).map(
         (v) => (typeof v === 'string' ? v : (v.value ?? v.label ?? '')),
       );
-      for (const opt of el.options) {
+      for (const opt of selectEl.options) {
         opt.selected = values.includes(opt.value) || values.includes(opt.label);
       }
     }
 
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   async scrollIntoViewIfNeeded(el: HTMLElement): Promise<void> {

@@ -9,6 +9,8 @@ const loadModelMock = vi.fn();
 const generateMock = vi.fn();
 const fetchCopilotStateMock = vi.fn();
 const streamCopilotChatMock = vi.fn();
+const resolveLanguageModelMock = vi.fn(() => ({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' }));
+const runToolAgentMock = vi.fn();
 const getSandboxFeatureFlagsMock = vi.fn(() => ({
   secureBrowserSandboxExec: false,
   disableWebContainerAdapter: false,
@@ -37,6 +39,14 @@ vi.mock('./services/copilotApi', () => ({
   streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
 }));
 
+vi.mock('./services/agentProvider', () => ({
+  resolveLanguageModel: (config: unknown) => (resolveLanguageModelMock as (config: unknown) => unknown)(config),
+}));
+
+vi.mock('./services/agentRunner', () => ({
+  runToolAgent: (options: unknown, callbacks: unknown) => runToolAgentMock(options, callbacks),
+}));
+
 vi.mock('./features/flags', () => ({
   getSandboxFeatureFlags: () => getSandboxFeatureFlagsMock(),
 }));
@@ -61,21 +71,31 @@ vi.mock('just-bash/browser', () => {
 
     async exec(command: string) {
       const trimmed = command.trim();
-      if (trimmed.startsWith('touch ')) {
-        const filePath = trimmed.slice('touch '.length).trim().replace(/^\/+/, '');
+      const sentinelSuffix = '; echo __JUSTBASH_CWD:$PWD';
+      const usesSentinel = trimmed.endsWith(sentinelSuffix);
+      const baseCommand = usesSentinel ? trimmed.slice(0, -sentinelSuffix.length).trim() : trimmed;
+      const withSentinel = (stdout: string) => ({
+        stdout: usesSentinel ? `${stdout}${stdout ? '\n' : ''}__JUSTBASH_CWD:/workspace` : stdout,
+        stderr: '',
+        exitCode: 0,
+      });
+
+      if (baseCommand.startsWith('touch ')) {
+        const filePath = baseCommand.slice('touch '.length).trim().replace(/^\/+/, '');
         if (filePath) this.fsPaths.add(`/workspace/${filePath}`);
+        return withSentinel('');
       }
       // rm -rf "/path"
-      const rmMatch = trimmed.match(/^rm\b.*?"([^"]+)"\s*$/);
+      const rmMatch = baseCommand.match(/^rm\b.*?"([^"]+)"\s*$/);
       if (rmMatch) {
         const target = rmMatch[1];
         for (const path of [...this.fsPaths]) {
           if (path === target || path.startsWith(target + '/')) this.fsPaths.delete(path);
         }
-        return { stdout: '', stderr: '', exitCode: 0 };
+        return withSentinel('');
       }
       // mv "oldPath" "newPath"
-      const mvMatch = trimmed.match(/^mv\s+"([^"]+)"\s+"([^"]+)"\s*$/);
+      const mvMatch = baseCommand.match(/^mv\s+"([^"]+)"\s+"([^"]+)"\s*$/);
       if (mvMatch) {
         const [, fromPath, toPath] = mvMatch;
         for (const path of [...this.fsPaths]) {
@@ -84,18 +104,21 @@ vi.mock('just-bash/browser', () => {
             this.fsPaths.add(path === fromPath ? toPath : toPath + path.slice(fromPath.length));
           }
         }
-        return { stdout: '', stderr: '', exitCode: 0 };
+        return withSentinel('');
       }
-      if (trimmed === 'pwd') {
-        return { stdout: '/workspace', stderr: '', exitCode: 0 };
+      if (baseCommand === 'pwd') {
+        return withSentinel('/workspace');
       }
-      if (trimmed === 'ls') {
+      if (baseCommand === 'ls') {
         const entries = [...this.fsPaths]
           .filter((path) => path !== '/workspace' && path !== '/workspace/.keep')
           .map((path) => path.replace('/workspace/', ''));
-        return { stdout: entries.join('\n'), stderr: '', exitCode: 0 };
+        return withSentinel(entries.join('\n'));
       }
-      return { stdout: '', stderr: '', exitCode: 0 };
+      if (baseCommand.startsWith('echo ')) {
+        return withSentinel(baseCommand.slice('echo '.length));
+      }
+      return withSentinel('');
     }
   }
 
@@ -103,6 +126,15 @@ vi.mock('just-bash/browser', () => {
 });
 
 describe('App', () => {
+  const disableAllTools = () => {
+    fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
+    const builtInToggle = screen.getByRole('checkbox', { name: 'Toggle all Built-In tools' });
+    if ((builtInToggle as HTMLInputElement).checked) {
+      fireEvent.click(builtInToggle);
+    }
+    fireEvent.keyDown(document, { key: 'Escape' });
+  };
+
   const createCopilotState = (overrides: Partial<CopilotRuntimeState> = {}): CopilotRuntimeState => ({
     available: true,
     authenticated: false,
@@ -124,11 +156,15 @@ describe('App', () => {
     generateMock.mockReset();
     fetchCopilotStateMock.mockReset();
     streamCopilotChatMock.mockReset();
+    resolveLanguageModelMock.mockReset();
+    runToolAgentMock.mockReset();
     searchBrowserModelsMock.mockResolvedValue([]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
     fetchCopilotStateMock.mockResolvedValue(createCopilotState());
     streamCopilotChatMock.mockResolvedValue(undefined);
+    resolveLanguageModelMock.mockReturnValue({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' });
+    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
     getSandboxFeatureFlagsMock.mockReturnValue({
       secureBrowserSandboxExec: false,
       disableWebContainerAdapter: false,
@@ -456,6 +492,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    disableAllTools();
     // Send a message
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the workspace rules.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -516,6 +553,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    disableAllTools();
     fireEvent.click(screen.getByLabelText('Workspaces'));
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Write a long answer.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -566,6 +604,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the current workspace.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -585,6 +624,54 @@ describe('App', () => {
     expect(screen.getByText('Copilot response')).toBeInTheDocument();
   });
 
+  it('renders cli tool calls as assistant-owned chips and reveals their output on expand', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: true,
+      }],
+    }));
+    runToolAgentMock.mockImplementation(async (options, callbacks) => {
+      callbacks.onToolCall?.('cli', { command: 'echo hello from cli' });
+      const result = await options.tools.cli.execute({ command: 'echo hello from cli' }, {} as never);
+      callbacks.onToolResult?.('cli', { command: 'echo hello from cli' }, result, false);
+      callbacks.onDone?.('I ran the terminal command.');
+      return { text: 'I ran the terminal command.', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp');
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Check the terminal.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const toolChip = screen.getByTestId('tool-chip-cli');
+    expect(toolChip).toBeInTheDocument();
+    expect(screen.getByText('$ echo hello from cli')).toBeInTheDocument();
+    expect(screen.queryByText(/^terminal$/i)).not.toBeInTheDocument();
+
+    const toolChipToggle = toolChip.querySelector('summary');
+    expect(toolChipToggle).not.toBeNull();
+    fireEvent.click(toolChipToggle!);
+
+    expect(screen.getByText('hello from cli')).toBeInTheDocument();
+    expect(screen.getByText('I ran the terminal command.')).toBeInTheDocument();
+  });
+
   it('shows a Thinking… indicator while the GHCP response is pending', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
@@ -602,6 +689,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -656,6 +744,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
+    disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the architectural shift.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -2834,15 +2923,6 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    // Count browser tab treeitems before (they sit under the Browser folder)
-    const browserFolder = screen.getByRole('button', { name: 'Browser' }).closest('[role="treeitem"]')!;
-    const getBrowserTabCount = () =>
-      screen.getAllByRole('treeitem').filter((el) => {
-        const btn = el.querySelector<HTMLElement>('.tree-button');
-        return btn && el !== browserFolder && browserFolder.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING;
-      }).length;
-    const before = getBrowserTabCount();
-
     fireEvent.click(screen.getByLabelText('Add browser tab to Research'));
     fireEvent.change(screen.getByRole('textbox', { name: /url/i }), {
       target: { value: 'https://example.com' },
@@ -3230,7 +3310,7 @@ describe('App', () => {
 
     await act(async () => {
       const event = new Event('copy', { bubbles: true }) as Event & { clipboardData: unknown };
-      (event as Record<string, unknown>)['clipboardData'] = { getData: (_: string) => 'selected chat text' };
+      (event as unknown as { clipboardData: { getData: (_: string) => string } }).clipboardData = { getData: (_: string) => 'selected chat text' };
       document.dispatchEvent(event);
       await Promise.resolve();
     });
@@ -3251,7 +3331,7 @@ describe('App', () => {
 
     await act(async () => {
       const event = new Event('cut', { bubbles: true }) as Event & { clipboardData: unknown };
-      (event as Record<string, unknown>)['clipboardData'] = { getData: (_: string) => 'cut text from input' };
+      (event as unknown as { clipboardData: { getData: (_: string) => string } }).clipboardData = { getData: (_: string) => 'cut text from input' };
       document.dispatchEvent(event);
       await Promise.resolve();
     });
@@ -3272,7 +3352,7 @@ describe('App', () => {
 
     const dispatchCopy = async (text: string) => {
       const event = new Event('copy', { bubbles: true });
-      (event as Record<string, unknown>)['clipboardData'] = { getData: (_: string) => text };
+      (event as unknown as { clipboardData: { getData: (_: string) => string } }).clipboardData = { getData: (_: string) => text };
       document.dispatchEvent(event);
       await Promise.resolve();
     };

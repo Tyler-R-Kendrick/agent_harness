@@ -12,7 +12,7 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 import { generateText } from 'ai';
-import { runToolAgent, type AgentRunOptions, type AgentRunCallbacks } from './agentRunner';
+import { runToolAgent, type AgentRunOptions } from './agentRunner';
 
 const mockGenerateText = generateText as ReturnType<typeof vi.fn>;
 
@@ -30,8 +30,8 @@ function makeModel() {
 
 const echoTool = tool({
   description: 'Echo a message back',
-  parameters: z.object({ message: z.string() }),
-  execute: async ({ message }) => `echoed: ${message}`,
+  inputSchema: z.object({ message: z.string() }),
+  execute: async ({ message }: { message: string }) => `echoed: ${message}`,
 });
 
 // ── runToolAgent ──────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ describe('runToolAgent', () => {
         tools: { echo: echoTool },
         system: 'You are a helpful agent.',
         messages: options.messages,
-        maxSteps: expect.any(Number),
+        stopWhen: expect.any(Function),
       }),
     );
   });
@@ -161,9 +161,9 @@ describe('runToolAgent', () => {
       {},
     );
 
-    expect(mockGenerateText).toHaveBeenCalledWith(
-      expect.objectContaining({ maxSteps: 3 }),
-    );
+    const call = mockGenerateText.mock.calls[0][0] as { stopWhen: (options: { steps: unknown[] }) => boolean };
+    expect(call.stopWhen({ steps: [1, 2] })).toBe(false);
+    expect(call.stopWhen({ steps: [1, 2, 3] })).toBe(true);
   });
 
   it('returns the final text result', async () => {
@@ -182,5 +182,34 @@ describe('runToolAgent', () => {
     );
 
     expect(result.text).toBe('the answer');
+  });
+
+  it('emits tool call and tool result callbacks from completed steps', async () => {
+    mockGenerateText.mockImplementationOnce(async ({ onStepFinish }) => {
+      onStepFinish?.({
+        toolCalls: [{ toolCallId: 'call-1', toolName: 'cli', input: { command: 'echo hello' } }],
+        toolResults: [{ toolCallId: 'call-1', toolName: 'cli', input: { command: 'echo hello' }, output: { stdout: 'hello', stderr: '', exitCode: 0 }, isError: false }],
+      });
+
+      return {
+        text: 'done',
+        toolCalls: [],
+        toolResults: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
+    });
+
+    const onToolCall = vi.fn();
+    const onToolResult = vi.fn();
+    const model = makeModel();
+
+    await runToolAgent(
+      { model: model as never, tools: { echo: echoTool }, instructions: '', messages: [] },
+      { onToolCall, onToolResult },
+    );
+
+    expect(onToolCall).toHaveBeenCalledWith('cli', { command: 'echo hello' }, 'call-1');
+    expect(onToolResult).toHaveBeenCalledWith('cli', { command: 'echo hello' }, { stdout: 'hello', stderr: '', exitCode: 0 }, false, 'call-1');
   });
 });

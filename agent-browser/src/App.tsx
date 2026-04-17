@@ -46,6 +46,7 @@ import {
   Settings,
   Share2,
   Square,
+  SlidersHorizontal,
   Sparkles,
   Terminal,
   Trash2,
@@ -77,11 +78,14 @@ import {
   streamGhcpChat,
   type AgentProvider,
 } from './chat-agents';
+import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-agents/toolCallSummary';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { ActivityPanel, InlineReasoning } from './features/reasoning/ReasoningUi';
 import { MarkdownContent } from './utils/MarkdownContent';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
+import { resolveLanguageModel } from './services/agentProvider';
+import { runToolAgent } from './services/agentRunner';
 import { browserInferenceEngine } from './services/browserInference';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { appendPendingLocalTurn } from './services/chatComposition';
@@ -103,7 +107,9 @@ import {
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import { createUniqueId } from './utils/uniqueId';
+import { DEFAULT_TOOL_DESCRIPTORS, DEFAULT_TOOL_IDS, buildDefaultToolInstructions, createDefaultTools, selectToolsByIds, type ToolDescriptor } from './tools';
 import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { CliHistoryEntry } from './tools/types';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -384,6 +390,7 @@ const icons = {
   terminal: Terminal,
   trash: Trash2,
   clipboard: Clipboard,
+  slidersHorizontal: SlidersHorizontal,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -697,6 +704,73 @@ function fmtMem(mb: number): string {
   return `${Math.round(mb * 1024)} KB`;
 }
 
+function getToolChipIconName(toolName?: string): keyof typeof icons {
+  switch (toolName) {
+    case 'cli':
+      return 'terminal';
+    case 'read_file':
+      return 'file';
+    case 'create_directory':
+      return 'folderOpen';
+    case 'create_file':
+      return 'save';
+    default:
+      return 'sparkles';
+  }
+}
+
+function getToolChipTestId(step: ReasoningStep): string {
+  const source = step.toolName ?? step.title;
+  return `tool-chip-${source.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'tool'}`;
+}
+
+function ToolCallChip({ step }: { step: ReasoningStep }) {
+  const argsText = formatToolArgs(step.toolArgs);
+  const resultText = step.toolResult;
+  const hasDetails = Boolean(argsText || resultText);
+  const summary = step.toolSummary ?? step.title;
+  const iconName = getToolChipIconName(step.toolName);
+  const statusLabel = step.status === 'active' ? 'Running' : (step.isError ? 'Failed' : 'Done');
+  const header = (
+    <span className={`tool-chip-row${step.status === 'active' ? ' tool-chip-row-active' : ''}${step.isError ? ' tool-chip-row-error' : ''}`}>
+      <span className="tool-chip-icon" aria-hidden="true"><Icon name={iconName} size={12} /></span>
+      <span className="tool-chip-text">{summary}</span>
+      <span className="tool-chip-status">{statusLabel}</span>
+      {hasDetails ? <ChevronDown size={12} className="tool-chip-chevron" aria-hidden="true" /> : null}
+    </span>
+  );
+
+  if (!hasDetails) {
+    return (
+      <div className="tool-chip" data-testid={getToolChipTestId(step)}>
+        {header}
+      </div>
+    );
+  }
+
+  return (
+    <details className="tool-chip" data-testid={getToolChipTestId(step)} open={step.status === 'active'}>
+      <summary className="tool-chip-toggle">
+        {header}
+      </summary>
+      <div className="tool-chip-details">
+        {argsText ? (
+          <div className="tool-chip-detail-block">
+            <span className="tool-chip-detail-label">args</span>
+            <pre className="tool-chip-detail-pre">{argsText}</pre>
+          </div>
+        ) : null}
+        {resultText ? (
+          <div className="tool-chip-detail-block">
+            <span className="tool-chip-detail-label">{step.isError ? 'error' : 'result'}</span>
+            <pre className="tool-chip-detail-pre">{resultText}</pre>
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
 function MemBar({ root }: { root: TreeNode }) {
   const budget = 2048;
   const tabs = flattenTabs(root);
@@ -745,13 +819,19 @@ function ChatMessageView({
 }) {
   const content = message.streamedContent || message.content;
   const isTerminalMessage = message.statusText?.startsWith('terminal') ?? false;
+  const allReasoningSteps = message.reasoningSteps ?? [];
+  const toolSteps = allReasoningSteps.filter((step) => step.kind === 'tool');
+  const reasoningSteps = allReasoningSteps.filter((step) => step.kind !== 'tool');
+  const reasoningMessage = reasoningSteps.length === allReasoningSteps.length
+    ? message
+    : { ...message, reasoningSteps };
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const senderLabel = isSystem ? 'system' : isUser ? 'you' : isTerminalMessage ? 'terminal' : agentName;
   const isStreaming = message.status === 'streaming';
   const isError = message.isError ?? message.status === 'error';
   const isStopped = message.statusText === 'stopped';
-  const hasReasoning = Boolean(message.reasoningSteps?.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
+  const hasReasoning = Boolean(reasoningSteps.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
   return (
     <div className={`message ${message.role}${isTerminalMessage ? ' terminal-message' : ''}${isError ? ' message-error' : ''}`}>
       {!isSystem && (
@@ -759,14 +839,14 @@ function ChatMessageView({
           <span className="sender-name">{senderLabel}</span>
         </div>
       )}
-      {hasReasoning ? <InlineReasoning message={message} selected={activitySelected} onOpenActivity={onOpenActivity} /> : null}
+      {hasReasoning ? <InlineReasoning message={reasoningMessage} selected={activitySelected} onOpenActivity={onOpenActivity} /> : null}
       {isStopped && (
         <div className="message-step message-step-static">
           <span className="message-step-dot" />
           <span className="message-step-text">Stopped</span>
         </div>
       )}
-      {message.loadingStatus && !hasReasoning && (
+      {message.loadingStatus && !hasReasoning && !toolSteps.length && (
         <div className="message-step">
           <span className="message-step-dot" />
           <span className="message-step-text">{message.loadingStatus}</span>
@@ -778,7 +858,8 @@ function ChatMessageView({
           <span className="message-step-text">Thinking…</span>
         </div>
       )}
-      {!(message.reasoningSteps?.length) && (message.cards ?? []).map((card, i) => (
+      {toolSteps.map((step) => <ToolCallChip key={step.id} step={step} />)}
+      {!(allReasoningSteps.length) && (message.cards ?? []).map((card, i) => (
         <div key={i} className="message-tool-call">
           <span className="tool-call-label">⚙ {card.app}</span>
           <pre className="tool-call-args">{JSON.stringify(card.args, null, 2)}</pre>
@@ -958,11 +1039,184 @@ function ClosedPanelsPlaceholder({ workspaceName, onNewSession }: { workspaceNam
 
 const BASH_INITIAL_CWD = '/workspace';
 const BASH_CWD_PLACEHOLDER_FILE = '.keep';
-const BASH_CWD_SENTINEL = '__JUSTBASH_CWD';
-type BashEntry = { cmd: string; stdout: string; stderr: string; exitCode: number };
+type BashEntry = CliHistoryEntry;
 
 function cleanStreamedAssistantContent(content: string): string {
   return content.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim();
+}
+
+function ToolsPicker({
+  descriptors,
+  selectedIds,
+  onChange,
+}: {
+  descriptors: ToolDescriptor[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const lowered = query.trim().toLowerCase();
+  const visible = useMemo(() => (
+    lowered
+      ? descriptors.filter((descriptor) => (
+          descriptor.id.toLowerCase().includes(lowered)
+          || descriptor.label.toLowerCase().includes(lowered)
+          || descriptor.description.toLowerCase().includes(lowered)
+        ))
+      : descriptors
+  ), [descriptors, lowered]);
+  const grouped = useMemo(() => {
+    const map = new Map<string, { groupLabel: string; entries: ToolDescriptor[] }>();
+    for (const descriptor of visible) {
+      const bucket = map.get(descriptor.group) ?? { groupLabel: descriptor.groupLabel, entries: [] };
+      bucket.entries.push(descriptor);
+      map.set(descriptor.group, bucket);
+    }
+    return Array.from(map.entries()).map(([group, value]) => ({ group, ...value }));
+  }, [visible]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (popoverRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      // Focus the search field once the popover renders.
+      requestAnimationFrame(() => searchRef.current?.focus());
+    } else {
+      setQuery('');
+    }
+  }, [open]);
+
+  const toggleId = (id: string) => {
+    const next = selectedSet.has(id)
+      ? selectedIds.filter((existing) => existing !== id)
+      : [...selectedIds, id];
+    onChange(next);
+  };
+  const setGroup = (groupDescriptors: ToolDescriptor[], enable: boolean) => {
+    const groupIds = new Set(groupDescriptors.map((descriptor) => descriptor.id));
+    const remaining = selectedIds.filter((id) => !groupIds.has(id));
+    onChange(enable ? [...remaining, ...groupDescriptors.map((descriptor) => descriptor.id)] : remaining);
+  };
+
+  const count = selectedIds.length;
+  const total = descriptors.length;
+  const triggerLabel = count > 0
+    ? `Configure tools (${count} of ${total} selected)`
+    : 'Configure tools (none selected)';
+
+  return (
+    <div className="tools-picker">
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`tools-picker-trigger${count > 0 ? ' is-selected' : ''}`}
+        aria-label={triggerLabel}
+        title="Tools"
+        data-tooltip="Tools"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        {...panelTitlebarControlProps}
+      >
+        <Icon name="slidersHorizontal" size={13} />
+        {count > 0 && <span className="tools-picker-count" aria-hidden="true">{count}</span>}
+      </button>
+      {open && (
+        <div
+          ref={popoverRef}
+          className="tools-picker-popover"
+          role="dialog"
+          aria-label="Tools picker"
+          {...panelTitlebarControlProps}
+        >
+          <div className="tools-picker-header">
+            <input
+              ref={searchRef}
+              type="search"
+              className="tools-picker-search"
+              placeholder="Search tools…"
+              aria-label="Search tools"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <span className="tools-picker-summary" aria-live="polite">{count} selected</span>
+          </div>
+          <div className="tools-picker-body">
+            {grouped.length === 0 && (
+              <div className="tools-picker-empty">No tools match.</div>
+            )}
+            {grouped.map(({ group, groupLabel, entries }) => {
+              const groupSelectedCount = entries.filter((descriptor) => selectedSet.has(descriptor.id)).length;
+              const allSelected = groupSelectedCount === entries.length;
+              const someSelected = groupSelectedCount > 0 && !allSelected;
+              return (
+                <div className="tools-picker-group" key={group}>
+                  <label className="tools-picker-group-header">
+                    <input
+                      type="checkbox"
+                      aria-label={`Toggle all ${groupLabel} tools`}
+                      checked={allSelected}
+                      ref={(element) => { if (element) element.indeterminate = someSelected; }}
+                      onChange={(event) => setGroup(entries, event.target.checked)}
+                    />
+                    <span className="tools-picker-group-label">{groupLabel}</span>
+                    <span className="tools-picker-group-count">{groupSelectedCount}/{entries.length}</span>
+                  </label>
+                  <ul className="tools-picker-list" role="list">
+                    {entries.map((descriptor) => (
+                      <li key={descriptor.id} className="tools-picker-row">
+                        <label className="tools-picker-row-label">
+                          <input
+                            type="checkbox"
+                            aria-label={descriptor.label}
+                            checked={selectedSet.has(descriptor.id)}
+                            onChange={() => toggleId(descriptor.id)}
+                          />
+                          <span className="tools-picker-row-text">
+                            <span className="tools-picker-row-name">{descriptor.label}</span>
+                            <span className="tools-picker-row-desc">{descriptor.description}</span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+          <div className="tools-picker-footer">
+            <button type="button" className="tools-picker-done" onClick={() => setOpen(false)}>Done</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ChatPanel({
@@ -1007,6 +1261,7 @@ function ChatPanel({
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
   const [selectedProviderBySession, setSelectedProviderBySession] = useState<Record<string, AgentProvider>>({});
   const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useState<Record<string, string>>({});
+  const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
@@ -1042,6 +1297,11 @@ function ChatPanel({
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
+  const selectedToolIds = selectedToolIdsBySession[activeChatSessionId] ?? DEFAULT_TOOL_IDS;
+  const toolsEnabled = selectedToolIds.length > 0;
+  const setSelectedToolIdsForActiveSession = useCallback((ids: string[]) => {
+    setSelectedToolIdsBySession((current) => ({ ...current, [activeChatSessionId]: ids }));
+  }, [activeChatSessionId]);
   const activeActivityMessageId = activeActivityMessageIdBySession[activeChatSessionId] ?? null;
   const activeActivityMessage = !showBash && activeActivityMessageId
     ? messages.find((message) => message.id === activeActivityMessageId) ?? null
@@ -1052,7 +1312,7 @@ function ChatPanel({
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
-  const contextSummary = `${providerSummary} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
 
   useEffect(() => {
@@ -1217,7 +1477,8 @@ function ChatPanel({
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || activeGenerationRef.current) return;
     const assistantId = createUniqueId();
-    const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId: createUniqueId(), assistantId });
+    const userId = createUniqueId();
+    const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId, assistantId });
     messagesRef.current = nextMessages;
     setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
     setInput('');
@@ -1238,6 +1499,168 @@ function ChatPanel({
 
     if (selectedProvider === 'codi' && !activeLocalModel) {
       updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      return;
+    }
+
+    if (toolsEnabled) {
+      if (!activeSessionId) {
+        updateMessage(assistantId, { status: 'error', content: 'Open or create a session before enabling tools.' });
+        return;
+      }
+
+      const controller = new AbortController();
+      let reasoningSteps: ReasoningStep[] = [];
+      const toolStepIdsByCallId = new Map<string, string>();
+      const finalizeToolReasoningSteps = (): ReasoningStep[] => reasoningSteps.map((step) => (
+        step.status === 'done'
+          ? step
+          : { ...step, status: 'done' as const, endedAt: Date.now() }
+      ));
+      const findToolStepId = (toolName: string, toolCallId?: string): string | undefined => {
+        if (toolCallId && toolStepIdsByCallId.has(toolCallId)) {
+          return toolStepIdsByCallId.get(toolCallId);
+        }
+
+        for (let index = reasoningSteps.length - 1; index >= 0; index -= 1) {
+          const step = reasoningSteps[index];
+          if (step?.kind === 'tool' && step.toolName === toolName && step.status === 'active') {
+            return step.id;
+          }
+        }
+
+        return undefined;
+      };
+      const recordToolStep = (toolName: string, args: unknown, toolCallId?: string) => {
+        const stepId = createUniqueId();
+        reasoningSteps = [...reasoningSteps, {
+          id: stepId,
+          kind: 'tool',
+          title: toolName,
+          body: formatToolArgs(args),
+          toolName,
+          toolCallId,
+          toolSummary: summarizeToolCall(toolName, args),
+          toolArgs: args,
+          startedAt: Date.now(),
+          status: 'active',
+        }];
+        if (toolCallId) {
+          toolStepIdsByCallId.set(toolCallId, stepId);
+        }
+        updateMessage(assistantId, {
+          status: 'streaming',
+          loadingStatus: null,
+          reasoningSteps,
+          currentStepId: getActiveReasoningStepId(reasoningSteps),
+          reasoningStartedAt: reasoningSteps[0]?.startedAt,
+          isThinking: false,
+        });
+      };
+      const recordToolResult = (toolName: string, args: unknown, result: unknown, isError: boolean, toolCallId?: string) => {
+        const existingStepId = findToolStepId(toolName, toolCallId);
+        if (!existingStepId) {
+          recordToolStep(toolName, args, toolCallId);
+        }
+
+        const stepId = findToolStepId(toolName, toolCallId);
+        if (!stepId) {
+          return;
+        }
+
+        reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+          body: formatToolArgs(args),
+          toolArgs: args,
+          toolResult: summarizeToolResult(toolName, result),
+          isError,
+          status: 'done',
+          endedAt: Date.now(),
+        });
+        updateMessage(assistantId, {
+          status: 'streaming',
+          loadingStatus: null,
+          reasoningSteps,
+          currentStepId: getActiveReasoningStepId(reasoningSteps),
+          reasoningStartedAt: reasoningSteps[0]?.startedAt,
+          isThinking: false,
+        });
+      };
+
+      activeGenerationRef.current = {
+        assistantId,
+        sessionId: activeChatSessionId,
+        cancel: () => controller.abort('Generation stopped.'),
+        finalizeCancelled: () => {
+          const finalizedSteps = finalizeToolReasoningSteps();
+          updateMessage(assistantId, {
+            status: 'complete',
+            statusText: 'stopped',
+            content: 'Response stopped.',
+            loadingStatus: null,
+            reasoningSteps: finalizedSteps,
+            currentStepId: undefined,
+            isThinking: false,
+          });
+        },
+      };
+      setActiveGenerationSessionId(activeChatSessionId);
+
+      try {
+        const model = resolveLanguageModel(selectedProvider === 'ghcp'
+          ? { kind: 'copilot', modelId: effectiveSelectedCopilotModelId }
+          : { kind: 'local', modelId: activeLocalModel!.id, task: activeLocalModel!.task });
+        const allTools = createDefaultTools({
+          appendSharedMessages,
+          getSessionBash,
+          notifyTerminalFsPathsChanged: onTerminalFsPathsChanged,
+          sessionId: activeSessionId,
+          setBashHistoryBySession,
+          setCwdBySession,
+        });
+        const tools = selectToolsByIds(allTools, selectedToolIds);
+        const inputMessages = nextMessages
+          .filter((message) => message.id !== assistantId)
+          .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
+
+        await runToolAgent({
+          model,
+          tools,
+          instructions: buildDefaultToolInstructions({ workspaceName, workspacePromptContext }),
+          messages: inputMessages,
+          signal: controller.signal,
+        }, {
+          onToolCall: (toolName, args, toolCallId) => recordToolStep(toolName, args, toolCallId),
+          onToolResult: (toolName, args, result, isError, toolCallId) => recordToolResult(toolName, args, result, isError, toolCallId),
+          onDone: (finalText) => {
+            const finalizedSteps = finalizeToolReasoningSteps();
+            updateMessage(assistantId, {
+              status: 'complete',
+              loadingStatus: null,
+              content: finalText.trim() || 'Tool run completed.',
+              reasoningSteps: finalizedSteps.length ? finalizedSteps : undefined,
+              currentStepId: undefined,
+              isThinking: false,
+            });
+          },
+          onError: (error: Error) => updateMessage(assistantId, {
+            status: 'error',
+            loadingStatus: null,
+            content: error.message,
+            reasoningSteps: reasoningSteps.length ? finalizeToolReasoningSteps() : undefined,
+            currentStepId: undefined,
+            isThinking: false,
+          }),
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+        onToast({ msg: error instanceof Error ? error.message : 'Agent request failed', type: 'error' });
+      } finally {
+        clearActiveGeneration(assistantId);
+      }
       return;
     }
 
@@ -1355,7 +1778,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, hasAvailableCopilotModels, onToast, runSandboxPrompt, selectedProvider, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, onTerminalFsPathsChanged, onToast, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, workspaceName, workspacePromptContext]);
 
   const runTerminalCommand = useCallback(async (command: string) => {
     const cmd = command.trim();
@@ -1371,62 +1794,24 @@ function ChatPanel({
       return;
     }
 
-    const bash = getSessionBash(activeSessionId);
-    const commandMessage: ChatMessage = {
-      id: createUniqueId(),
-      role: 'user',
-      content: `$ ${cmd}`,
-      isLocal: true,
-      status: 'complete',
-      statusText: 'terminal-command',
-    };
-    appendSharedMessages([commandMessage]);
+    const { executeCliCommand } = await import('./tools/cli/exec');
     setInput('');
 
     try {
-      const result = await bash.exec(`${cmd}; echo ${BASH_CWD_SENTINEL}:$PWD`);
-      // Extract CWD from sentinel line and strip it from output
-      const sentinelPrefix = `${BASH_CWD_SENTINEL}:`;
-      const stdoutLines = (result.stdout ?? '').split('\n');
-      const sentinelLine = stdoutLines.find((l) => l.startsWith(sentinelPrefix));
-      const capturedCwd = sentinelLine ? sentinelLine.slice(sentinelPrefix.length).trim() : null;
-      const cleanStdout = stdoutLines.filter((l) => !l.startsWith(sentinelPrefix)).join('\n').trimEnd();
-      if (capturedCwd) {
-        setCwdBySession((current) => ({ ...current, [activeSessionId]: capturedCwd }));
-      }
-
-      setBashHistoryBySession((current) => ({
-        ...current,
-        [activeSessionId]: [...(current[activeSessionId] ?? []), { cmd, stdout: cleanStdout, stderr: result.stderr, exitCode: result.exitCode }],
-      }));
-      onTerminalFsPathsChanged(activeSessionId, bash.fs.getAllPaths());
-
-      const outputParts = [cleanStdout, result.stderr?.trimEnd()].filter(Boolean);
-      const outputContent = outputParts.length > 0 ? outputParts.join('\n') : (result.exitCode === 0 ? 'Command completed.' : `Command exited with code ${result.exitCode}.`);
-
-      appendSharedMessages([{
-        id: createUniqueId(),
-        role: 'assistant',
-        content: outputContent,
-        isLocal: true,
-        status: result.exitCode === 0 ? 'complete' : 'error',
-        isError: result.exitCode !== 0,
-        statusText: 'terminal-output',
-      }]);
+      await executeCliCommand({
+        appendSharedMessages,
+        getSessionBash,
+        notifyTerminalFsPathsChanged: onTerminalFsPathsChanged,
+        sessionId: activeSessionId,
+        setBashHistoryBySession,
+        setCwdBySession,
+      }, cmd, { emitMessages: true });
     } catch (error) {
-      appendSharedMessages([{
-        id: createUniqueId(),
-        role: 'assistant',
-        content: error instanceof Error ? error.message : String(error),
-        isLocal: true,
-        status: 'error',
-        isError: true,
-        statusText: 'terminal-output',
-      }]);
+      // executeCliCommand already appends terminal error output
     } finally {
       requestAnimationFrame(() => terminalInputRef.current?.focus());
     }
-  }, [activeChatSessionId, activeSessionId, getSessionBash, onTerminalFsPathsChanged]);
+  }, [activeSessionId, appendSharedMessages, getSessionBash, onTerminalFsPathsChanged]);
 
   useEffect(() => {
     if (!pendingSearch) {
@@ -1487,6 +1872,11 @@ function ChatPanel({
                       : (
                         <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
                       ))}
+                <ToolsPicker
+                  descriptors={DEFAULT_TOOL_DESCRIPTORS}
+                  selectedIds={selectedToolIds}
+                  onChange={setSelectedToolIdsForActiveSession}
+                />
               </>
             )}
           </div>

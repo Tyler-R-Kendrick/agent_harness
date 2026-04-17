@@ -11,22 +11,40 @@
 import type {
   LanguageModelV3,
   LanguageModelV3CallOptions,
+  LanguageModelV3FinishReason,
   LanguageModelV3GenerateResult,
   LanguageModelV3StreamResult,
   LanguageModelV3StreamPart,
-  LanguageModelV3FinishReason,
+  LanguageModelV3FunctionTool,
+  LanguageModelV3Usage,
 } from '@ai-sdk/provider';
 import { browserInferenceEngine } from './browserInference';
+import { buildReActToolsSection, parseToolCall } from './reactToolCalling';
+
+const EMPTY_USAGE: LanguageModelV3Usage = {
+  inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: 0, text: 0, reasoning: 0 },
+};
+
+const STOP_FINISH: LanguageModelV3FinishReason = { unified: 'stop', raw: 'stop' };
+const TOOL_CALL_FINISH: LanguageModelV3FinishReason = { unified: 'tool-calls', raw: 'tool-calls' };
 
 function buildPromptString(options: LanguageModelV3CallOptions): unknown {
   // HF pipelines accept messages array for chat or string for completion
   const messages: Array<{ role: string; content: string }> = [];
+  const functionTools = (options.tools ?? []).filter(
+    (tool): tool is LanguageModelV3FunctionTool => tool.type === 'function',
+  );
 
   for (const message of options.prompt) {
     if (message.role === 'system') {
+      let content = typeof message.content === 'string' ? message.content : '';
+      if (functionTools.length > 0) {
+        content += `\n\n${buildReActToolsSection(functionTools)}`;
+      }
       messages.push({
         role: 'system',
-        content: typeof message.content === 'string' ? message.content : '',
+        content,
       });
     } else {
       const text = message.content
@@ -44,6 +62,7 @@ export class LocalLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = 'v3' as const;
   readonly provider = 'local';
   readonly modelId: string;
+  readonly supportedUrls = {};
   private readonly task: string;
 
   constructor(modelId: string, task = 'text-generation') {
@@ -54,7 +73,7 @@ export class LocalLanguageModel implements LanguageModelV3 {
   async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
     const prompt = buildPromptString(options);
     let text = '';
-    let finishReason: LanguageModelV3FinishReason = { type: 'stop' };
+    let finishReason: LanguageModelV3FinishReason = STOP_FINISH;
 
     await new Promise<void>((resolve, reject) => {
       browserInferenceEngine
@@ -71,9 +90,26 @@ export class LocalLanguageModel implements LanguageModelV3 {
         .catch(reject);
     });
 
+    const toolCall = parseToolCall(text);
+    if (toolCall) {
+      return {
+        content: [
+          {
+            type: 'tool-call' as const,
+            toolCallId: `tc-${Date.now()}`,
+            toolName: toolCall.toolName,
+            input: JSON.stringify(toolCall.args),
+          },
+        ],
+        usage: EMPTY_USAGE,
+        finishReason: TOOL_CALL_FINISH,
+        warnings: [],
+      };
+    }
+
     return {
       content: [{ type: 'text' as const, text }],
-      usage: { inputTokens: 0, outputTokens: 0 },
+      usage: EMPTY_USAGE,
       finishReason,
       warnings: [],
     };
@@ -102,8 +138,8 @@ export class LocalLanguageModel implements LanguageModelV3 {
                 controller.enqueue({ type: 'text-end', id: textId });
                 controller.enqueue({
                   type: 'finish',
-                  finishReason: { type: 'stop' },
-                  usage: { inputTokens: 0, outputTokens: 0 },
+                  finishReason: STOP_FINISH,
+                  usage: EMPTY_USAGE,
                 });
                 controller.close();
               },
