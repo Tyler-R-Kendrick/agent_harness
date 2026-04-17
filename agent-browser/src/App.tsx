@@ -772,6 +772,12 @@ function ChatMessageView({
           <span className="message-step-text">{message.loadingStatus}</span>
         </div>
       )}
+      {message.status === 'thinking' && !hasReasoning && !message.loadingStatus && (
+        <div className="message-step">
+          <span className="message-step-dot" />
+          <span className="message-step-text">Thinking…</span>
+        </div>
+      )}
       {!(message.reasoningSteps?.length) && (message.cards ?? []).map((card, i) => (
         <div key={i} className="message-tool-call">
           <span className="tool-call-label">⚙ {card.app}</span>

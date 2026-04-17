@@ -585,6 +585,34 @@ describe('App', () => {
     expect(screen.getByText('Copilot response')).toBeInTheDocument();
   });
 
+  it('shows a Thinking… indicator while the GHCP response is pending', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: false, vision: false }],
+    }));
+    let resolveChat!: () => void;
+    streamCopilotChatMock.mockImplementation(() => new Promise<void>((resolve) => { resolveChat = resolve; }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Hello' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText('Thinking…')).toBeInTheDocument();
+
+    resolveChat();
+    await act(async () => { await Promise.resolve(); });
+  });
+
   it('opens the activity panel for structured reasoning steps and allows pinning it', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
