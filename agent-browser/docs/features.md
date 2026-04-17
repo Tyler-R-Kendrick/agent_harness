@@ -11,6 +11,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 - Feature-gated sandbox tool execution: when `VITE_SECURE_BROWSER_SANDBOX_EXEC=true`, chat can run a `/sandbox ...` tool request inside a hidden sandboxed iframe, summarize structured results, and persist successful generated files into the active workspace `just-bash` filesystem.
 - Virtual filesystem per workspace: The Files category renders as a compute surface, mounts workspace-root and top-level directories as drives, and merges persisted workspace files with per-terminal filesystem trees per workspace.
 - Workspace switching and creation: `Research` and `Build` are separate workspaces, and users can switch, cycle, rename, or create workspaces without losing workspace-scoped state.
+- Clipboard history via Clip-Board: each workspace tree shows a non-expandable **Clip-Board** node after Files. Right-clicking it opens a History context menu item that launches the clipboard history modal, where users can browse previous clipboard entries (captured when copying URIs or session links within the app) and restore any prior item back to the clipboard.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
 
 ## Workspace shell

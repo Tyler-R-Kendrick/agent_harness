@@ -18,6 +18,7 @@ import {
   BookmarkMinus,
   ChevronDown,
   ChevronRight,
+  Clipboard,
   Copy,
   Cpu,
   File,
@@ -104,6 +105,7 @@ import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity,
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
+type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
 type WorkspaceViewState = {
   openTabIds: string[];
   editingFilePath: string | null;
@@ -275,7 +277,17 @@ const CATEGORY_LABELS: Record<NodeKind, string> = {
   terminal: 'Terminal',
   agent: 'Agent',
   files: 'Files',
+  clipboard: 'Clipboard',
 };
+
+function createClipboardNode(workspaceId: string): TreeNode {
+  return {
+    id: `${workspaceId}:clipboard`,
+    name: 'Clipboard',
+    type: 'tab',
+    nodeKind: 'clipboard',
+  };
+}
 
 function createSessionNode(workspaceId: string, index: number): TreeNode {
   return {
@@ -334,6 +346,7 @@ function createWorkspaceNode({
       categoryNode(id, 'browser', browserTabs),
       categoryNode(id, 'session', [createSessionNode(id, 1)]),
       categoryNode(id, 'files', []),
+      createClipboardNode(id),
     ],
   };
 }
@@ -368,6 +381,7 @@ const icons = {
   chevronRight: ChevronRight,
   terminal: Terminal,
   trash: Trash2,
+  clipboard: Clipboard,
 } as const;
 
 const mockHistory: HistorySession[] = [
@@ -495,7 +509,7 @@ function removeNodeById(node: TreeNode, nodeId: string): TreeNode {
 
 function ensureWorkspaceCategories(workspace: TreeNode): TreeNode {
   const existing = new Map((workspace.children ?? []).filter((child) => child.type === 'folder' && child.nodeKind).map((child) => [child.nodeKind as NodeKind, child]));
-  const legacyTabChildren = (workspace.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind !== 'agent' && child.nodeKind !== 'terminal' && child.nodeKind !== 'session');
+  const legacyTabChildren = (workspace.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind !== 'agent' && child.nodeKind !== 'terminal' && child.nodeKind !== 'session' && child.nodeKind !== 'clipboard');
   // Migrate any legacy agent/terminal/session-category tabs into unified 'session' nodeKind
   const rawSessionCategory = existing.get('session');
   const agentMigrated = (existing.get('agent')?.children ?? []).map((c) => ({ ...c, nodeKind: 'session' as NodeKind }));
@@ -504,10 +518,13 @@ function ensureWorkspaceCategories(workspace: TreeNode): TreeNode {
     ? rawSessionCategory.children?.map((c) => (c.nodeKind === 'agent' || c.nodeKind === 'terminal') ? { ...c, nodeKind: 'session' as NodeKind } : c) ?? []
     : [...terminalMigrated, ...agentMigrated];
   const sessionCategory = { ...(rawSessionCategory ?? categoryNode(workspace.id, 'session', [])), children: sessionChildren };
+  const clipboardNode = (workspace.children ?? []).find((child) => child.type === 'tab' && child.nodeKind === 'clipboard')
+    ?? createClipboardNode(workspace.id);
   const nextChildren: TreeNode[] = [
     existing.get('browser') ?? categoryNode(workspace.id, 'browser', legacyTabChildren),
     sessionCategory,
     existing.get('files') ?? categoryNode(workspace.id, 'files', []),
+    clipboardNode,
   ];
   return { ...workspace, children: nextChildren };
 }
@@ -2301,6 +2318,52 @@ function NewTabModal({ onConfirm, onClose }: {
   );
 }
 
+function ClipboardHistoryModal({ history, onRollback, onClose }: {
+  history: ClipboardEntry[];
+  onRollback: (entry: ClipboardEntry) => void;
+  onClose: () => void;
+}) {
+  const activeId = history[0]?.id ?? null;
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Clipboard history">
+      <div className="modal-card history-modal">
+        <div className="modal-header">
+          <h2>Clipboard history</h2>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close Clipboard history"><X size={14} /></button>
+        </div>
+        <div className="history-body">
+          <ul className="history-entry-list">
+            {history.length === 0 ? (
+              <li className="history-entry" style={{ opacity: 0.5 }}>No clipboard history yet</li>
+            ) : history.map((entry) => {
+              const isCurrent = entry.id === activeId;
+              return (
+                <li key={entry.id} className={`history-entry ${isCurrent ? 'history-entry--current' : ''}`}>
+                  <div className="history-entry-row">
+                    <span className="history-entry-msg">{entry.label}</span>
+                    {isCurrent && <span className="history-entry-badge">Active</span>}
+                  </div>
+                  <div className="history-entry-meta">
+                    <span style={{ fontFamily: 'monospace', wordBreak: 'break-all', opacity: 0.75 }}>{entry.text.length > 120 ? `${entry.text.slice(0, 120)}…` : entry.text}</span>
+                    <span>{new Date(entry.timestamp).toLocaleString()}</span>
+                    <div className="history-entry-actions">
+                      {!isCurrent && (
+                        <button type="button" className="secondary-button btn-xs" onClick={() => onRollback(entry)} aria-label={`Restore: ${entry.label}`}>
+                          Restore
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ContextMenu({ x, y, entries, topButtons, onClose }: { x: number; y: number; entries: ContextMenuEntry[]; topButtons?: ContextMenuTopButton[]; onClose: () => void }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [activeSubMenu, setActiveSubMenu] = useState<ContextMenuEntry[] | null>(null);
@@ -2522,7 +2585,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
           >
             <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
               {isFile ? (
-                <Icon name="file" size={12} color="#a5b4fc" />
+                <><span className="tree-chevron-spacer" /><Icon name="file" size={12} color="#a5b4fc" /></>
               ) : isFolder ? (
                 <>
                   <span className={`tree-chevron ${node.expanded ? 'tree-chevron-expanded' : ''}`}><Icon name="chevronRight" size={11} color="rgba(255,255,255,.25)" /></span>
@@ -2535,11 +2598,14 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
                 </>
               ) : (
                 <>
+                  <span className="tree-chevron-spacer" />
                   {node.nodeKind === 'browser' ? (
                     <>
                       <span className="tier-dot" style={{ background: TIERS[node.memoryTier ?? 'cold'].color }} />
                       <Favicon url={node.url} size={13} />
                     </>
+                  ) : node.nodeKind === 'clipboard' ? (
+                    <Icon name="clipboard" size={13} color="#a5b4fc" />
                   ) : <Icon name="terminal" size={13} color="#86efac" />}
                 </>
               )}
@@ -2731,6 +2797,8 @@ function AgentBrowserApp() {
   const [fileOpModal, setFileOpModal] = useState<{ node: TreeNode; op: FileOpKind } | null>(null);
   const [newTabWorkspaceId, setNewTabWorkspaceId] = useState<string | null>(null);
   const [versionHistories, setVersionHistories] = useState<Record<string, VersionDAG>>({});
+  const [clipboardHistory, setClipboardHistory] = useState<ClipboardEntry[]>([]);
+  const lastClipboardTextRef = useRef<string>('');
   const [browserNavHistories, setBrowserNavHistories] = useState<Record<string, BrowserNavHistory>>(() => {
     const initial: Record<string, BrowserNavHistory> = {};
     function seedBrowserTabs(nodes: typeof initialRootRef.current['children']) {
@@ -2855,6 +2923,51 @@ function AgentBrowserApp() {
       return { ...current, children: updated };
     });
   }, [terminalFsPathsBySession, workspaceFilesByWorkspace]);
+
+  // ── System clipboard detection ────────────────────────────────────────────
+  useEffect(() => {
+    function addClipboardEntry(text: string) {
+      if (!text || text === lastClipboardTextRef.current) return;
+      lastClipboardTextRef.current = text;
+      const label = text.length > 50 ? `${text.slice(0, 50)}\u2026` : text;
+      const entry: ClipboardEntry = { id: createUniqueId(), text, label, timestamp: Date.now() };
+      setClipboardHistory((prev) => (prev[0]?.text === text ? prev : [entry, ...prev].slice(0, 50)));
+    }
+
+    async function detectExternalClipboardChange() {
+      if (!navigator.clipboard?.readText) return;
+      try {
+        addClipboardEntry(await navigator.clipboard.readText());
+      } catch {
+        // Permission denied or API unavailable — ignore
+      }
+    }
+
+    function onCopyOrCut(event: ClipboardEvent) {
+      const text = event.clipboardData?.getData('text/plain') ?? '';
+      if (text) {
+        addClipboardEntry(text);
+      } else {
+        void Promise.resolve().then(() => detectExternalClipboardChange());
+      }
+    }
+
+    function onFocus() { void detectExternalClipboardChange(); }
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') void detectExternalClipboardChange();
+    }
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('copy', onCopyOrCut);
+    document.addEventListener('cut', onCopyOrCut);
+    void detectExternalClipboardChange();
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('copy', onCopyOrCut);
+      document.removeEventListener('cut', onCopyOrCut);
+    };
+  }, []);
 
   const switchWorkspace = useCallback((newId: string) => {
     if (newId === activeWorkspaceId) return;
@@ -3492,7 +3605,7 @@ function AgentBrowserApp() {
 
   async function handleCopyUri(node: TreeNode) {
     try {
-      await navigator.clipboard.writeText(node.url ?? '');
+      await writeToClipboard(node.url ?? '', `URI: ${node.name}`);
       setToast({ msg: 'URI copied to clipboard', type: 'success' });
     } catch {
       setToast({ msg: 'Failed to copy URI', type: 'error' });
@@ -3505,7 +3618,7 @@ function AgentBrowserApp() {
     const ws = findWorkspaceForNode(root, node.id);
     const text = `Session: ${node.name} (workspace: ${ws?.name ?? 'Unknown'})`;
     try {
-      await navigator.clipboard.writeText(text);
+      await writeToClipboard(text, `Session: ${node.name}`);
       setToast({ msg: 'Session link copied to clipboard', type: 'success' });
     } catch {
       setToast({ msg: 'Failed to copy session link', type: 'error' });
@@ -3526,6 +3639,24 @@ function AgentBrowserApp() {
   }
 
   // ── Context menu entry builders ───────────────────────────────────────────
+
+  async function writeToClipboard(text: string, label: string) {
+    await navigator.clipboard.writeText(text);
+    lastClipboardTextRef.current = text;
+    const entry: ClipboardEntry = { id: createUniqueId(), text, label, timestamp: Date.now() };
+    setClipboardHistory((prev) => [entry, ...prev].slice(0, 50));
+  }
+
+  async function handleClipboardRollback(entry: ClipboardEntry) {
+    try {
+      await navigator.clipboard.writeText(entry.text);
+      setClipboardHistory((prev) => [entry, ...prev.filter((e) => e.id !== entry.id)].slice(0, 50));
+      setHistoryNode(null);
+      setToast({ msg: 'Clipboard restored', type: 'success' });
+    } catch {
+      setToast({ msg: 'Failed to restore clipboard', type: 'error' });
+    }
+  }
 
   function buildNewVfsSubMenu(vfsArgs: { sessionId: string; basePath: string; isDriveRoot: boolean }): ContextMenuEntry[] {
     return [
@@ -3620,10 +3751,25 @@ function AgentBrowserApp() {
     };
   }
 
+  function buildClipboardContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    return {
+      topButtons: [],
+      entries: [
+        { label: 'History', onClick: () => setHistoryNode(node) },
+        'separator',
+        { label: 'Properties', onClick: () => setPropertiesNode(node) },
+      ],
+    };
+  }
+
   function handleNodeContextMenu(x: number, y: number, node: TreeNode) {
     if (node.id.startsWith('vfs:') && !node.nodeKind) {
       const vfsArgs = parseVfsNodeId(node.id);
       if (vfsArgs) setContextMenu({ x, y, ...buildVfsContextMenu(vfsArgs, node) });
+      return;
+    }
+    if (node.nodeKind === 'clipboard') {
+      setContextMenu({ x, y, ...buildClipboardContextMenu(node) });
       return;
     }
     if (node.nodeKind === 'browser') {
@@ -3643,6 +3789,16 @@ function AgentBrowserApp() {
 
   function buildNodeMetadata(node: TreeNode): NodeMetadata {
     const now = Date.now();
+    if (node.nodeKind === 'clipboard') {
+      return {
+        location: 'System clipboard',
+        sizeLabel: 'N/A',
+        createdAt: now,
+        modifiedAt: now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor(['Read', 'Write', 'History', 'Restore']),
+      };
+    }
     if (node.nodeKind === 'browser') {
       return {
         location: node.url ?? '(no URL)',
@@ -3749,6 +3905,15 @@ function AgentBrowserApp() {
       return;
     }
     const ownerWorkspaceId = ownerWorkspace?.id ?? activeWorkspaceId;
+    if (node.nodeKind === 'session') {
+      delete bashBySessionRef.current[nodeId];
+      setTerminalFsPathsBySession((current) => {
+        if (!(nodeId in current)) return current;
+        const next = { ...current };
+        delete next[nodeId];
+        return next;
+      });
+    }
     const nextRoot = removeNodeById(root, nodeId);
     const nextWorkspace = getWorkspace(nextRoot, ownerWorkspaceId);
     setRoot(nextRoot);
@@ -4169,7 +4334,15 @@ function AgentBrowserApp() {
         );
       })() : null}
 
-      {historyNode && (historyNode.id.startsWith('vfs:') || (historyNode.type !== 'tab')) && historyNode.nodeKind !== 'browser' && historyNode.nodeKind !== 'session' ? (() => {
+      {historyNode && historyNode.nodeKind === 'clipboard' ? (
+        <ClipboardHistoryModal
+          history={clipboardHistory}
+          onRollback={(entry) => void handleClipboardRollback(entry)}
+          onClose={() => setHistoryNode(null)}
+        />
+      ) : null}
+
+      {historyNode && (historyNode.id.startsWith('vfs:') || (historyNode.type !== 'tab')) && historyNode.nodeKind !== 'browser' && historyNode.nodeKind !== 'session' && historyNode.nodeKind !== 'clipboard' ? (() => {
         const currentDag = versionHistories[historyNode.id] ?? createVersionDAG('(initial)', 'user-1', `Initial state of ${historyNode.name}`, Date.now());
         return (
           <VersionHistoryModal

@@ -1,6 +1,6 @@
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
 export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
-export type NodeKind = 'browser' | 'terminal' | 'agent' | 'files' | 'session';
+export type NodeKind = 'browser' | 'terminal' | 'agent' | 'files' | 'session' | 'clipboard';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ModelStatus = 'available' | 'installed' | 'loading';

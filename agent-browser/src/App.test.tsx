@@ -2037,6 +2037,27 @@ describe('App', () => {
     expect(screen.queryByText('Session 1')).not.toBeInTheDocument();
   });
 
+  it('removing a session unmounts its virtual disk from the Files tree', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Verify the VFS drive for Session 1 exists before removal
+    expect(screen.getByRole('button', { name: '//session-1-fs' })).toBeInTheDocument();
+
+    // Add a second session so removing Session 1 doesn't leave the panel empty
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+    expect(screen.getByText('Session 2')).toBeInTheDocument();
+
+    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(sessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.queryByRole('button', { name: '//session-1-fs' })).not.toBeInTheDocument();
+  });
+
   // ── Ellipsis (more-actions) button ──────────────────────────
 
   it('each browser tab row has a "More actions" ellipsis button', async () => {
@@ -2630,5 +2651,455 @@ describe('App', () => {
     ).length;
     expect(after).toBe(before);
     expect(screen.queryByRole('dialog', { name: 'New browser tab' })).not.toBeInTheDocument();
+  });
+
+  // ── Clipboard worktree node ───────────────────────────────────
+
+  it('renders a Clipboard node in the active workspace tree', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Clipboard' })).toBeInTheDocument();
+  });
+
+  it('right-clicking the Clipboard node shows a History context menu item', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'History' })).toBeInTheDocument();
+  });
+
+  it('clicking History from Clipboard context menu opens the clipboard history modal', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByRole('dialog', { name: 'Clipboard history' })).toBeInTheDocument();
+    expect(screen.getByText('No clipboard history yet')).toBeInTheDocument();
+  });
+
+  it('closing the clipboard history modal dismisses it', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close Clipboard history' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Clipboard history' })).not.toBeInTheDocument();
+  });
+
+  it('Copy URI adds an entry to clipboard history visible in the modal', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    // Copy a tab URI to populate history
+    const tabRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Copy URI' }));
+      await Promise.resolve();
+    });
+
+    // Open clipboard history
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Clipboard history' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText(/URI: Hugging Face/)).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    // No Restore button for the active item
+    expect(screen.queryByRole('button', { name: /Restore:/ })).not.toBeInTheDocument();
+  });
+
+  it('Restore button in clipboard history restores a previous entry and closes the modal', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    // Copy two URIs to build up history
+    const hfRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(hfRow);
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Copy URI' })); await Promise.resolve(); });
+
+    const tjRow = screen.getByText('Transformers.js').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tjRow);
+    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: 'Copy URI' })); await Promise.resolve(); });
+
+    // Open clipboard history; Transformers.js URI is active, Hugging Face has a Restore button
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const restoreBtn = screen.getByRole('button', { name: /Restore: URI: Hugging Face/ });
+    await act(async () => {
+      fireEvent.click(restoreBtn);
+      await Promise.resolve();
+    });
+
+    // Modal closes and a success toast appears
+    expect(screen.queryByRole('dialog', { name: 'Clipboard history' })).not.toBeInTheDocument();
+    expect(screen.getByText('Clipboard restored')).toBeInTheDocument();
+    expect(writeText).toHaveBeenLastCalledWith('https://huggingface.co/models?library=transformers.js');
+  });
+
+  // ── System clipboard detection ────────────────────────────────
+
+  it('on mount, reads the system clipboard and adds external content to history', async () => {
+    const readText = vi.fn().mockResolvedValue('copied externally');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Clipboard history' });
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByText('copied externally', { selector: '.history-entry-msg' })).toBeInTheDocument();
+  });
+
+  it('regaining window focus detects new external clipboard content', async () => {
+    const readText = vi.fn()
+      .mockResolvedValueOnce('')
+      .mockResolvedValue('focused and copied');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('focused and copied', { selector: '.history-entry-msg' })).toBeInTheDocument();
+  });
+
+  it('document becoming visible detects new external clipboard content', async () => {
+    const readText = vi.fn()
+      .mockResolvedValueOnce('')
+      .mockResolvedValue('visible text');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('visible text', { selector: '.history-entry-msg' })).toBeInTheDocument();
+  });
+
+  it('same clipboard text is not added twice on consecutive focus events', async () => {
+    const readText = vi.fn().mockResolvedValue('same text');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    // Fire focus twice — same text should not produce a duplicate entry
+    await act(async () => { window.dispatchEvent(new Event('focus')); await Promise.resolve(); });
+    await act(async () => { window.dispatchEvent(new Event('focus')); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getAllByText('same text', { selector: '.history-entry-msg' })).toHaveLength(1);
+  });
+
+  it('readText permission errors are handled gracefully and leave history empty', async () => {
+    const readText = vi.fn().mockRejectedValue(new DOMException('Not allowed', 'NotAllowedError'));
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('No clipboard history yet')).toBeInTheDocument();
+  });
+
+  it('writing via app actions does not create a duplicate when focus fires with same text', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const readText = vi.fn().mockResolvedValue('https://huggingface.co/models?library=transformers.js');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText, readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    // Copy URI via app action
+    const tabRow = screen.getByText('Hugging Face').closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(tabRow);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Copy URI' }));
+      await Promise.resolve();
+    });
+
+    // Focus fires — same text should not duplicate
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getAllByText('URI: Hugging Face', { selector: '.history-entry-msg' })).toHaveLength(1);
+  });
+
+  // ── Clipboard Properties context menu item ────────────────────
+
+  it('Clipboard context menu has a Properties item', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+
+    expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
+  });
+
+  it('clicking Properties on the Clipboard node opens the Properties dialog', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    expect(screen.getByRole('dialog', { name: 'Properties' })).toBeInTheDocument();
+  });
+
+  it('Clipboard Properties dialog shows a Permissions table with Read and Write actions', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toBeInTheDocument();
+    const table = screen.getByRole('table', { name: 'Permissions' });
+    expect(table).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('Read');
+    expect(dialog).toHaveTextContent('Write');
+  });
+
+  it('Clipboard Properties dialog lists History and Restore in permissions', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Properties' });
+    expect(dialog).toHaveTextContent('History');
+    expect(dialog).toHaveTextContent('Restore');
+  });
+
+  it('Clipboard Properties permissions table has one row per identity', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
+
+    const rows = screen.getByRole('table', { name: 'Permissions' }).querySelectorAll('tr');
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // ── In-page copy/cut event detection ──────────────────────────
+
+  it('native copy event within the page adds the copied text to clipboard history', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { readText: vi.fn().mockResolvedValue('') }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await act(async () => {
+      const event = new Event('copy', { bubbles: true }) as Event & { clipboardData: unknown };
+      (event as Record<string, unknown>)['clipboardData'] = { getData: (_: string) => 'selected chat text' };
+      document.dispatchEvent(event);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('selected chat text', { selector: '.history-entry-msg' })).toBeInTheDocument();
+  });
+
+  it('native cut event within the page adds the cut text to clipboard history', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { readText: vi.fn().mockResolvedValue('') }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await act(async () => {
+      const event = new Event('cut', { bubbles: true }) as Event & { clipboardData: unknown };
+      (event as Record<string, unknown>)['clipboardData'] = { getData: (_: string) => 'cut text from input' };
+      document.dispatchEvent(event);
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('cut text from input', { selector: '.history-entry-msg' })).toBeInTheDocument();
+  });
+
+  it('native copy of the same text already in history does not create a duplicate', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { readText: vi.fn().mockResolvedValue('') }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const dispatchCopy = async (text: string) => {
+      const event = new Event('copy', { bubbles: true });
+      (event as Record<string, unknown>)['clipboardData'] = { getData: (_: string) => text };
+      document.dispatchEvent(event);
+      await Promise.resolve();
+    };
+
+    await act(() => dispatchCopy('duplicate text'));
+    await act(() => dispatchCopy('duplicate text'));
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    const entries = screen.getAllByText('duplicate text', { selector: '.history-entry-msg' });
+    expect(entries).toHaveLength(1);
+  });
+
+  it('copy event with no clipboardData falls back to readText', async () => {
+    const readText = vi.fn().mockResolvedValue('fallback text');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await act(async () => {
+      const event = new Event('copy', { bubbles: true });
+      // no clipboardData property set — simulates empty/missing clipboardData
+      document.dispatchEvent(event);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('fallback text', { selector: '.history-entry-msg' })).toBeInTheDocument();
+  });
+
+  it('clipboard detection is skipped gracefully when navigator.clipboard is unavailable', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, writable: true, configurable: true });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+
+    expect(screen.getByText('No clipboard history yet')).toBeInTheDocument();
   });
 });

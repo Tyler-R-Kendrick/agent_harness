@@ -466,6 +466,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .tree-chevron { display: inline-flex; transition: transform .12s ease; flex-shrink: 0; }
 .tree-chevron-expanded { transform: rotate(90deg); }
+.tree-chevron-spacer { display: inline-flex; width: 11px; flex-shrink: 0; }
 .persist-badge { font-size: 10px; line-height: 1; flex-shrink: 0; }
 .ws-name-temp { font-style: italic; }
 .memory-pulse { position: relative; display: inline-flex; width: 6px; height: 6px; flex-shrink: 0; }
