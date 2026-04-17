@@ -97,11 +97,12 @@ describe('Codi', () => {
     }, { onPhase, onReasoning, onToken, onDone });
 
     expect(onPhase).toHaveBeenCalledWith('thinking');
+    expect(onReasoning).toHaveBeenCalledTimes(2);
     expect(onReasoning).toHaveBeenNthCalledWith(1, 'plan');
-    expect(onReasoning).toHaveBeenNthCalledWith(2, 'plan more');
-    expect(onReasoning).toHaveBeenNthCalledWith(3, 'plan more');
+    expect(onReasoning).toHaveBeenNthCalledWith(2, ' more');
+    expect(onToken).toHaveBeenCalledTimes(2);
     expect(onToken).toHaveBeenNthCalledWith(1, 'answer');
-    expect(onToken).toHaveBeenNthCalledWith(2, 'answer done');
+    expect(onToken).toHaveBeenNthCalledWith(2, ' done');
     expect(onDone).toHaveBeenCalledWith('answer done');
   });
 

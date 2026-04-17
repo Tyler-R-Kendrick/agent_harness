@@ -43,3 +43,48 @@ When this repo is running inside a GitHub Codespace, do not use `http://localhos
 ## Scaffolding
 
 Use project specific cli tools to scaffold instead of manually creating/editing files (dotnet, uv, npm, etc.)
+
+## lib/ project conventions
+
+Self-contained TypeScript libraries live under `lib/<name>/`. Each follows this structure:
+
+```
+lib/<name>/
+  package.json        # "type": "module"; main/types/exports all point to ./src/index.ts
+  tsconfig.json       # strict mode, ESNext, bundler module resolution
+  vitest.config.ts    # v8 coverage, 100% threshold on all metrics
+  src/
+    index.ts          # barrel – re-exports public API (excluded from coverage)
+    types.ts          # shared interfaces / type aliases
+    *.ts              # feature modules
+    __tests__/
+      *.test.ts       # co-located unit tests, one file per module
+```
+
+### Tooling
+
+- **Test runner / coverage**: `vitest` + `@vitest/coverage-v8` (no Jest)
+- **AI SDK**: Vercel AI SDK (`ai` ^6, `@ai-sdk/openai` ^1) declared as a `peerDependency`; installed as a `devDependency` for tests
+- **Scripts**: `test` → `vitest run`, `test:watch` → `vitest`, `test:coverage` → `vitest run --coverage`
+- No bundler step — consumers import TypeScript source directly via the `exports` map
+
+### Coverage requirements
+
+`vitest.config.ts` must enforce 100% on lines, branches, functions, and statements:
+
+```ts
+coverage: {
+  provider: 'v8',
+  reporter: ['text', 'lcov'],
+  include: ['src/**/*.ts'],
+  exclude: ['src/**/*.test.ts', 'src/__tests__/**', 'src/index.ts'],
+  thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
+}
+```
+
+### Existing libs
+
+| Library | Purpose |
+|---|---|
+| `lib/inbrowser-use` | Playwright-shaped in-app DOM control runtime |
+| `lib/logact` | LogAct agentic reliability pattern (Meta Labs, arXiv 2604.07988) — deconstructed state-machine agents backed by a shared append-only log |

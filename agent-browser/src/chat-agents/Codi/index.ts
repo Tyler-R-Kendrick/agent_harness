@@ -69,31 +69,32 @@ export async function streamCodiChat(
       onToken: (token) => {
         if (!inReasoning && token.includes('<think>')) {
           inReasoning = true;
-          reasoningBuffer += token.split('<think>')[1] ?? '';
-          callbacks.onReasoning?.(reasoningBuffer);
+          const reasoningDelta = token.split('<think>')[1] ?? '';
+          reasoningBuffer += reasoningDelta;
+          if (reasoningDelta) callbacks.onReasoning?.(reasoningDelta);
           return;
         }
 
         if (inReasoning && token.includes('</think>')) {
           const [before, after = ''] = token.split('</think>');
           reasoningBuffer += before;
-          callbacks.onReasoning?.(reasoningBuffer);
+          if (before) callbacks.onReasoning?.(before);
           tokenBuffer += after;
           inReasoning = false;
           if (after) {
-            callbacks.onToken?.(tokenBuffer);
+            callbacks.onToken?.(after);
           }
           return;
         }
 
         if (inReasoning) {
           reasoningBuffer += token;
-          callbacks.onReasoning?.(reasoningBuffer);
+          callbacks.onReasoning?.(token);
           return;
         }
 
         tokenBuffer += token;
-        callbacks.onToken?.(tokenBuffer);
+        callbacks.onToken?.(token);
       },
       onDone: (result) => {
         const finalContent = (tokenBuffer.trim() || formatBrowserInferenceResult(result)).trim();

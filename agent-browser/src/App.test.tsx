@@ -2545,6 +2545,128 @@ describe('App', () => {
     expect(document.querySelector('.toast')?.textContent).toMatch(/duplicated/i);
   });
 
+  // ── FileOpPicker keyboard & directory navigation ─────────────────────────
+
+  it('picker shows breadcrumb input with ~/  prefix', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    const input = screen.getByRole('textbox', { name: /target directory/i }) as HTMLInputElement;
+    expect(input.value).toBe('~/');
+  });
+
+  it('picker shows Directories section and directory rows when workspace has dirs', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Add a skill (lives at .agents/skill/foo/SKILL.md) so dirs like .agents/ exist
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    await act(async () => { await Promise.resolve(); });
+    const nameInput = screen.getByLabelText('Capability name') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: 'my-skill' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    await act(async () => { await Promise.resolve(); });
+
+    // Open Move on the skill treeitem (avoids a second render via addAgentsMdAndGetTreeItem)
+    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    expect(treeitem).toBeDefined();
+    fireEvent.contextMenu(treeitem!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    // There should be a listbox (even if empty it renders)
+    expect(screen.getByRole('listbox', { name: 'Directories' })).toBeInTheDocument();
+  });
+
+  it('picker filters rows as user types in the breadcrumb input', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Create a skill file which creates .agents/ directory tree
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'foo' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    await act(async () => { await Promise.resolve(); });
+
+    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    fireEvent.contextMenu(treeitem!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    const input = screen.getByRole('textbox', { name: /target directory/i });
+    // Type a filter that matches .agents/
+    fireEvent.change(input, { target: { value: '~/.ag' } });
+
+    const listbox = screen.getByRole('listbox', { name: 'Directories' });
+    expect(listbox.textContent).toContain('.agents');
+  });
+
+  it('picker shows ".." row after navigating into a subdirectory', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    // Add a nested file (.agents/skill/foo/SKILL.md) via skill creation
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'bar' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    await act(async () => { await Promise.resolve(); });
+
+    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    fireEvent.contextMenu(treeitem!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    const input = screen.getByRole('textbox', { name: /target directory/i });
+    // Navigate into .agents/ by typing the full path with trailing slash
+    fireEvent.change(input, { target: { value: '~/.agents/' } });
+
+    const listbox = screen.getByRole('listbox', { name: 'Directories' });
+    // ".." row should appear
+    expect(listbox.textContent).toContain('..');
+  });
+
+  it('picker Backspace with empty filter and non-root dir steps up', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'baz' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    await act(async () => { await Promise.resolve(); });
+
+    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    fireEvent.contextMenu(treeitem!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    const input = screen.getByRole('textbox', { name: /target directory/i }) as HTMLInputElement;
+    // Navigate into .agents/
+    fireEvent.change(input, { target: { value: '~/.agents/' } });
+    expect(input.value).toBe('~/.agents/');
+
+    // Backspace when filter is empty should step up to root
+    fireEvent.keyDown(input, { key: 'Backspace' });
+    expect(input.value).toBe('~/');
+  });
+
+  it('picker Escape key closes the dialog', async () => {
+    const treeitem = await addAgentsMdAndGetTreeItem();
+    fireEvent.contextMenu(treeitem);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Move file' });
+    expect(dialog).toBeInTheDocument();
+
+    const input = screen.getByRole('textbox', { name: /target directory/i });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Move file' })).not.toBeInTheDocument();
+  });
+
   it('file Properties dialog lists Move, Symlink and Duplicate in the permissions table', async () => {
     const treeitem = await addAgentsMdAndGetTreeItem();
     fireEvent.contextMenu(treeitem);

@@ -100,6 +100,7 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import { createUniqueId } from './utils/uniqueId';
 import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 
@@ -1216,7 +1217,7 @@ function ChatPanel({
         onPhase: (phase: string) => updateMessage(assistantId, { loadingStatus: phase }),
         onReasoning: (content: string) => {
           if (!thinkingStart) thinkingStart = Date.now();
-          thinkingBuffer = content;
+          thinkingBuffer += content;
           updateMessage(assistantId, {
             status: 'streaming',
             isThinking: true,
@@ -1224,7 +1225,7 @@ function ChatPanel({
           });
         },
         onToken: (content: string) => {
-          tokenBuffer = content;
+          tokenBuffer += content;
           updateMessage(assistantId, {
             status: 'streaming',
             streamedContent: cleanStreamedAssistantContent(tokenBuffer),
@@ -2242,43 +2243,212 @@ type ContextMenuTopButton = { icon: LucideIcon; label: string } & (
 );
 
 type FileOpKind = 'move' | 'symlink' | 'duplicate';
+type PickerRow = { name: string; isUp: boolean };
 
-function FileOpModal({ node, op, onConfirm, onClose }: {
+const FILE_OP_LIST_ID = 'file-op-picker-list';
+
+function FileOpPicker({ node, op, directories, onConfirm, onClose }: {
   node: TreeNode;
   op: FileOpKind;
+  directories: string[];
   onConfirm: (targetDir: string) => void;
   onClose: () => void;
 }) {
-  const [targetDir, setTargetDir] = useState('');
   const opLabel = op === 'move' ? 'Move' : op === 'symlink' ? 'Symlink' : 'Duplicate';
-  const dialogLabel = `${opLabel} file`;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [currentDir, setCurrentDir] = useState('');
+  const [filter, setFilter] = useState('');
+  const [activeIdx, setActiveIdx] = useState(-1);
+
+  // Unique direct children of currentDir, filtered by the typed filter prefix
+  const filtered = useMemo<string[]>(() => {
+    const seen = new Set<string>();
+    const children: string[] = [];
+    for (const dir of directories) {
+      if (!dir.startsWith(currentDir) || dir === currentDir) continue;
+      const rest = dir.slice(currentDir.length);
+      const seg = rest.split('/')[0];
+      if (seg && !seen.has(seg)) {
+        seen.add(seg);
+        children.push(seg);
+      }
+    }
+    children.sort();
+    return filter
+      ? children.filter((c) => c.toLowerCase().startsWith(filter.toLowerCase()))
+      : children;
+  }, [currentDir, filter, directories]);
+
+  const rows = useMemo<PickerRow[]>(() => [
+    ...(currentDir ? [{ name: '..', isUp: true } as PickerRow] : []),
+    ...filtered.map((name): PickerRow => ({ name, isUp: false })),
+  ], [currentDir, filtered]);
+
+  // Use the explicit activeIdx unless it's -1 AND exactly one non-.. row:
+  // auto-highlight that single match so "Add" is offered instead of "Create & Add".
+  const effectiveActive = useMemo<number>(() => {
+    if (activeIdx >= 0 && activeIdx < rows.length) return activeIdx;
+    const dirRows = rows.filter((r) => !r.isUp);
+    if (dirRows.length === 1) return rows.findIndex((r) => !r.isUp);
+    return -1;
+  }, [activeIdx, rows]);
+
+  const isCreate = filter !== '' && effectiveActive < 0;
+  const actionLabel = isCreate ? `Create & ${opLabel}` : opLabel;
+
+  const ascend = useCallback(() => {
+    const trimmed = currentDir.replace(/\/$/, '');
+    const idx = trimmed.lastIndexOf('/');
+    setCurrentDir(idx >= 0 ? trimmed.slice(0, idx + 1) : '');
+    setFilter('');
+    setActiveIdx(-1);
+  }, [currentDir]);
+
+  const descend = useCallback((name: string) => {
+    setCurrentDir((prev) => prev + name + '/');
+    setFilter('');
+    setActiveIdx(-1);
+  }, []);
+
+  const handleConfirm = useCallback(() => {
+    const row = effectiveActive >= 0 ? rows[effectiveActive] : null;
+    const target = row && !row.isUp
+      ? currentDir + row.name
+      : currentDir + filter;
+    onConfirm(target.replace(/\/+$/, ''));
+  }, [effectiveActive, rows, currentDir, filter, onConfirm]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    const withoutPrefix = val.startsWith('~/') ? val.slice(2) : val;
+    const lastSlash = withoutPrefix.lastIndexOf('/');
+    if (lastSlash >= 0) {
+      setCurrentDir(withoutPrefix.slice(0, lastSlash + 1));
+      setFilter(withoutPrefix.slice(lastSlash + 1));
+    } else {
+      setCurrentDir('');
+      setFilter(withoutPrefix);
+    }
+    setActiveIdx(-1);
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      onClose();
+    } else if (e.key === 'Enter' && e.ctrlKey) {
+      e.preventDefault();
+      handleConfirm();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const row = effectiveActive >= 0 ? rows[effectiveActive] : null;
+      if (row) {
+        if (row.isUp) ascend();
+        else descend(row.name);
+      } else if (filter) {
+        onConfirm((currentDir + filter).replace(/\/+$/, ''));
+      } else {
+        onConfirm(currentDir.replace(/\/+$/, ''));
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (rows.length > 0) setActiveIdx((i) => Math.min(i + 1, rows.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (rows.length > 0) setActiveIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Backspace' && filter === '' && currentDir !== '') {
+      e.preventDefault();
+      ascend();
+    }
+  }, [effectiveActive, rows, filter, currentDir, handleConfirm, ascend, descend, onConfirm, onClose]);
+
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={dialogLabel} onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <span>{opLabel}: <strong>{node.name}</strong></span>
-          <button type="button" className="icon-button" onClick={onClose} aria-label={`Close ${dialogLabel}`}><X size={14} /></button>
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`${opLabel} file`} onClick={onClose}>
+      <div className="file-op-picker" onClick={(e) => e.stopPropagation()}>
+        {/* Header: back button + breadcrumb input + action button */}
+        <div className="file-op-picker-header">
+          {currentDir && (
+            <button type="button" className="file-op-picker-back" onClick={ascend} aria-label="Go up one directory">
+              <ArrowLeft size={14} />
+            </button>
+          )}
+          <input
+            ref={inputRef}
+            type="text"
+            aria-label="Target directory"
+            aria-controls={FILE_OP_LIST_ID}
+            aria-activedescendant={effectiveActive >= 0 ? `fop-row-${effectiveActive}` : undefined}
+            className="file-op-picker-breadcrumb"
+            value={`~/${currentDir}${filter}`}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            autoFocus
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            className="file-op-picker-action"
+            onClick={handleConfirm}
+            aria-label={`Confirm ${opLabel}`}
+          >
+            <span>{actionLabel}</span>
+            <kbd className="kbd">{isCreate ? 'Enter' : 'Ctrl\u00a0Enter'}</kbd>
+          </button>
         </div>
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span>Target directory</span>
-            <input
-              type="text"
-              aria-label="Target directory"
-              value={targetDir}
-              onChange={(e) => setTargetDir(e.target.value)}
-              placeholder="e.g. docs/"
-              autoFocus
-              style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid rgba(255,255,255,.2)', background: 'rgba(0,0,0,.3)', color: 'inherit' }}
-            />
-          </label>
-        </div>
-        <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 12px' }}>
-          <button type="button" className="secondary-button" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary-button" onClick={() => onConfirm(targetDir)} aria-label="Confirm">{opLabel}</button>
+
+        {/* Directory list */}
+        {rows.length > 0 && (
+          <div className="file-op-picker-section" aria-hidden="true">Directories</div>
+        )}
+        <ul
+          id={FILE_OP_LIST_ID}
+          role="listbox"
+          aria-label="Directories"
+          className="file-op-picker-list"
+        >
+          {rows.map((row, i) => (
+            <li
+              key={row.name}
+              id={`fop-row-${i}`}
+              role="option"
+              aria-selected={effectiveActive === i}
+              className={`file-op-picker-row${effectiveActive === i ? ' file-op-picker-row--active' : ''}`}
+              onClick={() => (row.isUp ? ascend() : descend(row.name))}
+              onMouseEnter={() => setActiveIdx(i)}
+            >
+              {row.isUp ? <ArrowLeft size={14} /> : <Folder size={14} />}
+              <span>{row.name}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Keyboard hint footer */}
+        <div className="file-op-picker-footer">
+          <span><kbd className="kbd">↑</kbd><kbd className="kbd">↓</kbd> Navigate</span>
+          <span><kbd className="kbd">Enter</kbd> Select</span>
+          <span><kbd className="kbd">Backspace</kbd> Back</span>
+          <span><kbd className="kbd">Esc</kbd> Close</span>
         </div>
       </div>
     </div>
+  );
+}
+
+function FileOpModal({ node, op, directories, onConfirm, onClose }: {
+  node: TreeNode;
+  op: FileOpKind;
+  directories: string[];
+  onConfirm: (targetDir: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <FileOpPicker
+      node={node}
+      op={op}
+      directories={directories}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    />
   );
 }
 
@@ -4360,14 +4530,20 @@ function AgentBrowserApp() {
         );
       })() : null}
 
-      {fileOpModal ? (
-        <FileOpModal
-          node={fileOpModal.node}
-          op={fileOpModal.op}
-          onConfirm={(targetDir) => handleFileOp(fileOpModal.node, fileOpModal.op, targetDir)}
-          onClose={() => setFileOpModal(null)}
-        />
-      ) : null}
+      {fileOpModal ? (() => {
+        const ownerWs = findWorkspaceForNode(root, fileOpModal.node.id);
+        const wsFiles = ownerWs ? (workspaceFilesByWorkspace[ownerWs.id] ?? []) : [];
+        const dirs = collectWorkspaceDirectories(wsFiles);
+        return (
+          <FileOpModal
+            node={fileOpModal.node}
+            op={fileOpModal.op}
+            directories={dirs}
+            onConfirm={(targetDir) => handleFileOp(fileOpModal.node, fileOpModal.op, targetDir)}
+            onClose={() => setFileOpModal(null)}
+          />
+        );
+      })() : null}
 
       {newTabWorkspaceId ? (
         <NewTabModal
