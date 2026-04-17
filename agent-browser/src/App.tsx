@@ -1609,7 +1609,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
         </SettingsSection>
       )}
 
-      <SettingsSection title="Local models">
+      <SettingsSection title="Local models" scrollBody bodyClassName="local-models-body">
         <div className="local-model-controls">
           <label className="shared-input-shell settings-search-shell">
             <Icon name="search" size={13} color="#7d8594" />
@@ -1631,7 +1631,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
         </div>
 
         {installedModels.length > 0 && (
-          <SettingsSection title={`Loaded (${installedModels.length})`} className="settings-subsection" scrollBody>
+          <SettingsSection title={`Loaded (${installedModels.length})`} className="settings-subsection">
             {installedModels.map((model) => (
               <ModelCard key={model.id} model={model} isInstalled={true} isLoading={false} onInstall={() => undefined} onDelete={() => onDelete(model.id)} />
             ))}
@@ -1639,14 +1639,14 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
         )}
 
         {!isFiltering && recommended.length > 0 && (
-          <SettingsSection title={`Recommended (${recommended.length})`} className="settings-subsection" scrollBody>
+          <SettingsSection title={`Recommended (${recommended.length})`} className="settings-subsection">
             {recommended.map((model) => (
               <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
             ))}
           </SettingsSection>
         )}
 
-        <SettingsSection title={isFiltering ? `Results (${hfResults.length})` : `Registry (${hfResults.length})`} defaultOpen={isFiltering} forceOpen={isFiltering} className="settings-subsection settings-result-list" scrollBody>
+        <SettingsSection title={isFiltering ? `Results (${hfResults.length})` : `Registry (${hfResults.length})`} defaultOpen={isFiltering} forceOpen={isFiltering} className="settings-subsection settings-result-list">
           {hfResults.map((model) => (
             <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
           ))}

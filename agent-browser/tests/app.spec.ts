@@ -211,15 +211,33 @@ test('captures the settings screen', async ({ browser }) => {
   const panelOverflowY = await settingsPanel.evaluate((element) => window.getComputedStyle(element).overflowY);
   expect(['auto', 'scroll']).toContain(panelOverflowY);
 
-  const resultsBody = page.locator('.settings-result-list .section-scroll-body');
-  await expect(resultsBody.locator('.model-card').nth(5)).toBeVisible();
-  const resultsScrollState = await resultsBody.evaluate((element) => ({
+  // Chip-row must be a single horizontal scrollable row — no wrapping.
+  const chipRow = page.locator('.settings-panel .chip-row');
+  const chipRowStyles = await chipRow.evaluate((element) => {
+    const cs = window.getComputedStyle(element);
+    return {
+      flexWrap: cs.flexWrap,
+      overflowX: cs.overflowX,
+      rowCount: element.scrollHeight > element.clientHeight ? 'multi' : 'single',
+    };
+  });
+  expect(chipRowStyles.flexWrap).toBe('nowrap');
+  expect(['auto', 'scroll']).toContain(chipRowStyles.overflowX);
+  expect(chipRowStyles.rowCount).toBe('single');
+
+  // Local models body must scroll when content overflows.
+  const localModelsBody = page.locator('.local-models-body');
+  await expect(localModelsBody).toBeVisible();
+  const localModelsScrollState = await localModelsBody.evaluate((element) => ({
     scrollHeight: element.scrollHeight,
     clientHeight: element.clientHeight,
     overflowY: window.getComputedStyle(element).overflowY,
   }));
-  expect(resultsScrollState.scrollHeight).toBeGreaterThan(resultsScrollState.clientHeight);
-  expect(['auto', 'scroll']).toContain(resultsScrollState.overflowY);
+  expect(localModelsScrollState.scrollHeight).toBeGreaterThan(localModelsScrollState.clientHeight);
+  expect(['auto', 'scroll']).toContain(localModelsScrollState.overflowY);
+
+  const resultsBody = page.locator('.settings-result-list .settings-section-body');
+  await expect(resultsBody.locator('.model-card').nth(5)).toBeVisible();
 
   const providersToggle = page.getByRole('button', { name: /Providers/i });
   await expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
@@ -807,6 +825,11 @@ test('settings: gated models are silently excluded without console.error', async
   await page.goto('/');
   await page.getByLabel('Settings').click();
 
+  // Open the Registry section (collapsed by default when no search is active)
+  const registryToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(registryToggle).toBeVisible({ timeout: 5000 });
+  await registryToggle.click();
+
   // gpt-2 resolves via fast-path (ONNX siblings); gated model → silently null
   await expect(page.getByRole('button', { name: /gpt2/i }).first()).toBeVisible({ timeout: 8000 });
 
@@ -825,11 +848,40 @@ test('installs gpt-2 and shows Installed state without console errors', async ({
   });
   page.on('pageerror', (error) => appErrors.push(`pageerror: ${error.message}`));
 
-  // Intercept the worker module script at the browser-context level so the stub
-  // is served for ALL requests including those originating from a dedicated
-  // web worker (page.route() only covers the page frame, not worker threads).
-  await page.context().route(/\/assets\/browserInference\.worker[^/]*\.js/, async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/javascript', body: WORKER_STUB });
+  // Replace the Worker constructor before app JS runs so the inference worker
+  // is fully stubbed without depending on Vite's dev vs prod URL shape.
+  await page.addInitScript(() => {
+    const OriginalWorker = globalThis.Worker;
+    function MockInferenceWorker(this: { onmessage: null | ((e: {data: unknown}) => void); onerror: null | (() => void) }) {
+      this.onmessage = null;
+      this.onerror = null;
+    }
+    MockInferenceWorker.prototype.postMessage = function(data: {action: string; id: string}) {
+      const { action, id } = data || {};
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      if (action === 'load') {
+        setTimeout(function() {
+          self.onmessage?.({ data: { type: 'status', phase: 'model', id, msg: 'Loading\u2026', pct: null } });
+          setTimeout(function() {
+            self.onmessage?.({ data: { type: 'done', id, result: { loaded: true } } });
+          }, 80);
+        }, 0);
+      } else if (action === 'generate') {
+        setTimeout(function() {
+          self.onmessage?.({ data: { type: 'token', id, token: 'Hi' } });
+          self.onmessage?.({ data: { type: 'done', id, result: { text: 'Hi' } } });
+        }, 80);
+      }
+    };
+    MockInferenceWorker.prototype.terminate = function() {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker = function(url: unknown, opts: unknown) {
+      if (String(url).includes('browserInference')) return new (MockInferenceWorker as unknown as new() => unknown)();
+      return new OriginalWorker(url as string | URL, opts as WorkerOptions);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker.prototype = OriginalWorker.prototype;
   });
 
   // Override window.fetch to mock the HF API (cross-origin; page.route() does not
@@ -838,6 +890,11 @@ test('installs gpt-2 and shows Installed state without console errors', async ({
 
   await page.goto('/');
   await page.getByLabel('Settings').click();
+
+  // Open the Registry section (collapsed by default when no search is active)
+  const registryToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(registryToggle).toBeVisible({ timeout: 5000 });
+  await registryToggle.click();
 
   // Wait for gpt-2 to appear (siblings-fast-path; no dtype probe needed)
   const modelButton = page.getByRole('button', { name: /gpt2/i }).first();
