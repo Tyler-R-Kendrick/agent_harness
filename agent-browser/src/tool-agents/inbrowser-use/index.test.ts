@@ -96,7 +96,7 @@ describe('createInBrowserUseTools', () => {
   it('each tool has description, parameters, and execute', () => {
     for (const [name, t] of Object.entries(tools)) {
       expect(typeof (t as any).description, `${name}.description`).toBe('string');
-      expect((t as any).parameters, `${name}.parameters`).toBeDefined();
+      expect((t as any).inputSchema, `${name}.inputSchema`).toBeDefined();
       expect(typeof (t as any).execute, `${name}.execute`).toBe('function');
     }
   });

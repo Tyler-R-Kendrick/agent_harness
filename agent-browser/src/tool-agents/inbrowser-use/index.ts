@@ -11,7 +11,7 @@
  */
 
 import { tool } from 'ai';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 import type { LanguageModel, ToolSet } from 'ai';
 import type { PlaywrightLikePage } from 'inbrowser-use';
 import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from '../../services/agentRunner';
@@ -46,7 +46,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
   return {
     click: tool({
       description: 'Click an element identified by a CSS selector.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element to click.'),
       }),
       execute: async ({ selector }) => {
@@ -56,7 +56,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     fill: tool({
       description: 'Clear and fill an input or textarea with the given text.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the input element.'),
         value: z.string().describe('Text to fill into the element.'),
       }),
@@ -67,7 +67,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     selectOption: tool({
       description: 'Select an option in a <select> element by value.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the <select> element.'),
         value: z.string().describe('The option value to select.'),
       }),
@@ -78,7 +78,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     check: tool({
       description: 'Check a checkbox or radio button.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the checkbox or radio.'),
       }),
       execute: async ({ selector }) => {
@@ -88,7 +88,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     uncheck: tool({
       description: 'Uncheck a checkbox.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the checkbox.'),
       }),
       execute: async ({ selector }) => {
@@ -98,7 +98,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     hover: tool({
       description: 'Hover the mouse over an element.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element to hover.'),
       }),
       execute: async ({ selector }) => {
@@ -108,7 +108,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     press: tool({
       description: 'Press a keyboard key while the element is focused (e.g. "Enter", "Tab", "Escape").',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the target element.'),
         key: z.string().describe('Key name to press (Playwright key format).'),
       }),
@@ -119,7 +119,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     focus: tool({
       description: 'Focus an element.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element to focus.'),
       }),
       execute: async ({ selector }) => {
@@ -129,7 +129,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     blur: tool({
       description: 'Remove focus from an element.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element to blur.'),
       }),
       execute: async ({ selector }) => {
@@ -139,7 +139,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     getTextContent: tool({
       description: 'Read the visible text content of an element.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element.'),
       }),
       execute: async ({ selector }) => {
@@ -149,7 +149,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     getInputValue: tool({
       description: 'Read the current value of an input, textarea, or select element.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the input element.'),
       }),
       execute: async ({ selector }) => {
@@ -159,7 +159,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     isVisible: tool({
       description: 'Check whether an element is visible on the page.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element.'),
       }),
       execute: async ({ selector }) => {
@@ -169,7 +169,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     isEnabled: tool({
       description: 'Check whether an element is enabled (not disabled).',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element.'),
       }),
       execute: async ({ selector }) => {
@@ -179,7 +179,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     countElements: tool({
       description: 'Count the number of elements matching a CSS selector.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector to count.'),
       }),
       execute: async ({ selector }) => {
@@ -189,7 +189,7 @@ export function createInBrowserUseTools(page: PlaywrightLikePage) {
 
     getAttribute: tool({
       description: 'Read an attribute value from an element.',
-      parameters: z.object({
+      inputSchema: z.object({
         selector: z.string().describe('CSS selector for the element.'),
         name: z.string().describe('Attribute name to read (e.g. "href", "aria-label").'),
       }),
