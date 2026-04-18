@@ -38,11 +38,18 @@ const copilotApiPlugin: Plugin = {
 
 export default defineConfig({
   plugins: [stubNodeZlib, copilotApiPlugin, react()],
+  server: {
+    allowedHosts: true,
+  },
   resolve: {
     alias: [
       {
         find: 'inbrowser-use',
         replacement: path.resolve(__dirname, '../lib/inbrowser-use/src/index.ts'),
+      },
+      {
+        find: 'webmcp',
+        replacement: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
       },
       ...(process.env.VITE_ALLOW_SANDBOX_SAME_ORIGIN?.trim().toLowerCase() === 'true'
         ? []

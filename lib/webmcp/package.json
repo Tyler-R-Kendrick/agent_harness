@@ -1,0 +1,22 @@
+{
+  "name": "@agent-harness/webmcp",
+  "version": "0.1.0",
+  "description": "Spec-faithful WebMCP polyfill and utilities for agent_harness",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.1.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.1.0"
+  }
+}

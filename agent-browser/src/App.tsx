@@ -86,6 +86,7 @@ import { MarkdownContent } from './utils/MarkdownContent';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { resolveLanguageModel } from './services/agentProvider';
 import { runToolAgent } from './services/agentRunner';
+import { createWebMcpToolBridge } from './services/webmcpBridge';
 import { browserInferenceEngine } from './services/browserInference';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { appendPendingLocalTurn } from './services/chatComposition';
@@ -110,6 +111,7 @@ import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, DEFAULT_TOOL_IDS, buildDefaultToolInstructions, createDefaultTools, selectToolsByIds, type ToolDescriptor } from './tools';
 import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 import type { CliHistoryEntry } from './tools/types';
+import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type FlatTreeItem = { node: TreeNode; depth: number };
@@ -1262,6 +1264,7 @@ function ChatPanel({
   const [selectedProviderBySession, setSelectedProviderBySession] = useState<Record<string, AgentProvider>>({});
   const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useState<Record<string, string>>({});
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
+  const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
   const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
@@ -1278,6 +1281,8 @@ function ChatPanel({
     cancel: () => void;
     finalizeCancelled: () => void;
   } | null>(null);
+  const webMcpModelContext = useMemo(() => installModelContext(window) ?? new ModelContext(), []);
+  const webMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
   const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
@@ -1297,6 +1302,10 @@ function ChatPanel({
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
+  const toolDescriptors = useMemo(
+    () => [...DEFAULT_TOOL_DESCRIPTORS, ...webMcpBridge.getDescriptors()],
+    [webMcpBridge, webMcpToolVersion],
+  );
   const selectedToolIds = selectedToolIdsBySession[activeChatSessionId] ?? DEFAULT_TOOL_IDS;
   const toolsEnabled = selectedToolIds.length > 0;
   const setSelectedToolIdsForActiveSession = useCallback((ids: string[]) => {
@@ -1314,6 +1323,12 @@ function ChatPanel({
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
   const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
+
+  useEffect(() => {
+    return webMcpBridge.subscribe(() => {
+      setWebMcpToolVersion((current) => current + 1);
+    });
+  }, [webMcpBridge]);
 
   useEffect(() => {
     setMessagesBySession((current) => current[activeChatSessionId]
@@ -1616,7 +1631,10 @@ function ChatPanel({
           setBashHistoryBySession,
           setCwdBySession,
         });
-        const tools = selectToolsByIds(allTools, selectedToolIds);
+        const tools = selectToolsByIds({
+          ...allTools,
+          ...webMcpBridge.createToolSet(),
+        }, selectedToolIds);
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
           .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
@@ -1778,7 +1796,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, onTerminalFsPathsChanged, onToast, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, onTerminalFsPathsChanged, onToast, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const runTerminalCommand = useCallback(async (command: string) => {
     const cmd = command.trim();
@@ -1873,7 +1891,7 @@ function ChatPanel({
                         <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
                       ))}
                 <ToolsPicker
-                  descriptors={DEFAULT_TOOL_DESCRIPTORS}
+                  descriptors={toolDescriptors}
                   selectedIds={selectedToolIds}
                   onChange={setSelectedToolIdsForActiveSession}
                 />

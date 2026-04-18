@@ -6,12 +6,9 @@ import '@radix-ui/themes/styles.css';
 import './index.css';
 import App from './App';
 import { COPILOT_RUNTIME_ENABLED, COPILOT_RUNTIME_URL } from './config';
+import { configureServiceWorker } from './serviceWorker';
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
-  });
-}
+configureServiceWorker();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

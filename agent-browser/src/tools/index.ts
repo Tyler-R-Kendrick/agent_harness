@@ -2,7 +2,7 @@ import type { ToolSet } from 'ai';
 import { createCliTool } from './cli';
 import type { TerminalExecutorContext } from './types';
 
-export type ToolGroup = 'built-in' | 'mcp';
+export type ToolGroup = 'built-in' | 'mcp' | 'webmcp';
 
 export interface ToolDescriptor {
   id: string;
