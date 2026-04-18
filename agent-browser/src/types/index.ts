@@ -58,6 +58,26 @@ export interface ReasoningStep {
   branchId?: string;
 }
 
+/**
+ * A single voter's evaluation of an intent.
+ * Structurally compatible with OperationStep (kind: 'agent') so it can be
+ * passed directly to OperationTimeline without mapping.
+ */
+export interface VoterStep {
+  id: string;
+  kind: 'agent';
+  /** Display label — typically the voter's ID. */
+  title: string;
+  voterId: string;
+  /** Human-readable outcome — "Approved", "Rejected: <reason>", or undefined while active. */
+  body?: string;
+  /** true = approved, false = rejected, undefined = still evaluating. */
+  approve?: boolean;
+  startedAt: number;
+  endedAt?: number;
+  status: ReasoningStepStatus;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
@@ -75,6 +95,10 @@ export interface ChatMessage {
   loadingStatus?: string | null;
   statusText?: string | null;
   isError?: boolean;
+  /** Voter evaluation steps produced by logact voters during this message's turn. */
+  voterSteps?: VoterStep[];
+  /** True while at least one voter is still evaluating the intent. */
+  isVoting?: boolean;
 }
 
 export interface HFModel {

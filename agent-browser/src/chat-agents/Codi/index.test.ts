@@ -17,7 +17,7 @@ vi.mock('../../services/chatComposition', () => ({
   toAiSdkMessages: (messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>) => toAiSdkMessagesMock(messages),
 }));
 
-import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from '.';
+import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat, wrapVoterWithCallbacks } from '.';
 
 describe('Codi', () => {
   it('detects whether any Codi models are installed', () => {
@@ -172,5 +172,129 @@ describe('Codi', () => {
     }, { onDone });
 
     expect(onDone).toHaveBeenCalledWith('answer');
+  });
+
+  it('handles an empty messages array without throwing', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onDone?.({ generated_text: 'response' });
+    });
+
+    const onDone = vi.fn();
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [],
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onDone });
+
+    expect(onDone).toHaveBeenCalledWith('response');
+  });
+});
+
+describe('wrapVoterWithCallbacks', () => {
+  it('fires onVoterStep when voting starts and onVoterStepUpdate/End when done (approve)', async () => {
+    const innerVoter = {
+      id: 'safety',
+      tier: 'classic' as const,
+      vote: vi.fn().mockResolvedValue({
+        type: 'Vote',
+        intentId: 'i1',
+        voterId: 'safety',
+        approve: true,
+      }),
+    };
+
+    const onVoterStep = vi.fn();
+    const onVoterStepUpdate = vi.fn();
+    const onVoterStepEnd = vi.fn();
+
+    const wrapped = wrapVoterWithCallbacks(innerVoter, { onVoterStep, onVoterStepUpdate, onVoterStepEnd });
+    const fakeIntent = { type: 'Intent' as const, intentId: 'i1', action: 'do something' };
+    const fakeBus = {} as never;
+
+    const result = await wrapped.vote(fakeIntent, fakeBus);
+
+    expect(result.approve).toBe(true);
+    expect(onVoterStep).toHaveBeenCalledOnce();
+    expect(onVoterStep.mock.calls[0][0]).toMatchObject({ voterId: 'safety', status: 'active', kind: 'agent' });
+
+    expect(onVoterStepUpdate).toHaveBeenCalledOnce();
+    expect(onVoterStepUpdate.mock.calls[0][1]).toMatchObject({ approve: true, body: 'Approved', status: 'done' });
+
+    expect(onVoterStepEnd).toHaveBeenCalledOnce();
+    expect(onVoterStepEnd.mock.calls[0][0]).toBe(onVoterStep.mock.calls[0][0].id);
+  });
+
+  it('fires onVoterStepUpdate with Rejected body when the voter rejects', async () => {
+    const innerVoter = {
+      id: 'policy',
+      tier: 'classic' as const,
+      vote: vi.fn().mockResolvedValue({
+        type: 'Vote',
+        intentId: 'i1',
+        voterId: 'policy',
+        approve: false,
+        reason: 'not on allowlist',
+      }),
+    };
+
+    const onVoterStepUpdate = vi.fn();
+    const wrapped = wrapVoterWithCallbacks(innerVoter, { onVoterStepUpdate });
+    await wrapped.vote({ type: 'Intent' as const, intentId: 'i1', action: 'rm -rf /' }, {} as never);
+
+    expect(onVoterStepUpdate.mock.calls[0][1]).toMatchObject({
+      approve: false,
+      body: 'Rejected: not on allowlist',
+    });
+  });
+
+  it('fires onVoterStepUpdate with error body and rethrows when the voter throws', async () => {
+    const innerVoter = {
+      id: 'flaky',
+      tier: 'classic' as const,
+      vote: vi.fn().mockRejectedValue(new Error('network timeout')),
+    };
+
+    const onVoterStepUpdate = vi.fn();
+    const onVoterStepEnd = vi.fn();
+    const wrapped = wrapVoterWithCallbacks(innerVoter, { onVoterStepUpdate, onVoterStepEnd });
+
+    await expect(wrapped.vote({ type: 'Intent' as const, intentId: 'i1', action: 'ping' }, {} as never)).rejects.toThrow('network timeout');
+    expect(onVoterStepUpdate.mock.calls[0][1]).toMatchObject({ approve: false, body: 'Error: network timeout' });
+    expect(onVoterStepEnd).toHaveBeenCalledOnce();
+  });
+
+  it('wires voters into streamCodiChat and fires voter callbacks', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onToken?.('result');
+      callbacks.onDone?.({ generated_text: 'result' });
+    });
+
+    const innerVoter = {
+      id: 'guard',
+      tier: 'classic' as const,
+      vote: vi.fn().mockResolvedValue({
+        type: 'Vote',
+        intentId: expect.any(String),
+        voterId: 'guard',
+        approve: true,
+      }),
+    };
+
+    const onVoterStep = vi.fn();
+    const onVoterStepEnd = vi.fn();
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'u1', role: 'user', content: 'run tests' }],
+      workspaceName: 'Build',
+      workspacePromptContext: '',
+      voters: [innerVoter],
+    }, { onVoterStep, onVoterStepEnd });
+
+    expect(onVoterStep).toHaveBeenCalledOnce();
+    expect(onVoterStep.mock.calls[0][0]).toMatchObject({ voterId: 'guard', status: 'active' });
+    expect(onVoterStepEnd).toHaveBeenCalledOnce();
+    expect(innerVoter.vote).toHaveBeenCalledOnce();
   });
 });

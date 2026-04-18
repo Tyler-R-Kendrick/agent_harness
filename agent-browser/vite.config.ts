@@ -48,6 +48,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../lib/inbrowser-use/src/index.ts'),
       },
       {
+        find: 'logact',
+        replacement: path.resolve(__dirname, '../lib/logact/src/index.ts'),
+      },
+      {
         find: 'webmcp',
         replacement: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
       },
