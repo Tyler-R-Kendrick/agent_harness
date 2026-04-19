@@ -18,6 +18,8 @@ vi.mock('../../services/chatComposition', () => ({
 }));
 
 import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat, wrapVoterWithCallbacks } from '.';
+import { PayloadType } from 'logact';
+import type { IntentPayload } from 'logact';
 
 describe('Codi', () => {
   it('detects whether any Codi models are installed', () => {
@@ -209,7 +211,7 @@ describe('wrapVoterWithCallbacks', () => {
     const onVoterStepEnd = vi.fn();
 
     const wrapped = wrapVoterWithCallbacks(innerVoter, { onVoterStep, onVoterStepUpdate, onVoterStepEnd });
-    const fakeIntent = { type: 'Intent' as const, intentId: 'i1', action: 'do something' };
+    const fakeIntent: IntentPayload = { type: PayloadType.Intent, intentId: 'i1', action: 'do something' };
     const fakeBus = {} as never;
 
     const result = await wrapped.vote(fakeIntent, fakeBus);
@@ -240,7 +242,7 @@ describe('wrapVoterWithCallbacks', () => {
 
     const onVoterStepUpdate = vi.fn();
     const wrapped = wrapVoterWithCallbacks(innerVoter, { onVoterStepUpdate });
-    await wrapped.vote({ type: 'Intent' as const, intentId: 'i1', action: 'rm -rf /' }, {} as never);
+    await wrapped.vote({ type: PayloadType.Intent, intentId: 'i1', action: 'rm -rf /' }, {} as never);
 
     expect(onVoterStepUpdate.mock.calls[0][1]).toMatchObject({
       approve: false,
@@ -259,7 +261,7 @@ describe('wrapVoterWithCallbacks', () => {
     const onVoterStepEnd = vi.fn();
     const wrapped = wrapVoterWithCallbacks(innerVoter, { onVoterStepUpdate, onVoterStepEnd });
 
-    await expect(wrapped.vote({ type: 'Intent' as const, intentId: 'i1', action: 'ping' }, {} as never)).rejects.toThrow('network timeout');
+    await expect(wrapped.vote({ type: PayloadType.Intent, intentId: 'i1', action: 'ping' }, {} as never)).rejects.toThrow('network timeout');
     expect(onVoterStepUpdate.mock.calls[0][1]).toMatchObject({ approve: false, body: 'Error: network timeout' });
     expect(onVoterStepEnd).toHaveBeenCalledOnce();
   });

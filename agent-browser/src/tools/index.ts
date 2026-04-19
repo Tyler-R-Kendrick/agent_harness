@@ -24,16 +24,16 @@ export const DEFAULT_TOOL_DESCRIPTORS: ToolDescriptor[] = [
 
 export const DEFAULT_TOOL_IDS: string[] = DEFAULT_TOOL_DESCRIPTORS.map((descriptor) => descriptor.id);
 
-export function createDefaultTools(context: TerminalExecutorContext) {
+export function createDefaultTools(context: TerminalExecutorContext): ToolSet {
   return {
     cli: createCliTool(context),
-  };
+  } as ToolSet;
 }
 
-export function selectToolsByIds<T extends ToolSet>(allTools: T, selectedIds: readonly string[]): Partial<T> {
+export function selectToolsByIds(allTools: ToolSet, selectedIds: readonly string[]): ToolSet {
   const allowed = new Set(selectedIds);
-  const filtered: Partial<T> = {};
-  for (const key of Object.keys(allTools) as Array<keyof T & string>) {
+  const filtered = {} as ToolSet;
+  for (const key of Object.keys(allTools)) {
     if (allowed.has(key)) {
       filtered[key] = allTools[key];
     }

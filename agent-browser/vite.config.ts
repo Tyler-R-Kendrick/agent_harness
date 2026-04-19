@@ -55,6 +55,10 @@ export default defineConfig({
         find: 'webmcp',
         replacement: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
       },
+      {
+        find: 'agent-browser-mcp',
+        replacement: path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
+      },
       ...(process.env.VITE_ALLOW_SANDBOX_SAME_ORIGIN?.trim().toLowerCase() === 'true'
         ? []
         : [

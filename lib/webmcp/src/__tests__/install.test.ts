@@ -112,7 +112,7 @@ describe('installModelContext', () => {
     expect(installModelContext(dom.window as unknown as Window)).toBe(existing);
   });
 
-  it('creates an internal polyfill when a foreign modelContext already exists', () => {
+  it('replaces a foreign modelContext with the compatible polyfill instance', () => {
     const dom = new JSDOM('', { url: 'https://example.com' });
     const foreignModelContext = { source: 'browser-native' };
 
@@ -127,7 +127,7 @@ describe('installModelContext', () => {
 
     expect(installed).toBeInstanceOf(ModelContext);
     expect(repeated).toBe(installed);
-    expect((dom.window.navigator as Navigator & { modelContext?: unknown }).modelContext).toBe(foreignModelContext);
+    expect((dom.window.navigator as Navigator & { modelContext?: unknown }).modelContext).toBe(installed);
     expect(installed).not.toBe(foreignModelContext);
   });
 });

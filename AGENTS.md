@@ -88,3 +88,5 @@ coverage: {
 |---|---|
 | `lib/inbrowser-use` | Playwright-shaped in-app DOM control runtime |
 | `lib/logact` | LogAct agentic reliability pattern (Meta Labs, arXiv 2604.07988) — deconstructed state-machine agents backed by a shared append-only log |
+| `lib/agent-browser-mcp` | Agent-browser MCP server — all agent-browser-specific tool, resource, prompt, and prompt-template definitions (e.g. the WebMCP bridge). Add new MCP features here. |
+| `lib/webmcp` | Spec-faithful WebMCP polyfill and runtime (ModelContext, ToolRegistry, install). Generic — no agent-browser specifics. |

@@ -19,7 +19,9 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "inbrowser-use": ["../lib/inbrowser-use/src/index.ts"],
-      "webmcp": ["../lib/webmcp/src/index.ts"]
+      "logact": ["../lib/logact/src/index.ts"],
+      "webmcp": ["../lib/webmcp/src/index.ts"],
+      "agent-browser-mcp": ["../lib/agent-browser-mcp/src/index.ts"]
     }
   },
   "include": ["src"]

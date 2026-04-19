@@ -6,7 +6,7 @@ vi.mock('./cli/exec', () => ({
   executeCliCommand: (...args: unknown[]) => executeCliCommandMock(...args),
 }));
 
-import { buildDefaultToolInstructions, createDefaultTools } from './index';
+import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools } from './index';
 import type { TerminalExecutorContext } from './types';
 
 function createContext(): TerminalExecutorContext {
@@ -29,6 +29,13 @@ describe('default tools', () => {
       workspaceName: 'Research',
       workspacePromptContext: 'Workspace instructions.',
     })).toContain('Active workspace: Research');
+  });
+
+  it('includes exactly one built-in tool descriptor: cli', () => {
+    expect(DEFAULT_TOOL_DESCRIPTORS).toHaveLength(1);
+    const [cli] = DEFAULT_TOOL_DESCRIPTORS;
+    expect(cli.id).toBe('cli');
+    expect(cli.group).toBe('built-in');
   });
 
   it('creates a cli tool that delegates to the shared executor', async () => {

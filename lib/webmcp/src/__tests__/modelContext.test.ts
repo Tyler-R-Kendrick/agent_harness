@@ -1,4 +1,11 @@
-import { getModelContextRegistry, invokeModelContextTool, ModelContext } from '../modelContext';
+import {
+  getModelContextPromptRegistry,
+  getModelContextPromptTemplateRegistry,
+  getModelContextRegistry,
+  getModelContextResourceRegistry,
+  invokeModelContextTool,
+  ModelContext,
+} from '../modelContext';
 import { ModelContextClient } from '../modelContextClient';
 import { TOOL_ACTIVATED_EVENT, TOOL_CANCELED_EVENT } from '../events';
 
@@ -301,5 +308,192 @@ describe('ModelContext', () => {
     await expect(defaultClient.requestUserInteraction(async () => 'default')).resolves.toBe('default');
     await expect(customClient.requestUserInteraction(async () => 'custom')).resolves.toBe('custom');
     expect(customHandler).toHaveBeenCalledOnce();
+  });
+
+  it('registers and unregisters resources, prompts, and prompt templates', async () => {
+    const modelContext = new ModelContext();
+    const resourceController = new AbortController();
+    const promptController = new AbortController();
+    const promptTemplateController = new AbortController();
+
+    modelContext.registerResource({
+      uri: 'files://workspace/AGENTS.md',
+      title: 'AGENTS.md',
+      description: 'Workspace rules',
+      mimeType: 'text/markdown',
+      read: async () => ({ uri: 'files://workspace/AGENTS.md', text: '# Rules' }),
+    }, { signal: resourceController.signal });
+
+    modelContext.registerPrompt({
+      name: 'workspace-overview',
+      title: 'Workspace overview',
+      description: 'Summarize the workspace.',
+      inputSchema: { type: 'object', properties: {} },
+      render: async () => ({ messages: [{ role: 'system', content: 'Overview' }] }),
+    }, { signal: promptController.signal });
+
+    modelContext.registerPromptTemplate({
+      name: 'workspace-file',
+      title: 'Workspace file',
+      description: 'Generate a file-specific prompt.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          path: { type: 'string' },
+        },
+      },
+      render: async (input) => ({
+        messages: [{ role: 'user', content: `Open ${(input as { path: string }).path}` }],
+      }),
+    }, { signal: promptTemplateController.signal });
+
+    expect(getModelContextResourceRegistry(modelContext).list()).toEqual([
+      expect.objectContaining({
+        uri: 'files://workspace/AGENTS.md',
+        title: 'AGENTS.md',
+        description: 'Workspace rules',
+        mimeType: 'text/markdown',
+      }),
+    ]);
+    expect(getModelContextPromptRegistry(modelContext).list()).toEqual([
+      expect.objectContaining({
+        name: 'workspace-overview',
+        title: 'Workspace overview',
+        description: 'Summarize the workspace.',
+        inputSchema: '{"type":"object","properties":{}}',
+      }),
+    ]);
+    expect(getModelContextPromptTemplateRegistry(modelContext).list()).toEqual([
+      expect.objectContaining({
+        name: 'workspace-file',
+        title: 'Workspace file',
+        description: 'Generate a file-specific prompt.',
+        inputSchema: '{"type":"object","properties":{"path":{"type":"string"}}}',
+      }),
+    ]);
+
+    await expect(getModelContextResourceRegistry(modelContext).get('files://workspace/AGENTS.md')?.read(new ModelContextClient()))
+      .resolves.toEqual({ uri: 'files://workspace/AGENTS.md', text: '# Rules' });
+    await expect(getModelContextPromptRegistry(modelContext).get('workspace-overview')?.render({}, new ModelContextClient()))
+      .resolves.toEqual({ messages: [{ role: 'system', content: 'Overview' }] });
+    await expect(getModelContextPromptTemplateRegistry(modelContext).get('workspace-file')?.render({ path: 'AGENTS.md' }, new ModelContextClient()))
+      .resolves.toEqual({ messages: [{ role: 'user', content: 'Open AGENTS.md' }] });
+
+    resourceController.abort();
+    promptController.abort();
+    promptTemplateController.abort();
+
+    expect(getModelContextResourceRegistry(modelContext).list()).toEqual([]);
+    expect(getModelContextPromptRegistry(modelContext).list()).toEqual([]);
+    expect(getModelContextPromptTemplateRegistry(modelContext).list()).toEqual([]);
+  });
+
+  it('registers resources, prompts, and prompt templates with only required params', () => {
+    const modelContext = new ModelContext();
+
+    modelContext.registerResource({
+      uri: 'files://workspace/README.md',
+      description: 'Workspace readme',
+      read: async () => ({ uri: 'files://workspace/README.md', text: '# Readme' }),
+    });
+    modelContext.registerPrompt({
+      name: 'plain-prompt',
+      description: 'Prompt without schema',
+      render: async () => ({ messages: [{ role: 'system', content: 'Plain prompt' }] }),
+    });
+    modelContext.registerPromptTemplate({
+      name: 'plain-template',
+      description: 'Template without schema',
+      render: async () => ({ messages: [{ role: 'user', content: 'Plain template' }] }),
+    });
+
+    expect(getModelContextResourceRegistry(modelContext).get('files://workspace/README.md')).toEqual(
+      expect.objectContaining({ mimeType: undefined }),
+    );
+    expect(getModelContextPromptRegistry(modelContext).get('plain-prompt')).toEqual(
+      expect.objectContaining({ inputSchema: '' }),
+    );
+    expect(getModelContextPromptTemplateRegistry(modelContext).get('plain-template')).toEqual(
+      expect.objectContaining({ inputSchema: '' }),
+    );
+  });
+
+  it('rejects invalid resource URIs and invalid prompt registrations', () => {
+    const modelContext = new ModelContext();
+
+    expect(() => {
+      modelContext.registerResource({ uri: '', description: 'desc', read: async () => null });
+    }).toThrow(/must not be empty/);
+
+    expect(() => {
+      modelContext.registerResource({ uri: 'not a uri', description: 'desc', read: async () => null });
+    }).toThrow(/valid absolute URI/);
+
+    expect(() => {
+      modelContext.registerPrompt({ name: '', description: 'desc', render: async () => ({ messages: [] }) });
+    }).toThrow(/must not be empty/);
+
+    expect(() => {
+      modelContext.registerPromptTemplate({ name: 'invalid!', description: 'desc', render: async () => ({ messages: [] }) });
+    }).toThrow(/ASCII alphanumeric/);
+  });
+
+  it('rejects duplicate resources, prompts, and prompt templates', () => {
+    const modelContext = new ModelContext();
+
+    modelContext.registerResource({ uri: 'files://workspace/AGENTS.md', description: 'desc', read: async () => null });
+    modelContext.registerPrompt({ name: 'workspace-overview', description: 'desc', render: async () => ({ messages: [] }) });
+    modelContext.registerPromptTemplate({ name: 'workspace-file', description: 'desc', render: async () => ({ messages: [] }) });
+
+    expect(() => {
+      modelContext.registerResource({ uri: 'files://workspace/AGENTS.md', description: 'desc', read: async () => null });
+    }).toThrow(/already registered/);
+    expect(() => {
+      modelContext.registerPrompt({ name: 'workspace-overview', description: 'desc', render: async () => ({ messages: [] }) });
+    }).toThrow(/already registered/);
+    expect(() => {
+      modelContext.registerPromptTemplate({ name: 'workspace-file', description: 'desc', render: async () => ({ messages: [] }) });
+    }).toThrow(/already registered/);
+  });
+
+  it('validates prompt schemas and aborted registration for other WebMCP surface types', () => {
+    const modelContext = new ModelContext();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(() => {
+      modelContext.registerPrompt({
+        name: 'bad-prompt',
+        description: 'desc',
+        inputSchema: { toJSON: () => undefined },
+        render: async () => ({ messages: [] }),
+      });
+    }).toThrow(TypeError);
+
+    expect(() => {
+      modelContext.registerPromptTemplate({
+        name: 'bad-template',
+        description: 'desc',
+        inputSchema: undefined,
+        render: async () => ({ messages: [] }),
+      });
+    }).toThrow(TypeError);
+
+    modelContext.registerResource(
+      { uri: 'files://workspace/aborted.md', description: 'desc', read: async () => null },
+      { signal: AbortSignal.abort('done') },
+    );
+    modelContext.registerPrompt(
+      { name: 'aborted-prompt', description: 'desc', render: async () => ({ messages: [] }) },
+      { signal: AbortSignal.abort('done') },
+    );
+    modelContext.registerPromptTemplate(
+      { name: 'aborted-template', description: 'desc', render: async () => ({ messages: [] }) },
+      { signal: AbortSignal.abort('done') },
+    );
+
+    expect(getModelContextResourceRegistry(modelContext).list()).toEqual([]);
+    expect(getModelContextPromptRegistry(modelContext).list()).toEqual([]);
+    expect(getModelContextPromptTemplateRegistry(modelContext).list()).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(3);
   });
 });

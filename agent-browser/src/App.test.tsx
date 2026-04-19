@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { createWebMcpTool } from 'agent-browser-mcp';
+import { installModelContext } from 'webmcp';
 import App from './App';
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
 import type { CopilotRuntimeState } from './services/copilotApi';
@@ -61,12 +63,29 @@ vi.mock('./sandbox/summarize-run', () => ({
 
 vi.mock('just-bash/browser', () => {
   class MockBash {
+    cwd = '/workspace';
+    fileContents = new Map<string, string>([['/workspace/.keep', '']]);
     fsPaths = new Set<string>(['/workspace', '/workspace/.keep']);
 
     fs = {
       getAllPaths: () => [...this.fsPaths],
-      mkdir: (path: string) => { this.fsPaths.add(path); return Promise.resolve(); },
-      writeFile: (path: string) => { this.fsPaths.add(path); return Promise.resolve(); },
+      mkdir: (path: string) => {
+        this.fsPaths.add(path);
+        return Promise.resolve();
+      },
+      writeFile: (path: string, content = '') => {
+        this.fsPaths.add(path);
+        const dir = path.slice(0, path.lastIndexOf('/'));
+        if (dir) this.fsPaths.add(dir);
+        this.fileContents.set(path, typeof content === 'string' ? content : '');
+        return Promise.resolve();
+      },
+      readFile: (path: string) => {
+        if (!this.fileContents.has(path)) {
+          return Promise.reject(new Error(`No such file: ${path}`));
+        }
+        return Promise.resolve(this.fileContents.get(path) ?? '');
+      },
     };
 
     async exec(command: string) {
@@ -75,44 +94,63 @@ vi.mock('just-bash/browser', () => {
       const usesSentinel = trimmed.endsWith(sentinelSuffix);
       const baseCommand = usesSentinel ? trimmed.slice(0, -sentinelSuffix.length).trim() : trimmed;
       const withSentinel = (stdout: string) => ({
-        stdout: usesSentinel ? `${stdout}${stdout ? '\n' : ''}__JUSTBASH_CWD:/workspace` : stdout,
+        stdout: usesSentinel ? `${stdout}${stdout ? '\n' : ''}__JUSTBASH_CWD:${this.cwd}` : stdout,
         stderr: '',
         exitCode: 0,
       });
 
+      const cdMatch = baseCommand.match(/^cd\s+--\s+'([^']+)'\s*$/) ?? baseCommand.match(/^cd\s+"([^"]+)"\s*$/);
+      if (cdMatch) {
+        this.cwd = cdMatch[1];
+        this.fsPaths.add(this.cwd);
+        return withSentinel('');
+      }
+
       if (baseCommand.startsWith('touch ')) {
         const filePath = baseCommand.slice('touch '.length).trim().replace(/^\/+/, '');
-        if (filePath) this.fsPaths.add(`/workspace/${filePath}`);
+        if (filePath) {
+          const resolvedPath = filePath.startsWith('/') ? filePath : `${this.cwd}/${filePath}`;
+          this.fsPaths.add(resolvedPath);
+          this.fileContents.set(resolvedPath, '');
+        }
         return withSentinel('');
       }
       // rm -rf "/path"
-      const rmMatch = baseCommand.match(/^rm\b.*?"([^"]+)"\s*$/);
+      const rmMatch = baseCommand.match(/^rm\b.*?"([^"]+)"\s*$/) ?? baseCommand.match(/^rm\b.*?'([^']+)'\s*$/);
       if (rmMatch) {
         const target = rmMatch[1];
         for (const path of [...this.fsPaths]) {
-          if (path === target || path.startsWith(target + '/')) this.fsPaths.delete(path);
+          if (path === target || path.startsWith(target + '/')) {
+            this.fsPaths.delete(path);
+            this.fileContents.delete(path);
+          }
         }
         return withSentinel('');
       }
       // mv "oldPath" "newPath"
-      const mvMatch = baseCommand.match(/^mv\s+"([^"]+)"\s+"([^"]+)"\s*$/);
+      const mvMatch = baseCommand.match(/^mv\s+"([^"]+)"\s+"([^"]+)"\s*$/) ?? baseCommand.match(/^mv\s+'([^']+)'\s+'([^']+)'\s*$/);
       if (mvMatch) {
         const [, fromPath, toPath] = mvMatch;
         for (const path of [...this.fsPaths]) {
           if (path === fromPath || path.startsWith(fromPath + '/')) {
             this.fsPaths.delete(path);
-            this.fsPaths.add(path === fromPath ? toPath : toPath + path.slice(fromPath.length));
+            const nextPath = path === fromPath ? toPath : toPath + path.slice(fromPath.length);
+            this.fsPaths.add(nextPath);
+            if (this.fileContents.has(path)) {
+              this.fileContents.set(nextPath, this.fileContents.get(path) ?? '');
+              this.fileContents.delete(path);
+            }
           }
         }
         return withSentinel('');
       }
       if (baseCommand === 'pwd') {
-        return withSentinel('/workspace');
+        return withSentinel(this.cwd);
       }
       if (baseCommand === 'ls') {
         const entries = [...this.fsPaths]
-          .filter((path) => path !== '/workspace' && path !== '/workspace/.keep')
-          .map((path) => path.replace('/workspace/', ''));
+          .filter((path) => path !== this.cwd && path !== '/workspace/.keep')
+          .map((path) => path.replace(`${this.cwd}/`, ''));
         return withSentinel(entries.join('\n'));
       }
       if (baseCommand.startsWith('echo ')) {
@@ -233,6 +271,267 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '//.agents' })).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
     expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+  });
+
+  it('registers workspace file WebMCP tools that a client can invoke', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
+      'ws-research': [{
+        path: 'AGENTS.md',
+        content: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
+        updatedAt: '2026-04-18T00:00:00.000Z',
+      }],
+      'ws-build': [],
+    }));
+
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    expect(modelContext).toBeDefined();
+
+    const webmcpTool = createWebMcpTool(modelContext!);
+    let listedFiles: unknown;
+    await act(async () => {
+      listedFiles = await webmcpTool.execute?.({ tool: 'list_files' }, {} as never);
+    });
+
+    expect(listedFiles).toEqual([
+      {
+        path: 'AGENTS.md',
+        uri: 'files://workspace/AGENTS.md',
+        updatedAt: '2026-04-18T00:00:00.000Z',
+      },
+    ]);
+
+    let openedFile: unknown;
+    await act(async () => {
+      openedFile = await webmcpTool.execute?.({
+        tool: 'open_file',
+        args: { uri: 'files://workspace/AGENTS.md' },
+      }, {} as never);
+    });
+
+    expect(openedFile).toEqual({
+      workspaceName: 'Research',
+      path: 'AGENTS.md',
+      uri: 'files://workspace/AGENTS.md',
+      updatedAt: '2026-04-18T00:00:00.000Z',
+      content: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
+    });
+    expect(screen.getByLabelText('Workspace file content')).toHaveValue('# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.');
+  });
+
+  it('registers browser, session, filesystem, and worktree WebMCP tools against live UI state', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
+      'ws-research': [{
+        path: 'AGENTS.md',
+        content: '# Workspace agent instructions\n\n## Goals\n- Verify full WebMCP coverage.',
+        updatedAt: '2026-04-18T00:00:00.000Z',
+      }],
+      'ws-build': [],
+    }));
+
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    disableAllTools();
+
+    const modelContext = installModelContext(window);
+    expect(modelContext).toBeDefined();
+    const webmcpTool = createWebMcpTool(modelContext!);
+
+    let browserPages: Array<{ id: string; title: string; url: string }> = [];
+    await act(async () => {
+      browserPages = await webmcpTool.execute?.({ tool: 'list_browser_pages' }, {} as never) as Array<{ id: string; title: string; url: string }>;
+    });
+
+    const docsPage = browserPages.find((page) => page.title === 'Hugging Face');
+    expect(docsPage).toBeDefined();
+
+    await act(async () => {
+      await webmcpTool.execute?.({ tool: 'open_browser_page', args: { pageId: docsPage!.id } }, {} as never);
+    });
+    expect(screen.getByLabelText('Page overlay')).toBeInTheDocument();
+
+    await act(async () => {
+      await webmcpTool.execute?.({ tool: 'close_browser_page', args: { pageId: docsPage!.id } }, {} as never);
+    });
+    expect(screen.queryByLabelText('Page overlay')).not.toBeInTheDocument();
+
+    let createdPage: { id: string; title: string; url: string } | undefined;
+    await act(async () => {
+      createdPage = await webmcpTool.execute?.({
+        tool: 'create_browser_page',
+        args: { url: 'https://example.com/mcp', title: 'MCP Tab' },
+      }, {} as never) as { id: string; title: string; url: string };
+    });
+    expect(createdPage).toEqual(expect.objectContaining({ title: 'MCP Tab', url: 'https://example.com/mcp' }));
+    expect(screen.getByText('MCP Tab')).toBeInTheDocument();
+
+    let sessions: Array<{ id: string; name: string; isOpen: boolean }> = [];
+    await act(async () => {
+      sessions = await webmcpTool.execute?.({ tool: 'list_sessions' }, {} as never) as Array<{ id: string; name: string; isOpen: boolean }>;
+    });
+    const sessionOne = sessions.find((session) => session.name === 'Session 1');
+    expect(sessionOne).toBeDefined();
+
+    let initialSessionState: { id: string; name: string; mode: string; provider: string | null; cwd: string | null } | undefined;
+    await act(async () => {
+      initialSessionState = await webmcpTool.execute?.({
+        tool: 'read_session',
+        args: { sessionId: sessionOne!.id },
+      }, {} as never) as { id: string; name: string; mode: string; provider: string | null; cwd: string | null };
+    });
+    expect(initialSessionState).toEqual(expect.objectContaining({ id: sessionOne!.id, mode: 'agent', provider: 'codi' }));
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'write_session',
+        args: { sessionId: sessionOne!.id, message: 'Message from WebMCP' },
+      }, {} as never);
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Message from WebMCP')).toBeInTheDocument();
+
+    let updatedSessionState: { provider: string | null; modelId: string | null } | undefined;
+    await act(async () => {
+      updatedSessionState = await webmcpTool.execute?.({
+        tool: 'write_session',
+        args: { sessionId: sessionOne!.id, provider: 'ghcp', modelId: 'gpt-4.1' },
+      }, {} as never) as { provider: string | null; modelId: string | null };
+    });
+    expect(updatedSessionState).toEqual(expect.objectContaining({ provider: 'ghcp', modelId: 'gpt-4.1' }));
+
+    let terminalSessionState: { mode: string; cwd: string | null } | undefined;
+    await act(async () => {
+      terminalSessionState = await webmcpTool.execute?.({
+        tool: 'write_session',
+        args: { sessionId: sessionOne!.id, mode: 'terminal', cwd: '/workspace/projects' },
+      }, {} as never) as { mode: string; cwd: string | null };
+      await Promise.resolve();
+    });
+    expect(terminalSessionState).toEqual(expect.objectContaining({ mode: 'terminal', cwd: '/workspace/projects' }));
+    expect(screen.getByRole('heading', { name: 'Terminal' })).toBeInTheDocument();
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'create_session_file',
+        args: { sessionId: sessionOne!.id, path: '/workspace/notes.md', content: 'notes from tool' },
+      }, {} as never);
+    });
+
+    let readSessionFile: { sessionId: string; path: string; kind: string; content: string } | undefined;
+    await act(async () => {
+      readSessionFile = await webmcpTool.execute?.({
+        tool: 'read_session_file',
+        args: { sessionId: sessionOne!.id, path: '/workspace/notes.md' },
+      }, {} as never) as { sessionId: string; path: string; kind: string; content: string };
+    });
+    expect(readSessionFile).toEqual({ sessionId: sessionOne!.id, path: '/workspace/notes.md', kind: 'file', content: 'notes from tool' });
+
+    let readSessionFolder: { entries: Array<{ name: string; path: string; kind: string }> } | undefined;
+    await act(async () => {
+      readSessionFolder = await webmcpTool.execute?.({
+        tool: 'read_session_folder',
+        args: { sessionId: sessionOne!.id, path: '/workspace' },
+      }, {} as never) as { entries: Array<{ name: string; path: string; kind: string }> };
+    });
+    expect(readSessionFolder).toEqual(expect.objectContaining({
+      entries: expect.arrayContaining([
+        expect.objectContaining({ name: 'notes.md', path: '/workspace/notes.md', kind: 'file' }),
+      ]),
+    }));
+
+    let worktreeItems: Array<{ id: string; itemType: string; label: string }> = [];
+    await act(async () => {
+      worktreeItems = await webmcpTool.execute?.({ tool: 'list_worktree_items' }, {} as never) as Array<{ id: string; itemType: string; label: string }>;
+    });
+    expect(worktreeItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ itemType: 'browser-page', label: 'Hugging Face' }),
+      expect.objectContaining({ itemType: 'session', label: 'Session 1' }),
+      expect.objectContaining({ itemType: 'workspace-file', label: 'AGENTS.md' }),
+      expect.objectContaining({ itemType: 'clipboard', label: 'Clipboard' }),
+    ]));
+
+    const browserItem = worktreeItems.find((item) => item.itemType === 'browser-page' && item.label === 'Hugging Face');
+    const sessionItem = worktreeItems.find((item) => item.itemType === 'session' && item.label === 'Session 1');
+    const fileItem = worktreeItems.find((item) => item.itemType === 'workspace-file' && item.label === 'AGENTS.md');
+    const vfsItem = worktreeItems.find((item) => item.itemType === 'session-fs-entry');
+    const clipboardItem = worktreeItems.find((item) => item.itemType === 'clipboard');
+    expect(browserItem).toBeDefined();
+    expect(sessionItem).toBeDefined();
+    expect(fileItem).toBeDefined();
+    expect(vfsItem).toBeDefined();
+    expect(clipboardItem).toBeDefined();
+
+    let browserActions: Array<{ id: string; label: string }> = [];
+    let sessionActions: Array<{ id: string; label: string }> = [];
+    let fileActions: Array<{ id: string; label: string }> = [];
+    let vfsActions: Array<{ id: string; label: string }> = [];
+    let clipboardActions: Array<{ id: string; label: string }> = [];
+    await act(async () => {
+      browserActions = await webmcpTool.execute?.({
+        tool: 'list_worktree_context_actions',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
+      }, {} as never) as Array<{ id: string; label: string }>;
+      sessionActions = await webmcpTool.execute?.({
+        tool: 'list_worktree_context_actions',
+        args: { itemId: sessionItem!.id, itemType: sessionItem!.itemType },
+      }, {} as never) as Array<{ id: string; label: string }>;
+      fileActions = await webmcpTool.execute?.({
+        tool: 'list_worktree_context_actions',
+        args: { itemId: fileItem!.id, itemType: fileItem!.itemType },
+      }, {} as never) as Array<{ id: string; label: string }>;
+      vfsActions = await webmcpTool.execute?.({
+        tool: 'list_worktree_context_actions',
+        args: { itemId: vfsItem!.id, itemType: vfsItem!.itemType },
+      }, {} as never) as Array<{ id: string; label: string }>;
+      clipboardActions = await webmcpTool.execute?.({
+        tool: 'list_worktree_context_actions',
+        args: { itemId: clipboardItem!.id, itemType: clipboardItem!.itemType },
+      }, {} as never) as Array<{ id: string; label: string }>;
+    });
+
+    expect(browserActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'toggle_bookmark' }), expect.objectContaining({ id: 'properties' })]));
+    expect(sessionActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'share' }), expect.objectContaining({ id: 'rename' })]));
+    expect(fileActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'move' }), expect.objectContaining({ id: 'duplicate' })]));
+    expect(vfsActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new_file' }), expect.objectContaining({ id: 'history' })]));
+    expect(clipboardActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'history' }), expect.objectContaining({ id: 'properties' })]));
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'invoke_worktree_context_action',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType, actionId: 'toggle_bookmark', args: {} },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    let bookmarkedBrowserPage: { persisted: boolean } | undefined;
+    await act(async () => {
+      bookmarkedBrowserPage = await webmcpTool.execute?.({
+        tool: 'read_browser_page',
+        args: { pageId: browserItem!.id },
+      }, {} as never) as { persisted: boolean };
+    });
+    expect(bookmarkedBrowserPage).toEqual(expect.objectContaining({ persisted: false }));
+
+    let createdSession: { id: string; name: string; isOpen: boolean } | undefined;
+    await act(async () => {
+      createdSession = await webmcpTool.execute?.({
+        tool: 'create_session',
+        args: { name: 'Ops Session' },
+      }, {} as never) as { id: string; name: string; isOpen: boolean };
+    });
+    expect(createdSession).toEqual(expect.objectContaining({ name: 'Ops Session', isOpen: true }));
+    expect(screen.getByText('Ops Session')).toBeInTheDocument();
   });
 
   it('supports creating new chat and terminal instances from the tree and panel', async () => {

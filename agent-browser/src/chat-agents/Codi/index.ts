@@ -1,6 +1,5 @@
 import { InMemoryAgentBus, LogActAgent, QuorumPolicy } from 'logact';
 import type { IInferenceClient, IVoter, IntentPayload, IAgentBus, VotePayload } from 'logact';
-import { PayloadType } from 'logact';
 import { browserInferenceEngine } from '../../services/browserInference';
 import { formatBrowserInferenceResult } from '../../services/browserInferenceRuntime';
 import { toAiSdkMessages } from '../../services/chatComposition';
@@ -52,7 +51,7 @@ function createCodiInferenceClient(
   signal?: AbortSignal,
 ): IInferenceClient {
   return {
-    async infer(_busMessages) {
+    async infer(_busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
       const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages });
       let tokenBuffer = '';
       let inReasoning = false;

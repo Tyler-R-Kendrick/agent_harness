@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       logact: path.resolve(__dirname, '../lib/logact/src/index.ts'),
       webmcp: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
+      'agent-browser-mcp': path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
     },
   },
   test: {
