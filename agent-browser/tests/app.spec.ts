@@ -104,6 +104,18 @@ async function switchToChatMode(page: Page) {
   await tab.click({ force: true });
 }
 
+async function ensureFilesExpanded(page: Page) {
+  const workspaceDrive = page.getByRole('button', { name: '//workspace', exact: true });
+  const sessionDrive = page.getByRole('button', { name: /\/\/session-\d+-fs/, exact: false });
+  if (await workspaceDrive.count() === 0 && await sessionDrive.count() === 0) {
+    await page.getByRole('button', { name: 'Files', exact: true }).first().click();
+  }
+}
+
+async function clickTreeButton(page: Page, name: string) {
+  await page.getByRole('button', { name, exact: true }).first().click();
+}
+
 // ── Screen capture tests ──────────────────────────────────────────────
 
 test('captures the main workspace screen', async ({ page }) => {
@@ -125,7 +137,10 @@ test('captures the main workspace screen', async ({ page }) => {
   await addFileDialog.getByLabel('Capability name').fill('review-pr');
   await addFileDialog.getByRole('button', { name: 'Skill', exact: true }).click();
   await expect(page.getByRole('region', { name: 'File editor' }).locator('.file-editor-path-text')).toHaveText('.agents/skills/review-pr/SKILL.md');
+
+  await ensureFilesExpanded(page);
   await expect(page.getByRole('button', { name: '//workspace', exact: true })).toBeVisible();
+  await clickTreeButton(page, '//workspace');
   await expect(page.getByRole('button', { name: '.agents', exact: true })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
@@ -186,13 +201,62 @@ test('captures categorized worktree with agent and terminal instances', async ({
   await page.getByLabel('Bash input').press('Enter');
   await expect(page.getByLabel('Bash input')).toBeEnabled({ timeout: 10000 });
 
+  await ensureFilesExpanded(page);
   await expect(page.getByRole('button', { name: '//session-2-fs', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '//session-2-fs', exact: true }).click();
+  await clickTreeButton(page, '//session-2-fs');
   await expect(page.getByRole('button', { name: '//workspace', exact: true })).toBeVisible();
+  await clickTreeButton(page, 'workspace');
   await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
 
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
+});
+
+test('autocompletes workspace skills and recalls terminal input history', async ({ page }) => {
+  await mockCopilotStatus(page, {
+    authenticated: true,
+    login: 'octocat',
+    models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: false }],
+  });
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  await switchToTerminalMode(page);
+  const bashInput = page.getByLabel('Bash input');
+  await expect(bashInput).toBeVisible();
+
+  await bashInput.fill('echo first');
+  await bashInput.press('Enter');
+  await expect(page.getByText('$ echo first')).toBeVisible();
+
+  await bashInput.fill('pwd');
+  await bashInput.press('Enter');
+  await expect(page.getByLabel('Terminal output').getByText('/workspace', { exact: true })).toBeVisible();
+
+  await bashInput.press('ArrowUp');
+  await expect(bashInput).toHaveValue('pwd');
+  await bashInput.press('ArrowUp');
+  await expect(bashInput).toHaveValue('echo first');
+  await bashInput.press('ArrowDown');
+  await expect(bashInput).toHaveValue('pwd');
+  await bashInput.press('ArrowDown');
+  await expect(bashInput).toHaveValue('');
+
+  await switchToChatMode(page);
+  const chatInput = page.getByLabel('Chat input');
+  await chatInput.fill('Use @create');
+
+  const skillSuggestions = page.getByRole('listbox', { name: 'Skill suggestions' });
+  await expect(skillSuggestions).toBeVisible();
+  await expect(page.getByRole('option', { name: 'create-agent', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'create-agent-eval', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'create-agent-skill', exact: true })).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/chat-skill-autocomplete-history.png', fullPage: true });
+
+  await page.getByRole('option', { name: 'create-agent-skill', exact: true }).click();
+  await expect(chatInput).toHaveValue('Use @create-agent-skill ');
 });
 
 test('captures the settings screen', async ({ browser }) => {
@@ -462,7 +526,9 @@ test('renders a session-fs workspace symlink as a reference file and saves throu
     content: 'workspace://AGENTS.md',
   });
 
-  await page.getByRole('button', { name: '//session-1-fs', exact: true }).click();
+  await ensureFilesExpanded(page);
+  await clickTreeButton(page, '//session-1-fs');
+  await clickTreeButton(page, 'workspace');
 
   const referenceRow = page.locator('[role="treeitem"].tree-row-reference').filter({ hasText: 'AGENTS.md' });
   await expect(referenceRow).toHaveCount(1);

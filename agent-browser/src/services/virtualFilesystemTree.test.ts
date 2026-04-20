@@ -21,18 +21,24 @@ describe('virtualFilesystemTree', () => {
       { name: '//docs', isDrive: true },
     ]);
 
+    expect(drives[0].expanded).toBe(false);
+    expect(drives[1].expanded).toBe(false);
+
     expect(drives[0].children).toEqual([
       expect.objectContaining({
         name: '.agents',
         type: 'folder',
+        expanded: false,
         children: [
           expect.objectContaining({
             name: 'skills',
             type: 'folder',
+            expanded: false,
             children: [
               expect.objectContaining({
                 name: 'review-pr',
                 type: 'folder',
+                expanded: false,
                 children: [
                   expect.objectContaining({ name: 'SKILL.md', type: 'file', filePath: '.agents/skills/review-pr/SKILL.md' }),
                 ],
@@ -62,12 +68,15 @@ describe('virtualFilesystemTree', () => {
       { name: 'tmp', isDrive: false },
     ]);
 
+    expect(drives[0].expanded).toBe(false);
+    expect(drives[1].expanded).toBe(false);
+
     expect(drives[0].children).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: '.keep', type: 'file' }),
       expect.objectContaining({ name: 'notes.txt', type: 'file' }),
     ]));
     expect(drives[1].children).toEqual([
-      expect.objectContaining({ name: 'cache', type: 'folder' }),
+      expect.objectContaining({ name: 'cache', type: 'folder', expanded: false }),
     ]);
   });
 
@@ -87,6 +96,7 @@ describe('virtualFilesystemTree', () => {
       expect.objectContaining({
         name: 'cache',
         type: 'folder',
+        expanded: false,
         children: expect.arrayContaining([
           expect.objectContaining({ name: 'a.txt', type: 'file' }),
           expect.objectContaining({ name: 'b.txt', type: 'file' }),
@@ -155,6 +165,7 @@ describe('virtualFilesystemTree', () => {
       expect.objectContaining({
         name: 'docs',
         type: 'folder',
+        expanded: false,
         children: [
           expect.objectContaining({ name: 'README.md', type: 'file' }),
         ],

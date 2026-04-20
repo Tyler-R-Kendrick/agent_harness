@@ -11,7 +11,7 @@ function createFolderNode(id: string, name: string, isDrive = false): TreeNode {
     name,
     type: 'folder',
     isDrive,
-    expanded: true,
+    expanded: false,
     children: [],
   };
 }

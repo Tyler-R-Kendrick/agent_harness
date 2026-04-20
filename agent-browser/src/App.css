@@ -1093,6 +1093,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   gap: 8px;
   align-items: center;
 }
+.composer-suggestions {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  background: rgba(13, 16, 22, 0.96);
+  box-shadow: 0 10px 24px rgba(0,0,0,.28);
+}
+.composer-suggestion {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #f3f4f6;
+  text-align: left;
+}
+.composer-suggestion:hover,
+.composer-suggestion.is-selected {
+  border-color: rgba(255,255,255,.08);
+  background: rgba(255,255,255,.06);
+}
+.composer-suggestion-name {
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer-suggestion-description {
+  font-size: 11px;
+  color: var(--text-muted);
+}
 .composer-input-shell {
   min-height: 38px;
   padding-left: 12px;

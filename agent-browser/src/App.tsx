@@ -384,7 +384,7 @@ function categoryNode(workspaceId: string, kind: NodeKind, children: TreeNode[] 
     name: CATEGORY_LABELS[kind],
     type: 'folder',
     nodeKind: kind,
-    expanded: true,
+    expanded: kind !== 'files',
     children,
   };
 }
@@ -1134,6 +1134,42 @@ function ClosedPanelsPlaceholder({ workspaceName, onNewSession }: { workspaceNam
 const BASH_INITIAL_CWD = '/workspace';
 const BASH_CWD_PLACEHOLDER_FILE = '.keep';
 type BashEntry = CliHistoryEntry;
+type InputHistoryMode = 'chat' | 'terminal';
+
+function buildInputHistoryScopeKey(mode: InputHistoryMode, sessionId: string) {
+  return `${mode}:${sessionId}`;
+}
+
+function getSkillAutocompleteQuery(value: string) {
+  const match = value.match(/(^|\s)@([a-z0-9-]*)$/i);
+  if (!match) return null;
+  return match[2].toLowerCase();
+}
+
+function applySkillAutocomplete(value: string, skillName: string) {
+  return value.replace(/(^|\s)@([a-z0-9-]*)$/i, (_, prefix: string) => `${prefix}@${skillName} `);
+}
+
+function shouldHandleTextareaHistoryKey(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    return false;
+  }
+
+  const { selectionStart, selectionEnd, value } = event.currentTarget;
+  if (selectionStart !== selectionEnd) {
+    return false;
+  }
+
+  if (event.key === 'ArrowUp') {
+    return !value.slice(0, selectionStart).includes('\n');
+  }
+
+  if (event.key === 'ArrowDown') {
+    return !value.slice(selectionEnd).includes('\n');
+  }
+
+  return false;
+}
 
 function cleanStreamedAssistantContent(content: string): string {
   return content.replace(/\nUser:|<\|im_end\|>|<\|endoftext\|>/g, '').trim();
@@ -1504,13 +1540,16 @@ function ChatPanel({
 }) {
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [input, setInput] = useState('');
+  const [chatHistoryBySession, setChatHistoryBySession] = useState<Record<string, string[]>>({});
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
   const [selectedProviderBySession, setSelectedProviderBySession] = useState<Record<string, AgentProvider>>({});
   const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useState<Record<string, string>>({});
   const [selectedAgentIdBySession, setSelectedAgentIdBySession] = useState<Record<string, string | null>>({});
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
-  const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
+  const [bashHistoryBySession, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
+  const [historyCursorByScope, setHistoryCursorByScope] = useState<Record<string, number>>({});
+  const [selectedSkillSuggestionIndex, setSelectedSkillSuggestionIndex] = useState(0);
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
   const [activeActivityMessageIdBySession, setActiveActivityMessageIdBySession] = useState<Record<string, string | null>>({});
@@ -1568,6 +1607,33 @@ function ChatPanel({
   const activeActivityMessage = !showBash && activeActivityMessageId
     ? messages.find((message) => message.id === activeActivityMessageId) ?? null
     : null;
+  const activeInputHistoryScopeKey = buildInputHistoryScopeKey(showBash ? 'terminal' : 'chat', activeChatSessionId);
+  const skillAutocompleteQuery = showBash ? null : getSkillAutocompleteQuery(input);
+  const skillSuggestions = useMemo(() => {
+    if (!skillAutocompleteQuery) {
+      return [] as Array<{ name: string; description: string }>;
+    }
+
+    const uniqueSkills = new Map<string, string>();
+    for (const skill of workspaceCapabilities.skills) {
+      if (!uniqueSkills.has(skill.name)) {
+        uniqueSkills.set(skill.name, skill.description);
+      }
+    }
+
+    return Array.from(uniqueSkills.entries())
+      .map(([name, description]) => ({ name, description }))
+      .filter((skill) => skill.name.toLowerCase().includes(skillAutocompleteQuery))
+      .sort((left, right) => {
+        const leftStartsWith = left.name.toLowerCase().startsWith(skillAutocompleteQuery);
+        const rightStartsWith = right.name.toLowerCase().startsWith(skillAutocompleteQuery);
+        if (leftStartsWith !== rightStartsWith) {
+          return leftStartsWith ? -1 : 1;
+        }
+        return left.name.localeCompare(right.name);
+      });
+  }, [skillAutocompleteQuery, workspaceCapabilities.skills]);
+  const isSkillAutocompleteOpen = skillSuggestions.length > 0;
   const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
     Boolean(parseSandboxPrompt(input))
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
@@ -1611,6 +1677,65 @@ function ChatPanel({
   useEffect(() => {
     cwdBySessionRef.current = cwdBySession;
   }, [cwdBySession]);
+
+  useEffect(() => {
+    setSelectedSkillSuggestionIndex(0);
+  }, [skillAutocompleteQuery]);
+
+  const resetActiveInputHistoryCursor = useCallback(() => {
+    setHistoryCursorByScope((current) => {
+      if (!(activeInputHistoryScopeKey in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[activeInputHistoryScopeKey];
+      return next;
+    });
+  }, [activeInputHistoryScopeKey]);
+
+  const handleInputChange = useCallback((nextValue: string) => {
+    resetActiveInputHistoryCursor();
+    setInput(nextValue);
+  }, [resetActiveInputHistoryCursor]);
+
+  const applySkillSuggestion = useCallback((skillName: string) => {
+    resetActiveInputHistoryCursor();
+    setInput((current) => applySkillAutocomplete(current, skillName));
+    requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, [resetActiveInputHistoryCursor]);
+
+  const navigateInputHistory = useCallback((direction: 'up' | 'down') => {
+    const entries = showBash
+      ? (activeSessionId ? (bashHistoryBySession[activeSessionId] ?? []).map((entry) => entry.cmd) : [])
+      : (chatHistoryBySession[activeChatSessionId] ?? []);
+    if (!entries.length) {
+      return false;
+    }
+
+    const currentCursor = historyCursorByScope[activeInputHistoryScopeKey] ?? entries.length;
+    const nextCursor = direction === 'up'
+      ? Math.max(currentCursor - 1, 0)
+      : Math.min(currentCursor + 1, entries.length);
+
+    setHistoryCursorByScope((current) => ({
+      ...current,
+      [activeInputHistoryScopeKey]: nextCursor,
+    }));
+    setInput(nextCursor === entries.length ? '' : entries[nextCursor] ?? '');
+    return true;
+  }, [activeChatSessionId, activeInputHistoryScopeKey, activeSessionId, bashHistoryBySession, chatHistoryBySession, historyCursorByScope, showBash]);
+
+  const handleTerminalInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+      return;
+    }
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+      return;
+    }
+    if (navigateInputHistory(event.key === 'ArrowUp' ? 'up' : 'down')) {
+      event.preventDefault();
+    }
+  }, [navigateInputHistory]);
 
   useEffect(() => {
     return webMcpBridge.subscribe(() => {
@@ -1781,10 +1906,16 @@ function ChatPanel({
     if (!text.trim() || activeGenerationRef.current) return;
     const assistantId = createUniqueId();
     const userId = createUniqueId();
+    const trimmedText = text.trim();
+    setChatHistoryBySession((current) => ({
+      ...current,
+      [activeChatSessionId]: [...(current[activeChatSessionId] ?? []), trimmedText],
+    }));
     const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId, assistantId });
     messagesRef.current = nextMessages;
     setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
     setInput('');
+    resetActiveInputHistoryCursor();
 
     if (await runSandboxPrompt(text, assistantId)) {
       return;
@@ -2086,7 +2217,48 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, onTerminalFsPathsChanged, onToast, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+
+  const handleChatInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isSkillAutocompleteOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSelectedSkillSuggestionIndex((current) => Math.min(current + 1, skillSuggestions.length - 1));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSelectedSkillSuggestionIndex((current) => Math.max(current - 1, 0));
+        return;
+      }
+
+      if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+        event.preventDefault();
+        const selectedSkill = skillSuggestions[selectedSkillSuggestionIndex];
+        if (selectedSkill) {
+          applySkillSuggestion(selectedSkill.name);
+        }
+        return;
+      }
+    }
+
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && shouldHandleTextareaHistoryKey(event)) {
+      if (navigateInputHistory(event.key === 'ArrowUp' ? 'up' : 'down')) {
+        event.preventDefault();
+        return;
+      }
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (isActiveSessionGenerating) {
+        stopActiveGeneration();
+        return;
+      }
+      if (canSubmit) void sendMessage(input);
+    }
+  }, [applySkillSuggestion, canSubmit, input, isActiveSessionGenerating, isSkillAutocompleteOpen, navigateInputHistory, selectedSkillSuggestionIndex, sendMessage, skillSuggestions, stopActiveGeneration]);
 
   const runTerminalCommand = useCallback(async (command: string) => {
     const cmd = command.trim();
@@ -2341,7 +2513,8 @@ function ChatPanel({
                   className="bash-input"
                   aria-label="Bash input"
                   value={input}
-                  onChange={(event) => setInput(event.target.value)}
+                  onChange={(event) => handleInputChange(event.target.value)}
+                  onKeyDown={handleTerminalInputKeyDown}
                   placeholder={activeSessionId ? 'type a command…' : 'create or select a session'}
                   autoComplete="off"
                   spellCheck={false}
@@ -2353,7 +2526,18 @@ function ChatPanel({
             <form className="chat-compose" onSubmit={(event) => { event.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } void sendMessage(input); }}>
               <div className="composer-rail">
                 <label className="composer-input-shell shared-input-shell">
-                  <textarea ref={chatInputRef} aria-label="Chat input" value={input} onChange={(event) => setInput(event.target.value)} placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels })} rows={1} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (isActiveSessionGenerating) { stopActiveGeneration(); return; } if (canSubmit) void sendMessage(input); } }} />
+                  <textarea
+                    ref={chatInputRef}
+                    aria-label="Chat input"
+                    aria-autocomplete="list"
+                    aria-expanded={isSkillAutocompleteOpen}
+                    aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
+                    value={input}
+                    onChange={(event) => handleInputChange(event.target.value)}
+                    placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels })}
+                    rows={1}
+                    onKeyDown={handleChatInputKeyDown}
+                  />
                   <button
                     type="submit"
                     className={`composer-send-btn${isActiveSessionGenerating ? ' composer-send-btn-stop' : ''}`}
@@ -2364,6 +2548,28 @@ function ChatPanel({
                     {isActiveSessionGenerating ? <Square size={13} fill="currentColor" /> : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   </button>
                 </label>
+                {isSkillAutocompleteOpen ? (
+                  <div id="chat-skill-suggestions" className="composer-suggestions" role="listbox" aria-label="Skill suggestions">
+                    {skillSuggestions.map((skill, index) => (
+                      <button
+                        key={skill.name}
+                        type="button"
+                        role="option"
+                        aria-label={skill.name}
+                        aria-selected={index === selectedSkillSuggestionIndex}
+                        className={`composer-suggestion${index === selectedSkillSuggestionIndex ? ' is-selected' : ''}`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          applySkillSuggestion(skill.name);
+                        }}
+                        onClick={() => applySkillSuggestion(skill.name)}
+                      >
+                        <span className="composer-suggestion-name">{skill.name}</span>
+                        <span className="composer-suggestion-description">{skill.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {selectedProvider === 'ghcp'
                 ? (!hasAvailableCopilotModels

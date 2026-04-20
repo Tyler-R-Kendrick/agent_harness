@@ -311,11 +311,19 @@ describe('App', () => {
       vi.advanceTimersByTime(150);
     });
 
+    expect(screen.queryByRole('button', { name: '//workspace' })).not.toBeInTheDocument();
+
+    fireEvent.click(filesButton);
     expect(screen.getByRole('button', { name: '//workspace' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '.agents' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '//workspace' }));
     expect(screen.queryByRole('button', { name: '//.agents' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '.agents' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'AGENTS.md' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('SKILL.md')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'AGENTS.md' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '.agents' }));
+    fireEvent.click(screen.getByRole('button', { name: 'skills' }));
     expect(screen.getByText('review-pr')).toBeInTheDocument();
   });
 
@@ -429,7 +437,9 @@ describe('App', () => {
       content: 'workspace://AGENTS.md',
     }));
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Files' })[0]);
     fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'workspace' }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -798,6 +808,17 @@ describe('App', () => {
     });
     expect(rolledBackSessionDriveHistory).toEqual(expect.objectContaining({ rolledBackToId: sessionDriveHistory!.records[0]!.id }));
 
+    await ensureFilesExpanded();
+    await expandSessionFsDrive();
+    await expandWorkspaceDrive();
+
+    let visibleWorktreeItems: Array<{ id: string; itemType: string; label: string }> = [];
+    await act(async () => {
+      visibleWorktreeItems = await webmcpTool.execute?.({ tool: 'list_worktree_items' }, {} as never) as Array<{ id: string; itemType: string; label: string }>;
+    });
+    const visibleVfsItem = visibleWorktreeItems.find((item) => item.itemType === 'session-fs-entry');
+    expect(visibleVfsItem).toBeDefined();
+
     let worktreeItems: Array<{ id: string; itemType: string; label: string }> = [];
     await act(async () => {
       worktreeItems = await webmcpTool.execute?.({ tool: 'list_worktree_items' }, {} as never) as Array<{ id: string; itemType: string; label: string }>;
@@ -870,10 +891,13 @@ describe('App', () => {
 
     let browserActions: Array<{ id: string; label: string }> = [];
     let sessionActions: Array<{ id: string; label: string }> = [];
-    let fileActions: Array<{ id: string; label: string }> = [];
     let vfsActions: Array<{ id: string; label: string }> = [];
     let clipboardActions: Array<{ id: string; label: string }> = [];
     await act(async () => {
+      vfsActions = await webmcpTool.execute?.({
+        tool: 'list_worktree_context_actions',
+        args: { itemId: visibleVfsItem!.id, itemType: visibleVfsItem!.itemType },
+      }, {} as never) as Array<{ id: string; label: string }>;
       browserActions = await webmcpTool.execute?.({
         tool: 'list_worktree_context_actions',
         args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
@@ -881,14 +905,6 @@ describe('App', () => {
       sessionActions = await webmcpTool.execute?.({
         tool: 'list_worktree_context_actions',
         args: { itemId: sessionItem!.id, itemType: sessionItem!.itemType },
-      }, {} as never) as Array<{ id: string; label: string }>;
-      fileActions = await webmcpTool.execute?.({
-        tool: 'list_worktree_context_actions',
-        args: { itemId: fileItem!.id, itemType: fileItem!.itemType },
-      }, {} as never) as Array<{ id: string; label: string }>;
-      vfsActions = await webmcpTool.execute?.({
-        tool: 'list_worktree_context_actions',
-        args: { itemId: vfsItem!.id, itemType: vfsItem!.itemType },
       }, {} as never) as Array<{ id: string; label: string }>;
       clipboardActions = await webmcpTool.execute?.({
         tool: 'list_worktree_context_actions',
@@ -898,7 +914,6 @@ describe('App', () => {
 
     expect(browserActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'toggle_bookmark' }), expect.objectContaining({ id: 'properties' })]));
     expect(sessionActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'share' }), expect.objectContaining({ id: 'rename' })]));
-    expect(fileActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'move' }), expect.objectContaining({ id: 'duplicate' })]));
     expect(vfsActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'new_file' }), expect.objectContaining({ id: 'history' })]));
     expect(clipboardActions).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'history' }), expect.objectContaining({ id: 'properties' })]));
 
@@ -932,10 +947,6 @@ describe('App', () => {
     await act(async () => {
       await webmcpTool.execute?.({
         tool: 'toggle_worktree_render_pane',
-        args: { itemId: fileItem!.id, itemType: fileItem!.itemType },
-      }, {} as never);
-      await webmcpTool.execute?.({
-        tool: 'toggle_worktree_render_pane',
         args: { itemId: docsPage!.id, itemType: 'browser-page' },
       }, {} as never);
       await Promise.resolve();
@@ -948,7 +959,6 @@ describe('App', () => {
     expect(renderPanes).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: `session:${createdSession!.id}`, paneType: 'session', itemId: createdSession!.id }),
       expect.objectContaining({ id: `browser:${docsPage!.id}`, paneType: 'browser-page', itemId: docsPage!.id }),
-      expect.objectContaining({ id: 'file:AGENTS.md', paneType: 'workspace-file', itemId: 'AGENTS.md' }),
     ]));
 
     let movedRenderPanes: Array<{ id: string; paneType: string; itemId: string; label: string }> = [];
@@ -965,15 +975,6 @@ describe('App', () => {
     });
 
     expect(movedRenderPanes[0]).toEqual(expect.objectContaining({ id: `browser:${docsPage!.id}` }));
-
-    await act(async () => {
-      await webmcpTool.execute?.({
-        tool: 'close_render_pane',
-        args: { paneId: 'file:AGENTS.md' },
-      }, {} as never);
-      await Promise.resolve();
-    });
-    expect(screen.queryByLabelText('Workspace file content')).not.toBeInTheDocument();
 
     await act(async () => {
       await webmcpTool.execute?.({
@@ -1303,8 +1304,11 @@ describe('App', () => {
       vi.advanceTimersByTime(150);
     });
 
-    // The new skill appears alongside the four default bundled skills.
-    expect(screen.getAllByText('SKILL.md')).toHaveLength(5);
+    await ensureFilesExpanded();
+    await expandWorkspaceDrive();
+    await clickTreeButton('.agents');
+    await clickTreeButton('skills');
+
     expect(screen.getByText('review-pr')).toBeInTheDocument();
 
     const storedFiles = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, Array<{ path: string }>>;
@@ -1504,6 +1508,121 @@ describe('App', () => {
     expect(streamCopilotChatMock).not.toHaveBeenCalled();
     expect(generateMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Chat input')).toHaveValue('Search the web for: browser sandbox constraints');
+  });
+
+  it('autocompletes loaded session skills in the chat composer', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const chatInput = screen.getByLabelText('Chat input');
+    fireEvent.change(chatInput, { target: { value: 'Use @create' } });
+
+    expect(screen.getByRole('listbox', { name: 'Skill suggestions' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'create-agent' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'create-agent-eval' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'create-agent-skill' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: 'create-agent-skill' }));
+
+    expect(screen.getByLabelText('Chat input')).toHaveValue('Use @create-agent-skill ');
+    expect(screen.queryByRole('listbox', { name: 'Skill suggestions' })).not.toBeInTheDocument();
+  });
+
+  it('recalls chat prompts with ArrowUp and clears the composer at the end of history', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: false }],
+    }));
+    streamCopilotChatMock.mockImplementation(async (_request, callbacks) => {
+      callbacks.onDone?.('ok');
+      return Promise.resolve();
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    disableAllTools();
+    const chatInput = screen.getByLabelText('Chat input') as HTMLTextAreaElement;
+
+    fireEvent.change(chatInput, { target: { value: 'First turn.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Second turn.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    chatInput.setSelectionRange(0, 0);
+    fireEvent.keyDown(chatInput, { key: 'ArrowUp' });
+    expect(screen.getByLabelText('Chat input')).toHaveValue('Second turn.');
+
+    chatInput.setSelectionRange(0, 0);
+    fireEvent.keyDown(chatInput, { key: 'ArrowUp' });
+    expect(screen.getByLabelText('Chat input')).toHaveValue('First turn.');
+
+    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+    fireEvent.keyDown(chatInput, { key: 'ArrowDown' });
+    expect(screen.getByLabelText('Chat input')).toHaveValue('Second turn.');
+
+    chatInput.setSelectionRange(chatInput.value.length, chatInput.value.length);
+    fireEvent.keyDown(chatInput, { key: 'ArrowDown' });
+    expect(screen.getByLabelText('Chat input')).toHaveValue('');
+  });
+
+  it('recalls terminal commands with ArrowUp and clears the input at the end of history', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Terminal mode' }));
+
+    const bashInput = screen.getByLabelText('Bash input') as HTMLInputElement;
+    fireEvent.change(bashInput, { target: { value: 'echo first' } });
+    fireEvent.submit(bashInput.closest('form')!);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Bash input'), { target: { value: 'pwd' } });
+    fireEvent.submit(screen.getByLabelText('Bash input').closest('form')!);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.keyDown(screen.getByLabelText('Bash input'), { key: 'ArrowUp' });
+    expect(screen.getByLabelText('Bash input')).toHaveValue('pwd');
+
+    fireEvent.keyDown(screen.getByLabelText('Bash input'), { key: 'ArrowUp' });
+    expect(screen.getByLabelText('Bash input')).toHaveValue('echo first');
+
+    fireEvent.keyDown(screen.getByLabelText('Bash input'), { key: 'ArrowDown' });
+    expect(screen.getByLabelText('Bash input')).toHaveValue('pwd');
+
+    fireEvent.keyDown(screen.getByLabelText('Bash input'), { key: 'ArrowDown' });
+    expect(screen.getByLabelText('Bash input')).toHaveValue('');
   });
 
   it('streams responses through GitHub Copilot when it is the selected provider', async () => {
@@ -2584,8 +2703,9 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const driveButton = screen.getByRole('button', { name: '//session-1-fs' });
-    const treeRow = driveButton.closest('[role="treeitem"]')!;
+    await ensureFilesExpanded();
+    const sessionFsButton = screen.getByRole('button', { name: '//session-1-fs' });
+    const treeRow = sessionFsButton.closest('[role="treeitem"]')!;
     fireEvent.contextMenu(treeRow);
 
     expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
@@ -2611,7 +2731,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
@@ -2632,7 +2752,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add Folder' }));
@@ -2653,7 +2773,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
@@ -2673,7 +2793,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
@@ -2693,7 +2813,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
 
@@ -2710,7 +2830,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
 
@@ -2727,7 +2847,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
 
     // The New toolbar button is the first menuitem when the drive root menu opens
@@ -2742,7 +2862,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
 
     const menu = screen.getByRole('menu', { name: 'Context menu' });
@@ -2773,7 +2893,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
@@ -2792,7 +2912,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
@@ -2818,7 +2938,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add Folder' }));
@@ -2844,7 +2964,7 @@ describe('App', () => {
     });
 
     // Open the context menu and choose Add File
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
@@ -2869,7 +2989,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const treeRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const treeRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add File' }));
@@ -2883,10 +3003,24 @@ describe('App', () => {
 
   // ── Session FS rename / delete ────────────────────────────────────
 
-  async function expandSessionFsDrive() {
-    // The //session-1-fs drive starts collapsed; click to expand it
-    fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
+  async function ensureFilesExpanded() {
+    if (!screen.queryByRole('button', { name: '//session-1-fs' }) && !screen.queryByRole('button', { name: '//workspace' })) {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Files' })[0]);
+    }
     await act(async () => { await Promise.resolve(); });
+  }
+
+  async function getSessionFsDriveRow() {
+    await ensureFilesExpanded();
+    return screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+  }
+
+  async function expandSessionFsDrive() {
+    await ensureFilesExpanded();
+    if (!screen.queryByRole('button', { name: 'workspace' })) {
+      fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
+      await act(async () => { await Promise.resolve(); });
+    }
   }
 
   it('context menu on a non-root VFS node shows Rename and Delete items', async () => {
@@ -2908,7 +3042,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const driveRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(driveRow);
 
     expect(screen.queryByRole('menuitem', { name: 'Rename' })).not.toBeInTheDocument();
@@ -3210,6 +3344,7 @@ describe('App', () => {
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
     // Verify the VFS drive for Session 1 exists before removal
+    await ensureFilesExpanded();
     expect(screen.getByRole('button', { name: '//session-1-fs' })).toBeInTheDocument();
 
     // Add a second session so removing Session 1 doesn't leave the panel empty
@@ -3305,7 +3440,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const driveRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(driveRow);
 
     const menu = screen.getByRole('menu', { name: 'Context menu' });
@@ -3318,8 +3453,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
-    await act(async () => { await Promise.resolve(); });
+    await expandSessionFsDrive();
 
     const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
     fireEvent.contextMenu(workspaceRow);
@@ -3336,7 +3470,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const driveRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(driveRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
@@ -3353,7 +3487,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const driveRow = screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!;
+    const driveRow = await getSessionFsDriveRow();
     fireEvent.contextMenu(driveRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
@@ -3393,7 +3527,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(await getSessionFsDriveRow());
     expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
   });
 
@@ -3440,7 +3574,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(await getSessionFsDriveRow());
     fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Properties' });
@@ -3473,7 +3607,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(await getSessionFsDriveRow());
     expect(screen.getByRole('menuitem', { name: 'History' })).toBeInTheDocument();
   });
 
@@ -3518,7 +3652,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(await getSessionFsDriveRow());
     fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
 
     expect(screen.getByRole('dialog', { name: 'Version history' })).toBeInTheDocument();
@@ -3530,7 +3664,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(await getSessionFsDriveRow());
     fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
 
     // The initial commit is always present; it should have a Rollback button
@@ -3542,7 +3676,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: '//session-1-fs' }).closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(await getSessionFsDriveRow());
     fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
 
     const rollbackBtn = screen.getAllByRole('button', { name: /Roll back/i })[0];
@@ -3599,6 +3733,39 @@ describe('App', () => {
 
   // ── File node: Move / Symlink / Duplicate ─────────────────────────────────
 
+  async function clickTreeButton(name: string) {
+    fireEvent.click(screen.getByRole('button', { name }));
+    await act(async () => { await Promise.resolve(); });
+  }
+
+  async function expandWorkspaceDrive() {
+    await ensureFilesExpanded();
+    if (!screen.queryByRole('button', { name: '.agents' }) && !screen.queryByRole('button', { name: 'AGENTS.md' })) {
+      await clickTreeButton('//workspace');
+    }
+  }
+
+  async function addSkillAndGetTreeItem(skillName: string) {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    fireEvent.click(screen.getByLabelText('Add file to Research'));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: skillName } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandWorkspaceDrive();
+    await clickTreeButton('.agents');
+    await clickTreeButton('skills');
+    await clickTreeButton(skillName);
+
+    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    if (!treeitem) throw new Error('SKILL.md treeitem not found');
+    return treeitem;
+  }
+
   /** Helper: add AGENTS.md to the Research workspace and return its treeitem element. */
   async function addAgentsMdAndGetTreeItem() {
     vi.useFakeTimers();
@@ -3607,7 +3774,9 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Add file to Research'));
     fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
-    await act(async () => { vi.advanceTimersByTime(150); await Promise.resolve(); });
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandWorkspaceDrive();
 
     // AGENTS.md appears both in the add-file modal and in the tree; pick the treeitem one
     const treeitem = screen.getAllByText('AGENTS.md')
@@ -3724,21 +3893,7 @@ describe('App', () => {
   });
 
   it('picker shows Directories section and directory rows when workspace has dirs', async () => {
-    vi.useFakeTimers();
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-
-    // Add a skill (lives at .agents/skills/foo/SKILL.md) so dirs like .agents/ exist
-    fireEvent.click(screen.getByLabelText('Add file to Research'));
-    await act(async () => { await Promise.resolve(); });
-    const nameInput = screen.getByLabelText('Capability name') as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: 'my-skill' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
-    await act(async () => { await Promise.resolve(); });
-
-    // Open Move on the skill treeitem (avoids a second render via addAgentsMdAndGetTreeItem)
-    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
-    expect(treeitem).toBeDefined();
+    const treeitem = await addSkillAndGetTreeItem('my-skill');
     fireEvent.contextMenu(treeitem!);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
 
@@ -3747,18 +3902,7 @@ describe('App', () => {
   });
 
   it('picker filters rows as user types in the breadcrumb input', async () => {
-    vi.useFakeTimers();
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-
-    // Create a skill file which creates .agents/ directory tree
-    fireEvent.click(screen.getByLabelText('Add file to Research'));
-    await act(async () => { await Promise.resolve(); });
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'foo' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
-    await act(async () => { await Promise.resolve(); });
-
-    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    const treeitem = await addSkillAndGetTreeItem('foo');
     fireEvent.contextMenu(treeitem!);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
 
@@ -3771,18 +3915,7 @@ describe('App', () => {
   });
 
   it('picker shows ".." row after navigating into a subdirectory', async () => {
-    vi.useFakeTimers();
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-
-    // Add a nested file (.agents/skills/foo/SKILL.md) via skill creation
-    fireEvent.click(screen.getByLabelText('Add file to Research'));
-    await act(async () => { await Promise.resolve(); });
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'bar' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
-    await act(async () => { await Promise.resolve(); });
-
-    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    const treeitem = await addSkillAndGetTreeItem('bar');
     fireEvent.contextMenu(treeitem!);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
 
@@ -3796,17 +3929,7 @@ describe('App', () => {
   });
 
   it('picker Backspace with empty filter and non-root dir steps up', async () => {
-    vi.useFakeTimers();
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-
-    fireEvent.click(screen.getByLabelText('Add file to Research'));
-    await act(async () => { await Promise.resolve(); });
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'baz' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
-    await act(async () => { await Promise.resolve(); });
-
-    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
+    const treeitem = await addSkillAndGetTreeItem('baz');
     fireEvent.contextMenu(treeitem!);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
 
