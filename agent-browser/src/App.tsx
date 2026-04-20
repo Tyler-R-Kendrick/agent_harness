@@ -2231,9 +2231,10 @@ function ChatPanel({
     }
     if (consumedPendingSearchRef.current === pendingSearch) return;
     consumedPendingSearchRef.current = pendingSearch;
-    void sendMessage(`Search the web for: ${pendingSearch}`);
+    setInput(`Search the web for: ${pendingSearch}`);
+    requestAnimationFrame(() => chatInputRef.current?.focus());
     onSearchConsumed();
-  }, [activeGenerationSessionId, pendingSearch, onSearchConsumed, sendMessage]);
+  }, [activeGenerationSessionId, onSearchConsumed, pendingSearch]);
 
   return (
     <section className={`chat-panel shared-console ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>

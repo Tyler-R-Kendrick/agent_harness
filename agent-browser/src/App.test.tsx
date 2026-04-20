@@ -1372,6 +1372,42 @@ describe('App', () => {
     expect(screen.queryByText('Generation stopped.')).not.toBeInTheDocument();
   });
 
+  it('queues omnibar searches in the composer without auto-sending them', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: false,
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    disableAllTools();
+
+    const omnibar = screen.getByLabelText('Omnibar');
+    fireEvent.change(omnibar, { target: { value: 'browser sandbox constraints' } });
+    fireEvent.submit(omnibar.closest('form')!);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(streamCopilotChatMock).not.toHaveBeenCalled();
+    expect(generateMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Chat input')).toHaveValue('Search the web for: browser sandbox constraints');
+  });
+
   it('streams responses through GitHub Copilot when it is the selected provider', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({

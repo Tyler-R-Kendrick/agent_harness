@@ -693,6 +693,20 @@ test('captures omnibar URL navigation creating a new tab', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/omnibar-navigation.png', fullPage: true });
 });
 
+test('captures omnibar search drafting into the chat composer', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+  await page.getByLabel('Omnibar').fill('browser sandbox constraints');
+  await page.getByLabel('Omnibar').press('Enter');
+
+  await expect(page.getByLabel('Chat input')).toHaveValue('Search the web for: browser sandbox constraints');
+  await expect(page.getByText('Search the web for: browser sandbox constraints', { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/omnibar-search-draft.png', fullPage: true });
+});
+
 // ── User flow: workspace file editing ─────────────────────────────────
 
 test('captures workspace file edit and delete flow', async ({ page }) => {

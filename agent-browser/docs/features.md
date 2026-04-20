@@ -163,7 +163,18 @@ Playwright test: `captures omnibar URL navigation creating a new tab`
 How to interact:
 - Type a URL in the omnibar and press Enter to open it as a new tab.
 - The page overlay opens immediately with the simulated browser chrome.
-- Search queries (non-URLs) are forwarded to the assistant as a web search request.
+- Search queries (non-URLs) are drafted into the chat composer so you can review or edit them before sending.
+
+## Omnibar search draft
+
+Playwright test: `captures omnibar search drafting into the chat composer`
+
+![Omnibar search draft screenshot](./screenshots/omnibar-search-draft.png)
+
+How to interact:
+- Type a non-URL query in the omnibar and press Enter.
+- The chat composer is prefilled with a `Search the web for: ...` draft.
+- The assistant does not start an LLM request until you explicitly send the drafted message.
 
 ## Workspace file editing
 
