@@ -34,11 +34,12 @@ describe('resolveLanguageModel', () => {
   });
 
   it('returns a CopilotLanguageModel for copilot config', () => {
-    const config: AgentModelConfig = { kind: 'copilot', modelId: 'gpt-4.1' };
+    const config: AgentModelConfig = { kind: 'copilot', modelId: 'gpt-4.1', sessionId: 'chat-session-1' };
     const model = resolveLanguageModel(config) as any;
     expect(model).toBeDefined();
     expect(model.provider).toBe('copilot');
     expect(model.modelId).toBe('gpt-4.1');
+    expect(model.sessionId).toBe('chat-session-1');
     expect(model.specificationVersion).toBe('v3');
   });
 

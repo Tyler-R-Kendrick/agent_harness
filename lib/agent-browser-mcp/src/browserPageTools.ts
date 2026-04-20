@@ -1,6 +1,6 @@
 import { ModelContext } from '../../webmcp/src/index';
 
-import type { RegisterWorkspaceToolsOptions } from './workspaceToolTypes';
+import type { RegisterWorkspaceToolsOptions, WorkspaceMcpBrowserPage } from './workspaceToolTypes';
 import type { BrowserPageInput } from './workspaceToolShared';
 import {
   normalizeBrowserPageMutationResult,
@@ -34,7 +34,7 @@ export function registerBrowserPageSurface(modelContext: ModelContext, options: 
       && typeof (result as { id?: unknown }).id === 'string'
       && typeof (result as { title?: unknown }).title === 'string'
       && typeof (result as { url?: unknown }).url === 'string') {
-      return toBrowserPageResult(result as RegisterWorkspaceToolsOptions['browserPages'][number]);
+      return toBrowserPageResult(result as WorkspaceMcpBrowserPage);
     }
 
     return { pageId, [action]: true };
@@ -45,7 +45,7 @@ export function registerBrowserPageSurface(modelContext: ModelContext, options: 
       && typeof (result as { id?: unknown }).id === 'string'
       && typeof (result as { title?: unknown }).title === 'string'
       && typeof (result as { url?: unknown }).url === 'string') {
-      return toBrowserPageResult(result as RegisterWorkspaceToolsOptions['browserPages'][number]);
+      return toBrowserPageResult(result as WorkspaceMcpBrowserPage);
     }
 
     return { pageId, direction };

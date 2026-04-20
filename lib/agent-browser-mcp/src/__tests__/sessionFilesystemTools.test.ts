@@ -8,6 +8,15 @@ const SESSION_DRIVES = [
   { sessionId: 'session-2', label: 'Session 2', mounted: false },
 ];
 
+const VISIBLE_SESSION_DRIVES = [
+  { sessionId: 'session-1', label: '//session-1-fs', mounted: true },
+];
+
+const MULTI_VISIBLE_SESSION_DRIVES = [
+  { sessionId: 'session-1', label: '//session-1-fs', mounted: true },
+  { sessionId: 'session-2', label: '//session-2-fs', mounted: true },
+];
+
 const SESSION_FS_ENTRIES = [
   { sessionId: 'session-1', path: '/', kind: 'folder' as const, isRoot: true },
   { sessionId: 'session-1', path: '/notes', kind: 'folder' as const },
@@ -257,6 +266,27 @@ describe('registerSessionFilesystemTools', () => {
     expect(onCreateSessionFsEntry).toHaveBeenCalledWith({ sessionId: 'session-1', path: '/empty.txt', kind: 'file', content: '' });
   });
 
+  it('accepts visible session drive locations without requiring sessionId', async () => {
+    const modelContext = new ModelContext();
+    const onCreateSessionFsEntry = vi.fn(async () => undefined);
+
+    registerSessionFilesystemTools(modelContext, {
+      workspaceName: 'Research',
+      sessionDrives: VISIBLE_SESSION_DRIVES,
+      sessionFsEntries: SESSION_FS_ENTRIES,
+      onCreateSessionFsEntry,
+    });
+
+    const tool = createWebMcpTool(modelContext);
+    const result = await tool.execute?.({
+      tool: 'create_session_file',
+      args: { path: '//session-1-fs/workspace/linked.md', content: 'linked' },
+    }, {} as never);
+
+    expect(result).toMatchObject({ sessionId: 'session-1', path: '/workspace/linked.md', kind: 'file', content: 'linked' });
+    expect(onCreateSessionFsEntry).toHaveBeenCalledWith({ sessionId: 'session-1', path: '/workspace/linked.md', kind: 'file', content: 'linked' });
+  });
+
   it('writes a session file', async () => {
     const modelContext = new ModelContext();
     const onWriteSessionFsFile = vi.fn(async () => undefined);
@@ -315,6 +345,52 @@ describe('registerSessionFilesystemTools', () => {
 
     expect(result).toMatchObject({ sessionId: 'session-1', path: '/README.md', previousPath: '/readme.md' });
     expect(onRenameSessionFsEntry).toHaveBeenCalledWith({ sessionId: 'session-1', path: '/readme.md', newPath: '/README.md' });
+  });
+
+  it('renames a session filesystem entry using visible session drive paths', async () => {
+    const modelContext = new ModelContext();
+    const onRenameSessionFsEntry = vi.fn(async () => undefined);
+
+    registerSessionFilesystemTools(modelContext, {
+      workspaceName: 'Research',
+      sessionDrives: VISIBLE_SESSION_DRIVES,
+      sessionFsEntries: SESSION_FS_ENTRIES,
+      onRenameSessionFsEntry,
+    });
+
+    const tool = createWebMcpTool(modelContext);
+    const result = await tool.execute?.({
+      tool: 'rename_session_filesystem_entry',
+      args: {
+        path: '//session-1-fs/readme.md',
+        newPath: '//session-1-fs/README.md',
+      },
+    }, {} as never);
+
+    expect(result).toMatchObject({ sessionId: 'session-1', path: '/README.md', previousPath: '/readme.md' });
+    expect(onRenameSessionFsEntry).toHaveBeenCalledWith({ sessionId: 'session-1', path: '/readme.md', newPath: '/README.md' });
+  });
+
+  it('rejects visible rename targets that switch sessions', async () => {
+    const modelContext = new ModelContext();
+    const onRenameSessionFsEntry = vi.fn(async () => undefined);
+
+    registerSessionFilesystemTools(modelContext, {
+      workspaceName: 'Research',
+      sessionDrives: MULTI_VISIBLE_SESSION_DRIVES,
+      sessionFsEntries: SESSION_FS_ENTRIES,
+      onRenameSessionFsEntry,
+    });
+
+    const tool = createWebMcpTool(modelContext);
+    await expect(tool.execute?.({
+      tool: 'rename_session_filesystem_entry',
+      args: {
+        path: '//session-1-fs/readme.md',
+        newPath: '//session-2-fs/README.md',
+      },
+    }, {} as never)).rejects.toThrow('must stay within the same session');
+    expect(onRenameSessionFsEntry).not.toHaveBeenCalled();
   });
 
   it('renames a session filesystem entry using newName', async () => {

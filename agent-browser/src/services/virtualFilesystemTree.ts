@@ -29,6 +29,39 @@ function displayDriveName(segment: string): string {
   return `//${normalizeDriveName(segment)}`;
 }
 
+function normalizeWorkspaceReferencePath(path: string): string | undefined {
+  const trimmed = path.trim();
+  if (!trimmed) return undefined;
+
+  const driveStyleMatch = trimmed.match(/^\/\/([^/]+)\/(.+)$/);
+  if (driveStyleMatch) {
+    const [, driveSegment, rest] = driveStyleMatch;
+    const normalizedRest = rest.replace(/^\/+/, '');
+    if (!normalizedRest) return undefined;
+    return driveSegment === 'workspace'
+      ? normalizedRest
+      : `${driveSegment}/${normalizedRest}`;
+  }
+
+  const normalized = trimmed.replace(/^\/+/, '');
+  return normalized || undefined;
+}
+
+function parseWorkspaceReferencePath(content?: string): string | undefined {
+  if (!content) return undefined;
+
+  if (content.startsWith('workspace://')) {
+    return normalizeWorkspaceReferencePath(content.slice('workspace://'.length));
+  }
+
+  const arrowMatch = content.match(/^(?:->|→)\s*(.+)$/);
+  if (!arrowMatch) return undefined;
+
+  const rawTarget = arrowMatch[1]?.trim() ?? '';
+  if (!rawTarget.startsWith('//')) return undefined;
+  return normalizeWorkspaceReferencePath(rawTarget);
+}
+
 function driveSortRank(name: string): number {
   return (name === WORKSPACE_DRIVE_NAME || name === 'workspace') ? 0 : 1;
 }
@@ -133,10 +166,13 @@ export function buildMountedTerminalDriveNodes(
       const nodeKind = inferNodeKind(paths, fullPath);
       if (nodeKind === 'file') {
         const content = fileContents?.[fullPath];
-        const filePath = content?.startsWith('workspace://')
-          ? content.slice('workspace://'.length)
-          : undefined;
-        cursor.children = [...(cursor.children ?? []), { id: nodeId, name: part, type: 'file', ...(filePath ? { filePath } : {}) }];
+        const filePath = parseWorkspaceReferencePath(content);
+        cursor.children = [...(cursor.children ?? []), {
+          id: nodeId,
+          name: part,
+          type: 'file',
+          ...(filePath ? { filePath, isReference: true } : {}),
+        }];
       } else {
         const next = createFolderNode(nodeId, part);
         cursor.children = [...(cursor.children ?? []), next];

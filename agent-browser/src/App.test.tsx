@@ -271,7 +271,7 @@ describe('App', () => {
     expect(selected).toBe(total);       // all selected by default
 
     // CLI is a flat item directly under Built-In (no sub-group)
-    expect(screen.getByRole('checkbox', { name: 'CLI', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'CLI' })).toBeInTheDocument();
 
     // All six surface sub-groups must appear inside the Built-In bucket —
     // not as separate top-level groups. Each must have a toggle-all checkbox.
@@ -373,6 +373,93 @@ describe('App', () => {
       uri: 'files://workspace/AGENTS.md',
       updatedAt: '2026-04-18T00:00:00.000Z',
       preview: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
+    }));
+  });
+
+  it('opens a session filesystem workspace symlink as an editable file reference', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    expect(modelContext).toBeDefined();
+
+    const webmcpTool = createWebMcpTool(modelContext!);
+    let createdReference: { path: string; content: string } | undefined;
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'add_filesystem_entry',
+        args: {
+          action: 'create',
+          targetType: 'workspace-file',
+          kind: 'file',
+          path: 'AGENTS.md',
+          content: '# Original\nKeep this synced.',
+        },
+      }, {} as never);
+      createdReference = await webmcpTool.execute?.({
+        tool: 'add_filesystem_entry',
+        args: {
+          action: 'symlink',
+          targetType: 'session-fs-entry',
+          kind: 'file',
+          path: '//session-1-fs/workspace',
+          sourcePath: '//workspace/AGENTS.md',
+        },
+      }, {} as never) as { path: string; content: string };
+      await Promise.resolve();
+    });
+
+    expect(createdReference).toEqual(expect.objectContaining({
+      path: '/workspace/AGENTS.md',
+      content: 'workspace://AGENTS.md',
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const workspaceFolderRow = screen.getAllByRole('treeitem').find((row) =>
+      row.textContent?.trim() === 'workspace' && row.querySelector('[data-icon="folder"], [data-icon="folderOpen"]'),
+    );
+    expect(workspaceFolderRow).toBeDefined();
+
+    const referenceRow = screen.getAllByRole('treeitem').find((row) =>
+      row.textContent?.includes('AGENTS.md') && row.querySelector('[data-icon="link"]'),
+    );
+    expect(referenceRow).toBeDefined();
+
+    const referenceButton = referenceRow?.querySelector<HTMLButtonElement>('.tree-button');
+    expect(referenceButton).not.toBeNull();
+    fireEvent.click(referenceButton!);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('File editor')).toHaveTextContent('AGENTS.md');
+    expect(screen.getByLabelText('Workspace file content')).toHaveValue('# Original\nKeep this synced.');
+
+    fireEvent.change(screen.getByLabelText('Workspace file content'), {
+      target: { value: '# Updated\nKeep this synced through refs.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save file' }));
+
+    let updatedFile: { preview: string } | undefined;
+    await act(async () => {
+      updatedFile = await webmcpTool.execute?.({
+        tool: 'read_filesystem_properties',
+        args: { targetType: 'workspace-file', path: 'AGENTS.md' },
+      }, {} as never) as { preview: string };
+    });
+
+    expect(updatedFile).toEqual(expect.objectContaining({
+      preview: '# Updated\nKeep this synced through refs.',
     }));
   });
 
@@ -1447,11 +1534,55 @@ describe('App', () => {
       expect.objectContaining({
         modelId: 'gpt-4.1',
         prompt: expect.stringContaining('Active workspace: Research'),
+        sessionId: expect.any(String),
       }),
       expect.any(Object),
       expect.any(AbortSignal),
     );
     expect(screen.getByText('Copilot response')).toBeInTheDocument();
+  });
+
+  it('reuses the same GHCP session id across multiple sends in one chat session', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: false }],
+    }));
+
+    const sessionIds: string[] = [];
+    streamCopilotChatMock.mockImplementation(async (request, callbacks) => {
+      sessionIds.push((request as { sessionId: string }).sessionId);
+      callbacks.onDone?.('Copilot response');
+      return Promise.resolve();
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'First turn.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Second turn.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(sessionIds).toHaveLength(2);
+    expect(sessionIds[0]).toBeTruthy();
+    expect(sessionIds[0]).toBe(sessionIds[1]);
   });
 
   it('renders cli tool calls as assistant-owned chips and reveals their output on expand', async () => {
@@ -1488,6 +1619,12 @@ describe('App', () => {
     await act(async () => {
       await Promise.resolve();
     });
+
+    expect(resolveLanguageModelMock).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'copilot',
+      modelId: 'gpt-4.1',
+      sessionId: expect.any(String),
+    }));
 
     const toolChip = screen.getByTestId('tool-chip-cli');
     expect(toolChip).toBeInTheDocument();

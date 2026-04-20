@@ -2,7 +2,6 @@ import { ModelContext } from '../../webmcp/src/index';
 
 import type {
   RegisterSessionToolsOptions,
-  WorkspaceMcpWriteSessionInput,
 } from './workspaceToolTypes';
 import {
   applySessionMutation,

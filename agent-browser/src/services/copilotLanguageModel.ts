@@ -95,12 +95,13 @@ type CopilotStreamEvent =
 async function* streamCopilotProxy(
   modelId: string,
   prompt: string,
+  sessionId: string,
   signal?: AbortSignal,
 ): AsyncGenerator<CopilotStreamEvent> {
   const response = await fetch('/api/copilot/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ modelId, prompt }),
+    body: JSON.stringify({ modelId, prompt, sessionId }),
     signal,
   });
 
@@ -134,10 +135,12 @@ export class CopilotLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = 'v3' as const;
   readonly provider = 'copilot';
   readonly modelId: string;
+  readonly sessionId: string;
   readonly supportedUrls = {};
 
-  constructor(modelId: string) {
+  constructor(modelId: string, sessionId: string) {
     this.modelId = modelId;
+    this.sessionId = sessionId;
   }
 
   async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
@@ -145,7 +148,7 @@ export class CopilotLanguageModel implements LanguageModelV3 {
     let text = '';
     let finishReason: LanguageModelV3FinishReason = STOP_FINISH;
 
-    for await (const event of streamCopilotProxy(this.modelId, prompt, options.abortSignal)) {
+    for await (const event of streamCopilotProxy(this.modelId, prompt, this.sessionId, options.abortSignal)) {
       if (event.type === 'token') text += event.delta;
       if (event.type === 'final') text = event.content;
       if (event.type === 'error') throw new Error(event.message);
@@ -181,6 +184,7 @@ export class CopilotLanguageModel implements LanguageModelV3 {
   async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
     const prompt = extractPromptText(options);
     const modelId = this.modelId;
+    const sessionId = this.sessionId;
     const signal = options.abortSignal;
 
     const stream = new ReadableStream<LanguageModelV3StreamPart>({
@@ -191,7 +195,7 @@ export class CopilotLanguageModel implements LanguageModelV3 {
 
         try {
           let fullText = '';
-          for await (const event of streamCopilotProxy(modelId, prompt, signal)) {
+          for await (const event of streamCopilotProxy(modelId, prompt, sessionId, signal)) {
             if (event.type === 'token') {
               controller.enqueue({ type: 'text-delta', id: textId, delta: event.delta });
               fullText += event.delta;

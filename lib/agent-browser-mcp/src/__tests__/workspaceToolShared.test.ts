@@ -3,6 +3,10 @@ import {
   normalizeDeleteWorkspaceFileResult,
   normalizeBrowserPageMutationResult,
   normalizeSessionMutationResult,
+  normalizeSessionFsPath,
+  normalizeWorkspaceFilePath,
+  resolveSessionFsLocationPath,
+  resolveSessionFsPathInput,
   readSessionFsEntry,
   readBrowserPage,
   readSessionSummary,
@@ -24,7 +28,88 @@ const FS_ENTRIES = [
   { sessionId: 'session-1', path: '/file.txt', kind: 'file' as const, content: 'hello' },
 ];
 
+const VISIBLE_SESSION_DRIVES = [
+  { sessionId: 'session-1', label: '//session-1-fs', mounted: true },
+];
+
 describe('workspaceToolShared helpers', () => {
+  describe('normalizeSessionFsPath', () => {
+    it('normalizes relative paths and rejects empty ones', () => {
+      expect(normalizeSessionFsPath('workspace/AGENTS.md')).toBe('/workspace/AGENTS.md');
+      expect(normalizeSessionFsPath('/workspace/')).toBe('/workspace');
+      expect(() => normalizeSessionFsPath('   ')).toThrow('Session filesystem path must not be empty.');
+    });
+  });
+
+  describe('normalizeWorkspaceFilePath', () => {
+    it('normalizes workspace and non-workspace drive-style file paths', () => {
+      expect(normalizeWorkspaceFilePath('//workspace/AGENTS.md')).toBe('AGENTS.md');
+      expect(normalizeWorkspaceFilePath('//docs/Quarter Plan.md')).toBe('docs/Quarter Plan.md');
+    });
+
+    it('rejects drive-style roots that do not include a file path', () => {
+      expect(() => normalizeWorkspaceFilePath('//workspace')).toThrow('must include a file path');
+      expect(() => normalizeWorkspaceFilePath('//docs/')).toThrow('must include a file path');
+    });
+
+    it('rejects drive-style paths whose remainder is only slashes', () => {
+      expect(() => normalizeWorkspaceFilePath('//workspace///')).toThrow('must include a file path');
+    });
+
+    it('rejects empty slash-only paths', () => {
+      expect(() => normalizeWorkspaceFilePath('/')).toThrow('must not be empty');
+      expect(() => normalizeWorkspaceFilePath('   ')).toThrow('must not be empty');
+    });
+  });
+
+  describe('resolveSessionFsLocationPath', () => {
+    it('resolves visible session filesystem locations into sessionId and path', () => {
+      expect(resolveSessionFsLocationPath(VISIBLE_SESSION_DRIVES, '//session-1-fs/workspace/AGENTS.md')).toEqual({
+        sessionId: 'session-1',
+        path: '/workspace/AGENTS.md',
+      });
+      expect(resolveSessionFsLocationPath(VISIBLE_SESSION_DRIVES, '//session-1-fs')).toEqual({
+        sessionId: 'session-1',
+        path: '/workspace',
+      });
+    });
+
+    it('returns null for non-session-drive paths', () => {
+      expect(resolveSessionFsLocationPath(VISIBLE_SESSION_DRIVES, '//workspace/AGENTS.md')).toBeNull();
+      expect(resolveSessionFsLocationPath(VISIBLE_SESSION_DRIVES, '/workspace/AGENTS.md')).toBeNull();
+    });
+  });
+
+  describe('resolveSessionFsPathInput', () => {
+    it('accepts visible session filesystem locations without a sessionId', () => {
+      expect(resolveSessionFsPathInput(VISIBLE_SESSION_DRIVES, { path: '//session-1-fs/workspace/AGENTS.md' })).toEqual({
+        sessionId: 'session-1',
+        path: '/workspace/AGENTS.md',
+      });
+    });
+
+    it('rejects explicit session ids that conflict with the visible session path', () => {
+      expect(() => resolveSessionFsPathInput(VISIBLE_SESSION_DRIVES, {
+        sessionId: 'session-2',
+        path: '//session-1-fs/workspace/AGENTS.md',
+      })).toThrow('does not match path');
+    });
+
+    it('falls back to explicit sessionId plus internal path when no visible drive label is used', () => {
+      expect(resolveSessionFsPathInput(VISIBLE_SESSION_DRIVES, {
+        sessionId: 'session-1',
+        path: '/workspace/AGENTS.md',
+      })).toEqual({
+        sessionId: 'session-1',
+        path: '/workspace/AGENTS.md',
+      });
+    });
+
+    it('requires a sessionId when the path is not a visible session drive location', () => {
+      expect(() => resolveSessionFsPathInput(VISIBLE_SESSION_DRIVES, { path: '/workspace/AGENTS.md' })).toThrow('must include a sessionId');
+    });
+  });
+
   describe('normalizeDeleteWorkspaceFileResult', () => {
     it('returns plain-object results verbatim', () => {
       const plain = { path: '/foo.txt', deleted: false, extra: 'yes' };

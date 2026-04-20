@@ -430,6 +430,7 @@ const icons = {
   folderOpen: FolderOpen,
   hardDrive: HardDrive,
   file: File,
+  link: Link,
   x: X,
   send: SendHorizontal,
   loader: LoaderCircle,
@@ -1907,7 +1908,7 @@ function ChatPanel({
 
       try {
         const model = resolveLanguageModel(selectedProvider === 'ghcp'
-          ? { kind: 'copilot', modelId: effectiveSelectedCopilotModelId }
+          ? { kind: 'copilot', modelId: effectiveSelectedCopilotModelId, sessionId: activeChatSessionId }
           : { kind: 'local', modelId: activeLocalModel!.id, task: activeLocalModel!.task });
         const allTools = createDefaultTools({
           appendSharedMessages,
@@ -2059,6 +2060,7 @@ function ChatPanel({
       if (selectedProvider === 'ghcp') {
         await streamGhcpChat({
           modelId: effectiveSelectedCopilotModelId,
+          sessionId: activeChatSessionId,
           workspaceName,
           workspacePromptContext,
           messages: nextMessages,
@@ -3658,12 +3660,12 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
           onNodeContextMenu(rect.right, rect.bottom, node);
         };
         return (
-          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
+          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
             onContextMenu={hasContextMenu ? (e) => { e.preventDefault(); onNodeContextMenu(e.clientX, e.clientY, node); } : undefined}
           >
             <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
               {isFile ? (
-                <><span className="tree-chevron-spacer" /><Icon name="file" size={12} color="#a5b4fc" /></>
+                <><span className="tree-chevron-spacer" /><Icon name={node.isReference ? 'link' : 'file'} size={12} color={node.isReference ? '#fbbf24' : '#a5b4fc'} /></>
               ) : isFolder ? (
                 <>
                   <span className={`tree-chevron ${node.expanded ? 'tree-chevron-expanded' : ''}`}><Icon name="chevronRight" size={11} color="rgba(255,255,255,.25)" /></span>
@@ -5452,23 +5454,6 @@ function AgentBrowserApp() {
     addSessionToWorkspace(activeWorkspaceId, name) ?? undefined
   ), [activeWorkspaceId, addSessionToWorkspace]);
 
-  const openSessionFromMcp = useCallback(async (sessionId: string) => {
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      const currentIds = existing.activeSessionIds ?? [];
-      if (currentIds.includes(sessionId)) {
-        return current;
-      }
-      return {
-        ...current,
-        [activeWorkspaceId]: {
-          ...existing,
-          activeSessionIds: [...currentIds, sessionId],
-        },
-      };
-    });
-  }, [activeWorkspace, activeWorkspaceId]);
-
   const closeSessionFromMcp = useCallback(async (sessionId: string) => {
     setWorkspaceViewStateByWorkspace((current) => {
       const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
@@ -6504,11 +6489,15 @@ function AgentBrowserApp() {
               editingFilePath: null,
             },
           }));
-          const panelsById = new Map<string, Panel>([
-            ...(editingFile ? [[`file:${editingFile.path}`, { type: 'file', file: editingFile } as FilePanel]] : []),
-            ...openBrowserTabs.map((tab): [string, BrowserPanel] => [`browser:${tab.id}`, { type: 'browser', tab }]),
-            ...activeSessionIds.map((id): [string, SessionPanel] => [`session:${id}`, { type: 'session', id }]),
-          ]);
+          const panelEntries: Array<[string, Panel]> = [];
+          if (editingFile) {
+            panelEntries.push([`file:${editingFile.path}`, { type: 'file', file: editingFile }]);
+          }
+          panelEntries.push(
+            ...openBrowserTabs.map((tab): [string, Panel] => [`browser:${tab.id}`, { type: 'browser', tab }]),
+            ...activeSessionIds.map((id): [string, Panel] => [`session:${id}`, { type: 'session', id }]),
+          );
+          const panelsById = new Map<string, Panel>(panelEntries);
           const allPanels: Panel[] = activeRenderPanes
             .map((pane) => panelsById.get(pane.id) ?? null)
             .filter((panel): panel is Panel => panel !== null);

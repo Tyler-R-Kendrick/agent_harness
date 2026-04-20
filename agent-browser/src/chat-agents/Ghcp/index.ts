@@ -60,12 +60,14 @@ function filterMarkerLines(content: string): string {
 export async function streamGhcpChat(
   {
     modelId,
+    sessionId,
     workspaceName,
     workspacePromptContext,
     messages,
     latestUserInput,
   }: {
     modelId: string;
+    sessionId: string;
     workspaceName: string;
     workspacePromptContext: string;
     messages: ChatMessage[];
@@ -112,6 +114,7 @@ export async function streamGhcpChat(
   await streamCopilotChat(
     {
       modelId,
+      sessionId,
       prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput }),
     },
     {

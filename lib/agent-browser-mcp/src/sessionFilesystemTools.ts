@@ -15,6 +15,8 @@ import {
   parentPath,
   readSessionFsEntry,
   requireCallback,
+  resolveSessionFsLocationPath,
+  resolveSessionFsPathInput,
   toSessionFolderResult,
   toSessionFsEntrySummary,
   toSessionFsFileResult,
@@ -157,7 +159,8 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       additionalProperties: false,
     },
     execute: async (input: object) => {
-      const entry = readSessionFsEntry(sessionFsEntries, input as SessionFsPathInput);
+        const resolvedInput = resolveSessionFsPathInput(sessionDrives, input as SessionFsPathInput);
+        const entry = readSessionFsEntry(sessionFsEntries, resolvedInput);
       if (entry.kind !== 'folder') {
         throw new TypeError(`Session filesystem path "${entry.path}" is not a folder.`);
       }
@@ -181,7 +184,8 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
         additionalProperties: false,
       },
       execute: async (input: object) => {
-        const entry = readSessionFsEntry(sessionFsEntries, input as SessionFsPathInput);
+        const resolvedInput = resolveSessionFsPathInput(sessionDrives, input as SessionFsPathInput);
+        const entry = readSessionFsEntry(sessionFsEntries, resolvedInput);
         if (entry.kind !== 'file') {
           throw new TypeError(`Session filesystem path "${entry.path}" is not a file.`);
         }
@@ -221,8 +225,7 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       },
       execute: async (input: object) => {
         const typedInput = input as SessionFsWriteInput;
-        const sessionId = String(typedInput.sessionId ?? '').trim();
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(sessionDrives, typedInput);
         const content = typeof typedInput.content === 'string' ? typedInput.content : '';
         const result = await onCreateSessionFsEntry({ sessionId, path, kind: 'file', content });
         return normalizeSessionFsMutationResult('create', { sessionId, path, kind: 'file', content }, result);
@@ -244,8 +247,7 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       },
       execute: async (input: object) => {
         const typedInput = input as SessionFsPathInput;
-        const sessionId = String(typedInput.sessionId ?? '').trim();
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(sessionDrives, typedInput);
         const result = await onCreateSessionFsEntry({ sessionId, path, kind: 'folder' });
         return normalizeSessionFsMutationResult('create', { sessionId, path, kind: 'folder' }, result);
       },
@@ -269,8 +271,7 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       },
       execute: async (input: object) => {
         const typedInput = input as SessionFsWriteInput;
-        const sessionId = String(typedInput.sessionId ?? '').trim();
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(sessionDrives, typedInput);
         const content = String(typedInput.content ?? '');
         const result = await onWriteSessionFsFile({ sessionId, path, content });
         return normalizeSessionFsMutationResult('write', { sessionId, path, kind: 'file', content }, result);
@@ -294,8 +295,7 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       },
       execute: async (input: object) => {
         const typedInput = input as SessionFsPathInput;
-        const sessionId = String(typedInput.sessionId ?? '').trim();
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(sessionDrives, typedInput);
         const result = await onDeleteSessionFsEntry({ sessionId, path });
         return normalizeSessionFsMutationResult('delete', { sessionId, path }, result);
       },
@@ -320,10 +320,18 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       },
       execute: async (input: object) => {
         const typedInput = input as SessionFsRenameInput;
-        const sessionId = String(typedInput.sessionId ?? '').trim();
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(sessionDrives, typedInput);
         const newPath = typeof typedInput.newPath === 'string' && typedInput.newPath.trim()
-          ? normalizeSessionFsPath(typedInput.newPath)
+          ? (() => {
+              const resolvedNextPath = resolveSessionFsLocationPath(sessionDrives, typedInput.newPath);
+              if (resolvedNextPath) {
+                if (resolvedNextPath.sessionId !== sessionId) {
+                  throw new TypeError('Session filesystem rename nextPath must stay within the same session.');
+                }
+                return resolvedNextPath.path;
+              }
+              return normalizeSessionFsPath(typedInput.newPath);
+            })()
           : (() => {
               const newName = String(typedInput.newName ?? '').trim();
               if (!newName) {
@@ -359,8 +367,10 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
       },
       execute: async (input: object) => {
         const typedInput = input as SessionFsScaffoldInput;
-        const sessionId = String(typedInput.sessionId ?? '').trim();
-        const basePath = normalizeSessionFsPath(String(typedInput.basePath ?? ''));
+        const { sessionId, path: basePath } = resolveSessionFsPathInput(sessionDrives, {
+          sessionId: typedInput.sessionId,
+          path: typedInput.basePath,
+        });
         const template = typedInput.template;
         if (!template) {
           throw new TypeError('Session filesystem scaffolding requires a template.');

@@ -20,6 +20,32 @@ async function mockCopilotStatus(page: Page, overrides: Partial<typeof DEFAULT_C
   });
 }
 
+async function invokeWebMcpTool<T>(page: Page, toolName: string, args: Record<string, unknown> = {}): Promise<T> {
+  return page.evaluate(async ({ toolName, args }) => {
+    const modelContext = (navigator as Navigator & { modelContext?: unknown }).modelContext as Record<PropertyKey, unknown> | undefined;
+    if (!modelContext) {
+      throw new Error('WebMCP model context is unavailable.');
+    }
+
+    const registry = Object.getOwnPropertySymbols(modelContext)
+      .map((symbol) => modelContext[symbol])
+      .find((candidate) => {
+        if (!candidate || typeof candidate !== 'object') return false;
+        const maybeRegistry = candidate as { get?: (name: string) => unknown; list?: () => unknown[] };
+        return typeof maybeRegistry.get === 'function'
+          && typeof maybeRegistry.list === 'function'
+          && Boolean(maybeRegistry.get(toolName));
+      }) as { get: (name: string) => { execute?: (input: object, client: object) => Promise<unknown> | unknown } | undefined } | undefined;
+
+    const tool = registry?.get(toolName);
+    if (!tool?.execute) {
+      throw new Error(`WebMCP tool "${toolName}" is not registered.`);
+    }
+
+    return await tool.execute(args, {});
+  }, { toolName, args }) as Promise<T>;
+}
+
 function captureRuntimeErrors(page: Page) {
   const errors: string[] = [];
   const isLocalUrl = (url: string) => url.startsWith('http://127.0.0.1:4173/') || url.startsWith('http://localhost:4173/');
@@ -362,6 +388,99 @@ self.onmessage = (event) => {
 
   await page.getByRole('button', { name: 'Stop response' }).click();
   await expect(page.getByText('Stopped')).toBeVisible();
+});
+
+test('reuses one GHCP session across tool-loop chat requests', async ({ page }) => {
+  await mockCopilotStatus(page, {
+    authenticated: true,
+    models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: false }],
+  });
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  const requests: Array<{ sessionId?: string; prompt?: string }> = [];
+
+  await page.route('**/api/copilot/chat', async (route) => {
+    const payload = route.request().postDataJSON() as { sessionId?: string; prompt?: string };
+    requests.push(payload);
+
+    if (requests.length === 1) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/x-ndjson',
+        body: `${JSON.stringify({ type: 'final', content: '<tool_call>{"tool":"cli","args":{"command":"echo hello from playwright"}}</tool_call>' })}\n${JSON.stringify({ type: 'done' })}\n`,
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/x-ndjson',
+      body: `${JSON.stringify({ type: 'final', content: 'CLI check complete.' })}\n${JSON.stringify({ type: 'done' })}\n`,
+    });
+  });
+
+  await page.goto('/');
+  await expect(page.getByLabel('Chat input')).toBeVisible();
+  await page.getByLabel('Chat input').fill('Run a CLI check.');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByText('CLI check complete.')).toBeVisible();
+  await expect(page.getByTestId('tool-chip-cli')).toBeVisible();
+
+  expect(requests).toHaveLength(2);
+  expect(requests[0]?.sessionId).toBeTruthy();
+  expect(requests[0]?.sessionId).toBe(requests[1]?.sessionId);
+  assertNoRuntimeErrors();
+});
+
+test('renders a session-fs workspace symlink as a reference file and saves through to the original', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+
+  await page.goto('/');
+  await expect(page.getByLabel('Workspace tree')).toBeVisible();
+
+  await invokeWebMcpTool(page, 'add_filesystem_entry', {
+    action: 'create',
+    targetType: 'workspace-file',
+    kind: 'file',
+    path: 'AGENTS.md',
+    content: '# Original\nKeep this synced.',
+  });
+
+  const createdReference = await invokeWebMcpTool<{ path: string; content: string }>(page, 'add_filesystem_entry', {
+    action: 'symlink',
+    targetType: 'session-fs-entry',
+    kind: 'file',
+    path: '//session-1-fs/workspace',
+    sourcePath: '//workspace/AGENTS.md',
+  });
+
+  expect(createdReference).toMatchObject({
+    path: '/workspace/AGENTS.md',
+    content: 'workspace://AGENTS.md',
+  });
+
+  await page.getByRole('button', { name: '//session-1-fs', exact: true }).click();
+
+  const referenceRow = page.locator('[role="treeitem"].tree-row-reference').filter({ hasText: 'AGENTS.md' });
+  await expect(referenceRow).toHaveCount(1);
+  await expect(referenceRow.locator('[data-icon="link"]')).toBeVisible();
+
+  await referenceRow.getByRole('button', { name: 'AGENTS.md', exact: true }).click();
+
+  await expect(page.getByRole('region', { name: 'File editor' })).toContainText('AGENTS.md');
+  await expect(page.getByLabel('Workspace file content')).toHaveValue('# Original\nKeep this synced.');
+
+  await page.getByLabel('Workspace file content').fill('# Updated\nKeep this synced through refs.');
+  await page.getByRole('button', { name: 'Save file' }).click({ force: true });
+
+  const updatedFile = await invokeWebMcpTool<{ preview: string }>(page, 'read_filesystem_properties', {
+    targetType: 'workspace-file',
+    path: 'AGENTS.md',
+  });
+
+  expect(updatedFile.preview).toBe('# Updated\nKeep this synced through refs.');
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/session-fs-workspace-reference.png', fullPage: true });
 });
 
 test('captures the active and completed reasoning activity flow', async ({ page }) => {

@@ -30,6 +30,8 @@ export type CopilotModelConfig = {
   kind: 'copilot';
   /** GitHub Copilot model ID, e.g. 'gpt-4.1' */
   modelId: string;
+  /** Stable app chat-session identifier used to reuse one Copilot session. */
+  sessionId?: string;
 };
 
 export type LocalModelConfig = {
@@ -56,7 +58,7 @@ export function resolveLanguageModel(config: AgentModelConfig): LanguageModel {
       return gateway(config.modelId as GatewayModelId);
 
     case 'copilot':
-      return new CopilotLanguageModel(config.modelId) as unknown as LanguageModel;
+      return new CopilotLanguageModel(config.modelId, config.sessionId ?? 'copilot-session:fallback') as unknown as LanguageModel;
 
     case 'local':
       return new LocalLanguageModel(config.modelId, config.task ?? 'text-generation') as unknown as LanguageModel;

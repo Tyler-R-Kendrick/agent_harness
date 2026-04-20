@@ -64,6 +64,7 @@ export function buildDefaultToolInstructions({
     `Active workspace: ${workspaceName}`,
     workspacePromptContext,
     'You may call the cli tool to inspect or operate on the active workspace terminal session.',
+    'For Files tools, you may use locations exactly as shown in the Files tree, including workspace paths like //workspace/AGENTS.md and session filesystem locations like //session-1-fs/workspace.',
     'When using cli, prefer short, non-interactive bash commands. Do not use cli for clear or long-running interactive shells.',
     'Each tool call is shown to the user in the chat transcript, so use tools only when they materially help the task.',
     'After any tool usage, answer concisely with what you found or changed.',

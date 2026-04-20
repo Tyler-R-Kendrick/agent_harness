@@ -22,6 +22,9 @@ describe('workspaceTools', () => {
     expect(toWorkspaceFileUri('/notes/Quarter Plan.md')).toBe('files://workspace/notes/Quarter%20Plan.md');
     expect(resolveWorkspaceFilePath({ path: '/notes/Quarter Plan.md' })).toBe('notes/Quarter Plan.md');
     expect(resolveWorkspaceFilePath({ uri: 'files://workspace/notes/Quarter%20Plan.md' })).toBe('notes/Quarter Plan.md');
+    expect(toWorkspaceFileUri('//workspace/AGENTS.md')).toBe('files://workspace/AGENTS.md');
+    expect(resolveWorkspaceFilePath({ path: '//workspace/AGENTS.md' })).toBe('AGENTS.md');
+    expect(resolveWorkspaceFilePath({ path: '//docs/Quarter Plan.md' })).toBe('docs/Quarter Plan.md');
   });
 
   it('rejects invalid workspace file inputs', () => {
@@ -620,7 +623,7 @@ describe('workspaceTools', () => {
         memoryMB: 96,
       }],
       sessions: [{ id: 'session-1', name: 'Session 1', isOpen: true }],
-      sessionDrives: [{ sessionId: 'session-1', label: 'Session 1', mounted: true }],
+      sessionDrives: [{ sessionId: 'session-1', label: '//session-1-fs', mounted: true }],
       sessionTools,
       getBrowserPageHistory,
       getSessionState,
@@ -1040,8 +1043,16 @@ describe('workspaceTools', () => {
       tool: 'list_filesystem_entries',
       args: { targetType: 'session-drive' },
     }, {} as never)).resolves.toEqual([
-      { targetType: 'session-drive', kind: 'drive', sessionId: 'session-1', label: 'Session 1', mounted: true },
+      { targetType: 'session-drive', kind: 'drive', sessionId: 'session-1', label: '//session-1-fs', mounted: true },
     ]);
+
+    await expect(webmcpTool.execute?.({
+      tool: 'list_filesystem_entries',
+      args: { targetType: 'session-fs-entry', parentPath: '//session-1-fs/workspace' },
+    }, {} as never)).resolves.toEqual(expect.arrayContaining([
+      { targetType: 'session-fs-entry', sessionId: 'session-1', path: '/workspace/docs', kind: 'folder', label: 'docs', isRoot: false },
+      { targetType: 'session-fs-entry', sessionId: 'session-1', path: '/workspace/notes.md', kind: 'file', label: 'notes.md', isRoot: false },
+    ]));
 
     await expect(webmcpTool.execute?.({
       tool: 'list_filesystem_entries',
@@ -1115,6 +1126,30 @@ describe('workspaceTools', () => {
     });
 
     await expect(webmcpTool.execute?.({
+      tool: 'add_filesystem_entry',
+      args: {
+        action: 'symlink',
+        targetType: 'session-fs-entry',
+        kind: 'file',
+        path: '//session-1-fs/workspace',
+        sourcePath: '//workspace/AGENTS.md',
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      action: 'symlink',
+      targetType: 'session-fs-entry',
+      sessionId: 'session-1',
+      path: '/workspace/AGENTS.md',
+      kind: 'file',
+      content: 'workspace://AGENTS.md',
+    }));
+    expect(onCreateSessionFsEntry).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      path: '/workspace/AGENTS.md',
+      kind: 'file',
+      content: 'workspace://AGENTS.md',
+    });
+
+    await expect(webmcpTool.execute?.({
       tool: 'update_filesystem_entry',
       args: { action: 'modify', targetType: 'session-fs-entry', sessionId: 'session-1', path: '/workspace/notes.md', content: 'updated notes' },
     }, {} as never)).resolves.toEqual(expect.objectContaining({
@@ -1133,7 +1168,12 @@ describe('workspaceTools', () => {
 
     await expect(webmcpTool.execute?.({
       tool: 'update_filesystem_entry',
-      args: { action: 'rename', targetType: 'session-fs-entry', sessionId: 'session-1', path: '/workspace/notes.md', nextPath: '/workspace/renamed.md' },
+      args: {
+        action: 'rename',
+        targetType: 'session-fs-entry',
+        path: '//session-1-fs/workspace/notes.md',
+        nextPath: '//session-1-fs/workspace/renamed.md',
+      },
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       action: 'rename',
       targetType: 'session-fs-entry',
@@ -1177,7 +1217,7 @@ describe('workspaceTools', () => {
       tool: 'list_filesystem_entries',
       args: { targetType: 'session-drive' },
     }, {} as never)).resolves.toEqual(expect.arrayContaining([
-      { targetType: 'session-drive', kind: 'drive', sessionId: 'session-1', label: 'Session 1', mounted: false },
+      { targetType: 'session-drive', kind: 'drive', sessionId: 'session-1', label: '//session-1-fs', mounted: false },
     ]));
 
     await expect(webmcpTool.execute?.({

@@ -15,6 +15,8 @@ import {
   detectMimeType,
   isPlainObject,
   normalizeSessionFsPath,
+  resolveSessionFsLocationPath,
+  resolveSessionFsPathInput,
   normalizeWorkspaceFilePath,
   parentPath,
   requireCallback,
@@ -34,6 +36,11 @@ type FilesystemListInput = {
   query?: string;
   sessionId?: string;
   includeUnmounted?: boolean;
+};
+
+type NormalizedFilesystemOptions = RegisterWorkspaceToolsOptions & {
+  sessionDrives: readonly WorkspaceMcpSessionDrive[];
+  sessionFsEntries: readonly WorkspaceMcpSessionFsEntry[];
 };
 
 type FilesystemMountInput = {
@@ -103,7 +110,7 @@ function normalizeTargetType(targetType: unknown): WorkspaceMcpFilesystemTargetT
   throw new TypeError('Filesystem targetType must be one of workspace-file, session-drive, or session-fs-entry.');
 }
 
-function normalizeTargetInput(input: FilesystemTargetInput): {
+function normalizeTargetInput(sessionDrives: readonly WorkspaceMcpSessionDrive[], input: FilesystemTargetInput): {
   targetType: WorkspaceMcpFilesystemTargetType;
   path?: string;
   sessionId?: string;
@@ -126,14 +133,30 @@ function normalizeTargetInput(input: FilesystemTargetInput): {
   }
 
   if (targetType === 'session-fs-entry') {
-    const sessionId = typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
-    if (!sessionId) {
-      throw new TypeError('Filesystem target must include a sessionId.');
-    }
-    return { targetType, path, sessionId };
+    const resolved = resolveSessionFsPathInput(sessionDrives, { sessionId: input.sessionId, path });
+    return { targetType, path: resolved.path, sessionId: resolved.sessionId };
   }
 
   return { targetType, path };
+}
+
+function resolveSessionFsWorkspaceSymlinkPath(
+  sessionFsEntries: readonly WorkspaceMcpSessionFsEntry[],
+  sessionId: string,
+  targetPath: string,
+  sourceBasename: string,
+): string {
+  const normalizedTargetPath = normalizeSessionFsPath(targetPath);
+  const existingTarget = sessionFsEntries.find((entry) =>
+    entry.sessionId === sessionId && normalizeSessionFsPath(entry.path) === normalizedTargetPath,
+  );
+
+  if (existingTarget?.kind === 'folder' || normalizedTargetPath === '/workspace') {
+    return normalizeSessionFsPath(`${normalizedTargetPath}/${sourceBasename}`);
+  }
+
+  const targetDir = normalizedTargetPath.slice(0, normalizedTargetPath.lastIndexOf('/'));
+  return normalizeSessionFsPath(targetDir ? `${targetDir}/${sourceBasename}` : `/${sourceBasename}`);
 }
 
 function toWorkspaceFileEntry(file: WorkspaceMcpFile): WorkspaceMcpFilesystemEntry {
@@ -321,18 +344,26 @@ function countSessionFsChildren(entries: readonly WorkspaceMcpSessionFsEntry[], 
     .length;
 }
 
-function filterByParent(entries: WorkspaceMcpFilesystemEntry[], rawParentPath: string): WorkspaceMcpFilesystemEntry[] {
-  const normalizedWorkspaceParent = rawParentPath.startsWith('//')
-    ? normalizeWorkspaceDrivePath(rawParentPath)
-    : normalizeWorkspaceFilePath(rawParentPath);
-  const normalizedSessionParent = rawParentPath.startsWith('//') ? null : normalizeSessionFsPath(rawParentPath);
+function filterByParent(
+  entries: WorkspaceMcpFilesystemEntry[],
+  sessionDrives: readonly WorkspaceMcpSessionDrive[],
+  rawParentPath: string,
+): WorkspaceMcpFilesystemEntry[] {
+  const resolvedSessionParent = resolveSessionFsLocationPath(sessionDrives, rawParentPath);
+  const normalizedWorkspaceParent = resolvedSessionParent
+    ? null
+    : rawParentPath.startsWith('//')
+      ? normalizeWorkspaceDrivePath(rawParentPath)
+      : normalizeWorkspaceFilePath(rawParentPath);
+  const normalizedSessionParent = resolvedSessionParent?.path ?? (rawParentPath.startsWith('//') ? null : normalizeSessionFsPath(rawParentPath));
 
   return entries.filter((entry) => {
-    if (entry.targetType === 'workspace-file') {
+    if (entry.targetType === 'workspace-file' && normalizedWorkspaceParent) {
       return workspaceEntryParentPath(entry) === normalizedWorkspaceParent;
     }
     if (entry.targetType === 'session-fs-entry' && entry.path && normalizedSessionParent) {
-      return parentPath(entry.path) === normalizedSessionParent;
+      return parentPath(entry.path) === normalizedSessionParent
+        && (!resolvedSessionParent || entry.sessionId === resolvedSessionParent.sessionId);
     }
     return false;
   });
@@ -348,10 +379,10 @@ function matchesQuery(entry: WorkspaceMcpFilesystemEntry, query: string): boolea
     .some((value) => value.toLowerCase().includes(normalizedQuery));
 }
 
-function listFilesystemEntries(options: RegisterWorkspaceToolsOptions, input: FilesystemListInput): WorkspaceMcpFilesystemEntry[] {
+function listFilesystemEntries(options: NormalizedFilesystemOptions, input: FilesystemListInput): WorkspaceMcpFilesystemEntry[] {
   const workspaceEntries = deriveWorkspaceEntries(options.workspaceFiles);
   const driveEntries = options.sessionDrives.map(toSessionDriveEntry);
-  const sessionEntries = (options.sessionFsEntries ?? []).map(toSessionFsEntry);
+  const sessionEntries = options.sessionFsEntries.map(toSessionFsEntry);
 
   let entries = [...workspaceEntries, ...driveEntries, ...sessionEntries];
 
@@ -366,7 +397,7 @@ function listFilesystemEntries(options: RegisterWorkspaceToolsOptions, input: Fi
     entries = entries.filter((entry) => entry.kind === input.kind);
   }
   if (typeof input.parentPath === 'string' && input.parentPath.trim()) {
-    entries = filterByParent(entries, input.parentPath.trim());
+    entries = filterByParent(entries, options.sessionDrives, input.parentPath.trim());
   }
   if (typeof input.query === 'string') {
     entries = entries.filter((entry) => matchesQuery(entry, input.query!));
@@ -375,13 +406,13 @@ function listFilesystemEntries(options: RegisterWorkspaceToolsOptions, input: Fi
   return sortFilesystemEntries(entries);
 }
 
-function buildFilesystemProperties(options: RegisterWorkspaceToolsOptions, input: {
+function buildFilesystemProperties(options: NormalizedFilesystemOptions, input: {
   targetType: WorkspaceMcpFilesystemTargetType;
   path?: string;
   sessionId?: string;
 }): WorkspaceMcpFilesystemProperties {
   const sessionDrives = options.sessionDrives;
-  const sessionFsEntries = options.sessionFsEntries ?? [];
+  const sessionFsEntries = options.sessionFsEntries;
 
   if (input.targetType === 'session-drive') {
     const drive = resolveSessionDrive(sessionDrives, input.sessionId!);
@@ -499,7 +530,6 @@ async function readSessionFileContent(
 export function registerFilesystemTools(modelContext: ModelContext, options: RegisterWorkspaceToolsOptions): void {
   const {
     workspaceName,
-    workspaceFiles,
     sessionDrives = [],
     sessionFsEntries = [],
     onCreateWorkspaceFile,
@@ -546,6 +576,7 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
     execute: async (input: object) => listFilesystemEntries({
       ...options,
       sessionDrives: readSessionDrives(),
+      sessionFsEntries,
     }, input as FilesystemListInput),
     annotations: { readOnlyHint: true },
   }, { signal });
@@ -565,10 +596,11 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
       additionalProperties: false,
     },
     execute: async (input: object) => {
-      const target = normalizeTargetInput(input as FilesystemTargetInput);
+      const target = normalizeTargetInput(readSessionDrives(), input as FilesystemTargetInput);
       return getFilesystemProperties?.(target) ?? buildFilesystemProperties({
         ...options,
         sessionDrives: readSessionDrives(),
+        sessionFsEntries,
       }, target);
     },
     annotations: { readOnlyHint: true },
@@ -589,7 +621,7 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
         required: ['targetType'],
         additionalProperties: false,
       },
-      execute: async (input: object) => getFilesystemHistory(normalizeTargetInput(input as FilesystemTargetInput)) ?? { records: [] },
+      execute: async (input: object) => getFilesystemHistory(normalizeTargetInput(readSessionDrives(), input as FilesystemTargetInput)) ?? { records: [] },
       annotations: { readOnlyHint: true },
     }, { signal });
   }
@@ -611,13 +643,14 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
         additionalProperties: false,
       },
       execute: async (input: object) => {
-        const recordId = typeof (input as FilesystemRollbackInput).recordId === 'string'
-          ? (input as FilesystemRollbackInput).recordId.trim()
+        const rollbackInput = input as FilesystemRollbackInput;
+        const recordId = typeof rollbackInput.recordId === 'string'
+          ? rollbackInput.recordId.trim()
           : '';
         if (!recordId) {
           throw new TypeError('Filesystem rollback requires a recordId.');
         }
-        const target = normalizeTargetInput(input as FilesystemRollbackInput);
+        const target = normalizeTargetInput(readSessionDrives(), input as FilesystemRollbackInput);
         return await onRollbackFilesystemHistory({ ...target, recordId }) ?? { ...target, rolledBackToId: recordId, records: [] };
       },
     }, { signal });
@@ -725,11 +758,10 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
           }, result);
         }
 
-        const sessionId = typeof typedInput.sessionId === 'string' ? typedInput.sessionId.trim() : '';
-        if (!sessionId) {
-          throw new TypeError('Filesystem add requires a sessionId for session filesystem entries.');
-        }
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(readSessionDrives(), {
+          sessionId: typedInput.sessionId,
+          path: String(typedInput.path ?? ''),
+        });
 
         if (typedInput.action === 'create') {
           const content = typeof typedInput.content === 'string' ? typedInput.content : '';
@@ -752,15 +784,19 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
           throw new DOMException('Duplicating or symlinking session folders is not supported.', 'NotSupportedError');
         }
 
-        // Workspace-file source: symlink a workspace file into the session filesystem
-        if (typedInput.action === 'symlink' && typedInput.sourceType === 'workspace-file') {
-          if (typeof typedInput.sourcePath !== 'string' || !typedInput.sourcePath.trim()) {
+        const rawSourcePath = typeof typedInput.sourcePath === 'string' ? typedInput.sourcePath.trim() : '';
+        const resolvedSessionSource = rawSourcePath ? resolveSessionFsLocationPath(readSessionDrives(), rawSourcePath) : null;
+        const isWorkspaceFileSource = typedInput.action === 'symlink'
+          && (typedInput.sourceType === 'workspace-file' || (rawSourcePath.startsWith('//') && !resolvedSessionSource));
+
+        // Workspace-file source: symlink a workspace file into the session filesystem.
+        if (isWorkspaceFileSource) {
+          if (!rawSourcePath) {
             throw new TypeError('Filesystem add symlink with sourceType workspace-file requires a sourcePath.');
           }
-          const workspaceSourcePath = normalizeWorkspaceFilePath(typedInput.sourcePath);
+          const workspaceSourcePath = normalizeWorkspaceFilePath(rawSourcePath);
           const sourceBasename = workspaceSourcePath.replace(/.*\//, '');
-          const targetDir = path.slice(0, path.lastIndexOf('/'));
-          const correctedPath = normalizeSessionFsPath(targetDir ? `${targetDir}/${sourceBasename}` : `/${sourceBasename}`);
+          const correctedPath = resolveSessionFsWorkspaceSymlinkPath(sessionFsEntries, sessionId, path, sourceBasename);
           const content = `workspace://${workspaceSourcePath}`;
           const result = await requireCallback(onCreateSessionFsEntry, `Creating session filesystem entry "${correctedPath}" is not supported.`)({
             sessionId,
@@ -777,7 +813,11 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
           }, result);
         }
 
-        const sourcePath = typeof typedInput.sourcePath === 'string' ? normalizeSessionFsPath(typedInput.sourcePath) : '';
+        if (resolvedSessionSource && resolvedSessionSource.sessionId !== sessionId) {
+          throw new TypeError('Filesystem add sourcePath must belong to the same session filesystem.');
+        }
+        const sourcePath = resolvedSessionSource?.path
+          ?? (typeof typedInput.sourcePath === 'string' ? normalizeSessionFsPath(typedInput.sourcePath) : '');
         if (!sourcePath) {
           throw new TypeError(`Filesystem add ${typedInput.action} requires a sourcePath.`);
         }
@@ -866,11 +906,10 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
           }, result);
         }
 
-        const sessionId = typeof typedInput.sessionId === 'string' ? typedInput.sessionId.trim() : '';
-        if (!sessionId) {
-          throw new TypeError('Filesystem update requires a sessionId for session filesystem entries.');
-        }
-        const path = normalizeSessionFsPath(String(typedInput.path ?? ''));
+        const { sessionId, path } = resolveSessionFsPathInput(readSessionDrives(), {
+          sessionId: typedInput.sessionId,
+          path: String(typedInput.path ?? ''),
+        });
         let entryKind: 'file' | 'folder' = 'file';
         try {
           entryKind = resolveSessionFsTarget(sessionFsEntries, sessionId, path).kind;
@@ -895,7 +934,16 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
         }
 
         const nextPath = typeof typedInput.nextPath === 'string' && typedInput.nextPath.trim()
-          ? normalizeSessionFsPath(typedInput.nextPath)
+          ? (() => {
+              const resolvedNextPath = resolveSessionFsLocationPath(readSessionDrives(), typedInput.nextPath);
+              if (resolvedNextPath) {
+                if (resolvedNextPath.sessionId !== sessionId) {
+                  throw new TypeError('Filesystem update nextPath must stay within the same session filesystem.');
+                }
+                return resolvedNextPath.path;
+              }
+              return normalizeSessionFsPath(typedInput.nextPath);
+            })()
           : (() => {
               const newName = typeof typedInput.newName === 'string' ? typedInput.newName.trim() : '';
               if (!newName) {
@@ -932,7 +980,7 @@ export function registerFilesystemTools(modelContext: ModelContext, options: Reg
         additionalProperties: false,
       },
       execute: async (input: object) => {
-        const target = normalizeTargetInput(input as FilesystemTargetInput);
+        const target = normalizeTargetInput(readSessionDrives(), input as FilesystemTargetInput);
         if (target.targetType === 'workspace-file') {
           const result = await requireCallback(onDeleteWorkspaceFile, `Removing workspace file "${target.path}" is not supported.`)({ path: target.path! });
           return toMutationResult('delete', {

@@ -69,6 +69,7 @@ describe('GHCP', () => {
 
     await streamGhcpChat({
       modelId: 'gpt-4.1',
+      sessionId: 'chat-session-1',
       workspaceName: 'Research',
       workspacePromptContext: 'Workspace prompt context.',
       messages: [{ id: 'user-1', role: 'user', content: 'Summarize this.' }],
@@ -78,6 +79,7 @@ describe('GHCP', () => {
     expect(streamCopilotChatMock).toHaveBeenCalledWith(
       expect.objectContaining({
         modelId: 'gpt-4.1',
+        sessionId: 'chat-session-1',
         prompt: expect.stringContaining('Active workspace: Research'),
       }),
       expect.objectContaining({ onToken: expect.any(Function) }),

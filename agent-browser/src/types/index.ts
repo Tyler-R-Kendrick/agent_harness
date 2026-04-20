@@ -25,6 +25,7 @@ export interface TreeNode {
   url?: string;
   color?: string;
   filePath?: string;
+  isReference?: boolean;
   muted?: boolean;
 }
 

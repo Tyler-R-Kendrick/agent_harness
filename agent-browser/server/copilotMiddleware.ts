@@ -29,6 +29,7 @@ export interface CopilotStatusResponse {
 type CopilotChatRequest = {
   modelId?: string;
   prompt?: string;
+  sessionId?: string;
 };
 
 type CopilotStreamEvent =
@@ -38,21 +39,80 @@ type CopilotStreamEvent =
   | { type: 'done'; aborted?: boolean }
   | { type: 'error'; message: string };
 
-class CopilotBridge {
+type CopilotSessionRecord = {
+  modelId: string;
+  session: Awaited<ReturnType<CopilotClient['createSession']>>;
+};
+
+export class CopilotBridge {
   private clientPromise: Promise<CopilotClient> | null = null;
+
+  private readonly sessionsByChatSessionId = new Map<string, Promise<CopilotSessionRecord>>();
+
+  constructor(private readonly createClient: () => CopilotClient = () => new CopilotClient({
+    cwd: process.cwd(),
+    useLoggedInUser: true,
+  })) {}
 
   private getClient(): Promise<CopilotClient> {
     if (!this.clientPromise) {
       this.clientPromise = (async () => {
-        const client = new CopilotClient({
-          cwd: process.cwd(),
-          useLoggedInUser: true,
-        });
+        const client = this.createClient();
         await client.start();
         return client;
       })();
     }
     return this.clientPromise;
+  }
+
+  private async createSessionRecord(sessionId: string, modelId: string): Promise<CopilotSessionRecord> {
+    const client = await this.getClient();
+    const session = await client.createSession({
+      sessionId,
+      model: modelId,
+      clientName: 'agent-browser',
+      workingDirectory: process.cwd(),
+      streaming: true,
+      availableTools: [],
+      enableConfigDiscovery: false,
+      infiniteSessions: { enabled: false },
+      onPermissionRequest: approveAll,
+    });
+
+    return { modelId, session };
+  }
+
+  private async getOrCreateSession(sessionId: string, modelId: string): Promise<CopilotSessionRecord> {
+    const existingPromise = this.sessionsByChatSessionId.get(sessionId);
+    if (existingPromise) {
+      const existing = await existingPromise;
+      if (existing.modelId !== modelId) {
+        await existing.session.setModel(modelId);
+        existing.modelId = modelId;
+      }
+      return existing;
+    }
+
+    const createdPromise = this.createSessionRecord(sessionId, modelId).catch((error) => {
+      this.sessionsByChatSessionId.delete(sessionId);
+      throw error;
+    });
+    this.sessionsByChatSessionId.set(sessionId, createdPromise);
+    return createdPromise;
+  }
+
+  private async invalidateSession(sessionId: string): Promise<void> {
+    const existingPromise = this.sessionsByChatSessionId.get(sessionId);
+    if (!existingPromise) return;
+
+    this.sessionsByChatSessionId.delete(sessionId);
+
+    try {
+      const existing = await existingPromise;
+      await existing.session.disconnect().catch(() => undefined);
+    } catch {
+      // Ignore cleanup failures for invalidated sessions.
+    }
   }
 
   async getStatus(): Promise<CopilotStatusResponse> {
@@ -87,73 +147,61 @@ class CopilotBridge {
   }
 
   async streamChat(request: Required<CopilotChatRequest>, signal: AbortSignal, onEvent: (event: CopilotStreamEvent) => void): Promise<void> {
-    const client = await this.getClient();
-    const session = await client.createSession({
-      model: request.modelId,
-      clientName: 'agent-browser',
-      workingDirectory: process.cwd(),
-      streaming: true,
-      availableTools: [],
-      enableConfigDiscovery: false,
-      infiniteSessions: { enabled: false },
-      onPermissionRequest: approveAll,
-    });
+    const { session } = await this.getOrCreateSession(request.sessionId, request.modelId);
 
-    let finished = false;
+    let settled = false;
     const disposers: Array<() => void> = [];
 
-    const cleanup = async () => {
-      if (finished) return;
-      finished = true;
+    const cleanup = () => {
       for (const dispose of disposers) dispose();
-      await session.disconnect().catch(() => undefined);
     };
 
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const finish = (callback?: () => void) => {
-          if (finished) return;
-          callback?.();
-          resolve();
-        };
+    await new Promise<void>((resolve, reject) => {
+      const finish = (callback?: () => void) => {
+        if (settled) return;
+        settled = true;
+        callback?.();
+        cleanup();
+        resolve();
+      };
 
-        const fail = (error: Error) => {
-          if (finished) return;
-          reject(error);
-        };
+      const fail = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        void this.invalidateSession(request.sessionId);
+        reject(error);
+      };
 
-        disposers.push(
-          session.on('assistant.message_delta', (event) => {
-            if (event.data.deltaContent) onEvent({ type: 'token', delta: event.data.deltaContent });
-          }),
-          session.on('assistant.reasoning_delta', (event) => {
-            if (event.data.deltaContent) onEvent({ type: 'reasoning', delta: event.data.deltaContent });
-          }),
-          session.on('assistant.message', (event) => {
-            if (event.data.content) onEvent({ type: 'final', content: event.data.content });
-          }),
-          session.on('session.error', (event) => {
-            fail(new Error(event.data.message || 'GitHub Copilot failed to respond.'));
-          }),
-          session.on('session.idle', (event) => {
-            finish(() => onEvent({ type: 'done', aborted: Boolean(event.data.aborted) }));
-          }),
-        );
+      disposers.push(
+        session.on('assistant.message_delta', (event) => {
+          if (event.data.deltaContent) onEvent({ type: 'token', delta: event.data.deltaContent });
+        }),
+        session.on('assistant.reasoning_delta', (event) => {
+          if (event.data.deltaContent) onEvent({ type: 'reasoning', delta: event.data.deltaContent });
+        }),
+        session.on('assistant.message', (event) => {
+          if (event.data.content) onEvent({ type: 'final', content: event.data.content });
+        }),
+        session.on('session.error', (event) => {
+          fail(new Error(event.data.message || 'GitHub Copilot failed to respond.'));
+        }),
+        session.on('session.idle', (event) => {
+          finish(() => onEvent({ type: 'done', aborted: Boolean(event.data.aborted) }));
+        }),
+      );
 
-        const abort = () => {
-          void session.abort().catch(() => undefined);
-        };
+      const abort = () => {
+        void session.abort().catch(() => undefined);
+      };
 
-        signal.addEventListener('abort', abort, { once: true });
-        disposers.push(() => signal.removeEventListener('abort', abort));
+      signal.addEventListener('abort', abort, { once: true });
+      disposers.push(() => signal.removeEventListener('abort', abort));
 
-        void session.send({ prompt: request.prompt }).catch((error) => {
-          fail(error instanceof Error ? error : new Error('GitHub Copilot request failed.'));
-        });
+      void session.send({ prompt: request.prompt }).catch((error) => {
+        fail(error instanceof Error ? error : new Error('GitHub Copilot request failed.'));
       });
-    } finally {
-      await cleanup();
-    }
+    });
   }
 }
 
@@ -209,8 +257,8 @@ export function createCopilotApiMiddleware() {
 
       if (req.method === 'POST' && url === '/api/copilot/chat') {
         const body = (await readJsonBody(req)) as CopilotChatRequest;
-        if (!body.modelId || !body.prompt) {
-          writeJson(res, 400, { error: 'Both modelId and prompt are required.' });
+        if (!body.modelId || !body.prompt || !body.sessionId) {
+          writeJson(res, 400, { error: 'modelId, prompt, and sessionId are required.' });
           return;
         }
 
@@ -239,7 +287,7 @@ export function createCopilotApiMiddleware() {
         req.on('close', abortRequest);
 
         try {
-          await bridge.streamChat({ modelId: body.modelId, prompt: body.prompt }, controller.signal, (event) => writeStreamEvent(res, event));
+          await bridge.streamChat({ modelId: body.modelId, prompt: body.prompt, sessionId: body.sessionId }, controller.signal, (event) => writeStreamEvent(res, event));
         } catch (error) {
           writeStreamEvent(res, { type: 'error', message: error instanceof Error ? error.message : 'GitHub Copilot request failed.' });
         } finally {

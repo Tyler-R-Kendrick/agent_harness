@@ -1,9 +1,6 @@
 import type {
   WorkspaceMcpBrowserPage,
-  WorkspaceMcpBrowserPageHistory,
-  WorkspaceMcpClipboardEntry,
   WorkspaceMcpFile,
-  WorkspaceMcpRenderPane,
   WorkspaceMcpSessionDrive,
   WorkspaceMcpSessionFsEntry,
   WorkspaceMcpSessionState,
@@ -59,7 +56,29 @@ export interface WorktreeActionInput extends WorktreeItemInput {
 }
 
 export function normalizeWorkspaceFilePath(path: string): string {
-  const normalized = path.trim().replace(/^\/+/, '');
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw new TypeError('Workspace file path must not be empty.');
+  }
+
+  const driveStyleRootMatch = trimmed.match(/^\/\/([^/]+)\/?$/);
+  if (driveStyleRootMatch) {
+    throw new TypeError('Workspace file path must include a file path.');
+  }
+
+  const driveStyleFileMatch = trimmed.match(/^\/\/([^/]+)\/(.+)$/);
+  if (driveStyleFileMatch) {
+    const [, driveSegment, rest] = driveStyleFileMatch;
+    const normalizedRest = rest.replace(/^\/+/, '');
+    if (!normalizedRest) {
+      throw new TypeError('Workspace file path must include a file path.');
+    }
+    return driveSegment === 'workspace'
+      ? normalizedRest
+      : `${driveSegment}/${normalizedRest}`;
+  }
+
+  const normalized = trimmed.replace(/^\/+/, '');
   if (!normalized) {
     throw new TypeError('Workspace file path must not be empty.');
   }
@@ -75,6 +94,71 @@ export function normalizeSessionFsPath(path: string): string {
 
   const prefixed = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
   return prefixed.length > 1 ? prefixed.replace(/\/+$/, '') : prefixed;
+}
+
+function normalizeSessionDriveLabel(label: string): string {
+  return label.trim().replace(/\/+$/, '');
+}
+
+export function resolveSessionFsLocationPath(
+  sessionDrives: readonly WorkspaceMcpSessionDrive[],
+  rawPath: string,
+): { sessionId: string; path: string } | null {
+  const trimmed = rawPath.trim();
+  if (!trimmed.startsWith('//')) {
+    return null;
+  }
+
+  const candidates = sessionDrives
+    .map((drive) => ({ sessionId: drive.sessionId, label: normalizeSessionDriveLabel(drive.label) }))
+    .filter((drive) => drive.label.startsWith('//'))
+    .sort((left, right) => right.label.length - left.label.length);
+
+  for (const candidate of candidates) {
+    if (trimmed !== candidate.label && !trimmed.startsWith(`${candidate.label}/`)) {
+      continue;
+    }
+
+    const remainder = trimmed.slice(candidate.label.length).replace(/^\/+/, '');
+    return {
+      sessionId: candidate.sessionId,
+      path: normalizeSessionFsPath(remainder ? `/${remainder}` : '/workspace'),
+    };
+  }
+
+  return null;
+}
+
+export function resolveSessionFsPathInput(
+  sessionDrives: readonly WorkspaceMcpSessionDrive[],
+  input: SessionFsPathInput,
+): { sessionId: string; path: string } {
+  if (typeof input.path !== 'string') {
+    throw new TypeError('Session filesystem input must include a path.');
+  }
+
+  const rawPath = input.path.trim();
+  if (!rawPath) {
+    throw new TypeError('Session filesystem input must include a path.');
+  }
+
+  const explicitSessionId = typeof input.sessionId === 'string' ? input.sessionId.trim() : '';
+  const resolvedFromLocation = resolveSessionFsLocationPath(sessionDrives, rawPath);
+  if (resolvedFromLocation) {
+    if (explicitSessionId && explicitSessionId !== resolvedFromLocation.sessionId) {
+      throw new TypeError(`Session filesystem input sessionId does not match path "${rawPath}".`);
+    }
+    return resolvedFromLocation;
+  }
+
+  if (!explicitSessionId) {
+    throw new TypeError('Session filesystem input must include a sessionId.');
+  }
+
+  return {
+    sessionId: explicitSessionId,
+    path: normalizeSessionFsPath(rawPath),
+  };
 }
 
 export function basename(path: string): string {
@@ -452,7 +536,7 @@ export function normalizeDeleteWorkspaceFileResult(path: string, result: unknown
   return { path, deleted: true };
 }
 
-export function normalizeBrowserPageMutationResult(action: 'create', pageId: string, result: unknown) {
+export function normalizeBrowserPageMutationResult(_action: 'create', pageId: string, result: unknown) {
   if (isPlainObject(result) && typeof result.id === 'string' && typeof result.title === 'string' && typeof result.url === 'string') {
     return toBrowserPageResult(result as unknown as WorkspaceMcpBrowserPage);
   }
@@ -460,7 +544,7 @@ export function normalizeBrowserPageMutationResult(action: 'create', pageId: str
   return { pageId, created: true };
 }
 
-export function normalizeSessionMutationResult(action: 'create', sessionId: string, result: unknown) {
+export function normalizeSessionMutationResult(_action: 'create', sessionId: string, result: unknown) {
   if (isPlainObject(result) && typeof result.id === 'string' && typeof result.name === 'string') {
     return toSessionSummary(result as unknown as WorkspaceMcpSessionSummary);
   }

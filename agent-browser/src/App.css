@@ -1710,6 +1710,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 12px;
   color: #c4b5fd;
 }
+.tree-row.tree-row-reference .tree-button {
+  color: #f5d38f;
+}
 .extension-badges {
   display: flex;
   flex-wrap: wrap;

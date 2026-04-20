@@ -27,6 +27,7 @@ export interface CopilotRuntimeState {
 export interface CopilotChatRequest {
   modelId: string;
   prompt: string;
+  sessionId: string;
 }
 
 export interface CopilotChatCallbacks {

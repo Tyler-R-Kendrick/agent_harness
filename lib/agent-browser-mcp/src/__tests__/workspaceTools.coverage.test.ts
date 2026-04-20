@@ -635,7 +635,7 @@ describe('workspaceTools coverage branches', () => {
     await expect(webmcpTool.execute?.({
       tool: 'add_filesystem_entry',
       args: { action: 'create', targetType: 'session-fs-entry', sessionId: 'session-1', kind: 'folder', path: '   ' },
-    }, {} as never)).rejects.toThrow('must not be empty');
+    }, {} as never)).rejects.toThrow('must include a path');
     await expect(webmcpTool.execute?.({
       tool: 'add_filesystem_entry',
       args: { action: 'create', targetType: 'session-fs-entry', sessionId: 'session-1', kind: 'file', path: 'relative.txt' },
@@ -651,7 +651,7 @@ describe('workspaceTools coverage branches', () => {
     await expect(webmcpTool.execute?.({
       tool: 'update_filesystem_entry',
       args: { action: 'modify', targetType: 'session-fs-entry', sessionId: 'session-1', content: 'missing-path' },
-    }, {} as never)).rejects.toThrow('must not be empty');
+    }, {} as never)).rejects.toThrow('must include a path');
     await expect(webmcpTool.execute?.({
       tool: 'remove_filesystem_entry',
       args: { targetType: 'session-fs-entry', sessionId: 'session-1', path: '/workspace/tmp.txt' },
@@ -679,7 +679,7 @@ describe('workspaceTools coverage branches', () => {
     await expect(webmcpTool.execute?.({
       tool: 'update_filesystem_entry',
       args: { action: 'rename', targetType: 'session-fs-entry', newName: 'renamed.txt' },
-    }, {} as never)).rejects.toThrow('sessionId');
+    }, {} as never)).rejects.toThrow('must include a path');
     await expect(webmcpTool.execute?.({
       tool: 'update_filesystem_entry',
       args: { action: 'rename', targetType: 'session-fs-entry', sessionId: 'session-1', path: '/workspace/logs/app.log' },
@@ -1160,7 +1160,7 @@ describe('workspaceTools coverage branches', () => {
     await expect(webmcpTool.execute?.({
       tool: 'add_filesystem_entry',
       args: { action: 'create', targetType: 'session-fs-entry', kind: 'file', sessionId: 'session-1' },
-    }, {} as never)).rejects.toThrow('Session filesystem path must not be empty.');
+    }, {} as never)).rejects.toThrow('Session filesystem input must include a path.');
 
     await expect(webmcpTool.execute?.({
       tool: 'update_filesystem_entry',
@@ -1194,6 +1194,119 @@ describe('workspaceTools coverage branches', () => {
     });
 
     expect(mountCallback).toHaveBeenCalledWith('orphan-session');
+  });
+
+  it('covers filesystem fallbacks when session drives are omitted', async () => {
+    const modelContext = new ModelContext();
+
+    registerWorkspaceTools(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [{ path: 'README.md', content: 'hello world' }],
+    });
+
+    const webmcpTool = createWebMcpTool(modelContext);
+
+    await expect(webmcpTool.execute?.({
+      tool: 'list_filesystem_entries',
+      args: { targetType: 'workspace-file' },
+    }, {} as never)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetType: 'workspace-file', path: 'README.md' }),
+    ]));
+
+    await expect(webmcpTool.execute?.({
+      tool: 'read_filesystem_properties',
+      args: { targetType: 'workspace-file', path: 'README.md' },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      targetType: 'workspace-file',
+      path: 'README.md',
+      kind: 'file',
+      preview: 'hello world',
+    }));
+  });
+
+  it('covers visible-session nextPath validation and normalization branches', async () => {
+    const renameCallback = vi.fn(async () => undefined);
+    const createSessionFsEntry = vi.fn(async () => undefined);
+    const modelContext = new ModelContext();
+
+    registerWorkspaceTools(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      sessionDrives: [
+        { sessionId: 'session-1', label: '//session-1-fs', mounted: true },
+        { sessionId: 'session-2', label: '//session-2-fs', mounted: true },
+      ],
+      sessionFsEntries: [
+        { sessionId: 'session-1', path: '/workspace/notes.md', kind: 'file' },
+      ],
+      onCreateSessionFsEntry: createSessionFsEntry,
+      onRenameSessionFsEntry: renameCallback,
+    });
+
+    const webmcpTool = createWebMcpTool(modelContext);
+
+    await expect(webmcpTool.execute?.({
+      tool: 'update_filesystem_entry',
+      args: {
+        action: 'rename',
+        targetType: 'session-fs-entry',
+        sessionId: 'session-1',
+        path: '/workspace/notes.md',
+        nextPath: 'workspace/renamed.md',
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      sessionId: 'session-1',
+      path: '/workspace/renamed.md',
+      previousPath: '/workspace/notes.md',
+    }));
+
+    await expect(webmcpTool.execute?.({
+      tool: 'update_filesystem_entry',
+      args: {
+        action: 'rename',
+        targetType: 'session-fs-entry',
+        path: '//session-1-fs/workspace/notes.md',
+        nextPath: '//session-2-fs/workspace/renamed.md',
+      },
+    }, {} as never)).rejects.toThrow('must stay within the same session filesystem');
+
+    await expect(webmcpTool.execute?.({
+      tool: 'add_filesystem_entry',
+      args: {
+        action: 'symlink',
+        targetType: 'session-fs-entry',
+        kind: 'file',
+        path: '//session-1-fs/workspace/copied.md',
+        sourcePath: '//session-1-fs/workspace/source.md',
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      sessionId: 'session-1',
+      path: '/workspace/copied.md',
+      content: '-> /workspace/source.md',
+    }));
+
+    await expect(webmcpTool.execute?.({
+      tool: 'add_filesystem_entry',
+      args: {
+        action: 'duplicate',
+        targetType: 'session-fs-entry',
+        kind: 'file',
+        path: '//session-1-fs/workspace/copied.md',
+        sourcePath: '//session-2-fs/workspace/source.md',
+      },
+    }, {} as never)).rejects.toThrow('must belong to the same session filesystem');
+
+    expect(renameCallback).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      path: '/workspace/notes.md',
+      newPath: '/workspace/renamed.md',
+    });
+    expect(createSessionFsEntry).toHaveBeenCalledTimes(1);
+    expect(createSessionFsEntry).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
+      path: '/workspace/copied.md',
+      content: '-> /workspace/source.md',
+    }));
   });
 
   it('covers worktree action validation and non-object args fallback branches', async () => {

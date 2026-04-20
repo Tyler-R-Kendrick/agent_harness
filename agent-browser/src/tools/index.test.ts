@@ -25,10 +25,12 @@ function createContext(): TerminalExecutorContext {
 
 describe('default tools', () => {
   it('builds tool instructions for the active workspace', () => {
-    expect(buildDefaultToolInstructions({
+    const instructions = buildDefaultToolInstructions({
       workspaceName: 'Research',
       workspacePromptContext: 'Workspace instructions.',
-    })).toContain('Active workspace: Research');
+    });
+    expect(instructions).toContain('Active workspace: Research');
+    expect(instructions).toContain('//session-1-fs/workspace');
   });
 
   it('includes exactly one built-in tool descriptor: cli', () => {
