@@ -1,0 +1,36 @@
+{
+  "skill_name": "create-agent",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a docs reviewer agent for this workspace. Keep the role narrow, derive a lowercase kebab-case folder name, and produce an AGENTS.md instead of copying the root rules verbatim.",
+      "expected_output": "Creates a focused agent bundle under .agents/<agent-name>/AGENTS.md with a tailored scaffold.",
+      "files": [],
+      "expectations": [
+        "The folder name is normalized to lowercase kebab-case",
+        "The generated AGENTS file is tailored to the requested role",
+        "The root repository AGENTS.md is not copied verbatim"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need an agent that only reviews release notes drafts before they go out. Pick the name if I didn't already.",
+      "expected_output": "Derives a reasonable agent name, keeps the scope narrow, and explains the chosen public identity.",
+      "files": [],
+      "expectations": [
+        "A narrow role-specific name is derived when the user did not provide one",
+        "The resulting agent stays focused on a single responsibility"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a QA sweep agent, but only reserve .evals if the request actually calls for repeatable evaluation coverage.",
+      "expected_output": "Creates the base agent scaffold and avoids introducing .evals unless the workflow clearly needs it.",
+      "files": [],
+      "expectations": [
+        "The base output path is .agents/<agent-name>/AGENTS.md",
+        "The instructions reserve .evals conditionally rather than always creating it"
+      ]
+    }
+  ]
+}

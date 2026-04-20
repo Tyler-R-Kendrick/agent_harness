@@ -46,15 +46,15 @@ function ensureScreenshotDir(): void {
 /** Add a skill file via the "Add file to Research" button and wait for the tree to update. */
 async function addSkillFile(page: Page, name: string): Promise<void> {
   await page.getByLabel('Add file to Research').click();
-  await page.getByLabel('Capability name').fill(name);
-  await page.getByRole('button', { name: 'Skill' }).click();
-  // Wait for the SKILL.md node to appear in the tree
-  await expect(page.getByRole('treeitem').filter({ hasText: 'SKILL.md' }).first()).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Add file' });
+  await dialog.getByLabel('Capability name').fill(name);
+  await dialog.getByRole('button', { name: 'Skill', exact: true }).click();
+  await expect(page.getByRole('treeitem').filter({ hasText: name })).toBeVisible();
 }
 
-/** Open the Move dialog for the first SKILL.md treeitem. */
+/** Open the Move dialog for the newly created SKILL.md treeitem. */
 async function openMovePicker(page: Page): Promise<void> {
-  const skillItem = page.getByRole('treeitem').filter({ hasText: 'SKILL.md' }).first();
+  const skillItem = page.getByRole('treeitem').filter({ hasText: 'SKILL.md' }).last();
   await skillItem.click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Move file' })).toBeVisible();
@@ -146,7 +146,7 @@ test.describe('FileOpPicker screenshots', () => {
 
     const input = page.getByRole('textbox', { name: /target directory/i });
     // Navigate to the deepest directory which has no sub-directories
-    await input.fill('~/.agents/skill/my-skill/');
+    await input.fill('~/.agents/skills/my-skill/');
 
     const dialog = page.getByRole('dialog', { name: 'Move file' });
     await expect(dialog).toBeVisible();

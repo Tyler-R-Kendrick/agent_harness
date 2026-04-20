@@ -1,0 +1,35 @@
+{
+  "skill_name": "create-agent-eval",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a smoke eval for the docs reviewer agent under .agents/docs-reviewer/.evals/ with stable case ids and objective assertions.",
+      "expected_output": "Creates a compact AgentEvals-style YAML suite beside the target agent with a normalized path and concrete assertions.",
+      "files": [],
+      "expectations": [
+        "The output path is .agents/<agent-name>/.evals/<eval-name>.yaml",
+        "The YAML uses stable case ids and objective assertions"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Make a regression suite for a release-manager agent even though I only asked for an acceptance check.",
+      "expected_output": "Treats the request as AgentEvals-style coverage and scaffolds a YAML file without needing the user to name AgentEvals explicitly.",
+      "files": [],
+      "expectations": [
+        "The skill still triggers when the user asks for a smoke test or acceptance check",
+        "The scaffold uses one YAML file per eval suite"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Generate a starter eval suite for a QA sweep agent and make the assertions unambiguous enough that a grader can verify them later.",
+      "expected_output": "Produces a YAML scaffold with concrete case descriptions and assertions that are easy to grade later.",
+      "files": [],
+      "expectations": [
+        "Assertions are objective rather than vague",
+        "The resulting suite is compact and easy to verify"
+      ]
+    }
+  ]
+}

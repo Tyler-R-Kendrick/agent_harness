@@ -1,0 +1,35 @@
+{
+  "skill_name": "agent-browser",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Inspect the active agent-browser workspace before making changes, and tell me which durable workspace files exist before you look at runtime artifacts.",
+      "expected_output": "Starts from render panes and worktree items, then inspects workspace files before session filesystems.",
+      "files": [],
+      "expectations": [
+        "The workflow starts from the active workspace rather than broad filesystem scans",
+        "Workspace files are prioritized before session filesystems"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Edit the default create-agent skill inside the active workspace copy without duplicating it into a session filesystem.",
+      "expected_output": "Finds the bundled skill under the workspace copy, reads it, and updates it in place.",
+      "files": [],
+      "expectations": [
+        "The workflow targets the workspace copy under .agents/skills",
+        "The result updates the durable file instead of copying it elsewhere"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Take a durable workspace skill file and make it available inside a mounted session filesystem for runtime use.",
+      "expected_output": "Uses the link-durable-file workflow and creates a symlink instead of duplicating content.",
+      "files": [],
+      "expectations": [
+        "The deterministic workflow resolves to link-durable-file",
+        "The durable file is linked rather than copied"
+      ]
+    }
+  ]
+}

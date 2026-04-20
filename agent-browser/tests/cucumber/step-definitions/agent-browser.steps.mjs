@@ -106,7 +106,9 @@ Given('{string} has capability files attached to it', async function(workspaceNa
   await switchWorkspace(this.page, workspaceName);
   this.currentWorkspace = workspaceName;
   await addWorkspaceCapability(this.page, workspaceName, 'AGENTS.md');
-  await expect(this.page.getByLabel('Workspace file path')).toHaveValue('AGENTS.md');
+  const editor = this.page.getByRole('region', { name: 'File editor' });
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('.file-editor-path-text')).toHaveText('AGENTS.md');
 });
 
 Given('the {string} workspace has the {string} tab open as a page overlay', async function(workspaceName, tabName) {
@@ -174,7 +176,7 @@ When('the user adds an {string} file from the workspace tree', async function(fi
 
 When('the user adds a skill named {string}', async function(skillName) {
   await addWorkspaceCapability(this.page, this.currentWorkspace, 'Skill', skillName);
-  this.lastFilePath = `.agents/skill/${skillName}/SKILL.md`;
+  this.lastFilePath = `.agents/skills/${skillName}/SKILL.md`;
 });
 
 When('the user creates {string} from {string}', async function(fileName, sessionName) {
@@ -322,11 +324,15 @@ Then('the terminal filesystem belongs only to the active workspace', async funct
 });
 
 Then('the file editor opens with the path {string}', async function(filePath) {
-  await expect(this.page.getByLabel('Workspace file path')).toHaveValue(filePath);
+  const editor = this.page.getByRole('region', { name: 'File editor' });
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('.file-editor-path-text')).toHaveText(filePath);
 });
 
 Then('the active workspace file editor shows {string}', async function(filePath) {
-  await expect(this.page.getByLabel('Workspace file path')).toHaveValue(filePath);
+  const editor = this.page.getByRole('region', { name: 'File editor' });
+  await expect(editor).toBeVisible();
+  await expect(editor.locator('.file-editor-path-text')).toHaveText(filePath);
 });
 
 Then('the Files category includes a {string} node', async function(nodeName) {
@@ -388,6 +394,12 @@ Then('the file editor opens in the main content area', async function() {
 });
 
 Then('the {string} field shows {string}', async function(fieldLabel, value) {
+  if (fieldLabel === 'Workspace file path') {
+    const editor = this.page.getByRole('region', { name: 'File editor' });
+    await expect(editor).toBeVisible();
+    await expect(editor.locator('.file-editor-path-text')).toHaveText(value);
+    return;
+  }
   await expect(this.page.getByLabel(fieldLabel)).toHaveValue(value);
 });
 

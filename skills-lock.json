@@ -41,6 +41,11 @@
       "sourceType": "local",
       "computedHash": "094491c0ae1dedba1865a45d8e9ec75520fb161e2d2fe0029cba914200335ba1"
     },
+    "sensei": {
+      "source": "microsoft/github-copilot-for-azure",
+      "sourceType": "github",
+      "computedHash": "29e4a602fce08ecf609389c0ee0a57995e89022ef91cdf737bc3bfcb543562a9"
+    },
     "shadcn": {
       "source": "/tmp/skill-checkout.wW6iid",
       "sourceType": "local",

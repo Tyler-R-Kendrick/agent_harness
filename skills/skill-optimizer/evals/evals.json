@@ -1,0 +1,44 @@
+{
+  "skill_name": "skill-optimizer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use /sensei --gepa on skills/release-manager. Keep the skill name unchanged, shrink the oversized SKILL.md so it focuses on triggering and workflow, move the long rollout examples and schema notes into references/, and create evals/evals.json that exercises the updated behavior.",
+      "expected_output": "The target skill is optimized with /sensei --gepa, the main SKILL.md is noticeably leaner, bulky material is moved into references/, and an AgentEvals-style eval manifest is created or refreshed.",
+      "files": [],
+      "expectations": [
+        "The workflow explicitly uses /sensei --gepa before major manual rewrites",
+        "The optimization plan is grounded in scripts/resolve-optimization-plan.ts rather than remaining purely narrative",
+        "The skill name and canonical skill path are preserved unless the user asked for a rename",
+        "Long-form guidance is moved from SKILL.md into references/ with clear pointers left behind",
+        "A valid evals/evals.json file is created or updated for the target skill"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Tighten .agents/skills/pdf-cleanup because it undertriggers and the current SKILL.md reads like a README. Run /sensei --gepa, keep only the activation-critical instructions in SKILL.md, move the extraction recipes into references/, and add realistic evals that test both normal PDF cleanup requests and nearby document-processing prompts that should not overtrigger it.",
+      "expected_output": "The optimized skill has stronger trigger language, a leaner main prompt, supporting reference docs, and eval coverage that checks routing boundaries.",
+      "files": [],
+      "expectations": [
+        "The optimization uses the canonical bundle rather than editing a compatibility symlink directly",
+        "The deterministic planning step resolves bundle output paths from scripts/resolve-optimization-plan.ts",
+        "The main SKILL.md keeps trigger language and short workflow guidance while recipes move into references/",
+        "The eval set includes both core success cases and near-miss routing cases",
+        "The result stays aligned with agentskills.io-style frontmatter constraints"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Optimize skills/metadata-auditor and script the boring parts. If you find deterministic checks like frontmatter parsing, section splitting, or eval manifest validation, create TypeScript helpers using a red/green TDD loop instead of leaving those steps as prose. Still run /sensei --gepa first and update evals to reflect the new deterministic workflow.",
+      "expected_output": "The target skill is optimized and deterministic audit steps are moved into TypeScript scripts with tests, while the eval manifest checks that those scripted paths are used.",
+      "files": [],
+      "expectations": [
+        "Deterministic workloads are turned into TypeScript scripts instead of remaining purely narrative",
+        "The deterministic scripts are introduced through a test-first red/green loop",
+        "The planning workflow itself is also represented as code under scripts/resolve-optimization-plan.ts",
+        "The optimized skill documents when the scripts should be used",
+        "The eval coverage is updated to reflect the scripted deterministic path"
+      ]
+    }
+  ]
+}

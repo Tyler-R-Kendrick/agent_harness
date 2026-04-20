@@ -1,0 +1,36 @@
+{
+  "skill_name": "create-agent-skill",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Create a release notes drafting skill under .agents/skills. Normalize the name, scaffold the base SKILL.md, and only add references or scripts if they remove repetition.",
+      "expected_output": "Creates a normalized skill bundle with a sparse top-level SKILL.md and only the directories that actually help the workflow.",
+      "files": [],
+      "expectations": [
+        "The skill path uses .agents/skills/<skill-name>/SKILL.md",
+        "The skill name is normalized to lowercase kebab-case",
+        "The top-level SKILL.md stays focused on triggering and workflow"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want a reusable workflow skill for triaging bug reports, but I only described the capability and not the folder layout.",
+      "expected_output": "Infers the normalized folder structure and produces a reusable skill scaffold without needing the user to specify the file tree.",
+      "files": [],
+      "expectations": [
+        "The folder structure is inferred from the capability description",
+        "The description is explicit enough to help the skill trigger later"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Make a templated skill for writing change summaries, and add a deterministic helper if the output is mostly boilerplate.",
+      "expected_output": "Keeps the main SKILL sparse, moves long templates into references, and introduces deterministic helpers when the output is mostly reproducible.",
+      "files": [],
+      "expectations": [
+        "Long templates are moved out of the main SKILL.md",
+        "Deterministic helpers are suggested when the output is mostly templated"
+      ]
+    }
+  ]
+}

@@ -10,6 +10,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 - In-browser terminal with isolated filesystem: Terminal mode runs `just-bash` in the browser, with each terminal session using its own sandboxed in-memory filesystem.
 - Feature-gated sandbox tool execution: when `VITE_SECURE_BROWSER_SANDBOX_EXEC=true`, chat can run a `/sandbox ...` tool request inside a hidden sandboxed iframe, summarize structured results, and persist successful generated files into the active workspace `just-bash` filesystem.
 - Virtual filesystem per workspace: The Files category renders as a compute surface, mounts workspace-root and top-level directories as drives, and merges persisted workspace files with per-terminal filesystem trees per workspace.
+- Default workspace skills: every workspace starts with `.agents/skills/agent-browser`, `.agents/skills/create-agent`, `.agents/skills/create-agent-skill`, and `.agents/skills/create-agent-eval`, sourced from `agent-browser/agent-skills/` and copied into browser storage at runtime.
 - Workspace switching and creation: `Research` and `Build` are separate workspaces, and users can switch, cycle, rename, or create workspaces without losing workspace-scoped state.
 - Clipboard history via Clip-Board: each workspace tree shows a non-expandable **Clip-Board** node after Files. Right-clicking it opens a History context menu item that launches the clipboard history modal, where users can browse previous clipboard entries (captured when copying URIs or session links within the app) and restore any prior item back to the clipboard.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
@@ -31,6 +32,7 @@ How to interact:
 - Click the workspace root or any category folder to expand or collapse that part of the tree.
 - Click a tab in the active workspace to open it as a page overlay.
 - Click the **+** button next to the active workspace to add files (AGENTS.md, skill, plugin, hook) directly into the mounted drives under Files.
+- Open the `.agents` folder inside `//workspace` under Files to inspect or edit the default workspace skill bundle copied into the active workspace.
 - Click a file node in the tree to open the **file editor** in the content area.
 - Use the omnibar to search or navigate.
 - Use the **workspace pill toggle** under the omnibar to open the workspace overlay.

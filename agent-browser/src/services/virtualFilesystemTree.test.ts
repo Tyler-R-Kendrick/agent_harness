@@ -7,10 +7,10 @@ import {
 } from './virtualFilesystemTree';
 
 describe('virtualFilesystemTree', () => {
-  it('mounts workspace root files under a workspace drive and top-level directories as separate drives', () => {
+  it('keeps hidden workspace folders under //workspace while mounting non-hidden top-level directories as separate drives', () => {
     const files: WorkspaceFile[] = [
       { path: 'AGENTS.md', content: '# Rules', updatedAt: '2026-04-15T00:00:00.000Z' },
-      { path: '.agents/skill/review-pr/SKILL.md', content: '---\nname: review-pr\n---', updatedAt: '2026-04-15T00:00:00.000Z' },
+      { path: '.agents/skills/review-pr/SKILL.md', content: '---\nname: review-pr\n---', updatedAt: '2026-04-15T00:00:00.000Z' },
       { path: 'docs/plan.md', content: '# Plan', updatedAt: '2026-04-15T00:00:00.000Z' },
     ];
 
@@ -18,28 +18,34 @@ describe('virtualFilesystemTree', () => {
 
     expect(drives.map((node) => ({ name: node.name, isDrive: node.isDrive }))).toEqual([
       { name: WORKSPACE_DRIVE_NAME, isDrive: true },
-      { name: '//.agents', isDrive: true },
       { name: '//docs', isDrive: true },
     ]);
 
     expect(drives[0].children).toEqual([
-      expect.objectContaining({ name: 'AGENTS.md', type: 'file', filePath: 'AGENTS.md' }),
-    ]);
-
-    expect(drives[1].children).toEqual([
       expect.objectContaining({
-        name: 'skill',
+        name: '.agents',
         type: 'folder',
         children: [
           expect.objectContaining({
-            name: 'review-pr',
+            name: 'skills',
             type: 'folder',
             children: [
-              expect.objectContaining({ name: 'SKILL.md', type: 'file', filePath: '.agents/skill/review-pr/SKILL.md' }),
+              expect.objectContaining({
+                name: 'review-pr',
+                type: 'folder',
+                children: [
+                  expect.objectContaining({ name: 'SKILL.md', type: 'file', filePath: '.agents/skills/review-pr/SKILL.md' }),
+                ],
+              }),
             ],
           }),
         ],
       }),
+      expect.objectContaining({ name: 'AGENTS.md', type: 'file', filePath: 'AGENTS.md' }),
+    ]);
+
+    expect(drives[1].children).toEqual([
+      expect.objectContaining({ name: 'plan.md', type: 'file', filePath: 'docs/plan.md' }),
     ]);
   });
 

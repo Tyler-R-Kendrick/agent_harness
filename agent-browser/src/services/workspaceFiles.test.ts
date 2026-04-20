@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildWorkspacePromptContext,
+  createDefaultWorkspaceFiles,
   createWorkspaceFileTemplate,
   detectWorkspaceFileKind,
   discoverWorkspaceCapabilities,
+  loadWorkspaceFiles,
   removeWorkspaceFile,
   upsertWorkspaceFile,
   validateWorkspaceFile,
+  WORKSPACE_FILES_STORAGE_KEY,
 } from './workspaceFiles';
 import type { WorkspaceFile } from '../types';
 
@@ -18,7 +21,7 @@ describe('workspaceFiles', () => {
     const plugin = createWorkspaceFileTemplate('plugin', 'review-tools');
 
     expect(agents.path).toBe('AGENTS.md');
-    expect(skill.path).toBe('.agents/skill/review-pr/SKILL.md');
+    expect(skill.path).toBe('.agents/skills/review-pr/SKILL.md');
     expect(hook.path).toBe('.agents/hooks/pre-task.sh');
     expect(plugin.path).toBe('.agents/plugins/review-tools/plugin.yaml');
   });
@@ -28,7 +31,7 @@ describe('workspaceFiles', () => {
       { path: 'AGENTS.md', content: '# Rules\nAlways lint before shipping.', updatedAt: '2026-04-08T00:00:00.000Z' },
       { path: 'docs/AGENTS.md', content: '# Docs agent\nFocus on docs.', updatedAt: '2026-04-08T00:00:00.000Z' },
       {
-        path: '.agents/skill/review-pr/SKILL.md',
+        path: '.agents/skills/review-pr/SKILL.md',
         content: '---\nname: review-pr\ndescription: Review pull requests before requesting approval.\n---\n\n# Review PR',
         updatedAt: '2026-04-08T00:00:00.000Z',
       },
@@ -55,7 +58,7 @@ describe('workspaceFiles', () => {
     ]);
     expect(promptContext).toContain('Always lint before shipping.');
     expect(promptContext).toContain('Focus on docs.');
-    expect(promptContext).toContain('review-pr (.agents/skill/review-pr/SKILL.md)');
+    expect(promptContext).toContain('review-pr (.agents/skills/review-pr/SKILL.md)');
     expect(promptContext).toContain('review-tools (.agents/plugins/review-tools/plugin.yaml)');
     expect(promptContext).toContain('pre-task.sh (.agents/hooks/pre-task.sh)');
     expect(focusedPromptContext).toContain('Active AGENTS.md:');
@@ -76,6 +79,66 @@ describe('workspaceFiles', () => {
     expect(validateWorkspaceFile({ path: '.agents/hooks/../plugins/x/plugin.yaml', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('.agents/hooks/<name>.<ext>');
     expect(validateWorkspaceFile({ path: '.agents/plugins/../manifest.json', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('Plugin directories');
     expect(validateWorkspaceFile({ path: 'README.md', content: '', updatedAt: '2026-04-08T00:00:00.000Z' })).toContain('Unsupported');
+  });
+
+  it('creates the default bundled agent skills for each workspace', () => {
+    expect(createDefaultWorkspaceFiles('2026-04-20T00:00:00.000Z')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/agent-browser/references/tool-map.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/agent-browser/scripts/resolve-workflow.ts', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/SKILL.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/evals/evals.json', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/scripts/scaffold-agent.ts', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-skill/scripts/scaffold-agent-skill.ts', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/scripts/scaffold-agent-eval.ts', updatedAt: '2026-04-20T00:00:00.000Z' }),
+    ]));
+    expect(createDefaultWorkspaceFiles('2026-04-20T00:00:00.000Z')).toHaveLength(24);
+  });
+
+  it('loads default bundled agent skills when storage is empty', () => {
+    window.localStorage.removeItem(WORKSPACE_FILES_STORAGE_KEY);
+
+    const loaded = loadWorkspaceFiles(['ws-research']);
+
+    expect(loaded['ws-research']).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/agent-browser/evals/evals.json' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/references/agent-template.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-skill/evals/evals.json' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/references/eval-schema.md' }),
+    ]));
+    expect(loaded['ws-research']).toHaveLength(24);
+  });
+
+  it('merges default bundled agent skills into stored workspace files without overwriting existing files', () => {
+    window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
+      'ws-research': [
+        { path: 'AGENTS.md', content: '# Workspace rules', updatedAt: '2026-04-18T00:00:00.000Z' },
+        {
+          path: '.agents/skills/create-agent/SKILL.md',
+          content: '---\nname: create-agent\ndescription: Custom override.\n---\n\n# Custom',
+          updatedAt: '2026-04-18T00:00:00.000Z',
+        },
+      ],
+    }));
+
+    const loaded = loadWorkspaceFiles(['ws-research']);
+
+    expect(loaded['ws-research']).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'AGENTS.md' }),
+      expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/SKILL.md', content: '---\nname: create-agent\ndescription: Custom override.\n---\n\n# Custom' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/scripts/scaffold-agent.ts' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/evals/evals.json' }),
+    ]));
+    expect(loaded['ws-research']).toHaveLength(25);
   });
 
   it('upserts and removes workspace files by path', () => {

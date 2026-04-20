@@ -4,8 +4,8 @@ import type { WorkspaceFile } from '../types';
  * Returns a sorted, deduped array of relative directory paths (with trailing
  * slash) derived from workspace file paths.
  *
- * Example: files ["docs/notes.md", ".agents/skill/foo/SKILL.md"] returns
- * [".agents/", ".agents/skill/", ".agents/skill/foo/", "docs/"].
+ * Example: files ["docs/notes.md", ".agents/skills/foo/SKILL.md"] returns
+ * [".agents/", ".agents/skills/", ".agents/skills/foo/", "docs/"].
  */
 export function collectWorkspaceDirectories(files: WorkspaceFile[]): string[] {
   const dirs = new Set<string>();

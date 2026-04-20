@@ -20,11 +20,11 @@ describe('collectWorkspaceDirectories', () => {
   });
 
   it('extracts all ancestor directories from a deeply nested file', () => {
-    const files = [makeFile('.agents/skill/foo/SKILL.md')];
+    const files = [makeFile('.agents/skills/foo/SKILL.md')];
     expect(collectWorkspaceDirectories(files)).toEqual([
       '.agents/',
-      '.agents/skill/',
-      '.agents/skill/foo/',
+      '.agents/skills/',
+      '.agents/skills/foo/',
     ]);
   });
 
@@ -41,12 +41,12 @@ describe('collectWorkspaceDirectories', () => {
   it('handles multiple independent directory trees', () => {
     const files = [
       makeFile('docs/notes.md'),
-      makeFile('.agents/skill/foo/SKILL.md'),
+      makeFile('.agents/skills/foo/SKILL.md'),
     ];
     expect(collectWorkspaceDirectories(files)).toEqual([
       '.agents/',
-      '.agents/skill/',
-      '.agents/skill/foo/',
+      '.agents/skills/',
+      '.agents/skills/foo/',
       'docs/',
     ]);
   });

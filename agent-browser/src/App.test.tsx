@@ -312,9 +312,11 @@ describe('App', () => {
     });
 
     expect(screen.getByRole('button', { name: '//workspace' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '//.agents' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '//.agents' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '.agents' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'AGENTS.md' }).length).toBeGreaterThan(0);
-    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+    expect(screen.getAllByText('SKILL.md')).toHaveLength(5);
+    expect(screen.getByText('review-pr')).toBeInTheDocument();
   });
 
   it('registers unified filesystem WebMCP tools that a client can invoke', async () => {
@@ -346,7 +348,7 @@ describe('App', () => {
       }, {} as never);
     });
 
-    expect(listedFiles).toEqual([
+    expect(listedFiles).toEqual(expect.arrayContaining([
       {
         targetType: 'workspace-file',
         kind: 'file',
@@ -355,7 +357,15 @@ describe('App', () => {
         uri: 'files://workspace/AGENTS.md',
         updatedAt: '2026-04-18T00:00:00.000Z',
       },
-    ]);
+      expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/agent-browser/references/tool-map.md', label: 'tool-map.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent/scripts/scaffold-agent.ts', label: 'scaffold-agent.ts' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/create-agent-eval/evals/evals.json', label: 'evals.json' }),
+    ]));
+    expect((listedFiles as unknown[])).toHaveLength(25);
 
     let fileProperties: unknown;
     await act(async () => {
@@ -1293,13 +1303,14 @@ describe('App', () => {
       vi.advanceTimersByTime(150);
     });
 
-    // The skill file should appear in the tree
-    expect(screen.getByText('SKILL.md')).toBeInTheDocument();
+    // The new skill appears alongside the four default bundled skills.
+    expect(screen.getAllByText('SKILL.md')).toHaveLength(5);
+    expect(screen.getByText('review-pr')).toBeInTheDocument();
 
     const storedFiles = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, Array<{ path: string }>>;
     expect(storedFiles['ws-research']).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: 'AGENTS.md' }),
-      expect.objectContaining({ path: '.agents/skill/review-pr/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/skills/review-pr/SKILL.md' }),
     ]));
   });
 
@@ -3717,7 +3728,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    // Add a skill (lives at .agents/skill/foo/SKILL.md) so dirs like .agents/ exist
+    // Add a skill (lives at .agents/skills/foo/SKILL.md) so dirs like .agents/ exist
     fireEvent.click(screen.getByLabelText('Add file to Research'));
     await act(async () => { await Promise.resolve(); });
     const nameInput = screen.getByLabelText('Capability name') as HTMLInputElement;
@@ -3764,7 +3775,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    // Add a nested file (.agents/skill/foo/SKILL.md) via skill creation
+    // Add a nested file (.agents/skills/foo/SKILL.md) via skill creation
     fireEvent.click(screen.getByLabelText('Add file to Research'));
     await act(async () => { await Promise.resolve(); });
     fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'bar' } });

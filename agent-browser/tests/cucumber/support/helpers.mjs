@@ -148,7 +148,8 @@ export async function closeWorkspaceSwitcher(page) {
 
 export async function switchWorkspace(page, workspaceName) {
   const workspacePill = page.getByLabel('Toggle workspace overlay');
-  if (await workspacePill.textContent() && (await workspacePill.textContent()).includes(workspaceName)) {
+  const currentTitle = await workspacePill.getAttribute('title');
+  if (currentTitle?.includes(workspaceName)) {
     await expectWorkspaceTree(page, workspaceName);
     return;
   }
@@ -156,7 +157,7 @@ export async function switchWorkspace(page, workspaceName) {
   await openWorkspaceSwitcher(page);
   const dialog = page.getByRole('dialog', { name: 'Workspace switcher' });
   await dialog.locator('.workspace-card-button').filter({ hasText: workspaceName }).first().click();
-  await expect(workspacePill).toContainText(workspaceName);
+  await expect(workspacePill).toHaveAttribute('title', workspaceName);
   await expectWorkspaceTree(page, workspaceName);
 }
 
@@ -193,14 +194,15 @@ export async function runTerminalCommand(page, command) {
 
 export async function addWorkspaceCapability(page, workspaceName, kind, name = '') {
   await page.getByLabel(`Add file to ${workspaceName}`).click();
+  const dialog = page.getByRole('dialog', { name: 'Add file' });
   if (kind === 'AGENTS.md') {
-    await page.getByRole('button', { name: 'AGENTS.md' }).click();
+    await dialog.getByRole('button', { name: 'AGENTS.md', exact: true }).click();
     return;
   }
   if (name) {
-    await page.getByLabel('Capability name').fill(name);
+    await dialog.getByLabel('Capability name').fill(name);
   }
-  await page.getByRole('button', { name: kind }).click();
+  await dialog.getByRole('button', { name: kind, exact: true }).click();
 }
 
 export async function ensureWorkspaceFile(page, workspaceName, filePath) {
@@ -214,7 +216,7 @@ export async function ensureWorkspaceFile(page, workspaceName, filePath) {
     return;
   }
 
-  const skillMatch = filePath.match(/^\.agents\/skill\/([^/]+)\/SKILL\.md$/);
+  const skillMatch = filePath.match(/^\.agents\/(?:skill|skills)\/([^/]+)\/SKILL\.md$/);
   if (skillMatch) {
     await addWorkspaceCapability(page, workspaceName, 'Skill', skillMatch[1]);
     return;
@@ -233,13 +235,13 @@ export async function ensureSecondTerminalSession(page, workspaceName, sessionNa
   if (await page.getByRole('button', { name: sessionName, exact: true }).count()) {
     return;
   }
-  await page.getByLabel(`Add terminal to ${workspaceName}`).click();
+  await page.getByLabel(`Add session to ${workspaceName}`).click();
   await expect(page.getByRole('button', { name: sessionName, exact: true })).toBeVisible();
 }
 
 export async function openTerminalSession(page, sessionName) {
   await page.getByRole('button', { name: sessionName, exact: true }).click();
-  await expect(page.getByLabel('Bash input')).toBeVisible();
+  await ensureTerminalMode(page);
 }
 
 export async function openBrowserTab(page, tabName) {

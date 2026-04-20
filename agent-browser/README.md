@@ -2,6 +2,8 @@
 
 The `agent-browser` app is a React and Vite workspace inside the `agent_harness` repository.
 
+The `agent-skills/` directory contains the checked-in default workspace skills that the app copies into each runtime workspace under `.agents/skills/`.
+
 ## Hot reload in Codespaces
 
 Opening the repository in VS Code should start the Vite dev server automatically through `.vscode/tasks.json`. In Codespaces, the workspace also installs a small local helper extension that opens VS Code Simple Browser to the forwarded URL for port `5173`.

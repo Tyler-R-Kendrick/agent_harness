@@ -114,16 +114,18 @@ test('captures the main workspace screen', async ({ page }) => {
   await expect(page.getByLabel('Workspace tree')).toBeVisible();
   // Add a file via the "+" button on Research workspace
   await page.getByLabel('Add file to Research').click();
-  await expect(page.getByRole('dialog', { name: 'Add file' })).toBeVisible();
-  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  const addFileDialog = page.getByRole('dialog', { name: 'Add file' });
+  await expect(addFileDialog).toBeVisible();
+  await addFileDialog.getByRole('button', { name: 'AGENTS.md', exact: true }).click();
   // AGENTS.md should appear in the tree and open in the file editor
-  await expect(page.getByRole('region', { name: 'File editor' }).getByText('AGENTS.md').first()).toBeVisible();
+  await expect(page.getByRole('region', { name: 'File editor' }).locator('.file-editor-path-text')).toHaveText('AGENTS.md');
   // Add a skill
   await page.getByLabel('Add file to Research').click();
-  await page.getByLabel('Capability name').fill('review-pr');
-  await page.getByRole('button', { name: 'Skill' }).click();
-  await expect(page.getByRole('region', { name: 'File editor' }).getByText('SKILL.md').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toBeVisible();
+  await expect(addFileDialog).toBeVisible();
+  await addFileDialog.getByLabel('Capability name').fill('review-pr');
+  await addFileDialog.getByRole('button', { name: 'Skill', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'File editor' }).locator('.file-editor-path-text')).toHaveText('.agents/skills/review-pr/SKILL.md');
+  await expect(page.getByRole('button', { name: '//workspace', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '.agents', exact: true })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-screen.png', fullPage: true });
@@ -134,11 +136,11 @@ test('closes AGENTS.md after save', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Add file to Research').click();
   await page.getByRole('button', { name: 'AGENTS.md' }).click();
-  await expect(page.getByLabel('Workspace file path')).toHaveValue('AGENTS.md');
+  await expect(page.getByRole('region', { name: 'File editor' }).locator('.file-editor-path-text')).toHaveText('AGENTS.md');
   await page.getByLabel('Workspace file content').fill('# Rules\nAlways verify workspace instructions.');
   await page.getByRole('button', { name: 'Save file' }).click({ force: true });
   await expect(page.getByLabel('Workspace file path')).toHaveCount(0);
-  await expect(page.getByLabel('Chat panel')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
   assertNoRuntimeErrors();
 });
 
@@ -184,9 +186,10 @@ test('captures categorized worktree with agent and terminal instances', async ({
   await page.getByLabel('Bash input').press('Enter');
   await expect(page.getByLabel('Bash input')).toBeEnabled({ timeout: 10000 });
 
-  await expect(page.getByRole('button', { name: /Session 2 FS/ }).first()).toBeVisible();
-  await page.getByRole('button', { name: /Session 2 FS/ }).first().click();
-  await expect(page.getByRole('button', { name: 'Workspace', exact: true })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '//session-2-fs', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '//session-2-fs', exact: true }).click();
+  await expect(page.getByRole('button', { name: '//workspace', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
 
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
@@ -836,7 +839,7 @@ test('captures workspace file edit and delete flow', async ({ page }) => {
   await page.getByLabel('Capability name').fill('test-hook');
   await page.getByRole('button', { name: 'Hook' }).click();
   // File editor opens in the content area
-  await expect(page.getByLabel('Workspace file path')).toHaveValue('.agents/hooks/test-hook.sh');
+  await expect(page.getByRole('region', { name: 'File editor' }).locator('.file-editor-path-text')).toHaveText('.agents/hooks/test-hook.sh');
   // Edit the content
   await page.getByLabel('Workspace file content').fill('{"name": "test-hook", "version": "1.0"}');
   // Save the file (force click past any CopilotKit error overlay)

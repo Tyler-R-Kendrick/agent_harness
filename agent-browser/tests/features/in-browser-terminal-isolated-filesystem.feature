@@ -22,8 +22,8 @@ Feature: In-browser terminal with isolated filesystem
     And the "Bash input" field is focused again
 
   Scenario: A terminal session exposes its own filesystem node
-    Given the active workspace has a second terminal session named "Terminal 2"
-    And Terminal mode is open for "Terminal 2"
+    Given the active workspace has a second terminal session named "Session 2"
+    And Terminal mode is open for "Session 2"
     When the user runs "touch notes.txt"
-    Then the Files category shows a "Terminal 2 FS" node
+    Then the Files category shows a "//session-2-fs" node
     And the terminal filesystem belongs only to the active workspace

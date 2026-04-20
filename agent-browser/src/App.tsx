@@ -110,6 +110,7 @@ import { createSandboxExecutionService } from './sandbox/service';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
 import {
   buildWorkspacePromptContext,
+  createDefaultWorkspaceFiles,
   createWorkspaceFileTemplate,
   detectWorkspaceFileKind,
   discoverWorkspaceCapabilities,
@@ -4196,7 +4197,7 @@ function AgentBrowserApp() {
       ],
     }));
     setWorkspaceViewStateByWorkspace((current) => ({ ...current, [workspaceId]: createWorkspaceViewEntry(workspace) }));
-    setWorkspaceFilesByWorkspace((current) => ({ ...current, [workspaceId]: [] }));
+    setWorkspaceFilesByWorkspace((current) => ({ ...current, [workspaceId]: createDefaultWorkspaceFiles() }));
     setActiveWorkspaceId(workspaceId);
     setToast({ msg: `Created ${name}`, type: 'success' });
   }, [root, setToast]);

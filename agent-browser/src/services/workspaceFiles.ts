@@ -1,3 +1,8 @@
+import {
+  createDefaultWorkspaceAgentSkillFiles,
+  mergeDefaultWorkspaceAgentSkillFiles,
+} from './defaultAgentSkills';
+
 import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspaceHook, WorkspacePlugin, WorkspaceSkill } from '../types';
 
 export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
@@ -17,6 +22,10 @@ function slugify(value: string) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+export function createDefaultWorkspaceFiles(updatedAt = nowIso()): WorkspaceFile[] {
+  return createDefaultWorkspaceAgentSkillFiles(updatedAt);
 }
 
 export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''): WorkspaceFile {
@@ -39,7 +48,7 @@ export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''):
 
   if (kind === 'skill') {
     return {
-      path: `.agents/skill/${slug}/SKILL.md`,
+      path: `.agents/skills/${slug}/SKILL.md`,
       updatedAt: nowIso(),
       content: [
         '---',
@@ -206,7 +215,7 @@ export function buildWorkspacePromptContext(files: WorkspaceFile[], activeAgentP
 }
 
 export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, WorkspaceFile[]> {
-  const fallback = Object.fromEntries(workspaceIds.map((workspaceId) => [workspaceId, [] satisfies WorkspaceFile[]]));
+  const fallback = Object.fromEntries(workspaceIds.map((workspaceId) => [workspaceId, createDefaultWorkspaceFiles()]));
   if (typeof window === 'undefined') return fallback;
 
   try {
@@ -215,7 +224,7 @@ export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, Works
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return Object.fromEntries(workspaceIds.map((workspaceId) => {
       const files = Array.isArray(parsed[workspaceId]) ? parsed[workspaceId] : [];
-      return [workspaceId, files.filter((entry): entry is WorkspaceFile => (
+      return [workspaceId, mergeDefaultWorkspaceAgentSkillFiles(files.filter((entry): entry is WorkspaceFile => (
         Boolean(entry)
         && typeof entry === 'object'
         && 'path' in entry
@@ -223,7 +232,7 @@ export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, Works
         && typeof entry.path === 'string'
         && typeof entry.content === 'string'
         && typeof entry.updatedAt === 'string'
-      ))];
+      )))];
     }));
   } catch {
     return fallback;

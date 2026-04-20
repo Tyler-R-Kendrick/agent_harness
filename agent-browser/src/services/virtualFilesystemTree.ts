@@ -74,6 +74,22 @@ function ensureChildFolder(parent: TreeNode, id: string, name: string): Workspac
   return next as WorkspaceBranchNode;
 }
 
+function appendWorkspacePath(parent: WorkspaceBranchNode, idPrefix: string, parts: string[], filePath: string): void {
+  let cursor = parent;
+  for (const [index, part] of parts.entries()) {
+    const nodeId = `${idPrefix}:${parts.slice(0, index + 1).join('/')}`;
+    const isLeaf = index === parts.length - 1;
+    if (isLeaf) {
+      cursor.children = [
+        ...(cursor.children ?? []),
+        { id: nodeId, name: part, type: 'file', filePath },
+      ];
+      return;
+    }
+    cursor = ensureChildFolder(cursor, nodeId, part);
+  }
+}
+
 function sortTreeNodes(nodes: TreeNode[] | undefined): TreeNode[] {
   const children = (nodes ?? []).map((node) => node.children?.length
     ? { ...node, children: sortTreeNodes(node.children) }
@@ -91,32 +107,19 @@ export function buildWorkspaceCapabilityDriveNodes(prefix: string, files: Worksp
   for (const file of files) {
     const segments = file.path.split('/').filter(Boolean);
     if (!segments.length) continue;
-    if (segments.length === 1) {
-      workspaceDrive.children = [
-        ...(workspaceDrive.children ?? []),
-        { id: `${prefix}:workspace:${file.path}`, name: segments[0], type: 'file', filePath: file.path },
-      ];
+    const [rawDriveSegment, ...rest] = segments;
+
+    if (segments.length === 1 || rawDriveSegment.startsWith('.')) {
+      appendWorkspacePath(workspaceDrive as WorkspaceBranchNode, `${prefix}:workspace`, segments, file.path);
       continue;
     }
 
-    const [rawDriveSegment, ...rest] = segments;
     const driveSegment = normalizeDriveName(rawDriveSegment);
     const driveId = `${prefix}:drive:${driveSegment}`;
     const drive = directoryDrives.get(driveSegment) ?? createFolderNode(driveId, displayDriveName(driveSegment), true);
     if (!directoryDrives.has(driveSegment)) directoryDrives.set(driveSegment, drive);
 
-    let cursor = drive as WorkspaceBranchNode;
-    for (const [index, part] of rest.entries()) {
-      const isLeaf = index === rest.length - 1;
-      if (isLeaf) {
-        cursor.children = [
-          ...(cursor.children ?? []),
-          { id: `${driveId}:${rest.slice(0, index + 1).join('/')}`, name: part, type: 'file', filePath: file.path },
-        ];
-        continue;
-      }
-      cursor = ensureChildFolder(cursor, `${driveId}:${rest.slice(0, index + 1).join('/')}`, part);
-    }
+    appendWorkspacePath(drive as WorkspaceBranchNode, driveId, rest, file.path);
   }
 
   return [
