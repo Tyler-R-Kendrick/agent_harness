@@ -31,14 +31,18 @@ test('Tools picker: header trigger and open popover', async ({ page }) => {
 
   await trigger.click();
   await expect(page.getByRole('dialog', { name: 'Tools picker' })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'CLI' })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'CLI', exact: true })).toBeChecked();
 
   await page.screenshot({ path: 'docs/screenshots/tools-picker-open.png', fullPage: false });
 });
 
-// Verifies that both built-in tools (CLI + WebMCP) are present and selected by default.
-test('Tools picker: shows two built-in tools (CLI and WebMCP) selected by default', async ({ page }) => {
+// Verifies that all built-in tools, including WebMCP-backed tools, are shown in one built-in
+// bucket with surface-specific sub-groups (Browser, Sessions, Files, etc.) underneath.
+// REGRESSION: must not show a separate top-level "WebMCP" group — all tools belong in Built-In.
+test('Tools picker: shows one built-in bucket with surface sub-groups selected by default', async ({ page }) => {
   await mockCopilotStatus(page);
+  // Tall viewport so all sub-groups are visible without scrolling
+  await page.setViewportSize({ width: 1280, height: 1200 });
   await page.goto('/');
 
   const trigger = page.getByRole('button', { name: /Configure tools/i });
@@ -47,15 +51,40 @@ test('Tools picker: shows two built-in tools (CLI and WebMCP) selected by defaul
   const dialog = page.getByRole('dialog', { name: 'Tools picker' });
   await expect(dialog).toBeVisible();
 
-  // Both built-in tools must be present and checked
-  await expect(page.getByRole('checkbox', { name: 'CLI' })).toBeChecked();
-  await expect(page.getByRole('checkbox', { name: 'WebMCP' })).toBeChecked();
+  // Top-level Built-In bucket — must contain ALL tools, count must be > 1 (not just CLI)
+  await expect(dialog.getByText('Built-In')).toBeVisible();
+  await expect(dialog.getByText('38/38')).toBeVisible();
+  const builtInToggle = page.getByRole('checkbox', { name: 'Toggle all Built-In tools' });
+  await expect(builtInToggle).toBeVisible();
+  await expect(builtInToggle).toBeChecked();
 
-  // The count badge on the trigger should show 2
+  // REGRESSION CHECK: there must be NO separate top-level "WebMCP" group.
+  // All WebMCP tools belong inside the Built-In bucket as sub-groups.
+  await expect(page.getByRole('checkbox', { name: 'Toggle all WebMCP tools' })).not.toBeAttached();
+  // The word "WebMCP" must NOT appear as a group header label in the dialog
+  await expect(dialog.locator('.tools-picker-group-label', { hasText: 'WebMCP' })).not.toBeAttached();
+
+  // CLI is ungrouped — appears flat under Built-In (not inside any sub-group)
+  await expect(page.getByRole('checkbox', { name: 'CLI', exact: true })).toBeChecked();
+
+  // All 6 surface sub-group headers must be visible AND checked inside the Built-In bucket
+  const subGroups = ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Workspace'];
+  for (const subGroupLabel of subGroups) {
+    const toggle = dialog.getByRole('checkbox', { name: `Toggle all ${subGroupLabel} tools` });
+    await expect(toggle, `Sub-group "${subGroupLabel}" must be visible inside Built-In`).toBeVisible();
+    await expect(toggle).toBeChecked();
+  }
+
+  // Representative individual tool checkboxes inside sub-groups must be visible and checked
+  await expect(page.getByRole('checkbox', { name: 'List filesystem entries', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Submit session message', exact: true })).toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Restore clipboard entry', exact: true })).toBeChecked();
+
+  // Screenshot showing the full sub-group structure inside Built-In
+  await page.screenshot({ path: 'docs/screenshots/tools-picker-built-in-bucket.png', fullPage: false });
+
   await dialog.getByRole('button', { name: 'Done' }).click();
-  await expect(trigger).toHaveAttribute('aria-label', /2 of 2/);
-
-  await page.screenshot({ path: 'docs/screenshots/tools-picker-two-builtins.png', fullPage: false });
+  await expect(trigger).toHaveAttribute('aria-label', /\d+ of \d+ selected/);
 });
 
 // Regression test: tools picker popover must not be clipped by overflow:hidden ancestors
@@ -91,4 +120,45 @@ test('Tools picker: popover is not clipped by the workspace overlay at narrow vi
   expect(doneBbox!.y + doneBbox!.height).toBeLessThanOrEqual(viewport.height);
 
   await page.screenshot({ path: 'docs/screenshots/tools-picker-narrow-not-clipped.png', fullPage: false });
+});
+
+// Regression: clicking a group header row must only expand/collapse — never toggle the checkbox.
+test('Tools picker: clicking group header row expands/collapses without toggling checkbox', async ({ page }) => {
+  await mockCopilotStatus(page);
+  await page.setViewportSize({ width: 1280, height: 1200 });
+  await page.goto('/');
+
+  const trigger = page.getByRole('button', { name: /Configure tools/i });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: 'Tools picker' });
+  await expect(dialog).toBeVisible();
+
+  // Find a collapsible sub-group header (e.g. Workspace)
+  const subGroupHeader = dialog.locator('.tools-picker-group-header[role="button"]', { hasText: 'Workspace' });
+  await expect(subGroupHeader).toBeVisible();
+  const checkbox = subGroupHeader.locator('input[type="checkbox"]');
+
+  // Initially expanded
+  await expect(subGroupHeader).toHaveAttribute('aria-expanded', 'true');
+  const checkedBefore = await checkbox.isChecked();
+
+  // Click the header row (not the checkbox) — should collapse, not toggle checkbox
+  await subGroupHeader.click();
+  await expect(subGroupHeader).toHaveAttribute('aria-expanded', 'false');
+
+  // Checkbox state must not have changed
+  expect(await checkbox.isChecked()).toBe(checkedBefore);
+
+  // Screenshot: collapsed state
+  await page.screenshot({ path: 'docs/screenshots/tools-picker-group-collapsed.png', fullPage: false });
+
+  // Click again to re-expand
+  await subGroupHeader.click();
+  await expect(subGroupHeader).toHaveAttribute('aria-expanded', 'true');
+
+  // Checkbox state still unchanged
+  expect(await checkbox.isChecked()).toBe(checkedBefore);
+
+  // Screenshot: expanded state again
+  await page.screenshot({ path: 'docs/screenshots/tools-picker-group-expanded.png', fullPage: false });
 });

@@ -9,7 +9,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useCopilotReadable } from '@copilotkit/react-core';
 import type { ToolSet } from 'ai';
@@ -91,8 +91,12 @@ import { runToolAgent } from './services/agentRunner';
 import {
   createWebMcpToolBridge,
   registerWorkspaceTools,
+  type WorkspaceMcpBrowserPageHistory,
   type WorkspaceMcpBrowserPage,
+  type WorkspaceMcpClipboardEntry,
   type WorkspaceMcpContextAction,
+  type WorkspaceMcpRenderPane,
+  type WorkspaceMcpSessionDrive,
   type WorkspaceMcpSessionFsEntry,
   type WorkspaceMcpSessionState,
   type WorkspaceMcpWorktreeItem,
@@ -118,6 +122,15 @@ import {
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
+import {
+  buildActiveSessionFilesystemEntries,
+  buildActiveWorktreeItems,
+  readWorktreeContextMenuState,
+  readWorktreeRenderPaneState,
+  toggleWorktreeRenderPaneState,
+  type WorkspaceContextMenuState,
+} from './services/workspaceMcpWorktree';
+import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolsByIds, type ToolDescriptor } from './tools';
 import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
@@ -132,6 +145,8 @@ type WorkspaceViewState = {
   editingFilePath: string | null;
   activeMode: 'agent' | 'terminal';
   activeSessionIds: string[];
+  mountedSessionFsIds: string[];
+  panelOrder: string[];
 };
 type SidebarPanel = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
@@ -143,6 +158,8 @@ type SessionMcpRuntimeState = {
   mode: 'agent' | 'terminal';
   provider: AgentProvider | null;
   modelId: string | null;
+  agentId: string | null;
+  toolIds: string[];
   cwd: string | null;
   messages: Array<{
     role: 'user' | 'assistant' | 'system';
@@ -315,6 +332,17 @@ const CATEGORY_LABELS: Record<NodeKind, string> = {
   files: 'Files',
   clipboard: 'Clipboard',
 };
+const TOOL_GROUP_ORDER = [
+  'built-in',
+  'mcp',
+  'worktree-mcp',
+  'renderer-viewport-mcp',
+  'browser-worktree-mcp',
+  'sessions-worktree-mcp',
+  'files-worktree-mcp',
+  'clipboard-worktree-mcp',
+] as const;
+const DEFAULT_COLLAPSED_TOOL_GROUPS = new Set<string>(['mcp', 'webmcp']);
 
 function createClipboardNode(workspaceId: string): TreeNode {
   return {
@@ -572,25 +600,38 @@ function findFirstSessionId(workspace: TreeNode): string | null {
   return first?.id ?? null;
 }
 
+function listWorkspaceSessionIds(workspace: TreeNode): string[] {
+  const category = getWorkspaceCategory(workspace, 'session');
+  return (category?.children ?? [])
+    .filter((child): child is TreeNode => child.type === 'tab' && child.nodeKind === 'session')
+    .map((child) => child.id);
+}
+
 function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewState {
-  const firstId = findFirstSessionId(workspace);
+  const sessionIds = listWorkspaceSessionIds(workspace);
+  const firstId = sessionIds[0] ?? null;
   return {
     openTabIds: [],
     editingFilePath: null,
     activeMode: 'agent',
     activeSessionIds: firstId ? [firstId] : [],
+    mountedSessionFsIds: sessionIds,
+    panelOrder: [],
   };
 }
 
 function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: WorkspaceViewState): WorkspaceViewState {
   const base = entry ?? createWorkspaceViewEntry(workspace);
+  const sessionIds = listWorkspaceSessionIds(workspace);
   const requestedSessionIds = base.activeSessionIds ?? [];
   const rawIds = requestedSessionIds.filter((id) => Boolean(findNode(workspace, id)));
   const shouldFallbackToFirstSession = !entry || requestedSessionIds.length > 0;
-  const firstSessionId = findFirstSessionId(workspace);
+  const firstSessionId = sessionIds[0] ?? null;
   const activeSessionIds = rawIds.length > 0
     ? rawIds
     : (shouldFallbackToFirstSession && firstSessionId ? [firstSessionId] : []);
+  const requestedMountedSessionFsIds = base.mountedSessionFsIds ?? sessionIds;
+  const mountedSessionFsIds = requestedMountedSessionFsIds.filter((id) => sessionIds.includes(id));
   const validOpenTabIds = (base.openTabIds ?? []).filter((id) => {
     const tab = findNode(workspace, id);
     return tab?.type === 'tab' && (tab.nodeKind ?? 'browser') === 'browser';
@@ -599,6 +640,8 @@ function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: WorkspaceViewS
     ...base,
     openTabIds: validOpenTabIds,
     activeSessionIds,
+    mountedSessionFsIds,
+    panelOrder: (base.panelOrder ?? []).filter((id) => typeof id === 'string' && id.trim().length > 0),
   };
 }
 
@@ -616,7 +659,24 @@ function workspaceViewStateEquals(left: WorkspaceViewState, right: WorkspaceView
     && left.editingFilePath === right.editingFilePath
     && left.activeMode === right.activeMode
     && left.activeSessionIds.length === right.activeSessionIds.length
-    && left.activeSessionIds.every((id, index) => id === right.activeSessionIds[index]);
+    && left.activeSessionIds.every((id, index) => id === right.activeSessionIds[index])
+    && left.mountedSessionFsIds.length === right.mountedSessionFsIds.length
+    && left.mountedSessionFsIds.every((id, index) => id === right.mountedSessionFsIds[index])
+    && left.panelOrder.length === right.panelOrder.length
+    && left.panelOrder.every((id, index) => id === right.panelOrder[index]);
+}
+
+function renderPaneIdForNode(node: TreeNode): string | null {
+  if (node.type === 'tab' && (node.nodeKind ?? 'browser') === 'browser') {
+    return `browser:${node.id}`;
+  }
+  if (node.type === 'tab' && node.nodeKind === 'session') {
+    return `session:${node.id}`;
+  }
+  if (node.type === 'file' && node.filePath) {
+    return `file:${node.filePath}`;
+  }
+  return null;
 }
 
 function buildWorkspaceNodeMap(root: TreeNode): Map<string, string> {
@@ -781,7 +841,7 @@ function ToolCallChip({ step }: { step: ReasoningStep }) {
   }
 
   return (
-    <details className="tool-chip" data-testid={getToolChipTestId(step)} open={step.status === 'active'}>
+    <details className="tool-chip" data-testid={getToolChipTestId(step)}>
       <summary className="tool-chip-toggle">
         {header}
       </summary>
@@ -1088,7 +1148,7 @@ function ToolsPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [collapsedSubGroups, setCollapsedSubGroups] = useState<ReadonlySet<string>>(() => new Set(['webmcp']));
+  const [collapsedSubGroups, setCollapsedSubGroups] = useState<ReadonlySet<string>>(() => new Set(DEFAULT_COLLAPSED_TOOL_GROUPS));
   const [popoverPos, setPopoverPos] = useState<{ top: number; right: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -1111,7 +1171,18 @@ function ToolsPicker({
       bucket.entries.push(descriptor);
       map.set(descriptor.group, bucket);
     }
-    return Array.from(map.entries()).map(([group, value]) => ({ group, ...value }));
+    return Array.from(map.entries())
+      .map(([group, value]) => ({ group, ...value }))
+      .sort((left, right) => {
+        const leftIndex = TOOL_GROUP_ORDER.indexOf(left.group as (typeof TOOL_GROUP_ORDER)[number]);
+        const rightIndex = TOOL_GROUP_ORDER.indexOf(right.group as (typeof TOOL_GROUP_ORDER)[number]);
+        const normalizedLeftIndex = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+        const normalizedRightIndex = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+        if (normalizedLeftIndex !== normalizedRightIndex) {
+          return normalizedLeftIndex - normalizedRightIndex;
+        }
+        return left.groupLabel.localeCompare(right.groupLabel);
+      });
   }, [visible]);
 
   useEffect(() => {
@@ -1222,38 +1293,144 @@ function ToolsPicker({
             {grouped.length === 0 && (
               <div className="tools-picker-empty">No tools match.</div>
             )}
-            {(() => {
-              const webmcpGroup = grouped.find((g) => g.group === 'webmcp') ?? null;
-              const topGroups = grouped.filter((g) => g.group !== 'webmcp');
-              return topGroups.map(({ group, groupLabel, entries }) => {
-                const webmcpEntries = group === 'built-in' ? (webmcpGroup?.entries ?? []) : [];
-                const allEntries = [...entries, ...webmcpEntries];
-                const groupSelectedCount = allEntries.filter((descriptor) => selectedSet.has(descriptor.id)).length;
-                const allSelected = groupSelectedCount === allEntries.length;
-                const someSelected = groupSelectedCount > 0 && !allSelected;
+            {grouped.map(({ group, groupLabel, entries }) => {
+              const groupSelectedCount = entries.filter((descriptor) => selectedSet.has(descriptor.id)).length;
+              const allSelected = entries.length > 0 && groupSelectedCount === entries.length;
+              const someSelected = groupSelectedCount > 0 && !allSelected;
+              const isCollapsible = group !== 'built-in' && !lowered;
+              const isCollapsed = isCollapsible && collapsedSubGroups.has(group);
 
-                const webmcpSelectedCount = webmcpEntries.filter((descriptor) => selectedSet.has(descriptor.id)).length;
-                const webmcpAllSelected = webmcpEntries.length > 0 && webmcpSelectedCount === webmcpEntries.length;
-                const webmcpSomeSelected = webmcpSelectedCount > 0 && !webmcpAllSelected;
-                const isWebmcpCollapsed = collapsedSubGroups.has('webmcp') && !lowered;
+              // For the built-in group (when not searching), split entries into ungrouped
+              // items (e.g. CLI) and named sub-groups (Browser, Sessions, Files, …).
+              const builtInSubGroups = group === 'built-in' && !lowered ? (() => {
+                const sgMap = new Map<string, { subGroupLabel: string; subEntries: ToolDescriptor[] }>();
+                for (const d of entries) {
+                  if (!d.subGroup) continue;
+                  const bucket = sgMap.get(d.subGroup) ?? { subGroupLabel: d.subGroupLabel ?? d.subGroup, subEntries: [] };
+                  bucket.subEntries.push(d);
+                  sgMap.set(d.subGroup, bucket);
+                }
+                return [...sgMap.entries()].sort((a, b) => {
+                  const ai = TOOL_GROUP_ORDER.indexOf(a[0] as (typeof TOOL_GROUP_ORDER)[number]);
+                  const bi = TOOL_GROUP_ORDER.indexOf(b[0] as (typeof TOOL_GROUP_ORDER)[number]);
+                  if (ai !== -1 && bi !== -1) return ai - bi;
+                  if (ai !== -1) return -1;
+                  if (bi !== -1) return 1;
+                  return a[1].subGroupLabel.localeCompare(b[1].subGroupLabel);
+                });
+              })() : null;
+              const ungroupedEntries = builtInSubGroups ? entries.filter((d) => !d.subGroup) : null;
 
-                return (
-                  <div className="tools-picker-group" key={group}>
-                    <label className="tools-picker-group-header">
-                      <input
-                        type="checkbox"
-                        aria-label={`Toggle all ${groupLabel} tools`}
-                        checked={allSelected}
-                        ref={(element) => { if (element) element.indeterminate = someSelected; }}
-                        onChange={(event) => setGroup(allEntries, event.target.checked)}
-                      />
+              return (
+                <div className="tools-picker-group" key={group}>
+                  <div
+                    className="tools-picker-group-header"
+                    {...(isCollapsible ? {
+                      role: 'button' as const,
+                      tabIndex: 0,
+                      'aria-expanded': !isCollapsed,
+                      onClick: () => toggleSubGroup(group),
+                      onKeyDown: (e: React.KeyboardEvent) => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSubGroup(group); }
+                      },
+                    } : {})}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={`Toggle all ${groupLabel} tools`}
+                      checked={allSelected}
+                      ref={(element) => { if (element) element.indeterminate = someSelected; }}
+                      onChange={(event) => setGroup(entries, event.target.checked)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <span className="tools-picker-row-text tools-picker-subgroup-name-row">
+                      {isCollapsible && <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={10} />}
                       <span className="tools-picker-group-label">{groupLabel}</span>
-                      <span className="tools-picker-group-count">{groupSelectedCount}/{allEntries.length}</span>
-                    </label>
-                    <ul className="tools-picker-list" role="list">
+                      <span className="tools-picker-group-count">{groupSelectedCount}/{entries.length}</span>
+                    </span>
+                  </div>
+                  {!isCollapsed && (builtInSubGroups ? (
+                    <>
+                      {ungroupedEntries && ungroupedEntries.length > 0 && (
+                        <ul className="tools-picker-list" role="list">
+                          {ungroupedEntries.map((descriptor) => (
+                            <li key={descriptor.id} className="tools-picker-row">
+                              <label className="tools-picker-row-label">
+                                <input
+                                  type="checkbox"
+                                  aria-label={descriptor.label}
+                                  checked={selectedSet.has(descriptor.id)}
+                                  onChange={() => toggleId(descriptor.id)}
+                                />
+                                <span className="tools-picker-row-text">
+                                  <span className="tools-picker-row-name">{descriptor.label}</span>
+                                  <span className="tools-picker-row-desc">{descriptor.description}</span>
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {builtInSubGroups.map(([sgKey, { subGroupLabel: sgLabel, subEntries }]) => {
+                        const sgSelectedCount = subEntries.filter((d) => selectedSet.has(d.id)).length;
+                        const sgAllSelected = subEntries.length > 0 && sgSelectedCount === subEntries.length;
+                        const sgSomeSelected = sgSelectedCount > 0 && !sgAllSelected;
+                        const isSgCollapsed = collapsedSubGroups.has(sgKey);
+                        return (
+                          <div className="tools-picker-group" key={sgKey}>
+                            <div
+                              className="tools-picker-group-header"
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={!isSgCollapsed}
+                              onClick={() => toggleSubGroup(sgKey)}
+                              onKeyDown={(e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSubGroup(sgKey); }
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                aria-label={`Toggle all ${sgLabel} tools`}
+                                checked={sgAllSelected}
+                                ref={(element) => { if (element) element.indeterminate = sgSomeSelected; }}
+                                onChange={(event) => setGroup(subEntries, event.target.checked)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <span className="tools-picker-row-text tools-picker-subgroup-name-row">
+                                <Icon name={isSgCollapsed ? 'chevronRight' : 'chevronDown'} size={10} />
+                                <span className="tools-picker-group-label">{sgLabel}</span>
+                                <span className="tools-picker-group-count">{sgSelectedCount}/{subEntries.length}</span>
+                              </span>
+                            </div>
+                            {!isSgCollapsed && (
+                              <ul className="tools-picker-list tools-picker-subgroup-list" role="list">
+                                {subEntries.map((descriptor) => (
+                                  <li key={descriptor.id} className="tools-picker-row">
+                                    <label className="tools-picker-row-label tools-picker-row-label--nested">
+                                      <input
+                                        type="checkbox"
+                                        aria-label={descriptor.label}
+                                        checked={selectedSet.has(descriptor.id)}
+                                        onChange={() => toggleId(descriptor.id)}
+                                      />
+                                      <span className="tools-picker-row-text">
+                                        <span className="tools-picker-row-name">{descriptor.label}</span>
+                                        <span className="tools-picker-row-desc">{descriptor.description}</span>
+                                      </span>
+                                    </label>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <ul className={`tools-picker-list${group === 'built-in' ? '' : ' tools-picker-subgroup-list'}`} role="list">
                       {entries.map((descriptor) => (
                         <li key={descriptor.id} className="tools-picker-row">
-                          <label className="tools-picker-row-label">
+                          <label className={`tools-picker-row-label${group === 'built-in' ? '' : ' tools-picker-row-label--nested'}`}>
                             <input
                               type="checkbox"
                               aria-label={descriptor.label}
@@ -1267,57 +1444,11 @@ function ToolsPicker({
                           </label>
                         </li>
                       ))}
-                      {group === 'built-in' && webmcpGroup && (
-                        <li className="tools-picker-row tools-picker-subgroup">
-                          <div className="tools-picker-row-label">
-                            <input
-                              type="checkbox"
-                              aria-label="Toggle all WebMCP tools"
-                              checked={webmcpAllSelected}
-                              ref={(element) => { if (element) element.indeterminate = webmcpSomeSelected; }}
-                              onChange={(event) => setGroup(webmcpEntries, event.target.checked)}
-                            />
-                            <span className="tools-picker-row-text tools-picker-subgroup-name-row">
-                              <button
-                                type="button"
-                                className="tools-picker-subgroup-toggle"
-                                aria-expanded={!isWebmcpCollapsed}
-                                aria-label={`${isWebmcpCollapsed ? 'Expand' : 'Collapse'} WebMCP tools`}
-                                onClick={() => toggleSubGroup('webmcp')}
-                              >
-                                <Icon name={isWebmcpCollapsed ? 'chevronRight' : 'chevronDown'} size={10} />
-                                {webmcpGroup.groupLabel}
-                              </button>
-                              <span className="tools-picker-subgroup-count">{webmcpSelectedCount}/{webmcpEntries.length}</span>
-                            </span>
-                          </div>
-                          {!isWebmcpCollapsed && (
-                            <ul className="tools-picker-list tools-picker-subgroup-list" role="list">
-                              {webmcpEntries.map((descriptor) => (
-                                <li key={descriptor.id} className="tools-picker-row">
-                                  <label className="tools-picker-row-label tools-picker-row-label--nested">
-                                    <input
-                                      type="checkbox"
-                                      aria-label={descriptor.label}
-                                      checked={selectedSet.has(descriptor.id)}
-                                      onChange={() => toggleId(descriptor.id)}
-                                    />
-                                    <span className="tools-picker-row-text">
-                                      <span className="tools-picker-row-name">{descriptor.label}</span>
-                                      <span className="tools-picker-row-desc">{descriptor.description}</span>
-                                    </span>
-                                  </label>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </li>
-                      )}
                     </ul>
-                  </div>
-                );
-              });
-            })()}
+                  ))}
+                </div>
+              );
+            })}
           </div>
           <div className="tools-picker-footer">
             <button type="button" className="tools-picker-done" onClick={() => setOpen(false)}>Done</button>
@@ -1374,6 +1505,7 @@ function ChatPanel({
   const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
   const [selectedProviderBySession, setSelectedProviderBySession] = useState<Record<string, AgentProvider>>({});
   const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useState<Record<string, string>>({});
+  const [selectedAgentIdBySession, setSelectedAgentIdBySession] = useState<Record<string, string | null>>({});
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
   const [, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
@@ -1394,9 +1526,17 @@ function ChatPanel({
     finalizeCancelled: () => void;
   } | null>(null);
   const webMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
-  const workspacePromptContext = useMemo(() => buildWorkspacePromptContext(workspaceFiles), [workspaceFiles]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
+  const availableAgentIds = useMemo(() => workspaceCapabilities.agents.map((file) => file.path), [workspaceCapabilities.agents]);
+  const selectedAgentIdState = selectedAgentIdBySession[activeChatSessionId] ?? null;
+  const selectedAgentId = selectedAgentIdState && availableAgentIds.includes(selectedAgentIdState)
+    ? selectedAgentIdState
+    : (availableAgentIds[0] ?? null);
+  const workspacePromptContext = useMemo(
+    () => buildWorkspacePromptContext(workspaceFiles, selectedAgentId),
+    [selectedAgentId, workspaceFiles],
+  );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState });
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
@@ -1437,6 +1577,8 @@ function ChatPanel({
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
   const effectiveSelectedCopilotModelIdRef = useRef(effectiveSelectedCopilotModelId);
+  const selectedAgentIdRef = useRef<string | null>(selectedAgentId);
+  const selectedToolIdsRef = useRef<string[]>(selectedToolIds);
   const activeModeRef = useRef(activeMode);
   const cwdBySessionRef = useRef(cwdBySession);
 
@@ -1451,6 +1593,14 @@ function ChatPanel({
   useEffect(() => {
     effectiveSelectedCopilotModelIdRef.current = effectiveSelectedCopilotModelId;
   }, [effectiveSelectedCopilotModelId]);
+
+  useEffect(() => {
+    selectedAgentIdRef.current = selectedAgentId;
+  }, [selectedAgentId]);
+
+  useEffect(() => {
+    selectedToolIdsRef.current = selectedToolIds;
+  }, [selectedToolIds]);
 
   useEffect(() => {
     activeModeRef.current = activeMode;
@@ -1976,6 +2126,8 @@ function ChatPanel({
         ? effectiveSelectedCopilotModelIdRef.current
         : effectiveSelectedModelIdRef.current
     ) || null,
+    agentId: selectedAgentIdRef.current ?? null,
+    toolIds: [...selectedToolIdsRef.current],
     cwd: activeSessionId ? (cwdBySessionRef.current[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD,
     messages: messagesRef.current.map((message) => ({
       role: message.role,
@@ -2007,6 +2159,18 @@ function ChatPanel({
         effectiveSelectedModelIdRef.current = nextModelId;
         setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
       }
+    }
+
+    if (typeof input.agentId === 'string') {
+      const nextAgentId = input.agentId.trim() || null;
+      selectedAgentIdRef.current = nextAgentId;
+      setSelectedAgentIdBySession((current) => ({ ...current, [activeChatSessionId]: nextAgentId }));
+    }
+
+    if (Array.isArray(input.toolIds)) {
+      const nextToolIds = input.toolIds.filter((toolId): toolId is string => typeof toolId === 'string');
+      selectedToolIdsRef.current = nextToolIds;
+      setSelectedToolIdsBySession((current) => ({ ...current, [activeChatSessionId]: nextToolIds }));
     }
 
     if (input.mode && input.mode !== activeModeRef.current) {
@@ -2116,6 +2280,24 @@ function ChatPanel({
                       : (
                         <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
                       ))}
+                {workspaceCapabilities.agents.length > 0 && (
+                  <label className="header-model-selector" {...panelTitlebarControlProps}>
+                    <select
+                      aria-label="Session AGENTS.md"
+                      value={selectedAgentId ?? ''}
+                      onChange={(event) => {
+                        const nextAgentId = event.target.value.trim() || null;
+                        selectedAgentIdRef.current = nextAgentId;
+                        setSelectedAgentIdBySession((current) => ({ ...current, [activeChatSessionId]: nextAgentId }));
+                      }}
+                      {...panelTitlebarControlProps}
+                    >
+                      {workspaceCapabilities.agents.map((agentFile) => (
+                        <option key={agentFile.path} value={agentFile.path}>{agentFile.path}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <ToolsPicker
                   descriptors={toolDescriptors}
                   selectedIds={selectedToolIds}
@@ -3549,13 +3731,18 @@ function SortablePanelCell({ id, children }: { id: string; children: (dragHandle
   );
 }
 
-function PanelSplitView({ panels, renderPanel }: { panels: Panel[]; renderPanel: (panel: Panel, dragHandleProps?: PanelDragHandleProps) => React.ReactNode }) {
+function PanelSplitView({
+  panels,
+  renderPanel,
+  onOrderChange,
+}: {
+  panels: Panel[];
+  renderPanel: (panel: Panel, dragHandleProps?: PanelDragHandleProps) => React.ReactNode;
+  onOrderChange: (paneIds: string[]) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [containerHeight, setContainerHeight] = useState<number>(0);
-  // orderedPanels is only used after the user has dragged at least once.
-  const [orderedPanels, setOrderedPanels] = useState<Panel[]>(panels);
-  const [hasUserReordered, setHasUserReordered] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -3569,21 +3756,7 @@ function PanelSplitView({ panels, renderPanel }: { panels: Panel[]; renderPanel:
     return () => ro.disconnect();
   }, []);
 
-  // When the upstream panels prop changes (open/close), merge into orderedPanels
-  // by keeping user-sorted positions for existing panels and appending new ones.
-  // This only matters after the user has dragged; otherwise we use `panels` directly.
-  useEffect(() => {
-    if (!hasUserReordered) return;
-    setOrderedPanels((prev) => {
-      const nextKeySet = new Set(panels.map(panelKey));
-      const kept = prev.filter((p) => nextKeySet.has(panelKey(p)));
-      const keptKeySet = new Set(kept.map(panelKey));
-      const added = panels.filter((p) => !keptKeySet.has(panelKey(p)));
-      return [...kept, ...added];
-    });
-  }, [panels, hasUserReordered]);
-
-  const displayPanels = hasUserReordered ? orderedPanels : panels;
+  const displayPanels = panels;
   const panelsPerRow = containerWidth > 0 ? Math.max(1, Math.floor(containerWidth / PANEL_MIN_WIDTH_PX)) : displayPanels.length;
   const maxRows = containerHeight > 0 ? Math.max(1, Math.floor(containerHeight / PANEL_MIN_HEIGHT_PX)) : Math.ceil(displayPanels.length / panelsPerRow);
   const visiblePanels = displayPanels.slice(0, maxRows * panelsPerRow);
@@ -3605,15 +3778,15 @@ function PanelSplitView({ panels, renderPanel }: { panels: Panel[]; renderPanel:
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     setActiveDragId(null);
     if (!over || active.id === over.id) return;
-    setHasUserReordered(true);
-    setOrderedPanels((prev) => {
-      // Seed from current display order if this is the first reorder
-      const base = hasUserReordered ? prev : panels;
-      const oldIndex = base.findIndex((p) => panelKey(p) === active.id);
-      const newIndex = base.findIndex((p) => panelKey(p) === over.id);
-      if (oldIndex === -1 || newIndex === -1) return prev;
-      return arrayMove(base, oldIndex, newIndex);
-    });
+    const oldIndex = displayPanels.findIndex((panel) => panelKey(panel) === active.id);
+    const newIndex = displayPanels.findIndex((panel) => panelKey(panel) === over.id);
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+    const nextOrder = [...displayPanels];
+    const [moved] = nextOrder.splice(oldIndex, 1);
+    nextOrder.splice(newIndex, 0, moved);
+    onOrderChange(nextOrder.map(panelKey));
   };
 
   const activeDragPanel = activeDragId ? displayPanels.find((p) => panelKey(p) === activeDragId) : null;
@@ -3678,13 +3851,14 @@ function AgentBrowserApp() {
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
   const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useState<Record<string, WorkspaceViewState>>(() => createWorkspaceViewState(initialRootRef.current!));
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
+  const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
   const sessionMcpControllersRef = useRef<Record<string, SessionMcpController>>({});
   const [addSessionFsMenu, setAddSessionFsMenu] = useState<{ sessionId: string; basePath: string; kind?: 'file' | 'folder' } | null>(null);
   const [addSessionFsName, setAddSessionFsName] = useState('');
   const [renameSessionFsMenu, setRenameSessionFsMenu] = useState<{ sessionId: string; path: string } | null>(null);
   const [renameSessionFsName, setRenameSessionFsName] = useState('');
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entries: ContextMenuEntry[]; topButtons?: ContextMenuTopButton[] } | null>(null);
+  const [contextMenu, setContextMenu] = useState<WorkspaceContextMenuState<ContextMenuEntry, ContextMenuTopButton> | null>(null);
   const [renamingSessionNodeId, setRenamingSessionNodeId] = useState<string | null>(null);
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   // ── Properties / History ──────────────────────────────────────────────────
@@ -3713,6 +3887,7 @@ function AgentBrowserApp() {
     () => installModelContext(typeof window === 'undefined' ? undefined : window) ?? new ModelContext(),
     [],
   );
+  const workspaceWebMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
@@ -3723,6 +3898,8 @@ function AgentBrowserApp() {
         editingFilePath: null,
         activeMode: 'agent',
         activeSessionIds: [],
+        mountedSessionFsIds: [],
+        panelOrder: [],
       };
   const activeSessionMode = activeWorkspaceViewState.activeMode;
   const activeSessionIds = activeWorkspaceViewState.activeSessionIds ?? [];
@@ -3749,6 +3926,12 @@ function AgentBrowserApp() {
       : [],
     [activeSessionIds, activeWorkspace],
   );
+  const activeMountedSessionFsIds = activeWorkspaceViewState.mountedSessionFsIds ?? [];
+  const activeSessionDrives = useMemo<WorkspaceMcpSessionDrive[]>(() => activeWorkspaceSessions.map((session) => ({
+    sessionId: session.id,
+    label: `//${session.name.toLowerCase().replace(/\s+/g, '-')}-fs`,
+    mounted: activeMountedSessionFsIds.includes(session.id),
+  })), [activeMountedSessionFsIds, activeWorkspaceSessions]);
   const visibleItems = useMemo(
     () => activeWorkspace.type === 'workspace' ? flattenWorkspaceTreeFiltered(activeWorkspace, treeFilter) : flattenTreeFiltered(root, treeFilter),
     [activeWorkspace, root, treeFilter],
@@ -3760,6 +3943,48 @@ function AgentBrowserApp() {
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
+  const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
+    const panes: WorkspaceMcpRenderPane[] = [];
+
+    if (editingFile) {
+      panes.push({
+        id: `file:${editingFile.path}`,
+        paneType: 'workspace-file',
+        itemId: editingFile.path,
+        label: editingFile.path,
+        path: editingFile.path,
+      });
+    }
+
+    for (const tab of openBrowserTabs) {
+      panes.push({
+        id: `browser:${tab.id}`,
+        paneType: 'browser-page',
+        itemId: tab.id,
+        label: tab.name,
+        url: tab.url ?? '',
+      });
+    }
+
+    for (const sessionId of activeSessionIds) {
+      const summary = activeWorkspaceSessions.find((session) => session.id === sessionId);
+      panes.push({
+        id: `session:${sessionId}`,
+        paneType: 'session',
+        itemId: sessionId,
+        label: summary?.name ?? sessionId,
+      });
+    }
+
+    return orderRenderPanes(panes, activeWorkspaceViewState.panelOrder ?? []);
+  }, [activeSessionIds, activeWorkspaceSessions, activeWorkspaceViewState.panelOrder, editingFile, openBrowserTabs]);
+  const activeClipboardEntries = useMemo<WorkspaceMcpClipboardEntry[]>(() => clipboardHistory.map((entry, index) => ({
+    id: entry.id,
+    label: entry.label,
+    text: entry.text,
+    timestamp: entry.timestamp,
+    isActive: index === 0,
+  })), [clipboardHistory]);
   const activePanelMeta = SIDEBAR_PANEL_META[activePanel];
   const openActiveWorkspaceFileFromMcp = useCallback((path: string) => {
     setWorkspaceViewStateByWorkspace((current) => ({
@@ -3847,15 +4072,17 @@ function AgentBrowserApp() {
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
         const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
         const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
+        const mountedSessionIds = normalizeWorkspaceViewEntry(normalizedWorkspace, workspaceViewStateByWorkspace[ws.id]).mountedSessionFsIds;
         const terminalFsNodes: TreeNode[] = (sessionCategory?.children ?? [])
           .filter((child) => child.type === 'tab' && child.nodeKind === 'session')
+          .filter((terminalNode) => mountedSessionIds.includes(terminalNode.id))
           .map((terminalNode) => ({
             id: `vfs:${ws.id}:${terminalNode.id}`,
             name: `//${terminalNode.name.toLowerCase().replace(/\s+/g, '-')}-fs`,
             type: 'folder',
             isDrive: true,
             expanded: false,
-            children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? []),
+            children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? [], terminalFsFileContentsBySession[terminalNode.id]),
           }));
         const nextChildren = (normalizedWorkspace.children ?? []).map((child) => child.nodeKind === 'files'
           ? { ...child, children: [...fileNodes, ...terminalFsNodes] }
@@ -3864,7 +4091,7 @@ function AgentBrowserApp() {
       });
       return { ...current, children: updated };
     });
-  }, [terminalFsPathsBySession, workspaceFilesByWorkspace]);
+  }, [terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
 
   // ── System clipboard detection ────────────────────────────────────────────
   useEffect(() => {
@@ -4032,6 +4259,8 @@ function AgentBrowserApp() {
         editingFilePath: null,
         activeMode: 'agent' as const,
         activeSessionIds: [],
+        mountedSessionFsIds: [],
+        panelOrder: [],
       };
       return {
         ...current,
@@ -4040,6 +4269,9 @@ function AgentBrowserApp() {
           openTabIds: [],
           editingFilePath: null,
           activeSessionIds: newSessionId ? [newSessionId] : [],
+          mountedSessionFsIds: newSessionId && !existing.mountedSessionFsIds.includes(newSessionId)
+            ? [...existing.mountedSessionFsIds, newSessionId]
+            : existing.mountedSessionFsIds,
         },
       };
     });
@@ -4051,13 +4283,25 @@ function AgentBrowserApp() {
     setNewTabWorkspaceId(workspaceId);
   }, []);
 
-  const confirmNewBrowserTab = useCallback((workspaceId: string, url: string, explicitTitle?: string) => {
+  function resolveBrowserNavigationTarget(url: string, explicitTitle?: string) {
     const trimmed = url.trim() || 'about:blank';
-    let normalized = trimmed;
+    let normalizedUrl = trimmed;
     if (trimmed !== 'about:blank' && !/^[a-z][a-z\d+\-.]*:/i.test(trimmed)) {
-      normalized = `https://${trimmed}`;
+      normalizedUrl = `https://${trimmed}`;
     }
-    const title = explicitTitle?.trim() || (() => { try { return new URL(normalized).hostname || normalized; } catch { return normalized; } })();
+    const normalizedTitle = explicitTitle?.trim() || (() => {
+      try {
+        return new URL(normalizedUrl).hostname || normalizedUrl;
+      } catch {
+        return normalizedUrl;
+      }
+    })();
+
+    return { url: normalizedUrl, title: normalizedTitle };
+  }
+
+  const confirmNewBrowserTab = useCallback((workspaceId: string, url: string, explicitTitle?: string) => {
+    const { url: normalized, title } = resolveBrowserNavigationTarget(url, explicitTitle);
     let createdPage: WorkspaceMcpBrowserPage | null = null;
     const newTab = createBrowserTab(title, normalized, 'hot', 0);
     createdPage = {
@@ -4081,6 +4325,13 @@ function AgentBrowserApp() {
             : child
         ),
       };
+    }));
+    setBrowserNavHistories((current) => ({
+      ...current,
+      [newTab.id]: {
+        entries: [{ url: normalized, title: newTab.name, timestamp: Date.now() }],
+        currentIndex: 0,
+      },
     }));
     setNewTabWorkspaceId(null);
     setToast({ msg: `Opened ${normalized}`, type: 'success' });
@@ -4733,27 +4984,33 @@ function AgentBrowserApp() {
     };
   }
 
-  function handleNodeContextMenu(x: number, y: number, node: TreeNode) {
+  function openContextMenuForNode(x: number, y: number, node: TreeNode) {
     if (node.id.startsWith('vfs:') && !node.nodeKind) {
       const vfsArgs = parseVfsNodeId(node.id);
-      if (vfsArgs) setContextMenu({ x, y, ...buildVfsContextMenu(vfsArgs, node) });
+      if (vfsArgs) {
+        setContextMenu({ x, y, itemId: node.id, itemType: 'session-fs-entry', ...buildVfsContextMenu(vfsArgs, node) });
+      }
       return;
     }
     if (node.nodeKind === 'clipboard') {
-      setContextMenu({ x, y, ...buildClipboardContextMenu(node) });
+      setContextMenu({ x, y, itemId: node.id, itemType: 'clipboard', ...buildClipboardContextMenu(node) });
       return;
     }
     if (node.nodeKind === 'browser') {
-      setContextMenu({ x, y, ...buildBrowserContextMenu(node) });
+      setContextMenu({ x, y, itemId: node.id, itemType: 'browser-page', ...buildBrowserContextMenu(node) });
       return;
     }
     if (node.nodeKind === 'session') {
-      setContextMenu({ x, y, ...buildSessionContextMenu(node) });
+      setContextMenu({ x, y, itemId: node.id, itemType: 'session', ...buildSessionContextMenu(node) });
       return;
     }
     if (node.type === 'file') {
-      setContextMenu({ x, y, ...buildFileContextMenu(node) });
+      setContextMenu({ x, y, itemId: node.id, itemType: 'workspace-file', ...buildFileContextMenu(node) });
     }
+  }
+
+  function handleNodeContextMenu(x: number, y: number, node: TreeNode) {
+    openContextMenuForNode(x, y, node);
   }
 
   // ── Properties ─────────────────────────────────────────────────────────────
@@ -4818,20 +5075,57 @@ function AgentBrowserApp() {
     setVersionHistories((prev) => ({ ...prev, [nodeId]: dag }));
   }
 
-  function handleBrowserBack(tabId: string) {
+  function syncBrowserTabFromHistory(tabId: string, history: BrowserNavHistory) {
+    const entry = history.entries[history.currentIndex];
+    if (!entry) {
+      return;
+    }
+
+    setRoot((current) => deepUpdate(current, tabId, (node) => {
+      if (node.type !== 'tab' || (node.nodeKind ?? 'browser') !== 'browser') {
+        return node;
+      }
+      return {
+        ...node,
+        name: entry.title || entry.url,
+        url: entry.url,
+      };
+    }));
+  }
+
+  function stepBrowserHistory(tabId: string, step: -1 | 1): BrowserNavHistory | null {
+    let nextHistory: BrowserNavHistory | null = null;
+    let shouldSync = false;
     setBrowserNavHistories((prev) => {
-      const h = prev[tabId];
-      if (!h || h.currentIndex <= 0) return prev;
-      return { ...prev, [tabId]: { ...h, currentIndex: h.currentIndex - 1 } };
+      const history = prev[tabId];
+      if (!history) {
+        return prev;
+      }
+
+      const nextIndex = history.currentIndex + step;
+      if (nextIndex < 0 || nextIndex >= history.entries.length) {
+        nextHistory = history;
+        return prev;
+      }
+
+      nextHistory = { ...history, currentIndex: nextIndex };
+      shouldSync = true;
+      return { ...prev, [tabId]: nextHistory };
     });
+
+    if (shouldSync && nextHistory) {
+      syncBrowserTabFromHistory(tabId, nextHistory);
+    }
+
+    return nextHistory;
+  }
+
+  function handleBrowserBack(tabId: string) {
+    stepBrowserHistory(tabId, -1);
   }
 
   function handleBrowserForward(tabId: string) {
-    setBrowserNavHistories((prev) => {
-      const h = prev[tabId];
-      if (!h || h.currentIndex >= h.entries.length - 1) return prev;
-      return { ...prev, [tabId]: { ...h, currentIndex: h.currentIndex + 1 } };
-    });
+    stepBrowserHistory(tabId, 1);
   }
 
   function handleRemoveFileNode(nodeId: string) {
@@ -4852,6 +5146,7 @@ function AgentBrowserApp() {
           [ownerWorkspace.id]: {
             ...existing,
             editingFilePath: null,
+            panelOrder: existing.panelOrder.filter((id) => id !== `file:${node.filePath}`),
           },
         };
       });
@@ -4859,10 +5154,21 @@ function AgentBrowserApp() {
       return;
     }
     const ownerWorkspaceId = ownerWorkspace?.id ?? activeWorkspaceId;
+    const paneId = renderPaneIdForNode(node);
     if (node.nodeKind === 'session') {
       delete bashBySessionRef.current[nodeId];
       setTerminalFsPathsBySession((current) => {
         if (!(nodeId in current)) return current;
+        const next = { ...current };
+        delete next[nodeId];
+        return next;
+      });
+    }
+    if (node.type === 'tab' && (node.nodeKind ?? 'browser') === 'browser') {
+      setBrowserNavHistories((current) => {
+        if (!(nodeId in current)) {
+          return current;
+        }
         const next = { ...current };
         delete next[nodeId];
         return next;
@@ -4874,12 +5180,15 @@ function AgentBrowserApp() {
     setWorkspaceViewStateByWorkspace((current) => {
       const existing = current[ownerWorkspaceId];
       if (!existing) return current;
+      const remainingSessionIds = (existing.activeSessionIds ?? []).filter((id) => id !== nodeId);
       const nextEntry: WorkspaceViewState = {
         ...existing,
         openTabIds: (existing.openTabIds ?? []).filter((id) => id !== nodeId),
-        activeSessionIds: (existing.activeSessionIds ?? []).filter((id) => id !== nodeId).length > 0
-          ? (existing.activeSessionIds ?? []).filter((id) => id !== nodeId)
+        activeSessionIds: remainingSessionIds.length > 0
+          ? remainingSessionIds
           : (nextWorkspace ? (findFirstSessionId(nextWorkspace) ? [findFirstSessionId(nextWorkspace)!] : []) : []),
+        mountedSessionFsIds: (existing.mountedSessionFsIds ?? []).filter((id) => id !== nodeId),
+        panelOrder: paneId ? existing.panelOrder.filter((id) => id !== paneId) : existing.panelOrder,
       };
       return workspaceViewStateEquals(existing, nextEntry)
         ? current
@@ -5026,73 +5335,117 @@ function AgentBrowserApp() {
       return [];
     }
 
-    return activeSessionIds.flatMap((sessionId) => {
-      const rawPaths = [...new Set(terminalFsPathsBySession[sessionId] ?? [])].sort((left, right) => left.localeCompare(right));
-      return rawPaths.map((path) => ({
-        sessionId,
-        path,
-        kind: inferSessionFsEntryKind(rawPaths, path),
-        isRoot: path === BASH_INITIAL_CWD,
-      }));
+    return buildActiveSessionFilesystemEntries({
+      activeSessionIds: activeMountedSessionFsIds,
+      terminalFsPathsBySession,
+      initialCwd: BASH_INITIAL_CWD,
+      inferSessionFsEntryKind,
     });
-  }, [activeSessionIds, activeWorkspace, terminalFsPathsBySession]);
+  }, [activeMountedSessionFsIds, activeWorkspace, terminalFsPathsBySession]);
 
   const activeWorktreeItems = useMemo<WorkspaceMcpWorktreeItem[]>(() => {
     if (activeWorkspace.type !== 'workspace') {
       return [];
     }
 
-    return flattenWorkspaceTreeFiltered(activeWorkspace, '')
-      .flatMap<WorkspaceMcpWorktreeItem>(({ node }) => {
-        if (node.id.startsWith('vfs:') && !node.nodeKind) {
-          const vfsArgs = parseVfsNodeId(node.id);
-          return vfsArgs ? [{
-            id: node.id,
-            itemType: 'session-fs-entry' as const,
-            label: node.name,
-            path: vfsArgs.basePath,
-            sessionId: vfsArgs.sessionId,
-          }] : [];
-        }
-        if (node.type === 'tab' && node.nodeKind === 'browser') {
-          return [{ id: node.id, itemType: 'browser-page' as const, label: node.name, url: node.url }];
-        }
-        if (node.type === 'tab' && node.nodeKind === 'session') {
-          return [{ id: node.id, itemType: 'session' as const, label: node.name }];
-        }
-        if (node.type === 'file' && node.filePath) {
-          return [{ id: node.id, itemType: 'workspace-file' as const, label: node.name, path: node.filePath }];
-        }
-        if (node.type === 'tab' && node.nodeKind === 'clipboard') {
-          return [{ id: node.id, itemType: 'clipboard' as const, label: node.name }];
-        }
-        return [];
-      });
+    return buildActiveWorktreeItems({
+      flattenedItems: flattenWorkspaceTreeFiltered(activeWorkspace, ''),
+      parseVfsNodeId,
+    });
   }, [activeWorkspace]);
+
+  const findActiveWorktreeItem = useCallback((itemId: string, itemType: WorkspaceMcpWorktreeItem['itemType']) => (
+    activeWorktreeItems.find((item) => item.id === itemId && item.itemType === itemType) ?? null
+  ), [activeWorktreeItems]);
+
+  const readBrowserPageFromWorkspace = useCallback((pageId: string, overrides?: Partial<WorkspaceMcpBrowserPage>): WorkspaceMcpBrowserPage => {
+    const page = activeBrowserPages.find((candidate) => candidate.id === pageId);
+    if (!page) {
+      throw new DOMException(`Browser page "${pageId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    return {
+      ...page,
+      ...overrides,
+    };
+  }, [activeBrowserPages, activeWorkspace.name]);
+
+  const getBrowserPageHistoryFromMcp = useCallback((pageId: string): WorkspaceMcpBrowserPageHistory | null => {
+    const history = browserNavHistories[pageId];
+    if (history) {
+      return {
+        pageId,
+        currentIndex: history.currentIndex,
+        entries: history.entries.map((entry) => ({ ...entry })),
+      };
+    }
+
+    const page = activeBrowserPages.find((candidate) => candidate.id === pageId);
+    if (!page) {
+      return null;
+    }
+
+    return {
+      pageId,
+      currentIndex: 0,
+      entries: [{ url: page.url, title: page.title, timestamp: Date.now() }],
+    };
+  }, [activeBrowserPages, browserNavHistories]);
 
   const createBrowserPageFromMcp = useCallback(async ({ url, title }: { url: string; title?: string }) => (
     confirmNewBrowserTab(activeWorkspaceId, url, title) ?? undefined
   ), [activeWorkspaceId, confirmNewBrowserTab]);
 
-  const openBrowserPageFromMcp = useCallback(async (pageId: string) => {
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      const nextIds = [pageId];
-      return existing.openTabIds.length === nextIds.length && existing.openTabIds.every((id, index) => id === nextIds[index])
-        ? current
-        : { ...current, [activeWorkspaceId]: { ...existing, openTabIds: nextIds } };
+  const navigateBrowserPageFromMcp = useCallback(async ({ pageId, url, title }: { pageId: string; url: string; title?: string }) => {
+    const page = readBrowserPageFromWorkspace(pageId);
+    const target = resolveBrowserNavigationTarget(url, title);
+    let nextHistory: BrowserNavHistory | null = null;
+    setBrowserNavHistories((current) => {
+      const existingHistory = current[pageId] ?? {
+        entries: [{ url: page.url, title: page.title, timestamp: Date.now() }],
+        currentIndex: 0,
+      };
+      const nextEntries = [
+        ...existingHistory.entries.slice(0, existingHistory.currentIndex + 1),
+        { url: target.url, title: target.title, timestamp: Date.now() },
+      ];
+      nextHistory = {
+        entries: nextEntries,
+        currentIndex: nextEntries.length - 1,
+      };
+      return { ...current, [pageId]: nextHistory };
     });
-  }, [activeWorkspace, activeWorkspaceId]);
+    if (nextHistory) {
+      syncBrowserTabFromHistory(pageId, nextHistory);
+    }
+    return readBrowserPageFromWorkspace(pageId, {
+      title: target.title,
+      url: target.url,
+      isOpen: page.isOpen,
+    });
+  }, [readBrowserPageFromWorkspace]);
 
-  const closeBrowserPageFromMcp = useCallback(async (pageId: string) => {
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      const nextIds = (existing.openTabIds ?? []).filter((id) => id !== pageId);
-      return nextIds.length === (existing.openTabIds ?? []).length
-        ? current
-        : { ...current, [activeWorkspaceId]: { ...existing, openTabIds: nextIds } };
-    });
-  }, [activeWorkspace, activeWorkspaceId]);
+  const navigateBrowserPageHistoryFromMcp = useCallback(async ({
+    pageId,
+    direction,
+  }: {
+    pageId: string;
+    direction: 'back' | 'forward';
+  }) => {
+    readBrowserPageFromWorkspace(pageId);
+    const nextHistory = stepBrowserHistory(pageId, direction === 'back' ? -1 : 1);
+    const entry = nextHistory?.entries[nextHistory.currentIndex];
+    return readBrowserPageFromWorkspace(pageId, entry ? { title: entry.title || entry.url, url: entry.url } : undefined);
+  }, [readBrowserPageFromWorkspace]);
+
+  const refreshBrowserPageFromMcp = useCallback(async (pageId: string) => {
+    const history = browserNavHistories[pageId];
+    const entry = history?.entries[history.currentIndex];
+    if (history) {
+      syncBrowserTabFromHistory(pageId, history);
+    }
+    return readBrowserPageFromWorkspace(pageId, entry ? { title: entry.title || entry.url, url: entry.url } : undefined);
+  }, [browserNavHistories, readBrowserPageFromWorkspace]);
 
   const createSessionFromMcp = useCallback(async ({ name }: { name?: string }) => (
     addSessionToWorkspace(activeWorkspaceId, name) ?? undefined
@@ -5171,11 +5524,77 @@ function AgentBrowserApp() {
         [activeWorkspaceId]: {
           ...existing,
           editingFilePath: existing.editingFilePath === path ? null : existing.editingFilePath,
+          panelOrder: existing.panelOrder.filter((id) => id !== `file:${path}`),
         },
       };
     });
     return { path, deleted: true };
   }, [activeWorkspace, activeWorkspaceId]);
+
+  const moveWorkspaceFileFromMcp = useCallback(async ({ path, targetPath }: { path: string; targetPath: string }) => {
+    const existingFile = (workspaceFilesByWorkspace[activeWorkspaceId] ?? []).find((file) => file.path === path);
+    if (!existingFile) {
+      throw new DOMException(`Workspace file "${path}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    const nextFile: WorkspaceFile = {
+      ...existingFile,
+      path: targetPath,
+      updatedAt: new Date().toISOString(),
+    };
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: upsertWorkspaceFile(removeWorkspaceFile(current[activeWorkspaceId] ?? [], path), nextFile),
+    }));
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          editingFilePath: existing.editingFilePath === path ? targetPath : existing.editingFilePath,
+          panelOrder: existing.panelOrder.map((paneId) => paneId === `file:${path}` ? `file:${targetPath}` : paneId),
+        },
+      };
+    });
+    return nextFile;
+  }, [activeWorkspace, activeWorkspaceId, workspaceFilesByWorkspace]);
+
+  const duplicateWorkspaceFileFromMcp = useCallback(async ({ path, targetPath }: { path: string; targetPath: string }) => {
+    const existingFile = (workspaceFilesByWorkspace[activeWorkspaceId] ?? []).find((file) => file.path === path);
+    if (!existingFile) {
+      throw new DOMException(`Workspace file "${path}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    const nextFile: WorkspaceFile = {
+      ...existingFile,
+      path: targetPath,
+      updatedAt: new Date().toISOString(),
+    };
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
+    }));
+    return nextFile;
+  }, [activeWorkspace.name, activeWorkspaceId, workspaceFilesByWorkspace]);
+
+  const symlinkWorkspaceFileFromMcp = useCallback(async ({ path, targetPath }: { path: string; targetPath: string }) => {
+    const existingFile = (workspaceFilesByWorkspace[activeWorkspaceId] ?? []).find((file) => file.path === path);
+    if (!existingFile) {
+      throw new DOMException(`Workspace file "${path}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    const nextFile: WorkspaceFile = {
+      path: targetPath,
+      content: `→ ${path}`,
+      updatedAt: new Date().toISOString(),
+    };
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
+    }));
+    return nextFile;
+  }, [activeWorkspace.name, activeWorkspaceId, workspaceFilesByWorkspace]);
 
   const createSessionFsEntryFromMcp = useCallback(async ({
     sessionId,
@@ -5197,6 +5616,12 @@ function AgentBrowserApp() {
       await bash.fs.mkdir(path, { recursive: true });
     } else {
       await bash.fs.writeFile(path, content ?? '', 'utf-8');
+      if (content !== undefined) {
+        setTerminalFsFileContentsBySession((current) => ({
+          ...current,
+          [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+        }));
+      }
     }
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
@@ -5214,12 +5639,26 @@ function AgentBrowserApp() {
       await bash.fs.mkdir(dir, { recursive: true });
     }
     await bash.fs.writeFile(path, content, 'utf-8');
+    setTerminalFsFileContentsBySession((current) => ({
+      ...current,
+      [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+    }));
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
   const deleteSessionFsEntryFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
     await bash.exec(`rm -rf ${quoteShellArg(path)}`);
+    setTerminalFsFileContentsBySession((current) => {
+      if (!current[sessionId]) return current;
+      const updated = { ...current[sessionId] };
+      for (const key of Object.keys(updated)) {
+        if (key === path || key.startsWith(`${path}/`)) {
+          delete updated[key];
+        }
+      }
+      return { ...current, [sessionId]: updated };
+    });
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
@@ -5234,6 +5673,13 @@ function AgentBrowserApp() {
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
     await bash.exec(`mv ${quoteShellArg(path)} ${quoteShellArg(newPath)}`);
+    setTerminalFsFileContentsBySession((current) => {
+      if (!current[sessionId]) return current;
+      const existing = current[sessionId];
+      if (!(path in existing)) return current;
+      const { [path]: movedContent, ...rest } = existing;
+      return { ...current, [sessionId]: { ...rest, [newPath]: movedContent } };
+    });
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
@@ -5263,6 +5709,123 @@ function AgentBrowserApp() {
     return { sessionId, path: nextTemplate.path, template };
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
+  const getFilesystemHistoryTargetFromMcp = useCallback((input: {
+    targetType: 'workspace-file' | 'session-drive' | 'session-fs-entry';
+    path?: string;
+    sessionId?: string;
+  }) => {
+    const labelFromPath = (value?: string) => value?.split('/').filter(Boolean).at(-1) ?? value ?? '/';
+
+    if (input.targetType === 'session-drive') {
+      const drive = activeSessionDrives.find((entry) => entry.sessionId === input.sessionId);
+      if (!drive) {
+        throw new DOMException(`Session drive "${input.sessionId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+      }
+      return {
+        key: `files-history:session-drive:${drive.sessionId}`,
+        kind: 'drive' as const,
+        label: drive.label,
+        content: drive.label,
+      };
+    }
+
+    if (input.targetType === 'session-fs-entry') {
+      const entry = activeSessionFsEntries.find((candidate) => candidate.sessionId === input.sessionId && candidate.path === input.path);
+      return {
+        key: `files-history:session-fs-entry:${input.sessionId}:${input.path ?? ''}`,
+        kind: entry?.kind ?? 'file',
+        label: labelFromPath(input.path),
+        content: typeof entry?.content === 'string' ? entry.content : input.path ?? labelFromPath(input.path),
+      };
+    }
+
+    const path = input.path ?? '';
+    if (path.startsWith('//')) {
+      return {
+        key: `files-history:workspace-file:${path}`,
+        kind: 'drive' as const,
+        label: path,
+        content: path,
+      };
+    }
+
+    const file = activeWorkspaceFiles.find((candidate) => candidate.path === path);
+    if (file) {
+      return {
+        key: `files-history:workspace-file:${path}`,
+        kind: 'file' as const,
+        label: labelFromPath(path),
+        content: file.content,
+      };
+    }
+
+    const hasDescendants = activeWorkspaceFiles.some((candidate) => candidate.path.startsWith(`${path}/`));
+    if (!hasDescendants) {
+      throw new DOMException(`Workspace filesystem path "${path}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    return {
+      key: `files-history:workspace-file:${path}`,
+      kind: 'folder' as const,
+      label: labelFromPath(path),
+      content: path,
+    };
+  }, [activeSessionDrives, activeSessionFsEntries, activeWorkspace.name, activeWorkspaceFiles]);
+
+  const toFilesystemHistoryResultFromMcp = useCallback((input: {
+    targetType: 'workspace-file' | 'session-drive' | 'session-fs-entry';
+    path?: string;
+    sessionId?: string;
+  }, dag: VersionDAG, rolledBackToId?: string) => {
+    const target = getFilesystemHistoryTargetFromMcp(input);
+    return {
+      targetType: input.targetType,
+      ...(input.path ? { path: input.path } : {}),
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      kind: target.kind,
+      label: target.label,
+      ...(rolledBackToId ? { rolledBackToId } : {}),
+      records: getTopologicalOrder(dag)
+        .slice()
+        .reverse()
+        .map((commit) => ({
+          id: commit.id,
+          label: commit.message,
+          timestamp: commit.timestamp,
+          isCurrent: commit.id === dag.currentCommitId,
+          canRollback: true,
+          detail: dag.branches[commit.branchId]?.name ?? commit.branchId,
+        })),
+    };
+  }, [getFilesystemHistoryTargetFromMcp]);
+
+  const getFilesystemHistoryFromMcp = useCallback((input: {
+    targetType: 'workspace-file' | 'session-drive' | 'session-fs-entry';
+    path?: string;
+    sessionId?: string;
+  }) => {
+    const target = getFilesystemHistoryTargetFromMcp(input);
+    const existing = versionHistories[target.key];
+    const dag = existing ?? createVersionDAG(target.content, 'user-1', `Initial state of ${target.label}`, Date.now());
+    if (!existing) {
+      setVersionHistories((prev) => prev[target.key] ? prev : { ...prev, [target.key]: dag });
+    }
+    return toFilesystemHistoryResultFromMcp(input, dag);
+  }, [getFilesystemHistoryTargetFromMcp, toFilesystemHistoryResultFromMcp, versionHistories]);
+
+  const rollbackFilesystemHistoryFromMcp = useCallback(async (input: {
+    targetType: 'workspace-file' | 'session-drive' | 'session-fs-entry';
+    path?: string;
+    sessionId?: string;
+    recordId: string;
+  }) => {
+    const target = getFilesystemHistoryTargetFromMcp(input);
+    const currentDag = versionHistories[target.key] ?? createVersionDAG(target.content, 'user-1', `Initial state of ${target.label}`, Date.now());
+    const nextDag = rollbackToCommit(currentDag, input.recordId, 'user-1', Date.now());
+    setVersionHistories((prev) => ({ ...prev, [target.key]: nextDag }));
+    return toFilesystemHistoryResultFromMcp(input, nextDag, input.recordId);
+  }, [getFilesystemHistoryTargetFromMcp, toFilesystemHistoryResultFromMcp, versionHistories]);
+
   const getSessionStateFromMcp = useCallback((sessionId: string): WorkspaceMcpSessionState | null => {
     const summary = activeWorkspaceSessions.find((session) => session.id === sessionId);
     const controller = sessionMcpControllersRef.current[sessionId];
@@ -5278,6 +5841,11 @@ function AgentBrowserApp() {
     };
   }, [activeWorkspaceSessions]);
 
+  const getSessionToolsFromMcp = useCallback(() => [
+    ...DEFAULT_TOOL_DESCRIPTORS,
+    ...workspaceWebMcpBridge.getDescriptors(),
+  ], [workspaceWebMcpBridge]);
+
   const writeSessionFromMcp = useCallback(async (input: WorkspaceMcpWriteSessionInput) => {
     const summary = activeWorkspaceSessions.find((session) => session.id === input.sessionId);
     if (!summary) {
@@ -5292,6 +5860,8 @@ function AgentBrowserApp() {
       (typeof input.message === 'string' && input.message.trim())
       || (typeof input.provider === 'string' && input.provider.trim())
       || (typeof input.modelId === 'string' && input.modelId.trim())
+      || (typeof input.agentId === 'string' && input.agentId.trim())
+      || Array.isArray(input.toolIds)
       || input.mode
       || (typeof input.cwd === 'string' && input.cwd.trim()),
     );
@@ -5307,6 +5877,186 @@ function AgentBrowserApp() {
     await controller.writeSession(input);
     return undefined;
   }, [activeWorkspace.name, activeWorkspaceSessions, renameSessionNodeById]);
+
+  const closeRenderPaneFromMcp = useCallback(async (paneId: string) => {
+    if (paneId.startsWith('browser:')) {
+      const pageId = paneId.slice('browser:'.length);
+      readBrowserPageFromWorkspace(pageId);
+      handleRemoveFileNode(pageId);
+      return { paneId, closed: true };
+    }
+    if (paneId.startsWith('session:')) {
+      await closeSessionFromMcp(paneId.slice('session:'.length));
+      return { paneId, closed: true };
+    }
+    if (paneId.startsWith('file:')) {
+      const path = paneId.slice('file:'.length);
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+        return {
+          ...current,
+          [activeWorkspaceId]: {
+            ...existing,
+            editingFilePath: existing.editingFilePath === path ? null : existing.editingFilePath,
+            panelOrder: existing.panelOrder.filter((id) => id !== paneId),
+          },
+        };
+      });
+      return { paneId, closed: true };
+    }
+
+    throw new DOMException(`Render pane "${paneId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+  }, [activeWorkspace, activeWorkspaceId, closeSessionFromMcp, handleRemoveFileNode, readBrowserPageFromWorkspace]);
+
+  const moveRenderPaneFromMcp = useCallback(async ({ paneId, toIndex }: { paneId: string; toIndex: number }) => {
+    let nextOrder = activeRenderPanes.map((pane) => pane.id);
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      nextOrder = moveRenderPaneOrder(activeRenderPanes, existing.panelOrder, paneId, toIndex);
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          panelOrder: nextOrder,
+        },
+      };
+    });
+    return nextOrder;
+  }, [activeRenderPanes, activeWorkspace, activeWorkspaceId]);
+
+  const mountSessionDriveFromMcp = useCallback(async (sessionId: string) => {
+    const drive = activeSessionDrives.find((entry) => entry.sessionId === sessionId);
+    if (!drive) {
+      throw new DOMException(`Session drive "${sessionId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      if (existing.mountedSessionFsIds.includes(sessionId)) {
+        return current;
+      }
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          mountedSessionFsIds: [...existing.mountedSessionFsIds, sessionId],
+        },
+      };
+    });
+    return { ...drive, mounted: true };
+  }, [activeSessionDrives, activeWorkspace, activeWorkspaceId]);
+
+  const unmountSessionDriveFromMcp = useCallback(async (sessionId: string) => {
+    const drive = activeSessionDrives.find((entry) => entry.sessionId === sessionId);
+    if (!drive) {
+      throw new DOMException(`Session drive "${sessionId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      if (!existing.mountedSessionFsIds.includes(sessionId)) {
+        return current;
+      }
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          mountedSessionFsIds: existing.mountedSessionFsIds.filter((id) => id !== sessionId),
+        },
+      };
+    });
+    return { ...drive, mounted: false };
+  }, [activeSessionDrives, activeWorkspace, activeWorkspaceId]);
+
+  const restoreClipboardEntryFromMcp = useCallback(async (entryId: string) => {
+    const entry = clipboardHistory.find((candidate) => candidate.id === entryId);
+    if (!entry) {
+      throw new DOMException(`Clipboard entry "${entryId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+
+    await handleClipboardRollback(entry);
+    return {
+      id: entry.id,
+      label: entry.label,
+      text: entry.text,
+      timestamp: entry.timestamp,
+      isActive: true,
+    };
+  }, [activeWorkspace.name, clipboardHistory]);
+
+  const getWorktreeRenderPaneStateFromMcp = useCallback(({
+    itemId,
+    itemType,
+  }: {
+    itemId: string;
+    itemType: WorkspaceMcpWorktreeItem['itemType'];
+  }) => {
+    const item = findActiveWorktreeItem(itemId, itemType);
+    return item ? readWorktreeRenderPaneState(item, activeWorkspaceViewState) : null;
+  }, [activeWorkspaceViewState, findActiveWorktreeItem]);
+
+  const toggleWorktreeRenderPaneFromMcp = useCallback(async ({
+    itemId,
+    itemType,
+  }: {
+    itemId: string;
+    itemType: WorkspaceMcpWorktreeItem['itemType'];
+  }) => {
+    const item = findActiveWorktreeItem(itemId, itemType);
+    if (!item) {
+      throw new DOMException(`Worktree item "${itemType}:${itemId}" is not available.`, 'NotFoundError');
+    }
+
+    let nextState = readWorktreeRenderPaneState(item, activeWorkspaceViewState);
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      const toggled = toggleWorktreeRenderPaneState(item, existing);
+      nextState = toggled.state;
+      return workspaceViewStateEquals(existing, toggled.nextViewState)
+        ? current
+        : { ...current, [activeWorkspaceId]: toggled.nextViewState };
+    });
+
+    return nextState;
+  }, [activeWorkspace, activeWorkspaceId, activeWorkspaceViewState, findActiveWorktreeItem]);
+
+  const getWorktreeContextMenuStateFromMcp = useCallback(({
+    itemId,
+    itemType,
+  }: {
+    itemId: string;
+    itemType: WorkspaceMcpWorktreeItem['itemType'];
+  }) => {
+    const item = findActiveWorktreeItem(itemId, itemType);
+    return item ? readWorktreeContextMenuState({ itemId, itemType }, contextMenu) : null;
+  }, [contextMenu, findActiveWorktreeItem]);
+
+  const toggleWorktreeContextMenuFromMcp = useCallback(async ({
+    itemId,
+    itemType,
+  }: {
+    itemId: string;
+    itemType: WorkspaceMcpWorktreeItem['itemType'];
+  }) => {
+    const item = findActiveWorktreeItem(itemId, itemType);
+    if (!item) {
+      throw new DOMException(`Worktree item "${itemType}:${itemId}" is not available.`, 'NotFoundError');
+    }
+
+    const currentState = readWorktreeContextMenuState({ itemId, itemType }, contextMenu);
+    if (currentState.isOpen) {
+      setContextMenu(null);
+      return { ...currentState, isOpen: false };
+    }
+
+    const node = findNode(activeWorkspace, itemId) ?? findNode(root, itemId);
+    if (!node) {
+      throw new DOMException(`Worktree item "${itemType}:${itemId}" is not available.`, 'NotFoundError');
+    }
+
+    openContextMenuForNode(24, 24, node);
+    return { itemId, itemType, isOpen: true, supported: true };
+  }, [activeWorkspace, contextMenu, findActiveWorktreeItem, root]);
 
   const getWorktreeContextActionsForItem = useCallback(({
     itemId,
@@ -5526,27 +6276,45 @@ function AgentBrowserApp() {
       workspaceName: activeWorkspace.name,
       workspaceFiles: activeWorkspaceFiles,
       browserPages: activeBrowserPages,
+      renderPanes: activeRenderPanes,
       sessions: activeWorkspaceSessions,
+      getSessionTools: getSessionToolsFromMcp,
+      sessionDrives: activeSessionDrives,
+      clipboardEntries: activeClipboardEntries,
       getSessionState: getSessionStateFromMcp,
+      getBrowserPageHistory: getBrowserPageHistoryFromMcp,
       sessionFsEntries: activeSessionFsEntries,
       worktreeItems: activeWorktreeItems,
       onOpenFile: openActiveWorkspaceFileFromMcp,
       onCreateBrowserPage: createBrowserPageFromMcp,
-      onOpenBrowserPage: openBrowserPageFromMcp,
-      onCloseBrowserPage: closeBrowserPageFromMcp,
+      onNavigateBrowserPage: navigateBrowserPageFromMcp,
+      onNavigateBrowserPageHistory: navigateBrowserPageHistoryFromMcp,
+      onRefreshBrowserPage: refreshBrowserPageFromMcp,
+      onCloseRenderPane: closeRenderPaneFromMcp,
+      onMoveRenderPane: moveRenderPaneFromMcp,
       onCreateSession: createSessionFromMcp,
-      onOpenSession: openSessionFromMcp,
-      onCloseSession: closeSessionFromMcp,
       onWriteSession: writeSessionFromMcp,
       onCreateWorkspaceFile: createWorkspaceFileFromMcp,
       onWriteWorkspaceFile: writeWorkspaceFileFromMcp,
       onDeleteWorkspaceFile: deleteWorkspaceFileFromMcp,
+      onMoveWorkspaceFile: moveWorkspaceFileFromMcp,
+      onDuplicateWorkspaceFile: duplicateWorkspaceFileFromMcp,
+      onSymlinkWorkspaceFile: symlinkWorkspaceFileFromMcp,
+      onMountSessionDrive: mountSessionDriveFromMcp,
+      onUnmountSessionDrive: unmountSessionDriveFromMcp,
       onCreateSessionFsEntry: createSessionFsEntryFromMcp,
       onReadSessionFsFile: readSessionFsFileFromMcp,
       onWriteSessionFsFile: writeSessionFsFileFromMcp,
       onDeleteSessionFsEntry: deleteSessionFsEntryFromMcp,
       onRenameSessionFsEntry: renameSessionFsEntryFromMcp,
       onScaffoldSessionFsEntry: scaffoldSessionFsEntryFromMcp,
+      getFilesystemHistory: getFilesystemHistoryFromMcp,
+      onRollbackFilesystemHistory: rollbackFilesystemHistoryFromMcp,
+      getWorktreeRenderPaneState: getWorktreeRenderPaneStateFromMcp,
+      onToggleWorktreeRenderPane: toggleWorktreeRenderPaneFromMcp,
+      getWorktreeContextMenuState: getWorktreeContextMenuStateFromMcp,
+      onToggleWorktreeContextMenu: toggleWorktreeContextMenuFromMcp,
+      onRestoreClipboardEntry: restoreClipboardEntryFromMcp,
       getWorktreeContextActions: getWorktreeContextActionsForItem,
       onInvokeWorktreeContextAction: invokeWorktreeContextActionFromMcp,
       signal: controller.signal,
@@ -5560,26 +6328,45 @@ function AgentBrowserApp() {
     activeWorkspaceFiles,
     activeWorkspaceSessions,
     activeWorktreeItems,
-    closeBrowserPageFromMcp,
+    activeClipboardEntries,
+    activeRenderPanes,
+    activeSessionDrives,
     closeSessionFromMcp,
     createBrowserPageFromMcp,
     createSessionFromMcp,
     createSessionFsEntryFromMcp,
     createWorkspaceFileFromMcp,
+    closeRenderPaneFromMcp,
     deleteSessionFsEntryFromMcp,
     deleteWorkspaceFileFromMcp,
+    getSessionToolsFromMcp,
     getSessionStateFromMcp,
+    getWorktreeContextMenuStateFromMcp,
     getWorktreeContextActionsForItem,
+    getWorktreeRenderPaneStateFromMcp,
     invokeWorktreeContextActionFromMcp,
+    duplicateWorkspaceFileFromMcp,
+    getBrowserPageHistoryFromMcp,
+    getFilesystemHistoryFromMcp,
     openActiveWorkspaceFileFromMcp,
-    openBrowserPageFromMcp,
-    openSessionFromMcp,
     readSessionFsFileFromMcp,
     renameSessionFsEntryFromMcp,
+    rollbackFilesystemHistoryFromMcp,
+    mountSessionDriveFromMcp,
+    moveRenderPaneFromMcp,
+    moveWorkspaceFileFromMcp,
+    navigateBrowserPageFromMcp,
+    navigateBrowserPageHistoryFromMcp,
     scaffoldSessionFsEntryFromMcp,
+    toggleWorktreeContextMenuFromMcp,
+    toggleWorktreeRenderPaneFromMcp,
     webMcpModelContext,
+    refreshBrowserPageFromMcp,
     writeSessionFromMcp,
+    restoreClipboardEntryFromMcp,
+    unmountSessionDriveFromMcp,
     writeSessionFsFileFromMcp,
+    symlinkWorkspaceFileFromMcp,
     writeWorkspaceFileFromMcp,
   ]);
 
@@ -5716,11 +6503,14 @@ function AgentBrowserApp() {
               editingFilePath: null,
             },
           }));
-          const allPanels: Panel[] = [
-            ...(editingFile ? [{ type: 'file', file: editingFile } as FilePanel] : []),
-            ...openBrowserTabs.map((tab): BrowserPanel => ({ type: 'browser', tab })),
-            ...activeSessionIds.map((id): SessionPanel => ({ type: 'session', id })),
-          ];
+          const panelsById = new Map<string, Panel>([
+            ...(editingFile ? [[`file:${editingFile.path}`, { type: 'file', file: editingFile } as FilePanel]] : []),
+            ...openBrowserTabs.map((tab): [string, BrowserPanel] => [`browser:${tab.id}`, { type: 'browser', tab }]),
+            ...activeSessionIds.map((id): [string, SessionPanel] => [`session:${id}`, { type: 'session', id }]),
+          ]);
+          const allPanels: Panel[] = activeRenderPanes
+            .map((pane) => panelsById.get(pane.id) ?? null)
+            .filter((panel): panel is Panel => panel !== null);
           const renderPanel = (panel: Panel, dragHandleProps?: PanelDragHandleProps) => {
             if (panel.type === 'file') {
               return (
@@ -5789,7 +6579,22 @@ function AgentBrowserApp() {
             return <ClosedPanelsPlaceholder workspaceName={activeWorkspace.name} onNewSession={() => addSessionToWorkspace(activeWorkspaceId)} />;
           }
           if (allPanels.length > 1) {
-            return <PanelSplitView panels={allPanels} renderPanel={renderPanel} />;
+            return (
+              <PanelSplitView
+                panels={allPanels}
+                renderPanel={renderPanel}
+                onOrderChange={(paneIds) => setWorkspaceViewStateByWorkspace((current) => {
+                  const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+                  return {
+                    ...current,
+                    [activeWorkspaceId]: {
+                      ...existing,
+                      panelOrder: paneIds,
+                    },
+                  };
+                })}
+              />
+            );
           }
           return renderPanel(allPanels[0]);
         })()}

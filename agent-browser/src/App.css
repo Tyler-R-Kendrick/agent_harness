@@ -1251,7 +1251,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   letter-spacing: 0.08em;
   color: var(--text-muted);
   cursor: pointer;
+  user-select: none;
 }
+.tools-picker-group-header[role="button"]:hover { background: rgba(255,255,255,.05); }
 .tools-picker-group-label { flex: 1; }
 .tools-picker-group-count { font-size: 10px; color: var(--text-muted); }
 .tools-picker-list { list-style: none; margin: 0; padding: 0 0 4px 0; }
@@ -2911,6 +2913,7 @@ kbd {
 @media (max-width: 820px) {
   .app-shell { grid-template-columns: 48px 1fr; }
   .sidebar { position: absolute; inset: 0 auto 0 48px; width: min(320px, calc(100vw - 48px)); z-index: 5; height: 100%; }
+  .tools-picker { z-index: 6; }
   .composer-toolbar { flex-direction: column; align-items: stretch; }
   .model-pill { max-width: none; min-width: 0; }
   .file-editor-chrome { flex-direction: column; align-items: stretch; }

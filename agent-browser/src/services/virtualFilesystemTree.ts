@@ -16,6 +16,11 @@ function createFolderNode(id: string, name: string, isDrive = false): TreeNode {
   };
 }
 
+function inferNodeKind(paths: string[], fullPath: string): 'file' | 'folder' {
+  if (paths.some((other) => other !== fullPath && other.startsWith(`${fullPath}/`))) return 'folder';
+  return /\.[^/]+$/.test(fullPath) ? 'file' : 'folder';
+}
+
 export function normalizeDriveName(segment: string): string {
   return segment.toLowerCase();
 }
@@ -89,7 +94,11 @@ export function buildWorkspaceCapabilityDriveNodes(prefix: string, files: Worksp
   ];
 }
 
-export function buildMountedTerminalDriveNodes(prefix: string, paths: string[]): TreeNode[] {
+export function buildMountedTerminalDriveNodes(
+  prefix: string,
+  paths: string[],
+  fileContents?: Record<string, string>,
+): TreeNode[] {
   const drives = new Map<string, TreeNode>();
 
   for (const rawPath of paths) {
@@ -111,9 +120,28 @@ export function buildMountedTerminalDriveNodes(prefix: string, paths: string[]):
         cursor = existing as TerminalBranchNode;
         continue;
       }
-      const next = createFolderNode(nodeId, part);
-      cursor.children = [...(cursor.children ?? []), next];
-      cursor = next as TerminalBranchNode;
+
+      const isLastSegment = index === rest.length - 1;
+      if (!isLastSegment) {
+        const next = createFolderNode(nodeId, part);
+        cursor.children = [...(cursor.children ?? []), next];
+        cursor = next as TerminalBranchNode;
+        continue;
+      }
+
+      const fullPath = `/${rawDriveSegment}/${rest.slice(0, index + 1).join('/')}`;
+      const nodeKind = inferNodeKind(paths, fullPath);
+      if (nodeKind === 'file') {
+        const content = fileContents?.[fullPath];
+        const filePath = content?.startsWith('workspace://')
+          ? content.slice('workspace://'.length)
+          : undefined;
+        cursor.children = [...(cursor.children ?? []), { id: nodeId, name: part, type: 'file', ...(filePath ? { filePath } : {}) }];
+      } else {
+        const next = createFolderNode(nodeId, part);
+        cursor.children = [...(cursor.children ?? []), next];
+        cursor = next as TerminalBranchNode;
+      }
     }
   }
 

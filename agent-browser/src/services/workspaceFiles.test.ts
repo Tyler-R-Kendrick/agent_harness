@@ -26,6 +26,7 @@ describe('workspaceFiles', () => {
   it('discovers AGENTS instructions, skills, hooks, and plugins from workspace files', () => {
     const files: WorkspaceFile[] = [
       { path: 'AGENTS.md', content: '# Rules\nAlways lint before shipping.', updatedAt: '2026-04-08T00:00:00.000Z' },
+      { path: 'docs/AGENTS.md', content: '# Docs agent\nFocus on docs.', updatedAt: '2026-04-08T00:00:00.000Z' },
       {
         path: '.agents/skill/review-pr/SKILL.md',
         content: '---\nname: review-pr\ndescription: Review pull requests before requesting approval.\n---\n\n# Review PR',
@@ -37,8 +38,9 @@ describe('workspaceFiles', () => {
 
     const capabilities = discoverWorkspaceCapabilities(files);
     const promptContext = buildWorkspacePromptContext(files);
+    const focusedPromptContext = buildWorkspacePromptContext(files, 'docs/AGENTS.md');
 
-    expect(capabilities.agents).toHaveLength(1);
+    expect(capabilities.agents).toHaveLength(2);
     expect(capabilities.skills).toEqual([
       expect.objectContaining({
         name: 'review-pr',
@@ -52,9 +54,14 @@ describe('workspaceFiles', () => {
       expect.objectContaining({ directory: 'review-tools', manifestName: 'plugin.yaml' }),
     ]);
     expect(promptContext).toContain('Always lint before shipping.');
+    expect(promptContext).toContain('Focus on docs.');
     expect(promptContext).toContain('review-pr (.agents/skill/review-pr/SKILL.md)');
     expect(promptContext).toContain('review-tools (.agents/plugins/review-tools/plugin.yaml)');
     expect(promptContext).toContain('pre-task.sh (.agents/hooks/pre-task.sh)');
+    expect(focusedPromptContext).toContain('Active AGENTS.md:');
+    expect(focusedPromptContext).toContain('docs/AGENTS.md');
+    expect(focusedPromptContext).toContain('Other AGENTS.md files:');
+    expect(focusedPromptContext).toContain('AGENTS.md');
   });
 
   it('validates file paths and supports both .agents/skill and .agents/skills roots', () => {

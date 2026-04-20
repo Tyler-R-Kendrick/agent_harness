@@ -14,7 +14,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/__tests__/**', 'src/index.ts', 'src/types.ts'],
+      exclude: ['src/**/*.test.ts', 'src/__tests__/**', 'src/index.ts', 'src/types.ts', 'src/workspaceToolTypes.ts'],
       thresholds: {
         lines: 100,
         functions: 100,

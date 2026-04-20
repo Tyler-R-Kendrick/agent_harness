@@ -7,11 +7,77 @@ import {
   type RegisteredToolDefinition,
 } from 'webmcp';
 
-import type { WebMcpToolDescriptor } from './types';
+import type { WebMcpToolDescriptor, WebMcpToolGroup } from './types';
 
 const WEBMCP_TOOL_ID_PREFIX = 'webmcp:';
-const WEBMCP_GROUP_LABEL = 'WebMCP';
 const DEFAULT_INPUT_SCHEMA = { type: 'object', properties: {} };
+const WEBMCP_BUILTIN_GROUP: { group: WebMcpToolGroup; groupLabel: string } = {
+  group: 'built-in',
+  groupLabel: 'Built-In',
+};
+
+// Maps each registered tool name to its display sub-group within the Built-In bucket.
+// The subGroup key matches the old top-level group ids so DEFAULT_COLLAPSED_TOOL_GROUPS
+// and TOOL_GROUP_ORDER in the host app continue to control ordering and collapse state.
+const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGroup; subGroupLabel: string }>> = {
+  // Browser pages
+  list_browser_pages: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  read_browser_page: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  read_browser_page_history: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  create_browser_page: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  navigate_browser_page: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  navigate_browser_page_history: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  refresh_browser_page: { subGroup: 'browser-worktree-mcp', subGroupLabel: 'Browser' },
+  // Sessions
+  list_sessions: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  create_session: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  read_session: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  list_session_tools: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  submit_session_message: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  change_session_agent: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  change_session_model: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  switch_session_mode: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  change_session_tools: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
+  // Files (workspace surface + session filesystem + drives)
+  list_filesystem_entries: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  read_filesystem_properties: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  read_filesystem_history: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  rollback_filesystem_history: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  change_filesystem_mount: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  add_filesystem_entry: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  update_filesystem_entry: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  remove_filesystem_entry: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  list_session_filesystem: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  read_session_folder: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  read_session_file: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  create_session_file: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  create_session_folder: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  write_session_file: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  delete_session_filesystem_entry: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  rename_session_filesystem_entry: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  scaffold_session_filesystem_entry: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  list_session_drives: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  mount_session_drive: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  unmount_session_drive: { subGroup: 'files-worktree-mcp', subGroupLabel: 'Files' },
+  // Clipboard
+  list_clipboard_history: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
+  read_clipboard_entry: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
+  restore_clipboard_entry: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
+  // Renderer viewport panes
+  list_render_panes: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
+  close_render_pane: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
+  move_render_pane: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
+  // Workspace context (worktree, files surface, prompt tools)
+  workspace_overview: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  workspace_file: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  list_worktree_items: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  read_worktree_render_pane_state: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  toggle_worktree_render_pane: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  list_worktree_context_actions: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  invoke_worktree_context_action: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  read_worktree_context_menu_state: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+  toggle_worktree_context_menu: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
+};
 
 export interface WebMcpToolBridgeOptions {
   createClient?: () => ModelContextClient;
@@ -33,12 +99,14 @@ export function toWebMcpToolId(name: string): string {
 }
 
 function toDescriptor(definition: RegisteredToolDefinition): WebMcpToolDescriptor {
+  const subGroupInfo = WEBMCP_SUBGROUP_BY_TOOL[definition.name];
   return {
     id: toWebMcpToolId(definition.name),
     label: definition.title?.trim() || definition.name,
     description: definition.description,
-    group: 'webmcp',
-    groupLabel: WEBMCP_GROUP_LABEL,
+    group: WEBMCP_BUILTIN_GROUP.group,
+    groupLabel: WEBMCP_BUILTIN_GROUP.groupLabel,
+    ...(subGroupInfo ? { subGroup: subGroupInfo.subGroup, subGroupLabel: subGroupInfo.subGroupLabel } : {}),
   };
 }
 

@@ -2,7 +2,16 @@ import type { ToolSet } from 'ai';
 import { createCliTool } from './cli';
 import type { TerminalExecutorContext } from './types';
 
-export type ToolGroup = 'built-in' | 'mcp' | 'webmcp';
+export type ToolGroup =
+  | 'built-in'
+  | 'mcp'
+  | 'webmcp'
+  | 'worktree-mcp'
+  | 'renderer-viewport-mcp'
+  | 'browser-worktree-mcp'
+  | 'sessions-worktree-mcp'
+  | 'files-worktree-mcp'
+  | 'clipboard-worktree-mcp';
 
 export interface ToolDescriptor {
   id: string;
@@ -10,6 +19,8 @@ export interface ToolDescriptor {
   description: string;
   group: ToolGroup;
   groupLabel: string;
+  subGroup?: string;
+  subGroupLabel?: string;
 }
 
 export const DEFAULT_TOOL_DESCRIPTORS: ToolDescriptor[] = [

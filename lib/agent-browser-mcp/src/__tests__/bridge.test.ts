@@ -4,7 +4,7 @@ import { ModelContext, ModelContextClient } from 'webmcp';
 import { createWebMcpToolBridge } from '../bridge';
 
 describe('createWebMcpToolBridge', () => {
-  it('exposes registered WebMCP tools as descriptors and AI SDK tools', async () => {
+  it('classifies registered tools as built-in and exposes AI SDK tools', async () => {
     const modelContext = new ModelContext();
     const createClient = vi.fn(() => new ModelContextClient());
     const execute = vi.fn(async ({ text }: { text: string }, _client: ModelContextClient) => ({ echoed: text }));
@@ -22,6 +22,18 @@ describe('createWebMcpToolBridge', () => {
       },
       execute: async (input, client) => execute(input as { text: string }, client),
     });
+    modelContext.registerTool({
+      name: 'list_render_panes',
+      title: 'List render panes',
+      description: 'List renderer panes from the page.',
+      execute: async () => [],
+    });
+    modelContext.registerTool({
+      name: 'restore_clipboard_entry',
+      title: 'Restore clipboard entry',
+      description: 'Restore a clipboard entry from history.',
+      execute: async () => ({ restored: true }),
+    });
 
     const bridge = createWebMcpToolBridge(modelContext, { createClient });
     const descriptors = bridge.getDescriptors();
@@ -32,14 +44,74 @@ describe('createWebMcpToolBridge', () => {
         id: 'webmcp:echo',
         label: 'Echo',
         description: 'Echo text from the page.',
-        group: 'webmcp',
-        groupLabel: 'WebMCP',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+      },
+      {
+        id: 'webmcp:list_render_panes',
+        label: 'List render panes',
+        description: 'List renderer panes from the page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'renderer-viewport-mcp',
+        subGroupLabel: 'Renderer',
+      },
+      {
+        id: 'webmcp:restore_clipboard_entry',
+        label: 'Restore clipboard entry',
+        description: 'Restore a clipboard entry from history.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'clipboard-worktree-mcp',
+        subGroupLabel: 'Clipboard',
       },
     ]);
 
     await expect(tools['webmcp:echo']?.execute?.({ text: 'hello' }, {} as never)).resolves.toEqual({ echoed: 'hello' });
     expect(createClient).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledWith({ text: 'hello' }, expect.any(ModelContextClient));
+  });
+
+  it('assigns all six surface sub-groups inside the built-in group — never a separate webmcp group', () => {
+    // One representative tool per sub-group category. Tools NOT in the lookup table
+    // (e.g. 'echo') must fall back to group:'built-in' with no subGroup.
+    const modelContext = new ModelContext();
+    const SURFACE_SAMPLES: Array<[toolName: string, expectedSubGroup: string, expectedSubGroupLabel: string]> = [
+      ['create_browser_page',   'browser-worktree-mcp',   'Browser'],
+      ['submit_session_message','sessions-worktree-mcp',  'Sessions'],
+      ['list_filesystem_entries','files-worktree-mcp',    'Files'],
+      ['restore_clipboard_entry','clipboard-worktree-mcp','Clipboard'],
+      ['list_render_panes',     'renderer-viewport-mcp',  'Renderer'],
+      ['list_worktree_items',   'worktree-mcp',           'Workspace'],
+    ];
+
+    for (const [name] of SURFACE_SAMPLES) {
+      modelContext.registerTool({ name, title: name, description: `Tool: ${name}`, execute: async () => null });
+    }
+    // Also register an ungrouped tool (falls back to built-in with no subGroup)
+    modelContext.registerTool({ name: 'echo', title: 'Echo', description: 'Echo', execute: async () => null });
+
+    const bridge = createWebMcpToolBridge(modelContext, { createClient: vi.fn(() => new ModelContextClient()) });
+    const descriptors = bridge.getDescriptors();
+
+    // Every descriptor must be in the 'built-in' group — never 'webmcp' or a surface group
+    for (const d of descriptors) {
+      expect(d.group, `Tool "${d.id}" must be in 'built-in', got '${d.group}'`).toBe('built-in');
+      expect(d.groupLabel, `Tool "${d.id}" groupLabel must be 'Built-In', got '${d.groupLabel}'`).toBe('Built-In');
+    }
+
+    // Each surface sample must have the correct subGroup + subGroupLabel
+    for (const [name, subGroup, subGroupLabel] of SURFACE_SAMPLES) {
+      const descriptor = descriptors.find((d) => d.id === `webmcp:${name}`);
+      expect(descriptor, `Descriptor for ${name} not found`).toBeDefined();
+      expect(descriptor?.subGroup).toBe(subGroup);
+      expect(descriptor?.subGroupLabel).toBe(subGroupLabel);
+    }
+
+    // The ungrouped tool must have no subGroup at all
+    const ungrouped = descriptors.find((d) => d.id === 'webmcp:echo');
+    expect(ungrouped?.subGroup).toBeUndefined();
+    expect(ungrouped?.subGroupLabel).toBeUndefined();
   });
 
   it('notifies subscribers when the WebMCP registry changes', () => {

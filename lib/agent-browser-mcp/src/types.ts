@@ -1,4 +1,11 @@
-export type WebMcpToolGroup = 'webmcp';
+export type WebMcpToolGroup =
+  | 'built-in'
+  | 'worktree-mcp'
+  | 'renderer-viewport-mcp'
+  | 'browser-worktree-mcp'
+  | 'sessions-worktree-mcp'
+  | 'files-worktree-mcp'
+  | 'clipboard-worktree-mcp';
 
 export interface WebMcpToolDescriptor {
   id: string;
@@ -6,4 +13,6 @@ export interface WebMcpToolDescriptor {
   description: string;
   group: WebMcpToolGroup;
   groupLabel: string;
+  subGroup?: string;
+  subGroupLabel?: string;
 }

@@ -166,9 +166,13 @@ vi.mock('just-bash/browser', () => {
 describe('App', () => {
   const disableAllTools = () => {
     fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
-    const builtInToggle = screen.getByRole('checkbox', { name: 'Toggle all Built-In tools' });
-    if ((builtInToggle as HTMLInputElement).checked) {
-      fireEvent.click(builtInToggle);
+    for (const toggle of screen.getAllByRole('checkbox').filter((checkbox) => {
+      const label = checkbox.getAttribute('aria-label') ?? '';
+      return label.startsWith('Toggle all ');
+    })) {
+      if ((toggle as HTMLInputElement).checked) {
+        fireEvent.click(toggle);
+      }
     }
     fireEvent.keyDown(document, { key: 'Escape' });
   };
@@ -241,6 +245,46 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
+  it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace sub-groups', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); });
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Tools picker' });
+    expect(dialog).toBeInTheDocument();
+
+    // REGRESSION: must NOT have a separate top-level "WebMCP" group.
+    // WebMCP tools must all live INSIDE Built-In as sub-groups.
+    expect(screen.queryByRole('checkbox', { name: 'Toggle all WebMCP tools' })).not.toBeInTheDocument();
+    expect(dialog.querySelector('.tools-picker-group-label')?.textContent).not.toBe('WebMCP');
+
+    // One Built-In parent bucket — its count must be > 1 (more than just CLI),
+    // proving WebMCP tools are merged into Built-In rather than being absent.
+    const builtInToggle = screen.getByRole('checkbox', { name: 'Toggle all Built-In tools' });
+    expect(builtInToggle).toBeInTheDocument();
+    // Find the count label sibling — it should show something like "38/38", not "1/1"
+    const builtInCount = dialog.querySelector('.tools-picker-group-count');
+    expect(builtInCount).not.toBeNull();
+    const [selected, total] = (builtInCount?.textContent ?? '').split('/').map(Number);
+    expect(total).toBeGreaterThan(1);   // more than just CLI
+    expect(selected).toBe(total);       // all selected by default
+
+    // CLI is a flat item directly under Built-In (no sub-group)
+    expect(screen.getByRole('checkbox', { name: 'CLI', exact: true })).toBeInTheDocument();
+
+    // All six surface sub-groups must appear inside the Built-In bucket —
+    // not as separate top-level groups. Each must have a toggle-all checkbox.
+    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Workspace']) {
+      expect(
+        screen.getByRole('checkbox', { name: `Toggle all ${subGroupLabel} tools` }),
+        `Expected sub-group "${subGroupLabel}" inside Built-In, not as a separate top-level group`,
+      ).toBeInTheDocument();
+    }
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+  });
+
   it('renders Files as a compute surface and mounts workspace directories as drives', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -269,11 +313,11 @@ describe('App', () => {
 
     expect(screen.getByRole('button', { name: '//workspace' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '//.agents' })).toBeInTheDocument();
-    expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'AGENTS.md' }).length).toBeGreaterThan(0);
     expect(screen.getByText('SKILL.md')).toBeInTheDocument();
   });
 
-  it('registers workspace file WebMCP tools that a client can invoke', async () => {
+  it('registers unified filesystem WebMCP tools that a client can invoke', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
       'ws-research': [{
@@ -296,42 +340,55 @@ describe('App', () => {
     const webmcpTool = createWebMcpTool(modelContext!);
     let listedFiles: unknown;
     await act(async () => {
-      listedFiles = await webmcpTool.execute?.({ tool: 'list_files' }, {} as never);
+      listedFiles = await webmcpTool.execute?.({
+        tool: 'list_filesystem_entries',
+        args: { targetType: 'workspace-file', kind: 'file' },
+      }, {} as never);
     });
 
     expect(listedFiles).toEqual([
       {
+        targetType: 'workspace-file',
+        kind: 'file',
+        label: 'AGENTS.md',
         path: 'AGENTS.md',
         uri: 'files://workspace/AGENTS.md',
         updatedAt: '2026-04-18T00:00:00.000Z',
       },
     ]);
 
-    let openedFile: unknown;
+    let fileProperties: unknown;
     await act(async () => {
-      openedFile = await webmcpTool.execute?.({
-        tool: 'open_file',
-        args: { uri: 'files://workspace/AGENTS.md' },
+      fileProperties = await webmcpTool.execute?.({
+        tool: 'read_filesystem_properties',
+        args: { targetType: 'workspace-file', path: 'AGENTS.md' },
       }, {} as never);
     });
 
-    expect(openedFile).toEqual({
-      workspaceName: 'Research',
+    expect(fileProperties).toEqual(expect.objectContaining({
+      targetType: 'workspace-file',
+      kind: 'file',
+      label: 'AGENTS.md',
       path: 'AGENTS.md',
       uri: 'files://workspace/AGENTS.md',
       updatedAt: '2026-04-18T00:00:00.000Z',
-      content: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
-    });
-    expect(screen.getByLabelText('Workspace file content')).toHaveValue('# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.');
+      preview: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
+    }));
   });
 
   it('registers browser, session, filesystem, and worktree WebMCP tools against live UI state', async () => {
     vi.useFakeTimers();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
     window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
       'ws-research': [{
         path: 'AGENTS.md',
         content: '# Workspace agent instructions\n\n## Goals\n- Verify full WebMCP coverage.',
         updatedAt: '2026-04-18T00:00:00.000Z',
+      }, {
+        path: 'docs/AGENTS.md',
+        content: '# Docs agent instructions\n\n## Goals\n- Focus on docs capability flows.',
+        updatedAt: '2026-04-18T00:05:00.000Z',
       }],
       'ws-build': [],
     }));
@@ -356,13 +413,41 @@ describe('App', () => {
     const docsPage = browserPages.find((page) => page.title === 'Hugging Face');
     expect(docsPage).toBeDefined();
 
+    let filteredBrowserPages: Array<{ id: string; title: string; url: string }> = [];
     await act(async () => {
-      await webmcpTool.execute?.({ tool: 'open_browser_page', args: { pageId: docsPage!.id } }, {} as never);
+      filteredBrowserPages = await webmcpTool.execute?.({
+        tool: 'list_browser_pages',
+        args: { titleQuery: 'hugging' },
+      }, {} as never) as Array<{ id: string; title: string; url: string }>;
+    });
+    expect(filteredBrowserPages).toEqual([expect.objectContaining({ id: docsPage!.id, title: 'Hugging Face' })]);
+
+    let docsHistory: { pageId: string; currentIndex: number; entries: Array<{ url: string; title: string }> } | undefined;
+    await act(async () => {
+      docsHistory = await webmcpTool.execute?.({
+        tool: 'read_browser_page_history',
+        args: { pageId: docsPage!.id },
+      }, {} as never) as { pageId: string; currentIndex: number; entries: Array<{ url: string; title: string }> };
+    });
+    expect(docsHistory).toEqual(expect.objectContaining({
+      pageId: docsPage!.id,
+      currentIndex: 0,
+      entries: [expect.objectContaining({ url: docsPage!.url, title: docsPage!.title })],
+    }));
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'toggle_worktree_render_pane',
+        args: { itemId: docsPage!.id, itemType: 'browser-page' },
+      }, {} as never);
     });
     expect(screen.getByLabelText('Page overlay')).toBeInTheDocument();
 
     await act(async () => {
-      await webmcpTool.execute?.({ tool: 'close_browser_page', args: { pageId: docsPage!.id } }, {} as never);
+      await webmcpTool.execute?.({
+        tool: 'toggle_worktree_render_pane',
+        args: { itemId: docsPage!.id, itemType: 'browser-page' },
+      }, {} as never);
     });
     expect(screen.queryByLabelText('Page overlay')).not.toBeInTheDocument();
 
@@ -375,6 +460,58 @@ describe('App', () => {
     });
     expect(createdPage).toEqual(expect.objectContaining({ title: 'MCP Tab', url: 'https://example.com/mcp' }));
     expect(screen.getByText('MCP Tab')).toBeInTheDocument();
+
+    let navigatedPage: { id: string; title: string; url: string } | undefined;
+    await act(async () => {
+      navigatedPage = await webmcpTool.execute?.({
+        tool: 'navigate_browser_page',
+        args: { pageId: docsPage!.id, url: 'https://example.com/navigation', title: 'Navigate Tab' },
+      }, {} as never) as { id: string; title: string; url: string };
+    });
+    expect(navigatedPage).toEqual(expect.objectContaining({ id: docsPage!.id, title: 'Navigate Tab', url: 'https://example.com/navigation' }));
+    expect(screen.getByText('Navigate Tab')).toBeInTheDocument();
+
+    await act(async () => {
+      docsHistory = await webmcpTool.execute?.({
+        tool: 'read_browser_page_history',
+        args: { pageId: docsPage!.id },
+      }, {} as never) as { pageId: string; currentIndex: number; entries: Array<{ url: string; title: string }> };
+    });
+    expect(docsHistory).toEqual(expect.objectContaining({
+      pageId: docsPage!.id,
+      currentIndex: 1,
+      entries: expect.arrayContaining([
+        expect.objectContaining({ url: docsPage!.url, title: docsPage!.title }),
+        expect.objectContaining({ url: 'https://example.com/navigation', title: 'Navigate Tab' }),
+      ]),
+    }));
+
+    let refreshedPage: { id: string; title: string; url: string } | undefined;
+    await act(async () => {
+      refreshedPage = await webmcpTool.execute?.({
+        tool: 'refresh_browser_page',
+        args: { pageId: docsPage!.id },
+      }, {} as never) as { id: string; title: string; url: string };
+    });
+    expect(refreshedPage).toEqual(expect.objectContaining({ id: docsPage!.id, url: 'https://example.com/navigation' }));
+
+    let browserBackPage: { id: string; title: string; url: string } | undefined;
+    await act(async () => {
+      browserBackPage = await webmcpTool.execute?.({
+        tool: 'navigate_browser_page_history',
+        args: { pageId: docsPage!.id, direction: 'back' },
+      }, {} as never) as { id: string; title: string; url: string };
+    });
+    expect(browserBackPage).toEqual(expect.objectContaining({ id: docsPage!.id, url: docsPage!.url }));
+
+    let browserForwardPage: { id: string; title: string; url: string } | undefined;
+    await act(async () => {
+      browserForwardPage = await webmcpTool.execute?.({
+        tool: 'navigate_browser_page_history',
+        args: { pageId: docsPage!.id, direction: 'forward' },
+      }, {} as never) as { id: string; title: string; url: string };
+    });
+    expect(browserForwardPage).toEqual(expect.objectContaining({ id: docsPage!.id, url: 'https://example.com/navigation' }));
 
     let sessions: Array<{ id: string; name: string; isOpen: boolean }> = [];
     await act(async () => {
@@ -394,7 +531,7 @@ describe('App', () => {
 
     await act(async () => {
       await webmcpTool.execute?.({
-        tool: 'write_session',
+        tool: 'submit_session_message',
         args: { sessionId: sessionOne!.id, message: 'Message from WebMCP' },
       }, {} as never);
       await Promise.resolve();
@@ -404,73 +541,235 @@ describe('App', () => {
     let updatedSessionState: { provider: string | null; modelId: string | null } | undefined;
     await act(async () => {
       updatedSessionState = await webmcpTool.execute?.({
-        tool: 'write_session',
+        tool: 'change_session_model',
         args: { sessionId: sessionOne!.id, provider: 'ghcp', modelId: 'gpt-4.1' },
       }, {} as never) as { provider: string | null; modelId: string | null };
     });
     expect(updatedSessionState).toEqual(expect.objectContaining({ provider: 'ghcp', modelId: 'gpt-4.1' }));
 
-    let terminalSessionState: { mode: string; cwd: string | null } | undefined;
+    let terminalSessionState: { mode: string } | undefined;
     await act(async () => {
       terminalSessionState = await webmcpTool.execute?.({
-        tool: 'write_session',
-        args: { sessionId: sessionOne!.id, mode: 'terminal', cwd: '/workspace/projects' },
-      }, {} as never) as { mode: string; cwd: string | null };
+        tool: 'switch_session_mode',
+        args: { sessionId: sessionOne!.id, mode: 'terminal' },
+      }, {} as never) as { mode: string };
       await Promise.resolve();
     });
-    expect(terminalSessionState).toEqual(expect.objectContaining({ mode: 'terminal', cwd: '/workspace/projects' }));
+    expect(terminalSessionState).toEqual(expect.objectContaining({ mode: 'terminal' }));
     expect(screen.getByRole('heading', { name: 'Terminal' })).toBeInTheDocument();
 
+    let cliSessionTools: Array<{
+      id: string;
+      label: string;
+      selected: boolean;
+    }> = [];
     await act(async () => {
-      await webmcpTool.execute?.({
-        tool: 'create_session_file',
-        args: { sessionId: sessionOne!.id, path: '/workspace/notes.md', content: 'notes from tool' },
-      }, {} as never);
+      cliSessionTools = await webmcpTool.execute?.({
+        tool: 'list_session_tools',
+        args: { sessionId: sessionOne!.id, query: 'bash commands' },
+      }, {} as never) as Array<{
+        id: string;
+        label: string;
+        selected: boolean;
+      }>;
     });
+    expect(cliSessionTools).toEqual([
+      expect.objectContaining({ id: 'cli', label: 'CLI', selected: true }),
+    ]);
 
-    let readSessionFile: { sessionId: string; path: string; kind: string; content: string } | undefined;
+    let availableSessionTools: Array<{
+      id: string;
+      selected: boolean;
+    }> = [];
     await act(async () => {
-      readSessionFile = await webmcpTool.execute?.({
-        tool: 'read_session_file',
-        args: { sessionId: sessionOne!.id, path: '/workspace/notes.md' },
+      availableSessionTools = await webmcpTool.execute?.({
+        tool: 'list_session_tools',
+        args: { sessionId: sessionOne!.id },
+      }, {} as never) as Array<{
+        id: string;
+        selected: boolean;
+      }>;
+    });
+    const toolIdsToDeselect = availableSessionTools
+      .filter((descriptor) => descriptor.selected && descriptor.id !== 'cli')
+      .map((descriptor) => descriptor.id);
+
+    let updatedSessionAgentState: {
+      agentId: string | null;
+    } | undefined;
+    await act(async () => {
+      updatedSessionAgentState = await webmcpTool.execute?.({
+        tool: 'change_session_agent',
+        args: { sessionId: sessionOne!.id, agentId: 'docs/AGENTS.md' },
+      }, {} as never) as {
+        agentId: string | null;
+      };
+      await Promise.resolve();
+    });
+    expect(updatedSessionAgentState).toEqual(expect.objectContaining({ agentId: 'docs/AGENTS.md' }));
+
+    let updatedSessionToolsState: {
+      toolIds: string[];
+    } | undefined;
+    await act(async () => {
+      updatedSessionToolsState = await webmcpTool.execute?.({
+        tool: 'change_session_tools',
+        args: { sessionId: sessionOne!.id, action: 'deselect', toolIds: toolIdsToDeselect },
+      }, {} as never) as {
+        toolIds: string[];
+      };
+      await Promise.resolve();
+    });
+    expect(updatedSessionToolsState).toEqual(expect.objectContaining({ toolIds: ['cli'] }));
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Chat mode' }));
+
+    expect(screen.getByRole('combobox', { name: 'Session AGENTS.md' })).toHaveValue('docs/AGENTS.md');
+    expect(screen.getByRole('button', { name: /Configure tools/i })).toHaveAttribute('aria-label', expect.stringMatching(/1 of \d+ selected/));
+
+    let createdSessionFile: { sessionId: string; path: string; kind: string; content: string } | undefined;
+    await act(async () => {
+      createdSessionFile = await webmcpTool.execute?.({
+        tool: 'add_filesystem_entry',
+        args: {
+          action: 'create',
+          targetType: 'session-fs-entry',
+          sessionId: sessionOne!.id,
+          kind: 'file',
+          path: '/workspace/notes.md',
+          content: 'notes from tool',
+        },
       }, {} as never) as { sessionId: string; path: string; kind: string; content: string };
+      await Promise.resolve();
     });
-    expect(readSessionFile).toEqual({ sessionId: sessionOne!.id, path: '/workspace/notes.md', kind: 'file', content: 'notes from tool' });
+    expect(createdSessionFile).toEqual(expect.objectContaining({
+      sessionId: sessionOne!.id,
+      path: '/workspace/notes.md',
+      kind: 'file',
+      content: 'notes from tool',
+    }));
 
-    let readSessionFolder: { entries: Array<{ name: string; path: string; kind: string }> } | undefined;
+    let readSessionFolder: Array<{ label: string; path: string; kind: string }> = [];
     await act(async () => {
       readSessionFolder = await webmcpTool.execute?.({
-        tool: 'read_session_folder',
-        args: { sessionId: sessionOne!.id, path: '/workspace' },
-      }, {} as never) as { entries: Array<{ name: string; path: string; kind: string }> };
+        tool: 'list_filesystem_entries',
+        args: { targetType: 'session-fs-entry', sessionId: sessionOne!.id, parentPath: '/workspace' },
+      }, {} as never) as Array<{ label: string; path: string; kind: string }>;
     });
-    expect(readSessionFolder).toEqual(expect.objectContaining({
-      entries: expect.arrayContaining([
-        expect.objectContaining({ name: 'notes.md', path: '/workspace/notes.md', kind: 'file' }),
-      ]),
-    }));
+    expect(readSessionFolder).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'notes.md', path: '/workspace/notes.md', kind: 'file' }),
+    ]));
+
+    let sessionDrives: Array<{ targetType: string; kind: string; sessionId: string; label: string; mounted: boolean }> = [];
+    await act(async () => {
+      sessionDrives = await webmcpTool.execute?.({ tool: 'list_filesystem_entries', args: { targetType: 'session-drive' } }, {} as never) as Array<{ targetType: string; kind: string; sessionId: string; label: string; mounted: boolean }>;
+    });
+    expect(sessionDrives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ targetType: 'session-drive', kind: 'drive', sessionId: sessionOne!.id, mounted: true }),
+    ]));
+
+    let sessionDriveProperties: { sessionId: string; kind: string; mounted: boolean } | undefined;
+    await act(async () => {
+      sessionDriveProperties = await webmcpTool.execute?.({
+        tool: 'read_filesystem_properties',
+        args: { targetType: 'session-drive', sessionId: sessionOne!.id },
+      }, {} as never) as { sessionId: string; kind: string; mounted: boolean };
+    });
+    expect(sessionDriveProperties).toEqual(expect.objectContaining({ sessionId: sessionOne!.id, kind: 'drive', mounted: true }));
+
+    let sessionDriveHistory: { records: Array<{ id: string }> } | undefined;
+    await act(async () => {
+      sessionDriveHistory = await webmcpTool.execute?.({
+        tool: 'read_filesystem_history',
+        args: { targetType: 'session-drive', sessionId: sessionOne!.id },
+      }, {} as never) as { records: Array<{ id: string }> };
+      await Promise.resolve();
+    });
+    expect(sessionDriveHistory?.records[0]?.id).toBeTruthy();
+
+    let rolledBackSessionDriveHistory: { rolledBackToId: string } | undefined;
+    await act(async () => {
+      rolledBackSessionDriveHistory = await webmcpTool.execute?.({
+        tool: 'rollback_filesystem_history',
+        args: {
+          targetType: 'session-drive',
+          sessionId: sessionOne!.id,
+          recordId: sessionDriveHistory!.records[0]!.id,
+        },
+      }, {} as never) as { rolledBackToId: string };
+      await Promise.resolve();
+    });
+    expect(rolledBackSessionDriveHistory).toEqual(expect.objectContaining({ rolledBackToId: sessionDriveHistory!.records[0]!.id }));
 
     let worktreeItems: Array<{ id: string; itemType: string; label: string }> = [];
     await act(async () => {
       worktreeItems = await webmcpTool.execute?.({ tool: 'list_worktree_items' }, {} as never) as Array<{ id: string; itemType: string; label: string }>;
     });
     expect(worktreeItems).toEqual(expect.arrayContaining([
-      expect.objectContaining({ itemType: 'browser-page', label: 'Hugging Face' }),
+      expect.objectContaining({ itemType: 'browser-page', label: 'Transformers.js' }),
       expect.objectContaining({ itemType: 'session', label: 'Session 1' }),
       expect.objectContaining({ itemType: 'workspace-file', label: 'AGENTS.md' }),
       expect.objectContaining({ itemType: 'clipboard', label: 'Clipboard' }),
     ]));
 
-    const browserItem = worktreeItems.find((item) => item.itemType === 'browser-page' && item.label === 'Hugging Face');
+    const browserItem = worktreeItems.find((item) => item.itemType === 'browser-page' && item.label === 'Transformers.js');
+    const createdBrowserItem = worktreeItems.find((item) => item.itemType === 'browser-page' && item.label === 'MCP Tab');
     const sessionItem = worktreeItems.find((item) => item.itemType === 'session' && item.label === 'Session 1');
     const fileItem = worktreeItems.find((item) => item.itemType === 'workspace-file' && item.label === 'AGENTS.md');
     const vfsItem = worktreeItems.find((item) => item.itemType === 'session-fs-entry');
     const clipboardItem = worktreeItems.find((item) => item.itemType === 'clipboard');
     expect(browserItem).toBeDefined();
+    expect(createdBrowserItem).toBeDefined();
     expect(sessionItem).toBeDefined();
     expect(fileItem).toBeDefined();
     expect(vfsItem).toBeDefined();
     expect(clipboardItem).toBeDefined();
+
+    let initialRenderPaneState: { isOpen: boolean; supported: boolean } | undefined;
+    await act(async () => {
+      initialRenderPaneState = await webmcpTool.execute?.({
+        tool: 'read_worktree_render_pane_state',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
+      }, {} as never) as { isOpen: boolean; supported: boolean };
+    });
+    expect(initialRenderPaneState).toEqual(expect.objectContaining({ isOpen: false, supported: true }));
+
+    let toggledRenderPaneState: { isOpen: boolean; supported: boolean } | undefined;
+    await act(async () => {
+      toggledRenderPaneState = await webmcpTool.execute?.({
+        tool: 'toggle_worktree_render_pane',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
+      }, {} as never) as { isOpen: boolean; supported: boolean };
+    });
+    expect(toggledRenderPaneState).toEqual(expect.objectContaining({ isOpen: true, supported: true }));
+    expect(screen.getByLabelText('Page overlay')).toBeInTheDocument();
+
+    let initialContextMenuState: { isOpen: boolean; supported: boolean } | undefined;
+    await act(async () => {
+      initialContextMenuState = await webmcpTool.execute?.({
+        tool: 'read_worktree_context_menu_state',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
+      }, {} as never) as { isOpen: boolean; supported: boolean };
+    });
+    expect(initialContextMenuState).toEqual(expect.objectContaining({ isOpen: false, supported: true }));
+
+    let toggledContextMenuState: { isOpen: boolean; supported: boolean } | undefined;
+    await act(async () => {
+      toggledContextMenuState = await webmcpTool.execute?.({
+        tool: 'toggle_worktree_context_menu',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
+      }, {} as never) as { isOpen: boolean; supported: boolean };
+    });
+    expect(toggledContextMenuState).toEqual(expect.objectContaining({ isOpen: true, supported: true }));
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'toggle_worktree_context_menu',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType },
+      }, {} as never);
+    });
+    expect(screen.queryByRole('menu', { name: 'Context menu' })).not.toBeInTheDocument();
 
     let browserActions: Array<{ id: string; label: string }> = [];
     let sessionActions: Array<{ id: string; label: string }> = [];
@@ -514,14 +813,14 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    let bookmarkedBrowserPage: { persisted: boolean } | undefined;
+    let bookmarkedBrowserPage: { persisted: boolean; title: string; url: string } | undefined;
     await act(async () => {
       bookmarkedBrowserPage = await webmcpTool.execute?.({
         tool: 'read_browser_page',
         args: { pageId: browserItem!.id },
-      }, {} as never) as { persisted: boolean };
+      }, {} as never) as { persisted: boolean; title: string; url: string };
     });
-    expect(bookmarkedBrowserPage).toEqual(expect.objectContaining({ persisted: false }));
+    expect(bookmarkedBrowserPage).toEqual(expect.objectContaining({ persisted: true }));
 
     let createdSession: { id: string; name: string; isOpen: boolean } | undefined;
     await act(async () => {
@@ -532,6 +831,202 @@ describe('App', () => {
     });
     expect(createdSession).toEqual(expect.objectContaining({ name: 'Ops Session', isOpen: true }));
     expect(screen.getByText('Ops Session')).toBeInTheDocument();
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'toggle_worktree_render_pane',
+        args: { itemId: fileItem!.id, itemType: fileItem!.itemType },
+      }, {} as never);
+      await webmcpTool.execute?.({
+        tool: 'toggle_worktree_render_pane',
+        args: { itemId: docsPage!.id, itemType: 'browser-page' },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    let renderPanes: Array<{ id: string; paneType: string; itemId: string; label: string }> = [];
+    await act(async () => {
+      renderPanes = await webmcpTool.execute?.({ tool: 'list_render_panes' }, {} as never) as Array<{ id: string; paneType: string; itemId: string; label: string }>;
+    });
+    expect(renderPanes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: `session:${createdSession!.id}`, paneType: 'session', itemId: createdSession!.id }),
+      expect.objectContaining({ id: `browser:${docsPage!.id}`, paneType: 'browser-page', itemId: docsPage!.id }),
+      expect.objectContaining({ id: 'file:AGENTS.md', paneType: 'workspace-file', itemId: 'AGENTS.md' }),
+    ]));
+
+    let movedRenderPanes: Array<{ id: string; paneType: string; itemId: string; label: string }> = [];
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'move_render_pane',
+        args: { paneId: `browser:${docsPage!.id}`, toIndex: 0 },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      movedRenderPanes = await webmcpTool.execute?.({ tool: 'list_render_panes' }, {} as never) as Array<{ id: string; paneType: string; itemId: string; label: string }>;
+    });
+
+    expect(movedRenderPanes[0]).toEqual(expect.objectContaining({ id: `browser:${docsPage!.id}` }));
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'close_render_pane',
+        args: { paneId: 'file:AGENTS.md' },
+      }, {} as never);
+      await Promise.resolve();
+    });
+    expect(screen.queryByLabelText('Workspace file content')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'change_filesystem_mount',
+        args: { action: 'unmount', sessionId: sessionOne!.id },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    let unmountedSessionDrives: Array<{ sessionId: string; label: string; mounted: boolean }> = [];
+    let afterUnmountFsEntries: Array<{ sessionId: string; path: string; kind: string }> = [];
+    await act(async () => {
+      unmountedSessionDrives = await webmcpTool.execute?.({ tool: 'list_filesystem_entries', args: { targetType: 'session-drive' } }, {} as never) as Array<{ sessionId: string; label: string; mounted: boolean }>;
+      afterUnmountFsEntries = await webmcpTool.execute?.({ tool: 'list_filesystem_entries', args: { targetType: 'session-fs-entry', sessionId: sessionOne!.id } }, {} as never) as Array<{ sessionId: string; path: string; kind: string }>;
+    });
+    expect(unmountedSessionDrives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sessionId: sessionOne!.id, mounted: false }),
+    ]));
+    expect(afterUnmountFsEntries.find((entry) => entry.sessionId === sessionOne!.id)).toBeUndefined();
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'change_filesystem_mount',
+        args: { action: 'mount', sessionId: sessionOne!.id },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    let remountedSessionDrives: Array<{ sessionId: string; label: string; mounted: boolean }> = [];
+    let afterRemountFsEntries: Array<{ sessionId: string; path: string; kind: string }> = [];
+    await act(async () => {
+      remountedSessionDrives = await webmcpTool.execute?.({ tool: 'list_filesystem_entries', args: { targetType: 'session-drive' } }, {} as never) as Array<{ sessionId: string; label: string; mounted: boolean }>;
+      afterRemountFsEntries = await webmcpTool.execute?.({ tool: 'list_filesystem_entries', args: { targetType: 'session-fs-entry', sessionId: sessionOne!.id } }, {} as never) as Array<{ sessionId: string; path: string; kind: string }>;
+    });
+    expect(remountedSessionDrives).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sessionId: sessionOne!.id, mounted: true }),
+    ]));
+    expect(afterRemountFsEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sessionId: sessionOne!.id, path: '/workspace/notes.md', kind: 'file' }),
+    ]));
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'invoke_worktree_context_action',
+        args: { itemId: browserItem!.id, itemType: browserItem!.itemType, actionId: 'copy_uri', args: {} },
+      }, {} as never);
+      await webmcpTool.execute?.({
+        tool: 'invoke_worktree_context_action',
+        args: { itemId: createdBrowserItem!.id, itemType: createdBrowserItem!.itemType, actionId: 'copy_uri', args: {} },
+      }, {} as never);
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledWith(bookmarkedBrowserPage!.url);
+    expect(writeText).toHaveBeenCalledWith(createdPage!.url);
+
+    let clipboardEntries: Array<{ id: string; label: string; text: string; isActive: boolean }> = [];
+    await act(async () => {
+      clipboardEntries = await webmcpTool.execute?.({ tool: 'list_clipboard_history' }, {} as never) as Array<{ id: string; label: string; text: string; isActive: boolean }>;
+    });
+    const copiedBrowserEntry = clipboardEntries.find((entry) => entry.text === bookmarkedBrowserPage!.url);
+    const copiedCreatedEntry = clipboardEntries.find((entry) => entry.text === createdPage!.url);
+    expect(copiedBrowserEntry).toEqual(expect.objectContaining({
+      label: `URI: ${bookmarkedBrowserPage!.title}`,
+      text: bookmarkedBrowserPage!.url,
+    }));
+    expect(copiedCreatedEntry).toEqual(expect.objectContaining({ label: 'URI: MCP Tab', text: createdPage!.url }));
+
+    let clipboardEntry: { id: string; label: string; text: string; isActive: boolean } | undefined;
+    await act(async () => {
+      clipboardEntry = await webmcpTool.execute?.({
+        tool: 'read_clipboard_entry',
+        args: { entryId: copiedBrowserEntry!.id },
+      }, {} as never) as { id: string; label: string; text: string; isActive: boolean };
+    });
+    expect(clipboardEntry).toEqual(expect.objectContaining({ id: copiedBrowserEntry!.id, text: bookmarkedBrowserPage!.url }));
+
+    let restoredClipboardEntry: { id: string; label: string; text: string; isActive: boolean } | undefined;
+    await act(async () => {
+      restoredClipboardEntry = await webmcpTool.execute?.({
+        tool: 'restore_clipboard_entry',
+        args: { entryId: copiedBrowserEntry!.id },
+      }, {} as never) as { id: string; label: string; text: string; isActive: boolean };
+      await Promise.resolve();
+    });
+    expect(restoredClipboardEntry).toEqual(expect.objectContaining({ id: copiedBrowserEntry!.id, text: bookmarkedBrowserPage!.url, isActive: true }));
+    expect(screen.getByText('Clipboard restored')).toBeInTheDocument();
+    expect(writeText).toHaveBeenLastCalledWith(bookmarkedBrowserPage!.url);
+
+    let movedWorkspaceFile: { path: string; content: string } | undefined;
+    await act(async () => {
+      movedWorkspaceFile = await webmcpTool.execute?.({
+        tool: 'update_filesystem_entry',
+        args: { action: 'move', targetType: 'workspace-file', path: 'AGENTS.md', nextPath: 'capabilities/AGENTS.main.md' },
+      }, {} as never) as { path: string; content: string };
+    });
+    expect(movedWorkspaceFile).toEqual(expect.objectContaining({ path: 'capabilities/AGENTS.main.md' }));
+
+    let movedWorkspaceFileContent: { path: string; preview: string } | undefined;
+    await act(async () => {
+      movedWorkspaceFileContent = await webmcpTool.execute?.({
+        tool: 'read_filesystem_properties',
+        args: { targetType: 'workspace-file', path: 'capabilities/AGENTS.main.md' },
+      }, {} as never) as { path: string; preview: string };
+    });
+    expect(movedWorkspaceFileContent).toEqual(expect.objectContaining({
+      path: 'capabilities/AGENTS.main.md',
+      preview: '# Workspace agent instructions\n\n## Goals\n- Verify full WebMCP coverage.',
+    }));
+
+    let duplicatedWorkspaceFile: { path: string } | undefined;
+    await act(async () => {
+      duplicatedWorkspaceFile = await webmcpTool.execute?.({
+        tool: 'add_filesystem_entry',
+        args: {
+          action: 'duplicate',
+          targetType: 'workspace-file',
+          kind: 'file',
+          path: 'copies/AGENTS.copy.md',
+          sourcePath: 'capabilities/AGENTS.main.md',
+        },
+      }, {} as never) as { path: string };
+    });
+    expect(duplicatedWorkspaceFile).toEqual(expect.objectContaining({ path: 'copies/AGENTS.copy.md' }));
+
+    let symlinkedWorkspaceFile: { path: string } | undefined;
+    await act(async () => {
+      symlinkedWorkspaceFile = await webmcpTool.execute?.({
+        tool: 'add_filesystem_entry',
+        args: {
+          action: 'symlink',
+          targetType: 'workspace-file',
+          kind: 'file',
+          path: 'links/AGENTS.link.md',
+          sourcePath: 'capabilities/AGENTS.main.md',
+        },
+      }, {} as never) as { path: string };
+    });
+    expect(symlinkedWorkspaceFile).toEqual(expect.objectContaining({ path: 'links/AGENTS.link.md' }));
+
+    let symlinkedWorkspaceFileContent: { path: string; preview: string } | undefined;
+    await act(async () => {
+      symlinkedWorkspaceFileContent = await webmcpTool.execute?.({
+        tool: 'read_filesystem_properties',
+        args: { targetType: 'workspace-file', path: 'links/AGENTS.link.md' },
+      }, {} as never) as { path: string; preview: string };
+    });
+    expect(symlinkedWorkspaceFileContent).toEqual(expect.objectContaining({
+      path: 'links/AGENTS.link.md',
+      preview: expect.stringContaining('capabilities/AGENTS.main.md'),
+    }));
   });
 
   it('supports creating new chat and terminal instances from the tree and panel', async () => {

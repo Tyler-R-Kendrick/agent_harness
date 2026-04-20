@@ -171,17 +171,28 @@ export function discoverWorkspaceCapabilities(files: WorkspaceFile[]): Workspace
   return { agents, skills, plugins, hooks };
 }
 
-export function buildWorkspacePromptContext(files: WorkspaceFile[]): string {
+export function buildWorkspacePromptContext(files: WorkspaceFile[], activeAgentPath?: string | null): string {
   const capabilities = discoverWorkspaceCapabilities(files);
+  const activeAgent = activeAgentPath
+    ? capabilities.agents.find((file) => file.path === activeAgentPath) ?? null
+    : null;
+  const otherAgents = activeAgent
+    ? capabilities.agents.filter((file) => file.path !== activeAgent.path)
+    : capabilities.agents;
   if (!capabilities.agents.length && !capabilities.skills.length && !capabilities.plugins.length && !capabilities.hooks.length) {
     return 'No workspace capability files are currently stored.';
   }
 
   return [
     'Workspace capability files loaded from browser storage:',
-    capabilities.agents.length
-      ? `AGENTS.md files:\n${capabilities.agents.map((file) => `- ${file.path}\n${file.content}`).join('\n')}`
-      : 'AGENTS.md files: none',
+    activeAgent
+      ? `Active AGENTS.md:\n- ${activeAgent.path}\n${activeAgent.content}`
+      : (otherAgents.length
+          ? `AGENTS.md files:\n${otherAgents.map((file) => `- ${file.path}\n${file.content}`).join('\n')}`
+          : 'AGENTS.md files: none'),
+    activeAgent && otherAgents.length
+      ? `Other AGENTS.md files:\n${otherAgents.map((file) => `- ${file.path}\n${file.content}`).join('\n')}`
+      : null,
     capabilities.skills.length
       ? `Skills:\n${capabilities.skills.map((skill) => `- ${skill.name} (${skill.path}): ${skill.description}`).join('\n')}`
       : 'Skills: none',
@@ -191,7 +202,7 @@ export function buildWorkspacePromptContext(files: WorkspaceFile[]): string {
     capabilities.hooks.length
       ? `Hooks:\n${capabilities.hooks.map((hook) => `- ${hook.name} (${hook.path})`).join('\n')}`
       : 'Hooks: none',
-  ].join('\n\n');
+  ].filter((section): section is string => Boolean(section)).join('\n\n');
 }
 
 export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, WorkspaceFile[]> {

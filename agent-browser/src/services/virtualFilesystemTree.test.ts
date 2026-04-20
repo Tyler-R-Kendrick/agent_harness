@@ -57,8 +57,8 @@ describe('virtualFilesystemTree', () => {
     ]);
 
     expect(drives[0].children).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: '.keep', type: 'folder' }),
-      expect.objectContaining({ name: 'notes.txt', type: 'folder' }),
+      expect.objectContaining({ name: '.keep', type: 'file' }),
+      expect.objectContaining({ name: 'notes.txt', type: 'file' }),
     ]));
     expect(drives[1].children).toEqual([
       expect.objectContaining({ name: 'cache', type: 'folder' }),
@@ -82,9 +82,45 @@ describe('virtualFilesystemTree', () => {
         name: 'cache',
         type: 'folder',
         children: expect.arrayContaining([
-          expect.objectContaining({ name: 'a.txt', type: 'folder' }),
-          expect.objectContaining({ name: 'b.txt', type: 'folder' }),
+          expect.objectContaining({ name: 'a.txt', type: 'file' }),
+          expect.objectContaining({ name: 'b.txt', type: 'file' }),
         ]),
+      }),
+    ]);
+  });
+
+  it('sets filePath on leaf file nodes whose content is a workspace:// symlink', () => {
+    const paths = ['/workspace/AGENTS.md'];
+    const fileContents = { '/workspace/AGENTS.md': 'workspace://AGENTS.md' };
+    const drives = buildMountedTerminalDriveNodes('vfs:ws-research:terminal-4', paths, fileContents);
+
+    expect(drives[0].children).toEqual([
+      expect.objectContaining({ name: 'AGENTS.md', type: 'file', filePath: 'AGENTS.md' }),
+    ]);
+  });
+
+  it('does not set filePath on leaf file nodes without workspace:// content', () => {
+    const paths = ['/workspace/notes.txt'];
+    const fileContents = { '/workspace/notes.txt': 'plain text content' };
+    const drives = buildMountedTerminalDriveNodes('vfs:ws-research:terminal-5', paths, fileContents);
+
+    expect(drives[0].children).toEqual([
+      expect.objectContaining({ name: 'notes.txt', type: 'file' }),
+    ]);
+    expect(drives[0].children?.[0]).not.toHaveProperty('filePath');
+  });
+
+  it('preserves directory nodes that have child files', () => {
+    const paths = ['/workspace/docs', '/workspace/docs/README.md'];
+    const drives = buildMountedTerminalDriveNodes('vfs:ws-research:terminal-6', paths);
+
+    expect(drives[0].children).toEqual([
+      expect.objectContaining({
+        name: 'docs',
+        type: 'folder',
+        children: [
+          expect.objectContaining({ name: 'README.md', type: 'file' }),
+        ],
       }),
     ]);
   });
