@@ -19,6 +19,7 @@ vi.mock('@ai-sdk/gateway', () => {
 import {
   resolveLanguageModel,
   createAutoProvider,
+  getModelCapabilities,
   type AgentModelConfig,
 } from './agentProvider';
 
@@ -140,5 +141,47 @@ describe('createAutoProvider', () => {
         installedModels: [],
       }),
     ).toThrow(/no.*provider/i);
+  });
+});
+
+describe('getModelCapabilities', () => {
+  it('returns gateway defaults', () => {
+    expect(getModelCapabilities({ kind: 'gateway', modelId: 'openai/gpt-4.1' })).toEqual({
+      provider: 'gateway',
+      contextWindow: 8192,
+      maxOutputTokens: 1024,
+      supportsNativeToolCalls: true,
+    });
+  });
+
+  it('uses copilot model metadata when available', () => {
+    expect(getModelCapabilities(
+      { kind: 'copilot', modelId: 'gpt-4.1' },
+      { copilotModels: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true, contextWindow: 32768, maxOutputTokens: 2048 }] },
+    )).toEqual({
+      provider: 'copilot',
+      contextWindow: 32768,
+      maxOutputTokens: 2048,
+      supportsNativeToolCalls: false,
+    });
+  });
+
+  it('uses local model metadata when available and falls back otherwise', () => {
+    expect(getModelCapabilities(
+      { kind: 'local', modelId: installedHfModel.id, task: installedHfModel.task },
+      { installedModels: [{ ...installedHfModel, contextWindow: 4096, maxOutputTokens: 768 }] },
+    )).toEqual({
+      provider: 'local',
+      contextWindow: 4096,
+      maxOutputTokens: 768,
+      supportsNativeToolCalls: false,
+    });
+
+    expect(getModelCapabilities({ kind: 'local', modelId: 'missing', task: 'text-generation' })).toEqual({
+      provider: 'local',
+      contextWindow: 2048,
+      maxOutputTokens: 512,
+      supportsNativeToolCalls: false,
+    });
   });
 });

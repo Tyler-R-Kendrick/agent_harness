@@ -1,6 +1,8 @@
+import type { IInferenceClient, IVoter } from 'logact';
 import { streamCopilotChat, type CopilotModelSummary, type CopilotRuntimeState } from '../../services/copilotApi';
 import { toChatSdkTranscript } from '../../services/chatComposition';
 import type { ChatMessage } from '../../types';
+import { runAgentLoop } from '../agent-loop';
 import { createReasoningStepSplitter } from '../reasoningSplitter';
 import type { AgentStreamCallbacks } from '../types';
 
@@ -57,7 +59,7 @@ function filterMarkerLines(content: string): string {
     .trim();
 }
 
-export async function streamGhcpChat(
+function createGhcpInferenceClient(
   {
     modelId,
     sessionId,
@@ -75,76 +77,120 @@ export async function streamGhcpChat(
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
-): Promise<void> {
-  // Track whether the server sends structured NDJSON reasoning_step events.
-  // If it does, we skip the local splitter (avoid double-counting steps).
-  // Splitter-generated steps do NOT set this flag — we always want the splitter
-  // to continue processing subsequent onReasoning deltas.
-  let sawNdjsonStep = false;
-  const reasoningSplitter = createReasoningStepSplitter({
-    markers: true,
-    onStepStart: (step) => {
-      callbacks.onReasoningStep?.(step);
-    },
-    onStepUpdate: (id, patch) => callbacks.onReasoningStepUpdate?.(id, patch),
-    onStepEnd: (id) => callbacks.onReasoningStepEnd?.(id),
-  });
+): IInferenceClient {
+  return {
+    async infer() {
+      let sawNdjsonStep = false;
+      let visibleTokenBuffer = '';
+      const reasoningSplitter = createReasoningStepSplitter({
+        markers: true,
+        onStepStart: (step) => {
+          callbacks.onReasoningStep?.(step);
+        },
+        onStepUpdate: (id, patch) => callbacks.onReasoningStepUpdate?.(id, patch),
+        onStepEnd: (id) => callbacks.onReasoningStepEnd?.(id),
+      });
 
-  // Buffer incomplete lines so we can detect full marker lines before forwarding tokens.
-  let tokenLineBuffer = '';
+      let tokenLineBuffer = '';
 
-  const processTokenLine = (line: string, trailingNewline: boolean) => {
-    if (TOKEN_MARKER_PATTERN.test(line.trim())) {
-      // Route marker lines to the reasoning splitter — don't show in response
-      reasoningSplitter.push(line + '\n');
-    } else {
-      callbacks.onToken?.(trailingNewline ? `${line}\n` : line);
-    }
-  };
-
-  const filteredOnToken = (delta: string) => {
-    const combined = tokenLineBuffer + delta;
-    const parts = combined.split('\n');
-    tokenLineBuffer = parts.pop() ?? '';
-    for (const line of parts) {
-      processTokenLine(line, true);
-    }
-  };
-
-  await streamCopilotChat(
-    {
-      modelId,
-      sessionId,
-      prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput }),
-    },
-    {
-      onToken: filteredOnToken,
-      onReasoning: (delta) => {
-        // Always feed native reasoning into the splitter UNLESS the server is
-        // already sending structured NDJSON reasoning_step events.
-        if (!sawNdjsonStep) reasoningSplitter.push(delta);
-        callbacks.onReasoning?.(delta);
-      },
-      onReasoningStep: (step) => {
-        // Server sent a structured step — disable the local splitter.
-        sawNdjsonStep = true;
-        callbacks.onReasoningStep?.(step);
-      },
-      onReasoningStepUpdate: (id, patch) => callbacks.onReasoningStepUpdate?.(id, patch),
-      onReasoningStepEnd: (id) => callbacks.onReasoningStepEnd?.(id),
-      onDone: (finalContent) => {
-        // Flush the last unsent partial line
-        if (tokenLineBuffer) {
-          processTokenLine(tokenLineBuffer, false);
-          tokenLineBuffer = '';
+      const processTokenLine = (line: string, trailingNewline: boolean) => {
+        if (TOKEN_MARKER_PATTERN.test(line.trim())) {
+          reasoningSplitter.push(line + '\n');
+        } else {
+          const token = trailingNewline ? `${line}\n` : line;
+          visibleTokenBuffer += token;
+          callbacks.onToken?.(token);
         }
-        if (!sawNdjsonStep) reasoningSplitter.finish();
-        // Strip any marker lines from the assembled final content (the server
-        // assembles its own full copy from all message deltas).
-        const cleanedFinalContent = finalContent ? filterMarkerLines(finalContent) || undefined : undefined;
-        callbacks.onDone?.(cleanedFinalContent);
-      },
+      };
+
+      const filteredOnToken = (delta: string) => {
+        const combined = tokenLineBuffer + delta;
+        const parts = combined.split('\n');
+        tokenLineBuffer = parts.pop() ?? '';
+        for (const line of parts) {
+          processTokenLine(line, true);
+        }
+      };
+
+      let resolvedContent = '';
+
+      try {
+        await streamCopilotChat(
+          {
+            modelId,
+            sessionId,
+            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput }),
+          },
+          {
+            onToken: filteredOnToken,
+            onReasoning: (delta) => {
+              if (!sawNdjsonStep) reasoningSplitter.push(delta);
+              callbacks.onReasoning?.(delta);
+            },
+            onReasoningStep: (step) => {
+              sawNdjsonStep = true;
+              callbacks.onReasoningStep?.(step);
+            },
+            onReasoningStepUpdate: (id, patch) => callbacks.onReasoningStepUpdate?.(id, patch),
+            onReasoningStepEnd: (id) => callbacks.onReasoningStepEnd?.(id),
+            onDone: (finalContent) => {
+              if (tokenLineBuffer) {
+                processTokenLine(tokenLineBuffer, false);
+                tokenLineBuffer = '';
+              }
+              if (!sawNdjsonStep) reasoningSplitter.finish();
+              const cleanedFinalContent = finalContent ? filterMarkerLines(finalContent) || undefined : undefined;
+              resolvedContent = cleanedFinalContent ?? visibleTokenBuffer.trim();
+              callbacks.onDone?.(resolvedContent || undefined);
+            },
+          },
+          signal,
+        );
+      } catch (error) {
+        const resolvedError = error instanceof Error ? error : new Error(String(error));
+        callbacks.onError?.(resolvedError);
+        throw resolvedError;
+      }
+
+      return resolvedContent;
     },
-    signal,
-  );
+  };
+}
+
+export async function streamGhcpChat(
+  {
+    modelId,
+    sessionId,
+    workspaceName,
+    workspacePromptContext,
+    messages,
+    latestUserInput,
+    voters = [],
+  }: {
+    modelId: string;
+    sessionId: string;
+    workspaceName: string;
+    workspacePromptContext: string;
+    messages: ChatMessage[];
+    latestUserInput: string;
+    voters?: IVoter[];
+  },
+  callbacks: AgentStreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const inferenceClient = createGhcpInferenceClient({
+    modelId,
+    sessionId,
+    workspaceName,
+    workspacePromptContext,
+    messages,
+    latestUserInput,
+  }, callbacks, signal);
+
+  await runAgentLoop({
+    inferenceClient,
+    messages,
+    voters,
+    input: latestUserInput,
+  }, callbacks);
 }

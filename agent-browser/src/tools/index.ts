@@ -1,4 +1,5 @@
 import type { ToolSet } from 'ai';
+import { buildToolInstructionsTemplate } from '../services/agentPromptTemplates';
 import { createCliTool } from './cli';
 import type { TerminalExecutorContext } from './types';
 
@@ -22,6 +23,25 @@ export interface ToolDescriptor {
   subGroup?: string;
   subGroupLabel?: string;
 }
+
+export interface ToolGroupDescriptor {
+  id: ToolGroup;
+  label: string;
+  description: string;
+  toolIds: string[];
+}
+
+const TOOL_GROUP_DESCRIPTIONS: Readonly<Record<ToolGroup, string>> = {
+  'built-in': 'General workspace tools such as shell commands and broad utility actions.',
+  mcp: 'External MCP tools bridged into the active workspace.',
+  webmcp: 'Generic WebMCP tools that are not tied to a specific workspace surface.',
+  'worktree-mcp': 'Workspace-level tools that act across the current workspace state.',
+  'renderer-viewport-mcp': 'Renderer and viewport inspection tools for visible output surfaces.',
+  'browser-worktree-mcp': 'Browser page navigation, reading, and history tools.',
+  'sessions-worktree-mcp': 'Session management, agent switching, and conversation control tools.',
+  'files-worktree-mcp': 'Workspace and session filesystem tools for reading and editing files.',
+  'clipboard-worktree-mcp': 'Clipboard inspection and restore tools.',
+};
 
 export const DEFAULT_TOOL_DESCRIPTORS: ToolDescriptor[] = [
   {
@@ -52,21 +72,45 @@ export function selectToolsByIds(allTools: ToolSet, selectedIds: readonly string
   return filtered;
 }
 
+export function selectToolDescriptorsByIds(
+  descriptors: readonly ToolDescriptor[],
+  selectedIds: readonly string[],
+): ToolDescriptor[] {
+  const allowed = new Set(selectedIds);
+  return descriptors.filter((descriptor) => allowed.has(descriptor.id));
+}
+
+export function buildToolGroupDescriptors(descriptors: readonly ToolDescriptor[]): ToolGroupDescriptor[] {
+  const buckets = new Map<ToolGroup, ToolGroupDescriptor>();
+
+  for (const descriptor of descriptors) {
+    const id = (descriptor.subGroup ?? descriptor.group) as ToolGroup;
+    const label = descriptor.subGroupLabel ?? descriptor.groupLabel;
+    const bucket = buckets.get(id) ?? {
+      id,
+      label,
+      description: TOOL_GROUP_DESCRIPTIONS[id],
+      toolIds: [],
+    };
+    bucket.toolIds.push(descriptor.id);
+    buckets.set(id, bucket);
+  }
+
+  return [...buckets.values()].sort((left, right) => left.label.localeCompare(right.label));
+}
+
 export function buildDefaultToolInstructions({
   workspaceName,
   workspacePromptContext,
+  descriptors = DEFAULT_TOOL_DESCRIPTORS,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
+  descriptors?: readonly Pick<ToolDescriptor, 'id' | 'label' | 'description'>[];
 }): string {
-  return [
-    'You are a workspace agent for an agent-first browser.',
-    `Active workspace: ${workspaceName}`,
+  return buildToolInstructionsTemplate({
+    workspaceName,
     workspacePromptContext,
-    'You may call the cli tool to inspect or operate on the active workspace terminal session.',
-    'For Files tools, you may use locations exactly as shown in the Files tree, including workspace paths like //workspace/AGENTS.md and session filesystem locations like //session-1-fs/workspace.',
-    'When using cli, prefer short, non-interactive bash commands. Do not use cli for clear or long-running interactive shells.',
-    'Each tool call is shown to the user in the chat transcript, so use tools only when they materially help the task.',
-    'After any tool usage, answer concisely with what you found or changed.',
-  ].join('\n\n');
+    descriptors,
+  });
 }

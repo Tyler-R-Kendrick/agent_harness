@@ -111,6 +111,8 @@ export interface HFModel {
   likes: number;
   tags: string[];
   sizeMB: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
   status: ModelStatus;
 }
 

@@ -1,14 +1,17 @@
-import { InMemoryAgentBus, LogActAgent, QuorumPolicy } from 'logact';
-import type { IInferenceClient, IVoter, IntentPayload, IAgentBus, VotePayload } from 'logact';
+import type { IInferenceClient, IVoter } from 'logact';
 import { browserInferenceEngine } from '../../services/browserInference';
-import { formatBrowserInferenceResult } from '../../services/browserInferenceRuntime';
+import { formatBrowserInferenceResult, trimTextForLocalInference } from '../../services/browserInferenceRuntime';
 import { toAiSdkMessages } from '../../services/chatComposition';
-import type { ChatMessage, HFModel, VoterStep } from '../../types';
+import { buildAgentSystemPrompt, resolveAgentScenario } from '../../services/agentPromptTemplates';
+import type { ChatMessage, HFModel } from '../../types';
+import { runAgentLoop } from '../agent-loop';
 import { createReasoningStepSplitter } from '../reasoningSplitter';
 import type { AgentStreamCallbacks } from '../types';
 
 export const CODI_LABEL = 'Codi';
 const MAX_CONTEXT_MESSAGES = 7;
+const MAX_CODI_WORKSPACE_CONTEXT_CHARS = 4_000;
+const MAX_CODI_MESSAGE_CHARS = 2_000;
 
 export function hasCodiModels(installedModels: HFModel[]): boolean {
   return installedModels.length > 0;
@@ -30,14 +33,26 @@ export function buildCodiPrompt({
   messages: ChatMessage[];
 }): Array<{ role: string; content: string }> {
   const aiMessages = toAiSdkMessages(messages);
+  const latestText = messages.at(-1)?.streamedContent || messages.at(-1)?.content || workspacePromptContext;
+  const scenario = resolveAgentScenario(latestText);
 
   return [
-    { role: 'system', content: 'You are Codi, the local workspace knowledge agent for an agent-first browser. Be concise and clear.' },
+    {
+      role: 'system',
+      content: buildAgentSystemPrompt({
+        workspaceName,
+        goal: 'Help the user in the active workspace with concise, grounded collaboration.',
+        scenario,
+      }),
+    },
     { role: 'system', content: `Active workspace: ${workspaceName}` },
-    { role: 'system', content: workspacePromptContext },
+    { role: 'system', content: trimTextForLocalInference(workspacePromptContext, MAX_CODI_WORKSPACE_CONTEXT_CHARS) },
     ...aiMessages.slice(-MAX_CONTEXT_MESSAGES).map((message) => ({
       role: message.role,
-      content: message.parts.map((part) => ('text' in part ? String(part.text) : '')).join(''),
+      content: trimTextForLocalInference(
+        message.parts.map((part) => ('text' in part ? String(part.text) : '')).join(''),
+        MAX_CODI_MESSAGE_CHARS,
+      ),
     })),
   ];
 }
@@ -124,57 +139,7 @@ function createCodiInferenceClient(
   };
 }
 
-/**
- * Wraps an IVoter so that each call to `vote()` fires the voter step
- * callbacks in `AgentStreamCallbacks`.  The wrapper is the "external agent"
- * surface that drives the voters activity panel.
- */
-export function wrapVoterWithCallbacks(
-  voter: IVoter,
-  callbacks: Pick<AgentStreamCallbacks, 'onVoterStep' | 'onVoterStepUpdate' | 'onVoterStepEnd'>,
-): IVoter {
-  return {
-    id: voter.id,
-    tier: voter.tier,
-    async vote(intent: IntentPayload, bus: IAgentBus): Promise<VotePayload> {
-      const stepId = `voter-${voter.id}-${intent.intentId}`;
-      const step: VoterStep = {
-        id: stepId,
-        kind: 'agent',
-        title: voter.id,
-        voterId: voter.id,
-        startedAt: Date.now(),
-        status: 'active',
-      };
-      callbacks.onVoterStep?.(step);
-
-      let result: VotePayload;
-      try {
-        result = await voter.vote(intent, bus);
-      } catch (err) {
-        callbacks.onVoterStepUpdate?.(stepId, {
-          status: 'done',
-          approve: false,
-          body: `Error: ${err instanceof Error ? err.message : String(err)}`,
-          endedAt: Date.now(),
-        });
-        callbacks.onVoterStepEnd?.(stepId);
-        throw err;
-      }
-
-      callbacks.onVoterStepUpdate?.(stepId, {
-        status: 'done',
-        approve: result.approve,
-        body: result.approve
-          ? 'Approved'
-          : `Rejected${result.reason ? `: ${result.reason}` : ''}`,
-        endedAt: Date.now(),
-      });
-      callbacks.onVoterStepEnd?.(stepId);
-      return result;
-    },
-  };
-}
+export { wrapVoterWithCallbacks } from '../agent-loop';
 
 export async function streamCodiChat(
   {
@@ -195,7 +160,6 @@ export async function streamCodiChat(
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const bus = new InMemoryAgentBus();
   const inferenceClient = createCodiInferenceClient(
     model,
     workspaceName,
@@ -205,21 +169,9 @@ export async function streamCodiChat(
     signal,
   );
 
-  const wrappedVoters = voters.map((v) => wrapVoterWithCallbacks(v, callbacks));
-
-  const agent = new LogActAgent({
-    bus,
+  await runAgentLoop({
     inferenceClient,
-    voters: wrappedVoters,
-    maxTurns: 1,
-    quorumPolicy: voters.length > 0 ? QuorumPolicy.BooleanAnd : QuorumPolicy.OnByDefault,
-  });
-
-  const lastMessage = messages.at(-1);
-  await agent.send(lastMessage?.content ?? '');
-  try {
-    await agent.run();
-  } catch {
-    // Error already forwarded to callbacks.onError inside createCodiInferenceClient
-  }
+    messages,
+    voters,
+  }, callbacks);
 }

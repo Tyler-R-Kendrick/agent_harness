@@ -1251,6 +1251,284 @@ test('installs gpt-2 and shows Installed state without console errors', async ({
   await page.screenshot({ path: 'docs/screenshots/gpt2-installed.png' });
 });
 
+test('completes the parallel delegation prompt without timing out', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+
+  const qwenEntry = {
+    id: 'onnx-community/Qwen3-0.6B-ONNX',
+    pipeline_tag: 'text-generation',
+    downloads: 5000,
+    likes: 30,
+    tags: ['transformers.js', 'onnx', 'text-generation'],
+    siblings: [
+      { rfilename: 'config.json' },
+      { rfilename: 'tokenizer.json' },
+      { rfilename: 'onnx/model.onnx' },
+    ],
+  };
+
+  await mockHFApi(page, [qwenEntry]);
+  await page.addInitScript(() => {
+    (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests = [];
+    const OriginalWorker = globalThis.Worker;
+    function MockInferenceWorker(this: { onmessage: null | ((e: { data: unknown }) => void); onerror: null | (() => void) }) {
+      this.onmessage = null;
+      this.onerror = null;
+    }
+    MockInferenceWorker.prototype.postMessage = function(data: { action?: string; id?: string; prompt?: unknown; options?: Record<string, unknown> }) {
+      const { action, id = '', prompt, options } = data || {};
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      if (!id) return;
+
+      if (action === 'load') {
+        setTimeout(function() {
+          self.onmessage?.({ data: { type: 'status', phase: 'model', id, msg: 'Loading…', pct: null } });
+          setTimeout(function() {
+            self.onmessage?.({ data: { type: 'done', id, result: { loaded: true } } });
+          }, 80);
+        }, 0);
+        return;
+      }
+
+      if (action !== 'generate') {
+        return;
+      }
+
+      (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests?.push({
+        prompt,
+        options: options ?? {},
+      });
+
+      const promptText = JSON.stringify(prompt || '');
+      const send = (text: string) => {
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'thinking' } });
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'generating' } });
+        self.onmessage?.({ data: { type: 'token', id, token: text } });
+        self.onmessage?.({ data: { type: 'done', id, result: { text } } });
+      };
+
+      setTimeout(function() {
+        if (promptText.includes('===PROBLEM===') && promptText.includes('===BREAKDOWN===')) {
+          send([
+            '<think>internal planning should stay hidden</think>',
+            '===PROBLEM===',
+            'Audit coverage health across the self-contained libraries.',
+            '===BREAKDOWN===',
+            '- Run coverage for each independent library track.',
+            '- Capture pass/fail and per-metric coverage values.',
+            '- Merge the results into one consolidated report.',
+            '===ASSIGNMENT===',
+            '- Subagent A: lib/inbrowser-use and lib/logact coverage checks, then hand results to aggregation.',
+            '- Subagent B: lib/agent-browser-mcp and lib/webmcp coverage checks, then hand results to aggregation.',
+            '- Subagent C: aggregate all summaries and flag any threshold gaps.',
+            '===VALIDATION===',
+            '- Verify that all four libraries are represented exactly once.',
+            '- Flag any metric that falls below the configured threshold.',
+          ].join('\n'));
+          return;
+        }
+
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'thinking' } });
+      }, 20);
+    };
+    MockInferenceWorker.prototype.terminate = function() {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker = function(url: unknown, opts: unknown) {
+      if (String(url).includes('browserInference')) return new (MockInferenceWorker as unknown as new() => unknown)();
+      return new OriginalWorker(url as string | URL, opts as WorkerOptions);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker.prototype = OriginalWorker.prototype;
+  });
+
+  await page.goto('/');
+  await expect(page.getByLabel('Omnibar')).toBeVisible();
+  await page.getByLabel('Settings').click();
+  const registryToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(registryToggle).toBeVisible({ timeout: 5000 });
+  await registryToggle.click();
+  const modelButton = page.getByRole('button', { name: /Qwen3-0.6B-ONNX/i }).first();
+  await expect(modelButton).toBeVisible({ timeout: 8000 });
+  await modelButton.click();
+  await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
+
+  await page.getByLabel('Workspaces').click();
+  await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
+  const prompt = 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.';
+  await page.getByLabel('Chat input').fill(prompt);
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  await expect(page.getByText('Parallel delegation plan')).toBeVisible();
+  await expect(page.getByText('Subagent breakdown')).toBeVisible();
+  await expect(page.getByText('Subagent assignments')).toBeVisible();
+  await expect(page.getByText('Validation and risk checks')).toBeVisible();
+  await expect(page.getByText(/timed out/i)).toHaveCount(0);
+
+  const thoughtButton = page.getByRole('button', { name: /Thought for/i });
+  await expect(thoughtButton).toBeVisible();
+  await thoughtButton.click();
+  await expect(page.getByText('Coordinator brief', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Breakdown subagent', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Assignment subagent', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Validation subagent', { exact: true }).first()).toBeVisible();
+  await expect(page.locator('body')).not.toContainText('<think>');
+
+  const workerGenerateRequests = await page.evaluate(() => {
+    return (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests ?? [];
+  });
+  expect(workerGenerateRequests.length).toBeGreaterThan(0);
+  expect(workerGenerateRequests[0]).toMatchObject({
+    options: {
+      max_new_tokens: 96,
+      temperature: 0.1,
+      do_sample: false,
+      top_p: 1,
+      // Qwen3 thinking must be disabled for the delegation path or every
+      // section spends its 96-token budget inside `<think>...</think>` and
+      // the idle watchdog fires before any visible output appears.
+      enable_thinking: false,
+    },
+  });
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/parallel-delegation-workflow.png', fullPage: true });
+});
+
+test('Qwen3 staged tool pipeline plans and runs without the local tool watchdog firing', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+
+  const qwenEntry = {
+    id: 'onnx-community/Qwen3-0.6B-ONNX',
+    pipeline_tag: 'text-generation',
+    downloads: 5000,
+    likes: 30,
+    tags: ['transformers.js', 'onnx', 'text-generation'],
+    siblings: [
+      { rfilename: 'config.json' },
+      { rfilename: 'tokenizer.json' },
+      { rfilename: 'onnx/model.onnx' },
+    ],
+  };
+
+  await mockHFApi(page, [qwenEntry]);
+  await page.addInitScript(() => {
+    (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests = [];
+    const OriginalWorker = globalThis.Worker;
+    function MockInferenceWorker(this: { onmessage: null | ((e: { data: unknown }) => void); onerror: null | (() => void) }) {
+      this.onmessage = null;
+      this.onerror = null;
+    }
+    MockInferenceWorker.prototype.postMessage = function(data: { action?: string; id?: string; prompt?: unknown; options?: Record<string, unknown> }) {
+      const { action, id = '', prompt, options } = data || {};
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      if (!id) return;
+
+      if (action === 'load') {
+        setTimeout(function() {
+          self.onmessage?.({ data: { type: 'status', phase: 'model', id, msg: 'Loading…', pct: null } });
+          setTimeout(function() {
+            self.onmessage?.({ data: { type: 'done', id, result: { loaded: true } } });
+          }, 40);
+        }, 0);
+        return;
+      }
+
+      if (action !== 'generate') {
+        return;
+      }
+
+      (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests?.push({
+        prompt,
+        options: options ?? {},
+      });
+
+      const promptText = JSON.stringify(prompt || '');
+      const send = (text: string) => {
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'thinking' } });
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'generating' } });
+        self.onmessage?.({ data: { type: 'token', id, token: text } });
+        self.onmessage?.({ data: { type: 'done', id, result: { text } } });
+      };
+
+      setTimeout(function() {
+        if (promptText.includes('Tool Routing Guidance')) {
+          send('<think>deciding…</think>{"mode":"tool-use","goal":"list workspace files"}');
+          return;
+        }
+        if (promptText.includes('Tool Group Selection Guidance')) {
+          send('<think>grouping…</think>{"groups":["files-worktree-mcp"],"goal":"list workspace files"}');
+          return;
+        }
+        if (promptText.includes('Tool Selection Guidance')) {
+          send('<think>picking…</think>{"toolIds":["list_session_files"],"goal":"list workspace files"}');
+          return;
+        }
+        // Executor turn — just answer directly; no actual tool call needed to
+        // prove the pipeline ran to completion without the idle watchdog.
+        send('Listed the workspace files.');
+      }, 20);
+    };
+    MockInferenceWorker.prototype.terminate = function() {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker = function(url: unknown, opts: unknown) {
+      if (String(url).includes('browserInference')) return new (MockInferenceWorker as unknown as new() => unknown)();
+      return new OriginalWorker(url as string | URL, opts as WorkerOptions);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker.prototype = OriginalWorker.prototype;
+  });
+
+  await page.goto('/');
+  await expect(page.getByLabel('Omnibar')).toBeVisible();
+  await page.getByLabel('Settings').click();
+  const registryToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(registryToggle).toBeVisible({ timeout: 5000 });
+  await registryToggle.click();
+  const modelButton = page.getByRole('button', { name: /Qwen3-0.6B-ONNX/i }).first();
+  await expect(modelButton).toBeVisible({ timeout: 8000 });
+  await modelButton.click();
+  await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
+
+  await page.getByLabel('Workspaces').click();
+  await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
+  await page.getByLabel('Chat input').fill('List files in the current workspace.');
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  // The pipeline must reach the executor and produce the final answer without
+  // the idle watchdog firing.
+  await expect(page.getByText('Listed the workspace files.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Local tool planning stalled/i)).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('<think>');
+
+  const workerGenerateRequests = await page.evaluate(() => {
+    return (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests ?? [];
+  });
+
+  expect(workerGenerateRequests.length).toBeGreaterThanOrEqual(4);
+
+  // Every staged planning call must have thinking disabled and use Qwen3's
+  // recommended non-thinking sampling overrides.
+  const planningRequests = workerGenerateRequests.filter((request) => {
+    const prompt = JSON.stringify(request.prompt ?? '');
+    return /Tool Routing Guidance|Tool Group Selection Guidance|Tool Selection Guidance/.test(prompt);
+  });
+  expect(planningRequests.length).toBeGreaterThanOrEqual(3);
+  for (const request of planningRequests) {
+    expect(request.options).toMatchObject({
+      enable_thinking: false,
+      top_k: 20,
+      min_p: 0,
+    });
+    const prompt = JSON.stringify(request.prompt ?? '');
+    expect(prompt).toContain('/no_think');
+  }
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/qwen3-stages/qwen3-staged-tool-pipeline.png', fullPage: true });
+});
+
 // ── Regression: panel coexistence ─────────────────────────────────────
 
 test('browser panel does not replace session panel when opened after a terminal session and file pane', async ({ page }) => {

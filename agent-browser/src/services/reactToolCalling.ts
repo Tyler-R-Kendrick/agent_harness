@@ -1,4 +1,5 @@
 import type { LanguageModelV3FunctionTool } from '@ai-sdk/provider';
+import type { ToolDescriptor, ToolGroupDescriptor } from '../tools';
 
 export function buildReActToolsSection(tools: LanguageModelV3FunctionTool[]): string {
   if (!tools.length) return '';
@@ -21,6 +22,46 @@ export function buildReActToolsSection(tools: LanguageModelV3FunctionTool[]): st
       .map(([key, value]) => `${key}: ${value.type ?? 'any'}${value.description ? ` (${value.description})` : ''}`)
       .join(', ');
     lines.push(`- ${tool.name}(${paramList})${tool.description ? `: ${tool.description}` : ''}`);
+  }
+
+  return lines.join('\n');
+}
+
+export function buildToolGroupCatalog(groups: ToolGroupDescriptor[]): string {
+  if (!groups.length) return '';
+
+  const lines = [
+    '## Tool Groups',
+    '',
+    'Pick the smallest set of tool groups needed for the task.',
+    'Respond with JSON only: {"groups":["<group-id>"],"goal":"<short goal>"}',
+    '',
+    'Available groups:',
+  ];
+
+  for (const group of groups) {
+    lines.push(`- ${group.id} (${group.label}) [${group.toolIds.length} tools]: ${group.description}`);
+  }
+
+  return lines.join('\n');
+}
+
+export function buildToolDescriptorCatalog(
+  descriptors: Array<Pick<ToolDescriptor, 'id' | 'label' | 'description'>>,
+): string {
+  if (!descriptors.length) return '';
+
+  const lines = [
+    '## Tools',
+    '',
+    'Pick the smallest set of specific tools needed for the task.',
+    'Respond with JSON only: {"toolIds":["<tool-id>"],"goal":"<short goal>"}',
+    '',
+    'Available tools:',
+  ];
+
+  for (const descriptor of descriptors) {
+    lines.push(`- ${descriptor.id} (${descriptor.label}): ${descriptor.description}`);
   }
 
   return lines.join('\n');

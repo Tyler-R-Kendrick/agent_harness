@@ -6,7 +6,7 @@ vi.mock('./cli/exec', () => ({
   executeCliCommand: (...args: unknown[]) => executeCliCommandMock(...args),
 }));
 
-import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools } from './index';
+import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, buildToolGroupDescriptors, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds } from './index';
 import type { TerminalExecutorContext } from './types';
 
 function createContext(): TerminalExecutorContext {
@@ -48,5 +48,44 @@ describe('default tools', () => {
     await tools.cli.execute?.({ command: 'pwd' }, {} as never);
 
     expect(executeCliCommandMock).toHaveBeenCalledWith(context, 'pwd', { emitMessages: false });
+  });
+
+  it('filters tool sets and descriptors by selected ids', () => {
+    const filteredTools = selectToolsByIds({ cli: { execute: vi.fn() }, other: { execute: vi.fn() } } as never, ['cli']);
+    const filteredDescriptors = selectToolDescriptorsByIds([
+      ...DEFAULT_TOOL_DESCRIPTORS,
+      {
+        id: 'read_session_file',
+        label: 'Read session file',
+        description: 'Read a file.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'files-worktree-mcp',
+        subGroupLabel: 'Files',
+      },
+    ], ['read_session_file']);
+
+    expect(Object.keys(filteredTools)).toEqual(['cli']);
+    expect(filteredDescriptors.map((descriptor) => descriptor.id)).toEqual(['read_session_file']);
+  });
+
+  it('builds group descriptors from top-level and subgroup tool metadata', () => {
+    const groups = buildToolGroupDescriptors([
+      ...DEFAULT_TOOL_DESCRIPTORS,
+      {
+        id: 'read_session_file',
+        label: 'Read session file',
+        description: 'Read a file.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'files-worktree-mcp',
+        subGroupLabel: 'Files',
+      },
+    ]);
+
+    expect(groups).toEqual([
+      expect.objectContaining({ id: 'built-in', label: 'Built-In', toolIds: ['cli'] }),
+      expect.objectContaining({ id: 'files-worktree-mcp', label: 'Files', toolIds: ['read_session_file'] }),
+    ]);
   });
 });

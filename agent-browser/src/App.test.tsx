@@ -12,7 +12,7 @@ const generateMock = vi.fn();
 const fetchCopilotStateMock = vi.fn();
 const streamCopilotChatMock = vi.fn();
 const resolveLanguageModelMock = vi.fn(() => ({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' }));
-const runToolAgentMock = vi.fn();
+const runStagedToolPipelineMock = vi.fn();
 const getSandboxFeatureFlagsMock = vi.fn(() => ({
   secureBrowserSandboxExec: false,
   disableWebContainerAdapter: false,
@@ -41,12 +41,16 @@ vi.mock('./services/copilotApi', () => ({
   streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
 }));
 
-vi.mock('./services/agentProvider', () => ({
-  resolveLanguageModel: (config: unknown) => (resolveLanguageModelMock as (config: unknown) => unknown)(config),
-}));
+vi.mock('./services/agentProvider', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./services/agentProvider')>();
+  return {
+    ...actual,
+    resolveLanguageModel: (config: unknown) => (resolveLanguageModelMock as (config: unknown) => unknown)(config),
+  };
+});
 
-vi.mock('./services/agentRunner', () => ({
-  runToolAgent: (options: unknown, callbacks: unknown) => runToolAgentMock(options, callbacks),
+vi.mock('./services/stagedToolPipeline', () => ({
+  runStagedToolPipeline: (options: unknown, callbacks: unknown) => runStagedToolPipelineMock(options, callbacks),
 }));
 
 vi.mock('./features/flags', () => ({
@@ -177,6 +181,18 @@ describe('App', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
   };
 
+  const installLocalModel = async () => {
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+  };
+
   const createCopilotState = (overrides: Partial<CopilotRuntimeState> = {}): CopilotRuntimeState => ({
     available: true,
     authenticated: false,
@@ -199,14 +215,14 @@ describe('App', () => {
     fetchCopilotStateMock.mockReset();
     streamCopilotChatMock.mockReset();
     resolveLanguageModelMock.mockReset();
-    runToolAgentMock.mockReset();
+    runStagedToolPipelineMock.mockReset();
     searchBrowserModelsMock.mockResolvedValue([]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
     fetchCopilotStateMock.mockResolvedValue(createCopilotState());
     streamCopilotChatMock.mockResolvedValue(undefined);
     resolveLanguageModelMock.mockReturnValue({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' });
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
+    runStagedToolPipelineMock.mockResolvedValue({ text: 'done', steps: 1 });
     getSandboxFeatureFlagsMock.mockReturnValue({
       secureBrowserSandboxExec: false,
       disableWebContainerAdapter: false,
@@ -1504,7 +1520,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(runStagedToolPipelineMock).not.toHaveBeenCalled();
     expect(streamCopilotChatMock).not.toHaveBeenCalled();
     expect(generateMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Chat input')).toHaveValue('Search the web for: browser sandbox constraints');
@@ -1727,7 +1743,7 @@ describe('App', () => {
         vision: true,
       }],
     }));
-    runToolAgentMock.mockImplementation(async (options, callbacks) => {
+    runStagedToolPipelineMock.mockImplementation(async (options, callbacks) => {
       callbacks.onToolCall?.('cli', { command: 'echo hello from cli' });
       const result = await options.tools.cli.execute({ command: 'echo hello from cli' }, {} as never);
       callbacks.onToolResult?.('cli', { command: 'echo hello from cli' }, result, false);
@@ -1869,6 +1885,345 @@ describe('App', () => {
 
     expect(screen.queryByRole('complementary', { name: 'Activity panel' })).not.toBeInTheDocument();
     expect(screen.getByText('Runtime intelligence is moving into the loop.')).toBeInTheDocument();
+  });
+
+  it('renders local Codi thoughts in the activity panel when the model emits think tags', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onToken?.('<think>Plan the response in steps.');
+      callbacks.onToken?.('</think>Final answer');
+      callbacks.onDone?.({ generated_text: 'Final answer' });
+      return undefined;
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Think through this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const pill = screen.getByRole('button', { name: /Thought for/i });
+    fireEvent.click(pill);
+
+    expect(screen.getByRole('complementary', { name: 'Activity panel' })).toBeInTheDocument();
+    expect(screen.getAllByText('Plan the response in steps.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Final answer')).toBeInTheDocument();
+  });
+
+  it('shows a concrete local Codi thinking step even when the model emits only phase updates', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    let resolveGeneration!: () => void;
+    generateMock.mockImplementation(async (_input, callbacks) => new Promise<void>((resolve) => {
+      callbacks.onPhase?.('thinking');
+      resolveGeneration = () => {
+        callbacks.onDone?.({ generated_text: 'Final answer' });
+        resolve();
+      };
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Think through this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Analyzing request' })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveGeneration();
+      await Promise.resolve();
+    });
+  });
+
+  it('shows an immediate local tool-planning step before any tool-agent callbacks arrive', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    let resolveRun!: () => void;
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => new Promise((resolve) => {
+      callbacks.onStageStart?.('router', '');
+      resolveRun = () => {
+        callbacks.onStageComplete?.('router', 'Planning finished.');
+        callbacks.onDone?.('Tool run completed.');
+        resolve({ text: 'Tool run completed.', steps: 1 });
+      };
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use tools to solve this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: 'Routing request' })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveRun();
+      await Promise.resolve();
+    });
+  });
+
+  it('streams local model tokens into the planning step body during tool runs', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    let resolveRun!: () => void;
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => new Promise((resolve) => {
+      callbacks.onStageStart?.('router', '');
+      callbacks.onStageToken?.('router', 'Looking ');
+      callbacks.onStageToken?.('router', 'for ');
+      callbacks.onStageToken?.('router', 'the right tool.');
+      resolveRun = () => {
+        callbacks.onStageComplete?.('router', 'Looking for the right tool.');
+        callbacks.onDone?.('Tool run completed.');
+        resolve({ text: 'Tool run completed.', steps: 1 });
+      };
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use tools to solve this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Open the activity panel so we can read the streamed body.
+    const planningPill = screen.getByRole('button', { name: /Routing request/i });
+    fireEvent.click(planningPill);
+
+    expect(screen.getByText(/Looking for the right tool\./)).toBeInTheDocument();
+
+    await act(async () => {
+      resolveRun();
+      await Promise.resolve();
+    });
+  });
+
+  it('fails local tool planning with a clear timeout instead of hanging forever', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => new Promise(() => {
+      callbacks.onStageStart?.('router', '');
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use tools to solve this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_001);
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/Local tool planning stalled with no new output\./i)).toBeInTheDocument();
+  });
+
+  it('does not fire the local tool idle watchdog while stages continue to stream output', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    let emitStageToken: ((delta: string) => void) | null = null;
+    let finishRun: (() => void) | null = null;
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      emitStageToken = (delta: string) => callbacks.onStageToken?.('router', delta);
+      return new Promise((resolve) => {
+        finishRun = () => {
+          callbacks.onDone?.('All done.');
+          resolve({ text: 'All done.', steps: 1 });
+        };
+      });
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Keep streaming.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    // Drip stage tokens every 15 seconds to keep the idle timer reset past
+    // the 30 s threshold without producing the timeout error.
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        vi.advanceTimersByTime(15_000);
+        emitStageToken?.(`delta-${i}`);
+        await Promise.resolve();
+      });
+    }
+
+    expect(screen.queryByText(/Local tool planning stalled with no new output\./i)).toBeNull();
+
+    await act(async () => {
+      finishRun?.();
+      await Promise.resolve();
+    });
+  });
+
+  it('surfaces tool-agent activity in the activity panel for local Codi runs with tools enabled', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('router', '');
+      callbacks.onStageComplete?.('router', 'Plan complete.');
+      callbacks.onToolCall?.('grep', { pattern: 'todo' }, 'tool-1');
+      callbacks.onToolResult?.('grep', { pattern: 'todo' }, 'Found matches', false, 'tool-1');
+      callbacks.onDone?.('Tool run completed.');
+      return { text: 'Tool run completed.', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Search the workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('tool-chip-grep')).toBeInTheDocument();
+
+    const pill = screen.getByRole('button', { name: /Thought for/i });
+    fireEvent.click(pill);
+
+    expect(screen.getByRole('complementary', { name: 'Activity panel' })).toBeInTheDocument();
+    expect(screen.getAllByText('grep').length).toBeGreaterThan(0);
+    expect(screen.getByText('Found matches')).toBeInTheDocument();
   });
 
   it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {
@@ -2251,6 +2606,47 @@ describe('App', () => {
     });
 
     expect(screen.getAllByText('Installed').length).toBeGreaterThan(0);
+  });
+
+  it('coalesces synchronous model-load progress updates without hitting a nested React update warning', async () => {
+    vi.useFakeTimers();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    loadModelMock.mockImplementation(async (_task, _id, callbacks) => {
+      for (let index = 0; index < 200; index += 1) {
+        callbacks.onStatus('model', `Downloading chunk ${index}`, index);
+      }
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+      vi.runOnlyPendingTimers();
+      await Promise.resolve();
+    });
+
+    expect(screen.getAllByText('Installed').length).toBeGreaterThan(0);
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining('Maximum update depth exceeded'));
   });
 
   it('shows an error toast and resets install state when a model install fails', async () => {

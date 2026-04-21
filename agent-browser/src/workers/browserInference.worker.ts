@@ -1,7 +1,12 @@
 // TypeScript port of reference_impl/tjs-worker.js
 // Keeps the same message protocol and per-task generate logic as the reference.
 
-import { pipeline, TextStreamer } from '@huggingface/transformers';
+import { env, pipeline, TextStreamer } from '@huggingface/transformers';
+import {
+  buildPipelineLoadOptions,
+  compactPromptForBrowserInference,
+  normalizeBrowserInferenceErrorMessage,
+} from '../services/browserInferenceRuntime';
 
 type ProgressInfo = {
   status?: unknown;
@@ -18,28 +23,44 @@ function postProgress(phase: string, msg: string, pct: number | null) {
   postMessage({ type: 'status', phase, msg, pct });
 }
 
+function configureRuntimeForModel(task: string, modelId: string) {
+  if (task !== 'text-generation' || !/qwen3-0\.6b-onnx/i.test(modelId)) {
+    return;
+  }
+
+  const wasm = env.backends?.onnx?.wasm;
+  env.useBrowserCache = false;
+
+  if (!wasm) {
+    return;
+  }
+
+  wasm.proxy = true;
+  wasm.numThreads = 1;
+}
+
+function shouldPreferWebGpuForModel(task: string, modelId: string) {
+  return task === 'text-generation'
+    && /qwen3-0\.6b-onnx/i.test(modelId)
+    && typeof navigator !== 'undefined'
+    && 'gpu' in navigator;
+}
+
 async function getPipeline(task: string, modelId: string): Promise<PipelineWithTokenizer> {
   const key = `${modelId}:${task}`;
   if (pipelines.has(key)) return pipelines.get(key) as PipelineWithTokenizer;
 
   postProgress('model', 'Loading model weights...', 0);
-  const pipe = await pipeline(task as Parameters<typeof pipeline>[0], modelId, {
-    progress_callback: (p: ProgressInfo) => {
-      const status = typeof p.status === 'string' ? p.status : null;
-      const file = typeof p.file === 'string' ? p.file : null;
-      const pct = typeof p.progress === 'number' ? Math.round(p.progress) : null;
-
-      if (status === 'progress' && pct != null) {
-        postProgress('model', file ?? 'Downloading...', pct);
-      } else if (status === 'download') {
-        postProgress('model', file ?? 'Starting download...', null);
-      } else if (status === 'initiate') {
-        postProgress('model', file ?? 'Initializing...', null);
-      } else if (status === 'done' || status === 'ready') {
-        postProgress('model', file ?? 'Finalizing...', 100);
-      }
-    },
-  });
+  configureRuntimeForModel(task, modelId);
+  const loadOptions = buildPipelineLoadOptions(task, modelId, (phase) => postProgress('model', phase, null));
+  if (shouldPreferWebGpuForModel(task, modelId)) {
+    loadOptions.device = 'webgpu';
+  }
+  const pipe = await pipeline(
+    task as Parameters<typeof pipeline>[0],
+    modelId,
+    loadOptions,
+  );
   pipelines.set(key, pipe);
   return pipe as PipelineWithTokenizer;
 }
@@ -67,6 +88,7 @@ export async function handleMessage(data: WorkerRequest) {
     if (action === 'generate') {
       const { task, modelId, prompt, options } = data;
       const pipe = await getPipeline(task, modelId);
+      const compactedPrompt = compactPromptForBrowserInference(prompt);
       postMessage({ type: 'phase', id, phase: 'thinking' });
 
       if (task === 'text-generation') {
@@ -80,18 +102,28 @@ export async function handleMessage(data: WorkerRequest) {
             postMessage({ type: 'token', id, token });
           },
         });
-        const result = await pipe(prompt, {
+        const result = await pipe(compactedPrompt, {
           max_new_tokens: (options.max_new_tokens as number) || 256,
           temperature: (options.temperature as number) || 0.7,
           do_sample: options.do_sample !== false,
           top_p: (options.top_p as number) || 0.9,
+          ...(typeof options.top_k === 'number' ? { top_k: options.top_k } : {}),
+          ...(typeof options.min_p === 'number' ? { min_p: options.min_p } : {}),
+          // Transformers.js forwards `tokenizer_encode_kwargs` into
+          // `tokenizer.apply_chat_template(...)`, so Qwen3-style thinking
+          // toggles MUST be nested here — passing `enable_thinking` at the
+          // top level is silently dropped.
+          ...(typeof options.enable_thinking === 'boolean'
+            ? { tokenizer_encode_kwargs: { enable_thinking: options.enable_thinking } }
+            : {}),
+          return_full_text: false,
           streamer,
         }) as Array<{ generated_text?: string }>;
         postMessage({ type: 'done', id, result: { text: result[0]?.generated_text ?? '' } });
 
       } else if (task === 'text2text-generation' || task === 'translation' || task === 'summarization') {
         postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(prompt, { max_new_tokens: (options.max_new_tokens as number) || 256 }) as Array<Record<string, string>>;
+        const result = await pipe(compactedPrompt, { max_new_tokens: (options.max_new_tokens as number) || 256 }) as Array<Record<string, string>>;
         // Pick the first non-null text field in priority order matching the reference_impl
         const text = result[0]?.generated_text ?? result[0]?.translation_text ?? result[0]?.summary_text ?? JSON.stringify(result);
         postMessage({ type: 'token', id, token: text });
@@ -99,21 +131,21 @@ export async function handleMessage(data: WorkerRequest) {
 
       } else if (task === 'text-classification' || task === 'sentiment-analysis') {
         postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(prompt) as Array<{ label: string; score: number }>;
+        const result = await pipe(compactedPrompt) as Array<{ label: string; score: number }>;
         const text = (result || []).map((r) => `${r.label} (${Math.round(r.score * 100)}%)`).join(', ');
         postMessage({ type: 'token', id, token: text });
         postMessage({ type: 'done', id, result: { text } });
 
       } else if (task === 'question-answering') {
         postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(prompt) as { answer?: string };
+        const result = await pipe(compactedPrompt) as { answer?: string };
         const text = result.answer ?? JSON.stringify(result);
         postMessage({ type: 'token', id, token: text });
         postMessage({ type: 'done', id, result: { text } });
 
       } else if (task === 'feature-extraction') {
         postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(prompt, { pooling: 'mean', normalize: true }) as { data?: unknown[]; size?: unknown };
+        const result = await pipe(compactedPrompt, { pooling: 'mean', normalize: true }) as { data?: unknown[]; size?: unknown };
         const dim = result?.data?.length ?? result?.size ?? '?';
         const text = `Generated embedding vector (${String(dim)} dimensions).`;
         postMessage({ type: 'token', id, token: text });
@@ -121,14 +153,14 @@ export async function handleMessage(data: WorkerRequest) {
 
       } else {
         postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(prompt) as unknown;
+        const result = await pipe(compactedPrompt) as unknown;
         const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
         postMessage({ type: 'token', id, token: text });
         postMessage({ type: 'done', id, result: { text } });
       }
     }
   } catch (err) {
-    postMessage({ type: 'error', id, error: err instanceof Error ? err.message : String(err) });
+    postMessage({ type: 'error', id, error: normalizeBrowserInferenceErrorMessage(err) });
   }
 }
 

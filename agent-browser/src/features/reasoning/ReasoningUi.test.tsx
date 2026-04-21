@@ -53,6 +53,30 @@ describe('ReasoningUi', () => {
     expect(onOpenActivity).toHaveBeenCalledWith('assistant-1');
   });
 
+  it('shows the active reasoning step title while thinking is still in progress', () => {
+    const activeMessage: ChatMessage = {
+      id: 'assistant-active',
+      role: 'assistant',
+      content: '',
+      status: 'streaming',
+      isThinking: true,
+      reasoningSteps: [
+        {
+          id: 'step-active',
+          kind: 'thinking',
+          title: 'Analyzing request',
+          body: 'Codi is reviewing the current prompt.',
+          startedAt: 1000,
+          status: 'active',
+        },
+      ],
+    };
+
+    render(<InlineReasoning message={activeMessage} />);
+
+    expect(screen.getByRole('button', { name: 'Analyzing request' })).toBeInTheDocument();
+  });
+
   it('renders the activity overlay with timeline steps, source chips, and back button', () => {
     render(<ActivityPanel message={baseMessage} onClose={() => undefined} />);
 

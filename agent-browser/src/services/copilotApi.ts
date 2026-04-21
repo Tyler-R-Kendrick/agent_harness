@@ -9,6 +9,8 @@ export interface CopilotModelSummary {
   reasoning: boolean;
   vision: boolean;
   billingMultiplier?: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 export interface CopilotRuntimeState {

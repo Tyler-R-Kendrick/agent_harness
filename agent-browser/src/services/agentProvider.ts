@@ -13,7 +13,7 @@
 import { gateway } from '@ai-sdk/gateway';
 import type { GatewayModelId } from '@ai-sdk/gateway';
 import type { LanguageModel } from 'ai';
-import type { CopilotRuntimeState } from './copilotApi';
+import type { CopilotModelSummary, CopilotRuntimeState } from './copilotApi';
 import type { HFModel } from '../types';
 import { CopilotLanguageModel } from './copilotLanguageModel';
 import { LocalLanguageModel } from './localLanguageModel';
@@ -42,6 +42,62 @@ export type LocalModelConfig = {
 };
 
 export type AgentModelConfig = GatewayModelConfig | CopilotModelConfig | LocalModelConfig;
+
+export type ModelCapabilities = {
+  provider: AgentModelConfig['kind'];
+  contextWindow: number;
+  maxOutputTokens: number;
+  supportsNativeToolCalls: boolean;
+};
+
+const DEFAULT_GATEWAY_CONTEXT_WINDOW = 8_192;
+const DEFAULT_COPILOT_CONTEXT_WINDOW = 8_192;
+const DEFAULT_LOCAL_CONTEXT_WINDOW = 2_048;
+const DEFAULT_GATEWAY_MAX_OUTPUT_TOKENS = 1_024;
+const DEFAULT_COPILOT_MAX_OUTPUT_TOKENS = 1_024;
+const DEFAULT_LOCAL_MAX_OUTPUT_TOKENS = 512;
+
+function pickPositiveNumber(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+export function getModelCapabilities(
+  config: AgentModelConfig,
+  options: {
+    installedModels?: HFModel[];
+    copilotModels?: CopilotModelSummary[];
+  } = {},
+): ModelCapabilities {
+  switch (config.kind) {
+    case 'gateway':
+      return {
+        provider: 'gateway',
+        contextWindow: DEFAULT_GATEWAY_CONTEXT_WINDOW,
+        maxOutputTokens: DEFAULT_GATEWAY_MAX_OUTPUT_TOKENS,
+        supportsNativeToolCalls: true,
+      };
+
+    case 'copilot': {
+      const model = options.copilotModels?.find((candidate) => candidate.id === config.modelId);
+      return {
+        provider: 'copilot',
+        contextWindow: pickPositiveNumber(model?.contextWindow, DEFAULT_COPILOT_CONTEXT_WINDOW),
+        maxOutputTokens: pickPositiveNumber(model?.maxOutputTokens, DEFAULT_COPILOT_MAX_OUTPUT_TOKENS),
+        supportsNativeToolCalls: false,
+      };
+    }
+
+    case 'local': {
+      const model = options.installedModels?.find((candidate) => candidate.id === config.modelId);
+      return {
+        provider: 'local',
+        contextWindow: pickPositiveNumber(model?.contextWindow, DEFAULT_LOCAL_CONTEXT_WINDOW),
+        maxOutputTokens: pickPositiveNumber(model?.maxOutputTokens, DEFAULT_LOCAL_MAX_OUTPUT_TOKENS),
+        supportsNativeToolCalls: false,
+      };
+    }
+  }
+}
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 

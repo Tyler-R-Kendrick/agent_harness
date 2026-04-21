@@ -1,12 +1,62 @@
+import type { IVoter } from 'logact';
 import type { CopilotRuntimeState } from '../services/copilotApi';
 import type { HFModel } from '../types';
-import { CODI_LABEL, hasCodiModels, resolveCodiModelId } from './Codi';
-import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId } from './Ghcp';
+import type { AgentStreamCallbacks } from './types';
+import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 import type { AgentProvider } from './types';
 
 export { CODI_LABEL, buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
+export { runAgentLoop, wrapVoterWithCallbacks, type AgentLoopOptions } from './agent-loop';
 export type { AgentProvider, AgentStreamCallbacks } from './types';
+
+export type StreamAgentChatOptions = {
+  provider: AgentProvider;
+  messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>;
+  workspaceName: string;
+  workspacePromptContext: string;
+  voters?: IVoter[];
+  model?: HFModel;
+  modelId?: string;
+  sessionId?: string;
+  latestUserInput?: string;
+};
+
+export async function streamAgentChat(
+  options: StreamAgentChatOptions,
+  callbacks: AgentStreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (options.provider === 'ghcp') {
+    if (!options.modelId || !options.sessionId) {
+      throw new Error('GHCP chat requires a modelId and sessionId.');
+    }
+
+    await streamGhcpChat({
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext: options.workspacePromptContext,
+      messages: options.messages,
+      latestUserInput: options.latestUserInput ?? options.messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
+  if (!options.model) {
+    throw new Error('Codi chat requires a local model.');
+  }
+
+  await streamCodiChat({
+    model: options.model,
+    messages: options.messages,
+    workspaceName: options.workspaceName,
+    workspacePromptContext: options.workspacePromptContext,
+    voters: options.voters,
+  }, callbacks, signal);
+}
 
 export function getDefaultAgentProvider({
   installedModels,

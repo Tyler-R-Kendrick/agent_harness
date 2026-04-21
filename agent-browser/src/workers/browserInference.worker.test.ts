@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const pipelineMock = vi.fn();
 const postMessageSpy = vi.fn();
+const transformerEnv = { useBrowserCache: true, backends: { onnx: { wasm: { proxy: false, numThreads: 4 } } } };
 
 vi.stubGlobal('postMessage', postMessageSpy);
 
@@ -12,10 +13,17 @@ vi.stubGlobal('postMessage', postMessageSpy);
 beforeEach(() => {
   pipelineMock.mockReset();
   postMessageSpy.mockReset();
+  if ('gpu' in globalThis.navigator) {
+    delete (globalThis.navigator as Navigator & { gpu?: unknown }).gpu;
+  }
   vi.resetModules();
+  transformerEnv.useBrowserCache = true;
+  transformerEnv.backends.onnx.wasm.proxy = false;
+  transformerEnv.backends.onnx.wasm.numThreads = 4;
   vi.doMock('@huggingface/transformers', () => ({
     pipeline: (...args: unknown[]) => pipelineMock(...args),
     TextStreamer: vi.fn().mockImplementation((_tokenizer, opts) => ({ kind: 'streamer', opts })),
+    env: transformerEnv,
   }));
 });
 
@@ -63,6 +71,41 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
     expect(loadOptions).not.toHaveProperty('device');
     expect(loadOptions).not.toHaveProperty('dtype');
     expect(loadOptions).toHaveProperty('progress_callback');
+  });
+
+  it('loads Qwen text-generation with q4 dtype to keep browser memory bounded', async () => {
+    pipelineMock.mockResolvedValue(vi.fn());
+    Object.defineProperty(globalThis.navigator, 'gpu', {
+      configurable: true,
+      value: {},
+    });
+
+    const handleMessage = await getHandleMessage();
+
+    await handleMessage({ action: 'load', id: 'req-qwen', task: 'text-generation', modelId: 'onnx-community/Qwen3-0.6B-ONNX' });
+
+    expect(pipelineMock).toHaveBeenCalledTimes(1);
+    const loadOptions = pipelineMock.mock.calls[0][2] as Record<string, unknown>;
+    expect(loadOptions).toMatchObject({
+      device: 'webgpu',
+      dtype: 'q4',
+      progress_callback: expect.any(Function),
+      session_options: {
+        enableCpuMemArena: false,
+        enableMemPattern: false,
+        graphOptimizationLevel: 'disabled',
+        extra: {
+          session: {
+            use_ort_model_bytes_directly: '0',
+          },
+        },
+      },
+    });
+    expect(transformerEnv.backends.onnx.wasm).toMatchObject({
+      proxy: true,
+      numThreads: 1,
+    });
+    expect(transformerEnv.useBrowserCache).toBe(false);
   });
 
   it('posts error:{error} (not msg) when pipeline loading fails — matching reference_impl', async () => {
@@ -158,6 +201,61 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
     );
   });
 
+  it('compacts oversized text-generation prompts before calling the pipeline', async () => {
+    const mockTokenizerObj = { decode: vi.fn() };
+    const mockPipe = vi.fn().mockResolvedValue([{ generated_text: 'trimmed' }]);
+    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
+    pipelineMock.mockResolvedValue(mockPipe);
+
+    const handleMessage = await getHandleMessage();
+
+    await handleMessage({
+      action: 'generate',
+      id: 'gen-big',
+      task: 'text-generation',
+      modelId: 'openai-community/gpt2',
+      prompt: [
+        { role: 'system', content: `rules:${'s'.repeat(8_000)}` },
+        { role: 'user', content: `older:${'u'.repeat(7_000)}` },
+        { role: 'assistant', content: `prior:${'a'.repeat(7_000)}` },
+        { role: 'user', content: `latest:${'z'.repeat(3_000)}` },
+      ],
+      options: {},
+    });
+
+    const promptArg = mockPipe.mock.calls[0][0] as Array<{ role: string; content: string }>;
+    const totalChars = promptArg.reduce((sum, message) => sum + message.content.length, 0);
+
+    expect(totalChars).toBeLessThanOrEqual(12_000);
+    expect(promptArg.at(-1)?.content).toContain('latest:');
+  });
+
+  it('maps ORT integer overflow failures to a clearer local-model error', async () => {
+    const mockTokenizerObj = { decode: vi.fn() };
+    const mockPipe = vi.fn().mockRejectedValue(new Error('failed to call OrtRun(). ERROR_CODE: 1, ERROR_MESSAGE: Integer overflow'));
+    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
+    pipelineMock.mockResolvedValue(mockPipe);
+
+    const handleMessage = await getHandleMessage();
+
+    await handleMessage({
+      action: 'generate',
+      id: 'gen-overflow',
+      task: 'text-generation',
+      modelId: 'openai-community/gpt2',
+      prompt: [{ role: 'user', content: 'hello' }],
+      options: {},
+    });
+
+    expect(postMessageSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        id: 'gen-overflow',
+        error: expect.stringContaining('Local model input exceeded the browser inference limits'),
+      }),
+    );
+  });
+
   it('generate text-classification: sends token with formatted label+score, done with {text}', async () => {
     const mockPipe = vi.fn().mockResolvedValue([{ label: 'POSITIVE', score: 0.95 }]);
     pipelineMock.mockResolvedValue(mockPipe);
@@ -179,5 +277,33 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'done', id: 'gen-2', result: { text: 'POSITIVE (95%)' } }),
     );
+  });
+
+  it('forwards enable_thinking, top_k, and min_p options into the text-generation pipe call', async () => {
+    const mockTokenizerObj = { decode: vi.fn() };
+    const mockPipe = vi.fn().mockResolvedValue([{ generated_text: 'ok' }]);
+    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
+    pipelineMock.mockResolvedValue(mockPipe);
+
+    const handleMessage = await getHandleMessage();
+
+    await handleMessage({
+      action: 'generate',
+      id: 'gen-thinking',
+      task: 'text-generation',
+      modelId: 'onnx-community/Qwen3-0.6B-ONNX',
+      prompt: [{ role: 'user', content: 'hi' }],
+      options: { enable_thinking: false, top_k: 20, min_p: 0 },
+    });
+
+    const runOptions = mockPipe.mock.calls[0][1] as Record<string, unknown>;
+    expect(runOptions).toMatchObject({
+      top_k: 20,
+      min_p: 0,
+      tokenizer_encode_kwargs: { enable_thinking: false },
+    });
+    // Belt-and-braces: must NOT pass enable_thinking at the top level —
+    // Transformers.js silently ignores it there.
+    expect(runOptions).not.toHaveProperty('enable_thinking');
   });
 });

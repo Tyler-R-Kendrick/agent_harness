@@ -57,6 +57,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
+import type { IVoter } from 'logact';
 import { Bash } from 'just-bash/browser';
 import './App.css';
 import {
@@ -76,18 +77,20 @@ import {
   hasCodiModels,
   hasGhcpAccess,
   resolveAgentModelIds,
-  streamCodiChat,
-  streamGhcpChat,
+  streamAgentChat,
   type AgentProvider,
 } from './chat-agents';
 import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-agents/toolCallSummary';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { ActivityPanel, InlineReasoning } from './features/reasoning/ReasoningUi';
+import { InlineVoters, VotersPanel } from './features/voters';
 import { MarkdownContent } from './utils/MarkdownContent';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
-import { resolveLanguageModel } from './services/agentProvider';
-import { runToolAgent } from './services/agentRunner';
+import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
+import { LocalLanguageModel } from './services/localLanguageModel';
+import { isParallelDelegationPrompt, runParallelDelegationWorkflow } from './services/parallelDelegationWorkflow';
+import { runStagedToolPipeline } from './services/stagedToolPipeline';
 import {
   createWebMcpToolBridge,
   registerWorkspaceTools,
@@ -133,8 +136,8 @@ import {
 } from './services/workspaceMcpWorktree';
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { createUniqueId } from './utils/uniqueId';
-import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolsByIds, type ToolDescriptor } from './tools';
-import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
+import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 import type { CliHistoryEntry } from './tools/types';
 import { installModelContext, ModelContext } from 'webmcp';
 
@@ -769,6 +772,49 @@ function useToast() {
   return { toast, setToast };
 }
 
+function createDeferredToastDispatcher(setToast: (toast: ToastState) => void) {
+  let timer: number | null = null;
+  let pendingToast: ToastState = null;
+
+  const commit = () => {
+    timer = null;
+    if (!pendingToast) return;
+    const nextToast = pendingToast;
+    pendingToast = null;
+    setToast(nextToast);
+  };
+
+  return {
+    push(nextToast: Exclude<ToastState, null>) {
+      pendingToast = nextToast;
+      if (timer !== null) return;
+      timer = window.setTimeout(commit, 0);
+    },
+    flush(nextToast?: Exclude<ToastState, null>) {
+      if (nextToast) {
+        pendingToast = nextToast;
+      }
+
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+
+      if (!pendingToast) return;
+      const toastToShow = pendingToast;
+      pendingToast = null;
+      setToast(toastToShow);
+    },
+    cancel() {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      pendingToast = null;
+    },
+  };
+}
+
 function upsertReasoningStep(steps: ReasoningStep[], step: ReasoningStep): ReasoningStep[] {
   const existingIndex = steps.findIndex((candidate) => candidate.id === step.id);
   if (existingIndex === -1) return [...steps, step];
@@ -784,6 +830,49 @@ function patchReasoningStep(steps: ReasoningStep[], id: string, patch: Partial<R
 function finalizeReasoningSteps(steps: ReasoningStep[], endedAt = Date.now()): ReasoningStep[] {
   return steps.map((step) => (step.status === 'active' ? { ...step, status: 'done', endedAt: step.endedAt ?? endedAt } : step));
 }
+
+function upsertVoterStep(steps: VoterStep[], step: VoterStep): VoterStep[] {
+  const existingIndex = steps.findIndex((candidate) => candidate.id === step.id);
+  if (existingIndex === -1) return [...steps, step];
+  const next = [...steps];
+  next[existingIndex] = { ...next[existingIndex], ...step };
+  return next;
+}
+
+function patchVoterStep(steps: VoterStep[], id: string, patch: Partial<VoterStep>): VoterStep[] {
+  return steps.map((step) => (step.id === id ? { ...step, ...patch } : step));
+}
+
+function finalizeVoterSteps(steps: VoterStep[], endedAt = Date.now()): VoterStep[] {
+  return steps.map((step) => (step.status === 'active' ? { ...step, status: 'done', endedAt: step.endedAt ?? endedAt } : step));
+}
+
+function getStepDurationSeconds(steps: Array<{ startedAt: number; endedAt?: number }>): number | undefined {
+  if (!steps.length) return undefined;
+  const startedAt = steps[0]?.startedAt;
+  const endedAt = steps.reduce((latest, step) => Math.max(latest, step.endedAt ?? step.startedAt), startedAt);
+  return Math.max(1, Math.round((endedAt - startedAt) / 1000));
+}
+
+function createInitialLocalReasoningStep(title: string, body: string): ReasoningStep {
+  return {
+    id: createUniqueId(),
+    kind: 'thinking',
+    title,
+    body,
+    startedAt: Date.now(),
+    status: 'active',
+  };
+}
+
+const LOCAL_TOOL_RUN_TIMEOUT_MS = 30_000;
+
+type ActivityPanelKind = 'reasoning' | 'voters';
+
+type ActivitySelection = {
+  messageId: string;
+  panel: ActivityPanelKind;
+};
 
 function getActiveReasoningStepId(steps: ReasoningStep[]): string | undefined {
   for (let index = steps.length - 1; index >= 0; index -= 1) {
@@ -909,23 +998,21 @@ function ChatMessageView({
   message: ChatMessage;
   agentName: string;
   activitySelected?: boolean;
-  onOpenActivity?: (messageId: string) => void;
+  onOpenActivity?: (messageId: string, panel: ActivityPanelKind) => void;
 }) {
   const content = message.streamedContent || message.content;
   const isTerminalMessage = message.statusText?.startsWith('terminal') ?? false;
   const allReasoningSteps = message.reasoningSteps ?? [];
   const toolSteps = allReasoningSteps.filter((step) => step.kind === 'tool');
-  const reasoningSteps = allReasoningSteps.filter((step) => step.kind !== 'tool');
-  const reasoningMessage = reasoningSteps.length === allReasoningSteps.length
-    ? message
-    : { ...message, reasoningSteps };
+  const reasoningMessage = message;
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const senderLabel = isSystem ? 'system' : isUser ? 'you' : isTerminalMessage ? 'terminal' : agentName;
   const isStreaming = message.status === 'streaming';
   const isError = message.isError ?? message.status === 'error';
   const isStopped = message.statusText === 'stopped';
-  const hasReasoning = Boolean(reasoningSteps.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
+  const hasReasoning = Boolean(allReasoningSteps.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
+  const hasVoters = Boolean((message.voterSteps?.length ?? 0) || message.isVoting);
   return (
     <div className={`message ${message.role}${isTerminalMessage ? ' terminal-message' : ''}${isError ? ' message-error' : ''}`}>
       {!isSystem && (
@@ -933,7 +1020,8 @@ function ChatMessageView({
           <span className="sender-name">{senderLabel}</span>
         </div>
       )}
-      {hasReasoning ? <InlineReasoning message={reasoningMessage} selected={activitySelected} onOpenActivity={onOpenActivity} /> : null}
+      {hasReasoning ? <InlineReasoning message={reasoningMessage} selected={activitySelected} onOpenActivity={(messageId) => onOpenActivity?.(messageId, 'reasoning')} /> : null}
+      {hasVoters ? <InlineVoters message={message} onOpenActivity={(messageId) => onOpenActivity?.(messageId, 'voters')} /> : null}
       {isStopped && (
         <div className="message-step message-step-static">
           <span className="message-step-dot" />
@@ -1552,7 +1640,7 @@ function ChatPanel({
   const [selectedSkillSuggestionIndex, setSelectedSkillSuggestionIndex] = useState(0);
   const [cwdBySession, setCwdBySession] = useState<Record<string, string>>({});
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
-  const [activeActivityMessageIdBySession, setActiveActivityMessageIdBySession] = useState<Record<string, string | null>>({});
+  const [activeActivityBySession, setActiveActivityBySession] = useState<Record<string, ActivitySelection | null>>({});
   const [pendingMcpMessage, setPendingMcpMessage] = useState<string | null>(null);
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -1603,7 +1691,9 @@ function ChatPanel({
   const setSelectedToolIdsForActiveSession = useCallback((ids: string[]) => {
     setSelectedToolIdsBySession((current) => ({ ...current, [activeChatSessionId]: ids }));
   }, [activeChatSessionId]);
-  const activeActivityMessageId = activeActivityMessageIdBySession[activeChatSessionId] ?? null;
+  const activeActivitySelection = activeActivityBySession[activeChatSessionId] ?? null;
+  const activeActivityMessageId = activeActivitySelection?.messageId ?? null;
+  const activeActivityPanel = activeActivitySelection?.panel ?? 'reasoning';
   const activeActivityMessage = !showBash && activeActivityMessageId
     ? messages.find((message) => message.id === activeActivityMessageId) ?? null
     : null;
@@ -1756,14 +1846,14 @@ function ChatPanel({
   useEffect(() => {
     if (!activeActivityMessageId) return;
     if (messages.some((message) => message.id === activeActivityMessageId)) return;
-    setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: null }));
+    setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }));
   }, [activeActivityMessageId, activeChatSessionId, messages]);
 
   useEffect(() => {
     if (!activeActivityMessage) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: null }));
+      setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }));
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -1830,8 +1920,8 @@ function ChatPanel({
     }));
   }
 
-  const selectActivityMessage = useCallback((messageId: string) => {
-    setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: messageId }));
+  const selectActivityMessage = useCallback((messageId: string, panel: ActivityPanelKind = 'reasoning') => {
+    setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: { messageId, panel } }));
   }, [activeChatSessionId]);
 
   const runSandboxPrompt = useCallback(async (text: string, assistantId: string) => {
@@ -1943,8 +2033,58 @@ function ChatPanel({
       }
 
       const controller = new AbortController();
-      let reasoningSteps: ReasoningStep[] = [];
+      type PlanningStageName = 'router' | 'group-select' | 'tool-select' | 'chat' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent';
+      let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
+        ? [createInitialLocalReasoningStep('Planning tool run', 'Codi is deciding how to use local tools and delegate work.')]
+        : [];
+      let localToolRunTimedOut = false;
       const toolStepIdsByCallId = new Map<string, string>();
+      const planningStepIdsByStage = new Map<PlanningStageName, string>();
+      const planningTokensByStage = new Map<PlanningStageName, string>();
+      const planningStageMeta: Record<PlanningStageName, { title: string; body: string }> = {
+        router: {
+          title: 'Routing request',
+          body: 'Choosing between direct chat and targeted tool use.',
+        },
+        'group-select': {
+          title: 'Selecting tool groups',
+          body: 'Reducing the available tools to the smallest relevant groups.',
+        },
+        'tool-select': {
+          title: 'Selecting tools',
+          body: 'Picking the smallest specific tool subset for execution.',
+        },
+        chat: {
+          title: 'Answering directly',
+          body: 'Handling the request without tool execution.',
+        },
+        coordinator: {
+          title: 'Coordinator brief',
+          body: 'Framing a compact delegation problem for focused subagents.',
+        },
+        'breakdown-agent': {
+          title: 'Breakdown subagent',
+          body: 'Breaking the work into compact parallel tracks.',
+        },
+        'assignment-agent': {
+          title: 'Assignment subagent',
+          body: 'Assigning focused work to specialist subagents.',
+        },
+        'validation-agent': {
+          title: 'Validation subagent',
+          body: 'Checking risks, coordination, and success criteria.',
+        },
+      };
+      const emitReasoningUpdate = (isThinking: boolean) => {
+        updateMessage(assistantId, {
+          status: 'streaming',
+          loadingStatus: null,
+          reasoningSteps,
+          currentStepId: getActiveReasoningStepId(reasoningSteps),
+          reasoningStartedAt: reasoningSteps[0]?.startedAt,
+          isThinking,
+        });
+      };
       const finalizeToolReasoningSteps = (): ReasoningStep[] => reasoningSteps.map((step) => (
         step.status === 'done'
           ? step
@@ -1990,6 +2130,69 @@ function ChatPanel({
           isThinking: false,
         });
       };
+      const beginPlanningStage = (stage: PlanningStageName) => {
+        const metadata = planningStageMeta[stage];
+        let stepId = planningStepIdsByStage.get(stage);
+
+        if (!stepId && planningStepIdsByStage.size === 0) {
+          const initialStep = reasoningSteps.find((step) => step.kind === 'thinking');
+          if (initialStep) {
+            stepId = initialStep.id;
+            planningStepIdsByStage.set(stage, stepId);
+          }
+        }
+
+        reasoningSteps = reasoningSteps.map((step) => (
+          step.kind === 'thinking' && step.status === 'active' && step.id !== stepId
+            ? { ...step, status: 'done' as const, endedAt: Date.now() }
+            : step
+        ));
+
+        if (stepId) {
+          reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+            title: metadata.title,
+            body: metadata.body,
+            status: 'active',
+          });
+        } else {
+          stepId = createUniqueId();
+          planningStepIdsByStage.set(stage, stepId);
+          reasoningSteps = [...reasoningSteps, {
+            id: stepId,
+            kind: 'thinking',
+            title: metadata.title,
+            body: metadata.body,
+            startedAt: Date.now(),
+            status: 'active',
+          }];
+        }
+
+        emitReasoningUpdate(true);
+      };
+      const appendPlanningStageToken = (stage: PlanningStageName, token: string) => {
+        if (!token) return;
+        const stepId = planningStepIdsByStage.get(stage);
+        if (!stepId) return;
+        const current = `${planningTokensByStage.get(stage) ?? ''}${token}`;
+        planningTokensByStage.set(stage, current);
+        reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+          body: current.length > 1_500 ? `…${current.slice(-1_500)}` : current,
+          status: 'active',
+        });
+        emitReasoningUpdate(true);
+      };
+      const completePlanningStage = (stage: PlanningStageName, finalText?: string) => {
+        const stepId = planningStepIdsByStage.get(stage);
+        if (!stepId) return;
+        const accumulated = planningTokensByStage.get(stage);
+        const body = accumulated?.trim() || finalText?.trim() || planningStageMeta[stage].body;
+        reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+          body: body.length > 1_500 ? `…${body.slice(-1_500)}` : body,
+          status: 'done',
+          endedAt: Date.now(),
+        });
+        emitReasoningUpdate(false);
+      };
       const recordToolResult = (toolName: string, args: unknown, result: unknown, isError: boolean, toolCallId?: string) => {
         const existingStepId = findToolStepId(toolName, toolCallId);
         if (!existingStepId) {
@@ -2032,16 +2235,70 @@ function ChatPanel({
             loadingStatus: null,
             reasoningSteps: finalizedSteps,
             currentStepId: undefined,
+            thinkingDuration: getStepDurationSeconds(finalizedSteps),
             isThinking: false,
           });
         },
       };
       setActiveGenerationSessionId(activeChatSessionId);
+      if (reasoningSteps.length) {
+        updateMessage(assistantId, {
+          status: 'streaming',
+          loadingStatus: null,
+          reasoningSteps,
+          currentStepId: getActiveReasoningStepId(reasoningSteps),
+          reasoningStartedAt: reasoningSteps[0]?.startedAt,
+          isThinking: true,
+        });
+      }
 
       try {
-        const model = resolveLanguageModel(selectedProvider === 'ghcp'
-          ? { kind: 'copilot', modelId: effectiveSelectedCopilotModelId, sessionId: activeChatSessionId }
-          : { kind: 'local', modelId: activeLocalModel!.id, task: activeLocalModel!.task });
+        let localToolIdleTimeoutId: number | null = null;
+        const scheduleLocalToolIdleTimeout = () => {
+          if (selectedProvider !== 'codi') return;
+          if (localToolIdleTimeoutId !== null) {
+            window.clearTimeout(localToolIdleTimeoutId);
+          }
+          localToolIdleTimeoutId = window.setTimeout(() => {
+            localToolRunTimedOut = true;
+            const message = 'Local tool planning stalled with no new output. Try fewer tools, a simpler prompt, or disable tools for this request.';
+            const finalizedSteps = finalizeToolReasoningSteps();
+            updateMessage(assistantId, {
+              status: 'error',
+              loadingStatus: null,
+              content: message,
+              reasoningSteps: finalizedSteps,
+              currentStepId: undefined,
+              thinkingDuration: getStepDurationSeconds(finalizedSteps),
+              isThinking: false,
+            });
+            controller.abort(message);
+          }, LOCAL_TOOL_RUN_TIMEOUT_MS);
+        };
+
+        const modelConfig = selectedProvider === 'ghcp'
+          ? { kind: 'copilot' as const, modelId: effectiveSelectedCopilotModelId, sessionId: activeChatSessionId }
+          : { kind: 'local' as const, modelId: activeLocalModel!.id, task: activeLocalModel!.task };
+        const model = selectedProvider === 'ghcp'
+          ? resolveLanguageModel(modelConfig)
+          : new LocalLanguageModel(
+              activeLocalModel!.id,
+              activeLocalModel!.task,
+              {
+                // Reset the idle watchdog on every raw worker token, even
+                // when the upstream consumer hides the chunk (e.g. while
+                // sanitizing a `<think>...</think>` block). Without this,
+                // a model that thinks for 30+ seconds before emitting any
+                // visible content trips the watchdog despite making real
+                // progress.
+                onToken: () => scheduleLocalToolIdleTimeout(),
+                onPhase: () => scheduleLocalToolIdleTimeout(),
+              },
+            ) as unknown as ReturnType<typeof resolveLanguageModel>;
+        const capabilities = getModelCapabilities(modelConfig, {
+          installedModels,
+          copilotModels: copilotState.models,
+        });
         const allTools = createDefaultTools({
           appendSharedMessages,
           getSessionBash,
@@ -2055,44 +2312,123 @@ function ChatPanel({
           ...allTools,
           ...bridgeTools,
         } as ToolSet, selectedToolIds);
+        const selectedDescriptors = selectToolDescriptorsByIds(toolDescriptors, selectedToolIds);
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
           .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
+        scheduleLocalToolIdleTimeout();
 
-        await runToolAgent({
-          model,
-          tools,
-          instructions: buildDefaultToolInstructions({ workspaceName, workspacePromptContext }),
-          messages: inputMessages,
-          signal: controller.signal,
-        }, {
-          onToolCall: (toolName, args, toolCallId) => recordToolStep(toolName, args, toolCallId),
-          onToolResult: (toolName, args, result, isError, toolCallId) => recordToolResult(toolName, args, result, isError, toolCallId),
-          onDone: (finalText) => {
-            const finalizedSteps = finalizeToolReasoningSteps();
-            updateMessage(assistantId, {
-              status: 'complete',
-              loadingStatus: null,
-              content: finalText.trim() || 'Tool run completed.',
-              reasoningSteps: finalizedSteps.length ? finalizedSteps : undefined,
-              currentStepId: undefined,
-              isThinking: false,
+        try {
+          const clearLocalToolIdleTimeout = () => {
+            if (localToolIdleTimeoutId !== null) {
+              window.clearTimeout(localToolIdleTimeoutId);
+              localToolIdleTimeoutId = null;
+            }
+          };
+          const sharedCallbacks = {
+            onDone: (finalText: string) => {
+              clearLocalToolIdleTimeout();
+              if (localToolRunTimedOut) return;
+              const finalizedSteps = finalizeToolReasoningSteps();
+              updateMessage(assistantId, {
+                status: 'complete',
+                loadingStatus: null,
+                content: finalText.trim() || 'Tool run completed.',
+                reasoningSteps: finalizedSteps.length ? finalizedSteps : undefined,
+                currentStepId: undefined,
+                thinkingDuration: getStepDurationSeconds(finalizedSteps),
+                isThinking: false,
+              });
+            },
+            onError: (error: Error) => {
+              clearLocalToolIdleTimeout();
+              if (localToolRunTimedOut) return;
+              updateMessage(assistantId, {
+                status: 'error',
+                loadingStatus: null,
+                content: error.message,
+                reasoningSteps: reasoningSteps.length ? finalizeToolReasoningSteps() : undefined,
+                currentStepId: undefined,
+                thinkingDuration: reasoningSteps.length ? getStepDurationSeconds(finalizeToolReasoningSteps()) : undefined,
+                isThinking: false,
+              });
+            },
+          };
+
+          if (isParallelDelegationPrompt(text)) {
+            await runParallelDelegationWorkflow({
+              model,
+              prompt: text,
+              workspaceName,
+              capabilities,
+              signal: controller.signal,
+            }, {
+              onStepStart: (stepId, title, body) => {
+                scheduleLocalToolIdleTimeout();
+                planningStageMeta[stepId] = { title, body };
+                beginPlanningStage(stepId);
+              },
+              onStepToken: (stepId, delta) => {
+                scheduleLocalToolIdleTimeout();
+                appendPlanningStageToken(stepId, delta);
+              },
+              onStepComplete: (stepId, resultText) => {
+                scheduleLocalToolIdleTimeout();
+                completePlanningStage(stepId, resultText);
+              },
+              ...sharedCallbacks,
             });
-          },
-          onError: (error: Error) => updateMessage(assistantId, {
-            status: 'error',
-            loadingStatus: null,
-            content: error.message,
-            reasoningSteps: reasoningSteps.length ? finalizeToolReasoningSteps() : undefined,
-            currentStepId: undefined,
-            isThinking: false,
-          }),
-        });
+          } else {
+            await runStagedToolPipeline({
+              model,
+              tools,
+              toolDescriptors: selectedDescriptors,
+              instructions: buildDefaultToolInstructions({ workspaceName, workspacePromptContext }),
+              messages: inputMessages,
+              workspaceName,
+              capabilities,
+              signal: controller.signal,
+            }, {
+              onStageStart: (stage) => {
+                scheduleLocalToolIdleTimeout();
+                beginPlanningStage(stage);
+              },
+              onStageToken: (stage, delta) => {
+                scheduleLocalToolIdleTimeout();
+                appendPlanningStageToken(stage, delta);
+              },
+              onStageComplete: (stage, text) => {
+                scheduleLocalToolIdleTimeout();
+                completePlanningStage(stage, text);
+              },
+              onToolCall: (toolName, args, toolCallId) => {
+                scheduleLocalToolIdleTimeout();
+                recordToolStep(toolName, args, toolCallId);
+              },
+              onToolResult: (toolName, args, result, isError, toolCallId) => {
+                scheduleLocalToolIdleTimeout();
+                recordToolResult(toolName, args, result, isError, toolCallId);
+              },
+              ...sharedCallbacks,
+            });
+          }
+        } finally {
+          if (localToolIdleTimeoutId !== null) {
+            window.clearTimeout(localToolIdleTimeoutId);
+            localToolIdleTimeoutId = null;
+          }
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
+          if (localToolRunTimedOut) {
+            return;
+          }
           return;
         }
         if (error instanceof Error && error.name === 'AbortError') {
+          if (localToolRunTimedOut) {
+            return;
+          }
           return;
         }
         onToast({ msg: error instanceof Error ? error.message : 'Agent request failed', type: 'error' });
@@ -2105,21 +2441,85 @@ function ChatPanel({
     let tokenBuffer = '';
     let thinkingBuffer = '';
     let thinkingStart = 0;
-    let reasoningSteps: ReasoningStep[] = [];
+    let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
+      ? [createInitialLocalReasoningStep('Analyzing request', 'Codi is reviewing the prompt and workspace context locally.')]
+      : [];
+    let voterSteps: VoterStep[] = [];
     let hasStructuredReasoning = false;
+    let phaseStepId: string | null = reasoningSteps[0]?.id ?? null;
+    let phaseStepTitle: string | null = reasoningSteps[0]?.title ?? null;
     const controller = new AbortController();
+    const codiVoters: IVoter[] = [];
 
     const ensureThinkingStarted = () => {
       if (!thinkingStart) thinkingStart = Date.now();
     };
 
-    const buildReasoningPatch = (patch: Partial<ChatMessage> = {}): Partial<ChatMessage> => ({
+    const getPhaseStepMeta = (phase: string) => {
+      switch (phase) {
+        case 'thinking':
+          return {
+            title: 'Analyzing request',
+            body: 'Codi is reviewing the prompt and workspace context locally.',
+          };
+        case 'generating':
+          return {
+            title: 'Drafting response',
+            body: 'Codi is composing the local response.',
+          };
+        default:
+          return {
+            title: phase.charAt(0).toUpperCase() + phase.slice(1),
+            body: phase,
+          };
+      }
+    };
+
+    const finalizePhaseStep = () => {
+      if (!phaseStepId) return;
+      reasoningSteps = patchReasoningStep(reasoningSteps, phaseStepId, {
+        status: 'done',
+        endedAt: Date.now(),
+      });
+      phaseStepId = null;
+      phaseStepTitle = null;
+    };
+
+    const syncPhaseStep = (phase: string) => {
+      if (selectedProvider !== 'codi' || hasStructuredReasoning || thinkingBuffer) return;
+      ensureThinkingStarted();
+      const meta = getPhaseStepMeta(phase);
+      if (phaseStepId && phaseStepTitle === meta.title) {
+        reasoningSteps = patchReasoningStep(reasoningSteps, phaseStepId, {
+          title: meta.title,
+          body: meta.body,
+          status: 'active',
+        });
+        return;
+      }
+
+      finalizePhaseStep();
+      phaseStepId = createUniqueId();
+      phaseStepTitle = meta.title;
+      reasoningSteps = upsertReasoningStep(reasoningSteps, {
+        id: phaseStepId,
+        kind: 'thinking',
+        title: meta.title,
+        body: meta.body,
+        startedAt: Date.now(),
+        status: 'active',
+      });
+    };
+
+    const buildActivityPatch = (patch: Partial<ChatMessage> = {}): Partial<ChatMessage> => ({
       reasoningSteps: reasoningSteps.length ? reasoningSteps : undefined,
+      voterSteps: voterSteps.length ? voterSteps : undefined,
       currentStepId: getActiveReasoningStepId(reasoningSteps),
       reasoningStartedAt: thinkingStart || undefined,
       thinkingContent: hasStructuredReasoning ? undefined : (thinkingBuffer || undefined),
       thinkingDuration: thinkingStart ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
       isThinking: Boolean(getActiveReasoningStepId(reasoningSteps)) || (!hasStructuredReasoning && Boolean(thinkingBuffer) && !tokenBuffer),
+      isVoting: voterSteps.some((step) => step.status === 'active'),
       ...patch,
     });
 
@@ -2129,11 +2529,14 @@ function ChatPanel({
       cancel: () => controller.abort('Generation stopped.'),
       finalizeCancelled: () => {
         reasoningSteps = finalizeReasoningSteps(reasoningSteps);
+        voterSteps = finalizeVoterSteps(voterSteps);
+        finalizePhaseStep();
         const streamedContent = cleanStreamedAssistantContent(tokenBuffer);
-        updateMessage(assistantId, buildReasoningPatch({
+        updateMessage(assistantId, buildActivityPatch({
           status: 'complete',
           statusText: 'stopped',
           isThinking: false,
+          isVoting: false,
           loadingStatus: null,
           streamedContent: streamedContent || undefined,
           content: streamedContent ? '' : 'Response stopped.',
@@ -2141,46 +2544,74 @@ function ChatPanel({
       },
     };
     setActiveGenerationSessionId(activeChatSessionId);
+    if (reasoningSteps.length) {
+      updateMessage(assistantId, buildActivityPatch({
+        status: 'streaming',
+        loadingStatus: null,
+      }));
+    }
 
     try {
       const streamCallbacks = {
-        onPhase: (phase: string) => updateMessage(assistantId, { loadingStatus: phase }),
+        onPhase: (phase: string) => {
+          syncPhaseStep(phase);
+          updateMessage(assistantId, buildActivityPatch({ loadingStatus: phase }));
+        },
         onReasoning: (content: string) => {
           ensureThinkingStarted();
           if (hasStructuredReasoning) return;
+          finalizePhaseStep();
           thinkingBuffer += content;
-          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onReasoningStep: (step: ReasoningStep) => {
           ensureThinkingStarted();
+          finalizePhaseStep();
           hasStructuredReasoning = true;
           reasoningSteps = upsertReasoningStep(reasoningSteps, step);
-          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onReasoningStepUpdate: (id: string, patch: Partial<ReasoningStep>) => {
           ensureThinkingStarted();
+          finalizePhaseStep();
           hasStructuredReasoning = true;
           reasoningSteps = patchReasoningStep(reasoningSteps, id, patch);
-          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onReasoningStepEnd: (id: string) => {
           reasoningSteps = patchReasoningStep(reasoningSteps, id, { status: 'done', endedAt: Date.now() });
-          updateMessage(assistantId, buildReasoningPatch({ status: 'streaming', loadingStatus: null }));
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onVoterStep: (step: VoterStep) => {
+          voterSteps = upsertVoterStep(voterSteps, step);
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onVoterStepUpdate: (id: string, patch: Partial<VoterStep>) => {
+          voterSteps = patchVoterStep(voterSteps, id, patch);
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onVoterStepEnd: (id: string) => {
+          voterSteps = patchVoterStep(voterSteps, id, { status: 'done', endedAt: Date.now() });
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onToken: (content: string) => {
+          finalizePhaseStep();
           tokenBuffer += content;
-          updateMessage(assistantId, buildReasoningPatch({
+          updateMessage(assistantId, buildActivityPatch({
             status: 'streaming',
             streamedContent: cleanStreamedAssistantContent(tokenBuffer),
             loadingStatus: null,
           }));
         },
         onDone: (finalContent?: string) => {
+          finalizePhaseStep();
           reasoningSteps = finalizeReasoningSteps(reasoningSteps);
+          voterSteps = finalizeVoterSteps(voterSteps);
           const resolvedContent = cleanStreamedAssistantContent(finalContent ?? tokenBuffer);
-          updateMessage(assistantId, buildReasoningPatch({
+          updateMessage(assistantId, buildActivityPatch({
             status: 'complete',
             isThinking: false,
+            isVoting: false,
             loadingStatus: null,
             streamedContent: resolvedContent || undefined,
             content: resolvedContent ? '' : (selectedProvider === 'ghcp' ? 'GHCP returned an empty response.' : 'Codi returned an empty response.'),
@@ -2189,23 +2620,17 @@ function ChatPanel({
         onError: (error: Error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
       };
 
-      if (selectedProvider === 'ghcp') {
-        await streamGhcpChat({
-          modelId: effectiveSelectedCopilotModelId,
-          sessionId: activeChatSessionId,
-          workspaceName,
-          workspacePromptContext,
-          messages: nextMessages,
-          latestUserInput: text,
-        }, streamCallbacks, controller.signal);
-      } else {
-        await streamCodiChat({
-          model: activeLocalModel!,
-          messages: nextMessages,
-          workspaceName,
-          workspacePromptContext,
-        }, streamCallbacks, controller.signal);
-      }
+      await streamAgentChat({
+        provider: selectedProvider,
+        model: activeLocalModel,
+        modelId: effectiveSelectedCopilotModelId,
+        sessionId: activeChatSessionId,
+        latestUserInput: text,
+        messages: nextMessages,
+        workspaceName,
+        workspacePromptContext,
+        voters: codiVoters,
+      }, streamCallbacks, controller.signal);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -2497,7 +2922,9 @@ function ChatPanel({
       <div className="shared-console-body">
         <div className="shared-console-main">
           {!showBash && activeActivityMessage ? (
-            <ActivityPanel message={activeActivityMessage} onClose={() => setActiveActivityMessageIdBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+            activeActivityPanel === 'voters'
+              ? <VotersPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+              : <ActivityPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} />)}
@@ -4889,22 +5316,25 @@ function AgentBrowserApp() {
       return;
     }
 
+    const progressToast = createDeferredToastDispatcher(setToast);
     setLoadingModelId(model.id);
     setToast({ msg: `Installing ${model.name}…`, type: 'info' });
     try {
       await browserInferenceEngine.loadModel(model.task, model.id, {
         // onStatus(phase, msg, pct): show download progress per TRD §7.1
-        onStatus: (_phase, msg, pct) => setToast({ msg: pct != null ? `${msg} ${pct}%` : msg, type: 'info' }),
-        onPhase: (phase) => setToast({ msg: phase, type: 'info' }),
-        onError: (error) => setToast({ msg: error.message, type: 'error' }),
+        onStatus: (_phase, msg, pct) => progressToast.push({ msg: pct != null ? `${msg} ${pct}%` : msg, type: 'info' }),
+        onPhase: (phase) => progressToast.push({ msg: phase, type: 'info' }),
       });
+      progressToast.cancel();
       setInstalledModels((current) => current.some((entry) => entry.id === model.id) ? current : [...current, { ...model, status: 'installed' }]);
       setToast({ msg: `${model.name} installed`, type: 'success' });
     } catch (error) {
+      progressToast.cancel();
       console.error(`Failed to install model ${model.id}`, error);
       const message = error instanceof Error ? error.message : 'Unknown installation error';
       setToast({ msg: `Failed to install ${model.name}: ${message}`, type: 'error' });
     } finally {
+      progressToast.cancel();
       setLoadingModelId((current) => current === model.id ? null : current);
     }
   }

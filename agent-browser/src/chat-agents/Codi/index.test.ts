@@ -17,7 +17,8 @@ vi.mock('../../services/chatComposition', () => ({
   toAiSdkMessages: (messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>) => toAiSdkMessagesMock(messages),
 }));
 
-import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat, wrapVoterWithCallbacks } from '.';
+import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from '.';
+import { wrapVoterWithCallbacks } from '../agent-loop';
 import { PayloadType } from 'logact';
 import type { IntentPayload } from 'logact';
 
@@ -60,6 +61,17 @@ describe('Codi', () => {
     });
 
     expect(prompt.at(-1)).toEqual({ role: 'assistant', content: '' });
+  });
+
+  it('trims oversized workspace context before sending it to the local model', () => {
+    const prompt = buildCodiPrompt({
+      workspaceName: 'Research',
+      workspacePromptContext: `Workspace capability files loaded from browser storage:\n${'x'.repeat(8_000)}`,
+      messages: [{ id: 'user-1', role: 'user', content: 'Summarize the workspace.' }],
+    });
+
+    expect(prompt[2]?.content.length).toBeLessThanOrEqual(4_000);
+    expect(prompt[2]?.content).toContain('...');
   });
 
   it('resolves the selected model to the first installed model when the stored selection is stale', () => {

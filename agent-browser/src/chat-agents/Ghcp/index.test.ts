@@ -86,4 +86,28 @@ describe('GHCP', () => {
       signal,
     );
   });
+
+  it('streams GHCP output through the shared loop and returns cleaned final content', async () => {
+    streamCopilotChatMock.mockImplementationOnce(async (_request, callbacks) => {
+      callbacks.onToken?.('Hello\n');
+      callbacks.onToken?.('world');
+      callbacks.onDone?.('###STEP: Plan\nHello\nworld');
+    });
+
+    const onToken = vi.fn();
+    const onDone = vi.fn();
+
+    await streamGhcpChat({
+      modelId: 'gpt-4.1',
+      sessionId: 'chat-session-1',
+      workspaceName: 'Research',
+      workspacePromptContext: 'Workspace prompt context.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Summarize this.' }],
+      latestUserInput: 'Summarize this.',
+    }, { onToken, onDone });
+
+    expect(onToken).toHaveBeenCalledWith('Hello\n');
+    expect(onToken).toHaveBeenCalledWith('world');
+    expect(onDone).toHaveBeenCalledWith('Hello\nworld');
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { searchBrowserModels } from './huggingFaceRegistry';
+import { inferBrowserModelContextWindow, inferBrowserModelMaxOutputTokens, searchBrowserModels } from './huggingFaceRegistry';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -82,7 +82,21 @@ describe('searchBrowserModels', () => {
     expect(model.task).toBe('summarization');
     expect(model.downloads).toBe(999);
     expect(model.likes).toBe(42);
+    expect(model.contextWindow).toBeUndefined();
+    expect(model.maxOutputTokens).toBe(512);
     expect(model.status).toBe('available');
+  });
+
+  it('infers local model context windows for known browser models', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => [makeEntry({ id: 'onnx-community/Qwen3-0.6B-ONNX' })],
+    });
+
+    const [model] = await searchBrowserModels('', 'text-generation');
+
+    expect(model.contextWindow).toBe(2048);
+    expect(model.maxOutputTokens).toBe(512);
   });
 
   it('returns sizeMB from safetensors.total if available', async () => {
@@ -145,5 +159,13 @@ describe('searchBrowserModels', () => {
 
     // Only one fetch call — no per-model dtype probing
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes standalone inference helpers for context windows and output budgets', () => {
+    expect(inferBrowserModelContextWindow('onnx-community/Qwen3-0.6B-ONNX', 'text-generation')).toBe(2048);
+    expect(inferBrowserModelContextWindow('org/model', 'text-generation')).toBe(4096);
+    expect(inferBrowserModelContextWindow('org/model', 'feature-extraction')).toBeUndefined();
+    expect(inferBrowserModelMaxOutputTokens('text-generation')).toBe(512);
+    expect(inferBrowserModelMaxOutputTokens('feature-extraction')).toBe(128);
   });
 });

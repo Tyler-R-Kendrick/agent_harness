@@ -44,6 +44,10 @@ export function InlineReasoning({
   onOpenActivity?: (messageId: string) => void;
 }) {
   const steps = useMemo(() => getRenderableReasoningSteps(message), [message]);
+  const activeStep = useMemo(
+    () => [...steps].reverse().find((step) => step.status === 'active') ?? steps.at(-1),
+    [steps],
+  );
   const isThinking = Boolean(
     steps.some((s) => s.status === 'active') || message.isThinking,
   );
@@ -55,7 +59,7 @@ export function InlineReasoning({
     <OperationTrigger
       isActive={isThinking}
       durationSeconds={duration}
-      activeLabel="Thinking…"
+      activeLabel={activeStep?.title ?? 'Thinking…'}
       doneLabelPrefix="Thought for"
       activeIcon={<LoaderCircle size={13} className="spin" style={{ color: '#a78bfa', flexShrink: 0 }} />}
       doneIcon={<Sparkles size={13} />}
