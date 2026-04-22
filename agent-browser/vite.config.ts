@@ -44,12 +44,24 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: 'onnxruntime-web/webgpu',
+        replacement: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort.webgpu.js'),
+      },
+      {
+        find: 'mermaid',
+        replacement: path.resolve(__dirname, 'node_modules/mermaid/dist/mermaid.js'),
+      },
+      {
         find: 'inbrowser-use',
         replacement: path.resolve(__dirname, '../lib/inbrowser-use/src/index.ts'),
       },
       {
         find: 'logact',
         replacement: path.resolve(__dirname, '../lib/logact/src/index.ts'),
+      },
+      {
+        find: 'ralph-loop',
+        replacement: path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
       },
       {
         find: 'webmcp',

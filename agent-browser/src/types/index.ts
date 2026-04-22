@@ -1,3 +1,5 @@
+import type { CompletionScore } from 'logact';
+
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
 export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
 export type NodeKind = 'browser' | 'terminal' | 'agent' | 'files' | 'session' | 'clipboard';
@@ -74,6 +76,25 @@ export interface VoterStep {
   body?: string;
   /** true = approved, false = rejected, undefined = still evaluating. */
   approve?: boolean;
+  /**
+   * Free-form subagent reasoning from the voter. Distinct from `body`: `body`
+   * holds the short outcome label, `thought` holds the voter's rationale as a
+   * subagent. Rendered as secondary timeline content in VotersPanel.
+   */
+  thought?: string;
+  startedAt: number;
+  endedAt?: number;
+  status: ReasoningStepStatus;
+}
+
+/** A single Ralph-style iteration of task completion. */
+export interface IterationStep {
+  id: string;
+  kind: 'iteration';
+  title: string;
+  body?: string;
+  score?: CompletionScore;
+  done?: boolean;
   startedAt: number;
   endedAt?: number;
   status: ReasoningStepStatus;
@@ -98,6 +119,8 @@ export interface ChatMessage {
   isError?: boolean;
   /** Voter evaluation steps produced by logact voters during this message's turn. */
   voterSteps?: VoterStep[];
+  /** Ralph-loop iteration steps produced while checking task completion. */
+  iterationSteps?: IterationStep[];
   /** True while at least one voter is still evaluating the intent. */
   isVoting?: boolean;
 }

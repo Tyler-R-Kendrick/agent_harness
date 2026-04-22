@@ -6,6 +6,10 @@ import { PayloadType } from './types.js';
  *
  * A rule-based, LLM-free voter.  The provided predicate inspects the intent
  * and returns `true` to approve or `false` to reject.
+ *
+ * Voters also act as subagents that may narrate *why* they decided. Pass an
+ * optional `reasoning` function to attach a per-intent thought to the emitted
+ * `VotePayload.thought`.
  */
 export class ClassicVoter implements IVoter {
   readonly tier = 'classic' as const;
@@ -14,16 +18,21 @@ export class ClassicVoter implements IVoter {
     readonly id: string,
     private readonly _predicate: (action: string) => boolean | Promise<boolean>,
     private readonly _rejectReason?: string,
+    private readonly _reasoning?: (action: string, approve: boolean) => string | Promise<string>,
   ) {}
 
   async vote(intent: IntentPayload, _bus: IAgentBus): Promise<VotePayload> {
     const approve = await this._predicate(intent.action);
+    const thought = this._reasoning
+      ? await this._reasoning(intent.action, approve)
+      : undefined;
     return {
       type: PayloadType.Vote,
       intentId: intent.intentId,
       voterId: this.id,
       approve,
       ...(approve ? {} : { reason: this._rejectReason ?? 'rule violation' }),
+      ...(thought !== undefined ? { thought } : {}),
     };
   }
 }
@@ -67,6 +76,7 @@ export class LLMPassiveVoter implements IVoter {
       voterId: this.id,
       approve,
       reason: approve ? undefined : response.trim(),
+      thought: response.trim(),
     };
   }
 }

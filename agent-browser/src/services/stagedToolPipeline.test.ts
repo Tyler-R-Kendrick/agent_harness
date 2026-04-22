@@ -296,4 +296,132 @@ describe('stagedToolPipeline', () => {
 
     expect(runToolAgentMock.mock.calls[0][0].maxSteps).toBe(20);
   });
+
+  it('routes the executor phase through LogAct voters and surfaces their thoughts', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'tool-answer', steps: 1 });
+    const model = makeStreamingModel({
+      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
+      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
+      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
+    });
+
+    const voter = {
+      id: 'tool-path-voter',
+      async vote() {
+        return {
+          approve: true,
+          thought: 'Executor plan looks safe; read-only file access only.',
+        };
+      },
+    };
+
+    const voterUpdates: Array<{ id: string; patch: Record<string, unknown> }> = [];
+
+    await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors: [toolDescriptors[1]],
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+      voters: [voter],
+    }, {
+      onVoterStepUpdate: (id, patch) => {
+        voterUpdates.push({ id, patch: patch as Record<string, unknown> });
+      },
+    });
+
+    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
+    const thoughtUpdate = voterUpdates.find((u) => u.patch.thought !== undefined);
+    expect(thoughtUpdate).toBeDefined();
+    expect(thoughtUpdate?.patch.thought).toBe('Executor plan looks safe; read-only file access only.');
+    expect(thoughtUpdate?.patch.approve).toBe(true);
+  });
+
+  it('re-runs the executor with checker feedback until the task is complete', async () => {
+    runToolAgentMock
+      .mockResolvedValueOnce({ text: 'first attempt', steps: 1 })
+      .mockResolvedValueOnce({ text: 'final attempt', steps: 1 });
+    const model = makeStreamingModel({
+      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
+      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
+      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
+    });
+    const checker = vi.fn()
+      .mockResolvedValueOnce({
+        type: 'Completion',
+        intentId: 'ignored-1',
+        done: false,
+        score: 'med',
+        feedback: 'The task is not complete. Verify the file contents and answer directly.',
+      })
+      .mockResolvedValueOnce({
+        type: 'Completion',
+        intentId: 'ignored-2',
+        done: true,
+        score: 'high',
+        feedback: 'Task complete.',
+      });
+    const iterationUpdates: Array<{ id: string; patch: Record<string, unknown> }> = [];
+
+    const result = await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors: [toolDescriptors[1]],
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+      completionChecker: { check: checker },
+      maxIterations: 5,
+    }, {
+      onIterationStepUpdate: (id, patch) => {
+        iterationUpdates.push({ id, patch: patch as Record<string, unknown> });
+      },
+    });
+
+    expect(result).toEqual({ text: 'final attempt', steps: 1 });
+    expect(runToolAgentMock).toHaveBeenCalledTimes(2);
+    expect(runToolAgentMock.mock.calls[1][0].messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          content: 'The task is not complete. Verify the file contents and answer directly.',
+        }),
+      ]),
+    );
+    expect(iterationUpdates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ patch: expect.objectContaining({ score: 'med', done: false }) }),
+        expect.objectContaining({ patch: expect.objectContaining({ score: 'high', done: true }) }),
+      ]),
+    );
+  });
+
+  it('uses the default heuristic checker to retry execution tasks that only return a plan on the first pass', async () => {
+    runToolAgentMock
+      .mockResolvedValueOnce({ text: 'Plan:\n1. Inspect the file\n2. Update the code', steps: 1 })
+      .mockResolvedValueOnce({ text: 'Implemented the fix and verified the tests pass.', steps: 1 });
+    const model = makeStreamingModel({
+      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
+      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
+      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
+    });
+    const onDone = vi.fn();
+
+    const result = await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors: [toolDescriptors[1]],
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Implement the fix and run the tests.' }],
+      workspaceName: 'Build',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, { onDone });
+
+    expect(result).toEqual({ text: 'Implemented the fix and verified the tests pass.', steps: 1 });
+    expect(runToolAgentMock).toHaveBeenCalledTimes(2);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith('Implemented the fix and verified the tests pass.');
+  });
 });

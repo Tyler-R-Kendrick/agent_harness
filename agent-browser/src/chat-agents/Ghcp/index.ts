@@ -1,7 +1,9 @@
-import type { IInferenceClient, IVoter } from 'logact';
+import type { ICompletionChecker, IInferenceClient, IVoter } from 'logact';
 import { streamCopilotChat, type CopilotModelSummary, type CopilotRuntimeState } from '../../services/copilotApi';
 import { toChatSdkTranscript } from '../../services/chatComposition';
+import { createHeuristicCompletionChecker, isExecutionTask } from 'ralph-loop';
 import type { ChatMessage } from '../../types';
+import { createDeferredAgentCallbacks } from '../deferredCallbacks';
 import { runAgentLoop } from '../agent-loop';
 import { createReasoningStepSplitter } from '../reasoningSplitter';
 import type { AgentStreamCallbacks } from '../types';
@@ -23,16 +25,23 @@ export function buildGhcpPrompt({
   workspacePromptContext,
   messages,
   latestUserInput,
+  loopMessages,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   messages: ChatMessage[];
   latestUserInput: string;
+  loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
 }): string {
-  const transcript = toChatSdkTranscript(messages)
-    .filter((message) => message.text.trim())
-    .map((message) => `${message.role}: ${message.text}`)
-    .join('\n\n');
+  const transcript = loopMessages
+    ? loopMessages
+      .filter((message) => message.content.trim())
+      .map((message) => `${message.role}: ${message.content}`)
+      .join('\n\n')
+    : toChatSdkTranscript(messages)
+      .filter((message) => message.text.trim())
+      .map((message) => `${message.role}: ${message.text}`)
+      .join('\n\n');
 
   return [
     'You are GHCP, a GitHub Copilot-backed agent for an agent-first browser. Be concise and clear.',
@@ -79,7 +88,7 @@ function createGhcpInferenceClient(
   signal?: AbortSignal,
 ): IInferenceClient {
   return {
-    async infer() {
+    async infer(busMessages) {
       let sawNdjsonStep = false;
       let visibleTokenBuffer = '';
       const reasoningSplitter = createReasoningStepSplitter({
@@ -119,7 +128,7 @@ function createGhcpInferenceClient(
           {
             modelId,
             sessionId,
-            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput }),
+            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages }),
           },
           {
             onToken: filteredOnToken,
@@ -166,6 +175,8 @@ export async function streamGhcpChat(
     messages,
     latestUserInput,
     voters = [],
+    completionChecker,
+    maxIterations = 5,
   }: {
     modelId: string;
     sessionId: string;
@@ -174,10 +185,15 @@ export async function streamGhcpChat(
     messages: ChatMessage[];
     latestUserInput: string;
     voters?: IVoter[];
+    completionChecker?: ICompletionChecker;
+    maxIterations?: number;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  const effectiveCompletionChecker = completionChecker
+    ?? (isExecutionTask(latestUserInput) ? createHeuristicCompletionChecker(latestUserInput) : undefined);
+  const deferred = effectiveCompletionChecker ? createDeferredAgentCallbacks(callbacks) : null;
   const inferenceClient = createGhcpInferenceClient({
     modelId,
     sessionId,
@@ -185,12 +201,26 @@ export async function streamGhcpChat(
     workspacePromptContext,
     messages,
     latestUserInput,
-  }, callbacks, signal);
+  }, deferred?.callbacks ?? callbacks, signal);
 
   await runAgentLoop({
     inferenceClient,
     messages,
     voters,
     input: latestUserInput,
+    completionChecker: effectiveCompletionChecker
+      ? {
+        async check(context) {
+          const result = await effectiveCompletionChecker.check(context);
+          if (result.done) {
+            deferred?.commit(context.lastResult.output);
+          } else {
+            deferred?.discard();
+          }
+          return result;
+        },
+      }
+      : undefined,
+    maxIterations: effectiveCompletionChecker ? maxIterations : undefined,
   }, callbacks);
 }

@@ -1,5 +1,6 @@
 import type {
   IAgentBus,
+  ICompletionChecker,
   IInferenceClient,
   IVoter,
   IExecutor,
@@ -8,6 +9,7 @@ import type {
   IntentPayload,
   VotePayload,
   ResultPayload,
+  CompletionPayload,
   MailPayload,
 } from './types.js';
 import { PayloadType, QuorumPolicy } from './types.js';
@@ -35,6 +37,7 @@ export class LogActAgent {
   private readonly _inference: IInferenceClient;
   private readonly _voters: IVoter[];
   private readonly _executor: IExecutor;
+  private readonly _completionChecker?: ICompletionChecker;
   private readonly _quorumPolicy: QuorumPolicy;
   private readonly _maxTurns: number;
   private _turnCount = 0;
@@ -45,6 +48,7 @@ export class LogActAgent {
     this._inference = opts.inferenceClient;
     this._voters = opts.voters ?? [];
     this._executor = opts.executor ?? new NoopExecutor();
+    this._completionChecker = opts.completionChecker;
     this._quorumPolicy = opts.quorumPolicy ?? QuorumPolicy.BooleanAnd;
     this._maxTurns = opts.maxTurns ?? Infinity;
   }
@@ -148,6 +152,30 @@ export class LogActAgent {
       results.push(result);
       this._turnCount++;
 
+      if (this._completionChecker) {
+        const history = await this._bus.read(0, await this._bus.tail());
+        const completion = await this._completionChecker.check({
+          task: getTaskFromHistory(history),
+          lastResult: result,
+          history,
+        });
+        const normalizedCompletion: CompletionPayload = {
+          type: PayloadType.Completion,
+          intentId,
+          ...completion,
+        };
+        await this._bus.append(normalizedCompletion);
+
+        if (normalizedCompletion.done) {
+          this.stop();
+          continue;
+        }
+
+        if (normalizedCompletion.feedback?.trim()) {
+          await this.send(normalizedCompletion.feedback, 'completion-checker');
+        }
+      }
+
       // If there's an execution error we continue so the model can recover.
     }
 
@@ -207,4 +235,12 @@ function buildMessages(
     }
   }
   return messages;
+}
+
+function getTaskFromHistory(entries: import('./types.js').Entry[]): string | undefined {
+  const firstMail = entries.find((entry) => entry.payload.type === PayloadType.Mail);
+  if (!firstMail || firstMail.payload.type !== PayloadType.Mail) {
+    return undefined;
+  }
+  return firstMail.payload.content;
 }

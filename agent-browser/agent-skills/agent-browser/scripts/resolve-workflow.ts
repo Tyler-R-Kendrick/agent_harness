@@ -56,12 +56,12 @@ export function resolveWorkflow(input: string): AgentBrowserWorkflow {
     return WORKFLOWS['edit-default-skill'];
   }
 
-  if (normalized.includes('runtime') || normalized.includes('session output')) {
-    return WORKFLOWS['inspect-runtime-output'];
-  }
-
   if (normalized.includes('symlink') || normalized.includes('link durable')) {
     return WORKFLOWS['link-durable-file'];
+  }
+
+  if (normalized.includes('runtime') || normalized.includes('session output')) {
+    return WORKFLOWS['inspect-runtime-output'];
   }
 
   return WORKFLOWS['inspect-workspace'];

@@ -9,9 +9,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
   },
   "peerDependencies": {
     "ai": "^6.0.0"

@@ -1,10 +1,12 @@
-import type { IInferenceClient, IVoter } from 'logact';
+import type { ICompletionChecker, IInferenceClient, IVoter } from 'logact';
 import { browserInferenceEngine } from '../../services/browserInference';
 import { formatBrowserInferenceResult, trimTextForLocalInference } from '../../services/browserInferenceRuntime';
 import { toAiSdkMessages } from '../../services/chatComposition';
 import { buildAgentSystemPrompt, resolveAgentScenario } from '../../services/agentPromptTemplates';
+import { createHeuristicCompletionChecker, isExecutionTask } from 'ralph-loop';
 import type { ChatMessage, HFModel } from '../../types';
 import { runAgentLoop } from '../agent-loop';
+import { createDeferredAgentCallbacks } from '../deferredCallbacks';
 import { createReasoningStepSplitter } from '../reasoningSplitter';
 import type { AgentStreamCallbacks } from '../types';
 
@@ -27,13 +29,24 @@ export function buildCodiPrompt({
   workspaceName,
   workspacePromptContext,
   messages,
+  loopMessages,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   messages: ChatMessage[];
+  loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
 }): Array<{ role: string; content: string }> {
-  const aiMessages = toAiSdkMessages(messages);
-  const latestText = messages.at(-1)?.streamedContent || messages.at(-1)?.content || workspacePromptContext;
+  const aiMessages = loopMessages
+    ? loopMessages.map((message, index) => ({
+      id: `loop-${index}`,
+      role: message.role,
+      parts: [{ type: 'text', text: message.content }],
+    }))
+    : toAiSdkMessages(messages);
+  const latestText = loopMessages?.at(-1)?.content
+    || messages.at(-1)?.streamedContent
+    || messages.at(-1)?.content
+    || workspacePromptContext;
   const scenario = resolveAgentScenario(latestText);
 
   return [
@@ -66,8 +79,8 @@ function createCodiInferenceClient(
   signal?: AbortSignal,
 ): IInferenceClient {
   return {
-    async infer(_busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
-      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages });
+    async infer(busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
+      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages });
       let tokenBuffer = '';
       let inReasoning = false;
       const reasoningSplitter = createReasoningStepSplitter({
@@ -148,6 +161,8 @@ export async function streamCodiChat(
     workspaceName,
     workspacePromptContext,
     voters = [],
+    completionChecker,
+    maxIterations = 5,
   }: {
     model: HFModel;
     messages: ChatMessage[];
@@ -156,16 +171,22 @@ export async function streamCodiChat(
     /** Optional logact voters treated as external agents. Each voter's
      *  decision is surfaced via the onVoterStep* callbacks. */
     voters?: IVoter[];
+    completionChecker?: ICompletionChecker;
+    maxIterations?: number;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  const latestInput = messages.at(-1)?.streamedContent || messages.at(-1)?.content || '';
+  const effectiveCompletionChecker = completionChecker
+    ?? (isExecutionTask(latestInput) ? createHeuristicCompletionChecker(latestInput) : undefined);
+  const deferred = effectiveCompletionChecker ? createDeferredAgentCallbacks(callbacks) : null;
   const inferenceClient = createCodiInferenceClient(
     model,
     workspaceName,
     workspacePromptContext,
     messages,
-    callbacks,
+    deferred?.callbacks ?? callbacks,
     signal,
   );
 
@@ -173,5 +194,19 @@ export async function streamCodiChat(
     inferenceClient,
     messages,
     voters,
+    completionChecker: effectiveCompletionChecker
+      ? {
+        async check(context) {
+          const result = await effectiveCompletionChecker.check(context);
+          if (result.done) {
+            deferred?.commit(context.lastResult.output);
+          } else {
+            deferred?.discard();
+          }
+          return result;
+        },
+      }
+      : undefined,
+    maxIterations: effectiveCompletionChecker ? maxIterations : undefined,
   }, callbacks);
 }

@@ -123,6 +123,9 @@ describe('parallelDelegationWorkflow', () => {
     expect(onStepComplete).toHaveBeenCalledTimes(4);
     expect(onDone).toHaveBeenCalledWith(result.text);
     expect(runAgentLoop).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(runAgentLoop).mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ completionChecker: expect.any(Object), maxIterations: 5 }),
+    );
   });
 
   it('passes the coordinator-selected problem into each remote worker task', async () => {

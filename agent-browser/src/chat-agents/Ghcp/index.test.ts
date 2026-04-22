@@ -110,4 +110,74 @@ describe('GHCP', () => {
     expect(onToken).toHaveBeenCalledWith('world');
     expect(onDone).toHaveBeenCalledWith('Hello\nworld');
   });
+
+  it('surfaces a voter thought through streamGhcpChat', async () => {
+    streamCopilotChatMock.mockImplementationOnce(async (_request, callbacks) => {
+      callbacks.onToken?.('ok');
+      callbacks.onDone?.('ok');
+    });
+
+    const thinkingVoter = {
+      id: 'reviewer',
+      tier: 'classic' as const,
+      vote: vi.fn().mockResolvedValue({
+        type: 'Vote',
+        intentId: expect.any(String),
+        voterId: 'reviewer',
+        approve: false,
+        reason: 'needs owner approval',
+        thought: 'This prompt edits shared infra; flagging for review.',
+      }),
+    };
+
+    const onVoterStepUpdate = vi.fn();
+
+    await streamGhcpChat({
+      modelId: 'gpt-4.1',
+      sessionId: 'chat-session-1',
+      workspaceName: 'Research',
+      workspacePromptContext: 'Workspace prompt context.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Deploy infra.' }],
+      latestUserInput: 'Deploy infra.',
+      voters: [thinkingVoter],
+    }, { onVoterStepUpdate });
+
+    expect(onVoterStepUpdate).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        approve: false,
+        body: 'Rejected: needs owner approval',
+        thought: 'This prompt edits shared infra; flagging for review.',
+      }),
+    );
+  });
+
+  it('retries execution-oriented prompts when the first GHCP answer is only a plan and only surfaces the final answer once', async () => {
+    const startingCalls = streamCopilotChatMock.mock.calls.length;
+    streamCopilotChatMock
+      .mockImplementationOnce(async (_request, callbacks) => {
+        callbacks.onToken?.('Plan:\n1. Inspect\n2. Update');
+        callbacks.onDone?.('Plan:\n1. Inspect\n2. Update');
+      })
+      .mockImplementationOnce(async (_request, callbacks) => {
+        callbacks.onToken?.('Implemented the fix and verified the tests pass.');
+        callbacks.onDone?.('Implemented the fix and verified the tests pass.');
+      });
+
+    const onDone = vi.fn();
+
+    await streamGhcpChat({
+      modelId: 'gpt-4.1',
+      sessionId: 'chat-session-1',
+      workspaceName: 'Build',
+      workspacePromptContext: 'Workspace prompt context.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Implement the fix and run the tests.' }],
+      latestUserInput: 'Implement the fix and run the tests.',
+    }, { onDone });
+
+    expect(streamCopilotChatMock.mock.calls.length - startingCalls).toBe(2);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith('Implemented the fix and verified the tests pass.');
+    expect(String(streamCopilotChatMock.mock.calls[startingCalls + 1][0].prompt)).toContain('Do the work to completion');
+  });
 });

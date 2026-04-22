@@ -4,6 +4,7 @@ import { runAgentLoop } from '../chat-agents/agent-loop';
 import { buildDelegationWorkerPrompt, buildDelegationWorkerTask } from './agentPromptTemplates';
 import { fitTextToTokenBudget } from './promptBudget';
 import type { ModelCapabilities } from './agentProvider';
+import { createHeuristicCompletionChecker } from 'ralph-loop';
 
 type StreamableModel = {
   doGenerate?: (options: unknown) => Promise<LanguageModelV3GenerateResult>;
@@ -205,12 +206,17 @@ async function runCompactAgentTask(
 ): Promise<string> {
   let resolvedText = '';
   let failure: Error | null = null;
+  let bufferedText = '';
+  const completionChecker = createHeuristicCompletionChecker(user);
 
   await runAgentLoop({
     inferenceClient: {
       async infer() {
         try {
-          resolvedText = await runCompactTextTask(model, system, user, signal, generationOptions, onToken);
+          bufferedText = '';
+          resolvedText = await runCompactTextTask(model, system, user, signal, generationOptions, (delta) => {
+            bufferedText += delta;
+          });
           return resolvedText;
         } catch (error) {
           failure = error instanceof Error ? error : new Error(String(error));
@@ -220,7 +226,17 @@ async function runCompactAgentTask(
     },
     messages: [{ content: user }],
     input: user,
-    maxTurns: 1,
+    completionChecker: {
+      async check(context) {
+        const result = await completionChecker.check(context);
+        if (result.done && bufferedText) {
+          onToken?.(bufferedText);
+        }
+        bufferedText = '';
+        return result;
+      },
+    },
+    maxIterations: 5,
   }, {});
 
   if (failure) {

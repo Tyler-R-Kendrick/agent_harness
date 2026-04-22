@@ -1,6 +1,6 @@
 export type AgentProvider = 'codi' | 'ghcp';
 
-import type { ReasoningStep, VoterStep } from '../types';
+import type { IterationStep, ReasoningStep, VoterStep } from '../types';
 
 export interface AgentStreamCallbacks {
   onPhase?: (phase: string) => void;
@@ -17,4 +17,10 @@ export interface AgentStreamCallbacks {
   onVoterStepUpdate?: (id: string, patch: Partial<VoterStep>) => void;
   /** Fired when a voter's evaluation is complete. */
   onVoterStepEnd?: (id: string) => void;
+  /** Fired when a Ralph-loop iteration begins. */
+  onIterationStep?: (step: IterationStep) => void;
+  /** Fired to patch an iteration step once the completion check resolves. */
+  onIterationStepUpdate?: (id: string, patch: Partial<IterationStep>) => void;
+  /** Fired when a Ralph-loop iteration is complete. */
+  onIterationStepEnd?: (id: string) => void;
 }

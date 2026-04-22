@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../agent-browser" && pwd)"
+readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly APP_DIR="$REPO_ROOT/agent-browser"
 readonly HEALTH_URL="http://127.0.0.1:5173/"
 
 log() {
@@ -9,7 +10,7 @@ log() {
 }
 
 dependencies_ready() {
-  [[ -d "$APP_DIR/node_modules" ]]
+  [[ -d "$REPO_ROOT/node_modules" ]]
 }
 
 server_ready() {
@@ -17,8 +18,8 @@ server_ready() {
 }
 
 if ! dependencies_ready; then
-  log "Dependencies are missing in $APP_DIR/node_modules"
-  log "Run 'npm ci --prefix agent-browser' once, or reopen the workspace after post-create finishes."
+  log "Dependencies are missing in $REPO_ROOT/node_modules"
+  log "Run 'npm ci' once from the repo root, or reopen the workspace after post-create finishes."
   exit 1
 fi
 

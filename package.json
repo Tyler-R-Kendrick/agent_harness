@@ -1,0 +1,13 @@
+{
+  "name": "agent-harness",
+  "private": true,
+  "workspaces": [
+    "agent-browser",
+    "lib/*"
+  ],
+  "scripts": {
+    "dev:agent-browser": "npm --workspace agent-browser run dev",
+    "test:agent-browser": "npm --workspace agent-browser run test",
+    "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage"
+  }
+}

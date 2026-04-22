@@ -5,6 +5,17 @@ log() {
   echo "[devcontainer post-create] $*"
 }
 
+prune_workspace_node_modules() {
+  local workspace_dir
+
+  for workspace_dir in "$REPO_ROOT/agent-browser" "$REPO_ROOT"/lib/*; do
+    if [ -d "$workspace_dir/node_modules" ]; then
+      log "Removing stale workspace-local dependencies from ${workspace_dir#$REPO_ROOT/}"
+      rm -rf "$workspace_dir/node_modules"
+    fi
+  done
+}
+
 run_with_timeout() {
   local seconds=$1
   shift
@@ -24,6 +35,11 @@ run_with_timeout() {
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ -x "$REPO_ROOT/.devcontainer/prepare-cache-storage.sh" ]; then
+  log "Relocating cache directories onto /tmp storage"
+  "$REPO_ROOT/.devcontainer/prepare-cache-storage.sh"
+fi
 
 # ── Serena ────────────────────────────────────────────────────────────────────
 log "Installing or upgrading Serena agent via uv"
@@ -55,12 +71,13 @@ else
   log "Skipping RTK init: 'rtk' not on PATH"
 fi
 
-# ── Agent Browser ------------------------------------------------------------
-if [ ! -d "$REPO_ROOT/agent-browser/node_modules" ] || [ ! -f "$REPO_ROOT/agent-browser/node_modules/.package-lock.json" ] || [ "$REPO_ROOT/agent-browser/package-lock.json" -nt "$REPO_ROOT/agent-browser/node_modules/.package-lock.json" ]; then
-  log "Installing agent-browser dependencies"
-  run_with_timeout 300 npm ci --prefix "$REPO_ROOT/agent-browser"
+# ── npm Workspaces -----------------------------------------------------------
+if [ ! -d "$REPO_ROOT/node_modules" ] || [ ! -f "$REPO_ROOT/node_modules/.package-lock.json" ] || [ "$REPO_ROOT/package-lock.json" -nt "$REPO_ROOT/node_modules/.package-lock.json" ]; then
+  prune_workspace_node_modules
+  log "Installing shared npm workspace dependencies"
+  run_with_timeout 600 npm ci --prefix "$REPO_ROOT"
 else
-  log "agent-browser dependencies are current"
+  log "Shared npm workspace dependencies are current"
 fi
 
 if [ -x "$REPO_ROOT/scripts/install-agent-browser-preview-extension.sh" ]; then

@@ -1,10 +1,14 @@
 import type { LanguageModel, ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import type { ICompletionChecker, IVoter } from 'logact';
 import type { LanguageModelV3GenerateResult, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from './agentRunner';
+import { runAgentLoop } from '../chat-agents/agent-loop';
+import type { AgentStreamCallbacks } from '../chat-agents/types';
 import { buildAgentSystemPrompt, buildToolInstructionsTemplate, buildToolGroupSelectionPrompt, buildToolRouterPrompt, buildToolSelectorPrompt, resolveAgentScenario } from './agentPromptTemplates';
 import { createPromptBudget, fitTextToTokenBudget, type BudgetedMessage } from './promptBudget';
 import type { ModelCapabilities } from './agentProvider';
+import { createHeuristicCompletionChecker, isExecutionTask } from 'ralph-loop';
 import {
   buildToolGroupDescriptors,
   selectToolDescriptorsByIds,
@@ -45,13 +49,32 @@ export type StagedToolPipelineOptions = {
   maxSteps?: number;
   maxGroups?: number;
   maxTools?: number;
+  completionChecker?: ICompletionChecker;
+  maxIterations?: number;
+  /**
+   * Optional LogAct voters. When provided, the executor phase runs inside
+   * `runAgentLoop` so each tool intent is driven through the shared Driver →
+   * Voter(s) → Decider → Executor flow and voter thoughts are surfaced
+   * through the voter-step callbacks — unifying the tool path with the plain
+   * chat path.
+   */
+  voters?: IVoter[];
 };
 
-export type StagedToolPipelineCallbacks = AgentRunCallbacks & {
-  onStageStart?: (stage: StageName, detail: string) => void;
-  onStageToken?: (stage: StageName, delta: string) => void;
-  onStageComplete?: (stage: StageName, text: string) => void;
-};
+export type StagedToolPipelineCallbacks = AgentRunCallbacks
+  & Pick<AgentStreamCallbacks,
+    'onVoterStep'
+    | 'onVoterStepUpdate'
+    | 'onVoterStepEnd'
+    | 'onIterationStep'
+    | 'onIterationStepUpdate'
+    | 'onIterationStepEnd'
+  >
+  & {
+    onStageStart?: (stage: StageName, detail: string) => void;
+    onStageToken?: (stage: StageName, delta: string) => void;
+    onStageComplete?: (stage: StageName, text: string) => void;
+  };
 
 type StageJson = {
   mode?: string;
@@ -395,14 +418,102 @@ export async function runStagedToolPipeline(
     ? Math.min(maxSteps, LOCAL_EXECUTOR_MAX_STEPS)
     : maxSteps;
 
-  return runToolAgent({
-    model,
-    tools: filteredTools,
-    instructions: focusedInstructions,
-    messages,
-    maxSteps: effectiveMaxSteps,
-    signal,
+  const voters = options.voters ?? [];
+  const defaultTask = typeof messages.at(-1)?.content === 'string'
+    ? messages.at(-1)?.content
+    : messages.at(-1)?.content
+      .map((part) => (part.type === 'text' ? part.text : ''))
+      .join('\n');
+  const completionChecker = options.completionChecker
+    ?? (isExecutionTask(defaultTask) ? createHeuristicCompletionChecker(defaultTask) : undefined);
+  const maxIterations = options.maxIterations ?? 5;
+
+  if (voters.length === 0 && !completionChecker) {
+    return runToolAgent({
+      model,
+      tools: filteredTools,
+      instructions: focusedInstructions,
+      messages,
+      maxSteps: effectiveMaxSteps,
+      signal,
+    }, callbacks);
+  }
+
+  // Voters present: route the executor phase through LogAct so tool intents
+  // flow through Driver → Voter(s) → Decider → Executor, exactly like the
+  // plain chat path. If a completion checker is present, keep iterating in a
+  // Ralph-style loop until the checker marks the task done. Tool callbacks
+  // still fire out-of-band for the UI.
+  let captured: AgentRunResult = { text: '', steps: 0 };
+  let failure: Error | null = null;
+  let feedbackMessages: ModelMessage[] = [];
+  const executorCallbacks = completionChecker
+    ? {
+      ...callbacks,
+      onToken: undefined,
+      onDone: undefined,
+    }
+    : callbacks;
+
+  await runAgentLoop({
+    inferenceClient: {
+      async infer() {
+        try {
+          const executorMessages = feedbackMessages.length > 0
+            ? [...messages, ...feedbackMessages]
+            : messages;
+          captured = await runToolAgent({
+            model,
+            tools: filteredTools,
+            instructions: focusedInstructions,
+            messages: executorMessages,
+            maxSteps: effectiveMaxSteps,
+            signal,
+          }, executorCallbacks);
+          return captured.text;
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error(String(error));
+          throw failure;
+        }
+      },
+    },
+    messages: messages.map((message) => ({
+      content: typeof message.content === 'string'
+        ? message.content
+        : message.content
+          .map((part) => (part.type === 'text' ? part.text : `[${part.type}]`))
+          .join('\n'),
+    })),
+    voters,
+    completionChecker: completionChecker
+      ? {
+        async check(context) {
+          const result = await completionChecker.check(context);
+          if (!result.done && result.feedback?.trim()) {
+            feedbackMessages = [
+              { role: 'assistant', content: [{ type: 'text', text: captured.text }] },
+              { role: 'system', content: result.feedback.trim() },
+            ];
+          } else {
+            feedbackMessages = [];
+          }
+          return result;
+        },
+      }
+      : undefined,
+    maxIterations: completionChecker ? maxIterations : 1,
   }, callbacks);
+
+  if (failure) {
+    throw failure;
+  }
+
+  if (completionChecker) {
+    callbacks.onToken?.(captured.text);
+    callbacks.onDone?.(captured.text);
+  }
+
+  return captured;
 }
 
 export function selectStageDescriptors(

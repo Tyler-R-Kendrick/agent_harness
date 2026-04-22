@@ -126,4 +126,28 @@ describe('VotersPanel', () => {
     // OperationPane returns null when steps is empty and isActive is false
     expect(container.firstChild).toBeNull();
   });
+
+  it('renders the voter subagent thought alongside the outcome', () => {
+    const stepWithThought: VoterStep = {
+      id: 'voter-thoughtful-intent-1',
+      kind: 'agent',
+      title: 'thoughtful',
+      voterId: 'thoughtful',
+      body: 'Approved',
+      thought: 'Low-risk read; no side effects.',
+      approve: true,
+      startedAt: 1000,
+      endedAt: 2000,
+      status: 'done',
+    };
+    const msg: ChatMessage = {
+      id: 'assistant-thought',
+      role: 'assistant',
+      content: '',
+      voterSteps: [stepWithThought],
+    };
+    render(<VotersPanel message={msg} onClose={() => undefined} />);
+    expect(screen.getByText(/Low-risk read; no side effects\./)).toBeInTheDocument();
+    expect(screen.getByText(/Approved/)).toBeInTheDocument();
+  });
 });

@@ -203,6 +203,34 @@ describe('Codi', () => {
 
     expect(onDone).toHaveBeenCalledWith('response');
   });
+
+  it('retries execution-oriented prompts when the first answer is only a plan and only surfaces the final answer once', async () => {
+    const startingCalls = generateMock.mock.calls.length;
+    generateMock
+      .mockImplementationOnce(async (_input, callbacks) => {
+        callbacks.onToken?.('Plan:\n1. Inspect the file\n2. Update the code');
+        callbacks.onDone?.({ generated_text: 'Plan:\n1. Inspect the file\n2. Update the code' });
+      })
+      .mockImplementationOnce(async (_input, callbacks) => {
+        callbacks.onToken?.('Implemented the fix and verified the tests pass.');
+        callbacks.onDone?.({ generated_text: 'Implemented the fix and verified the tests pass.' });
+      });
+
+    const onDone = vi.fn();
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'Implement the fix and run the tests.' }],
+      workspaceName: 'Build',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onDone });
+
+    expect(generateMock.mock.calls.length - startingCalls).toBe(2);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith('Implemented the fix and verified the tests pass.');
+    const secondPrompt = generateMock.mock.calls[startingCalls + 1][0].prompt as Array<{ role: string; content: string }>;
+    expect(secondPrompt.some((message) => String(message.content).includes('Do the work to completion'))).toBe(true);
+  });
 });
 
 describe('wrapVoterWithCallbacks', () => {
@@ -310,5 +338,43 @@ describe('wrapVoterWithCallbacks', () => {
     expect(onVoterStep.mock.calls[0][0]).toMatchObject({ voterId: 'guard', status: 'active' });
     expect(onVoterStepEnd).toHaveBeenCalledOnce();
     expect(innerVoter.vote).toHaveBeenCalledOnce();
+  });
+
+  it('surfaces a voter thought through streamCodiChat', async () => {
+    generateMock.mockImplementationOnce(async (_input, callbacks) => {
+      callbacks.onToken?.('result');
+      callbacks.onDone?.({ generated_text: 'result' });
+    });
+
+    const thinkingVoter = {
+      id: 'reviewer',
+      tier: 'classic' as const,
+      vote: vi.fn().mockResolvedValue({
+        type: 'Vote',
+        intentId: expect.any(String),
+        voterId: 'reviewer',
+        approve: true,
+        thought: 'Low-risk read; no side effects.',
+      }),
+    };
+
+    const onVoterStepUpdate = vi.fn();
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'u1', role: 'user', content: 'read workspace file' }],
+      workspaceName: 'Build',
+      workspacePromptContext: '',
+      voters: [thinkingVoter],
+    }, { onVoterStepUpdate });
+
+    expect(onVoterStepUpdate).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        approve: true,
+        body: 'Approved',
+        thought: 'Low-risk read; no side effects.',
+      }),
+    );
   });
 });

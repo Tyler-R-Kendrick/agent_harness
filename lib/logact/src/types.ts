@@ -18,6 +18,8 @@ export enum PayloadType {
   Abort = 'Abort',
   /** Action result produced by the Executor after execution. */
   Result = 'Result',
+  /** Completion check emitted after a result to decide whether the task is done. */
+  Completion = 'Completion',
   /** Mailbox message from an external user or agent. */
   Mail = 'Mail',
   /** Policy change entry controlling voter/decider behaviour. */
@@ -51,6 +53,13 @@ export type VotePayload = {
   /** true = approve, false = reject. */
   approve: boolean;
   reason?: string;
+  /**
+   * Optional free-form voter rationale. Voters act as subagents: they may
+   * narrate *why* they approved/rejected in addition to the short `reason`
+   * used for abort messaging. Surfaced to the UI via the agent-browser's
+   * VoterStep.thought so operators can audit voter reasoning.
+   */
+  thought?: string;
 };
 
 export type CommitPayload = {
@@ -69,6 +78,16 @@ export type ResultPayload = {
   intentId: string;
   output: string;
   error?: string;
+};
+
+export type CompletionScore = 'invalid' | 'low' | 'med' | 'med-high' | 'high';
+
+export type CompletionPayload = {
+  type: PayloadType.Completion;
+  intentId: string;
+  done: boolean;
+  score?: CompletionScore;
+  feedback?: string;
 };
 
 export type MailPayload = {
@@ -92,6 +111,7 @@ export type Payload =
   | CommitPayload
   | AbortPayload
   | ResultPayload
+  | CompletionPayload
   | MailPayload
   | PolicyPayload;
 
@@ -180,6 +200,14 @@ export interface IInferenceClient {
   ): Promise<string>;
 }
 
+export interface ICompletionChecker {
+  check(context: {
+    task?: string;
+    lastResult: ResultPayload;
+    history: Entry[];
+  }): Promise<CompletionPayload>;
+}
+
 // ----- LogActAgent options ----------------------------------------
 
 export type LogActAgentOptions = {
@@ -193,4 +221,9 @@ export type LogActAgentOptions = {
    * Useful for tests and bounded tasks. Default: Infinity.
    */
   maxTurns?: number;
+  /**
+   * Optional Ralph-style completion gate. When present, each Result is scored
+   * and the checker can either stop the loop or feed critique into the next turn.
+   */
+  completionChecker?: ICompletionChecker;
 };

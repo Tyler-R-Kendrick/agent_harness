@@ -3,6 +3,12 @@
 	"hostRequirements": {
 		"storage": "64gb"
 	},
+	"containerEnv": {
+		"XDG_CACHE_HOME": "/tmp/devcontainer-cache/xdg",
+		"NPM_CONFIG_CACHE": "/tmp/devcontainer-cache/npm",
+		"UV_CACHE_DIR": "/tmp/devcontainer-cache/uv",
+		"PLAYWRIGHT_BROWSERS_PATH": "/tmp/devcontainer-cache/ms-playwright"
+	},
 	"postCreateCommand": "bash .devcontainer/post-create.sh",
 	"postStartCommand": "bash .devcontainer/post-start.sh",
 	"customizations": {

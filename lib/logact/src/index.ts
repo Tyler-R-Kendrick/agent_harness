@@ -18,6 +18,8 @@ export {
 export type {
   Entry,
   Payload,
+  CompletionPayload,
+  CompletionScore,
   InfInPayload,
   InfOutPayload,
   IntentPayload,
@@ -30,6 +32,7 @@ export type {
   IAgentBus,
   IVoter,
   IExecutor,
+  ICompletionChecker,
   IInferenceClient,
   LogActAgentOptions,
   ComponentTier,

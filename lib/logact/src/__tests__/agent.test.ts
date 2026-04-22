@@ -317,3 +317,78 @@ describe('LogActAgent – message history building', () => {
     expect(inferMessages[0].some((m) => m.content === 'start')).toBe(true);
   });
 });
+
+describe('LogActAgent – voter thoughts on the bus', () => {
+  it('preserves voter thoughts in the Vote payloads appended to the bus', async () => {
+    const bus = new InMemoryAgentBus();
+    const thinkingVoter = {
+      id: 'thinker',
+      tier: 'classic' as const,
+      async vote(intent: import('../types.js').IntentPayload): Promise<import('../types.js').VotePayload> {
+        return {
+          type: PayloadType.Vote,
+          intentId: intent.intentId,
+          voterId: 'thinker',
+          approve: true,
+          thought: `Considered "${intent.action}" and it looked low risk.`,
+        };
+      },
+    };
+
+    const agent = new LogActAgent({
+      bus,
+      inferenceClient: makeInference(['read logs', '']),
+      voters: [thinkingVoter],
+      quorumPolicy: QuorumPolicy.BooleanAnd,
+      maxTurns: 2,
+    });
+
+    await agent.send('read logs');
+    await agent.run();
+
+    const entries = await bus.read(0, await bus.tail());
+    const voteEntries = entries.filter((e) => e.payload.type === PayloadType.Vote);
+    expect(voteEntries).toHaveLength(1);
+    const votePayload = voteEntries[0].payload as import('../types.js').VotePayload;
+    expect(votePayload.thought).toBe('Considered "read logs" and it looked low risk.');
+  });
+
+  it('still aborts with the voter reason when a rejecting voter also emits a thought', async () => {
+    const bus = new InMemoryAgentBus();
+    const thinkingVoter = {
+      id: 'blocker',
+      tier: 'classic' as const,
+      async vote(intent: import('../types.js').IntentPayload): Promise<import('../types.js').VotePayload> {
+        return {
+          type: PayloadType.Vote,
+          intentId: intent.intentId,
+          voterId: 'blocker',
+          approve: false,
+          reason: 'unsafe action',
+          thought: 'The action would delete production data.',
+        };
+      },
+    };
+
+    const agent = new LogActAgent({
+      bus,
+      inferenceClient: makeInference(['rm -rf /', '']),
+      voters: [thinkingVoter],
+      quorumPolicy: QuorumPolicy.BooleanAnd,
+      maxTurns: 2,
+    });
+
+    await agent.send('rm -rf /');
+    await agent.run();
+
+    const entries = await bus.read(0, await bus.tail());
+    const abortEntry = entries.find((e) => e.payload.type === PayloadType.Abort);
+    expect(abortEntry).toBeDefined();
+    const abortPayload = abortEntry!.payload as import('../types.js').AbortPayload;
+    expect(abortPayload.reason).toBe('unsafe action');
+
+    const votePayload = entries.find((e) => e.payload.type === PayloadType.Vote)!
+      .payload as import('../types.js').VotePayload;
+    expect(votePayload.thought).toBe('The action would delete production data.');
+  });
+});

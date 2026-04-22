@@ -5,6 +5,7 @@ readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly START_SCRIPT="$REPO_ROOT/scripts/run-agent-browser-dev-server.sh"
 readonly HEALTH_URL="http://127.0.0.1:5173/"
 readonly LOG_FILE="${TMPDIR:-/tmp}/agent-browser-dev-server.log"
+readonly CACHE_PREP_SCRIPT="$REPO_ROOT/.devcontainer/prepare-cache-storage.sh"
 
 log() {
   printf '[devcontainer post-start] %s\n' "$*"
@@ -13,6 +14,11 @@ log() {
 server_ready() {
   curl --silent --fail "$HEALTH_URL" >/dev/null 2>&1
 }
+
+if [[ -x "$CACHE_PREP_SCRIPT" ]]; then
+  log 'Ensuring cache directories live on /tmp storage'
+  "$CACHE_PREP_SCRIPT"
+fi
 
 if [[ ! -x "$START_SCRIPT" ]]; then
   log "Skipping agent-browser start because $START_SCRIPT is not executable"

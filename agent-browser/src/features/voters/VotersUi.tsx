@@ -11,12 +11,22 @@ import {
 
 /**
  * Converts VoterStep[] to the OperationStep interface accepted by
- * OperationPane / OperationTimeline.  VoterStep is structurally compatible
- * (kind: 'agent', title = voterId display name, body = vote outcome) so the
- * cast is safe without any data transformation.
+ * OperationPane / OperationTimeline. Voter steps carry two distinct outputs:
+ *   - `thought`: the subagent's rationale (LogAct VotePayload.thought)
+ *   - `body`:    the outcome label (Approved / Rejected: …)
+ * We merge them into the OperationStep `body` so a single timeline entry
+ * shows the subagent's reasoning followed by its verdict.
  */
 function toOperationSteps(steps: VoterStep[]) {
-  return steps as import('../operation-pane').OperationStep[];
+  return steps.map((step) => {
+    if (step.thought && step.body) {
+      return { ...step, body: `${step.thought}\n\n${step.body}` };
+    }
+    if (step.thought) {
+      return { ...step, body: step.thought };
+    }
+    return step;
+  }) as import('../operation-pane').OperationStep[];
 }
 
 // ─── InlineVoters — inherits OperationTrigger rendering ───────────────────
