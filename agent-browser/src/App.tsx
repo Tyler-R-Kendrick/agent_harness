@@ -2109,11 +2109,9 @@ function ChatPanel({
         const branch = (
           stage === 'breakdown-agent' || stage === 'assignment-agent' || stage === 'validation-agent'
             ? stage
-            : stage === 'agent-bus'
-              ? 'bus'
-              : stage === 'voter-ensemble'
-                ? 'voters'
-                : 'coordinator'
+            : stage === 'voter-ensemble'
+              ? 'voters'
+              : 'coordinator'
         );
         processBranchByStage.set(stage, branch);
         return branch;
@@ -2121,6 +2119,7 @@ function ChatPanel({
       const snapshotProcess = (): ProcessEntry[] => processLog.snapshot();
       let localToolRunTimedOut = false;
       let activePlanningStage: PlanningStageName | null = null;
+      let lastBusProcessId: string | undefined;
       const toolStepIdsByCallId = new Map<string, string>();
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
@@ -2271,6 +2270,37 @@ function ChatPanel({
           `${entries.length} AgentBus entr${entries.length === 1 ? 'y' : 'ies'} recorded during this run.`,
           ...entries.map((entry, index) => `${index + 1}. ${entry.summary} — ${formatPlanningLine(entry.detail)}`),
         ].join('\n');
+      };
+      const resolveBusBranch = (entry: BusEntryStep): string => (
+        entry.payloadType === 'Mail' ? `mail:${entry.actor ?? 'unknown'}` : 'bus'
+      );
+      const appendBusProcessEntry = (entry: BusEntryStep, fallbackParentId?: string) => {
+        const kindMap: Record<string, ProcessEntryKind> = {
+          Mail: 'mail',
+          InfIn: 'inf-in',
+          InfOut: 'inf-out',
+          Intent: 'intent',
+          Vote: 'vote',
+          Commit: 'commit',
+          Abort: 'abort',
+          Result: 'result',
+          Completion: 'completion',
+          Policy: 'policy',
+        };
+        const parentProcessId = lastBusProcessId ?? fallbackParentId;
+        processLog.append({
+          id: entry.id,
+          kind: kindMap[entry.payloadType] ?? 'reasoning',
+          actor: entry.actor ? entry.actor : 'bus',
+          summary: entry.summary,
+          transcript: entry.detail,
+          payload: entry,
+          branchId: resolveBusBranch(entry),
+          ...(parentProcessId ? { parentId: parentProcessId } : {}),
+          status: 'done',
+          ts: entry.realtimeTs,
+        });
+        lastBusProcessId = entry.id;
       };
       const resolvePlanningStageTimeoutMs = (stage: PlanningStageName, reason: LocalToolTimeoutReason): number => {
         const timeout = planningStageTimeouts[stage];
@@ -3116,25 +3146,10 @@ function ChatPanel({
                 noteLocalToolMirrorOutput('streaming');
                 delegationBusEntries = [...delegationBusEntries, entry];
                 syncPlanningStage('agent-bus', buildDelegationBusStageBody([...delegationBusEntries]), 'active');
-                // Map BusEntryStep into a process entry. Kind heuristic:
-                // payloadType -> normalized ProcessEntryKind.
-                const kindMap: Record<string, ProcessEntryKind> = {
-                  Mail: 'mail', InfIn: 'inf-in', InfOut: 'inf-out',
-                  Intent: 'intent', Vote: 'vote', Commit: 'commit',
-                  Abort: 'abort', Result: 'result', Completion: 'completion',
-                  Policy: 'policy',
-                };
-                processLog.append({
-                  id: entry.id,
-                  kind: kindMap[entry.payloadType] ?? 'reasoning',
-                  actor: entry.actor ? entry.actor : 'bus',
-                  summary: entry.summary,
-                  transcript: entry.detail,
-                  payload: entry,
-                  branchId: 'bus',
-                  status: 'done',
-                  ts: entry.realtimeTs,
-                });
+                appendBusProcessEntry(
+                  entry,
+                  processIdByStage.get('agent-bus') ?? processIdByStage.get('coordinator'),
+                );
                 updateMessage(assistantId, { processEntries: snapshotProcess(), busEntries: delegationBusEntries });
               },
               onToolCall: (toolName, args, toolCallId) => {
@@ -3283,26 +3298,9 @@ function ChatPanel({
               },
               onBusEntry: (entry) => {
                 noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
-                const kindMap: Record<string, ProcessEntryKind> = {
-                  Mail: 'mail', InfIn: 'inf-in', InfOut: 'inf-out',
-                  Intent: 'intent', Vote: 'vote', Commit: 'commit',
-                  Abort: 'abort', Result: 'result', Completion: 'completion',
-                  Policy: 'policy',
-                };
                 const parentProcessId = (activePlanningStage && processIdByStage.get(activePlanningStage))
                   ?? processIdByStage.get('executor');
-                processLog.append({
-                  id: entry.id,
-                  kind: kindMap[entry.payloadType] ?? 'reasoning',
-                  actor: entry.actor ? entry.actor : 'bus',
-                  summary: entry.summary,
-                  transcript: entry.detail,
-                  payload: entry,
-                  branchId: 'bus',
-                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
-                  status: 'done',
-                  ts: entry.realtimeTs,
-                });
+                appendBusProcessEntry(entry, parentProcessId);
                 updateMessage(assistantId, { processEntries: snapshotProcess() });
               },
               onIterationStep: (step) => {
@@ -3337,7 +3335,7 @@ function ChatPanel({
               },
               onModelTurnStart: (turnId, stepIndex) => {
                 noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
-                const parentProcessId = processIdByStage.get('executor');
+                const parentProcessId = lastBusProcessId ?? processIdByStage.get('executor');
                 processLog.append({
                   id: `turn:${turnId}`,
                   kind: 'inf-in',

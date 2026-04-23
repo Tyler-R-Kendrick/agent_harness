@@ -120,6 +120,38 @@ describe('ProcessGraph', () => {
     });
   });
 
+  it('keeps intermediate parent branches open when bus work nests under mail', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'router', ts: 1000, position: 1, branchId: 'main', actor: 'router' }),
+      entry({ id: 'tool-select', ts: 2000, position: 2, branchId: 'main', actor: 'tool-select' }),
+      entry({ id: 'browser', ts: 3000, position: 3, branchId: 'tools:Browser', parentId: 'tool-select', actor: 'tools:Browser' }),
+      entry({ id: 'builtin', ts: 4000, position: 4, branchId: 'tools:Built-In', parentId: 'tool-select', actor: 'tools:Built-In' }),
+      entry({ id: 'executor', ts: 5000, position: 5, branchId: 'main', actor: 'executor' }),
+      entry({ id: 'user', ts: 6000, position: 6, branchId: 'mail:user', parentId: 'executor', actor: 'user' }),
+      entry({ id: 'bus', ts: 7000, position: 7, branchId: 'bus', parentId: 'user', actor: 'bus' }),
+      entry({ id: 'turn', ts: 8000, position: 8, branchId: 'executor', parentId: 'bus', actor: 'executor-turn' }),
+    ];
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+    const busRow = container.querySelector('[data-actor="bus"]');
+    const turnRow = container.querySelector('[data-actor="executor-turn"]');
+    const busFork = busRow?.querySelector('[data-connector="fork"][data-lane="bus"]') as HTMLElement | null;
+    const turnFork = turnRow?.querySelector('[data-connector="fork"][data-lane="executor"]') as HTMLElement | null;
+
+    expect(busFork).toBeInTheDocument();
+    expect(busFork?.style.left).toBe('49px');
+    expect(busFork?.style.width).toBe('14px');
+    expect(turnFork).toBeInTheDocument();
+    expect(turnFork?.style.left).toBe('63px');
+    expect(turnFork?.style.width).toBe('14px');
+    expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
+    expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).not.toHaveClass('pg-rail-lane-end');
+    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).toHaveClass('pg-rail-lane-active');
+    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).not.toHaveClass('pg-rail-lane-end');
+    expect(turnRow?.querySelector('[data-connector="merge"][data-lane="bus"]')).toBeInTheDocument();
+    expect(turnRow?.querySelector('[data-connector="merge"][data-lane="mail:user"]')).toBeInTheDocument();
+  });
+
   it('does not draw a merge connector until the child branch is complete', () => {
     const entries: ProcessEntry[] = [
       entry({ id: 'root', ts: 1000, position: 1, branchId: 'coordinator', actor: 'root' }),
