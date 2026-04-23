@@ -131,6 +131,36 @@ import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } fr
 import { STORAGE_KEYS, isString, isStringRecord, useStoredState } from './services/sessionState';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import {
+  WORKSPACE_COLORS,
+  buildWorkspaceNodeMap,
+  countTabs,
+  createBrowserTab,
+  createInitialRoot,
+  createSessionNode,
+  createWorkspaceNode,
+  createWorkspaceViewEntry,
+  createWorkspaceViewState,
+  deepUpdate,
+  ensureWorkspaceCategories,
+  findFirstSessionId,
+  findNode,
+  findParent,
+  findWorkspaceForNode,
+  flattenTabs,
+  flattenTreeFiltered,
+  flattenWorkspaceTreeFiltered,
+  getWorkspace,
+  getWorkspaceCategory,
+  nextWorkspaceName,
+  normalizeWorkspaceViewEntry,
+  removeNodeById,
+  renderPaneIdForNode,
+  totalMemoryMB,
+  workspaceViewStateEquals,
+  type FlatTreeItem,
+  type WorkspaceViewState,
+} from './services/workspaceTree';
+import {
   buildActiveSessionFilesystemEntries,
   buildActiveWorktreeItems,
   readWorktreeContextMenuState,
@@ -141,21 +171,12 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
-import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 import type { CliHistoryEntry } from './tools/types';
 import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
-type FlatTreeItem = { node: TreeNode; depth: number };
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type WorkspaceViewState = {
-  openTabIds: string[];
-  editingFilePath: string | null;
-  activeMode: 'agent' | 'terminal';
-  activeSessionIds: string[];
-  mountedSessionFsIds: string[];
-  panelOrder: string[];
-};
 type SidebarPanel = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -331,15 +352,6 @@ const WORKSPACE_SHORTCUT_GROUPS = [
     ],
   },
 ] as const;
-const WORKSPACE_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#a78bfa', '#fb7185'] as const;
-const CATEGORY_LABELS: Record<NodeKind, string> = {
-  browser: 'Browser',
-  session: 'Sessions',
-  terminal: 'Terminal',
-  agent: 'Agent',
-  files: 'Files',
-  clipboard: 'Clipboard',
-};
 const TOOL_GROUP_ORDER = [
   'built-in',
   'mcp',
@@ -351,77 +363,6 @@ const TOOL_GROUP_ORDER = [
   'clipboard-worktree-mcp',
 ] as const;
 const DEFAULT_COLLAPSED_TOOL_GROUPS = new Set<string>(['mcp', 'webmcp']);
-
-function createClipboardNode(workspaceId: string): TreeNode {
-  return {
-    id: `${workspaceId}:clipboard`,
-    name: 'Clipboard',
-    type: 'tab',
-    nodeKind: 'clipboard',
-  };
-}
-
-function createSessionNode(workspaceId: string, index: number): TreeNode {
-  return {
-    id: createUniqueId(),
-    name: `Session ${index}`,
-    type: 'tab',
-    nodeKind: 'session',
-    persisted: true,
-    filePath: `${workspaceId}:session:${index}`,
-  };
-}
-
-function createBrowserTab(name: string, url: string, memoryTier: TreeNode['memoryTier'], memoryMB: number, persisted = false): TreeNode {
-  return {
-    id: createUniqueId(),
-    name,
-    type: 'tab',
-    nodeKind: 'browser',
-    url,
-    persisted,
-    memoryTier,
-    memoryMB,
-  };
-}
-
-function categoryNode(workspaceId: string, kind: NodeKind, children: TreeNode[] = []): TreeNode {
-  return {
-    id: `${workspaceId}:category:${kind}`,
-    name: CATEGORY_LABELS[kind],
-    type: 'folder',
-    nodeKind: kind,
-    expanded: kind !== 'files',
-    children,
-  };
-}
-
-function createWorkspaceNode({
-  id,
-  name,
-  color,
-  browserTabs,
-}: {
-  id: string;
-  name: string;
-  color: string;
-  browserTabs: TreeNode[];
-}): TreeNode {
-  return {
-    id,
-    name,
-    type: 'workspace',
-    expanded: true,
-    activeMemory: true,
-    color,
-    children: [
-      categoryNode(id, 'browser', browserTabs),
-      categoryNode(id, 'session', [createSessionNode(id, 1)]),
-      categoryNode(id, 'files', []),
-      createClipboardNode(id),
-    ],
-  };
-}
 
 const icons = {
   layers: Layers3,
@@ -463,34 +404,6 @@ const mockHistory: HistorySession[] = [
   { id: 2, title: 'UX Session', date: 'Yesterday · 4:30 PM', preview: 'Tuned keyboard navigation and overlays', events: ['Moved through workspace tree', 'Opened shortcut overlay', 'Validated page overlay'] },
 ];
 
-function createInitialRoot(): TreeNode {
-  return {
-    id: 'root',
-    name: 'Root',
-    type: 'root',
-    expanded: true,
-    children: [
-      createWorkspaceNode({
-        id: 'ws-research',
-        name: 'Research',
-        color: '#60a5fa',
-        browserTabs: [
-          createBrowserTab('Hugging Face', 'https://huggingface.co/models?library=transformers.js', 'hot', 165, true),
-          createBrowserTab('Transformers.js', 'https://huggingface.co/docs/transformers.js', 'warm', 88),
-        ],
-      }),
-      createWorkspaceNode({
-        id: 'ws-build',
-        name: 'Build',
-        color: '#34d399',
-        browserTabs: [
-          createBrowserTab('CopilotKit docs', 'https://docs.copilotkit.ai', 'cool', 44),
-        ],
-      }),
-    ],
-  };
-}
-
 function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof icons; size?: number; color?: string; className?: string }) {
   const IconComponent: LucideIcon = icons[name];
   return <IconComponent size={size} color={color} className={className} aria-hidden="true" strokeWidth={1.8} data-icon={name} />;
@@ -515,238 +428,12 @@ function ActiveMemoryPulse() {
   );
 }
 
-function deepUpdate(node: TreeNode, id: string, update: (node: TreeNode) => TreeNode): TreeNode {
-  if (node.id === id) return update(node);
-  if (!node.children) return node;
-  return { ...node, children: node.children.map((child) => deepUpdate(child, id, update)) };
-}
-
-function findNode(node: TreeNode, id: string): TreeNode | null {
-  if (node.id === id) return node;
-  for (const child of node.children ?? []) {
-    const match = findNode(child, id);
-    if (match) return match;
-  }
-  return null;
-}
-
-function flattenTabs(node: TreeNode, kind?: NodeKind): TreeNode[] {
-  if (node.type === 'tab') {
-    if (!kind || node.nodeKind === kind) return [node];
-    return [];
-  }
-  return (node.children ?? []).flatMap((child) => flattenTabs(child, kind));
-}
-
-function countTabs(node: TreeNode): number {
-  return flattenTabs(node, 'browser').length;
-}
-
-function totalMemoryMB(node: TreeNode): number {
-  return flattenTabs(node, 'browser').reduce((sum, t) => sum + (t.memoryMB ?? 0), 0);
-}
-
-function getWorkspace(root: TreeNode, workspaceId: string): TreeNode | null {
-  return (root.children ?? []).find((node) => node.id === workspaceId) ?? null;
-}
-
-function findParent(root: TreeNode, id: string, parent: TreeNode | null = null): TreeNode | null {
-  if (root.id === id) return parent;
-  for (const child of root.children ?? []) {
-    const match = findParent(child, id, root);
-    if (match) return match;
-  }
-  return null;
-}
-
-function findWorkspaceForNode(root: TreeNode, nodeId: string): TreeNode | null {
-  for (const workspace of root.children ?? []) {
-    if (workspace.id === nodeId) return workspace;
-    if ((workspace.children ?? []).some((child) => findNode(child, nodeId))) return workspace;
-  }
-  return null;
-}
-
-function getWorkspaceCategory(workspace: TreeNode, kind: NodeKind): TreeNode | null {
-  return (workspace.children ?? []).find((child) => child.type === 'folder' && child.nodeKind === kind) ?? null;
-}
-
-function removeNodeById(node: TreeNode, nodeId: string): TreeNode {
-  if (!node.children) return node;
-  return {
-    ...node,
-    children: node.children
-      .filter((child) => child.id !== nodeId)
-      .map((child) => removeNodeById(child, nodeId)),
-  };
-}
-
-function ensureWorkspaceCategories(workspace: TreeNode): TreeNode {
-  const existing = new Map((workspace.children ?? []).filter((child) => child.type === 'folder' && child.nodeKind).map((child) => [child.nodeKind as NodeKind, child]));
-  const legacyTabChildren = (workspace.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind !== 'agent' && child.nodeKind !== 'terminal' && child.nodeKind !== 'session' && child.nodeKind !== 'clipboard');
-  // Migrate any legacy agent/terminal/session-category tabs into unified 'session' nodeKind
-  const rawSessionCategory = existing.get('session');
-  const agentMigrated = (existing.get('agent')?.children ?? []).map((c) => ({ ...c, nodeKind: 'session' as NodeKind }));
-  const terminalMigrated = (existing.get('terminal')?.children ?? []).map((c) => ({ ...c, nodeKind: 'session' as NodeKind }));
-  const sessionChildren = rawSessionCategory
-    ? rawSessionCategory.children?.map((c) => (c.nodeKind === 'agent' || c.nodeKind === 'terminal') ? { ...c, nodeKind: 'session' as NodeKind } : c) ?? []
-    : [...terminalMigrated, ...agentMigrated];
-  const sessionCategory = { ...(rawSessionCategory ?? categoryNode(workspace.id, 'session', [])), children: sessionChildren };
-  const clipboardNode = (workspace.children ?? []).find((child) => child.type === 'tab' && child.nodeKind === 'clipboard')
-    ?? createClipboardNode(workspace.id);
-  const nextChildren: TreeNode[] = [
-    existing.get('browser') ?? categoryNode(workspace.id, 'browser', legacyTabChildren),
-    sessionCategory,
-    existing.get('files') ?? categoryNode(workspace.id, 'files', []),
-    clipboardNode,
-  ];
-  return { ...workspace, children: nextChildren };
-}
-
-function findFirstSessionId(workspace: TreeNode): string | null {
-  const category = getWorkspaceCategory(workspace, 'session');
-  const first = (category?.children ?? []).find((child) => child.type === 'tab' && child.nodeKind === 'session');
-  return first?.id ?? null;
-}
-
-function listWorkspaceSessionIds(workspace: TreeNode): string[] {
-  const category = getWorkspaceCategory(workspace, 'session');
-  return (category?.children ?? [])
-    .filter((child): child is TreeNode => child.type === 'tab' && child.nodeKind === 'session')
-    .map((child) => child.id);
-}
-
-function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewState {
-  const sessionIds = listWorkspaceSessionIds(workspace);
-  const firstId = sessionIds[0] ?? null;
-  return {
-    openTabIds: [],
-    editingFilePath: null,
-    activeMode: 'agent',
-    activeSessionIds: firstId ? [firstId] : [],
-    mountedSessionFsIds: sessionIds,
-    panelOrder: [],
-  };
-}
-
-function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: WorkspaceViewState): WorkspaceViewState {
-  const base = entry ?? createWorkspaceViewEntry(workspace);
-  const sessionIds = listWorkspaceSessionIds(workspace);
-  const requestedSessionIds = base.activeSessionIds ?? [];
-  const rawIds = requestedSessionIds.filter((id) => Boolean(findNode(workspace, id)));
-  const shouldFallbackToFirstSession = !entry || requestedSessionIds.length > 0;
-  const firstSessionId = sessionIds[0] ?? null;
-  const activeSessionIds = rawIds.length > 0
-    ? rawIds
-    : (shouldFallbackToFirstSession && firstSessionId ? [firstSessionId] : []);
-  const requestedMountedSessionFsIds = base.mountedSessionFsIds ?? sessionIds;
-  const mountedSessionFsIds = requestedMountedSessionFsIds.filter((id) => sessionIds.includes(id));
-  const validOpenTabIds = (base.openTabIds ?? []).filter((id) => {
-    const tab = findNode(workspace, id);
-    return tab?.type === 'tab' && (tab.nodeKind ?? 'browser') === 'browser';
-  });
-  return {
-    ...base,
-    openTabIds: validOpenTabIds,
-    activeSessionIds,
-    mountedSessionFsIds,
-    panelOrder: (base.panelOrder ?? []).filter((id) => typeof id === 'string' && id.trim().length > 0),
-  };
-}
-
-function createWorkspaceViewState(root: TreeNode): Record<string, WorkspaceViewState> {
-  return Object.fromEntries(
-    (root.children ?? [])
-      .filter((node): node is TreeNode => node.type === 'workspace')
-      .map((workspace) => [workspace.id, createWorkspaceViewEntry(workspace)]),
-  );
-}
-
-function workspaceViewStateEquals(left: WorkspaceViewState, right: WorkspaceViewState): boolean {
-  return left.openTabIds.length === right.openTabIds.length
-    && left.openTabIds.every((id, index) => id === right.openTabIds[index])
-    && left.editingFilePath === right.editingFilePath
-    && left.activeMode === right.activeMode
-    && left.activeSessionIds.length === right.activeSessionIds.length
-    && left.activeSessionIds.every((id, index) => id === right.activeSessionIds[index])
-    && left.mountedSessionFsIds.length === right.mountedSessionFsIds.length
-    && left.mountedSessionFsIds.every((id, index) => id === right.mountedSessionFsIds[index])
-    && left.panelOrder.length === right.panelOrder.length
-    && left.panelOrder.every((id, index) => id === right.panelOrder[index]);
-}
-
-function renderPaneIdForNode(node: TreeNode): string | null {
-  if (node.type === 'tab' && (node.nodeKind ?? 'browser') === 'browser') {
-    return `browser:${node.id}`;
-  }
-  if (node.type === 'tab' && node.nodeKind === 'session') {
-    return `session:${node.id}`;
-  }
-  if (node.type === 'file' && node.filePath) {
-    return `file:${node.filePath}`;
-  }
-  return null;
-}
-
-function buildWorkspaceNodeMap(root: TreeNode): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const workspace of root.children ?? []) {
-    if (workspace.type !== 'workspace') continue;
-    map.set(workspace.id, workspace.id);
-    const stack = [...(workspace.children ?? [])];
-    while (stack.length) {
-      const node = stack.pop();
-      if (!node) continue;
-      map.set(node.id, workspace.id);
-      if (node.children?.length) stack.push(...node.children);
-    }
-  }
-  return map;
-}
-
 function createSystemChatMessage(sessionId: string): ChatMessage {
   return {
     id: `${sessionId}:system`,
     role: 'system',
     content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.',
   };
-}
-
-function flattenTreeFiltered(node: TreeNode, query: string, depth = 0): FlatTreeItem[] {
-  const normalized = query.trim().toLowerCase();
-  const children = node.children ?? [];
-  if (!normalized) {
-    return children.flatMap((child) => [{ node: child, depth }, ...(child.expanded && child.children ? flattenTreeFiltered(child, normalized, depth + 1) : [])]);
-  }
-
-  const filtered: FlatTreeItem[] = [];
-  for (const child of children) {
-    const matches = child.name.toLowerCase().includes(normalized);
-    const descendants = child.children ? flattenTreeFiltered(child, normalized, depth + 1) : [];
-    if (matches || descendants.length) {
-      filtered.push({ node: child, depth });
-      if (child.expanded && child.children) filtered.push(...descendants);
-    }
-  }
-  return filtered;
-}
-
-function flattenWorkspaceTreeFiltered(workspace: TreeNode, query: string): FlatTreeItem[] {
-  const normalized = query.trim().toLowerCase();
-  const descendants = workspace.expanded && workspace.children ? flattenTreeFiltered(workspace, normalized, 0) : [];
-  if (!normalized) return descendants;
-  const matches = workspace.name.toLowerCase().includes(normalized);
-  if (matches) {
-    return workspace.expanded && workspace.children ? flattenTreeFiltered(workspace, '', 0) : [];
-  }
-  return descendants;
-}
-
-function nextWorkspaceName(root: TreeNode): string {
-  const existing = new Set((root.children ?? []).map((workspace) => workspace.name));
-  let index = (root.children ?? []).length + 1;
-  while (existing.has(`Workspace ${index}`)) index += 1;
-  return `Workspace ${index}`;
 }
 
 function classifyOmnibar(raw: string): { intent: 'navigate' | 'search'; value: string } {
