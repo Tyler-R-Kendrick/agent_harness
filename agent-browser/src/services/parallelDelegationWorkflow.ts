@@ -7,7 +7,7 @@ import { fitTextToTokenBudget } from './promptBudget';
 import type { ModelCapabilities } from './agentProvider';
 import { createHeuristicCompletionChecker } from 'ralph-loop';
 import { ClassicVoter, InMemoryAgentBus, PayloadType } from 'logact';
-import type { Entry, IVoter, Payload } from 'logact';
+import type { Entry, IVoter } from 'logact';
 import type { BusEntryStep, VoterStep } from '../types';
 import { createObservedBus, summarisePayload } from './observedAgentBus';
 import { runStagedToolPipeline, type StagedToolPipelineCallbacks } from './stagedToolPipeline';
@@ -351,7 +351,7 @@ export function isParallelDelegationPrompt(prompt: string): boolean {
  */
 export function shouldRunParallelDelegation(
   prompt: string,
-  capabilities: Pick<ModelCapabilities, 'provider'>,
+  capabilities: Pick<ModelCapabilities, 'provider' | 'contextWindow' | 'maxOutputTokens'>,
 ): boolean {
   if (!isParallelDelegationPrompt(prompt)) return false;
   return capabilities.provider !== 'local';
@@ -817,6 +817,8 @@ async function executeTaskPlan(args: {
                   runShellCommand,
                 });
                 return {
+                  type: PayloadType.Completion,
+                  intentId: context.lastResult.intentId,
                   done: validation.done,
                   feedback: validation.feedback,
                   score: validation.done ? 'high' : 'med',

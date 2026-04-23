@@ -22,7 +22,7 @@ vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
 
-vi.mock('@copilotkit/react-core', () => ({
+vi.mock('./services/copilotRuntimeBridge', () => ({
   useCopilotReadable: () => undefined,
 }));
 

@@ -8,12 +8,6 @@ import {
   normalizeBrowserInferenceErrorMessage,
 } from '../services/browserInferenceRuntime';
 
-type ProgressInfo = {
-  status?: unknown;
-  file?: unknown;
-  progress?: unknown;
-};
-
 type AnyPipeline = (prompt: unknown, options?: Record<string, unknown>) => Promise<unknown>;
 type PipelineWithTokenizer = AnyPipeline & { tokenizer?: unknown };
 

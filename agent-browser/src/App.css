@@ -3261,6 +3261,7 @@ kbd {
   align-items: center;
   height: 100%;
   min-width: 14px;
+  width: calc(var(--pg-lane-count, 1) * 14px);
 }
 .pg-rail-lane {
   position: relative;
@@ -3281,19 +3282,18 @@ kbd {
 }
 .pg-rail-lane-active.pg-rail-lane-start::before { top: 50%; }
 .pg-rail-lane-active.pg-rail-lane-end::before   { bottom: 50%; }
-.pg-rail-fork {
+.pg-rail-connector {
   position: absolute;
   top: 50%;
   height: 2px;
   margin-top: -1px;
-  /* Span horizontally from parent lane center to this lane center.
-     Each lane is 14px wide; offset uses (to - from) lanes. */
-  left: calc((min(var(--pg-fork-from), var(--pg-fork-to)) - var(--pg-fork-to)) * 14px + 7px);
-  width: calc(abs(var(--pg-fork-to) - var(--pg-fork-from)) * 14px);
-  background: var(--pg-fork-color, var(--pg-branch-color));
   opacity: 0.55;
   border-radius: 1px;
   pointer-events: none;
+  z-index: 0;
+}
+.pg-rail-merge {
+  opacity: 0.75;
 }
 .pg-row-dot {
   position: relative;

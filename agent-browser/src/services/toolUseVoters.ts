@@ -47,7 +47,7 @@ export function createMustUseToolVoter(): IVoter {
     'must-use-tool',
     (action) => containsToolCall(action) || /<tool_result\b/i.test(action),
     'No tool was called. Call at least one tool from the catalog before answering.',
-    (action, approve) => approve
+    (_action, approve) => approve
       ? 'A tool call (or follow-up to a tool result) is present.'
       : 'The model produced a final answer without calling any tool.',
   );
@@ -63,7 +63,7 @@ export function createNoPlanOnlyVoter(): IVoter {
     'no-plan-only',
     (action) => containsToolCall(action) || !PLAN_ONLY_PATTERN.test(action),
     'The response only describes a plan. Do the work with tools and answer with the completed result.',
-    (action, approve) => approve
+    (_action, approve) => approve
       ? 'Action is grounded in a tool call or a completed answer.'
       : 'Action is plan-only / future-tense — caller will retry.',
   );

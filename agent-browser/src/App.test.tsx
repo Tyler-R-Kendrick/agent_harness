@@ -26,7 +26,7 @@ vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
 
-vi.mock('@copilotkit/react-core', () => ({
+vi.mock('./services/copilotRuntimeBridge', () => ({
   useCopilotReadable: () => undefined,
 }));
 
@@ -2662,6 +2662,9 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /Validation subagent/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reviewer votes/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /AgentBus log/i })).toBeInTheDocument();
+    const breakdownRow = screen.getByRole('button', { name: /Breakdown subagent/i });
+    expect(breakdownRow.querySelector('[data-connector="fork"][data-lane="breakdown-agent"]')).toBeInTheDocument();
+    expect(breakdownRow.querySelector('[data-connector="merge"][data-lane="breakdown-agent"]')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Breakdown subagent/i }));
 
@@ -2749,6 +2752,12 @@ describe('App', () => {
     expect(mailIndex).toBeGreaterThanOrEqual(0);
     expect(coordinatorIndex).toBeGreaterThan(mailIndex);
     expect(infInIndex).toBeGreaterThan(coordinatorIndex);
+    const infInRow = orderedRows[infInIndex];
+    const infInFork = infInRow.querySelector('[data-connector="fork"][data-lane="bus"]') as HTMLElement | null;
+    expect(infInFork).toBeInTheDocument();
+    expect(infInFork?.style.left).toBe('21px');
+    expect(infInFork?.style.width).toBe('14px');
+    expect(infInRow.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
   });
 
   it('surfaces tool-agent activity in the activity panel for local Codi runs with tools enabled', async () => {
@@ -2797,6 +2806,86 @@ describe('App', () => {
     expect(screen.getByRole('complementary', { name: /Activity panel|Process graph/i })).toBeInTheDocument();
     expect(screen.getAllByText('grep').length).toBeGreaterThan(0);
     expect(screen.getByText('Found matches')).toBeInTheDocument();
+  });
+
+  it('parents staged bus and model-turn graph rows to the open branch context', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('router', '');
+      callbacks.onStageComplete?.('router', 'Route to tools.');
+      callbacks.onStageStart?.('group-select', '');
+      callbacks.onStageComplete?.('group-select', 'Use local tools.');
+      callbacks.onStageStart?.('tool-select', '');
+      callbacks.onStageComplete?.('tool-select', 'Selected Browser.');
+      callbacks.onStageStart?.('executor', '');
+      callbacks.onBusEntry?.({
+        id: 'bus-0',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Mail',
+        summary: 'Mail · user',
+        detail: 'request context',
+        actor: 'user',
+      });
+      callbacks.onBusEntry?.({
+        id: 'bus-1',
+        position: 1,
+        realtimeTs: Date.now(),
+        payloadType: 'InfIn',
+        summary: 'InfIn · 1 message',
+        detail: 'user: request context',
+      });
+      callbacks.onModelTurnStart?.('turn-1', 0);
+      callbacks.onModelTurnEnd?.('turn-1', 'Ready to call the tool.', null);
+      callbacks.onStageComplete?.('executor', 'Tool run completed.');
+      callbacks.onDone?.('Tool run completed.');
+      return { text: 'Tool run completed.', steps: 1 };
+    });
+
+    const { container } = render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Search the workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Thought for|Process ·|Working…/i }));
+
+    const busRow = container.querySelector('.pg-row[data-actor="bus"]');
+    const turnRows = Array.from(container.querySelectorAll('.pg-row[data-actor="executor"]'));
+    const turnRow = turnRows.find((row) => row.textContent?.includes('Ready to call the tool.'));
+    const busFork = busRow?.querySelector('[data-connector="fork"][data-lane="bus"]') as HTMLElement | null;
+    const turnFork = turnRow?.querySelector('[data-connector="fork"][data-lane="executor"]') as HTMLElement | null;
+
+    expect(busFork).toBeInTheDocument();
+    expect(busFork?.style.left).toBe('21px');
+    expect(busFork?.style.width).toBe('14px');
+    expect(turnFork).toBeInTheDocument();
+    expect(turnFork?.style.left).toBe('35px');
+    expect(turnFork?.style.width).toBe('14px');
+    expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
+    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).toHaveClass('pg-rail-lane-active');
+    expect(turnRow?.querySelector('[data-connector="merge"][data-lane="bus"]')).toBeInTheDocument();
   });
 
   it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {

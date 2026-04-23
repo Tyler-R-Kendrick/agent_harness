@@ -160,9 +160,9 @@ export class LogActAgent {
           history,
         });
         const normalizedCompletion: CompletionPayload = {
+          ...completion,
           type: PayloadType.Completion,
           intentId,
-          ...completion,
         };
         await this._bus.append(normalizedCompletion);
 

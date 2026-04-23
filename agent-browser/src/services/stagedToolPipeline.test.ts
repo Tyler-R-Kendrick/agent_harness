@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolSet } from 'ai';
+import { PayloadType } from 'logact';
 
 const runToolAgentMock = vi.fn();
 const runLocalToolCallExecutorMock = vi.fn();
@@ -482,8 +483,12 @@ describe('stagedToolPipeline', () => {
 
     const voter = {
       id: 'tool-path-voter',
-      async vote() {
+      tier: 'classic' as const,
+      async vote(intent: { intentId: string }) {
         return {
+          type: PayloadType.Vote as PayloadType.Vote,
+          intentId: intent.intentId,
+          voterId: 'tool-path-voter',
           approve: true,
           thought: 'Executor plan looks safe; read-only file access only.',
         };
