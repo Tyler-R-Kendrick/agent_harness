@@ -11,7 +11,6 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useCopilotReadable } from '@copilotkit/react-core';
 import type { ToolSet } from 'ai';
 import {
   ArrowLeft,
@@ -81,6 +80,8 @@ import {
   type AgentProvider,
 } from './chat-agents';
 import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-agents/toolCallSummary';
+import { useCopilotReadable } from './services/copilotRuntimeBridge';
+import { executeCliCommand } from './tools/cli/exec';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
@@ -1022,7 +1023,6 @@ function ChatMessageView({
     }
     return Array.from(byKey.values());
   })();
-  const reasoningMessage = message;
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const senderLabel = isSystem ? 'system' : isUser ? 'you' : isTerminalMessage ? 'terminal' : agentName;
@@ -1620,6 +1620,7 @@ function ChatPanel({
   onClose,
   onTerminalFsPathsChanged,
   onOpenSettings,
+  onWorkspaceFileUpsert,
   bashBySessionRef,
   webMcpModelContext,
   onSessionMcpControllerChange,
@@ -1640,6 +1641,7 @@ function ChatPanel({
   onClose: () => void;
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
   onOpenSettings: () => void;
+  onWorkspaceFileUpsert: (file: WorkspaceFile) => void;
   bashBySessionRef: React.MutableRefObject<Record<string, Bash>>;
   webMcpModelContext: ModelContext;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
@@ -2216,6 +2218,15 @@ function ChatPanel({
         }
         return undefined;
       };
+      const resolveProcessParentId = (stage: PlanningStageName): string | undefined => {
+        let parentStage = planningStageLayout[stage].parentStage;
+        while (parentStage) {
+          const processId = processIdByStage.get(parentStage);
+          if (processId) return processId;
+          parentStage = planningStageLayout[parentStage].parentStage;
+        }
+        return undefined;
+      };
       const resolveWatchdogPlanningStage = (stage: PlanningStageName | null): PlanningStageName | null => {
         let owner = stage;
         while (owner && planningMirrorStages.has(owner)) {
@@ -2386,6 +2397,7 @@ function ChatPanel({
 
         const transcript = planningTokensByStage.get(stage) ?? metadata.body;
         const parentStepId = resolvePlanningParentStepId(stage);
+        const parentProcessId = resolveProcessParentId(stage);
 
         if (stepId) {
           reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
@@ -2434,6 +2446,7 @@ function ChatPanel({
             summary: metadata.title,
             transcript,
             branchId: branch,
+            ...(parentProcessId ? { parentId: parentProcessId } : {}),
             status: 'active',
             timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
           });
@@ -2524,6 +2537,7 @@ function ChatPanel({
       const subStageFailedByParent = new Map<PlanningStageName, Set<string>>();
       const subStageDoneByParent = new Map<PlanningStageName, Set<string>>();
       const subStageLabels = new Map<string, string>();
+      let failLocalToolRun: ((reason: LocalToolTimeoutReason, stage?: PlanningStageName | null) => void) | null = null;
       const subStageKey = (stage: PlanningStageName, subStageId: string) => `${stage}:${subStageId}`;
       const clearSubStageTimers = (key: string) => {
         const timers = subStageTimers.get(key);
@@ -2580,7 +2594,7 @@ function ChatPanel({
         if (active && active.size === 0) {
           const done = subStageDoneByParent.get(stage)?.size ?? 0;
           if (done === 0) {
-            failLocalToolRun(reason, stage);
+            failLocalToolRun?.(reason, stage);
           }
         }
       };
@@ -2768,7 +2782,7 @@ function ChatPanel({
               return 'Local tool planning stalled after output stopped. Try fewer tools, a simpler prompt, or disable tools for this request.';
           }
         };
-        const failLocalToolRun = (reason: LocalToolTimeoutReason, stage: PlanningStageName | null = activePlanningStage) => {
+        failLocalToolRun = (reason: LocalToolTimeoutReason, stage: PlanningStageName | null = activePlanningStage) => {
           localToolRunTimedOut = true;
           const message = getLocalToolTimeoutMessage(reason);
           const timeoutStage = resolveWatchdogPlanningStage(stage) ?? stage;
@@ -2815,7 +2829,7 @@ function ChatPanel({
             window.clearTimeout(localToolIdleTimeoutId);
           }
           localToolIdleTimeoutId = window.setTimeout(() => {
-            failLocalToolRun(localToolWatchdogMode === 'thinking' ? 'thinking-idle' : 'streaming-idle', timeoutStage);
+            failLocalToolRun?.(localToolWatchdogMode === 'thinking' ? 'thinking-idle' : 'streaming-idle', timeoutStage);
           }, resolvePlanningStageTimeoutMs(timeoutStage, localToolWatchdogMode === 'thinking' ? 'thinking-idle' : 'streaming-idle'));
         };
         const scheduleLocalToolHardTimeout = (stage: PlanningStageName | null = activePlanningStage) => {
@@ -2827,7 +2841,7 @@ function ChatPanel({
             window.clearTimeout(localToolHardTimeoutId);
           }
           localToolHardTimeoutId = window.setTimeout(() => {
-            failLocalToolRun('no-output', timeoutStage);
+            failLocalToolRun?.('no-output', timeoutStage);
           }, resolvePlanningStageTimeoutMs(timeoutStage, 'no-output'));
         };
         const noteLocalToolPlanningOutput = (
@@ -3003,10 +3017,7 @@ function ChatPanel({
                     if (validationError) {
                       throw new TypeError(validationError);
                     }
-                    setWorkspaceFilesByWorkspace((current) => ({
-                      ...current,
-                      [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
-                    }));
+                    onWorkspaceFileUpsert(nextFile);
                   },
                   listWorkspacePaths: async () => {
                     const paths = workspaceFilesRef.current.map((file) => file.path);
@@ -3056,6 +3067,8 @@ function ChatPanel({
                 syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(delegationVoterSteps), 'active');
                 const pId = `vote:${step.id}`;
                 processIdByVoterStepId.set(step.id, pId);
+                const parentProcessId = processIdByStage.get('voter-ensemble')
+                  ?? processIdByStage.get('coordinator');
                 processLog.append({
                   id: pId,
                   kind: 'vote',
@@ -3063,6 +3076,7 @@ function ChatPanel({
                   summary: `${step.voterId} reviewing`,
                   payload: step,
                   branchId: 'voters',
+                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
                   status: 'active',
                 });
                 updateMessage(assistantId, { processEntries: snapshotProcess() });
@@ -3231,6 +3245,9 @@ function ChatPanel({
                 noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
                 const pId = `vote:${step.id}`;
                 processIdByVoterStepId.set(step.id, pId);
+                const parentProcessId = (activePlanningStage && processIdByStage.get(activePlanningStage))
+                  ?? processIdByStage.get('executor')
+                  ?? processIdByStage.get('coordinator');
                 processLog.append({
                   id: pId,
                   kind: 'vote',
@@ -3238,6 +3255,7 @@ function ChatPanel({
                   summary: `${step.voterId} reviewing`,
                   payload: step,
                   branchId: 'voters',
+                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
                   status: 'active',
                 });
                 updateMessage(assistantId, { processEntries: snapshotProcess() });
@@ -3496,6 +3514,7 @@ function ChatPanel({
           ...(transcript ? { transcript } : {}),
           payload: step,
           branchId: 'voters',
+          ...(processLog.has(rawThinkingProcessId) ? { parentId: rawThinkingProcessId } : {}),
           status: step.status,
           ts: step.startedAt,
         });
@@ -3786,7 +3805,6 @@ function ChatPanel({
       return;
     }
 
-    const { executeCliCommand } = await import('./tools/cli/exec');
     setInput('');
 
     try {
@@ -3866,7 +3884,6 @@ function ChatPanel({
     }
 
     if (typeof input.cwd === 'string' && input.cwd.trim()) {
-      const { executeCliCommand } = await import('./tools/cli/exec');
       await executeCliCommand({
         appendSharedMessages,
         getSessionBash,
@@ -8314,6 +8331,10 @@ function AgentBrowserApp() {
                 })}
                 onTerminalFsPathsChanged={handleTerminalFsPathsChanged}
                 onOpenSettings={() => switchSidebarPanel('settings')}
+                onWorkspaceFileUpsert={(nextFile) => setWorkspaceFilesByWorkspace((current) => ({
+                  ...current,
+                  [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
+                }))}
                 bashBySessionRef={bashBySessionRef}
                 webMcpModelContext={webMcpModelContext}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}

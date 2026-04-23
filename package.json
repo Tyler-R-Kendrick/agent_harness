@@ -7,7 +7,12 @@
   ],
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",
+    "verify:agent-browser": "node scripts/verify-agent-browser.mjs",
     "test:agent-browser": "npm --workspace agent-browser run test",
     "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage"
+  },
+  "overrides": {
+    "fast-xml-parser": "^5.7.0",
+    "protobufjs": "^7.5.5"
   }
 }

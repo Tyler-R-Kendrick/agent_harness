@@ -20,6 +20,10 @@ Always use TDD with code coverage metrics to ensure 100% coverage.
 Use Playwright to visually validate your work in the browser afterwards.
 Take screenshots of the outcomes and put them into your PR description so we can view the outcomes that you believe are successful.
 
+For `agent-browser` changes, do not stop at targeted tests. Before final response or PR handoff, run `npm run verify:agent-browser` from the repo root. Treat every build, lint, test, npm install, and npm audit warning or error as blocking, including unrelated issues discovered while working. Fix those issues in the same turn whenever they are in the workspace and can be fixed without reverting user work.
+
+Keep `npm audit --audit-level=moderate` clean. If a vulnerable transitive dependency cannot be removed, pin or override the patched version and run the full verification script again so dependency, lockfile, lint, test, and build health are checked together.
+
 ## Browsing and debugging
 
 When this repo is running inside a GitHub Codespace, do not use `http://localhost:<port>` as the browser URL or OAuth/debug redirect URI.

@@ -19,6 +19,9 @@ import {
 import type { ProcessEntry, ProcessEntryKind } from '../../services/processLog';
 import { branchColor } from './branchColor';
 
+const LANE_WIDTH = 14;
+const LANE_CENTER = LANE_WIDTH / 2;
+
 const KIND_ICON: Record<ProcessEntryKind, LucideIcon> = {
   'stage-start': Sparkles,
   reasoning: MessageSquare,
@@ -42,6 +45,23 @@ function formatTime(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+type LaneSpan = {
+  first: number;
+  ownLast: number;
+  last: number;
+  parent?: string;
+  hasActive: boolean;
+};
+
+function connectorStyle(fromIndex: number, toIndex: number, color: string, type: 'fork' | 'merge') {
+  return {
+    left: Math.min(fromIndex, toIndex) * LANE_WIDTH + LANE_CENTER,
+    width: Math.abs(toIndex - fromIndex) * LANE_WIDTH,
+    top: type === 'fork' ? '36%' : '64%',
+    background: color,
+  };
 }
 
 /**
@@ -80,21 +100,77 @@ export function ProcessGraph({
   // Lanes assigned in first-seen execution order so the leftmost lane is
   // whichever branch appeared first chronologically.
   const lanes: string[] = [];
-  // Track each lane's first/last row index so the rail can draw a vertical
-  // segment spanning the lane's lifetime, plus the parent branch each lane
-  // forked from (for fork/merge connectors).
-  const laneSpans = new Map<string, { first: number; last: number; parent?: string }>();
   const idToLane = new Map<string, string>();
-  sorted.forEach((entry, rowIndex) => {
+  sorted.forEach((entry) => {
     const lane = branchOf(entry);
     if (!lanes.includes(lane)) lanes.push(lane);
     idToLane.set(entry.id, lane);
+  });
+
+  // Track each lane's first/last row index so the rail can draw a vertical
+  // segment spanning the lane's lifetime, plus the parent branch each lane
+  // forked from (for fork/merge connectors).
+  const laneSpans = new Map<string, LaneSpan>();
+  sorted.forEach((entry, rowIndex) => {
+    const lane = branchOf(entry);
+    const parentLane = entry.parentId ? idToLane.get(entry.parentId) : undefined;
+    const parent = parentLane && parentLane !== lane ? parentLane : undefined;
     const existing = laneSpans.get(lane);
     if (!existing) {
-      const parentLane = entry.parentId ? idToLane.get(entry.parentId) : undefined;
-      laneSpans.set(lane, { first: rowIndex, last: rowIndex, parent: parentLane && parentLane !== lane ? parentLane : undefined });
+      laneSpans.set(lane, {
+        first: rowIndex,
+        ownLast: rowIndex,
+        last: rowIndex,
+        ...(parent ? { parent } : {}),
+        hasActive: entry.status === 'active',
+      });
     } else {
+      existing.ownLast = rowIndex;
       existing.last = rowIndex;
+      existing.hasActive = existing.hasActive || entry.status === 'active';
+      if (!existing.parent && parent) existing.parent = parent;
+    }
+  });
+
+  // A parent lane should remain visible while its child branches are running,
+  // even when the parent has no row of its own between fork and merge.
+  let extendedParentSpan = true;
+  while (extendedParentSpan) {
+    extendedParentSpan = false;
+    laneSpans.forEach((span) => {
+      if (!span.parent) return;
+      const parentSpan = laneSpans.get(span.parent);
+      if (!parentSpan) return;
+      if (parentSpan.last < span.last) {
+        parentSpan.last = span.last;
+        extendedParentSpan = true;
+      }
+    });
+  }
+
+  const connectorsByRow = new Map<number, Array<{
+    key: string;
+    type: 'fork' | 'merge';
+    laneId: string;
+    fromIndex: number;
+    toIndex: number;
+    color: string;
+  }>>();
+
+  laneSpans.forEach((span, laneId) => {
+    if (!span.parent) return;
+    const fromIndex = lanes.indexOf(span.parent);
+    const toIndex = lanes.indexOf(laneId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+    const color = branchColor(laneId);
+    const fork = connectorsByRow.get(span.first) ?? [];
+    fork.push({ key: `${laneId}:fork`, type: 'fork', laneId, fromIndex, toIndex, color });
+    connectorsByRow.set(span.first, fork);
+
+    if (!span.hasActive) {
+      const merge = connectorsByRow.get(span.last) ?? [];
+      merge.push({ key: `${laneId}:merge`, type: 'merge', laneId, fromIndex: toIndex, toIndex: fromIndex, color });
+      connectorsByRow.set(span.last, merge);
     }
   });
 
@@ -109,6 +185,7 @@ export function ProcessGraph({
         const isFailed = entry.status === 'failed';
         const isSelected = selectedEntryId === entry.id;
         const dotClassName = `pg-row-dot${isActive ? ' pg-row-dot-active' : ''}${isFailed ? ' pg-row-dot-failed' : ''}`;
+        const connectors = connectorsByRow.get(rowIndex) ?? [];
         return (
           <button
             type="button"
@@ -130,19 +207,23 @@ export function ProcessGraph({
               aria-hidden="true"
               style={{ ['--pg-lane-count' as string]: lanes.length }}
             >
+              {connectors.map((connector) => (
+                <span
+                  key={connector.key}
+                  className={`pg-rail-connector pg-rail-${connector.type}`}
+                  data-connector={connector.type}
+                  data-lane={connector.laneId}
+                  style={connectorStyle(connector.fromIndex, connector.toIndex, connector.color, connector.type)}
+                />
+              ))}
               {lanes.map((laneId, i) => {
                 const span = laneSpans.get(laneId);
                 if (!span) return null;
                 const inSpan = rowIndex >= span.first && rowIndex <= span.last;
                 const isFirst = rowIndex === span.first;
-                const isLast = rowIndex === span.last;
+                const isLast = rowIndex === span.last && span.last === span.ownLast;
                 const laneColor = branchColor(laneId);
                 const isActiveLane = i === laneIndex;
-                const parentLane = span.parent;
-                const parentIndex = parentLane ? lanes.indexOf(parentLane) : -1;
-                // Fork connector: at this lane's first row, draw a horizontal
-                // line from the parent lane to this lane.
-                const isForkRow = isFirst && parentIndex >= 0 && parentIndex !== i;
                 return (
                   <span
                     key={laneId}
@@ -150,16 +231,6 @@ export function ProcessGraph({
                     data-lane={laneId}
                     style={{ ['--pg-lane-color' as string]: laneColor }}
                   >
-                    {isForkRow ? (
-                      <span
-                        className="pg-rail-fork"
-                        style={{
-                          ['--pg-fork-from' as string]: parentIndex,
-                          ['--pg-fork-to' as string]: i,
-                          ['--pg-fork-color' as string]: laneColor,
-                        }}
-                      />
-                    ) : null}
                     {isActiveLane ? (
                       <span className={dotClassName}>
                         {isActive ? (

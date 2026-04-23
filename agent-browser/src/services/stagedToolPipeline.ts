@@ -228,14 +228,18 @@ function formatMessages(messages: ModelMessage[]): string {
   return messages
     .slice(-6)
     .map((message) => {
-      const content = typeof message.content === 'string'
-        ? message.content
-        : message.content
-          .map((part) => part.type === 'text' ? part.text : `[${part.type}]`)
-          .join('\n');
+      const content = messageContentToText(message.content);
       return `[${message.role}]\n${content}`;
     })
     .join('\n\n');
+}
+
+function messageContentToText(content: ModelMessage['content']): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return JSON.stringify(content);
+  return content
+    .map((part) => (part.type === 'text' ? part.text : `[${part.type}]`))
+    .join('\n');
 }
 
 function extractTextFromGenerateResult(result: LanguageModelV3GenerateResult): string {
@@ -553,11 +557,9 @@ export async function runStagedToolPipeline(
     : maxSteps;
 
   const voters = [...(options.voters ?? [])];
-  const defaultTask = typeof messages.at(-1)?.content === 'string'
-    ? messages.at(-1)?.content
-    : messages.at(-1)?.content
-      .map((part) => (part.type === 'text' ? part.text : ''))
-      .join('\n');
+  const defaultTask = messages.at(-1)
+    ? messageContentToText(messages.at(-1)!.content)
+    : '';
   let completionChecker = options.completionChecker
     ?? (isExecutionTask(defaultTask) ? createHeuristicCompletionChecker(defaultTask) : undefined);
 
@@ -661,11 +663,7 @@ export async function runStagedToolPipeline(
       },
     },
     messages: messages.map((message) => ({
-      content: typeof message.content === 'string'
-        ? message.content
-        : message.content
-          .map((part) => (part.type === 'text' ? part.text : `[${part.type}]`))
-          .join('\n'),
+      content: messageContentToText(message.content),
     })),
     voters,
     completionChecker: completionChecker

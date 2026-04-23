@@ -1,6 +1,6 @@
 import type { IVoter } from 'logact';
 import type { CopilotRuntimeState } from '../services/copilotApi';
-import type { HFModel } from '../types';
+import type { ChatMessage, HFModel } from '../types';
 import type { AgentStreamCallbacks } from './types';
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
@@ -13,7 +13,7 @@ export type { AgentProvider, AgentStreamCallbacks } from './types';
 
 export type StreamAgentChatOptions = {
   provider: AgentProvider;
-  messages: Array<{ id: string; role: string; content: string; streamedContent?: string }>;
+  messages: ChatMessage[];
   workspaceName: string;
   workspacePromptContext: string;
   voters?: IVoter[];

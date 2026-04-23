@@ -242,7 +242,7 @@ describe('parallelDelegationWorkflow', () => {
       '- Confirm all libraries are included.\n- Flag any metric below 100%.',
     ];
 
-    const doStream = vi.fn(async () => ({
+    const doStream = vi.fn(async (_options: unknown) => ({
       stream: new ReadableStream({
         start(controller) {
           controller.enqueue({ type: 'stream-start', warnings: [] });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ICompletionChecker, IVoter } from 'logact';
+import { PayloadType, type ICompletionChecker, type IVoter } from 'logact';
 import { runLocalToolCallExecutor } from './localToolCallExecutor';
 
 type StreamPart =
@@ -30,8 +30,10 @@ function makeStreamingModel(turns: string[]) {
   return { model, calls, getTurnCount: () => turn };
 }
 
-function makeTool(execute: (args: unknown) => unknown | Promise<unknown>) {
-  return { execute: vi.fn(execute) } as never;
+type TestTool = { execute: ReturnType<typeof vi.fn> };
+
+function makeTool<TArgs>(execute: (args: TArgs) => unknown | Promise<unknown>): TestTool {
+  return { execute: vi.fn((args: unknown) => execute(args as TArgs)) };
 }
 
 describe('runLocalToolCallExecutor', () => {
@@ -161,11 +163,23 @@ describe('runLocalToolCallExecutor', () => {
     const { model } = makeStreamingModel(['ok']);
     const voter: IVoter = {
       id: 'always-yes',
-      tier: 1,
-      vote: vi.fn(async () => ({ approve: true, reason: 'ok' })),
+      tier: 'classic',
+      vote: vi.fn(async (intent) => ({
+        type: PayloadType.Vote as PayloadType.Vote,
+        intentId: intent.intentId,
+        voterId: 'always-yes',
+        approve: true,
+        reason: 'ok',
+      })),
     };
     const checker: ICompletionChecker = {
-      check: vi.fn(async () => ({ done: true, score: 1, feedback: '' })),
+      check: vi.fn(async ({ lastResult }) => ({
+        type: PayloadType.Completion as PayloadType.Completion,
+        intentId: lastResult.intentId,
+        done: true,
+        score: 'high' as const,
+        feedback: '',
+      })),
     };
     const onVoterStep = vi.fn();
     const onIterationStep = vi.fn();

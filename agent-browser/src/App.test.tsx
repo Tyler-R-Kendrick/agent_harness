@@ -26,7 +26,7 @@ vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
 
-vi.mock('@copilotkit/react-core', () => ({
+vi.mock('./services/copilotRuntimeBridge', () => ({
   useCopilotReadable: () => undefined,
 }));
 
@@ -2662,6 +2662,9 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /Validation subagent/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reviewer votes/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /AgentBus log/i })).toBeInTheDocument();
+    const breakdownRow = screen.getByRole('button', { name: /Breakdown subagent/i });
+    expect(breakdownRow.querySelector('[data-connector="fork"][data-lane="breakdown-agent"]')).toBeInTheDocument();
+    expect(breakdownRow.querySelector('[data-connector="merge"][data-lane="breakdown-agent"]')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Breakdown subagent/i }));
 
