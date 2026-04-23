@@ -3,7 +3,7 @@ import type { CompletionPayload, ICompletionChecker } from 'logact';
 
 const EXECUTION_TASK_PATTERN = /\b(?:fix|implement|add|update|build|create|run|execute|wire|refactor|complete|finish|start implementation|ship)\b/i;
 const PLANNING_TASK_PATTERN = /\b(?:plan|delegate|parallel(?:ize|ise)?|break down|decompose|summari[sz]e|explain|review|analy[sz]e)\b/i;
-const PLAN_ONLY_PATTERN = /(?:^|\n)\s*(?:plan:|next steps?:|remaining steps?:)|\b(?:i will|i'll|we should|need to (?:do|finish|implement|run)|still need to|remaining work|follow-?up)\b/i;
+export const PLAN_ONLY_PATTERN = /(?:^|\n)\s*(?:plan:|next steps?:|remaining steps?:)|\b(?:i will|i'll|we should|need to (?:do|finish|implement|run)|still need to|remaining work|follow-?up|let me know if|specific constraints or requirements)\b/i;
 const EMPTY_OUTPUT_PATTERN = /^\s*$/;
 
 export function isExecutionTask(task?: string): boolean {

@@ -6,14 +6,21 @@ vi.mock('../chat-agents/agent-loop', async () => {
     runAgentLoop: vi.fn(actual.runAgentLoop),
   };
 });
+const runStagedToolPipelineMock = vi.fn();
+vi.mock('./stagedToolPipeline', () => ({
+  runStagedToolPipeline: (options: unknown, callbacks: unknown) => runStagedToolPipelineMock(options, callbacks),
+}));
 
 import { runAgentLoop } from '../chat-agents/agent-loop';
+import { PLAN_FILE_PATH } from './planFile';
 import {
+  parseDelegationAssignmentContracts,
   buildDelegationProblemBrief,
   buildSectionedDelegationPrompt,
   createDelegationSectionRouter,
   DELEGATION_SECTION_MARKERS,
   isParallelDelegationPrompt,
+  shouldRunParallelDelegation,
   runParallelDelegationWorkflow,
 } from './parallelDelegationWorkflow';
 
@@ -21,7 +28,9 @@ function makeStreamingModel(responses: Record<string, string>) {
   return {
     doStream: vi.fn(async ({ prompt }) => {
       const system = prompt[0]?.content as string;
-      const response = Object.entries(responses).find(([marker]) => system.includes(marker))?.[1] ?? 'fallback';
+      const response = Object.entries(responses)
+        .sort(([left], [right]) => right.length - left.length)
+        .find(([marker]) => system.includes(marker))?.[1] ?? 'fallback';
 
       return {
         stream: new ReadableStream({
@@ -49,12 +58,20 @@ function makeStreamingModel(responses: Record<string, string>) {
 describe('parallelDelegationWorkflow', () => {
   beforeEach(() => {
     vi.mocked(runAgentLoop).mockClear();
+    runStagedToolPipelineMock.mockReset();
   });
 
   it('detects delegation prompts via keyword combinations', () => {
     expect(isParallelDelegationPrompt('parallelize this and delegate it to subagents')).toBe(true);
     expect(isParallelDelegationPrompt('Identify a multi-step problem suitable for parallelization, break it into independent tasks, and delegate each to subagents for concurrent execution.')).toBe(true);
     expect(isParallelDelegationPrompt('delegate this')).toBe(false);
+  });
+
+  it('shouldRunParallelDelegation skips delegation for local models that are too small for the staged pipeline', () => {
+    const text = 'parallelize this and delegate it to subagents';
+    expect(shouldRunParallelDelegation(text, { provider: 'local', contextWindow: 2048, maxOutputTokens: 256 })).toBe(false);
+    expect(shouldRunParallelDelegation(text, { provider: 'copilot', contextWindow: 8192, maxOutputTokens: 1024 })).toBe(true);
+    expect(shouldRunParallelDelegation('hello there', { provider: 'copilot', contextWindow: 8192, maxOutputTokens: 1024 })).toBe(false);
   });
 
   it('builds a compact coordinator brief', () => {
@@ -69,6 +86,28 @@ describe('parallelDelegationWorkflow', () => {
     expect(prompt).toContain(DELEGATION_SECTION_MARKERS.assignment);
     expect(prompt).toContain(DELEGATION_SECTION_MARKERS.validation);
     expect(prompt).toContain('Do not repeat the same bullets across sections.');
+    expect(prompt).toContain('Role: <specialist role> | Owns: <track and scope> | Handoff: <next role or deliverable>');
+    expect(prompt).toContain('Each Owns field must begin with the exact breakdown track text it covers.');
+  });
+
+  it('parses strict assignment contracts and rejects loose agent labels', () => {
+    expect(parseDelegationAssignmentContracts([
+      '- Role: Planner specialist | Owns: map the seams and required runtime inputs | Handoff: Executor specialist',
+      '- Role: Executor specialist | Owns: wire execution and focused verification | Handoff: final report',
+    ].join('\n'))).toEqual([
+      {
+        role: 'Planner specialist',
+        owns: 'map the seams and required runtime inputs',
+        handoff: 'Executor specialist',
+      },
+      {
+        role: 'Executor specialist',
+        owns: 'wire execution and focused verification',
+        handoff: 'final report',
+      },
+    ]);
+
+    expect(parseDelegationAssignmentContracts('- Agent 1: inspect the seams\n- Agent 2: wire the executor')).toEqual([]);
   });
 
   it('routes sectioned deltas to distinct buffers even when markers split across chunks', () => {
@@ -100,7 +139,7 @@ describe('parallelDelegationWorkflow', () => {
   it('runs three compact worker prompts in parallel and synthesizes the final report', async () => {
     const model = makeStreamingModel({
       'delegation-worker:coordinator': 'Audit TODO coverage in src without broad scans.',
-      'delegation-worker:sectioned-plan': '===PROBLEM===\nAudit TODO coverage in src without broad scans.\n===BREAKDOWN===\n- Task A\n- Task B\n===ASSIGNMENT===\n- Agent 1: Task A\n- Agent 2: Task B\n===VALIDATION===\n- Risk: drift\n- Check: compare outputs',
+      'delegation-worker:sectioned-plan': '===PROBLEM===\nAudit TODO coverage in src without broad scans.\n===BREAKDOWN===\n- Task A\n- Task B\n===ASSIGNMENT===\n- Role: Reader specialist | Owns: Task A with source inspection only | Handoff: Reporter specialist\n- Role: Reporter specialist | Owns: Task B with summary synthesis only | Handoff: final report\n===VALIDATION===\n- Risk: drift\n- Check: compare outputs',
     });
     const onStepStart = vi.fn();
     const onStepToken = vi.fn();
@@ -117,6 +156,8 @@ describe('parallelDelegationWorkflow', () => {
     expect(result.steps).toBe(4);
     expect(result.text).toContain('Parallel delegation plan');
     expect(result.text).toContain('Subagent assignments');
+    expect(result.text).toContain('assignment-has-roles');
+    expect(result.text).toContain('Each track has an explicit role or owner with a stated handoff.');
     expect(onStepComplete).toHaveBeenCalledWith('coordinator', expect.stringContaining('Audit TODO coverage in src'));
     expect(onStepStart).toHaveBeenCalledTimes(4);
     expect(onStepToken).toHaveBeenCalled();
@@ -126,6 +167,23 @@ describe('parallelDelegationWorkflow', () => {
     expect(vi.mocked(runAgentLoop).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ completionChecker: expect.any(Object), maxIterations: 5 }),
     );
+  });
+
+  it('rejects assignment bullets that do not cover the exact emitted breakdown tracks', async () => {
+    const model = makeStreamingModel({
+      'delegation-worker:coordinator': 'Audit TODO coverage in src without broad scans.',
+      'delegation-worker:sectioned-plan': '===PROBLEM===\nAudit TODO coverage in src without broad scans.\n===BREAKDOWN===\n- Inspect src TODO coverage\n- Inspect test TODO coverage\n===ASSIGNMENT===\n- Role: Reader specialist | Owns: source inspection only | Handoff: Reporter specialist\n- Role: Reporter specialist | Owns: summary synthesis only | Handoff: final report\n===VALIDATION===\n- Risk: drift\n- Check: compare outputs',
+    });
+
+    const result = await runParallelDelegationWorkflow({
+      model: model as never,
+      prompt: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.',
+      workspaceName: 'Research',
+      capabilities: { provider: 'copilot', contextWindow: 2048, maxOutputTokens: 256 },
+    });
+
+    expect(result.text).toContain('assignment-has-roles');
+    expect(result.text).toContain('did not map each emitted track to an explicit role or owner with a stated handoff');
   });
 
   it('passes the coordinator-selected problem into each remote worker task', async () => {
@@ -180,7 +238,7 @@ describe('parallelDelegationWorkflow', () => {
       '<think>hidden planning</think>===PRO',
       'BLEM===\nAudit lib coverage health.\n===BREAK',
       'DOWN===\n- Run coverage for independent libraries.\n- Collect per-metric coverage outputs.\n===ASSIGNMENT===\n',
-      '- Agent A: cover inbrowser-use and hand off results.\n- Agent B: cover webmcp and hand off results.\n===VALIDATION===\n',
+      '- Role: Coverage specialist A | Owns: Run coverage for independent libraries across inbrowser-use and summarize the metrics | Handoff: Coverage specialist B\n- Role: Coverage specialist B | Owns: Collect per-metric coverage outputs for webmcp and combine the summaries | Handoff: final report\n===VALIDATION===\n',
       '- Confirm all libraries are included.\n- Flag any metric below 100%.',
     ];
 
@@ -227,15 +285,216 @@ describe('parallelDelegationWorkflow', () => {
     expect(onStepToken).not.toHaveBeenCalledWith('coordinator', 'hidden planning');
     expect(onStepComplete).toHaveBeenCalledWith('coordinator', 'Audit lib coverage health.');
     expect(onStepComplete).toHaveBeenCalledWith('breakdown-agent', expect.stringContaining('Run coverage for independent libraries.'));
-    expect(onStepComplete).toHaveBeenCalledWith('assignment-agent', expect.stringContaining('Agent A: cover inbrowser-use and hand off results.'));
+    expect(onStepComplete).toHaveBeenCalledWith('assignment-agent', expect.stringContaining('Role: Coverage specialist A | Owns: Run coverage for independent libraries across inbrowser-use and summarize the metrics | Handoff: Coverage specialist B'));
     expect(onStepComplete).toHaveBeenCalledWith('validation-agent', expect.stringContaining('Confirm all libraries are included.'));
 
     const tokenBodies = onStepToken.mock.calls.map(([stepId, delta]) => `${stepId}:${String(delta)}`);
     expect(tokenBodies.some((entry) => entry.includes('breakdown-agent:- Run coverage for independent libraries.'))).toBe(true);
-    expect(tokenBodies.some((entry) => entry.includes('assignment-agent:- Agent A: cover inbrowser-use and hand off results.'))).toBe(true);
+    expect(tokenBodies.some((entry) => entry.includes('assignment-agent:- Role: Coverage specialist A | Owns: Run coverage for independent libraries across inbrowser-use and summarize the metrics | Handoff: Coverage specialist B'))).toBe(true);
     expect(tokenBodies.some((entry) => entry.includes('validation-agent:- Confirm all libraries are included.'))).toBe(true);
-    expect(tokenBodies.some((entry) => entry.includes('breakdown-agent:- Agent A: cover inbrowser-use'))).toBe(false);
+    expect(tokenBodies.some((entry) => entry.includes('breakdown-agent:- Role: Coverage specialist A | Owns: cover inbrowser-use'))).toBe(false);
     expect(tokenBodies.some((entry) => entry.includes('assignment-agent:- Confirm all libraries are included.'))).toBe(false);
     expect(runAgentLoop).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts local delegation subagent stages only when their section begins streaming', async () => {
+    const streamedChunks = [
+      '===PROBLEM===\nInvestigate coverage drift.\n===BREAKDOWN===\n',
+      '- Audit libraries\n- Compare reports\n===ASSIGNMENT===\n',
+      '- Role: Audit specialist | Owns: audit libraries only | Handoff: final report\n===VALIDATION===\n',
+      '- Verify thresholds hold',
+    ];
+
+    const doStream = vi.fn(async () => ({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: 'stream-start', warnings: [] });
+          controller.enqueue({ type: 'text-start', id: 'text-0' });
+          for (const delta of streamedChunks) {
+            controller.enqueue({ type: 'text-delta', id: 'text-0', delta });
+          }
+          controller.enqueue({ type: 'text-end', id: 'text-0' });
+          controller.enqueue({
+            type: 'finish',
+            finishReason: { unified: 'stop', raw: 'stop' },
+            usage: {
+              inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+              outputTokens: { total: 0, text: 0, reasoning: 0 },
+            },
+          });
+          controller.close();
+        },
+      }),
+    }));
+
+    const onStepStart = vi.fn();
+
+    await runParallelDelegationWorkflow({
+      model: { provider: 'local', doStream } as never,
+      prompt: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.',
+      workspaceName: 'Research',
+      capabilities: { provider: 'local', contextWindow: 2048, maxOutputTokens: 256 },
+    }, { onStepStart });
+
+    expect(onStepStart.mock.calls.map(([stepId]) => stepId)).toEqual([
+      'coordinator',
+      'breakdown-agent',
+      'assignment-agent',
+      'validation-agent',
+    ]);
+  });
+
+  it('executes planned tasks, writes PLAN.md, and narrows tools per task', async () => {
+    runStagedToolPipelineMock
+      .mockResolvedValueOnce({ text: 'Inspected the workflow seams and identified the missing runtime inputs.', steps: 1 })
+      .mockResolvedValueOnce({ text: 'Implemented the executor wiring and verified the focused tests pass.', steps: 1 });
+    const model = makeStreamingModel({
+      'delegation-worker:coordinator': 'Repair the workflow so delegated tasks execute instead of returning a plan only.',
+      'delegation-worker:sectioned-plan': '===PROBLEM===\nRepair the workflow so delegated tasks execute instead of returning a plan only.\n===BREAKDOWN===\n- Identify the execution seams and required tools.\n- Wire execution and verification through the existing loop.\n===ASSIGNMENT===\n- Role: Planner specialist | Owns: Identify the execution seams and required tools while mapping the runtime requirements | Handoff: Executor specialist\n- Role: Executor specialist | Owns: Wire execution and verification through the existing loop and report the results | Handoff: final report\n===VALIDATION===\n- Confirm each task declares validations before execution.\n- Confirm PLAN.md reflects running and done states.',
+      'delegation-worker:task-planner': JSON.stringify({
+        goal: 'Execute delegated work through the existing loop and verify each task.',
+        tasks: [
+          {
+            id: 'inspect-seams',
+            title: 'Inspect execution seams',
+            description: 'Inspect the workflow seam and capture the required runtime inputs.',
+            toolIds: ['read_session_file'],
+            toolRationale: 'Read-only inspection is enough for the seam audit.',
+            dependsOn: [],
+            validations: [
+              { id: 'seam-output', kind: 'response-contains', substrings: ['runtime inputs'] },
+            ],
+          },
+          {
+            id: 'wire-executor',
+            title: 'Wire executor loop',
+            description: 'Wire the executor flow and verify the focused tests pass.',
+            toolIds: ['cli'],
+            toolRationale: 'CLI is needed to run the focused test command.',
+            dependsOn: ['inspect-seams'],
+            validations: [
+              { id: 'tests-pass', kind: 'shell-command', command: 'npm test -- --runInBand', expectExitCode: 0, stdoutIncludes: ['PASS'] },
+              { id: 'executor-output', kind: 'response-contains', substrings: ['focused tests pass'] },
+            ],
+          },
+        ],
+      }),
+    });
+    const writePlanFile = vi.fn(async () => undefined);
+    const runShellCommand = vi.fn(async () => ({ exitCode: 0, stdout: 'PASS\n2 tests passed', stderr: '' }));
+
+    const result = await runParallelDelegationWorkflow({
+      model: model as never,
+      prompt: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.',
+      workspaceName: 'Research',
+      capabilities: { provider: 'copilot', contextWindow: 2048, maxOutputTokens: 256 },
+      execution: {
+        tools: {
+          cli: { execute: vi.fn() },
+          read_session_file: { execute: vi.fn() },
+        } as never,
+        toolDescriptors: [
+          {
+            id: 'cli',
+            label: 'CLI',
+            description: 'Run shell commands.',
+            group: 'built-in',
+            groupLabel: 'Built-In',
+          },
+          {
+            id: 'read_session_file',
+            label: 'Read session file',
+            description: 'Read a file from the session filesystem.',
+            group: 'built-in',
+            groupLabel: 'Built-In',
+          },
+        ],
+        instructions: 'Use the selected tools and verify the work before claiming completion.',
+        messages: [{ role: 'user', content: 'Repair the workflow end-to-end.' }],
+        writePlanFile,
+        listWorkspacePaths: async () => [PLAN_FILE_PATH],
+        runShellCommand,
+      },
+    });
+
+    expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(2);
+    expect(runStagedToolPipelineMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        toolDescriptors: [expect.objectContaining({ id: 'read_session_file' })],
+        tools: expect.objectContaining({ read_session_file: expect.any(Object) }),
+        completionChecker: expect.any(Object),
+      }),
+    );
+    expect(runStagedToolPipelineMock.mock.calls[0]?.[0].tools.cli).toBeUndefined();
+    expect(runStagedToolPipelineMock.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        toolDescriptors: [expect.objectContaining({ id: 'cli' })],
+        tools: expect.objectContaining({ cli: expect.any(Object) }),
+        completionChecker: expect.any(Object),
+      }),
+    );
+    expect(runStagedToolPipelineMock.mock.calls[1]?.[0].tools.read_session_file).toBeUndefined();
+    expect(runShellCommand).toHaveBeenCalledWith('npm test -- --runInBand');
+    expect(writePlanFile).toHaveBeenCalledWith(PLAN_FILE_PATH, expect.stringContaining('Status: pending'));
+    expect(writePlanFile).toHaveBeenLastCalledWith(
+      PLAN_FILE_PATH,
+      expect.stringContaining('Status: done'),
+    );
+    expect(result.steps).toBe(6);
+    expect(result.text).toContain('Executable task plan');
+    expect(result.text).toContain('Inspect execution seams');
+    expect(result.text).toContain('Wire executor loop');
+    expect(result.text).toContain('Implemented the executor wiring');
+  });
+
+  it('marks the task failed when validations still fail after execution', async () => {
+    runStagedToolPipelineMock.mockResolvedValue({ text: 'Implemented the change but skipped verification.', steps: 1 });
+    const model = makeStreamingModel({
+      'delegation-worker:coordinator': 'Repair the workflow so delegated tasks execute instead of returning a plan only.',
+      'delegation-worker:sectioned-plan': '===PROBLEM===\nRepair the workflow so delegated tasks execute instead of returning a plan only.\n===BREAKDOWN===\n- Execute the repair.\n===ASSIGNMENT===\n- Role: Executor specialist | Owns: Execute the repair and verify the focused tests pass | Handoff: final report\n===VALIDATION===\n- Confirm tests pass before completion.',
+      'delegation-worker:task-planner': JSON.stringify({
+        goal: 'Execute the repair and verify it.',
+        tasks: [
+          {
+            id: 'wire-executor',
+            title: 'Wire executor loop',
+            description: 'Wire the executor flow and verify the focused tests pass.',
+            toolIds: ['cli'],
+            dependsOn: [],
+            validations: [
+              { id: 'tests-pass', kind: 'shell-command', command: 'npm test -- --runInBand', expectExitCode: 0, stdoutIncludes: ['PASS'] },
+            ],
+          },
+        ],
+      }),
+    });
+    const writePlanFile = vi.fn(async () => undefined);
+
+    await expect(runParallelDelegationWorkflow({
+      model: model as never,
+      prompt: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.',
+      workspaceName: 'Research',
+      capabilities: { provider: 'copilot', contextWindow: 2048, maxOutputTokens: 256 },
+      execution: {
+        tools: { cli: { execute: vi.fn() } } as never,
+        toolDescriptors: [{
+          id: 'cli',
+          label: 'CLI',
+          description: 'Run shell commands.',
+          group: 'built-in',
+          groupLabel: 'Built-In',
+        }],
+        instructions: 'Use the selected tools and verify the work before claiming completion.',
+        messages: [{ role: 'user', content: 'Repair the workflow end-to-end.' }],
+        writePlanFile,
+        listWorkspacePaths: async () => [PLAN_FILE_PATH],
+        runShellCommand: async () => ({ exitCode: 1, stdout: 'FAIL', stderr: 'tests failed' }),
+      },
+    })).rejects.toThrow('tests-pass (shell-command) exit code 1 !== 0');
+
+    expect(writePlanFile).toHaveBeenLastCalledWith(
+      PLAN_FILE_PATH,
+      expect.stringContaining('Status: failed'),
+    );
   });
 });

@@ -83,14 +83,17 @@ import {
 import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-agents/toolCallSummary';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
-import { ActivityPanel, InlineReasoning } from './features/reasoning/ReasoningUi';
-import { InlineVoters, VotersPanel } from './features/voters';
+import { formatOperationDuration } from './features/operation-pane';
+// Unified per-turn process visualization surfaced via InlineProcess and
+// ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import { LocalLanguageModel } from './services/localLanguageModel';
-import { isParallelDelegationPrompt, runParallelDelegationWorkflow } from './services/parallelDelegationWorkflow';
+import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline } from './services/stagedToolPipeline';
+import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
+import { InlineProcess, ProcessPanel } from './features/process';
 import {
   createWebMcpToolBridge,
   registerWorkspaceTools,
@@ -125,6 +128,7 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import { STORAGE_KEYS, isString, isStringRecord, useStoredState } from './services/sessionState';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import {
   buildActiveSessionFilesystemEntries,
@@ -137,7 +141,7 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
-import type { BrowserNavHistory, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeKind, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 import type { CliHistoryEntry } from './tools/types';
 import { installModelContext, ModelContext } from 'webmcp';
 
@@ -865,13 +869,15 @@ function createInitialLocalReasoningStep(title: string, body: string): Reasoning
   };
 }
 
-const LOCAL_TOOL_RUN_TIMEOUT_MS = 30_000;
+const LOCAL_TOOL_STREAMING_IDLE_TIMEOUT_MS = 180_000;
+const LOCAL_TOOL_THINKING_IDLE_TIMEOUT_MS = 180_000;
+const LOCAL_TOOL_HARD_TIMEOUT_MS = 300_000;
 
-type ActivityPanelKind = 'reasoning' | 'voters';
+type LocalToolWatchdogMode = 'thinking' | 'streaming';
+type LocalToolTimeoutReason = 'no-output' | 'thinking-idle' | 'streaming-idle';
 
 type ActivitySelection = {
   messageId: string;
-  panel: ActivityPanelKind;
 };
 
 function getActiveReasoningStepId(steps: ReasoningStep[]): string | undefined {
@@ -998,12 +1004,24 @@ function ChatMessageView({
   message: ChatMessage;
   agentName: string;
   activitySelected?: boolean;
-  onOpenActivity?: (messageId: string, panel: ActivityPanelKind) => void;
+  onOpenActivity?: (messageId: string) => void;
 }) {
   const content = message.streamedContent || message.content;
   const isTerminalMessage = message.statusText?.startsWith('terminal') ?? false;
   const allReasoningSteps = message.reasoningSteps ?? [];
-  const toolSteps = allReasoningSteps.filter((step) => step.kind === 'tool');
+  // De-duplicate tool chips by toolCallId so each unique tool invocation
+  // renders exactly one chip. Some pipelines (LogAct iterations, retries)
+  // may emit the same toolCallId multiple times; the latest entry wins so
+  // the chip reflects current status (active → done) and result.
+  const toolSteps = (() => {
+    const allTools = allReasoningSteps.filter((step) => step.kind === 'tool');
+    const byKey = new Map<string, typeof allTools[number]>();
+    for (const step of allTools) {
+      const key = step.toolCallId ?? step.id;
+      byKey.set(key, step);
+    }
+    return Array.from(byKey.values());
+  })();
   const reasoningMessage = message;
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -1020,8 +1038,9 @@ function ChatMessageView({
           <span className="sender-name">{senderLabel}</span>
         </div>
       )}
-      {hasReasoning ? <InlineReasoning message={reasoningMessage} selected={activitySelected} onOpenActivity={(messageId) => onOpenActivity?.(messageId, 'reasoning')} /> : null}
-      {hasVoters ? <InlineVoters message={message} onOpenActivity={(messageId) => onOpenActivity?.(messageId, 'voters')} /> : null}
+      {hasReasoning || hasVoters || (message.processEntries?.length ?? 0) > 0 ? (
+        <InlineProcess message={message} selected={activitySelected} onOpenActivity={onOpenActivity} />
+      ) : null}
       {isStopped && (
         <div className="message-step message-step-static">
           <span className="message-step-dot" />
@@ -1629,9 +1648,24 @@ function ChatPanel({
   const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
   const [input, setInput] = useState('');
   const [chatHistoryBySession, setChatHistoryBySession] = useState<Record<string, string[]>>({});
-  const [selectedModelBySession, setSelectedModelBySession] = useState<Record<string, string>>({});
-  const [selectedProviderBySession, setSelectedProviderBySession] = useState<Record<string, AgentProvider>>({});
-  const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useState<Record<string, string>>({});
+  const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
+    sessionStorageBackend,
+    STORAGE_KEYS.selectedCodiModelBySession,
+    isStringRecord,
+    {},
+  );
+  const [selectedProviderBySession, setSelectedProviderBySession] = useStoredState<Record<string, AgentProvider>>(
+    sessionStorageBackend,
+    STORAGE_KEYS.selectedProviderBySession,
+    isAgentProviderRecord,
+    {},
+  );
+  const [selectedCopilotModelBySession, setSelectedCopilotModelBySession] = useStoredState<Record<string, string>>(
+    sessionStorageBackend,
+    STORAGE_KEYS.selectedCopilotModelBySession,
+    isStringRecord,
+    {},
+  );
   const [selectedAgentIdBySession, setSelectedAgentIdBySession] = useState<Record<string, string | null>>({});
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
@@ -1693,7 +1727,9 @@ function ChatPanel({
   }, [activeChatSessionId]);
   const activeActivitySelection = activeActivityBySession[activeChatSessionId] ?? null;
   const activeActivityMessageId = activeActivitySelection?.messageId ?? null;
-  const activeActivityPanel = activeActivitySelection?.panel ?? 'reasoning';
+  // Panel kind is no longer used by the unified ProcessPanel; selection retains
+  // the kind tag only so legacy tests can still pass it through.
+  void activeActivitySelection;
   const activeActivityMessage = !showBash && activeActivityMessageId
     ? messages.find((message) => message.id === activeActivityMessageId) ?? null
     : null;
@@ -1738,7 +1774,9 @@ function ChatPanel({
   const selectedAgentIdRef = useRef<string | null>(selectedAgentId);
   const selectedToolIdsRef = useRef<string[]>(selectedToolIds);
   const activeModeRef = useRef(activeMode);
+  const activeSessionIdRef = useRef(activeSessionId);
   const cwdBySessionRef = useRef(cwdBySession);
+  const workspaceFilesRef = useRef(workspaceFiles);
 
   useEffect(() => {
     selectedProviderRef.current = selectedProvider;
@@ -1757,6 +1795,10 @@ function ChatPanel({
   }, [selectedAgentId]);
 
   useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
+
+  useEffect(() => {
     selectedToolIdsRef.current = selectedToolIds;
   }, [selectedToolIds]);
 
@@ -1767,6 +1809,10 @@ function ChatPanel({
   useEffect(() => {
     cwdBySessionRef.current = cwdBySession;
   }, [cwdBySession]);
+
+  useEffect(() => {
+    workspaceFilesRef.current = workspaceFiles;
+  }, [workspaceFiles]);
 
   useEffect(() => {
     setSelectedSkillSuggestionIndex(0);
@@ -1920,8 +1966,8 @@ function ChatPanel({
     }));
   }
 
-  const selectActivityMessage = useCallback((messageId: string, panel: ActivityPanelKind = 'reasoning') => {
-    setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: { messageId, panel } }));
+  const selectActivityMessage = useCallback((messageId: string) => {
+    setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: { messageId } }));
   }, [activeChatSessionId]);
 
   const runSandboxPrompt = useCallback(async (text: string, assistantId: string) => {
@@ -2033,14 +2079,57 @@ function ChatPanel({
       }
 
       const controller = new AbortController();
-      type PlanningStageName = 'router' | 'group-select' | 'tool-select' | 'chat' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent';
+      type PlanningStageName = 'router' | 'group-select' | 'tool-select' | 'executor' | 'chat' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent' | 'voter-ensemble' | 'agent-bus';
+      type PlanningStageLayout = {
+        parentStage?: PlanningStageName;
+        lane?: 'sequential' | 'parallel';
+      };
+      type PlanningStageTimeouts = {
+        hardMs: number;
+        thinkingIdleMs: number;
+        streamingIdleMs: number;
+      };
       let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
         ? [createInitialLocalReasoningStep('Planning tool run', 'Codi is deciding how to use local tools and delegate work.')]
         : [];
+      let delegationVoterSteps: VoterStep[] = [];
+      let delegationBusEntries: BusEntryStep[] = [];
+      const processLog = new ProcessLog();
+      const processBranchByStage = new Map<PlanningStageName, string>();
+      const processIdByStage = new Map<PlanningStageName, string>();
+      const processIdByVoterStepId = new Map<string, string>();
+      const processIdByToolCallId = new Map<string, string>();
+      const resolveProcessBranch = (stage: PlanningStageName): string => {
+        const cached = processBranchByStage.get(stage);
+        if (cached) return cached;
+        // Parallel subagents get their own colored rail; everything else
+        // collapses onto the coordinator/root branch.
+        const branch = (
+          stage === 'breakdown-agent' || stage === 'assignment-agent' || stage === 'validation-agent'
+            ? stage
+            : stage === 'agent-bus'
+              ? 'bus'
+              : stage === 'voter-ensemble'
+                ? 'voters'
+                : 'coordinator'
+        );
+        processBranchByStage.set(stage, branch);
+        return branch;
+      };
+      const snapshotProcess = (): ProcessEntry[] => processLog.snapshot();
       let localToolRunTimedOut = false;
+      let activePlanningStage: PlanningStageName | null = null;
       const toolStepIdsByCallId = new Map<string, string>();
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
+      const previewPlanningBody = (content: string) => (
+        content.length > 1_500 ? `…${content.slice(-1_500)}` : content
+      );
+      const formatPlanningLine = (content: string, maxLength = 120) => {
+        const compact = content.replace(/\s+/g, ' ').trim();
+        if (!compact) return 'no detail captured';
+        return compact.length > maxLength ? `${compact.slice(0, maxLength - 1)}…` : compact;
+      };
       const planningStageMeta: Record<PlanningStageName, { title: string; body: string }> = {
         router: {
           title: 'Routing request',
@@ -2053,6 +2142,10 @@ function ChatPanel({
         'tool-select': {
           title: 'Selecting tools',
           body: 'Picking the smallest specific tool subset for execution.',
+        },
+        executor: {
+          title: 'Executing tools',
+          body: 'Running selected tools and composing the final response.',
         },
         chat: {
           title: 'Answering directly',
@@ -2074,6 +2167,61 @@ function ChatPanel({
           title: 'Validation subagent',
           body: 'Checking risks, coordination, and success criteria.',
         },
+        'voter-ensemble': {
+          title: 'Reviewer votes',
+          body: 'Reviewing the delegated plan with focused classic voters.',
+        },
+        'agent-bus': {
+          title: 'AgentBus log',
+          body: 'Capturing the append-only process log for this delegation run.',
+        },
+      };
+      const planningStageLayout: Record<PlanningStageName, PlanningStageLayout> = {
+        router: {},
+        'group-select': { parentStage: 'router' },
+        'tool-select': { parentStage: 'group-select' },
+        executor: { parentStage: 'tool-select' },
+        chat: { parentStage: 'router' },
+        coordinator: {},
+        'breakdown-agent': { parentStage: 'coordinator', lane: 'parallel' },
+        'assignment-agent': { parentStage: 'coordinator', lane: 'parallel' },
+        'validation-agent': { parentStage: 'coordinator', lane: 'parallel' },
+        'voter-ensemble': { parentStage: 'coordinator' },
+        'agent-bus': { parentStage: 'coordinator' },
+      };
+      const planningMirrorStages = new Set<PlanningStageName>(['voter-ensemble', 'agent-bus']);
+      const planningStageTimeouts: Record<PlanningStageName, PlanningStageTimeouts> = {
+        router: {
+          hardMs: LOCAL_TOOL_HARD_TIMEOUT_MS,
+          thinkingIdleMs: LOCAL_TOOL_THINKING_IDLE_TIMEOUT_MS,
+          streamingIdleMs: LOCAL_TOOL_STREAMING_IDLE_TIMEOUT_MS,
+        },
+        'group-select': { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
+        'tool-select': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 135_000 },
+        executor: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
+        chat: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
+        coordinator: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
+        'breakdown-agent': { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
+        'assignment-agent': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 120_000 },
+        'validation-agent': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 120_000 },
+        'voter-ensemble': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
+        'agent-bus': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
+      };
+      const resolvePlanningParentStepId = (stage: PlanningStageName): string | undefined => {
+        let parentStage = planningStageLayout[stage].parentStage;
+        while (parentStage) {
+          const stepId = planningStepIdsByStage.get(parentStage);
+          if (stepId) return stepId;
+          parentStage = planningStageLayout[parentStage].parentStage;
+        }
+        return undefined;
+      };
+      const resolveWatchdogPlanningStage = (stage: PlanningStageName | null): PlanningStageName | null => {
+        let owner = stage;
+        while (owner && planningMirrorStages.has(owner)) {
+          owner = planningStageLayout[owner].parentStage ?? null;
+        }
+        return owner;
       };
       const emitReasoningUpdate = (isThinking: boolean) => {
         updateMessage(assistantId, {
@@ -2083,7 +2231,71 @@ function ChatPanel({
           currentStepId: getActiveReasoningStepId(reasoningSteps),
           reasoningStartedAt: reasoningSteps[0]?.startedAt,
           isThinking,
+          voterSteps: delegationVoterSteps.length ? delegationVoterSteps : undefined,
+          isVoting: delegationVoterSteps.some((step) => step.status === 'active'),
+          busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
+          processEntries: snapshotProcess(),
         });
+      };
+      const buildDelegationVoterStageBody = (steps: VoterStep[]) => {
+        if (!steps.length) return planningStageMeta['voter-ensemble'].body;
+        return [
+          `${steps.length} reviewer${steps.length === 1 ? '' : 's'} evaluated the delegation plan.`,
+          ...steps.map((step) => {
+            const verdict = step.status === 'active'
+              ? 'Reviewing'
+              : step.approve === true
+                ? 'Approved'
+                : step.approve === false
+                  ? 'Rejected'
+                  : 'Pending';
+            const rationale = step.thought ?? step.body ?? 'Waiting for reviewer output.';
+            return `- ${step.voterId}: ${verdict} — ${formatPlanningLine(rationale)}`;
+          }),
+        ].join('\n');
+      };
+      const buildDelegationBusStageBody = (entries: BusEntryStep[]) => {
+        if (!entries.length) return planningStageMeta['agent-bus'].body;
+        return [
+          `${entries.length} AgentBus entr${entries.length === 1 ? 'y' : 'ies'} recorded during this run.`,
+          ...entries.map((entry, index) => `${index + 1}. ${entry.summary} — ${formatPlanningLine(entry.detail)}`),
+        ].join('\n');
+      };
+      const resolvePlanningStageTimeoutMs = (stage: PlanningStageName, reason: LocalToolTimeoutReason): number => {
+        const timeout = planningStageTimeouts[stage];
+        switch (reason) {
+          case 'no-output':
+            return timeout.hardMs;
+          case 'thinking-idle':
+            return timeout.thinkingIdleMs;
+          default:
+            return timeout.streamingIdleMs;
+        }
+      };
+      const resolvePlanningStageDisplayTimeoutMs = (
+        stage: PlanningStageName,
+        reason: LocalToolTimeoutReason,
+      ): number | undefined => (
+        planningMirrorStages.has(stage)
+          ? undefined
+          : resolvePlanningStageTimeoutMs(stage, reason)
+      );
+      const setPlanningStageTimeout = (stage: PlanningStageName, reason: LocalToolTimeoutReason) => {
+        const stepId = planningStepIdsByStage.get(stage);
+        if (!stepId) return;
+        reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+          timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, reason),
+        });
+      };
+      const buildPlanningStageTimeoutBody = (stage: PlanningStageName, reason: LocalToolTimeoutReason) => {
+        const existing = planningTokensByStage.get(stage)?.trim() || planningStageMeta[stage].body;
+        const timeoutLabel = formatOperationDuration(Math.round(resolvePlanningStageTimeoutMs(stage, reason) / 1000));
+        const reasonLabel = reason === 'no-output'
+          ? 'waiting for any output.'
+          : reason === 'thinking-idle'
+            ? 'waiting for visible output while the model was still thinking.'
+            : 'waiting for more streamed output.';
+        return `${existing}\n\nTimed out after ${timeoutLabel} ${reasonLabel}`;
       };
       const finalizeToolReasoningSteps = (): ReasoningStep[] => reasoningSteps.map((step) => (
         step.status === 'done'
@@ -2121,6 +2333,26 @@ function ChatPanel({
         if (toolCallId) {
           toolStepIdsByCallId.set(toolCallId, stepId);
         }
+        const processId = `tool:${stepId}`;
+        if (toolCallId) {
+          processIdByToolCallId.set(toolCallId, processId);
+        }
+        // Attach this tool-call row to the currently-active executor stage
+        // so the gitgraph layer can render a fork connector from the
+        // executor lane to the tools lane.
+        const parentProcessId = (activePlanningStage && processIdByStage.get(activePlanningStage))
+          ?? processIdByStage.get('executor');
+        processLog.append({
+          id: processId,
+          kind: 'tool-call',
+          actor: toolName,
+          summary: summarizeToolCall(toolName, args),
+          transcript: formatToolArgs(args),
+          payload: { toolName, toolCallId, args },
+          branchId: 'tools',
+          ...(parentProcessId ? { parentId: parentProcessId } : {}),
+          status: 'active',
+        });
         updateMessage(assistantId, {
           status: 'streaming',
           loadingStatus: null,
@@ -2128,10 +2360,12 @@ function ChatPanel({
           currentStepId: getActiveReasoningStepId(reasoningSteps),
           reasoningStartedAt: reasoningSteps[0]?.startedAt,
           isThinking: false,
+          processEntries: snapshotProcess(),
         });
       };
-      const beginPlanningStage = (stage: PlanningStageName) => {
+      const beginPlanningStage = (stage: PlanningStageName, timeoutReason: LocalToolTimeoutReason = 'no-output') => {
         const metadata = planningStageMeta[stage];
+        const layout = planningStageLayout[stage];
         let stepId = planningStepIdsByStage.get(stage);
 
         if (!stepId && planningStepIdsByStage.size === 0) {
@@ -2142,17 +2376,26 @@ function ChatPanel({
           }
         }
 
-        reasoningSteps = reasoningSteps.map((step) => (
-          step.kind === 'thinking' && step.status === 'active' && step.id !== stepId
-            ? { ...step, status: 'done' as const, endedAt: Date.now() }
-            : step
-        ));
+        if (layout.lane !== 'parallel') {
+          reasoningSteps = reasoningSteps.map((step) => (
+            step.kind === 'thinking' && step.status === 'active' && step.id !== stepId
+              ? { ...step, status: 'done' as const, endedAt: Date.now() }
+              : step
+          ));
+        }
+
+        const transcript = planningTokensByStage.get(stage) ?? metadata.body;
+        const parentStepId = resolvePlanningParentStepId(stage);
 
         if (stepId) {
           reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
             title: metadata.title,
-            body: metadata.body,
+            body: previewPlanningBody(transcript),
+            transcript,
+            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
             status: 'active',
+            parentStepId,
+            lane: layout.lane,
           });
         } else {
           stepId = createUniqueId();
@@ -2161,10 +2404,39 @@ function ChatPanel({
             id: stepId,
             kind: 'thinking',
             title: metadata.title,
-            body: metadata.body,
+            body: previewPlanningBody(transcript),
+            transcript,
             startedAt: Date.now(),
+            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
             status: 'active',
+            parentStepId,
+            lane: layout.lane,
           }];
+        }
+
+        // Mirror to ProcessLog
+        const processId = processIdByStage.get(stage);
+        const branch = resolveProcessBranch(stage);
+        if (processId) {
+          processLog.update(processId, {
+            summary: metadata.title,
+            transcript,
+            status: 'active',
+            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
+          });
+        } else {
+          const newId = `stage:${stage}:${createUniqueId()}`;
+          processIdByStage.set(stage, newId);
+          processLog.append({
+            id: newId,
+            kind: stage === 'voter-ensemble' || stage === 'agent-bus' ? 'reasoning' : 'stage-start',
+            actor: stage,
+            summary: metadata.title,
+            transcript,
+            branchId: branch,
+            status: 'active',
+            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
+          });
         }
 
         emitReasoningUpdate(true);
@@ -2176,9 +2448,21 @@ function ChatPanel({
         const current = `${planningTokensByStage.get(stage) ?? ''}${token}`;
         planningTokensByStage.set(stage, current);
         reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
-          body: current.length > 1_500 ? `…${current.slice(-1_500)}` : current,
+          body: previewPlanningBody(current),
+          transcript: current,
+          parentStepId: resolvePlanningParentStepId(stage),
+          lane: planningStageLayout[stage].lane,
+          timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, 'streaming-idle'),
           status: 'active',
         });
+        const processId = processIdByStage.get(stage);
+        if (processId) {
+          processLog.update(processId, {
+            transcript: current,
+            status: 'active',
+            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, 'streaming-idle'),
+          });
+        }
         emitReasoningUpdate(true);
       };
       const completePlanningStage = (stage: PlanningStageName, finalText?: string) => {
@@ -2187,11 +2471,202 @@ function ChatPanel({
         const accumulated = planningTokensByStage.get(stage);
         const body = accumulated?.trim() || finalText?.trim() || planningStageMeta[stage].body;
         reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
-          body: body.length > 1_500 ? `…${body.slice(-1_500)}` : body,
+          body: previewPlanningBody(body),
+          transcript: body,
+          parentStepId: resolvePlanningParentStepId(stage),
+          lane: planningStageLayout[stage].lane,
           status: 'done',
           endedAt: Date.now(),
         });
+        const processId = processIdByStage.get(stage);
+        if (processId) {
+          processLog.update(processId, { transcript: body, status: 'done' });
+        }
         emitReasoningUpdate(false);
+      };
+      const syncPlanningStage = (stage: PlanningStageName, transcript: string, status: 'active' | 'done') => {
+        if (!planningStepIdsByStage.has(stage)) {
+          beginPlanningStage(stage, status === 'active' ? 'streaming-idle' : 'no-output');
+        }
+        const stepId = planningStepIdsByStage.get(stage);
+        if (!stepId) return;
+        planningTokensByStage.set(stage, transcript);
+        reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+          body: previewPlanningBody(transcript),
+          transcript,
+          parentStepId: resolvePlanningParentStepId(stage),
+          lane: planningStageLayout[stage].lane,
+          timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, status === 'active' ? 'streaming-idle' : 'no-output'),
+          status,
+          ...(status === 'done' ? { endedAt: Date.now() } : {}),
+        });
+        const processId = processIdByStage.get(stage);
+        if (processId) {
+          processLog.update(processId, {
+            transcript,
+            status,
+            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, status === 'active' ? 'streaming-idle' : 'no-output'),
+          });
+        }
+        emitReasoningUpdate(status === 'active');
+      };
+      // ── Sub-stage support: parallel per-group tool-select children ─────
+      // Sub-stages are addressed by composite `${stage}:${subStageId}` keys
+      // and render as ProcessLog children of their parent stage row. Each
+      // sub-stage has its own watchdog so a single stalled stream no longer
+      // aborts the whole turn — only when ALL siblings stall do we surface
+      // the run-level timeout via the existing fail path.
+      type SubStageTimers = { idle: number | null; hard: number | null };
+      const subStageProcessIds = new Map<string, string>();
+      const subStageTimers = new Map<string, SubStageTimers>();
+      const subStageSawOutput = new Set<string>();
+      const subStageActiveByParent = new Map<PlanningStageName, Set<string>>();
+      const subStageFailedByParent = new Map<PlanningStageName, Set<string>>();
+      const subStageDoneByParent = new Map<PlanningStageName, Set<string>>();
+      const subStageLabels = new Map<string, string>();
+      const subStageKey = (stage: PlanningStageName, subStageId: string) => `${stage}:${subStageId}`;
+      const clearSubStageTimers = (key: string) => {
+        const timers = subStageTimers.get(key);
+        if (!timers) return;
+        if (timers.idle !== null) window.clearTimeout(timers.idle);
+        if (timers.hard !== null) window.clearTimeout(timers.hard);
+        subStageTimers.delete(key);
+      };
+      const settleSubStage = (
+        stage: PlanningStageName,
+        subStageId: string,
+        outcome: 'done' | 'failed',
+        finalText?: string,
+      ) => {
+        const key = subStageKey(stage, subStageId);
+        clearSubStageTimers(key);
+        subStageActiveByParent.get(stage)?.delete(subStageId);
+        if (outcome === 'failed') {
+          const set = subStageFailedByParent.get(stage) ?? new Set<string>();
+          set.add(subStageId);
+          subStageFailedByParent.set(stage, set);
+        } else {
+          const set = subStageDoneByParent.get(stage) ?? new Set<string>();
+          set.add(subStageId);
+          subStageDoneByParent.set(stage, set);
+        }
+        const processId = subStageProcessIds.get(key);
+        if (processId) {
+          processLog.update(processId, {
+            status: outcome,
+            ...(finalText !== undefined ? { transcript: finalText } : {}),
+          });
+        }
+        emitReasoningUpdate(false);
+      };
+      const failSubStageFromTimeout = (
+        stage: PlanningStageName,
+        subStageId: string,
+        reason: LocalToolTimeoutReason,
+      ) => {
+        const key = subStageKey(stage, subStageId);
+        const label = subStageLabels.get(key) ?? subStageId;
+        const timeoutLabel = formatOperationDuration(Math.round(resolvePlanningStageTimeoutMs(stage, reason) / 1000));
+        const reasonLabel = reason === 'no-output'
+          ? 'waiting for any output.'
+          : reason === 'thinking-idle'
+            ? 'waiting for visible output while the model was still thinking.'
+            : 'waiting for more streamed output.';
+        const transcript = `Stalled ${label} after ${timeoutLabel} ${reasonLabel}`;
+        settleSubStage(stage, subStageId, 'failed', transcript);
+        // If every sibling stalled, the parent run-level watchdog fires via
+        // the existing fail path. Otherwise the surviving children continue.
+        const active = subStageActiveByParent.get(stage);
+        if (active && active.size === 0) {
+          const done = subStageDoneByParent.get(stage)?.size ?? 0;
+          if (done === 0) {
+            failLocalToolRun(reason, stage);
+          }
+        }
+      };
+      const scheduleSubStageIdle = (stage: PlanningStageName, subStageId: string) => {
+        const key = subStageKey(stage, subStageId);
+        const timers = subStageTimers.get(key) ?? { idle: null, hard: null };
+        if (timers.idle !== null) window.clearTimeout(timers.idle);
+        timers.idle = window.setTimeout(() => {
+          failSubStageFromTimeout(stage, subStageId, 'streaming-idle');
+        }, resolvePlanningStageTimeoutMs(stage, 'streaming-idle'));
+        subStageTimers.set(key, timers);
+      };
+      const scheduleSubStageHard = (stage: PlanningStageName, subStageId: string) => {
+        const key = subStageKey(stage, subStageId);
+        const timers = subStageTimers.get(key) ?? { idle: null, hard: null };
+        if (timers.hard !== null) window.clearTimeout(timers.hard);
+        timers.hard = window.setTimeout(() => {
+          failSubStageFromTimeout(stage, subStageId, 'no-output');
+        }, resolvePlanningStageTimeoutMs(stage, 'no-output'));
+        subStageTimers.set(key, timers);
+      };
+      const beginSubStage = (
+        stage: PlanningStageName,
+        subStageId: string,
+        label: string | undefined,
+      ) => {
+        const key = subStageKey(stage, subStageId);
+        if (label) subStageLabels.set(key, label);
+        const active = subStageActiveByParent.get(stage) ?? new Set<string>();
+        active.add(subStageId);
+        subStageActiveByParent.set(stage, active);
+        const parentProcessId = processIdByStage.get(stage);
+        if (!subStageProcessIds.has(key)) {
+          const processId = `stage:${stage}:${subStageId}:${createUniqueId()}`;
+          subStageProcessIds.set(key, processId);
+          processLog.append({
+            id: processId,
+            kind: 'tool-select',
+            actor: label ? `tools:${label}` : `tools:${subStageId}`,
+            summary: `Selecting tools · ${label ?? subStageId}`,
+            ...(parentProcessId ? { parentId: parentProcessId } : {}),
+            branchId: `${stage}-children`,
+            status: 'active',
+            timeoutMs: resolvePlanningStageTimeoutMs(stage, 'no-output'),
+          });
+        }
+        scheduleSubStageHard(stage, subStageId);
+        emitReasoningUpdate(true);
+      };
+      const appendSubStageToken = (stage: PlanningStageName, subStageId: string, token: string) => {
+        if (!token) return;
+        const key = subStageKey(stage, subStageId);
+        subStageSawOutput.add(key);
+        const processId = subStageProcessIds.get(key);
+        if (!processId) return;
+        const existing = processLog.snapshot().find((entry) => entry.id === processId);
+        const accumulated = `${existing?.transcript ?? ''}${token}`;
+        processLog.update(processId, {
+          transcript: accumulated,
+          status: 'active',
+          timeoutMs: resolvePlanningStageTimeoutMs(stage, 'streaming-idle'),
+        });
+        // Cancel hard timer once we've seen any output; idle timer takes over.
+        const timers = subStageTimers.get(key);
+        if (timers?.hard !== null && timers) {
+          window.clearTimeout(timers.hard!);
+          timers.hard = null;
+          subStageTimers.set(key, timers);
+        }
+        scheduleSubStageIdle(stage, subStageId);
+        emitReasoningUpdate(true);
+      };
+      const completeSubStage = (
+        stage: PlanningStageName,
+        subStageId: string,
+        finalText?: string,
+      ) => {
+        settleSubStage(stage, subStageId, 'done', finalText);
+      };
+      const errorSubStage = (
+        stage: PlanningStageName,
+        subStageId: string,
+        error: Error,
+      ) => {
+        const label = subStageLabels.get(subStageKey(stage, subStageId)) ?? subStageId;
+        settleSubStage(stage, subStageId, 'failed', `Error in ${label}: ${error.message}`);
       };
       const recordToolResult = (toolName: string, args: unknown, result: unknown, isError: boolean, toolCallId?: string) => {
         const existingStepId = findToolStepId(toolName, toolCallId);
@@ -2204,14 +2679,28 @@ function ChatPanel({
           return;
         }
 
+        const resultSummary = summarizeToolResult(toolName, result);
         reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
           body: formatToolArgs(args),
           toolArgs: args,
-          toolResult: summarizeToolResult(toolName, result),
+          toolResult: resultSummary,
           isError,
           status: 'done',
           endedAt: Date.now(),
         });
+        // Single ProcessLog row per tool call: update the existing tool-call
+        // entry in-place with the result summary + final status. Avoids
+        // bloating the timeline with separate `tool-result` rows that
+        // duplicate the `tool-call` row's content.
+        const callProcessId = toolCallId ? processIdByToolCallId.get(toolCallId) : undefined;
+        if (callProcessId) {
+          processLog.update(callProcessId, {
+            status: isError ? 'failed' : 'done',
+            transcript: `${formatToolArgs(args)}\n→ ${resultSummary}`,
+            payload: { toolName, toolCallId, args, result, isError },
+            summary: isError ? `${toolName} failed` : summarizeToolCall(toolName, args),
+          });
+        }
         updateMessage(assistantId, {
           status: 'streaming',
           loadingStatus: null,
@@ -2219,6 +2708,7 @@ function ChatPanel({
           currentStepId: getActiveReasoningStepId(reasoningSteps),
           reasoningStartedAt: reasoningSteps[0]?.startedAt,
           isThinking: false,
+          processEntries: snapshotProcess(),
         });
       };
 
@@ -2254,26 +2744,115 @@ function ChatPanel({
 
       try {
         let localToolIdleTimeoutId: number | null = null;
-        const scheduleLocalToolIdleTimeout = () => {
-          if (selectedProvider !== 'codi') return;
+        let localToolHardTimeoutId: number | null = null;
+        let localToolWatchdogMode: LocalToolWatchdogMode = 'thinking';
+        let localToolSawPlanningOutput = false;
+        let localToolInsideThinkBlock = false;
+        const clearLocalToolWatchdogs = () => {
+          if (localToolIdleTimeoutId !== null) {
+            window.clearTimeout(localToolIdleTimeoutId);
+            localToolIdleTimeoutId = null;
+          }
+          if (localToolHardTimeoutId !== null) {
+            window.clearTimeout(localToolHardTimeoutId);
+            localToolHardTimeoutId = null;
+          }
+        };
+        const getLocalToolTimeoutMessage = (reason: LocalToolTimeoutReason) => {
+          switch (reason) {
+            case 'no-output':
+              return 'Local tool planning produced no output at all. Try fewer tools, a simpler prompt, or switch models for this request.';
+            case 'thinking-idle':
+              return 'Local tool planning is still thinking with no new visible output. Try fewer tools, a simpler prompt, or disable tools for this request.';
+            default:
+              return 'Local tool planning stalled after output stopped. Try fewer tools, a simpler prompt, or disable tools for this request.';
+          }
+        };
+        const failLocalToolRun = (reason: LocalToolTimeoutReason, stage: PlanningStageName | null = activePlanningStage) => {
+          localToolRunTimedOut = true;
+          const message = getLocalToolTimeoutMessage(reason);
+          const timeoutStage = resolveWatchdogPlanningStage(stage) ?? stage;
+          if (timeoutStage && planningStepIdsByStage.has(timeoutStage)) {
+            const body = buildPlanningStageTimeoutBody(timeoutStage, reason);
+            reasoningSteps = patchReasoningStep(reasoningSteps, planningStepIdsByStage.get(timeoutStage)!, {
+              body: previewPlanningBody(body),
+              transcript: body,
+              endedAt: Date.now(),
+              timeoutMs: resolvePlanningStageDisplayTimeoutMs(timeoutStage, reason),
+            });
+            const processId = processIdByStage.get(timeoutStage);
+            if (processId) {
+              processLog.update(processId, {
+                transcript: body,
+                status: 'done',
+                timeoutMs: resolvePlanningStageDisplayTimeoutMs(timeoutStage, reason),
+              });
+            }
+          }
+          const finalizedSteps = finalizeToolReasoningSteps();
+          updateMessage(assistantId, {
+            status: 'error',
+            loadingStatus: null,
+            content: message,
+            reasoningSteps: finalizedSteps,
+            currentStepId: undefined,
+            thinkingDuration: getStepDurationSeconds(finalizedSteps),
+            isThinking: false,
+            processEntries: snapshotProcess(),
+          });
+          controller.abort(message);
+        };
+        const scheduleLocalToolIdleTimeout = (
+          stage: PlanningStageName | null = activePlanningStage,
+          mode: LocalToolWatchdogMode = localToolWatchdogMode,
+        ) => {
+          const timeoutStage = resolveWatchdogPlanningStage(stage);
+          if (selectedProvider !== 'codi' || !timeoutStage) return;
+          localToolWatchdogMode = mode;
+          activePlanningStage = timeoutStage;
+          setPlanningStageTimeout(timeoutStage, mode === 'thinking' ? 'thinking-idle' : 'streaming-idle');
           if (localToolIdleTimeoutId !== null) {
             window.clearTimeout(localToolIdleTimeoutId);
           }
           localToolIdleTimeoutId = window.setTimeout(() => {
-            localToolRunTimedOut = true;
-            const message = 'Local tool planning stalled with no new output. Try fewer tools, a simpler prompt, or disable tools for this request.';
-            const finalizedSteps = finalizeToolReasoningSteps();
-            updateMessage(assistantId, {
-              status: 'error',
-              loadingStatus: null,
-              content: message,
-              reasoningSteps: finalizedSteps,
-              currentStepId: undefined,
-              thinkingDuration: getStepDurationSeconds(finalizedSteps),
-              isThinking: false,
-            });
-            controller.abort(message);
-          }, LOCAL_TOOL_RUN_TIMEOUT_MS);
+            failLocalToolRun(localToolWatchdogMode === 'thinking' ? 'thinking-idle' : 'streaming-idle', timeoutStage);
+          }, resolvePlanningStageTimeoutMs(timeoutStage, localToolWatchdogMode === 'thinking' ? 'thinking-idle' : 'streaming-idle'));
+        };
+        const scheduleLocalToolHardTimeout = (stage: PlanningStageName | null = activePlanningStage) => {
+          const timeoutStage = resolveWatchdogPlanningStage(stage);
+          if (selectedProvider !== 'codi' || !timeoutStage) return;
+          activePlanningStage = timeoutStage;
+          setPlanningStageTimeout(timeoutStage, 'no-output');
+          if (localToolHardTimeoutId !== null) {
+            window.clearTimeout(localToolHardTimeoutId);
+          }
+          localToolHardTimeoutId = window.setTimeout(() => {
+            failLocalToolRun('no-output', timeoutStage);
+          }, resolvePlanningStageTimeoutMs(timeoutStage, 'no-output'));
+        };
+        const noteLocalToolPlanningOutput = (
+          stage: PlanningStageName | null = activePlanningStage,
+          mode: LocalToolWatchdogMode = localToolWatchdogMode,
+        ) => {
+          localToolSawPlanningOutput = true;
+          const timeoutStage = resolveWatchdogPlanningStage(stage);
+          if (timeoutStage) {
+            activePlanningStage = timeoutStage;
+          }
+          if (localToolHardTimeoutId !== null) {
+            window.clearTimeout(localToolHardTimeoutId);
+            localToolHardTimeoutId = null;
+          }
+          scheduleLocalToolIdleTimeout(timeoutStage, mode);
+        };
+        const noteLocalToolMirrorOutput = (mode: LocalToolWatchdogMode = localToolWatchdogMode) => {
+          localToolSawPlanningOutput = true;
+          localToolWatchdogMode = mode;
+          if (localToolHardTimeoutId !== null) {
+            window.clearTimeout(localToolHardTimeoutId);
+            localToolHardTimeoutId = null;
+          }
+          scheduleLocalToolIdleTimeout(resolveWatchdogPlanningStage(activePlanningStage), mode);
         };
 
         const modelConfig = selectedProvider === 'ghcp'
@@ -2291,8 +2870,22 @@ function ChatPanel({
                 // a model that thinks for 30+ seconds before emitting any
                 // visible content trips the watchdog despite making real
                 // progress.
-                onToken: () => scheduleLocalToolIdleTimeout(),
-                onPhase: () => scheduleLocalToolIdleTimeout(),
+                onToken: (token) => {
+                  if (token.includes('<think>')) {
+                    localToolInsideThinkBlock = true;
+                    noteLocalToolPlanningOutput(activePlanningStage, 'thinking');
+                  }
+
+                  if (token.includes('</think>')) {
+                    const afterThink = token.split('</think>')[1] ?? '';
+                    localToolInsideThinkBlock = false;
+                    noteLocalToolPlanningOutput(activePlanningStage, afterThink.trim() ? 'streaming' : 'thinking');
+                    return;
+                  }
+
+                  noteLocalToolPlanningOutput(activePlanningStage, localToolInsideThinkBlock ? 'thinking' : 'streaming');
+                },
+                onPhase: (phase) => noteLocalToolPlanningOutput(activePlanningStage, phase === 'thinking' ? 'thinking' : 'streaming'),
               },
             ) as unknown as ReturnType<typeof resolveLanguageModel>;
         const capabilities = getModelCapabilities(modelConfig, {
@@ -2313,22 +2906,24 @@ function ChatPanel({
           ...bridgeTools,
         } as ToolSet, selectedToolIds);
         const selectedDescriptors = selectToolDescriptorsByIds(toolDescriptors, selectedToolIds);
+        const toolInstructions = buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
           .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
-        scheduleLocalToolIdleTimeout();
 
         try {
-          const clearLocalToolIdleTimeout = () => {
-            if (localToolIdleTimeoutId !== null) {
-              window.clearTimeout(localToolIdleTimeoutId);
-              localToolIdleTimeoutId = null;
-            }
-          };
           const sharedCallbacks = {
             onDone: (finalText: string) => {
-              clearLocalToolIdleTimeout();
+              clearLocalToolWatchdogs();
               if (localToolRunTimedOut) return;
+              const finalizedVoters = finalizeVoterSteps(delegationVoterSteps);
+              delegationVoterSteps = finalizedVoters;
+              if (finalizedVoters.length) {
+                syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(finalizedVoters), 'done');
+              }
+              if (delegationBusEntries.length) {
+                syncPlanningStage('agent-bus', buildDelegationBusStageBody(delegationBusEntries), 'done');
+              }
               const finalizedSteps = finalizeToolReasoningSteps();
               updateMessage(assistantId, {
                 status: 'complete',
@@ -2338,11 +2933,23 @@ function ChatPanel({
                 currentStepId: undefined,
                 thinkingDuration: getStepDurationSeconds(finalizedSteps),
                 isThinking: false,
+                voterSteps: finalizedVoters.length ? finalizedVoters : undefined,
+                isVoting: false,
+                busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
+                processEntries: snapshotProcess(),
               });
             },
             onError: (error: Error) => {
-              clearLocalToolIdleTimeout();
+              clearLocalToolWatchdogs();
               if (localToolRunTimedOut) return;
+              const finalizedVoters = finalizeVoterSteps(delegationVoterSteps);
+              delegationVoterSteps = finalizedVoters;
+              if (finalizedVoters.length) {
+                syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(finalizedVoters), 'done');
+              }
+              if (delegationBusEntries.length) {
+                syncPlanningStage('agent-bus', buildDelegationBusStageBody(delegationBusEntries), 'done');
+              }
               updateMessage(assistantId, {
                 status: 'error',
                 loadingStatus: null,
@@ -2351,30 +2958,217 @@ function ChatPanel({
                 currentStepId: undefined,
                 thinkingDuration: reasoningSteps.length ? getStepDurationSeconds(finalizeToolReasoningSteps()) : undefined,
                 isThinking: false,
+                voterSteps: finalizedVoters.length ? finalizedVoters : undefined,
+                isVoting: false,
+                busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
+                processEntries: snapshotProcess(),
               });
             },
           };
 
-          if (isParallelDelegationPrompt(text)) {
+          if (shouldRunParallelDelegation(text, capabilities)) {
             await runParallelDelegationWorkflow({
               model,
               prompt: text,
               workspaceName,
               capabilities,
               signal: controller.signal,
+              execution: selectedDescriptors.length > 0
+                ? {
+                  tools,
+                  toolDescriptors: selectedDescriptors,
+                  instructions: toolInstructions,
+                  messages: inputMessages,
+                  writePlanFile: async (path, content) => {
+                    if (path.startsWith('/workspace/')) {
+                      const sessionId = activeSessionIdRef.current;
+                      if (!sessionId) {
+                        throw new Error('No active session available for delegated plan persistence.');
+                      }
+                      const bash = getSessionBash(sessionId);
+                      const dir = path.slice(0, path.lastIndexOf('/'));
+                      if (dir) {
+                        await bash.fs.mkdir(dir, { recursive: true });
+                      }
+                      await bash.fs.writeFile(path, content, 'utf-8');
+                      return;
+                    }
+
+                    const nextFile: WorkspaceFile = {
+                      path,
+                      content,
+                      updatedAt: new Date().toISOString(),
+                    };
+                    const validationError = validateWorkspaceFile(nextFile);
+                    if (validationError) {
+                      throw new TypeError(validationError);
+                    }
+                    setWorkspaceFilesByWorkspace((current) => ({
+                      ...current,
+                      [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
+                    }));
+                  },
+                  listWorkspacePaths: async () => {
+                    const paths = workspaceFilesRef.current.map((file) => file.path);
+                    const sessionId = activeSessionIdRef.current;
+                    if (!sessionId) {
+                      return paths;
+                    }
+                    return [...paths, ...getSessionBash(sessionId).fs.getAllPaths()];
+                  },
+                  runShellCommand: async (command) => {
+                    const sessionId = activeSessionIdRef.current;
+                    if (!sessionId) {
+                      return {
+                        exitCode: 127,
+                        stdout: '',
+                        stderr: 'No active session available for shell validation.',
+                      };
+                    }
+                    return getSessionBash(sessionId).exec(command);
+                  },
+                }
+                : undefined,
             }, {
               onStepStart: (stepId, title, body) => {
-                scheduleLocalToolIdleTimeout();
                 planningStageMeta[stepId] = { title, body };
-                beginPlanningStage(stepId);
+                beginPlanningStage(stepId, 'no-output');
+                if (activePlanningStage === null) {
+                  activePlanningStage = stepId;
+                  if (localToolSawPlanningOutput) {
+                    scheduleLocalToolIdleTimeout(stepId, localToolWatchdogMode);
+                  } else {
+                    scheduleLocalToolHardTimeout(stepId);
+                  }
+                }
               },
               onStepToken: (stepId, delta) => {
-                scheduleLocalToolIdleTimeout();
+                noteLocalToolPlanningOutput(stepId, 'streaming');
                 appendPlanningStageToken(stepId, delta);
               },
               onStepComplete: (stepId, resultText) => {
-                scheduleLocalToolIdleTimeout();
+                noteLocalToolPlanningOutput(stepId, 'streaming');
                 completePlanningStage(stepId, resultText);
+              },
+              onVoterStep: (step) => {
+                noteLocalToolMirrorOutput('streaming');
+                delegationVoterSteps = upsertVoterStep(delegationVoterSteps, step);
+                syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(delegationVoterSteps), 'active');
+                const pId = `vote:${step.id}`;
+                processIdByVoterStepId.set(step.id, pId);
+                processLog.append({
+                  id: pId,
+                  kind: 'vote',
+                  actor: `voter:${step.voterId}`,
+                  summary: `${step.voterId} reviewing`,
+                  payload: step,
+                  branchId: 'voters',
+                  status: 'active',
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onVoterStepUpdate: (id, patch) => {
+                noteLocalToolMirrorOutput('streaming');
+                delegationVoterSteps = patchVoterStep(delegationVoterSteps, id, patch);
+                syncPlanningStage(
+                  'voter-ensemble',
+                  buildDelegationVoterStageBody(delegationVoterSteps),
+                  delegationVoterSteps.some((step) => step.status === 'active') ? 'active' : 'done',
+                );
+                const pId = processIdByVoterStepId.get(id);
+                const merged = delegationVoterSteps.find((s) => s.id === id);
+                if (pId && merged) {
+                  const verdict = merged.approve === true ? '✓' : merged.approve === false ? '✗' : '·';
+                  processLog.update(pId, {
+                    summary: `${merged.voterId} ${verdict}`,
+                    transcript: merged.thought ?? merged.body ?? undefined,
+                    payload: merged,
+                    status: merged.status,
+                  });
+                }
+              },
+              onVoterStepEnd: (id) => {
+                noteLocalToolMirrorOutput('streaming');
+                delegationVoterSteps = patchVoterStep(delegationVoterSteps, id, { status: 'done', endedAt: Date.now() });
+                syncPlanningStage(
+                  'voter-ensemble',
+                  buildDelegationVoterStageBody(delegationVoterSteps),
+                  delegationVoterSteps.some((step) => step.status === 'active') ? 'active' : 'done',
+                );
+                const pId = processIdByVoterStepId.get(id);
+                if (pId) processLog.update(pId, { status: 'done' });
+              },
+              onBusEntry: (entry) => {
+                noteLocalToolMirrorOutput('streaming');
+                delegationBusEntries = [...delegationBusEntries, entry];
+                syncPlanningStage('agent-bus', buildDelegationBusStageBody([...delegationBusEntries]), 'active');
+                // Map BusEntryStep into a process entry. Kind heuristic:
+                // payloadType -> normalized ProcessEntryKind.
+                const kindMap: Record<string, ProcessEntryKind> = {
+                  Mail: 'mail', InfIn: 'inf-in', InfOut: 'inf-out',
+                  Intent: 'intent', Vote: 'vote', Commit: 'commit',
+                  Abort: 'abort', Result: 'result', Completion: 'completion',
+                  Policy: 'policy',
+                };
+                processLog.append({
+                  id: entry.id,
+                  kind: kindMap[entry.payloadType] ?? 'reasoning',
+                  actor: entry.actor ? entry.actor : 'bus',
+                  summary: entry.summary,
+                  transcript: entry.detail,
+                  payload: entry,
+                  branchId: 'bus',
+                  status: 'done',
+                  ts: entry.realtimeTs,
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess(), busEntries: delegationBusEntries });
+              },
+              onToolCall: (toolName, args, toolCallId) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                recordToolStep(toolName, args, toolCallId);
+              },
+              onToolResult: (toolName, args, result, isError, toolCallId) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                recordToolResult(toolName, args, result, isError, toolCallId);
+              },
+              onStageStart: (_stage, _detail, meta) => {
+                if (meta?.subStageId) {
+                  // Forward subagent staged-pipeline sub-stages to the
+                  // ProcessLog. Use 'tool-select' as the parent stage so
+                  // the existing renderer/timeout path applies.
+                  beginSubStage('tool-select', meta.subStageId, meta.label);
+                  return;
+                }
+                activePlanningStage = _stage;
+                beginPlanningStage(_stage, 'no-output');
+                if (localToolSawPlanningOutput) {
+                  scheduleLocalToolIdleTimeout(_stage, localToolWatchdogMode);
+                } else {
+                  scheduleLocalToolHardTimeout(_stage);
+                }
+              },
+              onStageToken: (_stage, delta, meta) => {
+                if (meta?.subStageId) {
+                  noteLocalToolMirrorOutput('streaming');
+                  appendSubStageToken('tool-select', meta.subStageId, delta);
+                  return;
+                }
+                noteLocalToolPlanningOutput(_stage, 'streaming');
+                appendPlanningStageToken(_stage, delta);
+              },
+              onStageComplete: (_stage, text, meta) => {
+                if (meta?.subStageId) {
+                  noteLocalToolMirrorOutput('streaming');
+                  completeSubStage('tool-select', meta.subStageId, text);
+                  return;
+                }
+                noteLocalToolPlanningOutput(_stage, 'streaming');
+                completePlanningStage(_stage, text);
+              },
+              onStageError: (_stage, error, meta) => {
+                if (meta?.subStageId) {
+                  errorSubStage('tool-select', meta.subStageId, error);
+                }
               },
               ...sharedCallbacks,
             });
@@ -2383,40 +3177,187 @@ function ChatPanel({
               model,
               tools,
               toolDescriptors: selectedDescriptors,
-              instructions: buildDefaultToolInstructions({ workspaceName, workspacePromptContext }),
+              instructions: toolInstructions,
               messages: inputMessages,
               workspaceName,
               capabilities,
               signal: controller.signal,
             }, {
-              onStageStart: (stage) => {
-                scheduleLocalToolIdleTimeout();
-                beginPlanningStage(stage);
+              onStageStart: (stage, _detail, meta) => {
+                if (meta?.subStageId) {
+                  beginSubStage(stage, meta.subStageId, meta.label);
+                  return;
+                }
+                activePlanningStage = stage;
+                beginPlanningStage(stage, 'no-output');
+                if (localToolSawPlanningOutput) {
+                  scheduleLocalToolIdleTimeout(stage, localToolWatchdogMode);
+                } else {
+                  scheduleLocalToolHardTimeout(stage);
+                }
               },
-              onStageToken: (stage, delta) => {
-                scheduleLocalToolIdleTimeout();
+              onStageToken: (stage, delta, meta) => {
+                if (meta?.subStageId) {
+                  noteLocalToolPlanningOutput(stage, 'streaming');
+                  appendSubStageToken(stage, meta.subStageId, delta);
+                  return;
+                }
+                noteLocalToolPlanningOutput(stage, 'streaming');
                 appendPlanningStageToken(stage, delta);
               },
-              onStageComplete: (stage, text) => {
-                scheduleLocalToolIdleTimeout();
+              onStageComplete: (stage, text, meta) => {
+                if (meta?.subStageId) {
+                  noteLocalToolPlanningOutput(stage, 'streaming');
+                  completeSubStage(stage, meta.subStageId, text);
+                  return;
+                }
+                noteLocalToolPlanningOutput(stage, 'streaming');
                 completePlanningStage(stage, text);
               },
+              onStageError: (stage, error, meta) => {
+                if (meta?.subStageId) {
+                  errorSubStage(stage, meta.subStageId, error);
+                }
+              },
               onToolCall: (toolName, args, toolCallId) => {
-                scheduleLocalToolIdleTimeout();
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
                 recordToolStep(toolName, args, toolCallId);
               },
               onToolResult: (toolName, args, result, isError, toolCallId) => {
-                scheduleLocalToolIdleTimeout();
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
                 recordToolResult(toolName, args, result, isError, toolCallId);
+              },
+              onVoterStep: (step) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                const pId = `vote:${step.id}`;
+                processIdByVoterStepId.set(step.id, pId);
+                processLog.append({
+                  id: pId,
+                  kind: 'vote',
+                  actor: `voter:${step.voterId}`,
+                  summary: `${step.voterId} reviewing`,
+                  payload: step,
+                  branchId: 'voters',
+                  status: 'active',
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onVoterStepUpdate: (id, patch) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                const pId = processIdByVoterStepId.get(id);
+                if (pId) {
+                  const verdict = patch.approve === true ? '✓' : patch.approve === false ? '✗' : '·';
+                  processLog.update(pId, {
+                    summary: `${patch.voterId ?? id} ${verdict}`,
+                    transcript: patch.thought ?? patch.body ?? undefined,
+                    payload: patch,
+                    status: patch.status ?? 'active',
+                  });
+                  updateMessage(assistantId, { processEntries: snapshotProcess() });
+                }
+              },
+              onVoterStepEnd: (id) => {
+                const pId = processIdByVoterStepId.get(id);
+                if (pId) {
+                  processLog.update(pId, { status: 'done' });
+                  updateMessage(assistantId, { processEntries: snapshotProcess() });
+                }
+              },
+              onBusEntry: (entry) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                const kindMap: Record<string, ProcessEntryKind> = {
+                  Mail: 'mail', InfIn: 'inf-in', InfOut: 'inf-out',
+                  Intent: 'intent', Vote: 'vote', Commit: 'commit',
+                  Abort: 'abort', Result: 'result', Completion: 'completion',
+                  Policy: 'policy',
+                };
+                const parentProcessId = (activePlanningStage && processIdByStage.get(activePlanningStage))
+                  ?? processIdByStage.get('executor');
+                processLog.append({
+                  id: entry.id,
+                  kind: kindMap[entry.payloadType] ?? 'reasoning',
+                  actor: entry.actor ? entry.actor : 'bus',
+                  summary: entry.summary,
+                  transcript: entry.detail,
+                  payload: entry,
+                  branchId: 'bus',
+                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
+                  status: 'done',
+                  ts: entry.realtimeTs,
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onIterationStep: (step) => {
+                const pId = `iter:${step.id}`;
+                const parentProcessId = processIdByStage.get('executor');
+                processLog.append({
+                  id: pId,
+                  kind: 'reasoning',
+                  actor: 'iteration',
+                  summary: step.title ?? `Iteration ${step.id}`,
+                  payload: step,
+                  branchId: 'iterations',
+                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
+                  status: 'active',
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onIterationStepUpdate: (id, patch) => {
+                const pId = `iter:${id}`;
+                processLog.update(pId, {
+                  summary: patch.done ? 'Iteration ✓ done' : patch.body ?? `Iteration ${id}`,
+                  transcript: patch.body,
+                  payload: patch,
+                  status: patch.status ?? 'active',
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onIterationStepEnd: (id) => {
+                const pId = `iter:${id}`;
+                processLog.update(pId, { status: 'done' });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onModelTurnStart: (turnId, stepIndex) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                const parentProcessId = processIdByStage.get('executor');
+                processLog.append({
+                  id: `turn:${turnId}`,
+                  kind: 'inf-in',
+                  actor: 'executor',
+                  summary: `Model turn ${stepIndex + 1}`,
+                  branchId: 'executor',
+                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
+                  status: 'active',
+                });
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
+              },
+              onModelTurnEnd: (turnId, text, parsed) => {
+                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                // Combine model-turn start + end into a single row that
+                // updates in-place. If the turn produced nothing meaningful
+                // (no parsed tool call AND no text), drop it entirely so
+                // the timeline isn't polluted with empty start/end pairs.
+                const trimmed = text.length > 200 ? `${text.slice(0, 200)}…` : text;
+                if (!parsed && !text.trim()) {
+                  processLog.update(`turn:${turnId}`, { status: 'done', summary: 'Empty turn' });
+                } else {
+                  processLog.update(`turn:${turnId}`, {
+                    kind: 'inf-out',
+                    summary: parsed
+                      ? `Tool call → ${parsed.toolName}`
+                      : trimmed,
+                    transcript: text,
+                    payload: { turnId, parsed, text },
+                    status: 'done',
+                  });
+                }
+                updateMessage(assistantId, { processEntries: snapshotProcess() });
               },
               ...sharedCallbacks,
             });
           }
         } finally {
-          if (localToolIdleTimeoutId !== null) {
-            window.clearTimeout(localToolIdleTimeoutId);
-            localToolIdleTimeoutId = null;
-          }
+          clearLocalToolWatchdogs();
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -2448,6 +3389,10 @@ function ChatPanel({
     let hasStructuredReasoning = false;
     let phaseStepId: string | null = reasoningSteps[0]?.id ?? null;
     let phaseStepTitle: string | null = reasoningSteps[0]?.title ?? null;
+    const processLog = new ProcessLog();
+    const processIdByReasoningStepId = new Map<string, string>();
+    const processIdByVoterStepId = new Map<string, string>();
+    const rawThinkingProcessId = `reasoning:${assistantId}:thinking`;
     const controller = new AbortController();
     const codiVoters: IVoter[] = [];
 
@@ -2475,12 +3420,125 @@ function ChatPanel({
       }
     };
 
+      const resolveDirectReasoningKind = (step: ReasoningStep): ProcessEntryKind => {
+        if (step.kind === 'tool') {
+          return step.toolResult ? 'tool-result' : 'tool-call';
+        }
+        return 'reasoning';
+      };
+
+      const resolveDirectReasoningActor = (step: ReasoningStep): string => {
+        if (step.toolName) return step.toolName;
+        if (step.kind === 'search') return 'search';
+        return selectedProvider;
+      };
+
+      const syncReasoningProcessEntry = (step: ReasoningStep | undefined) => {
+        if (!step) return;
+        const processId = processIdByReasoningStepId.get(step.id);
+        const kind = resolveDirectReasoningKind(step);
+        const actor = resolveDirectReasoningActor(step);
+        const summary = step.toolSummary ?? step.title;
+        const transcript = step.transcript ?? step.body;
+        const branchId = step.branchId ?? step.parentStepId ?? 'coordinator';
+        if (processId) {
+          processLog.update(processId, {
+            kind,
+            summary,
+            transcript,
+            payload: step,
+            status: step.status,
+            timeoutMs: step.timeoutMs,
+          });
+          return;
+        }
+        const nextProcessId = `reasoning:${step.id}`;
+        processIdByReasoningStepId.set(step.id, nextProcessId);
+        processLog.append({
+          id: nextProcessId,
+          kind,
+          actor,
+          summary,
+          ...(transcript ? { transcript } : {}),
+          payload: step,
+          branchId,
+          status: step.status,
+          ts: step.startedAt,
+          ...(step.timeoutMs !== undefined ? { timeoutMs: step.timeoutMs } : {}),
+        });
+      };
+
+      const syncVoterProcessEntry = (step: VoterStep | undefined) => {
+        if (!step) return;
+        const processId = processIdByVoterStepId.get(step.id);
+        const summary = step.approve === true
+          ? `${step.voterId} ✓`
+          : step.approve === false
+            ? `${step.voterId} ✗`
+            : `${step.voterId} reviewing`;
+        const transcript = step.thought ?? step.body;
+        if (processId) {
+          processLog.update(processId, {
+            summary,
+            transcript,
+            payload: step,
+            status: step.status,
+          });
+          return;
+        }
+        const nextProcessId = `vote:${step.id}`;
+        processIdByVoterStepId.set(step.id, nextProcessId);
+        processLog.append({
+          id: nextProcessId,
+          kind: 'vote',
+          actor: `voter:${step.voterId}`,
+          summary,
+          ...(transcript ? { transcript } : {}),
+          payload: step,
+          branchId: 'voters',
+          status: step.status,
+          ts: step.startedAt,
+        });
+      };
+
+      const syncRawThinkingProcessEntry = (status: 'active' | 'done') => {
+        const transcript = thinkingBuffer.trim();
+        if (!transcript) return;
+        const summary = phaseStepTitle ?? 'Thinking';
+        if (processLog.has(rawThinkingProcessId)) {
+          processLog.update(rawThinkingProcessId, {
+            summary,
+            transcript,
+            payload: { provider: selectedProvider, transcript },
+            status,
+          });
+          return;
+        }
+        processLog.append({
+          id: rawThinkingProcessId,
+          kind: 'reasoning',
+          actor: selectedProvider,
+          summary,
+          transcript,
+          payload: { provider: selectedProvider, transcript },
+          branchId: 'coordinator',
+          status,
+          ts: thinkingStart || Date.now(),
+        });
+      };
+
+      const finalizeRawThinkingProcessEntry = () => {
+        if (!processLog.has(rawThinkingProcessId)) return;
+        syncRawThinkingProcessEntry('done');
+      };
+
     const finalizePhaseStep = () => {
       if (!phaseStepId) return;
       reasoningSteps = patchReasoningStep(reasoningSteps, phaseStepId, {
         status: 'done',
         endedAt: Date.now(),
       });
+        syncReasoningProcessEntry(reasoningSteps.find((step) => step.id === phaseStepId));
       phaseStepId = null;
       phaseStepTitle = null;
     };
@@ -2495,6 +3553,7 @@ function ChatPanel({
           body: meta.body,
           status: 'active',
         });
+        syncReasoningProcessEntry(reasoningSteps.find((step) => step.id === phaseStepId));
         return;
       }
 
@@ -2509,6 +3568,7 @@ function ChatPanel({
         startedAt: Date.now(),
         status: 'active',
       });
+      syncReasoningProcessEntry(reasoningSteps.find((step) => step.id === phaseStepId));
     };
 
     const buildActivityPatch = (patch: Partial<ChatMessage> = {}): Partial<ChatMessage> => ({
@@ -2520,8 +3580,11 @@ function ChatPanel({
       thinkingDuration: thinkingStart ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
       isThinking: Boolean(getActiveReasoningStepId(reasoningSteps)) || (!hasStructuredReasoning && Boolean(thinkingBuffer) && !tokenBuffer),
       isVoting: voterSteps.some((step) => step.status === 'active'),
+      processEntries: processLog.snapshot(),
       ...patch,
     });
+
+    reasoningSteps.forEach(syncReasoningProcessEntry);
 
     activeGenerationRef.current = {
       assistantId,
@@ -2531,6 +3594,9 @@ function ChatPanel({
         reasoningSteps = finalizeReasoningSteps(reasoningSteps);
         voterSteps = finalizeVoterSteps(voterSteps);
         finalizePhaseStep();
+        reasoningSteps.forEach(syncReasoningProcessEntry);
+        voterSteps.forEach(syncVoterProcessEntry);
+        finalizeRawThinkingProcessEntry();
         const streamedContent = cleanStreamedAssistantContent(tokenBuffer);
         updateMessage(assistantId, buildActivityPatch({
           status: 'complete',
@@ -2562,40 +3628,50 @@ function ChatPanel({
           if (hasStructuredReasoning) return;
           finalizePhaseStep();
           thinkingBuffer += content;
+          syncRawThinkingProcessEntry('active');
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onReasoningStep: (step: ReasoningStep) => {
           ensureThinkingStarted();
           finalizePhaseStep();
+          finalizeRawThinkingProcessEntry();
           hasStructuredReasoning = true;
           reasoningSteps = upsertReasoningStep(reasoningSteps, step);
+          syncReasoningProcessEntry(reasoningSteps.find((candidate) => candidate.id === step.id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onReasoningStepUpdate: (id: string, patch: Partial<ReasoningStep>) => {
           ensureThinkingStarted();
           finalizePhaseStep();
+          finalizeRawThinkingProcessEntry();
           hasStructuredReasoning = true;
           reasoningSteps = patchReasoningStep(reasoningSteps, id, patch);
+          syncReasoningProcessEntry(reasoningSteps.find((step) => step.id === id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onReasoningStepEnd: (id: string) => {
           reasoningSteps = patchReasoningStep(reasoningSteps, id, { status: 'done', endedAt: Date.now() });
+          syncReasoningProcessEntry(reasoningSteps.find((step) => step.id === id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onVoterStep: (step: VoterStep) => {
           voterSteps = upsertVoterStep(voterSteps, step);
+          syncVoterProcessEntry(voterSteps.find((candidate) => candidate.id === step.id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onVoterStepUpdate: (id: string, patch: Partial<VoterStep>) => {
           voterSteps = patchVoterStep(voterSteps, id, patch);
+          syncVoterProcessEntry(voterSteps.find((step) => step.id === id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onVoterStepEnd: (id: string) => {
           voterSteps = patchVoterStep(voterSteps, id, { status: 'done', endedAt: Date.now() });
+          syncVoterProcessEntry(voterSteps.find((step) => step.id === id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
         onToken: (content: string) => {
           finalizePhaseStep();
+          finalizeRawThinkingProcessEntry();
           tokenBuffer += content;
           updateMessage(assistantId, buildActivityPatch({
             status: 'streaming',
@@ -2607,6 +3683,9 @@ function ChatPanel({
           finalizePhaseStep();
           reasoningSteps = finalizeReasoningSteps(reasoningSteps);
           voterSteps = finalizeVoterSteps(voterSteps);
+          reasoningSteps.forEach(syncReasoningProcessEntry);
+          voterSteps.forEach(syncVoterProcessEntry);
+          finalizeRawThinkingProcessEntry();
           const resolvedContent = cleanStreamedAssistantContent(finalContent ?? tokenBuffer);
           updateMessage(assistantId, buildActivityPatch({
             status: 'complete',
@@ -2617,7 +3696,15 @@ function ChatPanel({
             content: resolvedContent ? '' : (selectedProvider === 'ghcp' ? 'GHCP returned an empty response.' : 'Codi returned an empty response.'),
           }));
         },
-        onError: (error: Error) => updateMessage(assistantId, { status: 'error', content: error.message, loadingStatus: null }),
+        onError: (error: Error) => {
+          finalizePhaseStep();
+          reasoningSteps = finalizeReasoningSteps(reasoningSteps);
+          voterSteps = finalizeVoterSteps(voterSteps);
+          reasoningSteps.forEach(syncReasoningProcessEntry);
+          voterSteps.forEach(syncVoterProcessEntry);
+          finalizeRawThinkingProcessEntry();
+          updateMessage(assistantId, buildActivityPatch({ status: 'error', content: error.message, loadingStatus: null }));
+        },
       };
 
       await streamAgentChat({
@@ -2922,9 +4009,7 @@ function ChatPanel({
       <div className="shared-console-body">
         <div className="shared-console-main">
           {!showBash && activeActivityMessage ? (
-            activeActivityPanel === 'voters'
-              ? <VotersPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
-              : <ActivityPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+            <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} />)}
@@ -4454,18 +5539,52 @@ function PanelSplitView({
   );
 }
 
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account'];
+
+function isSidebarPanel(value: unknown): value is SidebarPanel {
+  return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
+}
+
+function isHFModelArray(value: unknown): value is HFModel[] {
+  return (
+    Array.isArray(value)
+    && value.every((entry) => (
+      Boolean(entry)
+      && typeof entry === 'object'
+      && typeof (entry as { id?: unknown }).id === 'string'
+      && typeof (entry as { task?: unknown }).task === 'string'
+    ))
+  );
+}
+
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp'];
+
+function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && Object.values(value as Record<string, unknown>).every((entry) => (
+      typeof entry === 'string' && (VALID_AGENT_PROVIDERS as string[]).includes(entry)
+    ))
+  );
+}
+
+const sessionStorageBackend = typeof window !== 'undefined' ? window.sessionStorage : null;
+const localStorageBackend = typeof window !== 'undefined' ? window.localStorage : null;
+
 function AgentBrowserApp() {
   const { toast, setToast } = useToast();
   const initialRootRef = useRef<TreeNode | null>(null);
   if (!initialRootRef.current) initialRootRef.current = createInitialRoot();
   const [root, setRoot] = useState<TreeNode>(initialRootRef.current);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState('ws-research');
-  const [activePanel, setActivePanel] = useState<SidebarPanel>('workspaces');
+  const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
+  const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
   const [collapsed, setCollapsed] = useState(false);
   const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
-  const [installedModels, setInstalledModels] = useState<HFModel[]>([]);
+  const [installedModels, setInstalledModels] = useStoredState<HFModel[]>(localStorageBackend, STORAGE_KEYS.installedModels, isHFModelArray, []);
   const [copilotState, setCopilotState] = useState<CopilotRuntimeState>(EMPTY_COPILOT_STATE);
   const [isCopilotStateLoading, setIsCopilotStateLoading] = useState(true);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);

@@ -18,24 +18,32 @@ export type DelegationWorkerId = 'coordinator' | 'breakdown-agent' | 'assignment
 export function buildPersonaTemplate(): string {
   return [
     '## Persona',
-    'Mirror the user\'s tone and pace without parodying them.',
+    'Mirror the user\'s tone, pace, and level of detail without parodying them.',
     'Be friendly, modest, and collaborative.',
-    'When uncertain, say what you are unsure about and ask for clarifying direction when that would improve the result.',
-    'Act like a collaborator helping the user steer toward the best answer rather than pretending to know more than you do.',
+    'Do not pretend to know more than you do or imply certainty you cannot support.',
+    'When uncertainty matters, name it plainly in one sentence and ask the single most useful clarifying question.',
+    'Treat the user like a collaborator who is steering the work; offer grounded options when tradeoffs exist.',
+    'Never restate this persona to the user.',
   ].join('\n');
 }
 
 export function buildAlignmentTemplate({
   workspaceName,
   goal,
+  constraints = [],
 }: {
   workspaceName?: string;
   goal: string;
+  constraints?: string[];
 }): string {
   return [
     '## Alignment',
+    '## Goal',
+    goal,
+    workspaceName ? '## Workspace' : null,
     workspaceName ? `Active workspace: ${workspaceName}` : null,
-    `Primary goal: ${goal}`,
+    constraints.length ? '## Constraints' : null,
+    constraints.length ? constraints.map((constraint) => `- ${constraint}`).join('\n') : null,
     'Stay aligned to the user\'s request, avoid unnecessary work, and prefer the smallest useful next action.',
     'If tradeoffs exist, keep them explicit and grounded in the current task.',
   ].filter(Boolean).join('\n');
@@ -44,29 +52,41 @@ export function buildAlignmentTemplate({
 export function buildMemoryRecallTemplate(): string {
   return [
     '## Memory / Recall Guidance',
-    'Recall only the information relevant to the current request.',
-    'Summarize prior context compactly before reusing it.',
-    'When storing or repeating information, preserve the user\'s intent, key constraints, and unresolved questions.',
-    'Call out uncertainty, stale context, or possible gaps in memory before relying on it.',
+    '### Recall',
+    'Recall only the details that materially change the current answer or next action.',
+    'Prefer the freshest relevant context over broad history dumps.',
+    '### Summarize',
+    'Summarize reused context compactly and preserve the user\'s intent, constraints, and unresolved questions.',
+    'Call out stale context, uncertainty, or likely gaps before relying on memory.',
+    '### Store',
+    'When storing notes, make them short, actionable, and easy for another agent to reuse.',
+    'Record what matters, what is still unknown, and what should be checked later.',
   ].join('\n');
 }
 
 export function buildCodingTemplate(): string {
   return [
     '## Coding Guidance',
-    'Prefer concrete implementation steps over abstract advice.',
+    '### Plan',
+    'Prefer concrete implementation steps over abstract advice and choose the smallest useful diff.',
+    'Do not introduce speculative refactors or widen scope unless the current approach fails.',
+    '### Implement',
     'Write code that is minimal, testable, and consistent with the surrounding codebase.',
-    'Verify assumptions, run focused tests when possible, and mention any remaining uncertainty or risk.',
-    'When changing behavior, optimize for correctness first and keep the user informed about tradeoffs.',
+    'Fix the root cause first; avoid placeholder logic and avoid changing unrelated behavior.',
+    '### Test',
+    'Verify assumptions with the narrowest relevant test, lint, or typecheck before widening scope.',
+    '### Verify',
+    'State any remaining risk or uncertainty explicitly.',
+    'If behavior stays ambiguous, say what you did not change and why.',
   ].join('\n');
 }
 
 export function buildHarnessControlTemplate(): string {
   return [
     '## Agent Harness Control Guidance',
-    'Reason in terms of workspaces, chat sessions, browser tabs, terminal mode, workspace files, and agent-browser surfaces.',
-    'When controlling the harness, prefer precise actions that preserve workspace-scoped state and avoid leaking context across workspaces.',
-    'If an action could affect multiple workspaces or sessions, state that explicitly and choose the narrowest safe scope.',
+    'Reason in terms of workspaces, chat sessions, browser tabs, terminal mode, workspace files, page overlays, and other agent-browser surfaces.',
+    'Preserve workspace-scoped state and avoid leaking context across workspaces, sessions, or surfaces.',
+    'When an action could affect multiple workspaces or sessions, say so explicitly and choose the narrowest safe scope.',
   ].join('\n');
 }
 
@@ -83,6 +103,7 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
         '## Tool Routing Guidance',
         'Decide whether the request should be answered directly or routed into tool use.',
         'Keep the goal short and specific so downstream planners can stay aligned.',
+        'Prefer direct answers when tools would not materially improve correctness, evidence, or execution.',
       ].join('\n');
     case 'tool-group-select':
       return [
@@ -95,6 +116,7 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
         '## Tool Selection Guidance',
         'Choose the smallest specific tool set that can complete the task.',
         'Avoid redundant tools and select only tools you expect to use.',
+        'Prefer one clear tool at a time over a broad batch unless the task is inherently parallel.',
       ].join('\n');
     case 'delegation-coordinator':
       return [
@@ -113,6 +135,8 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
         '## Delegation Assignment Guidance',
         'Only assign specialist roles, ownership boundaries, and handoffs.',
         'Do not restate the full plan; focus on who should do what and where overlap must be avoided.',
+        'Emit one bullet per track using the exact format "Role: <specialist role> | Owns: <track and scope> | Handoff: <next role or deliverable>".',
+        'Each Owns field must begin with the exact breakdown track text it covers.',
       ].join('\n');
     case 'delegation-validation':
       return [
@@ -131,65 +155,96 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
 export function resolveAgentScenario(text: string): Exclude<AgentScenario, 'tool-router' | 'tool-group-select' | 'tool-select' | 'delegation-coordinator' | 'delegation-breakdown' | 'delegation-assignment' | 'delegation-validation'> {
   const lowered = text.toLowerCase();
 
-  if (/(remember|recall|summari[sz]e|store|memory|notes?)/.test(lowered)) {
-    return 'memory-recall';
-  }
-
-  if (/(code|implement|fix|refactor|test|debug|build|typescript|javascript|python)/.test(lowered)) {
-    return 'coding';
-  }
-
-  if (/(agent-browser|workspace|browser tab|terminal mode|chat session|harness|session fs|files tree)/.test(lowered)) {
+  if (/(agent-browser|workspace|browser tab|terminal mode|chat session|harness|session fs|files tree|tab|panel|overlay|worktree|surface)/.test(lowered)) {
     return 'harness-control';
   }
 
+  if (/(code|implement|fix|refactor|test|debug|build|typescript|javascript|python|lint|compile|pytest|vitest)/.test(lowered)) {
+    return 'coding';
+  }
+
+  if (/(remember|recall|summari[sz]e|store|memory|notes?|note|remind|journal)/.test(lowered)) {
+    return 'memory-recall';
+  }
+
   return 'general-chat';
+}
+
+export function composeAgentPrompt({
+  persona,
+  alignment,
+  scenario,
+  toolInstructions,
+}: {
+  persona: string;
+  alignment: string;
+  scenario: string;
+  toolInstructions?: string;
+}): string {
+  return [persona, alignment, scenario, toolInstructions].filter(Boolean).join('\n\n');
 }
 
 export function buildAgentSystemPrompt({
   workspaceName,
   goal,
   scenario,
+  constraints,
 }: {
   workspaceName?: string;
   goal: string;
   scenario: AgentScenario;
+  constraints?: string[];
 }): string {
-  return [
-    buildPersonaTemplate(),
-    buildAlignmentTemplate({ workspaceName, goal }),
-    buildScenarioGuidance(scenario),
-  ].join('\n\n');
+  return composeAgentPrompt({
+    persona: buildPersonaTemplate(),
+    alignment: buildAlignmentTemplate({ workspaceName, goal, constraints }),
+    scenario: buildScenarioGuidance(scenario),
+  });
 }
 
 export function buildToolInstructionsTemplate({
   workspaceName,
   workspacePromptContext,
   descriptors,
+  selectedToolIds,
+  selectedGroups,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   descriptors: readonly Pick<ToolDescriptor, 'id' | 'label' | 'description'>[];
+  selectedToolIds?: readonly string[];
+  selectedGroups?: readonly string[];
 }): string {
-  const lines = [
-    buildAgentSystemPrompt({
+  const toolLines = descriptors.map((descriptor) => `- ${descriptor.id} (${descriptor.label}) — ${descriptor.description} When to use: reach for this when it is the smallest tool that directly advances the current task.`);
+
+  return composeAgentPrompt({
+    persona: buildPersonaTemplate(),
+    alignment: buildAlignmentTemplate({
       workspaceName,
-      goal: 'Use tools only when they materially improve the answer and then respond with a concise, grounded result.',
-      scenario: 'coding',
+      goal: 'Use tools only when they materially improve correctness, evidence, or execution, then respond with a concise grounded result.',
+      constraints: [
+        'Use only the currently available tools listed below.',
+        'Prefer the smallest useful tool set and avoid redundant calls.',
+      ],
     }),
-    buildHarnessControlTemplate(),
+    scenario: buildHarnessControlTemplate(),
+    toolInstructions: [
     '## Tool Instructions',
     workspacePromptContext,
     'Use only the current available tools listed below. Each tool call is visible to the user, so prefer the smallest useful set.',
+    selectedGroups?.length ? `Selected tool groups: ${selectedGroups.join(', ')}` : null,
+    selectedToolIds?.length ? `Selected tool ids: ${selectedToolIds.join(', ')}` : null,
     'For Files tools, use locations exactly as shown in the Files tree, including workspace paths like //workspace/AGENTS.md and session filesystem locations like //session-1-fs/workspace.',
     'For cli, prefer short, non-interactive bash commands. Do not use cli for clear or long-running interactive shells.',
+    'Emit at most one tool call per step unless the task is explicitly parallel or batched.',
     'After any tool usage, summarize what you found or changed and note any uncertainty.',
-    '',
-    'Available tools:',
-    ...descriptors.map((descriptor) => `- ${descriptor.id} (${descriptor.label}): ${descriptor.description}`),
-  ];
-
-  return lines.filter(Boolean).join('\n\n');
+    '## Available Tools',
+    ...(toolLines.length > 0 ? toolLines : ['- No tools selected. Answer directly.']),
+    '## Output Contract',
+    'If you use a tool, name the next action briefly, make the tool call, then summarize the result afterwards.',
+    'If no tool is needed, answer directly without pretending to have used one.',
+  ].filter(Boolean).join('\n'),
+  });
 }
 
 export function buildToolRouterPrompt({ instructions, workspaceName }: { instructions: string; workspaceName?: string }): string {
@@ -298,7 +353,7 @@ export function buildDelegationWorkerTask({
       return [
         ...shared,
         'Assigned task: assign each track to a specialist subagent, define its objective, and make handoffs explicit.',
-        'Output only bullet points in the form "Role: task and handoff".',
+        'Output only bullet points in the form "Role: <specialist role> | Owns: <track and scope> | Handoff: <next role or deliverable>".',
       ].join('\n\n');
     case 'validation-agent':
       return [

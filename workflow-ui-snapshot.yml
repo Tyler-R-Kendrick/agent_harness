@@ -1,0 +1,89 @@
+- generic [ref=e4]:
+  - navigation "Primary navigation" [ref=e5]:
+    - generic [ref=e6]:
+      - button "Workspaces" [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+      - button "History" [ref=e12] [cursor=pointer]:
+        - img [ref=e13]
+      - button "Extensions" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+    - generic [ref=e20]:
+      - button "Settings" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Account" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+    - button "Collapse sidebar" [ref=e29] [cursor=pointer]:
+      - img [ref=e30]
+  - complementary [ref=e33]:
+    - generic [ref=e36]:
+      - generic [ref=e37]:
+        - button "Go back" [ref=e38] [cursor=pointer]:
+          - img [ref=e39]
+        - button "Go forward" [ref=e41] [cursor=pointer]:
+          - img [ref=e42]
+        - button "Reload" [ref=e44] [cursor=pointer]:
+          - img [ref=e45]
+        - button "New tab" [ref=e50] [cursor=pointer]:
+          - img [ref=e51]
+        - button "Split view" [ref=e52] [cursor=pointer]:
+          - img [ref=e53]
+      - generic [ref=e57]:
+        - img [ref=e58]
+        - textbox "Omnibar" [ref=e61]:
+          - /placeholder: Search or enter URL
+      - generic [ref=e62]:
+        - generic [ref=e63]: 2 pages · 2 active · 1 saved
+        - generic [ref=e64]:
+          - button "Toggle workspace overlay" [ref=e65] [cursor=pointer]
+          - button "Open keyboard shortcuts" [ref=e69] [cursor=pointer]
+    - generic [ref=e72]:
+      - generic "Memory distribution" [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]: Memory
+          - generic [ref=e76]: 253 MB / 2 GB
+        - generic [ref=e77]:
+          - 'generic "Hot: 165MB" [ref=e78]'
+          - 'generic "Warm: 88MB" [ref=e79]'
+        - generic [ref=e80]:
+          - generic [ref=e81]: Hot
+          - generic [ref=e83]: Warm
+          - generic [ref=e85]: Cool
+          - generic [ref=e87]: Cold
+      - tree "Workspace tree" [ref=e89]:
+        - treeitem "Browser Add browser tab to Research" [selected] [ref=e90]:
+          - button "Browser" [ref=e91] [cursor=pointer]
+          - button "Add browser tab to Research" [ref=e99] [cursor=pointer]
+        - treeitem "Hugging Face 165 MB More actions for Hugging Face" [ref=e101]:
+          - button "Hugging Face 165 MB" [ref=e102] [cursor=pointer]
+          - button "More actions for Hugging Face" [ref=e107] [cursor=pointer]
+        - treeitem "Transformers.js 88 MB More actions for Transformers.js" [ref=e112]:
+          - button "Transformers.js 88 MB" [ref=e113] [cursor=pointer]
+          - button "More actions for Transformers.js" [ref=e118] [cursor=pointer]
+        - treeitem "Sessions Add session to Research" [ref=e123]:
+          - button "Sessions" [ref=e124] [cursor=pointer]
+          - button "Add session to Research" [ref=e131] [cursor=pointer]
+        - treeitem "Session 1 More actions for Session 1" [ref=e133]:
+          - button "Session 1" [ref=e134] [cursor=pointer]
+          - button "More actions for Session 1" [ref=e138] [cursor=pointer]
+        - treeitem "Files Add file to Research" [ref=e143]:
+          - button "Files" [ref=e144] [cursor=pointer]
+          - button "Add file to Research" [ref=e152] [cursor=pointer]
+        - treeitem "Clipboard More actions for Clipboard" [ref=e154]:
+          - button "Clipboard" [ref=e155] [cursor=pointer]
+          - button "More actions for Clipboard" [ref=e160] [cursor=pointer]
+  - main [ref=e165]:
+    - region "Chat panel" [ref=e166]:
+      - generic [ref=e167]:
+        - generic [ref=e168]:
+          - generic [ref=e169]
+          - generic [ref=e176]
+        - generic [ref=e188]:
+          - generic [ref=e189]
+          - button "Close chat panel" [ref=e200] [cursor=pointer]
+      - generic [ref=e205]:
+        - log "Chat transcript" [ref=e206]:
+          - paragraph [ref=e210]: Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.
+        - generic [ref=e211]: "Context: 0 Codi models ready · tools 38 selected · 0 AGENTS.md · 4 skills · 0 plugins · 0 hooks · workspace ready"
+        - generic [ref=e212]:
+          - generic [ref=e214]
+          - button "No Codi model loaded. Open Models to load one." [ref=e219] [cursor=pointer]

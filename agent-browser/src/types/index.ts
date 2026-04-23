@@ -1,4 +1,5 @@
 import type { CompletionScore } from 'logact';
+import type { ProcessEntry } from '../services/processLog';
 
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
 export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
@@ -7,6 +8,7 @@ export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ReasoningStepKind = 'thinking' | 'search' | 'tool' | 'summary';
 export type ReasoningStepStatus = 'active' | 'done';
+export type ReasoningStepLane = 'sequential' | 'parallel';
 export type ModelStatus = 'available' | 'installed' | 'loading';
 export type PanelId = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
 /** ONNX quantization dtype values understood by Transformers.js. */
@@ -47,6 +49,7 @@ export interface ReasoningStep {
   kind: ReasoningStepKind;
   title: string;
   body?: string;
+  transcript?: string;
   toolName?: string;
   toolCallId?: string;
   toolSummary?: string;
@@ -56,9 +59,11 @@ export interface ReasoningStep {
   sources?: SourceChip[];
   startedAt: number;
   endedAt?: number;
+  timeoutMs?: number;
   status: ReasoningStepStatus;
   parentStepId?: string;
   branchId?: string;
+  lane?: ReasoningStepLane;
 }
 
 /**
@@ -79,7 +84,7 @@ export interface VoterStep {
   /**
    * Free-form subagent reasoning from the voter. Distinct from `body`: `body`
    * holds the short outcome label, `thought` holds the voter's rationale as a
-   * subagent. Rendered as secondary timeline content in VotersPanel.
+    * subagent. Rendered as secondary process detail content.
    */
   thought?: string;
   startedAt: number;
@@ -98,6 +103,28 @@ export interface IterationStep {
   startedAt: number;
   endedAt?: number;
   status: ReasoningStepStatus;
+}
+
+/**
+ * A single AgentBus entry surfaced to the UI.
+ * Mirrors logact's `Entry` shape but keeps the payload as a tagged record so
+ * the UI does not depend on the runtime PayloadType enum (avoids cross-package
+ * coupling and survives serialization through React state).
+ */
+export interface BusEntryStep {
+  id: string;
+  /** Monotonic log position from the underlying AgentBus. */
+  position: number;
+  /** Realtime timestamp the entry was appended. */
+  realtimeTs: number;
+  /** Payload type tag — matches `logact.PayloadType` values. */
+  payloadType: string;
+  /** Short summary line for the timeline (e.g. "Intent: synthesize delegation report"). */
+  summary: string;
+  /** Full payload rendering for the drill-down detail pane. */
+  detail: string;
+  /** Optional originating actor id — voter id, subagent id, etc. */
+  actor?: string;
 }
 
 export interface ChatMessage {
@@ -123,7 +150,19 @@ export interface ChatMessage {
   iterationSteps?: IterationStep[];
   /** True while at least one voter is still evaluating the intent. */
   isVoting?: boolean;
+  /** Append-only log of AgentBus entries observed during this turn. */
+  busEntries?: BusEntryStep[];
+  /**
+   * Canonical, append-only ProcessLog snapshot for this turn. The unified
+   * gitgraph UI renders only this; legacy `reasoningSteps`/`voterSteps`/
+   * `busEntries` fields are kept on the message for backwards compat with
+   * existing tests until removal.
+   */
+  processEntries?: ProcessEntry[];
 }
+
+/** Re-exported ProcessLog entry type so consumers can import it from `types`. */
+export type { ProcessEntry, ProcessEntryKind, ProcessEntryStatus } from '../services/processLog';
 
 export interface HFModel {
   id: string;

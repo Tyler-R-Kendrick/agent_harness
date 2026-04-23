@@ -3,6 +3,7 @@ import type { ModelMessage } from '@ai-sdk/provider-utils';
 import type { ICompletionChecker, IVoter } from 'logact';
 import type { LanguageModelV3GenerateResult, LanguageModelV3StreamPart } from '@ai-sdk/provider';
 import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from './agentRunner';
+import { runLocalToolCallExecutor } from './localToolCallExecutor';
 import { runAgentLoop } from '../chat-agents/agent-loop';
 import type { AgentStreamCallbacks } from '../chat-agents/types';
 import { buildAgentSystemPrompt, buildToolInstructionsTemplate, buildToolGroupSelectionPrompt, buildToolRouterPrompt, buildToolSelectorPrompt, resolveAgentScenario } from './agentPromptTemplates';
@@ -10,12 +11,19 @@ import { createPromptBudget, fitTextToTokenBudget, type BudgetedMessage } from '
 import type { ModelCapabilities } from './agentProvider';
 import { createHeuristicCompletionChecker, isExecutionTask } from 'ralph-loop';
 import {
+  createMustUseToolVoter,
+  createNoPlanOnlyVoter,
+  createMustExecuteCompletionChecker,
+} from './toolUseVoters';
+import {
   buildToolGroupDescriptors,
   selectToolDescriptorsByIds,
   selectToolsByIds,
   type ToolDescriptor,
   type ToolGroupDescriptor,
 } from '../tools';
+import type { BusEntryStep } from '../types';
+import { createObservedBus } from './observedAgentBus';
 
 const ROUTER_OUTPUT_TOKENS = 96;
 const GROUP_SELECTOR_OUTPUT_TOKENS = 96;
@@ -35,7 +43,7 @@ const LOCAL_STAGE_PROVIDER_OPTIONS = {
 // Keeps the executor from looping for minutes if the model stalls mid-plan.
 const LOCAL_EXECUTOR_MAX_STEPS = 6;
 
-type StageName = 'router' | 'group-select' | 'tool-select' | 'chat';
+type StageName = 'router' | 'group-select' | 'tool-select' | 'executor' | 'chat';
 
 export type StagedToolPipelineOptions = {
   model: LanguageModel;
@@ -71,9 +79,43 @@ export type StagedToolPipelineCallbacks = AgentRunCallbacks
     | 'onIterationStepEnd'
   >
   & {
-    onStageStart?: (stage: StageName, detail: string) => void;
-    onStageToken?: (stage: StageName, delta: string) => void;
-    onStageComplete?: (stage: StageName, text: string) => void;
+    /** Fired for every entry appended to the underlying observed AgentBus. */
+    onBusEntry?: (entry: BusEntryStep) => void;
+    /** Fired when an inference turn (one model generation pass) starts. */
+    onModelTurnStart?: (turnId: string, stepIndex: number) => void;
+    /** Fired when a turn completes, with parsed `<tool_call>` if any. */
+    onModelTurnEnd?: (
+      turnId: string,
+      text: string,
+      parsedToolCall: { toolName: string; args: Record<string, unknown> } | null,
+    ) => void;
+    /**
+     * Stage lifecycle callbacks. The optional `subStageId` / `parentStageId`
+     * pair lets a single `StageName` (e.g. `'tool-select'`) fan out into
+     * multiple parallel sub-stages — one per ToolGroupDescriptor — each with
+     * its own ProcessLog row, watchdog entry, and render branch under the
+     * shared parent.
+     */
+    onStageStart?: (
+      stage: StageName,
+      detail: string,
+      meta?: { subStageId?: string; parentStageId?: string; label?: string },
+    ) => void;
+    onStageToken?: (
+      stage: StageName,
+      delta: string,
+      meta?: { subStageId?: string; parentStageId?: string },
+    ) => void;
+    onStageComplete?: (
+      stage: StageName,
+      text: string,
+      meta?: { subStageId?: string; parentStageId?: string },
+    ) => void;
+    onStageError?: (
+      stage: StageName,
+      error: Error,
+      meta?: { subStageId?: string; parentStageId?: string },
+    ) => void;
   };
 
 type StageJson = {
@@ -209,9 +251,11 @@ async function runTextStage(
   system: string,
   user: string,
   signal: AbortSignal | undefined,
-  callbacks: Pick<StagedToolPipelineCallbacks, 'onStageStart' | 'onStageToken' | 'onStageComplete'>,
+  callbacks: Pick<StagedToolPipelineCallbacks, 'onStageStart' | 'onStageToken' | 'onStageComplete' | 'onStageError'>,
+  meta?: { subStageId?: string; parentStageId?: string; label?: string },
 ): Promise<string> {
-  callbacks.onStageStart?.(stage, user);
+  const stageMeta = meta && (meta.subStageId || meta.parentStageId || meta.label) ? meta : undefined;
+  callbacks.onStageStart?.(stage, user, stageMeta);
   const stageModel = model as unknown as StreamableModel;
   const sanitizer = createThinkBlockSanitizer();
   // Append `/no_think` as a belt-and-braces hint for Qwen3 templates that
@@ -228,47 +272,53 @@ async function runTextStage(
     providerOptions: LOCAL_STAGE_PROVIDER_OPTIONS,
   };
 
-  if (typeof stageModel.doStream === 'function') {
-    const result = await stageModel.doStream(stageCallOptions);
-    const reader = result.stream.getReader();
-    let text = '';
+  try {
+    if (typeof stageModel.doStream === 'function') {
+      const result = await stageModel.doStream(stageCallOptions);
+      const reader = result.stream.getReader();
+      let text = '';
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value.type === 'text-delta') {
-        const cleanedDelta = sanitizer.push(value.delta);
-        if (cleanedDelta) {
-          text += cleanedDelta;
-          callbacks.onStageToken?.(stage, cleanedDelta);
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value.type === 'text-delta') {
+          const cleanedDelta = sanitizer.push(value.delta);
+          if (cleanedDelta) {
+            text += cleanedDelta;
+            callbacks.onStageToken?.(stage, cleanedDelta, stageMeta);
+          }
+        }
+        if (value.type === 'error') {
+          throw value.error instanceof Error ? value.error : new Error(String(value.error));
         }
       }
-      if (value.type === 'error') {
-        throw value.error instanceof Error ? value.error : new Error(String(value.error));
+
+      const tail = sanitizer.finish();
+      if (tail) {
+        text += tail;
+        callbacks.onStageToken?.(stage, tail, stageMeta);
       }
+
+      callbacks.onStageComplete?.(stage, text, stageMeta);
+      return text;
     }
 
-    const tail = sanitizer.finish();
-    if (tail) {
-      text += tail;
-      callbacks.onStageToken?.(stage, tail);
+    if (typeof stageModel.doGenerate === 'function') {
+      const result = await stageModel.doGenerate(stageCallOptions);
+      const text = stripThinkBlocks(extractTextFromGenerateResult(result));
+      if (text) {
+        callbacks.onStageToken?.(stage, text, stageMeta);
+      }
+      callbacks.onStageComplete?.(stage, text, stageMeta);
+      return text;
     }
 
-    callbacks.onStageComplete?.(stage, text);
-    return text;
+    throw new Error('Model does not support staged planning calls.');
+  } catch (error) {
+    const wrapped = error instanceof Error ? error : new Error(String(error));
+    callbacks.onStageError?.(stage, wrapped, stageMeta);
+    throw wrapped;
   }
-
-  if (typeof stageModel.doGenerate === 'function') {
-    const result = await stageModel.doGenerate(stageCallOptions);
-    const text = stripThinkBlocks(extractTextFromGenerateResult(result));
-    if (text) {
-      callbacks.onStageToken?.(stage, text);
-    }
-    callbacks.onStageComplete?.(stage, text);
-    return text;
-  }
-
-  throw new Error('Model does not support staged planning calls.');
 }
 
 function pickMatchingGroups(groups: ToolGroupDescriptor[], parsed: StageJson, fallbackSource: string, maxGroups: number): ToolGroupDescriptor[] {
@@ -310,6 +360,22 @@ function buildStageMessages(instructions: string, transcript: string, maxInputTo
   ];
 }
 
+async function runExecutorWithStage(
+  callbacks: StagedToolPipelineCallbacks,
+  executor: () => Promise<AgentRunResult>,
+): Promise<AgentRunResult> {
+  callbacks.onStageStart?.('executor', 'Executing selected tools and composing the response.');
+  try {
+    const result = await executor();
+    callbacks.onStageComplete?.('executor', result.text);
+    return result;
+  } catch (error) {
+    const executorError = error instanceof Error ? error : new Error(String(error));
+    callbacks.onStageError?.('executor', executorError);
+    throw executorError;
+  }
+}
+
 export async function runStagedToolPipeline(
   options: StagedToolPipelineOptions,
   callbacks: StagedToolPipelineCallbacks,
@@ -344,8 +410,16 @@ export async function runStagedToolPipeline(
   );
   const routerSelection = parseStageJson(routerText);
 
-  if (routerSelection?.mode === 'chat' || !toolDescriptors.length) {
-    const chatScenario = resolveAgentScenario(`${instructions}\n${transcript}`);
+  // Only fall back to direct chat when there are no tools available at all.
+  // We deliberately ignore a router "mode: chat" verdict whenever tools exist
+  // so the run always exercises tool selection + the LogAct executor, even
+  // when the local router model is tiny or hesitant. Getting work done with
+  // tools is more important than letting the router short-circuit to a
+  // naive textual answer.
+  const routerWantsChatMode = !toolDescriptors.length;
+
+  if (routerWantsChatMode) {
+    const chatScenario = resolveAgentScenario(transcript);
     const chatText = await runTextStage(
       model,
       'chat',
@@ -355,6 +429,7 @@ export async function runStagedToolPipeline(
           goal: routerSelection?.goal ?? 'Answer the request directly without tools.',
           scenario: chatScenario,
         }),
+        '## Workspace Context',
         fitTextToTokenBudget(instructions, routerBudget.maxInputTokens),
       ].join('\n\n'),
       fitTextToTokenBudget(transcript, routerBudget.maxInputTokens),
@@ -381,21 +456,78 @@ export async function runStagedToolPipeline(
   );
   const selectedGroups = pickMatchingGroups(availableGroups, parseStageJson(groupSelectorText) ?? {}, groupSelectorText, maxGroups);
 
-  const selectedGroupToolIds = new Set(selectedGroups.flatMap((group) => group.toolIds));
-  const descriptorsForGroups = toolDescriptors.filter((descriptor) => selectedGroupToolIds.has(descriptor.id));
   const toolBudget = createPromptBudget({
     contextWindow: capabilities.contextWindow,
     maxOutputTokens: TOOL_SELECTOR_OUTPUT_TOKENS,
   });
-  const toolSelectorText = await runTextStage(
-    model,
-    'tool-select',
-    buildToolSelectorPrompt({ descriptors: descriptorsForGroups, workspaceName }),
-    fitTextToTokenBudget(`${routerSelection?.goal ?? transcript}\n\n${transcript}`, toolBudget.maxInputTokens),
-    signal,
-    callbacks,
+  const toolSelectorUser = fitTextToTokenBudget(`${routerSelection?.goal ?? transcript}\n\n${transcript}`, toolBudget.maxInputTokens);
+
+  // Open a parent `tool-select` aggregate node so the watchdog can attach to
+  // the parent while the per-group children stream in parallel. Tokens are
+  // not forwarded to the parent — they belong to the children.
+  callbacks.onStageStart?.('tool-select', toolSelectorUser);
+
+  // Fan out one tool-select call per group in parallel. A single failing
+  // group does not abort planning; the executor proceeds with whatever tools
+  // the surviving groups returned. Emits per-group sub-stage callbacks
+  // tagged with `subStageId` so the App-level ProcessLog renders each as a
+  // child row under the parent `tool-select` node.
+  const perGroupResults = await Promise.allSettled(
+    selectedGroups.map(async (group) => {
+      const groupDescriptors = toolDescriptors.filter((descriptor) => group.toolIds.includes(descriptor.id));
+      const text = await runTextStage(
+        model,
+        'tool-select',
+        buildToolSelectorPrompt({ descriptors: groupDescriptors, workspaceName }),
+        toolSelectorUser,
+        signal,
+        callbacks,
+        { subStageId: group.id, parentStageId: 'tool-select', label: group.label },
+      );
+      const picked = pickMatchingTools(groupDescriptors, parseStageJson(text) ?? {}, text, maxTools);
+      return { group, text, picked };
+    }),
   );
-  const selectedDescriptors = pickMatchingTools(descriptorsForGroups, parseStageJson(toolSelectorText) ?? {}, toolSelectorText, maxTools);
+
+  const stalledGroupIds: string[] = [];
+  const succeededTexts: string[] = [];
+  const mergedDescriptors: ToolDescriptor[] = [];
+  const seenToolIds = new Set<string>();
+  for (let i = 0; i < perGroupResults.length; i += 1) {
+    const result = perGroupResults[i];
+    const group = selectedGroups[i];
+    if (result.status === 'fulfilled') {
+      succeededTexts.push(result.value.text);
+      for (const descriptor of result.value.picked) {
+        if (!seenToolIds.has(descriptor.id)) {
+          seenToolIds.add(descriptor.id);
+          mergedDescriptors.push(descriptor);
+        }
+      }
+    } else {
+      stalledGroupIds.push(group.id);
+    }
+  }
+
+  // Re-cap to maxTools across all groups so the executor's catalog stays
+  // bounded even when many groups succeeded in parallel.
+  const selectedDescriptors = mergedDescriptors.slice(0, maxTools);
+
+  // Close the parent aggregate node. Surface stalled group ids in the parent
+  // transcript so the user can see which groups did not complete.
+  const parentSummary = stalledGroupIds.length > 0 && succeededTexts.length > 0
+    ? `Continued with ${succeededTexts.length} group${succeededTexts.length === 1 ? '' : 's'}; stalled: ${stalledGroupIds.join(', ')}`
+    : succeededTexts.join('\n\n');
+  callbacks.onStageComplete?.('tool-select', parentSummary);
+
+  if (selectedDescriptors.length === 0 && stalledGroupIds.length === selectedGroups.length) {
+    // All groups failed; rethrow the first rejection so the caller can react.
+    const firstFailure = perGroupResults.find((result) => result.status === 'rejected') as PromiseRejectedResult | undefined;
+    if (firstFailure) {
+      throw firstFailure.reason instanceof Error ? firstFailure.reason : new Error(String(firstFailure.reason));
+    }
+  }
+
   const selectedToolIds = selectedDescriptors.map((descriptor) => descriptor.id);
   const filteredTools = selectToolsByIds(tools, selectedToolIds);
   const focusedInstructions = [
@@ -403,6 +535,8 @@ export async function runStagedToolPipeline(
       workspaceName: workspaceName ?? 'Workspace',
       workspacePromptContext: fitTextToTokenBudget(instructions, Math.max(128, Math.floor(capabilities.contextWindow * 0.35))),
       descriptors: selectedDescriptors,
+      selectedToolIds,
+      selectedGroups: selectedGroups.map((group) => group.id),
     }),
     `Selected tool groups: ${selectedGroups.map((group) => group.label).join(', ') || 'none'}`,
     `Selected tools: ${selectedDescriptors.map((descriptor) => descriptor.label).join(', ') || 'none'}`,
@@ -418,25 +552,69 @@ export async function runStagedToolPipeline(
     ? Math.min(maxSteps, LOCAL_EXECUTOR_MAX_STEPS)
     : maxSteps;
 
-  const voters = options.voters ?? [];
+  const voters = [...(options.voters ?? [])];
   const defaultTask = typeof messages.at(-1)?.content === 'string'
     ? messages.at(-1)?.content
     : messages.at(-1)?.content
       .map((part) => (part.type === 'text' ? part.text : ''))
       .join('\n');
-  const completionChecker = options.completionChecker
+  let completionChecker = options.completionChecker
     ?? (isExecutionTask(defaultTask) ? createHeuristicCompletionChecker(defaultTask) : undefined);
+
+  // For local models with tools available, ALWAYS attach mandatory tool-use
+  // voters and a must-execute completion checker. This satisfies the contract
+  // that local runs MUST follow LogAct AND MUST use tool-calling — without
+  // these, the local backbone tends to short-circuit into a naive plan-only
+  // text answer and never invokes any tool.
+  if (isLocalModel && selectedDescriptors.length > 0) {
+    const hasMustUse = voters.some((voter) => voter.id === 'must-use-tool');
+    const hasNoPlanOnly = voters.some((voter) => voter.id === 'no-plan-only');
+    if (!hasMustUse) voters.push(createMustUseToolVoter());
+    if (!hasNoPlanOnly) voters.push(createNoPlanOnlyVoter());
+    if (!completionChecker) completionChecker = createMustExecuteCompletionChecker();
+  }
+
   const maxIterations = options.maxIterations ?? 5;
 
   if (voters.length === 0 && !completionChecker) {
-    return runToolAgent({
+    if (isLocalModel) {
+      return runExecutorWithStage(callbacks, () => runLocalToolCallExecutor({
+        model,
+        tools: filteredTools,
+        toolDescriptors: selectedDescriptors,
+        instructions: focusedInstructions,
+        messages,
+        signal,
+        maxSteps: effectiveMaxSteps,
+      }, callbacks));
+    }
+    return runExecutorWithStage(callbacks, () => runToolAgent({
       model,
       tools: filteredTools,
       instructions: focusedInstructions,
       messages,
       maxSteps: effectiveMaxSteps,
       signal,
-    }, callbacks);
+    }, callbacks));
+  }
+
+  if (isLocalModel) {
+    // Local models cannot emit AI-SDK tool calls. Route the entire LogAct
+    // executor pass through the JSON tool-call ReAct loop so voters and the
+    // completion checker still apply, but the inner inference uses
+    // `runLocalToolCallExecutor` instead of `runToolAgent`.
+    return runExecutorWithStage(callbacks, () => runLocalToolCallExecutor({
+      model,
+      tools: filteredTools,
+      toolDescriptors: selectedDescriptors,
+      instructions: focusedInstructions,
+      messages,
+      signal,
+      maxSteps: effectiveMaxSteps,
+      voters,
+      completionChecker,
+      maxIterations,
+    }, callbacks));
   }
 
   // Voters present: route the executor phase through LogAct so tool intents
@@ -455,7 +633,12 @@ export async function runStagedToolPipeline(
     }
     : callbacks;
 
+  // Observed bus so the non-local LogAct path also surfaces Mail/Intent/
+  // Vote/Result/etc. rows in the ProcessLog (matches the local executor).
+  const observedBus = createObservedBus(callbacks.onBusEntry);
+
   await runAgentLoop({
+    bus: observedBus,
     inferenceClient: {
       async infer() {
         try {

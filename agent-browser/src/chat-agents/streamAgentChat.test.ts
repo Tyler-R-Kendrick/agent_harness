@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@huggingface/transformers', () => ({
+  TextStreamer: class MockTextStreamer {},
+}));
+
 import * as CodiModule from './Codi';
 import * as GhcpModule from './Ghcp';
 import { streamAgentChat } from './index';

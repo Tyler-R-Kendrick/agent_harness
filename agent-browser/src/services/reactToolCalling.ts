@@ -7,10 +7,15 @@ export function buildReActToolsSection(tools: LanguageModelV3FunctionTool[]): st
   const lines = [
     '## Tools',
     '',
-    'You have access to the following tools. To call a tool, output EXACTLY:',
-    '<tool_call>{"tool": "<name>", "args": {<arguments>}}</tool_call>',
+    'You have access to the tools listed below.',
     '',
-    'Then stop immediately. Wait for the tool result before continuing.',
+    'CRITICAL RULES:',
+    '1. You MUST call at least one tool before producing any final answer. Do NOT respond with prose, plans, "I will…" statements, or "let me know your constraints" — call a tool first.',
+    '2. To call a tool, output EXACTLY:',
+    '   <tool_call>{"tool": "<name>", "args": {<arguments>}}</tool_call>',
+    '   Then stop immediately. The runtime will execute the tool and return a <tool_result>…</tool_result> block.',
+    '3. After receiving a <tool_result>, you may either call another tool the same way OR write a final answer that summarizes what the tool produced.',
+    '4. Never invent tool results. Never claim a tool was called unless you emitted the exact <tool_call> block above.',
     '',
     'Available tools:',
   ];

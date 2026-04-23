@@ -46,22 +46,151 @@ function SourceRow({ sources }: { sources?: OperationSourceChip[] }) {
  * Renders an ordered step graph (git-graph style vertical timeline) for any
  * operation. Steps are shown in order with their title, body, and source chips.
  */
-export function OperationTimeline({ steps }: { steps: OperationStep[] }) {
+export function OperationTimeline({
+  steps,
+  onSelectStep,
+}: {
+  steps: OperationStep[];
+  onSelectStep?: (stepId: string) => void;
+}) {
   return (
     <div className="op-timeline">
       {steps.map((step) => (
         <div key={step.id} className={`op-timeline-item op-timeline-item-${step.status}`}>
           <span className="op-timeline-rail" aria-hidden="true" />
           <span className="op-timeline-dot" aria-hidden="true" />
-          <div className="op-timeline-content">
+          <div
+            className={`op-timeline-content${onSelectStep ? ' op-timeline-content-selectable' : ''}`}
+            role={onSelectStep ? 'button' : undefined}
+            tabIndex={onSelectStep ? 0 : undefined}
+            onClick={onSelectStep ? () => onSelectStep(step.id) : undefined}
+            onKeyDown={onSelectStep ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onSelectStep(step.id);
+              }
+            } : undefined}
+          >
             <div className="op-timeline-title-row">
               <strong>{step.title}</strong>
+              <StepCounter step={step} />
+              {onSelectStep ? <span className="op-step-inspect-label">Inspect</span> : null}
             </div>
             <SourceRow sources={step.sources} />
             {step.body ? <p>{step.body}</p> : null}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+type OperationGraphNode = OperationStep & {
+  children: OperationGraphNode[];
+};
+
+function buildOperationGraph(steps: OperationStep[]): OperationGraphNode[] {
+  const nodes = new Map<string, OperationGraphNode>();
+  const roots: OperationGraphNode[] = [];
+
+  steps.forEach((step) => {
+    nodes.set(step.id, { ...step, children: [] });
+  });
+
+  steps.forEach((step) => {
+    const node = nodes.get(step.id);
+    if (!node) return;
+    if (step.parentStepId && nodes.has(step.parentStepId)) {
+      nodes.get(step.parentStepId)?.children.push(node);
+      return;
+    }
+    roots.push(node);
+  });
+
+  const sortNodes = (items: OperationGraphNode[]) => {
+    items.sort((left, right) => {
+      if (left.startedAt !== right.startedAt) return left.startedAt - right.startedAt;
+      return left.title.localeCompare(right.title);
+    });
+    items.forEach((item) => sortNodes(item.children));
+  };
+  sortNodes(roots);
+
+  return roots;
+}
+
+function describeStepRole(step: OperationStep, isRoot: boolean): string {
+  if (isRoot) return 'Coordinator';
+  if (step.lane === 'parallel') return 'Parallel track';
+  if (/agentbus|reviewer votes/i.test(step.title)) return 'Process mirror';
+  return 'Sequential step';
+}
+
+function OperationGraphNodeCard({
+  step,
+  isRoot,
+  onSelectStep,
+}: {
+  step: OperationStep;
+  isRoot: boolean;
+  onSelectStep?: (stepId: string) => void;
+}) {
+  const roleLabel = describeStepRole(step, isRoot);
+  const isMirror = roleLabel === 'Process mirror';
+
+  return (
+    <button
+      type="button"
+      className={`op-graph-node op-graph-node-${step.status}${step.status === 'active' ? ' op-graph-node-active' : ''}${isRoot ? ' op-graph-node-root' : ''}${isMirror ? ' op-graph-node-mirror' : ''}`}
+      onClick={onSelectStep ? () => onSelectStep(step.id) : undefined}
+    >
+      <div className="op-graph-node-header">
+        <span className="op-graph-node-dot" aria-hidden="true" />
+        <strong>{step.title}</strong>
+        <StepCounter step={step} />
+        {onSelectStep ? <span className="op-step-inspect-label">Inspect</span> : null}
+      </div>
+      <div className="op-graph-node-meta">
+        <span className={`op-step-role-pill${isRoot ? ' op-step-role-pill-root' : ''}${isMirror ? ' op-step-role-pill-mirror' : ''}`}>{roleLabel}</span>
+        <span className={`op-step-status-pill op-step-status-pill-${step.status}`}>{step.status === 'active' ? 'Running' : 'Complete'}</span>
+      </div>
+      {step.body ? <p>{step.body}</p> : null}
+    </button>
+  );
+}
+
+function renderOperationGraphNode(
+  node: OperationGraphNode,
+  depth: number,
+  onSelectStep?: (stepId: string) => void,
+): ReactNode {
+  const hasParallelChildren = node.children.length > 1 && node.children.every((child) => child.lane === 'parallel');
+  const isRoot = depth === 0;
+
+  return (
+    <div key={node.id} className={`op-graph-branch${isRoot ? ' op-graph-branch-root' : ''}`}>
+      <OperationGraphNodeCard step={node} isRoot={isRoot} onSelectStep={onSelectStep} />
+      {node.children.length ? (
+        <div className={`op-graph-children ${hasParallelChildren ? 'op-graph-children-parallel' : 'op-graph-children-sequential'}`}>
+          {node.children.map((child) => renderOperationGraphNode(child, depth + 1, onSelectStep))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function OperationGraph({
+  steps,
+  onSelectStep,
+}: {
+  steps: OperationStep[];
+  onSelectStep?: (stepId: string) => void;
+}) {
+  const roots = buildOperationGraph(steps);
+
+  return (
+    <div className="op-graph">
+      {roots.map((root) => renderOperationGraphNode(root, 0, onSelectStep))}
     </div>
   );
 }
@@ -92,6 +221,36 @@ function useLiveDuration(startedAt?: number, fallback?: number, active?: boolean
 
   if (active && startedAt) return Math.max(1, Math.round((now - startedAt) / 1000));
   return fallback;
+}
+
+function getStepDurationSeconds(step: OperationStep): number | undefined {
+  if (!step.endedAt) return undefined;
+  return Math.max(1, Math.round((step.endedAt - step.startedAt) / 1000));
+}
+
+function StepCounter({ step }: { step: OperationStep }) {
+  const elapsed = useLiveDuration(step.startedAt, getStepDurationSeconds(step), step.status === 'active');
+  if (!elapsed) return null;
+
+  const timeoutSeconds = step.timeoutMs ? Math.max(1, Math.round(step.timeoutMs / 1000)) : undefined;
+  const elapsedLabel = formatOperationDuration(elapsed);
+  const budgetLabel = timeoutSeconds ? formatOperationDuration(timeoutSeconds) : undefined;
+  const ariaLabel = budgetLabel
+    ? `Step timer elapsed ${elapsedLabel}, budget ${budgetLabel}`
+    : `Step timer elapsed ${elapsedLabel}`;
+
+  return (
+    <span
+      className={`op-step-counter${timeoutSeconds && elapsed > timeoutSeconds ? ' op-step-counter-overdue' : ''}`}
+      aria-label={ariaLabel}
+    >
+      <span className="op-step-counter-label">Elapsed</span>
+      <span className="op-step-counter-value">{elapsedLabel}</span>
+      {budgetLabel ? <span className="op-step-counter-divider" aria-hidden="true">/</span> : null}
+      {budgetLabel ? <span className="op-step-counter-label">Budget</span> : null}
+      {budgetLabel ? <span className="op-step-counter-value">{budgetLabel}</span> : null}
+    </span>
+  );
 }
 
 // ─── OperationTrigger (inline pill) ───────────────────────────────────────
@@ -170,6 +329,7 @@ export function OperationTrigger({
 
 export interface OperationPaneProps {
   steps: OperationStep[];
+  view?: 'timeline' | 'graph';
   /** Heading displayed in the overlay header. Default: "Activity" */
   title?: string;
   /** `aria-label` for the `<aside>`. Defaults to `title`. */
@@ -187,6 +347,7 @@ export interface OperationPaneProps {
    * renders automatically once the operation completes.
    */
   footer?: ReactNode;
+  onSelectStep?: (stepId: string) => void;
   /** Called when the user dismisses the pane. */
   onClose: () => void;
 }
@@ -204,6 +365,7 @@ export interface OperationPaneProps {
  */
 export function OperationPane({
   steps,
+  view = 'timeline',
   title = 'Activity',
   ariaLabel,
   backLabel = 'Back',
@@ -211,6 +373,7 @@ export function OperationPane({
   startedAt,
   durationSeconds,
   footer,
+  onSelectStep,
   onClose,
 }: OperationPaneProps) {
   const elapsed = useLiveDuration(startedAt, durationSeconds, isActive);
@@ -236,7 +399,9 @@ export function OperationPane({
         {elapsed ? <span className="op-pane-duration">{formatOperationDuration(elapsed)}</span> : null}
       </header>
       <div className="op-pane-body">
-        <OperationTimeline steps={steps} />
+        {view === 'graph'
+          ? <OperationGraph steps={steps} onSelectStep={onSelectStep} />
+          : <OperationTimeline steps={steps} onSelectStep={onSelectStep} />}
       </div>
       {resolvedFooter}
     </aside>

@@ -103,14 +103,20 @@ export function buildDefaultToolInstructions({
   workspaceName,
   workspacePromptContext,
   descriptors = DEFAULT_TOOL_DESCRIPTORS,
+  selectedToolIds,
+  selectedGroups,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   descriptors?: readonly Pick<ToolDescriptor, 'id' | 'label' | 'description'>[];
+  selectedToolIds?: readonly string[];
+  selectedGroups?: readonly string[];
 }): string {
   return buildToolInstructionsTemplate({
     workspaceName,
     workspacePromptContext,
     descriptors,
+    selectedToolIds,
+    selectedGroups,
   });
 }

@@ -17,7 +17,15 @@
 			"type": "stdio",
 			"command": "npx",
 			"args": [
-				"@playwright/mcp@latest"
+				"@playwright/mcp@latest",
+				"--browser=chromium",
+				"--browser-arg=--enable-gpu",
+				"--browser-arg=--ignore-gpu-blocklist",
+				"--browser-arg=--enable-unsafe-webgpu",
+				"--browser-arg=--enable-features=Vulkan,WebGPU",
+				"--browser-arg=--use-vulkan=swiftshader",
+				"--browser-arg=--use-angle=vulkan",
+				"--browser-arg=--no-sandbox"
 			],
 			"gallery": "https://api.mcp.github.com",
 			"version": "0.0.1-seed"

@@ -46,9 +46,23 @@ describe('GHCP', () => {
       latestUserInput: 'Summarize this.',
     });
 
-    expect(prompt).toContain('You are GHCP');
+    expect(prompt).toContain('## Persona');
+    expect(prompt).toContain('## Workspace Context');
     expect(prompt).toContain('assistant: done');
     expect(prompt).toContain('Latest user request:\nSummarize this.');
+  });
+
+  it('uses shared scenario guidance for coding-style GHCP prompts', () => {
+    const prompt = buildGhcpPrompt({
+      workspaceName: 'Build',
+      workspacePromptContext: 'Workspace prompt context.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Fix the failing vitest run.' }],
+      latestUserInput: 'Fix the failing vitest run.',
+    });
+
+    expect(prompt).toContain('## Coding Guidance');
+    expect(prompt).toContain('## Goal');
+    expect(prompt).toContain('Help the user in the active workspace with concise, grounded collaboration.');
   });
 
   it('omits the transcript block when there is no non-empty prior conversation', () => {
@@ -80,7 +94,7 @@ describe('GHCP', () => {
       expect.objectContaining({
         modelId: 'gpt-4.1',
         sessionId: 'chat-session-1',
-        prompt: expect.stringContaining('Active workspace: Research'),
+        prompt: expect.stringContaining('## Workspace Context'),
       }),
       expect.objectContaining({ onToken: expect.any(Function) }),
       signal,

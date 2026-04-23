@@ -29,7 +29,9 @@ function configureRuntimeForModel(task: string, modelId: string) {
   }
 
   const wasm = env.backends?.onnx?.wasm;
-  env.useBrowserCache = false;
+  // Keep `env.useBrowserCache` enabled (default `true`) so installed model
+  // weights persist in the browser cache across page refreshes. Disabling it
+  // here previously forced a full re-download of every model after reload.
 
   if (!wasm) {
     return;

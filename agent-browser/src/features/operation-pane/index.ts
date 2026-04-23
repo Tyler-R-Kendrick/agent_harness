@@ -1,5 +1,6 @@
 export type { OperationStep, OperationSourceChip, OperationStepStatus } from './types';
 export {
+  OperationGraph,
   OperationTimeline,
   OperationTrigger,
   OperationPane,

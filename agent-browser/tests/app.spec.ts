@@ -1251,7 +1251,7 @@ test('installs gpt-2 and shows Installed state without console errors', async ({
   await page.screenshot({ path: 'docs/screenshots/gpt2-installed.png' });
 });
 
-test('completes the parallel delegation prompt without timing out', async ({ page }) => {
+test('falls back to staged tool pipeline + chat for delegation prompts on local Codi', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
 
   const qwenEntry = {
@@ -1260,6 +1260,248 @@ test('completes the parallel delegation prompt without timing out', async ({ pag
     downloads: 5000,
     likes: 30,
     tags: ['transformers.js', 'onnx', 'text-generation'],
+    siblings: [
+      { rfilename: 'config.json' },
+      { rfilename: 'tokenizer.json' },
+      { rfilename: 'onnx/model.onnx' },
+    ],
+  };
+
+  await mockHFApi(page, [qwenEntry]);
+  await page.addInitScript(() => {
+    (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests = [];
+    const OriginalWorker = globalThis.Worker;
+    function MockInferenceWorker(this: { onmessage: null | ((e: { data: unknown }) => void); onerror: null | (() => void) }) {
+      this.onmessage = null;
+      this.onerror = null;
+    }
+    MockInferenceWorker.prototype.postMessage = function(data: { action?: string; id?: string; prompt?: unknown; options?: Record<string, unknown> }) {
+      const { action, id = '', prompt, options } = data || {};
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      const self = this;
+      if (!id) return;
+
+      const promptText = JSON.stringify(prompt || '');
+
+      const decodePrompt = () => promptText.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+
+      const extractListedIds = (label: string) => {
+        const decoded = decodePrompt();
+        const sectionIndex = decoded.indexOf(label);
+        if (sectionIndex === -1) return [] as string[];
+        const section = decoded.slice(sectionIndex);
+        const matches = section.matchAll(/-\s+([a-z0-9_-]+)\s*\(/gi);
+        return Array.from(matches, (match) => match[1]).filter(Boolean);
+      };
+
+      const extractCatalogToolIds = () => {
+        const decoded = decodePrompt();
+        const matches = decoded.matchAll(/-\s+([a-z0-9_-]+):\s/gi);
+        return Array.from(matches, (match) => match[1]).filter(Boolean);
+      };
+
+      if (action === 'load') {
+        setTimeout(function() {
+          self.onmessage?.({ data: { type: 'status', phase: 'model', id, msg: 'Loading…', pct: null } });
+          setTimeout(function() {
+            self.onmessage?.({ data: { type: 'done', id, result: { loaded: true } } });
+          }, 80);
+        }, 0);
+        return;
+      }
+
+      if (action !== 'generate') {
+        return;
+      }
+
+      (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests?.push({
+        prompt,
+        options: options ?? {},
+      });
+
+      const send = (text: string) => {
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'thinking' } });
+        self.onmessage?.({ data: { type: 'phase', id, phase: 'generating' } });
+        self.onmessage?.({ data: { type: 'token', id, token: text } });
+        self.onmessage?.({ data: { type: 'done', id, result: { text } } });
+      };
+
+      setTimeout(function() {
+        if (promptText.includes('Respond with JSON only: {"mode":"tool-use"|"chat","goal":"<short goal>"}')) {
+          send(JSON.stringify({
+            mode: 'tool-use',
+            goal: 'Audit coverage health across the self-contained libraries.',
+          }));
+          return;
+        }
+
+        if (promptText.includes('Respond with JSON only: {"groups":["<group-id>"],"goal":"<short goal>"}')) {
+          const groups = extractListedIds('Available groups:').slice(0, 2);
+          send(JSON.stringify({
+            groups,
+            goal: 'Audit coverage health across the self-contained libraries.',
+          }));
+          return;
+        }
+
+        if (promptText.includes('Respond with JSON only: {"toolIds":["<tool-id>"],"goal":"<short goal>"}')) {
+          const toolIds = extractListedIds('Available tools:').slice(0, 2);
+          send(JSON.stringify({
+            toolIds,
+            goal: 'Audit coverage health across the self-contained libraries.',
+          }));
+          return;
+        }
+
+        if (promptText.includes('delegation-worker:task-planner') || promptText.includes('Plan the work as executable tasks.')) {
+          const toolIds = extractCatalogToolIds();
+          send(JSON.stringify({
+            goal: 'Audit coverage health across the self-contained libraries.',
+            tasks: [
+              {
+                id: 'collect-coverage-signals',
+                title: 'Collect coverage signals',
+                description: 'Use the selected tools to inspect the current coverage state and summarize the result.',
+                toolIds: toolIds.slice(0, Math.min(2, toolIds.length)),
+                toolRationale: 'Need lightweight inspection plus one execution surface to validate the workflow path.',
+                dependsOn: [],
+                validations: [
+                  {
+                    id: 'mock-output',
+                    kind: 'response-contains',
+                    substrings: ['Completed the requested step without timing out.'],
+                  },
+                ],
+              },
+            ],
+          }));
+          return;
+        }
+
+        if (promptText.includes('===PROBLEM===') && promptText.includes('===BREAKDOWN===')) {
+          send([
+            '<think>internal planning should stay hidden</think>',
+            '===PROBLEM===',
+            'Audit coverage health across the self-contained libraries.',
+            '===BREAKDOWN===',
+            '- Run coverage for each independent library track.',
+            '- Capture pass/fail and per-metric coverage values.',
+            '- Merge the results into one consolidated report.',
+            '===ASSIGNMENT===',
+            '- Role: Coverage specialist A | Owns: Run coverage for each independent library track across lib/inbrowser-use and lib/logact | Handoff: Coverage specialist B',
+            '- Role: Coverage specialist B | Owns: Capture pass/fail and per-metric coverage values for lib/agent-browser-mcp and lib/webmcp | Handoff: Aggregation specialist',
+            '- Role: Aggregation specialist | Owns: Merge the results into one consolidated report and flag any threshold gaps | Handoff: final report',
+            '===VALIDATION===',
+            '- Verify that all four libraries are represented exactly once.',
+            '- Flag any metric that falls below the configured threshold.',
+          ].join('\n'));
+          return;
+        }
+
+        if (promptText.includes('delegation-worker:sectioned-plan')) {
+          send([
+            '===PROBLEM===',
+            'Audit coverage health across the self-contained libraries.',
+            '===BREAKDOWN===',
+            '- Run coverage for each independent library track.',
+            '- Capture pass/fail and per-metric coverage values.',
+            '- Merge the results into one consolidated report.',
+            '===ASSIGNMENT===',
+            '- Role: Coverage specialist A | Owns: Run coverage for each independent library track across lib/inbrowser-use and lib/logact | Handoff: Coverage specialist B',
+            '- Role: Coverage specialist B | Owns: Capture pass/fail and per-metric coverage values for lib/agent-browser-mcp and lib/webmcp | Handoff: Aggregation specialist',
+            '- Role: Aggregation specialist | Owns: Merge the results into one consolidated report and flag any threshold gaps | Handoff: final report',
+            '===VALIDATION===',
+            '- Verify that all four libraries are represented exactly once.',
+            '- Flag any metric that falls below the configured threshold.',
+          ].join('\n'));
+          return;
+        }
+
+        // Local executor turn: first turn emits a JSON tool call so the
+        // staged pipeline actually exercises tool calling on local models;
+        // the second turn (which sees a <tool_result> in the conversation)
+        // returns the final answer.
+        if (promptText.includes('<tool_result')) {
+          send('Completed the requested step without timing out.');
+          return;
+        }
+
+        const catalogIds = extractCatalogToolIds();
+        const firstTool = catalogIds[0];
+        if (firstTool) {
+          send(`<tool_call>${JSON.stringify({ tool: firstTool, args: {} })}</tool_call>`);
+          return;
+        }
+
+        send('Completed the requested step without timing out.');
+      }, 20);
+    };
+    MockInferenceWorker.prototype.terminate = function() {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker = function(url: unknown, opts: unknown) {
+      if (String(url).includes('browserInference')) return new (MockInferenceWorker as unknown as new() => unknown)();
+      return new OriginalWorker(url as string | URL, opts as WorkerOptions);
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Worker.prototype = OriginalWorker.prototype;
+  });
+
+  await page.goto('/');
+  await expect(page.getByLabel('Omnibar')).toBeVisible();
+  await page.getByLabel('Settings').click();
+  const registryToggle = page.locator('.settings-result-list .section-toggle');
+  await expect(registryToggle).toBeVisible({ timeout: 5000 });
+  await registryToggle.click();
+  const modelButton = page.getByRole('button', { name: /Qwen3-0.6B-ONNX/i }).first();
+  await expect(modelButton).toBeVisible({ timeout: 8000 });
+  await modelButton.click();
+  await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
+
+  await page.getByLabel('Workspaces').click();
+  await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
+  const prompt = 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.';
+  await page.getByLabel('Chat input').fill(prompt);
+  await page.getByRole('button', { name: 'Send' }).click();
+
+  // The active provider is local Codi. Local models cannot reliably drive the
+  // multi-stage delegation pipeline (every stage stalls on Qwen3-0.6B), so
+  // delegation prompts must fall back to the staged tool pipeline + chat path
+  // and produce a real response without firing the planning watchdog.
+  await expect(page.getByText('Completed the requested step without timing out.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Local tool planning stalled/i)).toHaveCount(0);
+  await expect(page.getByText(/timed out/i)).toHaveCount(0);
+  // Delegation-only UI must not render for the local-model fallback path.
+  await expect(page.getByText('Parallel delegation plan')).toHaveCount(0);
+  await expect(page.getByText('Subagent breakdown')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText('<think>');
+
+  const workerGenerateRequests = await page.evaluate(() => {
+    return (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests ?? [];
+  });
+  // Fallback path must have driven multiple staged-pipeline calls
+  // (router + chat or executor) instead of a single one-shot request.
+  expect(workerGenerateRequests.length).toBeGreaterThanOrEqual(2);
+  // Qwen3 thinking must remain disabled on every request or stages spend
+  // their entire token budget inside `<think>...</think>` and the idle
+  // watchdog fires before any visible output appears.
+  for (const request of workerGenerateRequests) {
+    expect((request as { options?: { enable_thinking?: boolean } }).options?.enable_thinking).toBe(false);
+  }
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/parallel-delegation-workflow.png', fullPage: true });
+});
+
+test('Qwen3 direct-chat routing uses memory and coding guidance for local Codi prompts', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  const qwenEntry = {
+    id: 'onnx-community/Qwen3-0.6B-ONNX',
+    name: 'Qwen3-0.6B-ONNX',
+    author: 'onnx-community',
+    pipeline_tag: 'text-generation',
+    tags: ['transformers.js', 'onnx', 'text-generation'],
+    downloads: 5000,
+    likes: 30,
     siblings: [
       { rfilename: 'config.json' },
       { rfilename: 'tokenizer.json' },
@@ -1309,27 +1551,19 @@ test('completes the parallel delegation prompt without timing out', async ({ pag
       };
 
       setTimeout(function() {
-        if (promptText.includes('===PROBLEM===') && promptText.includes('===BREAKDOWN===')) {
-          send([
-            '<think>internal planning should stay hidden</think>',
-            '===PROBLEM===',
-            'Audit coverage health across the self-contained libraries.',
-            '===BREAKDOWN===',
-            '- Run coverage for each independent library track.',
-            '- Capture pass/fail and per-metric coverage values.',
-            '- Merge the results into one consolidated report.',
-            '===ASSIGNMENT===',
-            '- Subagent A: lib/inbrowser-use and lib/logact coverage checks, then hand results to aggregation.',
-            '- Subagent B: lib/agent-browser-mcp and lib/webmcp coverage checks, then hand results to aggregation.',
-            '- Subagent C: aggregate all summaries and flag any threshold gaps.',
-            '===VALIDATION===',
-            '- Verify that all four libraries are represented exactly once.',
-            '- Flag any metric that falls below the configured threshold.',
-          ].join('\n'));
+        if (promptText.includes('Tool Routing Guidance')) {
+          send('{"mode":"chat","goal":"answer directly"}');
           return;
         }
-
-        self.onmessage?.({ data: { type: 'phase', id, phase: 'thinking' } });
+        if (promptText.includes('Memory / Recall Guidance')) {
+          send('Saved a compact note and summarized the open question.');
+          return;
+        }
+        if (promptText.includes('Coding Guidance')) {
+          send('Planned the minimal fix and a focused vitest run.');
+          return;
+        }
+        send('Fallback local answer.');
       }, 20);
     };
     MockInferenceWorker.prototype.terminate = function() {};
@@ -1355,44 +1589,33 @@ test('completes the parallel delegation prompt without timing out', async ({ pag
 
   await page.getByLabel('Workspaces').click();
   await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
-  const prompt = 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.';
-  await page.getByLabel('Chat input').fill(prompt);
+
+  await page.evaluate(() => {
+    (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests = [];
+  });
+  await page.getByLabel('Chat input').fill('Please remember this note, summarize it, and keep track of the unresolved question.');
   await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Saved a compact note and summarized the open question.')).toBeVisible({ timeout: 15_000 });
 
-  await expect(page.getByText('Parallel delegation plan')).toBeVisible();
-  await expect(page.getByText('Subagent breakdown')).toBeVisible();
-  await expect(page.getByText('Subagent assignments')).toBeVisible();
-  await expect(page.getByText('Validation and risk checks')).toBeVisible();
-  await expect(page.getByText(/timed out/i)).toHaveCount(0);
-
-  const thoughtButton = page.getByRole('button', { name: /Thought for/i });
-  await expect(thoughtButton).toBeVisible();
-  await thoughtButton.click();
-  await expect(page.getByText('Coordinator brief', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Breakdown subagent', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Assignment subagent', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('Validation subagent', { exact: true }).first()).toBeVisible();
-  await expect(page.locator('body')).not.toContainText('<think>');
-
-  const workerGenerateRequests = await page.evaluate(() => {
+  const memoryRequests = await page.evaluate(() => {
     return (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests ?? [];
   });
-  expect(workerGenerateRequests.length).toBeGreaterThan(0);
-  expect(workerGenerateRequests[0]).toMatchObject({
-    options: {
-      max_new_tokens: 96,
-      temperature: 0.1,
-      do_sample: false,
-      top_p: 1,
-      // Qwen3 thinking must be disabled for the delegation path or every
-      // section spends its 96-token budget inside `<think>...</think>` and
-      // the idle watchdog fires before any visible output appears.
-      enable_thinking: false,
-    },
+  expect(memoryRequests.some((request) => JSON.stringify(request.prompt ?? '').includes('Memory / Recall Guidance'))).toBe(true);
+
+  await page.evaluate(() => {
+    (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests = [];
   });
+  await page.getByLabel('Chat input').fill('Fix the failing vitest run with the smallest safe code change.');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Planned the minimal fix and a focused vitest run.')).toBeVisible({ timeout: 15_000 });
+
+  const codingRequests = await page.evaluate(() => {
+    return (globalThis as typeof globalThis & { __workerGenerateRequests?: Array<Record<string, unknown>> }).__workerGenerateRequests ?? [];
+  });
+  expect(codingRequests.some((request) => JSON.stringify(request.prompt ?? '').includes('Coding Guidance'))).toBe(true);
 
   assertNoRuntimeErrors();
-  await page.screenshot({ path: 'docs/screenshots/parallel-delegation-workflow.png', fullPage: true });
+  await page.screenshot({ path: 'docs/screenshots/codi-scenario-routing.png', fullPage: true });
 });
 
 test('Qwen3 staged tool pipeline plans and runs without the local tool watchdog firing', async ({ page }) => {
@@ -1499,7 +1722,7 @@ test('Qwen3 staged tool pipeline plans and runs without the local tool watchdog 
   // The pipeline must reach the executor and produce the final answer without
   // the idle watchdog firing.
   await expect(page.getByText('Listed the workspace files.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/Local tool planning stalled/i)).toHaveCount(0);
+  await expect(page.getByText(/Local tool planning (produced no output at all|is still thinking with no new visible output|stalled after output stopped)/i)).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('<think>');
 
   const workerGenerateRequests = await page.evaluate(() => {

@@ -7,6 +7,10 @@ const toAiSdkMessagesMock = vi.fn((messages: Array<{ id: string; role: string; c
   parts: [{ type: 'text', text: message.streamedContent || message.content }],
 })));
 
+vi.mock('@huggingface/transformers', () => ({
+  TextStreamer: class MockTextStreamer {},
+}));
+
 vi.mock('../../services/browserInference', () => ({
   browserInferenceEngine: {
     generate: (...args: unknown[]) => generateMock(...args),
@@ -37,10 +41,13 @@ describe('Codi', () => {
         { id: 'user-1', role: 'user', content: 'Summarize the workspace.' },
       ],
     });
-
     const content = prompt.map((message) => message.content).join('\n\n');
-    expect(content).toContain('Active workspace: Research');
-    expect(content).toContain('Always validate before shipping.');
+
+    expect(prompt).toHaveLength(3);
+    expect(prompt[0]).toEqual(expect.objectContaining({ role: 'system' }));
+    expect(prompt[0]?.content).toContain('Active workspace: Research');
+    expect(prompt[0]?.content).toContain('## Workspace Context');
+    expect(prompt[0]?.content).toContain('Always validate before shipping.');
     expect(content).not.toContain('Copilot bridge');
     expect(content).not.toContain('GitHub Copilot');
   });
@@ -70,8 +77,9 @@ describe('Codi', () => {
       messages: [{ id: 'user-1', role: 'user', content: 'Summarize the workspace.' }],
     });
 
-    expect(prompt[2]?.content.length).toBeLessThanOrEqual(4_000);
-    expect(prompt[2]?.content).toContain('...');
+    expect(prompt[0]?.content).toContain('## Workspace Context');
+    expect(prompt[0]?.content.length).toBeLessThanOrEqual(5_000);
+    expect(prompt[0]?.content).toContain('...');
   });
 
   it('resolves the selected model to the first installed model when the stored selection is stale', () => {

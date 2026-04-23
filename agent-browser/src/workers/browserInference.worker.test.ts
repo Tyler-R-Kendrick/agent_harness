@@ -105,7 +105,7 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
       proxy: true,
       numThreads: 1,
     });
-    expect(transformerEnv.useBrowserCache).toBe(false);
+    expect(transformerEnv.useBrowserCache).toBe(true);
   });
 
   it('posts error:{error} (not msg) when pipeline loading fails — matching reference_impl', async () => {

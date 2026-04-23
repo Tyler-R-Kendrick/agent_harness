@@ -1,5 +1,6 @@
 /** Status of a single step within an operation. */
 export type OperationStepStatus = 'active' | 'done';
+export type OperationStepLane = 'sequential' | 'parallel';
 
 /**
  * A URL/domain reference surfaced alongside an operation step.
@@ -23,10 +24,14 @@ export interface OperationStep {
   kind: string;
   title: string;
   body?: string;
+  transcript?: string;
   sources?: OperationSourceChip[];
   startedAt: number;
   endedAt?: number;
+  timeoutMs?: number;
   status: OperationStepStatus;
+  parentStepId?: string;
+  lane?: OperationStepLane;
   /** Optional branch identifier for parallel tracks (not yet rendered). */
   branchId?: string;
 }

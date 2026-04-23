@@ -2,9 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolSet } from 'ai';
 
 const runToolAgentMock = vi.fn();
+const runLocalToolCallExecutorMock = vi.fn();
 
 vi.mock('./agentRunner', () => ({
   runToolAgent: (options: unknown, callbacks: unknown) => runToolAgentMock(options, callbacks),
+}));
+
+vi.mock('./localToolCallExecutor', () => ({
+  runLocalToolCallExecutor: (options: unknown, callbacks: unknown) =>
+    runLocalToolCallExecutorMock(options, callbacks),
 }));
 
 import { runStagedToolPipeline, selectStageDescriptors } from './stagedToolPipeline';
@@ -61,6 +67,7 @@ describe('stagedToolPipeline', () => {
 
   beforeEach(() => {
     runToolAgentMock.mockReset();
+    runLocalToolCallExecutorMock.mockReset();
   });
 
   it('filters executor tools through router, group, and tool selection stages', async () => {
@@ -93,7 +100,7 @@ describe('stagedToolPipeline', () => {
   it('falls back to chat mode when the router says no tool use is needed', async () => {
     const model = makeStreamingModel({
       '## Tool Routing Guidance': '{"mode":"chat","goal":"answer directly"}',
-      '## Agent Harness Control Guidance': 'Direct answer.',
+      '## Memory / Recall Guidance': 'Direct answer.',
     });
     const onDone = vi.fn();
 
@@ -102,7 +109,7 @@ describe('stagedToolPipeline', () => {
       tools: {},
       toolDescriptors: [],
       instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Say hello' }],
+      messages: [{ role: 'user', content: 'Please remember this note and summarize it later.' }],
       workspaceName: 'Research',
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
     }, { onDone });
@@ -110,6 +117,78 @@ describe('stagedToolPipeline', () => {
     expect(result).toEqual({ text: 'Direct answer.', steps: 2 });
     expect(onDone).toHaveBeenCalledWith('Direct answer.');
     expect(runToolAgentMock).not.toHaveBeenCalled();
+
+    const chatPrompt = model.doStream.mock.calls[1]?.[0]?.prompt?.[0]?.content as string;
+    expect(chatPrompt).toContain('## Persona');
+    expect(chatPrompt).toContain('## Workspace Context');
+    expect(chatPrompt).toContain('## Memory / Recall Guidance');
+  });
+
+  it('continues into the executor (no chat fallback) when the router output is empty so local models still get tools', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'used a tool', steps: 2 });
+    const model = makeStreamingModel({
+      '## Tool Routing Guidance': '',
+      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
+      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
+    });
+
+    const result = await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors,
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Inspect the file.' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, {});
+
+    expect(result.text).toBe('used a tool');
+    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
+    expect(runLocalToolCallExecutorMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores a router "chat" verdict when tools are available so the executor still runs', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'used a tool', steps: 2 });
+    const model = makeStreamingModel({
+      '## Tool Routing Guidance': '{"mode":"chat","goal":"answer directly"}',
+      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
+      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
+    });
+
+    const result = await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors,
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Inspect the file.' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, {});
+
+    expect(result.text).toBe('used a tool');
+    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues into the executor when the router output is unparseable instead of falling back to chat', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'used a tool', steps: 2 });
+    const model = makeStreamingModel({
+      '## Tool Routing Guidance': 'maybe we should use a tool, not sure',
+      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
+      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
+    });
+
+    const result = await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors,
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Inspect the file.' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, {});
+
+    expect(result.text).toBe('used a tool');
+    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
   });
 
   it('emits stage callbacks while planning', async () => {
@@ -133,9 +212,103 @@ describe('stagedToolPipeline', () => {
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
     }, { onStageStart, onStageToken, onStageComplete });
 
-    expect(onStageStart).toHaveBeenCalledTimes(3);
+    // router + group-select + tool-select parent aggregate + 1 sub-stage + executor
+    expect(onStageStart).toHaveBeenCalledTimes(5);
     expect(onStageToken).toHaveBeenCalled();
-    expect(onStageComplete).toHaveBeenCalledTimes(3);
+    expect(onStageComplete).toHaveBeenCalledTimes(5);
+
+    const toolSelectStarts = onStageStart.mock.calls.filter(([stage]) => stage === 'tool-select');
+    expect(toolSelectStarts).toHaveLength(2);
+    const subStageStart = toolSelectStarts.find(([, , meta]) => meta?.subStageId);
+    expect(subStageStart?.[2]).toMatchObject({
+      subStageId: 'files-worktree-mcp',
+      parentStageId: 'tool-select',
+    });
+  });
+
+  it('fans out tool-select per selected group and tolerates one failing group', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
+
+    // Model returns two groups in group-select; one tool-select call rejects.
+    const baseResponses: Record<string, string> = {
+      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"do work"}',
+      '## Tool Group Selection Guidance':
+        '{"groups":["files-worktree-mcp","built-in"],"goal":"do work"}',
+    };
+    let toolSelectCallCount = 0;
+    const model = {
+      doStream: vi.fn(async ({ prompt }) => {
+        const system = prompt[0]?.content as string;
+        const matchKey = Object.keys(baseResponses).find((k) => system.includes(k));
+        if (matchKey) {
+          const text = baseResponses[matchKey];
+          return {
+            stream: new ReadableStream({
+              start(controller) {
+                controller.enqueue({ type: 'text-delta', delta: text });
+                controller.enqueue({ type: 'finish', finishReason: 'stop' });
+                controller.close();
+              },
+            }),
+          };
+        }
+        // tool-select per-group calls
+        toolSelectCallCount += 1;
+        if (toolSelectCallCount === 1) {
+          throw new Error('group stalled');
+        }
+        return {
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue({
+                type: 'text-delta',
+                delta: '{"toolIds":["cli"],"goal":"do work"}',
+              });
+              controller.enqueue({ type: 'finish', finishReason: 'stop' });
+              controller.close();
+            },
+          }),
+        };
+      }),
+    };
+
+    const onStageStart = vi.fn();
+    const onStageComplete = vi.fn();
+    const onStageError = vi.fn();
+
+    await runStagedToolPipeline({
+      model: model as never,
+      tools: {
+        cli: { execute: vi.fn() },
+        read_session_file: { execute: vi.fn() },
+      } as unknown as ToolSet,
+      toolDescriptors,
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'Do work' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, { onStageStart, onStageComplete, onStageError });
+
+    const toolSelectStarts = onStageStart.mock.calls.filter(([stage]) => stage === 'tool-select');
+    // parent aggregate + one per group (2)
+    expect(toolSelectStarts).toHaveLength(3);
+    const subStageIds = toolSelectStarts
+      .map(([, , meta]) => meta?.subStageId)
+      .filter((id): id is string => Boolean(id))
+      .sort();
+    expect(subStageIds).toEqual(['built-in', 'files-worktree-mcp']);
+
+    expect(onStageError).toHaveBeenCalledTimes(1);
+    const errorCall = onStageError.mock.calls[0];
+    expect(errorCall[0]).toBe('tool-select');
+    expect(errorCall[2]?.subStageId).toBeDefined();
+
+    // Pipeline still completes the parent and reaches executor.
+    const parentComplete = onStageComplete.mock.calls.find(
+      ([stage, , meta]) => stage === 'tool-select' && !meta?.subStageId,
+    );
+    expect(parentComplete).toBeDefined();
+    expect(runToolAgentMock).toHaveBeenCalled();
   });
 
   it('falls back to heuristic group and tool selection when stage JSON is malformed', async () => {
@@ -252,8 +425,8 @@ describe('stagedToolPipeline', () => {
     }
   });
 
-  it('caps executor maxSteps to 6 when the model reports provider "local"', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
+  it('routes local providers through the local JSON tool-call executor with maxSteps capped at 6', async () => {
+    runLocalToolCallExecutorMock.mockResolvedValue({ text: 'done', steps: 1 });
     const streaming = makeStreamingModel({
       '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
       '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
@@ -272,7 +445,9 @@ describe('stagedToolPipeline', () => {
       maxSteps: 20,
     }, {});
 
-    expect(runToolAgentMock.mock.calls[0][0].maxSteps).toBe(6);
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(runLocalToolCallExecutorMock).toHaveBeenCalledTimes(1);
+    expect(runLocalToolCallExecutorMock.mock.calls[0][0].maxSteps).toBe(6);
   });
 
   it('preserves the caller maxSteps for remote models', async () => {

@@ -14,6 +14,7 @@ export const CODI_LABEL = 'Codi';
 const MAX_CONTEXT_MESSAGES = 7;
 const MAX_CODI_WORKSPACE_CONTEXT_CHARS = 4_000;
 const MAX_CODI_MESSAGE_CHARS = 2_000;
+const MAX_CODI_SYSTEM_PROMPT_CHARS = 5_000;
 
 export function hasCodiModels(installedModels: HFModel[]): boolean {
   return installedModels.length > 0;
@@ -48,18 +49,30 @@ export function buildCodiPrompt({
     || messages.at(-1)?.content
     || workspacePromptContext;
   const scenario = resolveAgentScenario(latestText);
+  const systemPromptPrefix = [
+    buildAgentSystemPrompt({
+      workspaceName,
+      goal: 'Help the user in the active workspace with concise, grounded collaboration.',
+      scenario,
+    }),
+    '## Workspace Context',
+  ].join('\n\n');
+  const workspaceContextBudget = Math.max(
+    256,
+    Math.min(
+      MAX_CODI_WORKSPACE_CONTEXT_CHARS,
+      MAX_CODI_SYSTEM_PROMPT_CHARS - systemPromptPrefix.length - 2,
+    ),
+  );
 
   return [
     {
       role: 'system',
-      content: buildAgentSystemPrompt({
-        workspaceName,
-        goal: 'Help the user in the active workspace with concise, grounded collaboration.',
-        scenario,
-      }),
+      content: [
+        systemPromptPrefix,
+        trimTextForLocalInference(workspacePromptContext, workspaceContextBudget),
+      ].join('\n\n'),
     },
-    { role: 'system', content: `Active workspace: ${workspaceName}` },
-    { role: 'system', content: trimTextForLocalInference(workspacePromptContext, MAX_CODI_WORKSPACE_CONTEXT_CHARS) },
     ...aiMessages.slice(-MAX_CONTEXT_MESSAGES).map((message) => ({
       role: message.role,
       content: trimTextForLocalInference(

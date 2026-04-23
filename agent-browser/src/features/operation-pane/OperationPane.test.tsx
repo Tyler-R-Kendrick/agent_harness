@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { OperationStep } from './types';
 import {
+  OperationGraph,
   OperationPane,
   OperationTimeline,
   OperationTrigger,
@@ -38,6 +39,42 @@ const activeStep: OperationStep = {
   startedAt: 1041,
   status: 'active',
 };
+
+const graphSteps: OperationStep[] = [
+  {
+    id: 'coordinator',
+    kind: 'thinking',
+    title: 'Coordinator brief',
+    body: 'Framing the delegated problem.',
+    startedAt: 1000,
+    endedAt: 1010,
+    timeoutMs: 120_000,
+    status: 'done',
+  },
+  {
+    id: 'breakdown',
+    kind: 'thinking',
+    title: 'Breakdown subagent',
+    body: 'Splitting the work.',
+    startedAt: 1011,
+    timeoutMs: 90_000,
+    status: 'active',
+    parentStepId: 'coordinator',
+    lane: 'parallel',
+  },
+  {
+    id: 'assignment',
+    kind: 'thinking',
+    title: 'Assignment subagent',
+    body: 'Assigning owners.',
+    startedAt: 1012,
+    endedAt: 1040,
+    timeoutMs: 75_000,
+    status: 'done',
+    parentStepId: 'coordinator',
+    lane: 'parallel',
+  },
+];
 
 // ─── formatOperationDuration ──────────────────────────────────────────────
 
@@ -99,6 +136,57 @@ describe('OperationTimeline', () => {
   it('renders nothing when steps array is empty', () => {
     const { container } = render(<OperationTimeline steps={[]} />);
     expect(container.querySelector('.op-timeline')?.children.length).toBe(0);
+  });
+
+  it('supports selecting a timeline step for detail inspection', () => {
+    const onSelectStep = vi.fn();
+    render(<OperationTimeline steps={[doneStep]} onSelectStep={onSelectStep} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Planning the response/i }));
+    expect(onSelectStep).toHaveBeenCalledWith('step-1');
+  });
+});
+
+describe('OperationGraph', () => {
+  it('renders parent and parallel child nodes', () => {
+    render(<OperationGraph steps={graphSteps} />);
+
+    expect(screen.getByRole('button', { name: /Coordinator brief/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Breakdown subagent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Assignment subagent/i })).toBeInTheDocument();
+    expect(screen.getByText('Coordinator')).toBeInTheDocument();
+    expect(screen.getAllByText('Parallel track')).toHaveLength(2);
+  });
+
+  it('marks active nodes with the active graph class', () => {
+    render(<OperationGraph steps={graphSteps} />);
+
+    expect(screen.getByRole('button', { name: /Breakdown subagent/i })).toHaveClass('op-graph-node-active');
+  });
+
+  it('calls onSelectStep when a graph node is clicked', () => {
+    const onSelectStep = vi.fn();
+    render(<OperationGraph steps={graphSteps} onSelectStep={onSelectStep} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Assignment subagent/i }));
+    expect(onSelectStep).toHaveBeenCalledWith('assignment');
+  });
+
+  it('renders a per-step counter and timeout budget for graph nodes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(61_011);
+
+    render(<OperationGraph steps={graphSteps} />);
+
+    expect(screen.getByLabelText('Step timer elapsed 1m, budget 1m 30s')).toBeInTheDocument();
+    expect(screen.getByLabelText('Step timer elapsed 1s, budget 1m 15s')).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(screen.getByLabelText('Step timer elapsed 1m 1s, budget 1m 30s')).toBeInTheDocument();
+    vi.useRealTimers();
   });
 });
 
@@ -231,5 +319,18 @@ describe('OperationPane', () => {
       <OperationPane steps={[]} isActive={true} onClose={() => undefined} />,
     );
     expect(screen.getByRole('complementary')).toBeInTheDocument();
+  });
+
+  it('renders the graph view when requested', () => {
+    render(
+      <OperationPane
+        steps={graphSteps}
+        view="graph"
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Coordinator brief/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Breakdown subagent/i })).toBeInTheDocument();
   });
 });

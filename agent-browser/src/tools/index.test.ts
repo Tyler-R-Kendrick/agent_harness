@@ -28,9 +28,11 @@ describe('default tools', () => {
     const instructions = buildDefaultToolInstructions({
       workspaceName: 'Research',
       workspacePromptContext: 'Workspace instructions.',
+      selectedToolIds: ['cli'],
     });
     expect(instructions).toContain('Active workspace: Research');
     expect(instructions).toContain('//session-1-fs/workspace');
+    expect(instructions).toContain('Selected tool ids: cli');
   });
 
   it('includes exactly one built-in tool descriptor: cli', () => {

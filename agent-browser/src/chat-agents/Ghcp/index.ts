@@ -1,6 +1,7 @@
 import type { ICompletionChecker, IInferenceClient, IVoter } from 'logact';
 import { streamCopilotChat, type CopilotModelSummary, type CopilotRuntimeState } from '../../services/copilotApi';
 import { toChatSdkTranscript } from '../../services/chatComposition';
+import { buildAgentSystemPrompt, resolveAgentScenario } from '../../services/agentPromptTemplates';
 import { createHeuristicCompletionChecker, isExecutionTask } from 'ralph-loop';
 import type { ChatMessage } from '../../types';
 import { createDeferredAgentCallbacks } from '../deferredCallbacks';
@@ -42,10 +43,16 @@ export function buildGhcpPrompt({
       .filter((message) => message.text.trim())
       .map((message) => `${message.role}: ${message.text}`)
       .join('\n\n');
+  const scenario = resolveAgentScenario(loopMessages?.at(-1)?.content || latestUserInput || transcript);
 
   return [
-    'You are GHCP, a GitHub Copilot-backed agent for an agent-first browser. Be concise and clear.',
-    `Active workspace: ${workspaceName}`,
+    buildAgentSystemPrompt({
+      workspaceName,
+      goal: 'Help the user in the active workspace with concise, grounded collaboration.',
+      scenario,
+      constraints: ['Use the transcript and latest user request to stay grounded in the current workspace context.'],
+    }),
+    '## Workspace Context',
     workspacePromptContext,
     transcript ? `Conversation transcript:\n${transcript}` : null,
     `Latest user request:\n${latestUserInput.trim()}`,

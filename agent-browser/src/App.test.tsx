@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createWebMcpTool } from 'agent-browser-mcp';
 import { installModelContext } from 'webmcp';
@@ -13,6 +13,7 @@ const fetchCopilotStateMock = vi.fn();
 const streamCopilotChatMock = vi.fn();
 const resolveLanguageModelMock = vi.fn(() => ({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' }));
 const runStagedToolPipelineMock = vi.fn();
+const runParallelDelegationWorkflowMock = vi.fn();
 const getSandboxFeatureFlagsMock = vi.fn(() => ({
   secureBrowserSandboxExec: false,
   disableWebContainerAdapter: false,
@@ -20,6 +21,10 @@ const getSandboxFeatureFlagsMock = vi.fn(() => ({
 }));
 const createSandboxExecutionServiceMock = vi.fn();
 const buildRunSummaryInputMock = vi.fn();
+
+vi.mock('@huggingface/transformers', () => ({
+  TextStreamer: class MockTextStreamer {},
+}));
 
 vi.mock('@copilotkit/react-core', () => ({
   useCopilotReadable: () => undefined,
@@ -52,6 +57,19 @@ vi.mock('./services/agentProvider', async (importOriginal) => {
 vi.mock('./services/stagedToolPipeline', () => ({
   runStagedToolPipeline: (options: unknown, callbacks: unknown) => runStagedToolPipelineMock(options, callbacks),
 }));
+
+vi.mock('./services/parallelDelegationWorkflow', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./services/parallelDelegationWorkflow')>();
+  return {
+    ...actual,
+    runParallelDelegationWorkflow: (options: unknown, callbacks: unknown) => runParallelDelegationWorkflowMock(options, callbacks),
+    // Bypass the provider-based gate in App tests so the delegation
+    // behavior under test still runs even when the active model is local.
+    // The gate's own behavior is covered in
+    // services/parallelDelegationWorkflow.test.ts.
+    shouldRunParallelDelegation: (prompt: string) => actual.isParallelDelegationPrompt(prompt),
+  };
+});
 
 vi.mock('./features/flags', () => ({
   getSandboxFeatureFlags: () => getSandboxFeatureFlagsMock(),
@@ -209,6 +227,7 @@ describe('App', () => {
 
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
@@ -216,6 +235,7 @@ describe('App', () => {
     streamCopilotChatMock.mockReset();
     resolveLanguageModelMock.mockReset();
     runStagedToolPipelineMock.mockReset();
+    runParallelDelegationWorkflowMock.mockReset();
     searchBrowserModelsMock.mockResolvedValue([]);
     loadModelMock.mockResolvedValue(undefined);
     generateMock.mockResolvedValue(undefined);
@@ -223,6 +243,7 @@ describe('App', () => {
     streamCopilotChatMock.mockResolvedValue(undefined);
     resolveLanguageModelMock.mockReturnValue({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' });
     runStagedToolPipelineMock.mockResolvedValue({ text: 'done', steps: 1 });
+    runParallelDelegationWorkflowMock.mockResolvedValue({ text: 'done', steps: 4 });
     getSandboxFeatureFlagsMock.mockReturnValue({
       secureBrowserSandboxExec: false,
       disableWebContainerAdapter: false,
@@ -1774,7 +1795,7 @@ describe('App', () => {
 
     const toolChip = screen.getByTestId('tool-chip-cli');
     expect(toolChip).toBeInTheDocument();
-    expect(screen.getByText('$ echo hello from cli')).toBeInTheDocument();
+    expect(screen.getAllByText('$ echo hello from cli').length).toBeGreaterThan(0);
     expect(screen.queryByText(/^terminal$/i)).not.toBeInTheDocument();
 
     const toolChipToggle = toolChip.querySelector('summary');
@@ -1866,24 +1887,24 @@ describe('App', () => {
     });
 
     // Panel should NOT open automatically — only on user click
-    expect(screen.queryByRole('complementary', { name: 'Activity panel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: /Activity panel|Process graph/i })).not.toBeInTheDocument();
 
     // Clicking the reasoning pill opens the Activity panel overlay
-    const pill = screen.getByRole('button', { name: /Thought for/i });
+    const pill = screen.getByRole('button', { name: /Thought for|Process ·|Working…/i });
     fireEvent.click(pill);
 
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('complementary', { name: 'Activity panel' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: /Activity panel|Process graph/i })).toBeInTheDocument();
     expect(screen.getAllByText('Searching openreview.net').length).toBeGreaterThan(0);
 
     // Close via the back button
     const backButton = screen.getByRole('button', { name: 'Back to chat' });
     fireEvent.click(backButton);
 
-    expect(screen.queryByRole('complementary', { name: 'Activity panel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: /Activity panel|Process graph/i })).not.toBeInTheDocument();
     expect(screen.getByText('Runtime intelligence is moving into the loop.')).toBeInTheDocument();
   });
 
@@ -1924,10 +1945,10 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    const pill = screen.getByRole('button', { name: /Thought for/i });
+    const pill = screen.getByRole('button', { name: /Thought for|Process ·|Working…/i });
     fireEvent.click(pill);
 
-    expect(screen.getByRole('complementary', { name: 'Activity panel' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: /Activity panel|Process graph/i })).toBeInTheDocument();
     expect(screen.getAllByText('Plan the response in steps.').length).toBeGreaterThan(0);
     expect(screen.getByText('Final answer')).toBeInTheDocument();
   });
@@ -1972,7 +1993,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('button', { name: 'Analyzing request' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Analyzing request/i })).toBeInTheDocument();
 
     await act(async () => {
       resolveGeneration();
@@ -2020,7 +2041,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('button', { name: 'Routing request' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Routing request/i })).toBeInTheDocument();
 
     await act(async () => {
       resolveRun();
@@ -2075,6 +2096,12 @@ describe('App', () => {
     const planningPill = screen.getByRole('button', { name: /Routing request/i });
     fireEvent.click(planningPill);
 
+    // Drill into the router pg-row to see the streamed transcript.
+    const routerRow = screen.getAllByRole('button').find(
+      (row) => row.className.includes('pg-row') && /Routing request/.test(row.textContent ?? ''),
+    );
+    expect(routerRow).toBeDefined();
+    fireEvent.click(routerRow!);
     expect(screen.getByText(/Looking for the right tool\./)).toBeInTheDocument();
 
     await act(async () => {
@@ -2114,12 +2141,12 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await act(async () => {
-      vi.advanceTimersByTime(30_001);
+      vi.advanceTimersByTime(180_001);
       await vi.runOnlyPendingTimersAsync();
       await Promise.resolve();
     });
 
-    expect(screen.getByText(/Local tool planning stalled with no new output\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Local tool planning produced no output at all\./i)).toBeInTheDocument();
   });
 
   it('does not fire the local tool idle watchdog while stages continue to stream output', async () => {
@@ -2160,8 +2187,8 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Keep streaming.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    // Drip stage tokens every 15 seconds to keep the idle timer reset past
-    // the 30 s threshold without producing the timeout error.
+    // Drip stage tokens every 15 seconds to keep the idle timer reset well
+    // inside the 3 minute threshold without producing the timeout error.
     for (let i = 0; i < 3; i++) {
       await act(async () => {
         vi.advanceTimersByTime(15_000);
@@ -2170,12 +2197,558 @@ describe('App', () => {
       });
     }
 
-    expect(screen.queryByText(/Local tool planning stalled with no new output\./i)).toBeNull();
+    expect(screen.queryByText(/Local tool planning produced no output at all\./i)).toBeNull();
+    expect(screen.queryByText(/Local tool planning is still thinking with no new visible output\./i)).toBeNull();
 
     await act(async () => {
       finishRun?.();
       await Promise.resolve();
     });
+  });
+
+  it('fails local tool planning after 3 minutes when streamed output stops', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('router', '');
+      callbacks.onStageToken?.('router', 'partial output');
+      return new Promise(() => {});
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Keep planning until streamed output stops.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(179_999);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/Local tool planning stalled after output stopped\./i)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2);
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/Local tool planning stalled after output stopped\./i)).toBeInTheDocument();
+  });
+
+  it('uses a longer timeout budget for later planning stages', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('router', '');
+      callbacks.onStageComplete?.('router', 'Routed to tool-group selection.');
+      callbacks.onStageStart?.('group-select', '');
+      return new Promise(() => {});
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Choose the right tool groups.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(119_999);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/Local tool planning stalled after output stopped\./i)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(2);
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/Local tool planning stalled after output stopped\./i)).toBeInTheDocument();
+  });
+
+  it('does not let AgentBus updates take ownership of the delegated planning timeout', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runParallelDelegationWorkflowMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStepStart?.('coordinator', 'Coordinator brief', 'Frame the delegated problem.');
+      callbacks.onBusEntry?.({
+        id: 'bus-0',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Mail',
+        summary: 'Mail · user',
+        detail: 'figure out a multi-step problem to solve that can be parallelized',
+        actor: 'user',
+      });
+      callbacks.onBusEntry?.({
+        id: 'bus-1',
+        position: 1,
+        realtimeTs: Date.now() + 1_000,
+        payloadType: 'InfIn',
+        summary: 'InfIn · 2 message(s)',
+        detail: 'system: coordinator\nuser: analyze',
+      });
+      return new Promise(() => {});
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const activityTrigger = screen.queryByRole('button', { name: /Thought for|Process ·|Working…/i })
+      ?? screen.getByRole('button', { name: /Coordinator brief|AgentBus log/i });
+    fireEvent.click(activityTrigger);
+
+    const agentBusWorkflowCard = screen.getAllByRole('button', { name: /AgentBus log/i })
+      .find((button) => button.className.includes('pg-row'));
+
+    expect(agentBusWorkflowCard).toBeDefined();
+    expect(agentBusWorkflowCard).not.toHaveTextContent(/Budget/i);
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_001);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/Local tool planning stalled after output stopped\./i)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(90_001);
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/Local tool planning stalled after output stopped\./i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Coordinator brief/i }));
+    expect(screen.getAllByText(/Timed out after 2m 30s waiting for more streamed output\./i).length).toBeGreaterThan(0);
+  });
+
+  it('passes delegated execution runtime inputs into the parallel workflow', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runParallelDelegationWorkflowMock.mockImplementation(async (options, callbacks) => {
+      const typed = options as {
+        execution?: {
+          toolDescriptors: Array<{ id: string }>;
+          instructions: string;
+          messages: Array<{ role: string; content: unknown }>;
+          writePlanFile: (path: string, content: string) => Promise<void>;
+          runShellCommand: (command: string) => Promise<{ exitCode: number; stdout: string; stderr: string }>;
+        };
+      };
+
+      expect(typed.execution).toBeDefined();
+      expect(typed.execution?.toolDescriptors.map((descriptor) => descriptor.id)).toContain('cli');
+      expect(typed.execution?.instructions).toContain('Research');
+      expect(typed.execution?.messages).toEqual([
+        expect.objectContaining({ role: 'user', content: expect.stringContaining('delegate the work to subagents') }),
+      ]);
+
+      const shellResult = await typed.execution?.runShellCommand('pwd');
+      expect(shellResult?.exitCode).toBe(0);
+      await typed.execution?.writePlanFile('/workspace/PLAN.md', '# PLAN');
+
+      callbacks.onDone?.('Parallel delegation plan');
+      return { text: 'Parallel delegation plan', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(runParallelDelegationWorkflowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats delegated staged-planning stage tokens as watchdog activity', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runParallelDelegationWorkflowMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStepStart?.('coordinator', 'Coordinator brief', 'Frame the delegated problem.');
+      callbacks.onStepComplete?.('coordinator', 'Frame the delegated problem.');
+
+      window.setTimeout(() => {
+        callbacks.onStageStart?.('router', 'Plan task execution');
+        callbacks.onStageToken?.('router', 'delegated planner still streaming');
+      }, 60_000);
+
+      return new Promise(() => {});
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(29_999);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/Local tool planning stalled after output stopped\./i)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(149_999);
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByText(/Local tool planning stalled after output stopped\./i)).toBeNull();
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_002);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/Local tool planning stalled after output stopped\./i)).toBeInTheDocument();
+  });
+
+  it('renders the delegated workflow graph and lets the user inspect a subagent transcript', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runParallelDelegationWorkflowMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStepStart?.('coordinator', 'Coordinator brief', 'Frame the delegated problem.');
+      callbacks.onStepStart?.('breakdown-agent', 'Breakdown subagent', 'Split the work into parallel tracks.');
+      callbacks.onStepStart?.('assignment-agent', 'Assignment subagent', 'Assign owners for each track.');
+      callbacks.onStepStart?.('validation-agent', 'Validation subagent', 'Define risks and checks.');
+      callbacks.onStepToken?.('coordinator', 'Analyze the customer-support dataset.');
+      callbacks.onStepComplete?.('coordinator', 'Analyze the customer-support dataset.');
+      callbacks.onStepToken?.('breakdown-agent', 'Track A\nTrack B\nTrack C');
+      callbacks.onStepComplete?.('breakdown-agent', 'Track A\nTrack B\nTrack C');
+      callbacks.onStepComplete?.('assignment-agent', [
+        'Role: Analyst specialist | Owns: Track A dataset analysis | Handoff: Ops specialist',
+        'Role: Ops specialist | Owns: Track B operational follow-up | Handoff: final report',
+      ].join('\n'));
+      callbacks.onStepComplete?.('validation-agent', 'Check data quality\nConfirm metric coverage');
+      callbacks.onVoterStep?.({
+        id: 'voter-breakdown',
+        kind: 'agent',
+        title: 'breakdown-distinct-tracks',
+        voterId: 'breakdown-distinct-tracks',
+        startedAt: Date.now(),
+        status: 'active',
+      });
+      callbacks.onVoterStepUpdate?.('voter-breakdown', {
+        status: 'done',
+        approve: true,
+        body: 'Approved',
+        thought: 'Confirmed the breakdown has multiple independent tracks.',
+        endedAt: Date.now(),
+      });
+      callbacks.onVoterStepEnd?.('voter-breakdown');
+      callbacks.onVoterStep?.({
+        id: 'voter-assignment',
+        kind: 'agent',
+        title: 'assignment-has-roles',
+        voterId: 'assignment-has-roles',
+        startedAt: Date.now(),
+        status: 'active',
+      });
+      callbacks.onVoterStepUpdate?.('voter-assignment', {
+        status: 'done',
+        approve: true,
+        body: 'Approved',
+        thought: 'Each track has an explicit role or owner with a stated handoff.',
+        endedAt: Date.now(),
+      });
+      callbacks.onVoterStepEnd?.('voter-assignment');
+      callbacks.onBusEntry?.({
+        id: 'bus-0',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Mail',
+        summary: 'Mail · user',
+        detail: 'figure out a multi-step problem to solve that can be parallelized',
+        actor: 'user',
+      });
+      callbacks.onBusEntry?.({
+        id: 'bus-1',
+        position: 1,
+        realtimeTs: Date.now() + 1000,
+        payloadType: 'Vote',
+        summary: 'Vote · breakdown-distinct-tracks ✓',
+        detail: 'Confirmed the breakdown has multiple independent tracks.',
+        actor: 'breakdown-distinct-tracks',
+      });
+      callbacks.onBusEntry?.({
+        id: 'bus-2',
+        position: 2,
+        realtimeTs: Date.now() + 2000,
+        payloadType: 'Vote',
+        summary: 'Vote · assignment-has-roles ✓',
+        detail: 'Each track has an explicit role or owner with a stated handoff.',
+        actor: 'assignment-has-roles',
+      });
+      callbacks.onBusEntry?.({
+        id: 'bus-3',
+        position: 3,
+        realtimeTs: Date.now() + 3000,
+        payloadType: 'Commit',
+        summary: 'Commit · delegation-abc',
+        detail: 'intent committed',
+      });
+      const finalText = [
+        'Parallel delegation plan',
+        '',
+        '## Reviewer votes',
+        '- ✅ breakdown-distinct-tracks — Confirmed the breakdown has multiple independent tracks.',
+        '- ✅ assignment-has-roles — Each track has an explicit role or owner with a stated handoff.',
+        '',
+        '## Process log (AgentBus)',
+        '1. Mail · user — figure out a multi-step problem to solve that can be parallelized',
+        '2. Vote · breakdown-distinct-tracks ✓ — Confirmed the breakdown has multiple independent tracks.',
+        '3. Vote · assignment-has-roles ✓ — Each track has an explicit role or owner with a stated handoff.',
+        '4. Commit · delegation-abc — intent committed',
+      ].join('\n');
+      callbacks.onDone?.(finalText);
+      return { text: finalText, steps: 4 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: /Process ·|Reviewers · 1 approved · 1 rejected/i })).toBeInTheDocument();
+    expect(screen.getByText('Reviewer votes')).toBeInTheDocument();
+    expect(screen.getByText('Process log (AgentBus)')).toBeInTheDocument();
+
+    const activityTrigger = screen.queryByRole('button', { name: /Thought for|Process ·|Working…/i })
+      ?? screen.getByRole('button', { name: /Validation subagent|Coordinator brief|Planning tool run/i });
+    fireEvent.click(activityTrigger);
+
+    expect(screen.getByRole('button', { name: /Coordinator brief/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Breakdown subagent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Assignment subagent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Validation subagent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reviewer votes/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /AgentBus log/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Breakdown subagent/i }));
+
+    const detailPane = screen.getByRole('complementary', { name: /breakdown-agent .* detail/i });
+    expect(screen.getByRole('button', { name: 'Back to graph' })).toBeInTheDocument();
+    expect(within(detailPane).getByText(/Track A/)).toBeInTheDocument();
+    expect(within(detailPane).getByText(/Track C/)).toBeInTheDocument();
+  });
+
+  it('renders ProcessGraph rows in chronological execution order across branches', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    runParallelDelegationWorkflowMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onBusEntry?.({
+        id: 'bus-0',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Mail',
+        summary: 'Mail · user',
+        detail: 'figure out a multi-step problem to solve that can be parallelized',
+        actor: 'user',
+      });
+      callbacks.onStepStart?.('coordinator', 'Coordinator brief', 'Frame the delegated problem.');
+      callbacks.onStepComplete?.('coordinator', 'Analyze the customer-support dataset.');
+      callbacks.onBusEntry?.({
+        id: 'bus-1',
+        position: 1,
+        realtimeTs: Date.now() + 1000,
+        payloadType: 'InfIn',
+        summary: 'InfIn · 2 messages',
+        detail: 'system: coordinator\nuser: analyze',
+      });
+      callbacks.onDone?.('Parallel delegation plan');
+      return { text: 'Parallel delegation plan', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const activityTrigger = screen.queryByRole('button', { name: /Thought for|Process ·|Working…/i })
+      ?? screen.getByRole('button', { name: /Coordinator brief|AgentBus log|Mail|InfIn/i });
+    fireEvent.click(activityTrigger);
+
+    // The process timeline must render entries in pure chronological order
+    // (ts → position) regardless of which branch they belong to. The mocked
+    // sequence above interleaves bus rows around the coordinator stage, so
+    // the rendered rows MUST follow: Mail (bus-0) → Coordinator brief →
+    // InfIn (bus-1). Anything else means branch priority is back.
+    const orderedRows = screen.getAllByRole('button').filter((button) => {
+      const label = button.textContent ?? '';
+      return /Coordinator brief|Mail|InfIn|AgentBus log/.test(label);
+    });
+    const summaries = orderedRows.map((button) => button.textContent ?? '');
+    const mailIndex = summaries.findIndex((label) => /Mail/.test(label));
+    const coordinatorIndex = summaries.findIndex((label) => /Coordinator brief/.test(label));
+    const infInIndex = summaries.findIndex((label) => /InfIn/.test(label));
+
+    // All three rows must appear and be in chronological order.
+    expect(mailIndex).toBeGreaterThanOrEqual(0);
+    expect(coordinatorIndex).toBeGreaterThan(mailIndex);
+    expect(infInIndex).toBeGreaterThan(coordinatorIndex);
   });
 
   it('surfaces tool-agent activity in the activity panel for local Codi runs with tools enabled', async () => {
@@ -2218,10 +2791,10 @@ describe('App', () => {
 
     expect(screen.getByTestId('tool-chip-grep')).toBeInTheDocument();
 
-    const pill = screen.getByRole('button', { name: /Thought for/i });
+    const pill = screen.getByRole('button', { name: /Thought for|Process ·|Working…/i });
     fireEvent.click(pill);
 
-    expect(screen.getByRole('complementary', { name: 'Activity panel' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: /Activity panel|Process graph/i })).toBeInTheDocument();
     expect(screen.getAllByText('grep').length).toBeGreaterThan(0);
     expect(screen.getByText('Found matches')).toBeInTheDocument();
   });
