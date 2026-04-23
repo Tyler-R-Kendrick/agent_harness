@@ -9,7 +9,8 @@
     "dev:agent-browser": "npm --workspace agent-browser run dev",
     "verify:agent-browser": "node scripts/verify-agent-browser.mjs",
     "test:agent-browser": "npm --workspace agent-browser run test",
-    "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage"
+    "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage",
+    "visual:agent-browser": "npm --workspace agent-browser run visual:smoke"
   },
   "overrides": {
     "fast-xml-parser": "^5.7.0",

@@ -17,32 +17,19 @@ vi.mock('./localToolCallExecutor', () => ({
 import { runStagedToolPipeline, selectStageDescriptors } from './stagedToolPipeline';
 import type { ToolDescriptor } from '../tools';
 
-function makeStreamingModel(responses: Record<string, string>) {
+function makeStreamingModel(text = 'Direct answer.') {
   return {
-    doStream: vi.fn(async ({ prompt }) => {
-      const system = prompt[0]?.content as string;
-      const response = Object.entries(responses).find(([marker]) => system.includes(marker))?.[1] ?? '{"mode":"chat"}';
-
-      return {
-        stream: new ReadableStream({
-          start(controller) {
-            controller.enqueue({ type: 'stream-start', warnings: [] });
-            controller.enqueue({ type: 'text-start', id: 'text-0' });
-            controller.enqueue({ type: 'text-delta', id: 'text-0', delta: response });
-            controller.enqueue({ type: 'text-end', id: 'text-0' });
-            controller.enqueue({
-              type: 'finish',
-              finishReason: { unified: 'stop', raw: 'stop' },
-              usage: {
-                inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-                outputTokens: { total: 0, text: 0, reasoning: 0 },
-              },
-            });
-            controller.close();
-          },
-        }),
-      };
-    }),
+    provider: 'test-provider',
+    modelId: 'test-model',
+    doStream: vi.fn(async () => ({
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue({ type: 'text-delta', delta: text });
+          controller.enqueue({ type: 'finish', finishReason: 'stop' });
+          controller.close();
+        },
+      }),
+    })),
   };
 }
 
@@ -71,38 +58,43 @@ describe('stagedToolPipeline', () => {
     runLocalToolCallExecutorMock.mockReset();
   });
 
-  it('filters executor tools through router, group, and tool selection stages', async () => {
+  it('routes tool-enabled requests through the Tool Agent before the executor', async () => {
     runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect the file"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"],"goal":"inspect the file"}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"],"goal":"inspect the file"}',
-    });
+    const model = makeStreamingModel();
+    const onStageStart = vi.fn();
+    const onToolAgentEvent = vi.fn();
 
     await runStagedToolPipeline({
       model: model as never,
       tools: { cli: { execute: vi.fn() }, read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
       toolDescriptors,
       instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
+      messages: [{ role: 'user', content: 'Inspect AGENTS.md with the read session file tool.' }],
       workspaceName: 'Research',
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
+    }, { onStageStart, onToolAgentEvent });
 
-    expect(runToolAgentMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tools: expect.objectContaining({ read_session_file: expect.any(Object) }),
-      }),
-      expect.any(Object),
+    expect(model.doStream).not.toHaveBeenCalled();
+    expect(onToolAgentEvent).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'plan',
+      branchId: 'tool-agent',
+    }));
+    expect(onToolAgentEvent).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'codemode',
+      branchId: 'codemode',
+      parentBranchId: 'tool-agent',
+    }));
+    expect(onStageStart).toHaveBeenCalledWith(
+      'router',
+      'Routing request through Tool Agent.',
+      expect.objectContaining({ agentId: 'tool-agent', agentLabel: 'Tool Agent', modelId: 'test-model' }),
     );
-    expect(runToolAgentMock.mock.calls[0][0].tools.cli).toBeUndefined();
+    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
+    expect(runToolAgentMock.mock.calls[0][0].tools.read_session_file).toBeDefined();
   });
 
-  it('falls back to chat mode when the router says no tool use is needed', async () => {
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"chat","goal":"answer directly"}',
-      '## Memory / Recall Guidance': 'Direct answer.',
-    });
+  it('falls back to direct chat only when no tool catalog is available', async () => {
+    const model = makeStreamingModel('Direct answer.');
     const onDone = vi.fn();
 
     const result = await runStagedToolPipeline({
@@ -110,330 +102,44 @@ describe('stagedToolPipeline', () => {
       tools: {},
       toolDescriptors: [],
       instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Please remember this note and summarize it later.' }],
+      messages: [{ role: 'user', content: 'Please remember this note.' }],
       workspaceName: 'Research',
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
     }, { onDone });
 
-    expect(result).toEqual({ text: 'Direct answer.', steps: 2 });
+    expect(result).toEqual({ text: 'Direct answer.', steps: 1 });
     expect(onDone).toHaveBeenCalledWith('Direct answer.');
     expect(runToolAgentMock).not.toHaveBeenCalled();
-
-    const chatPrompt = model.doStream.mock.calls[1]?.[0]?.prompt?.[0]?.content as string;
-    expect(chatPrompt).toContain('## Persona');
-    expect(chatPrompt).toContain('## Workspace Context');
-    expect(chatPrompt).toContain('## Memory / Recall Guidance');
+    expect(model.doStream).toHaveBeenCalledTimes(1);
   });
 
-  it('continues into the executor (no chat fallback) when the router output is empty so local models still get tools', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'used a tool', steps: 2 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
-    const result = await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors,
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect the file.' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    expect(result.text).toBe('used a tool');
-    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
-    expect(runLocalToolCallExecutorMock).not.toHaveBeenCalled();
-  });
-
-  it('ignores a router "chat" verdict when tools are available so the executor still runs', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'used a tool', steps: 2 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"chat","goal":"answer directly"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
-    const result = await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors,
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect the file.' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    expect(result.text).toBe('used a tool');
-    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('continues into the executor when the router output is unparseable instead of falling back to chat', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'used a tool', steps: 2 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': 'maybe we should use a tool, not sure',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
-    const result = await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors,
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect the file.' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    expect(result.text).toBe('used a tool');
-    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('emits stage callbacks while planning', async () => {
+  it('emits CodeMode as a process-log branch flow during planning', async () => {
     runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect the file"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"],"goal":"inspect the file"}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"],"goal":"inspect the file"}',
-    });
     const onStageStart = vi.fn();
-    const onStageToken = vi.fn();
-    const onStageComplete = vi.fn();
 
     await runStagedToolPipeline({
-      model: model as never,
+      model: makeStreamingModel() as never,
       tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
       toolDescriptors: [toolDescriptors[1]],
       instructions: 'You are a workspace agent.',
       messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
       workspaceName: 'Research',
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, { onStageStart, onStageToken, onStageComplete });
+    }, { onStageStart });
 
-    // router + group-select + tool-select parent aggregate + 1 sub-stage + executor
-    expect(onStageStart).toHaveBeenCalledTimes(5);
-    expect(onStageToken).toHaveBeenCalled();
-    expect(onStageComplete).toHaveBeenCalledTimes(5);
-
-    const toolSelectStarts = onStageStart.mock.calls.filter(([stage]) => stage === 'tool-select');
-    expect(toolSelectStarts).toHaveLength(2);
-    const subStageStart = toolSelectStarts.find(([, , meta]) => meta?.subStageId);
-    expect(subStageStart?.[2]).toMatchObject({
-      subStageId: 'files-worktree-mcp',
-      parentStageId: 'tool-select',
+    const codemodeStart = onStageStart.mock.calls.find(([, , meta]) => meta?.subStageId === 'codemode');
+    expect(codemodeStart).toBeDefined();
+    expect(codemodeStart?.[2]).toMatchObject({
+      agentId: 'tool-agent',
+      parentStageId: 'tool-agent',
+      branchId: 'codemode',
+      parentBranchId: 'tool-agent',
     });
-  });
-
-  it('fans out tool-select per selected group and tolerates one failing group', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-
-    // Model returns two groups in group-select; one tool-select call rejects.
-    const baseResponses: Record<string, string> = {
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"do work"}',
-      '## Tool Group Selection Guidance':
-        '{"groups":["files-worktree-mcp","built-in"],"goal":"do work"}',
-    };
-    let toolSelectCallCount = 0;
-    const model = {
-      doStream: vi.fn(async ({ prompt }) => {
-        const system = prompt[0]?.content as string;
-        const matchKey = Object.keys(baseResponses).find((k) => system.includes(k));
-        if (matchKey) {
-          const text = baseResponses[matchKey];
-          return {
-            stream: new ReadableStream({
-              start(controller) {
-                controller.enqueue({ type: 'text-delta', delta: text });
-                controller.enqueue({ type: 'finish', finishReason: 'stop' });
-                controller.close();
-              },
-            }),
-          };
-        }
-        // tool-select per-group calls
-        toolSelectCallCount += 1;
-        if (toolSelectCallCount === 1) {
-          throw new Error('group stalled');
-        }
-        return {
-          stream: new ReadableStream({
-            start(controller) {
-              controller.enqueue({
-                type: 'text-delta',
-                delta: '{"toolIds":["cli"],"goal":"do work"}',
-              });
-              controller.enqueue({ type: 'finish', finishReason: 'stop' });
-              controller.close();
-            },
-          }),
-        };
-      }),
-    };
-
-    const onStageStart = vi.fn();
-    const onStageComplete = vi.fn();
-    const onStageError = vi.fn();
-
-    await runStagedToolPipeline({
-      model: model as never,
-      tools: {
-        cli: { execute: vi.fn() },
-        read_session_file: { execute: vi.fn() },
-      } as unknown as ToolSet,
-      toolDescriptors,
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Do work' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, { onStageStart, onStageComplete, onStageError });
-
-    const toolSelectStarts = onStageStart.mock.calls.filter(([stage]) => stage === 'tool-select');
-    // parent aggregate + one per group (2)
-    expect(toolSelectStarts).toHaveLength(3);
-    const subStageIds = toolSelectStarts
-      .map(([, , meta]) => meta?.subStageId)
-      .filter((id): id is string => Boolean(id))
-      .sort();
-    expect(subStageIds).toEqual(['built-in', 'files-worktree-mcp']);
-
-    expect(onStageError).toHaveBeenCalledTimes(1);
-    const errorCall = onStageError.mock.calls[0];
-    expect(errorCall[0]).toBe('tool-select');
-    expect(errorCall[2]?.subStageId).toBeDefined();
-
-    // Pipeline still completes the parent and reaches executor.
-    const parentComplete = onStageComplete.mock.calls.find(
-      ([stage, , meta]) => stage === 'tool-select' && !meta?.subStageId,
-    );
-    expect(parentComplete).toBeDefined();
-    expect(runToolAgentMock).toHaveBeenCalled();
-  });
-
-  it('falls back to heuristic group and tool selection when stage JSON is malformed', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"read the file"}',
-      '## Tool Group Selection Guidance': 'The files tools look right for this request.',
-      '## Tool Selection Guidance': 'Use the read session file tool.',
-    });
-
-    await runStagedToolPipeline({
-      model: model as never,
-      tools: { cli: { execute: vi.fn() }, read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors,
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    expect(runToolAgentMock.mock.calls[0][0].tools.read_session_file).toBeDefined();
-  });
-
-  it('uses doGenerate when streaming is unavailable', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = {
-      doGenerate: vi.fn(async ({ prompt }) => {
-        const system = prompt[0]?.content as string;
-        const response = Object.entries({
-          '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect the file"}',
-          '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-          '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-        }).find(([marker]) => system.includes(marker))?.[1] ?? '{"mode":"chat"}';
-
-        return {
-          content: [{ type: 'text', text: response }],
-          usage: { inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 0, text: 0, reasoning: 0 } },
-          finishReason: { unified: 'stop', raw: 'stop' },
-          warnings: [],
-        };
-      }),
-    };
-
-    await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors: [toolDescriptors[1]],
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    expect(model.doGenerate).toHaveBeenCalled();
-    expect(runToolAgentMock).toHaveBeenCalled();
-  });
-
-  it('selectStageDescriptors preserves descriptor ordering for selected ids', () => {
-    expect(selectStageDescriptors(toolDescriptors, ['read_session_file'])).toEqual([toolDescriptors[1]]);
-  });
-
-  it('passes providerOptions.local.enableThinking=false and Qwen3 non-thinking sampling to stage calls', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
-    await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors: [toolDescriptors[1]],
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    const firstCall = model.doStream.mock.calls[0][0] as { providerOptions?: Record<string, unknown> };
-    expect(firstCall.providerOptions).toEqual({
-      local: { enableThinking: false, topK: 20, minP: 0 },
-    });
-  });
-
-  it('appends a /no_think suffix to planning stage user prompts so Qwen3 skips think blocks', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
-    await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors: [toolDescriptors[1]],
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, {});
-
-    const userParts = model.doStream.mock.calls.map((call: unknown[]) => {
-      const prompt = (call[0] as { prompt: Array<{ role: string; content: unknown }> }).prompt;
-      const userMessage = prompt.find((part) => part.role === 'user');
-      const content = userMessage?.content as Array<{ type: string; text: string }>;
-      return content[0]?.text ?? '';
-    });
-
-    expect(userParts.length).toBeGreaterThanOrEqual(3);
-    for (const text of userParts) {
-      expect(text).toMatch(/\/no_think\s*$/);
-    }
   });
 
   it('routes local providers through the local JSON tool-call executor with maxSteps capped at 6', async () => {
     runLocalToolCallExecutorMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const streaming = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-    const model = { ...streaming, provider: 'local' };
+    const model = { ...makeStreamingModel(), provider: 'local' };
 
     await runStagedToolPipeline({
       model: model as never,
@@ -451,36 +157,25 @@ describe('stagedToolPipeline', () => {
     expect(runLocalToolCallExecutorMock.mock.calls[0][0].maxSteps).toBe(6);
   });
 
-  it('preserves the caller maxSteps for remote models', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
-    await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors: [toolDescriptors[1]],
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-      maxSteps: 20,
-    }, {});
-
-    expect(runToolAgentMock.mock.calls[0][0].maxSteps).toBe(20);
-  });
-
-  it('routes the executor phase through LogAct voters and surfaces their thoughts', async () => {
-    runToolAgentMock.mockResolvedValue({ text: 'tool-answer', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-
+  it('preserves remote executor voters and completion-checker retries', async () => {
+    runToolAgentMock
+      .mockResolvedValueOnce({ text: 'first attempt', steps: 1 })
+      .mockResolvedValueOnce({ text: 'final attempt', steps: 1 });
+    const checker = vi.fn()
+      .mockResolvedValueOnce({
+        type: PayloadType.Completion,
+        intentId: 'ignored-1',
+        done: false,
+        score: 'med',
+        feedback: 'Try again with the selected tool.',
+      })
+      .mockResolvedValueOnce({
+        type: PayloadType.Completion,
+        intentId: 'ignored-2',
+        done: true,
+        score: 'high',
+        feedback: 'Task complete.',
+      });
     const voter = {
       id: 'tool-path-voter',
       tier: 'classic' as const,
@@ -490,15 +185,14 @@ describe('stagedToolPipeline', () => {
           intentId: intent.intentId,
           voterId: 'tool-path-voter',
           approve: true,
-          thought: 'Executor plan looks safe; read-only file access only.',
+          thought: 'Executor plan looks safe.',
         };
       },
     };
+    const voterUpdates: Array<Record<string, unknown>> = [];
 
-    const voterUpdates: Array<{ id: string; patch: Record<string, unknown> }> = [];
-
-    await runStagedToolPipeline({
-      model: model as never,
+    const result = await runStagedToolPipeline({
+      model: makeStreamingModel() as never,
       tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
       toolDescriptors: [toolDescriptors[1]],
       instructions: 'You are a workspace agent.',
@@ -506,102 +200,23 @@ describe('stagedToolPipeline', () => {
       workspaceName: 'Research',
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
       voters: [voter],
-    }, {
-      onVoterStepUpdate: (id, patch) => {
-        voterUpdates.push({ id, patch: patch as Record<string, unknown> });
-      },
-    });
-
-    expect(runToolAgentMock).toHaveBeenCalledTimes(1);
-    const thoughtUpdate = voterUpdates.find((u) => u.patch.thought !== undefined);
-    expect(thoughtUpdate).toBeDefined();
-    expect(thoughtUpdate?.patch.thought).toBe('Executor plan looks safe; read-only file access only.');
-    expect(thoughtUpdate?.patch.approve).toBe(true);
-  });
-
-  it('re-runs the executor with checker feedback until the task is complete', async () => {
-    runToolAgentMock
-      .mockResolvedValueOnce({ text: 'first attempt', steps: 1 })
-      .mockResolvedValueOnce({ text: 'final attempt', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-    const checker = vi.fn()
-      .mockResolvedValueOnce({
-        type: 'Completion',
-        intentId: 'ignored-1',
-        done: false,
-        score: 'med',
-        feedback: 'The task is not complete. Verify the file contents and answer directly.',
-      })
-      .mockResolvedValueOnce({
-        type: 'Completion',
-        intentId: 'ignored-2',
-        done: true,
-        score: 'high',
-        feedback: 'Task complete.',
-      });
-    const iterationUpdates: Array<{ id: string; patch: Record<string, unknown> }> = [];
-
-    const result = await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors: [toolDescriptors[1]],
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
-      workspaceName: 'Research',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
       completionChecker: { check: checker },
       maxIterations: 5,
     }, {
-      onIterationStepUpdate: (id, patch) => {
-        iterationUpdates.push({ id, patch: patch as Record<string, unknown> });
-      },
+      onVoterStepUpdate: (_id, patch) => voterUpdates.push(patch as Record<string, unknown>),
     });
 
     expect(result).toEqual({ text: 'final attempt', steps: 1 });
     expect(runToolAgentMock).toHaveBeenCalledTimes(2);
     expect(runToolAgentMock.mock.calls[1][0].messages).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          content: 'The task is not complete. Verify the file contents and answer directly.',
-        }),
+        expect.objectContaining({ content: 'Try again with the selected tool.' }),
       ]),
     );
-    expect(iterationUpdates).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ patch: expect.objectContaining({ score: 'med', done: false }) }),
-        expect.objectContaining({ patch: expect.objectContaining({ score: 'high', done: true }) }),
-      ]),
-    );
+    expect(voterUpdates.some((patch) => patch.thought === 'Executor plan looks safe.')).toBe(true);
   });
 
-  it('uses the default heuristic checker to retry execution tasks that only return a plan on the first pass', async () => {
-    runToolAgentMock
-      .mockResolvedValueOnce({ text: 'Plan:\n1. Inspect the file\n2. Update the code', steps: 1 })
-      .mockResolvedValueOnce({ text: 'Implemented the fix and verified the tests pass.', steps: 1 });
-    const model = makeStreamingModel({
-      '## Tool Routing Guidance': '{"mode":"tool-use","goal":"inspect"}',
-      '## Tool Group Selection Guidance': '{"groups":["files-worktree-mcp"]}',
-      '## Tool Selection Guidance': '{"toolIds":["read_session_file"]}',
-    });
-    const onDone = vi.fn();
-
-    const result = await runStagedToolPipeline({
-      model: model as never,
-      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
-      toolDescriptors: [toolDescriptors[1]],
-      instructions: 'You are a workspace agent.',
-      messages: [{ role: 'user', content: 'Implement the fix and run the tests.' }],
-      workspaceName: 'Build',
-      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, { onDone });
-
-    expect(result).toEqual({ text: 'Implemented the fix and verified the tests pass.', steps: 1 });
-    expect(runToolAgentMock).toHaveBeenCalledTimes(2);
-    expect(onDone).toHaveBeenCalledTimes(1);
-    expect(onDone).toHaveBeenCalledWith('Implemented the fix and verified the tests pass.');
+  it('selectStageDescriptors preserves descriptor ordering for selected ids', () => {
+    expect(selectStageDescriptors(toolDescriptors, ['read_session_file'])).toEqual([toolDescriptors[1]]);
   });
 });

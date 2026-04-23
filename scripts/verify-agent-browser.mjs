@@ -2,9 +2,10 @@ import { spawnSync } from 'node:child_process';
 
 const steps = [
   ['lint', ['npm', '--workspace', 'agent-browser', 'run', 'lint']],
-  ['test', ['npm', '--workspace', 'agent-browser', 'run', 'test']],
+  ['coverage', ['npm', '--workspace', 'agent-browser', 'run', 'test:coverage']],
   ['build', ['npm', '--workspace', 'agent-browser', 'run', 'build']],
   ['audit', ['npm', 'audit', '--audit-level=moderate']],
+  ['visual-smoke', ['npm', 'run', 'visual:agent-browser']],
 ];
 
 const warningPatterns = [

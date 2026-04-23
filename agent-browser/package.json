@@ -14,11 +14,13 @@
     "test": "node ../scripts/run-package-bin.mjs vitest run",
     "test:watch": "node ../scripts/run-package-bin.mjs vitest",
     "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage",
-    "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit"
+    "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit",
+    "visual:smoke": "node scripts/visual-smoke.mjs"
   },
   "dependencies": {
     "@ai-sdk/provider": "^3.0.8",
     "@ai-sdk/provider-utils": "^4.0.23",
+    "@cloudflare/codemode": "^0.3.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -36,6 +38,7 @@
     "protobufjs": "^7.5.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "zod": "^4.3.6",
     "zustand": "^4.5.2"
   },
   "devDependencies": {

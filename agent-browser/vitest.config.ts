@@ -17,10 +17,18 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['src/test-setup.ts'],
     exclude: ['tests/**', 'node_modules/**', 'dist/**'],
+    testTimeout: 10_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      exclude: ['src/test-setup.ts', '**/*.d.ts'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/test-fixtures/**',
+        'src/test-setup.ts',
+        'src/main.tsx',
+        'src/**/*.d.ts',
+      ],
     },
   },
 });

@@ -187,6 +187,24 @@ describe('ProcessGraph', () => {
     expect(container.querySelector('[data-kind="unknown-kind"] .pg-row-icon svg')).toBeInTheDocument();
   });
 
+  it('renders compact agent and model metadata when available', () => {
+    const entries: ProcessEntry[] = [
+      entry({
+        id: 'tool-agent',
+        ts: 1000,
+        position: 1,
+        kind: 'tool-plan',
+        actor: 'tool-select',
+        agentLabel: 'Tool Agent',
+        modelId: 'Qwen3-0.6B',
+      }),
+    ];
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+
+    expect(container.querySelector('.pg-row-agent')).toHaveTextContent('Tool Agent · Qwen3-0.6B');
+  });
+
   it('breaks timestamp ties by monotonic position so simultaneous appends remain stable', () => {
     const entries: ProcessEntry[] = [
       entry({ id: 'second', ts: 1000, position: 2, branchId: 'b', actor: 'second' }),

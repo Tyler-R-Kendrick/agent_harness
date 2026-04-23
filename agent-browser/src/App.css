@@ -3220,7 +3220,7 @@ kbd {
 .pg-row {
   --pg-branch-color: #a78bfa;
   display: grid;
-  grid-template-columns: 64px auto 18px minmax(120px, 180px) minmax(0, 1fr);
+  grid-template-columns: 64px auto 18px minmax(110px, 170px) minmax(100px, 160px) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
@@ -3335,6 +3335,16 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.pg-row-agent {
+  color: rgba(148,163,184,.72);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pg-row-agent-empty {
+  min-width: 0;
 }
 .pg-row-active .pg-row-summary { color: #e2e8f0; }
 .pg-row-failed .pg-row-summary { color: #fda4af; }
