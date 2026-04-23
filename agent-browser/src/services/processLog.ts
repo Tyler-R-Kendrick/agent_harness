@@ -21,6 +21,8 @@ export type ProcessEntryKind =
   | 'stage-start'
   | 'reasoning'
   | 'tool-select'
+  | 'tool-plan'
+  | 'tool-created'
   | 'tool-call'
   | 'tool-result'
   | 'subagent'
@@ -46,6 +48,14 @@ export interface ProcessEntry {
   kind: ProcessEntryKind;
   /** Originating actor id (e.g. 'coordinator', 'breakdown-agent', 'voter:foo'). */
   actor: string;
+  /** Stable id of the agent responsible for this row, when known. */
+  agentId?: string;
+  /** Compact human label for the responsible agent. */
+  agentLabel?: string;
+  /** Model id used by the responsible agent, when known. */
+  modelId?: string;
+  /** Provider/runtime for the model, when known. */
+  modelProvider?: string;
   /** Single-line human-readable summary shown in the timeline row. */
   summary: string;
   /** Full raw transcript (e.g. streamed reasoning tokens). */
@@ -70,6 +80,10 @@ export interface ProcessLogAppendInput {
   id: string;
   kind: ProcessEntryKind;
   actor: string;
+  agentId?: string;
+  agentLabel?: string;
+  modelId?: string;
+  modelProvider?: string;
   summary: string;
   transcript?: string;
   payload?: unknown;
@@ -84,6 +98,7 @@ export type ProcessLogPatch = Partial<
   Pick<
     ProcessEntry,
     'summary' | 'transcript' | 'payload' | 'status' | 'endedAt' | 'timeoutMs' | 'kind'
+    | 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'
   >
 >;
 
@@ -104,6 +119,10 @@ export class ProcessLog {
       ts: input.ts ?? Date.now(),
       kind: input.kind,
       actor: input.actor,
+      ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
+      ...(input.agentLabel !== undefined ? { agentLabel: input.agentLabel } : {}),
+      ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
+      ...(input.modelProvider !== undefined ? { modelProvider: input.modelProvider } : {}),
       summary: input.summary,
       ...(input.transcript !== undefined ? { transcript: input.transcript } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),

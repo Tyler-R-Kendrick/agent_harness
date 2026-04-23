@@ -24,6 +24,12 @@ export function ProcessDrilldown({
 }) {
   const transcript = entry.transcript?.trim();
   const payloadText = formatPayload(entry.payload).trim();
+  const executionMeta = [
+    entry.agentLabel ? `Agent: ${entry.agentLabel}` : null,
+    entry.agentId ? `Agent ID: ${entry.agentId}` : null,
+    entry.modelId ? `Model: ${entry.modelId}` : null,
+    entry.modelProvider ? `Provider: ${entry.modelProvider}` : null,
+  ].filter((line): line is string => Boolean(line)).join('\n');
 
   return (
     <aside
@@ -65,6 +71,12 @@ export function ProcessDrilldown({
           <h3 className="pg-drilldown-section-title">Summary</h3>
           <p className="pg-drilldown-summary">{entry.summary}</p>
         </section>
+        {executionMeta ? (
+          <section className="pg-drilldown-section">
+            <h3 className="pg-drilldown-section-title">Agent and model</h3>
+            <pre className="pg-drilldown-pre">{executionMeta}</pre>
+          </section>
+        ) : null}
       </div>
     </aside>
   );

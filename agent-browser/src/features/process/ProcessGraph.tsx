@@ -26,6 +26,8 @@ const KIND_ICON: Record<ProcessEntryKind, LucideIcon> = {
   'stage-start': Sparkles,
   reasoning: MessageSquare,
   'tool-select': FileSearch,
+  'tool-plan': ScrollText,
+  'tool-created': Package,
   'tool-call': Wrench,
   'tool-result': Package,
   subagent: CornerDownRight,
@@ -45,6 +47,11 @@ function formatTime(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function formatAgentMeta(entry: ProcessEntry): string | null {
+  if (!entry.agentLabel && !entry.modelId) return null;
+  return [entry.agentLabel, entry.modelId].filter(Boolean).join(' · ');
 }
 
 type LaneSpan = {
@@ -186,6 +193,7 @@ export function ProcessGraph({
         const isSelected = selectedEntryId === entry.id;
         const dotClassName = `pg-row-dot${isActive ? ' pg-row-dot-active' : ''}${isFailed ? ' pg-row-dot-failed' : ''}`;
         const connectors = connectorsByRow.get(rowIndex) ?? [];
+        const agentMeta = formatAgentMeta(entry);
         return (
           <button
             type="button"
@@ -249,6 +257,11 @@ export function ProcessGraph({
               <Icon size={13} />
             </span>
             <span className="pg-row-actor">{entry.actor}</span>
+            {agentMeta ? (
+              <span className="pg-row-agent" title={agentMeta}>{agentMeta}</span>
+            ) : (
+              <span className="pg-row-agent pg-row-agent-empty" aria-hidden="true" />
+            )}
             <span className="pg-row-summary">{entry.summary}</span>
           </button>
         );

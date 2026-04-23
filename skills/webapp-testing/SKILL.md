@@ -6,12 +6,17 @@ license: Complete terms in LICENSE.txt
 
 # Web Application Testing
 
-To test local web applications, write native Python Playwright scripts.
+To test local web applications, prefer deterministic, checked-in scripts before writing new Playwright automation. Use native Python Playwright scripts only when no project script exists and the task is exploratory or genuinely one-off.
 
 **Helper Scripts Available**:
 - `scripts/with_server.py` - Manages server lifecycle (supports multiple servers)
 
-**Always run scripts with `--help` first** to see usage. DO NOT read the source until you try running the script first and find that a customized solution is abslutely necessary. These scripts can be very large and thus pollute your context window. They exist to be called directly as black-box scripts rather than ingested into your context window.
+**Always run scripts with `--help` first** to see usage. DO NOT read the source until you try running the script first and find that a customized solution is absolutely necessary. These scripts can be very large and thus pollute your context window. They exist to be called directly as black-box scripts rather than ingested into your context window.
+
+**Deterministic-first rule**:
+- Check `package.json`, `scripts/`, and skill-local `scripts/` for an existing command before generating Playwright CLI snippets or temporary automation.
+- If you repeat a browser workflow, convert it into a committed script with a stable command name and run that script thereafter.
+- For `agent-browser`, use `npm run visual:agent-browser` for browser smoke validation and `npm run verify:agent-browser` for the full lint, coverage, build, audit, and visual check.
 
 ## Decision Tree: Choosing Your Approach
 
@@ -21,15 +26,19 @@ User task → Is it static HTML?
     │         ├─ Success → Write Playwright script using selectors
     │         └─ Fails/Incomplete → Treat as dynamic (below)
     │
-    └─ No (dynamic webapp) → Is the server already running?
-        ├─ No → Run: python scripts/with_server.py --help
-        │        Then use the helper + write simplified Playwright script
+    └─ No (dynamic webapp) → Is there a repo-owned validation script?
+        ├─ Yes → Run that deterministic script
         │
-        └─ Yes → Reconnaissance-then-action:
-            1. Navigate and wait for networkidle
-            2. Take screenshot or inspect DOM
-            3. Identify selectors from rendered state
-            4. Execute actions with discovered selectors
+        └─ No → Is the server already running?
+            ├─ No → Run: python scripts/with_server.py --help
+            │        Then use the helper + write simplified Playwright script
+        │
+            └─ Yes → Reconnaissance-then-action:
+                1. Navigate and wait for networkidle
+                2. Take screenshot or inspect DOM
+                3. Identify selectors from rendered state
+                4. Execute actions with discovered selectors
+                5. Commit a reusable script if this workflow will be repeated
 ```
 
 ## Example: Using with_server.py
@@ -83,6 +92,7 @@ with sync_playwright() as p:
 ## Best Practices
 
 - **Use bundled scripts as black boxes** - To accomplish a task, consider whether one of the scripts available in `scripts/` can help. These scripts handle common, complex workflows reliably without cluttering the context window. Use `--help` to see usage, then invoke directly. 
+- Prefer stable project commands over dynamic CLI. A checked-in script beats an inline `node -e`, `python - <<EOF`, or generated Playwright snippet when the workflow is repeatable.
 - Use `sync_playwright()` for synchronous scripts
 - Always close the browser when done
 - Use descriptive selectors: `text=`, `role=`, CSS selectors, or IDs

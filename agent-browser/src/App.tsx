@@ -92,7 +92,7 @@ import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState }
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
-import { runStagedToolPipeline } from './services/stagedToolPipeline';
+import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
 import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
 import { InlineProcess, ProcessPanel } from './features/process';
 import {
@@ -1810,6 +1810,18 @@ function ChatPanel({
       const toolStepIdsByCallId = new Map<string, string>();
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
+      const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
+        agentId: 'tool-agent',
+        agentLabel: 'Tool Agent',
+        modelId: selectedProvider === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
+        modelProvider: selectedProvider,
+      });
+      const processMetaFromStageMeta = (meta?: StageMeta): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
+        agentId: meta?.agentId ?? currentToolAgentLogMeta().agentId,
+        agentLabel: meta?.agentLabel ?? currentToolAgentLogMeta().agentLabel,
+        modelId: meta?.modelId ?? currentToolAgentLogMeta().modelId,
+        modelProvider: meta?.modelProvider ?? currentToolAgentLogMeta().modelProvider,
+      });
       const previewPlanningBody = (content: string) => (
         content.length > 1_500 ? `…${content.slice(-1_500)}` : content
       );
@@ -1983,6 +1995,7 @@ function ChatPanel({
           transcript: entry.detail,
           payload: entry,
           branchId: resolveBusBranch(entry),
+          ...currentToolAgentLogMeta(),
           ...(parentProcessId ? { parentId: parentProcessId } : {}),
           status: 'done',
           ts: entry.realtimeTs,
@@ -2078,6 +2091,7 @@ function ChatPanel({
           transcript: formatToolArgs(args),
           payload: { toolName, toolCallId, args },
           branchId: 'tools',
+          ...currentToolAgentLogMeta(),
           ...(parentProcessId ? { parentId: parentProcessId } : {}),
           status: 'active',
         });
@@ -2091,7 +2105,7 @@ function ChatPanel({
           processEntries: snapshotProcess(),
         });
       };
-      const beginPlanningStage = (stage: PlanningStageName, timeoutReason: LocalToolTimeoutReason = 'no-output') => {
+      const beginPlanningStage = (stage: PlanningStageName, timeoutReason: LocalToolTimeoutReason = 'no-output', stageMeta?: StageMeta) => {
         const metadata = planningStageMeta[stage];
         const layout = planningStageLayout[stage];
         let stepId = planningStepIdsByStage.get(stage);
@@ -2152,6 +2166,7 @@ function ChatPanel({
             transcript,
             status: 'active',
             timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
+            ...processMetaFromStageMeta(stageMeta),
           });
         } else {
           const newId = `stage:${stage}:${createUniqueId()}`;
@@ -2163,6 +2178,7 @@ function ChatPanel({
             summary: metadata.title,
             transcript,
             branchId: branch,
+            ...processMetaFromStageMeta(stageMeta),
             ...(parentProcessId ? { parentId: parentProcessId } : {}),
             status: 'active',
             timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
@@ -2337,6 +2353,7 @@ function ChatPanel({
         stage: PlanningStageName,
         subStageId: string,
         label: string | undefined,
+        stageMeta?: StageMeta,
       ) => {
         const key = subStageKey(stage, subStageId);
         if (label) subStageLabels.set(key, label);
@@ -2349,11 +2366,12 @@ function ChatPanel({
           subStageProcessIds.set(key, processId);
           processLog.append({
             id: processId,
-            kind: 'tool-select',
+            kind: subStageId.startsWith('make-tool:') ? 'tool-created' : subStageId === 'codemode' ? 'tool-plan' : 'tool-select',
             actor: label ? `tools:${label}` : `tools:${subStageId}`,
             summary: `Selecting tools · ${label ?? subStageId}`,
             ...(parentProcessId ? { parentId: parentProcessId } : {}),
-            branchId: `${stage}-children`,
+            branchId: stageMeta?.branchId ?? `${stage}-children`,
+            ...processMetaFromStageMeta(stageMeta),
             status: 'active',
             timeoutMs: resolvePlanningStageTimeoutMs(stage, 'no-output'),
           });
@@ -2852,11 +2870,11 @@ function ChatPanel({
                   // Forward subagent staged-pipeline sub-stages to the
                   // ProcessLog. Use 'tool-select' as the parent stage so
                   // the existing renderer/timeout path applies.
-                  beginSubStage('tool-select', meta.subStageId, meta.label);
+                  beginSubStage('tool-select', meta.subStageId, meta.label, meta);
                   return;
                 }
                 activePlanningStage = _stage;
-                beginPlanningStage(_stage, 'no-output');
+                beginPlanningStage(_stage, 'no-output', meta);
                 if (localToolSawPlanningOutput) {
                   scheduleLocalToolIdleTimeout(_stage, localToolWatchdogMode);
                 } else {
@@ -2898,14 +2916,19 @@ function ChatPanel({
               workspaceName,
               capabilities,
               signal: controller.signal,
+              onGeneratedTool: (file) => onWorkspaceFileUpsert({
+                path: file.path,
+                content: file.source,
+                updatedAt: new Date().toISOString(),
+              }),
             }, {
               onStageStart: (stage, _detail, meta) => {
                 if (meta?.subStageId) {
-                  beginSubStage(stage, meta.subStageId, meta.label);
+                  beginSubStage(stage, meta.subStageId, meta.label, meta);
                   return;
                 }
                 activePlanningStage = stage;
-                beginPlanningStage(stage, 'no-output');
+                beginPlanningStage(stage, 'no-output', meta);
                 if (localToolSawPlanningOutput) {
                   scheduleLocalToolIdleTimeout(stage, localToolWatchdogMode);
                 } else {

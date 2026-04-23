@@ -36,6 +36,10 @@ describe('ProcessLog', () => {
       status: 'active',
       ts: 1234,
       timeoutMs: 60_000,
+      agentId: 'tool-agent',
+      agentLabel: 'Tool Agent',
+      modelId: 'test-model',
+      modelProvider: 'local',
     });
     expect(entry.status).toBe('active');
     expect(entry.transcript).toBe('tokens');
@@ -44,6 +48,10 @@ describe('ProcessLog', () => {
     expect(entry.branchId).toBe('main');
     expect(entry.ts).toBe(1234);
     expect(entry.timeoutMs).toBe(60_000);
+    expect(entry.agentId).toBe('tool-agent');
+    expect(entry.agentLabel).toBe('Tool Agent');
+    expect(entry.modelId).toBe('test-model');
+    expect(entry.modelProvider).toBe('local');
   });
 
   it('updates existing entries in place and stamps endedAt on done', () => {
@@ -58,6 +66,23 @@ describe('ProcessLog', () => {
     expect(log.snapshot()[0].endedAt).toBeTypeOf('number');
 
     expect(log.update('missing', { summary: 'x' })).toBe(false);
+  });
+
+  it('updates agent/model metadata in place', () => {
+    const log = new ProcessLog();
+    log.append({ id: 'a', kind: 'tool-plan', actor: 'planner', summary: 'planning' });
+    log.update('a', {
+      agentId: 'tool-agent',
+      agentLabel: 'Tool Agent',
+      modelId: 'qwen',
+      modelProvider: 'local',
+    });
+    expect(log.snapshot()[0]).toMatchObject({
+      agentId: 'tool-agent',
+      agentLabel: 'Tool Agent',
+      modelId: 'qwen',
+      modelProvider: 'local',
+    });
   });
 
   it('preserves an explicit endedAt when provided in patch', () => {
