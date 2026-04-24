@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { invokeModelContextTool, ModelContext } from 'webmcp';
+import { invokeModelContextTool, ModelContext } from '@agent-harness/webmcp';
 
 export const WEBMCP_TOOL_ID = 'webmcp';
 
