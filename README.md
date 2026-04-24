@@ -2,6 +2,17 @@
 
 A collection of different agent harness UX POCs to experiment with.
 
+## Workspace packages
+
+| Package | Purpose |
+|---|---|
+| `agent-browser` | Agent Browser application shell and chat-agent runtime. |
+| `lib/inbrowser-use` | Playwright-shaped in-app DOM control runtime. |
+| `lib/logact` | LogAct agentic reliability pattern backed by a shared append-only log. |
+| `lib/ralph-loop` | Ralph Loop completion heuristics for iterative agent task execution. |
+| `lib/agent-browser-mcp` | Agent-browser MCP server tools, resources, prompts, and WebMCP bridge definitions. |
+| `lib/webmcp` | Generic WebMCP polyfill and runtime. |
+
 ## Bundled skills
 
 The vendored project skills now live in the repo-root `skills/` directory so compatible agents can discover them directly from the checkout.
