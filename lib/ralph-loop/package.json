@@ -5,6 +5,10 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "files": [
+    "src/index.ts",
+    "src/heuristicCompletion.ts"
+  ],
   "exports": {
     ".": "./src/index.ts"
   },
@@ -12,6 +16,9 @@
     "test": "node ../../scripts/run-package-bin.mjs vitest run",
     "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
     "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "dependencies": {
+    "logact": "0.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.5",
