@@ -21,6 +21,7 @@ const getSandboxFeatureFlagsMock = vi.fn(() => ({
 }));
 const createSandboxExecutionServiceMock = vi.fn();
 const buildRunSummaryInputMock = vi.fn();
+const bashExecCommands: string[] = [];
 
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
@@ -111,6 +112,7 @@ vi.mock('just-bash/browser', () => {
     };
 
     async exec(command: string) {
+      bashExecCommands.push(command);
       const trimmed = command.trim();
       const sentinelSuffix = '; echo __JUSTBASH_CWD:$PWD';
       const usesSentinel = trimmed.endsWith(sentinelSuffix);
@@ -228,6 +230,7 @@ describe('App', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    bashExecCommands.length = 0;
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
@@ -4334,6 +4337,29 @@ describe('App', () => {
     });
 
     expect(screen.getByText('Deleted /workspace')).toBeInTheDocument();
+  });
+
+  it('shell-quotes session FS rename paths before invoking mv', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+    const maliciousName = 'evil"; touch pwned #';
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), {
+      target: { value: maliciousName },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+      await Promise.resolve();
+    });
+
+    expect(bashExecCommands).toContain(`mv '/workspace' '/${maliciousName}'`);
+    expect(bashExecCommands).not.toContain(`mv "/workspace" "/${maliciousName}"`);
   });
 
   // ── Browser tab context menu ───────────────────────────────────

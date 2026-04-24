@@ -5,7 +5,10 @@ describe('heuristicCompletion', () => {
   it('detects execution-oriented tasks', () => {
     expect(isExecutionTask()).toBe(false);
     expect(isExecutionTask('Implement the fix and run the tests.')).toBe(true);
+    expect(isExecutionTask('Fix the regression and explain what changed.')).toBe(true);
+    expect(isExecutionTask('Review the failure log and fix the bug.')).toBe(true);
     expect(isExecutionTask('Plan how to implement the fix.')).toBe(false);
+    expect(isExecutionTask('Explain how to implement the fix.')).toBe(false);
     expect(isExecutionTask('Explain the current architecture.')).toBe(false);
   });
 
@@ -13,7 +16,13 @@ describe('heuristicCompletion', () => {
     expect(looksLikePlanOnly('')).toBe(true);
     expect(looksLikePlanOnly('Plan:\n1. Inspect the file\n2. Update the code')).toBe(true);
     expect(looksLikePlanOnly('I will fix this next by updating the handler.')).toBe(true);
+    expect(looksLikePlanOnly('Follow-up: run the remaining verification checks.')).toBe(true);
     expect(looksLikePlanOnly('Implemented the fix and verified the tests pass.')).toBe(false);
+    expect(
+      looksLikePlanOnly(
+        'Implemented the fix and verified the tests pass.\n\nFollow-Up Recommendations\n- Monitor CI for recurrence.',
+      ),
+    ).toBe(false);
   });
 
   it('requests another iteration for execution tasks that only return a plan', async () => {
@@ -36,6 +45,23 @@ describe('heuristicCompletion', () => {
     const result = await checker.check({
       task: 'Implement the fix and run the tests.',
       lastResult: { type: 'Result', intentId: 'i1', output: 'Implemented the fix and verified the tests pass.' },
+      history: [],
+    });
+
+    expect(result.done).toBe(true);
+    expect(result.score).toBe('high');
+  });
+
+  it('accepts completed execution reports that include follow-up recommendations', async () => {
+    const checker = createHeuristicCompletionChecker('Implement the fix and run the tests.');
+
+    const result = await checker.check({
+      task: 'Implement the fix and run the tests.',
+      lastResult: {
+        type: 'Result',
+        intentId: 'i1',
+        output: 'Implemented the fix and verified the tests pass.\n\nFollow-Up Recommendations\n- Monitor CI for recurrence.',
+      },
       history: [],
     });
 
