@@ -1,5 +1,6 @@
 .playwright-mcp/
 node_modules/
+.npm-cache/
 lib/*/node_modules/
 lib/*/coverage/
 agent-browser-running.png
