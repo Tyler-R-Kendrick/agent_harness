@@ -57,10 +57,21 @@ npm run visual:agent-browser
 
 The visual smoke script writes a screenshot to `output/playwright/agent-browser-visual-smoke.png`.
 
+## Codespaces Note
+
+When working in GitHub Codespaces, use the forwarded Codespaces URL for browser navigation. Keep `http://localhost:<port>` for tools running inside the container, such as `curl`, Playwright, or local health checks.
+
+To print the forwarded preview URL for port `5173`:
+
+```bash
+./skills/agent-harness-context/scripts/codespaces-uri.sh 5173
+```
+
 ## Where To Go Next
 
 - [`agent-browser/README.md`](./agent-browser/README.md): app-specific commands, hot reload behavior, and Codespaces notes
 - [`agent-browser/docs/features.md`](./agent-browser/docs/features.md): visual feature guide and interaction walkthroughs
+- [`reference_impl/README.md`](./reference_impl/README.md): research and reference designs
 - [`AGENTS.md`](./AGENTS.md): repository-specific implementation and verification rules for coding agents
 
 ## Bundled skills
