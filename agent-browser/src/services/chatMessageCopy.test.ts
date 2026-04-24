@@ -44,6 +44,20 @@ describe('messageElementToCopyContent', () => {
     );
   });
 
+  it('preserves ordered list numbering when serializing rendered markup to markdown', () => {
+    const message = document.createElement('article');
+    message.innerHTML = `
+      <div class="message-bubble">
+        <p>Follow these steps:</p>
+        <ol><li>Open settings</li><li>Enable the tool</li></ol>
+      </div>
+    `;
+
+    expect(messageElementToCopyContent(message, 'markdown')).toBe(
+      'Follow these steps:\n\n1. Open settings\n2. Enable the tool',
+    );
+  });
+
   it('serializes rendered message markup to compact plaintext', () => {
     const message = document.createElement('article');
     message.innerHTML = `
