@@ -1,12 +1,6 @@
 import { defineConfig } from 'vitest/config';
-import path from 'node:path';
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      webmcp: path.resolve(__dirname, '../webmcp/src/index.ts'),
-    },
-  },
   test: {
     environment: 'jsdom',
     globals: true,
