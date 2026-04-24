@@ -6397,7 +6397,7 @@ function AgentBrowserApp() {
   async function handleDeleteSessionFsNode(sessionId: string, path: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    await bash.exec(`rm -rf "${path}"`);
+    await bash.exec(`rm -rf ${quoteShellArg(path)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
     setToast({ msg: `Deleted ${path}`, type: 'success' });
   }
@@ -6407,7 +6407,7 @@ function AgentBrowserApp() {
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
     const dir = oldPath.slice(0, oldPath.lastIndexOf('/'));
     const newPath = `${dir}/${newName}`;
-    await bash.exec(`mv "${oldPath}" "${newPath}"`);
+    await bash.exec(`mv ${quoteShellArg(oldPath)} ${quoteShellArg(newPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
     setRenameSessionFsMenu(null);
     setRenameSessionFsName('');
