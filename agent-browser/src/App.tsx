@@ -116,6 +116,11 @@ import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
 import {
+  createMessageCopyLabel,
+  formatMessageCopyContent,
+  type ClipboardCopyFormat,
+} from './services/chatMessageCopy';
+import {
   buildWorkspacePromptContext,
   createDefaultWorkspaceFiles,
   createWorkspaceFileTemplate,
@@ -688,11 +693,13 @@ function ChatMessageView({
   agentName,
   activitySelected,
   onOpenActivity,
+  onCopyMessage,
 }: {
   message: ChatMessage;
   agentName: string;
   activitySelected?: boolean;
   onOpenActivity?: (messageId: string) => void;
+  onCopyMessage?: (input: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => Promise<void>;
 }) {
   const content = message.streamedContent || message.content;
   const isTerminalMessage = message.statusText?.startsWith('terminal') ?? false;
@@ -718,11 +725,36 @@ function ChatMessageView({
   const isStopped = message.statusText === 'stopped';
   const hasReasoning = Boolean(allReasoningSteps.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
   const hasVoters = Boolean((message.voterSteps?.length ?? 0) || message.isVoting);
+  const canCopy = Boolean(content.trim() && onCopyMessage);
   return (
     <div className={`message ${message.role}${isTerminalMessage ? ' terminal-message' : ''}${isError ? ' message-error' : ''}`}>
-      {!isSystem && (
+      {(!isSystem || canCopy) && (
         <div className={`message-sender ${isUser ? 'message-sender-user' : 'message-sender-agent'}`}>
           <span className="sender-name">{senderLabel}</span>
+          {canCopy ? (
+            <span className="message-actions" aria-label={`${senderLabel} message actions`}>
+              <button
+                type="button"
+                className="message-action-button"
+                aria-label={`Copy ${senderLabel} message as markdown`}
+                title="Copy as markdown"
+                data-tooltip="Copy markdown"
+                onClick={() => void onCopyMessage?.({ content, senderLabel, format: 'markdown' })}
+              >
+                <Icon name="panes" size={11} />
+              </button>
+              <button
+                type="button"
+                className="message-action-button"
+                aria-label={`Copy ${senderLabel} message as plaintext`}
+                title="Copy as plaintext"
+                data-tooltip="Copy plaintext"
+                onClick={() => void onCopyMessage?.({ content, senderLabel, format: 'plaintext' })}
+              >
+                <Icon name="clipboard" size={11} />
+              </button>
+            </span>
+          ) : null}
         </div>
       )}
       {hasReasoning || hasVoters || (message.processEntries?.length ?? 0) > 0 ? (
@@ -1308,6 +1340,7 @@ function ChatPanel({
   onTerminalFsPathsChanged,
   onOpenSettings,
   onWorkspaceFileUpsert,
+  onCopyToClipboard,
   bashBySessionRef,
   webMcpModelContext,
   onSessionMcpControllerChange,
@@ -1329,6 +1362,7 @@ function ChatPanel({
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
   onOpenSettings: () => void;
   onWorkspaceFileUpsert: (file: WorkspaceFile) => void;
+  onCopyToClipboard: (text: string, label: string) => Promise<void>;
   bashBySessionRef: React.MutableRefObject<Record<string, Bash>>;
   webMcpModelContext: ModelContext;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
@@ -3648,6 +3682,18 @@ function ChatPanel({
     onSearchConsumed();
   }, [activeGenerationSessionId, onSearchConsumed, pendingSearch]);
 
+  const handleCopyMessage = useCallback(async ({ content, senderLabel, format }: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => {
+    try {
+      await onCopyToClipboard(
+        formatMessageCopyContent(content, format),
+        createMessageCopyLabel(senderLabel, format),
+      );
+      onToast({ msg: `Message copied as ${format}`, type: 'success' });
+    } catch {
+      onToast({ msg: 'Failed to copy message', type: 'error' });
+    }
+  }, [onCopyToClipboard, onToast]);
+
   return (
     <section className={`chat-panel shared-console ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className={`chat-header shared-console-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
@@ -3737,7 +3783,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onCopyMessage={handleCopyMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -8043,6 +8089,7 @@ function AgentBrowserApp() {
                   ...current,
                   [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
                 }))}
+                onCopyToClipboard={writeToClipboard}
                 bashBySessionRef={bashBySessionRef}
                 webMcpModelContext={webMcpModelContext}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}

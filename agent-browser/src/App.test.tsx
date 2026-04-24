@@ -1444,6 +1444,84 @@ describe('App', () => {
     expect(prompt.map((entry) => entry.content).join('\n')).not.toContain('GitHub Copilot');
   });
 
+  it('copies an assistant message as markdown through the clipboard feature', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onToken?.('## Result\n\nUse **bold** and [docs](https://example.test).');
+      callbacks.onDone?.({ generated_text: '## Result\n\nUse **bold** and [docs](https://example.test).' });
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+    await installLocalModel();
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Codi: Test Model message as markdown' }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith('## Result\n\nUse **bold** and [docs](https://example.test).');
+    expect(screen.getByText('Message copied as markdown')).toBeInTheDocument();
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+    expect(screen.getByText('Chat Codi: Test Model message (markdown)')).toBeInTheDocument();
+  });
+
+  it('copies a user message as plaintext through the clipboard feature', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+    await installLocalModel();
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use **bold** and [docs](https://example.test).' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy you message as plaintext' }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith('Use bold and docs (https://example.test).');
+    expect(screen.getByText('Message copied as plaintext')).toBeInTheDocument();
+  });
+
   it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
     vi.useFakeTimers();
     let activeSignal: AbortSignal | undefined;
