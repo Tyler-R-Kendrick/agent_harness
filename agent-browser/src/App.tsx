@@ -132,7 +132,17 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
-import { STORAGE_KEYS, isString, isStringRecord, useStoredState } from './services/sessionState';
+import {
+  STORAGE_KEYS,
+  isChatMessagesBySession,
+  isString,
+  isStringArrayRecord,
+  isStringRecord,
+  isTreeNode,
+  isWorkspaceViewStateRecord,
+  removeStoredRecordEntry,
+  useStoredState,
+} from './services/sessionState';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import {
   WORKSPACE_COLORS,
@@ -1337,9 +1347,19 @@ function ChatPanel({
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
-  const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
+  const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.chatMessagesBySession,
+    isChatMessagesBySession,
+    {},
+  );
   const [input, setInput] = useState('');
-  const [chatHistoryBySession, setChatHistoryBySession] = useState<Record<string, string[]>>({});
+  const [chatHistoryBySession, setChatHistoryBySession] = useStoredState<Record<string, string[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.chatHistoryBySession,
+    isStringArrayRecord,
+    {},
+  );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
     STORAGE_KEYS.selectedCodiModelBySession,
@@ -5348,7 +5368,12 @@ function AgentBrowserApp() {
   const { toast, setToast } = useToast();
   const initialRootRef = useRef<TreeNode | null>(null);
   if (!initialRootRef.current) initialRootRef.current = createInitialRoot();
-  const [root, setRoot] = useState<TreeNode>(initialRootRef.current);
+  const [root, setRoot] = useStoredState<TreeNode>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceRoot,
+    isTreeNode,
+    initialRootRef.current,
+  );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
   const [collapsed, setCollapsed] = useState(false);
@@ -5376,7 +5401,12 @@ function AgentBrowserApp() {
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
-  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useState<Record<string, WorkspaceViewState>>(() => createWorkspaceViewState(initialRootRef.current!));
+  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceViewStateByWorkspace,
+    isWorkspaceViewStateRecord,
+    createWorkspaceViewState(root),
+  );
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
   const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
@@ -6687,6 +6717,8 @@ function AgentBrowserApp() {
     const paneId = renderPaneIdForNode(node);
     if (node.nodeKind === 'session') {
       delete bashBySessionRef.current[nodeId];
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, nodeId);
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatHistoryBySession, isStringArrayRecord, nodeId);
       setTerminalFsPathsBySession((current) => {
         if (!(nodeId in current)) return current;
         const next = { ...current };
