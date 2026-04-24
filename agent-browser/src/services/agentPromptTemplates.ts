@@ -3,6 +3,7 @@ import type { ToolDescriptor, ToolGroupDescriptor } from '../tools';
 export type AgentScenario =
   | 'general-chat'
   | 'memory-recall'
+  | 'research'
   | 'coding'
   | 'harness-control'
   | 'tool-router'
@@ -64,6 +65,27 @@ export function buildMemoryRecallTemplate(): string {
   ].join('\n');
 }
 
+export function buildResearchTemplate(): string {
+  return [
+    '## Researcher Guidance',
+    '### Plan',
+    'Start by identifying the claim, decision, or topic being researched and the evidence needed to answer it.',
+    'Use authoritative sources first: official documentation, primary publications, standards, changelogs, source repositories, and regulator or vendor pages for the relevant domain.',
+    'Use only currently available tools; web search, web scraping, browser-use, curl or CLI, and MCP documentation/search tools are optional capabilities, not required dependencies.',
+    '### Evidence',
+    'Record provenance for every material claim: title, URL or file path, domain or publisher, retrieved date, and publication/update date when available.',
+    'Cite evidence close to the claims it supports and distinguish direct evidence from inference.',
+    'Always score source quality before relying on it; favor primary, authoritative, recent, and corroborated sources over low-authority or uncited commentary.',
+    '### Conflicts',
+    'When sources disagree, resolve conflicting information by source quality first.',
+    'When quality is comparable, apply a recency bias and prefer the newer correction or update.',
+    'Call out unresolved conflicts instead of flattening them into false certainty.',
+    '### Persistence',
+    'Keep short working notes in memory during the task.',
+    'Persist reusable research output to `.research/<task-id>/research.md` with sources, quality notes, conflict decisions, and open questions.',
+  ].join('\n');
+}
+
 export function buildCodingTemplate(): string {
   return [
     '## Coding Guidance',
@@ -94,6 +116,8 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
   switch (scenario) {
     case 'memory-recall':
       return buildMemoryRecallTemplate();
+    case 'research':
+      return buildResearchTemplate();
     case 'coding':
       return buildCodingTemplate();
     case 'harness-control':
@@ -154,6 +178,10 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
 
 export function resolveAgentScenario(text: string): Exclude<AgentScenario, 'tool-router' | 'tool-group-select' | 'tool-select' | 'delegation-coordinator' | 'delegation-breakdown' | 'delegation-assignment' | 'delegation-validation'> {
   const lowered = text.toLowerCase();
+
+  if (/(research|investigate|source|sources|citation|citations|cite|provenance|evidence|fact[-\s]?check|conflicting information|disinfo)/.test(lowered)) {
+    return 'research';
+  }
 
   if (/(agent-browser|workspace|browser tab|terminal mode|chat session|harness|session fs|files tree|tab|panel|overlay|worktree|surface)/.test(lowered)) {
     return 'harness-control';

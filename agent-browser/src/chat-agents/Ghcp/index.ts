@@ -27,12 +27,14 @@ export function buildGhcpPrompt({
   messages,
   latestUserInput,
   loopMessages,
+  systemPrompt,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   messages: ChatMessage[];
   latestUserInput: string;
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  systemPrompt?: string;
 }): string {
   const transcript = loopMessages
     ? loopMessages
@@ -46,7 +48,7 @@ export function buildGhcpPrompt({
   const scenario = resolveAgentScenario(loopMessages?.at(-1)?.content || latestUserInput || transcript);
 
   return [
-    buildAgentSystemPrompt({
+    systemPrompt ?? buildAgentSystemPrompt({
       workspaceName,
       goal: 'Help the user in the active workspace with concise, grounded collaboration.',
       scenario,
@@ -83,6 +85,7 @@ function createGhcpInferenceClient(
     workspacePromptContext,
     messages,
     latestUserInput,
+    systemPrompt,
   }: {
     modelId: string;
     sessionId: string;
@@ -90,6 +93,7 @@ function createGhcpInferenceClient(
     workspacePromptContext: string;
     messages: ChatMessage[];
     latestUserInput: string;
+    systemPrompt?: string;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
@@ -135,7 +139,7 @@ function createGhcpInferenceClient(
           {
             modelId,
             sessionId,
-            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages }),
+            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages, systemPrompt }),
           },
           {
             onToken: filteredOnToken,
@@ -184,6 +188,7 @@ export async function streamGhcpChat(
     voters = [],
     completionChecker,
     maxIterations = 5,
+    systemPrompt,
   }: {
     modelId: string;
     sessionId: string;
@@ -194,6 +199,7 @@ export async function streamGhcpChat(
     voters?: IVoter[];
     completionChecker?: ICompletionChecker;
     maxIterations?: number;
+    systemPrompt?: string;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
@@ -208,6 +214,7 @@ export async function streamGhcpChat(
     workspacePromptContext,
     messages,
     latestUserInput,
+    systemPrompt,
   }, deferred?.callbacks ?? callbacks, signal);
 
   await runAgentLoop({
