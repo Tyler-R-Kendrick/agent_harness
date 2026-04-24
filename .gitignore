@@ -4,6 +4,7 @@
 
 .playwright-mcp/
 node_modules/
+.npm-cache/
 lib/*/node_modules/
 .npm-cache/
 
