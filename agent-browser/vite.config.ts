@@ -68,6 +68,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
       },
       {
+        find: '@agent-harness/webmcp',
+        replacement: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
+      },
+      {
         find: 'agent-browser-mcp',
         replacement: path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
       },

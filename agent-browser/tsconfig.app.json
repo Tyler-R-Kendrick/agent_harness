@@ -22,6 +22,7 @@
       "logact": ["../lib/logact/src/index.ts"],
       "ralph-loop": ["../lib/ralph-loop/src/index.ts"],
       "webmcp": ["../lib/webmcp/src/index.ts"],
+      "@agent-harness/webmcp": ["../lib/webmcp/src/index.ts"],
       "agent-browser-mcp": ["../lib/agent-browser-mcp/src/index.ts"]
     }
   },
