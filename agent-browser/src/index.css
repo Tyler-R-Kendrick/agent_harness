@@ -13,3 +13,37 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.2); }
 html { scroll-behavior: smooth; }
 a { color: inherit; }
+
+.message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 18px;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+.message:focus-within .message-actions,
+.message:hover .message-actions {
+  opacity: 1;
+}
+.message-action-button {
+  width: 22px;
+  min-width: 22px;
+  height: 18px;
+  border: 1px solid rgba(161, 161, 170, 0.28);
+  border-radius: 4px;
+  background: rgba(24, 24, 27, 0.72);
+  color: #a1a1aa;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.message-action-button:hover,
+.message-action-button:focus-visible,
+.message-action-button[data-copied="true"] {
+  color: #e5f2ff;
+  border-color: rgba(125, 211, 252, 0.45);
+  background: rgba(14, 116, 144, 0.2);
+  outline: none;
+}
