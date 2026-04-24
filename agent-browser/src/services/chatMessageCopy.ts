@@ -83,8 +83,15 @@ function elementToMarkdown(node: Node): string {
       const text = childMarkdown();
       return href ? `[${text}](${href})` : text;
     }
-    case 'li':
-      return `- ${childMarkdown().trim()}\n`;
+    case 'li': {
+      const parentList = element.parentElement;
+      const marker = parentList?.tagName.toLowerCase() === 'ol'
+        ? `${Array.from(parentList.children)
+          .filter((child) => child.tagName.toLowerCase() === 'li')
+          .indexOf(element) + 1}.`
+        : '-';
+      return `${marker} ${childMarkdown().trim()}\n`;
+    }
     case 'ul':
     case 'ol':
       return `\n${childMarkdown()}\n`;
