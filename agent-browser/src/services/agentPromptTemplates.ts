@@ -53,14 +53,16 @@ export function buildAlignmentTemplate({
 export function buildMemoryRecallTemplate(): string {
   return [
     '## Memory / Recall Guidance',
+    'Workspace memory is file-backed. The Memory agent owns reads and writes for `.memory/MEMORY.md` and scoped `.memory/*.memory.md` files.',
     '### Recall',
+    'Before answering requests involving remembered preferences, prior project facts, or durable notes, inspect the relevant markdown list items from workspace memory.',
     'Recall only the details that materially change the current answer or next action.',
     'Prefer the freshest relevant context over broad history dumps.',
     '### Summarize',
     'Summarize reused context compactly and preserve the user\'s intent, constraints, and unresolved questions.',
     'Call out stale context, uncertainty, or likely gaps before relying on memory.',
     '### Store',
-    'When storing notes, make them short, actionable, and easy for another agent to reuse.',
+    'When storing notes, append one short markdown list item per fact through the Memory agent.',
     'Record what matters, what is still unknown, and what should be checked later.',
   ].join('\n');
 }

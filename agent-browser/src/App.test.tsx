@@ -409,8 +409,14 @@ describe('App', () => {
       expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md', label: 'SKILL.md' }),
       expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md', label: 'SKILL.md' }),
       expect.objectContaining({ path: '.agents/skills/create-agent-eval/evals/evals.json', label: 'evals.json' }),
+      expect.objectContaining({ path: '.agents/skills/memory/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({ path: '.memory/MEMORY.md', label: 'MEMORY.md' }),
+      expect.objectContaining({ path: '.memory/user.memory.md', label: 'user.memory.md' }),
+      expect.objectContaining({ path: '.memory/project.memory.md', label: 'project.memory.md' }),
+      expect.objectContaining({ path: '.memory/workspace.memory.md', label: 'workspace.memory.md' }),
+      expect.objectContaining({ path: '.memory/session.memory.md', label: 'session.memory.md' }),
     ]));
-    expect((listedFiles as unknown[])).toHaveLength(25);
+    expect((listedFiles as unknown[])).toHaveLength(31);
 
     let fileProperties: unknown;
     await act(async () => {
