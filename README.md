@@ -20,7 +20,7 @@ Agent Harness is a monorepo for experimenting with agent UX, workspace flows, an
 
 ### Prerequisites
 
-- Node.js 20.x and npm.
+- Node.js 20.19+ or 22.12+ and npm.
 - A shell environment that can run the workspace scripts from the repo root.
 
 ### Install Dependencies
