@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ModelContext, ModelContextClient } from 'webmcp';
+import { ModelContext, ModelContextClient } from '@agent-harness/webmcp';
 
 import { createWebMcpToolBridge } from '../bridge';
 
@@ -141,7 +141,8 @@ describe('createWebMcpToolBridge', () => {
 
     expect(bridge.getDescriptors()).toEqual([]);
     expect(bridge.createToolSet()).toEqual({});
-    expect(() => bridge.subscribe(() => undefined)).not.toThrow();
+    const unsubscribe = bridge.subscribe(() => undefined);
+    expect(unsubscribe()).toBeUndefined();
   });
 
   it('uses default input schema when tool has no inputSchema', async () => {
@@ -160,6 +161,22 @@ describe('createWebMcpToolBridge', () => {
     expect(descriptors[0]?.label).toBe('noschema');
 
     await expect(tools['webmcp:noschema']?.execute?.({}, {} as never)).resolves.toBe('result');
+  });
+
+  it('creates a default WebMCP client when no bridge client factory is supplied', async () => {
+    const modelContext = new ModelContext();
+    const execute = vi.fn(async (_input: object, client: ModelContextClient) => client instanceof ModelContextClient);
+    modelContext.registerTool({
+      name: 'default_client',
+      description: 'Checks the default client.',
+      execute,
+    });
+
+    const bridge = createWebMcpToolBridge(modelContext);
+    const tools = bridge.createToolSet();
+
+    await expect(tools['webmcp:default_client']?.execute?.({}, {} as never)).resolves.toBe(true);
+    expect(execute).toHaveBeenCalledWith({}, expect.any(ModelContextClient));
   });
 
   it('throws when tool input is not an object', async () => {
