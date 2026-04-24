@@ -4,6 +4,7 @@ import {
   buildResearchTemplate,
   buildDelegationWorkerPrompt,
   buildDelegationWorkerTask,
+  buildMemoryRecallTemplate,
   buildPersonaTemplate,
   composeAgentPrompt,
   buildToolInstructionsTemplate,
@@ -47,6 +48,15 @@ describe('agentPromptTemplates', () => {
     expect(prompt).toContain('## Researcher Guidance');
     expect(prompt).toContain('Active workspace: Research');
     expect(prompt).toContain('Research browser automation options.');
+  });
+
+  it('builds file-backed memory recall guidance', () => {
+    const template = buildMemoryRecallTemplate();
+
+    expect(template).toContain('Memory agent');
+    expect(template).toContain('.memory/MEMORY.md');
+    expect(template).toContain('.memory/*.memory.md');
+    expect(template).toContain('markdown list item');
   });
 
   it('builds tool instructions with available tool detail', () => {
