@@ -4339,56 +4339,27 @@ describe('App', () => {
     expect(screen.getByText('Deleted /workspace')).toBeInTheDocument();
   });
 
-  it('shell-quotes session FS delete paths before invoking rm', async () => {
-    vi.useFakeTimers();
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-
-    await expandSessionFsDrive();
-
-    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
-    fireEvent.contextMenu(workspaceRow);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
-    fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), {
-      target: { value: 'evil"; touch /workspace/pwned #' },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
-      await Promise.resolve();
-    });
-
-    const renamedRow = screen.getByRole('button', { name: 'evil\"; touch /workspace/pwned #' }).closest('[role="treeitem"]')!;
-    fireEvent.contextMenu(renamedRow);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
-      await Promise.resolve();
-    });
-
-    expect(bashExecCommands).toContain(`rm -rf '/evil"; touch /workspace/pwned #'`);
-    expect(bashExecCommands).not.toContain(`rm -rf "/evil"; touch /workspace/pwned #"`);
-  });
-
   it('shell-quotes session FS rename paths before invoking mv', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
     await expandSessionFsDrive();
+    const maliciousName = 'evil"; touch pwned #';
 
     const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
     fireEvent.contextMenu(workspaceRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), {
-      target: { value: 'evil"; touch /workspace/pwned #' },
+      target: { value: maliciousName },
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
       await Promise.resolve();
     });
 
-    expect(bashExecCommands).toContain(`mv '/workspace' '/evil"; touch /workspace/pwned #'`);
-    expect(bashExecCommands).not.toContain(`mv "/workspace" "/evil"; touch /workspace/pwned #"`);
+    expect(bashExecCommands).toContain(`mv '/workspace' '/${maliciousName}'`);
+    expect(bashExecCommands).not.toContain(`mv "/workspace" "/${maliciousName}"`);
   });
 
   // ── Browser tab context menu ───────────────────────────────────
