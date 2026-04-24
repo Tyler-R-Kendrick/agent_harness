@@ -1583,6 +1583,58 @@ describe('App', () => {
     expect(screen.getByText('Research complete.')).toBeInTheDocument();
   });
 
+  it('routes debugging tasks through the first-class Debugger agent', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onDone?.('Debugging complete.');
+      return { text: 'Debugging complete.', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Debug why deployment health checks started failing after release.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('debugger');
+    expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(1);
+    expect(runStagedToolPipelineMock.mock.calls[0][0]).toEqual(expect.objectContaining({
+      instructions: expect.stringContaining('## Debugger Operating Instructions'),
+    }));
+    expect(runStagedToolPipelineMock.mock.calls[0][0].instructions).toContain('hypothesis ledger');
+    expect(screen.getByText('Debugging complete.')).toBeInTheDocument();
+  });
+
   it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
     vi.useFakeTimers();
     let activeSignal: AbortSignal | undefined;
