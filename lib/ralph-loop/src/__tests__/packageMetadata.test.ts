@@ -18,4 +18,15 @@ describe('package metadata', () => {
       logact: '0.1.0',
     });
   });
+
+  it('limits published files to the public TypeScript source', () => {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+      files?: string[];
+    };
+
+    expect(packageJson.files).toEqual([
+      'src/index.ts',
+      'src/heuristicCompletion.ts',
+    ]);
+  });
 });
