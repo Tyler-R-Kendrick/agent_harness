@@ -108,6 +108,54 @@ const seedInstalledModel = () => {
   );
 };
 
+const seedPersistedChatSession = () => {
+  window.localStorage.setItem(STORAGE_KEYS.workspaceRoot, JSON.stringify({
+    id: 'root',
+    name: 'Root',
+    type: 'root',
+    expanded: true,
+    children: [{
+      id: 'ws-research',
+      name: 'Research',
+      type: 'workspace',
+      expanded: true,
+      activeMemory: true,
+      color: '#60a5fa',
+      children: [{
+        id: 'ws-research:category:session',
+        name: 'Sessions',
+        type: 'folder',
+        nodeKind: 'session',
+        expanded: true,
+        children: [{
+          id: 'session-persisted',
+          name: 'Restored Session',
+          type: 'tab',
+          nodeKind: 'session',
+          persisted: true,
+          filePath: 'ws-research:session:restored',
+        }],
+      }],
+    }],
+  }));
+  window.localStorage.setItem(STORAGE_KEYS.workspaceViewStateByWorkspace, JSON.stringify({
+    'ws-research': {
+      openTabIds: [],
+      editingFilePath: null,
+      activeMode: 'agent',
+      activeSessionIds: ['session-persisted'],
+      mountedSessionFsIds: ['session-persisted'],
+      panelOrder: ['session:session-persisted'],
+    },
+  }));
+  window.localStorage.setItem(STORAGE_KEYS.chatMessagesBySession, JSON.stringify({
+    'session-persisted': [
+      { id: 'session-persisted:system', role: 'system', content: 'Ready from storage.' },
+      { id: 'message-persisted', role: 'user', content: 'Persisted hello from storage.' },
+    ],
+  }));
+};
+
 describe('App session-bound persistence', () => {
   it('hydrates installed local LLMs from localStorage on mount', async () => {
     vi.useFakeTimers();
@@ -220,5 +268,16 @@ describe('App session-bound persistence', () => {
     await act(async () => { vi.advanceTimersByTime(350); });
 
     expect((screen.getByRole('combobox', { name: 'Agent provider' }) as HTMLSelectElement).value).toBe('ghcp');
+  });
+
+  it('hydrates persisted chat sessions and transcripts from localStorage on mount', async () => {
+    vi.useFakeTimers();
+    seedPersistedChatSession();
+
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); });
+
+    expect(screen.getAllByText(/Restored Session/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Persisted hello from storage/i)).toBeTruthy();
   });
 });

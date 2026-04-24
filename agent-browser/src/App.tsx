@@ -73,9 +73,12 @@ import {
   getAgentInputPlaceholder,
   getAgentProviderSummary,
   getDefaultAgentProvider,
+  resolveAgentProviderForTask,
+  buildResearcherToolInstructions,
   hasCodiModels,
   hasGhcpAccess,
   resolveAgentModelIds,
+  resolveRuntimeAgentProvider,
   streamAgentChat,
   type AgentProvider,
 } from './chat-agents';
@@ -129,7 +132,17 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
-import { STORAGE_KEYS, isString, isStringRecord, useStoredState } from './services/sessionState';
+import {
+  STORAGE_KEYS,
+  isChatMessagesBySession,
+  isString,
+  isStringArrayRecord,
+  isStringRecord,
+  isTreeNode,
+  isWorkspaceViewStateRecord,
+  removeStoredRecordEntry,
+  useStoredState,
+} from './services/sessionState';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import {
   WORKSPACE_COLORS,
@@ -1334,9 +1347,19 @@ function ChatPanel({
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
-  const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
+  const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.chatMessagesBySession,
+    isChatMessagesBySession,
+    {},
+  );
   const [input, setInput] = useState('');
-  const [chatHistoryBySession, setChatHistoryBySession] = useState<Record<string, string[]>>({});
+  const [chatHistoryBySession, setChatHistoryBySession] = useStoredState<Record<string, string[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.chatHistoryBySession,
+    isStringArrayRecord,
+    {},
+  );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
     STORAGE_KEYS.selectedCodiModelBySession,
@@ -1403,6 +1426,11 @@ function ChatPanel({
   const activeCopilotModel = copilotState.models.find((model) => model.id === effectiveSelectedCopilotModelId);
   const hasInstalledModels = hasCodiModels(installedModels);
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
+  const selectedRuntimeProvider = resolveRuntimeAgentProvider({
+    provider: selectedProvider,
+    hasCodiModelsReady: Boolean(activeLocalModel),
+    hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+  });
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
   const toolDescriptors = useMemo(
@@ -1453,6 +1481,10 @@ function ChatPanel({
     Boolean(parseSandboxPrompt(input))
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+    || (selectedProvider === 'researcher' && (
+      (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+      || Boolean(activeLocalModel)
+    ))
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
   const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
@@ -1732,6 +1764,19 @@ function ChatPanel({
     const assistantId = createUniqueId();
     const userId = createUniqueId();
     const trimmedText = text.trim();
+    const providerForRequest = resolveAgentProviderForTask({
+      selectedProvider,
+      latestUserInput: trimmedText,
+    });
+    const runtimeProviderForRequest = resolveRuntimeAgentProvider({
+      provider: providerForRequest,
+      hasCodiModelsReady: Boolean(activeLocalModel),
+      hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+    });
+    if (providerForRequest !== selectedProvider) {
+      selectedProviderRef.current = providerForRequest;
+      setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: providerForRequest }));
+    }
     setChatHistoryBySession((current) => ({
       ...current,
       [activeChatSessionId]: [...(current[activeChatSessionId] ?? []), trimmedText],
@@ -1746,7 +1791,7 @@ function ChatPanel({
       return;
     }
 
-    if (selectedProvider === 'ghcp' && !hasAvailableCopilotModels) {
+    if (runtimeProviderForRequest === 'ghcp' && (!effectiveSelectedCopilotModelId || !hasAvailableCopilotModels)) {
       updateMessage(assistantId, {
         status: 'error',
         content: copilotState.authenticated
@@ -1756,8 +1801,8 @@ function ChatPanel({
       return;
     }
 
-    if (selectedProvider === 'codi' && !activeLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+    if (runtimeProviderForRequest === 'codi' && !activeLocalModel) {
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -1778,8 +1823,11 @@ function ChatPanel({
         thinkingIdleMs: number;
         streamingIdleMs: number;
       };
-      let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
-        ? [createInitialLocalReasoningStep('Planning tool run', 'Codi is deciding how to use local tools and delegate work.')]
+      let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
+        ? [createInitialLocalReasoningStep(
+          providerForRequest === 'researcher' ? 'Planning research run' : 'Planning tool run',
+          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : 'Codi is deciding how to use local tools and delegate work.',
+        )]
         : [];
       let delegationVoterSteps: VoterStep[] = [];
       let delegationBusEntries: BusEntryStep[] = [];
@@ -1811,10 +1859,10 @@ function ChatPanel({
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
-        agentId: 'tool-agent',
-        agentLabel: 'Tool Agent',
-        modelId: selectedProvider === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
-        modelProvider: selectedProvider,
+        agentId: providerForRequest === 'researcher' ? 'researcher' : 'tool-agent',
+        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : 'Tool Agent',
+        modelId: runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
+        modelProvider: providerForRequest,
       });
       const processMetaFromStageMeta = (meta?: StageMeta): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
         agentId: meta?.agentId ?? currentToolAgentLogMeta().agentId,
@@ -2556,7 +2604,7 @@ function ChatPanel({
           mode: LocalToolWatchdogMode = localToolWatchdogMode,
         ) => {
           const timeoutStage = resolveWatchdogPlanningStage(stage);
-          if (selectedProvider !== 'codi' || !timeoutStage) return;
+          if (runtimeProviderForRequest !== 'codi' || !timeoutStage) return;
           localToolWatchdogMode = mode;
           activePlanningStage = timeoutStage;
           setPlanningStageTimeout(timeoutStage, mode === 'thinking' ? 'thinking-idle' : 'streaming-idle');
@@ -2569,7 +2617,7 @@ function ChatPanel({
         };
         const scheduleLocalToolHardTimeout = (stage: PlanningStageName | null = activePlanningStage) => {
           const timeoutStage = resolveWatchdogPlanningStage(stage);
-          if (selectedProvider !== 'codi' || !timeoutStage) return;
+          if (runtimeProviderForRequest !== 'codi' || !timeoutStage) return;
           activePlanningStage = timeoutStage;
           setPlanningStageTimeout(timeoutStage, 'no-output');
           if (localToolHardTimeoutId !== null) {
@@ -2604,10 +2652,10 @@ function ChatPanel({
           scheduleLocalToolIdleTimeout(resolveWatchdogPlanningStage(activePlanningStage), mode);
         };
 
-        const modelConfig = selectedProvider === 'ghcp'
+        const modelConfig = runtimeProviderForRequest === 'ghcp'
           ? { kind: 'copilot' as const, modelId: effectiveSelectedCopilotModelId, sessionId: activeChatSessionId }
           : { kind: 'local' as const, modelId: activeLocalModel!.id, task: activeLocalModel!.task };
-        const model = selectedProvider === 'ghcp'
+        const model = runtimeProviderForRequest === 'ghcp'
           ? resolveLanguageModel(modelConfig)
           : new LocalLanguageModel(
               activeLocalModel!.id,
@@ -2655,7 +2703,14 @@ function ChatPanel({
           ...bridgeTools,
         } as ToolSet, selectedToolIds);
         const selectedDescriptors = selectToolDescriptorsByIds(toolDescriptors, selectedToolIds);
-        const toolInstructions = buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
+        const toolInstructions = providerForRequest === 'researcher'
+          ? buildResearcherToolInstructions({
+            workspaceName,
+            workspacePromptContext,
+            descriptors: selectedDescriptors,
+            selectedToolIds,
+          })
+          : buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
           .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
@@ -3108,8 +3163,11 @@ function ChatPanel({
     let tokenBuffer = '';
     let thinkingBuffer = '';
     let thinkingStart = 0;
-    let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
-      ? [createInitialLocalReasoningStep('Analyzing request', 'Codi is reviewing the prompt and workspace context locally.')]
+    let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
+      ? [createInitialLocalReasoningStep(
+        providerForRequest === 'researcher' ? 'Analyzing research request' : 'Analyzing request',
+        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+      )]
       : [];
     let voterSteps: VoterStep[] = [];
     let hasStructuredReasoning = false;
@@ -3130,13 +3188,13 @@ function ChatPanel({
       switch (phase) {
         case 'thinking':
           return {
-            title: 'Analyzing request',
-            body: 'Codi is reviewing the prompt and workspace context locally.',
+            title: providerForRequest === 'researcher' ? 'Analyzing research request' : 'Analyzing request',
+            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
           };
         case 'generating':
           return {
-            title: 'Drafting response',
-            body: 'Codi is composing the local response.',
+            title: providerForRequest === 'researcher' ? 'Drafting research response' : 'Drafting response',
+            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : 'Codi is composing the local response.',
           };
         default:
           return {
@@ -3156,7 +3214,7 @@ function ChatPanel({
       const resolveDirectReasoningActor = (step: ReasoningStep): string => {
         if (step.toolName) return step.toolName;
         if (step.kind === 'search') return 'search';
-        return selectedProvider;
+        return providerForRequest;
       };
 
       const syncReasoningProcessEntry = (step: ReasoningStep | undefined) => {
@@ -3236,7 +3294,7 @@ function ChatPanel({
           processLog.update(rawThinkingProcessId, {
             summary,
             transcript,
-            payload: { provider: selectedProvider, transcript },
+            payload: { provider: providerForRequest, runtimeProvider: runtimeProviderForRequest, transcript },
             status,
           });
           return;
@@ -3244,10 +3302,10 @@ function ChatPanel({
         processLog.append({
           id: rawThinkingProcessId,
           kind: 'reasoning',
-          actor: selectedProvider,
+          actor: providerForRequest,
           summary,
           transcript,
-          payload: { provider: selectedProvider, transcript },
+          payload: { provider: providerForRequest, runtimeProvider: runtimeProviderForRequest, transcript },
           branchId: 'coordinator',
           status,
           ts: thinkingStart || Date.now(),
@@ -3271,7 +3329,7 @@ function ChatPanel({
     };
 
     const syncPhaseStep = (phase: string) => {
-      if (selectedProvider !== 'codi' || hasStructuredReasoning || thinkingBuffer) return;
+      if (runtimeProviderForRequest !== 'codi' || hasStructuredReasoning || thinkingBuffer) return;
       ensureThinkingStarted();
       const meta = getPhaseStepMeta(phase);
       if (phaseStepId && phaseStepTitle === meta.title) {
@@ -3420,7 +3478,13 @@ function ChatPanel({
             isVoting: false,
             loadingStatus: null,
             streamedContent: resolvedContent || undefined,
-            content: resolvedContent ? '' : (selectedProvider === 'ghcp' ? 'GHCP returned an empty response.' : 'Codi returned an empty response.'),
+            content: resolvedContent ? '' : (
+              providerForRequest === 'researcher'
+                ? 'Researcher returned an empty response.'
+                : runtimeProviderForRequest === 'ghcp'
+                  ? 'GHCP returned an empty response.'
+                  : 'Codi returned an empty response.'
+            ),
           }));
         },
         onError: (error: Error) => {
@@ -3435,7 +3499,8 @@ function ChatPanel({
       };
 
       await streamAgentChat({
-        provider: selectedProvider,
+        provider: providerForRequest,
+        runtimeProvider: runtimeProviderForRequest,
         model: activeLocalModel,
         modelId: effectiveSelectedCopilotModelId,
         sessionId: activeChatSessionId,
@@ -3666,9 +3731,10 @@ function ChatPanel({
                   <select aria-label="Agent provider" value={selectedProvider} onChange={(event) => setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value as AgentProvider }))} {...panelTitlebarControlProps}>
                     <option value="codi">Codi</option>
                     <option value="ghcp">GHCP</option>
+                    <option value="researcher">Researcher</option>
                   </select>
                 </label>
-                {selectedProvider === 'ghcp'
+                {selectedRuntimeProvider === 'ghcp'
                   ? (hasAvailableCopilotModels
                       ? (
                         <label className="header-model-selector" {...panelTitlebarControlProps}>
@@ -3737,7 +3803,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -3808,11 +3874,11 @@ function ChatPanel({
                   </div>
                 ) : null}
               </div>
-              {selectedProvider === 'ghcp'
+              {selectedRuntimeProvider === 'ghcp'
                 ? (!hasAvailableCopilotModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
-                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>No Codi model loaded. Open Models to load one.</button> : null)}
+                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -5282,7 +5348,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -5302,7 +5368,12 @@ function AgentBrowserApp() {
   const { toast, setToast } = useToast();
   const initialRootRef = useRef<TreeNode | null>(null);
   if (!initialRootRef.current) initialRootRef.current = createInitialRoot();
-  const [root, setRoot] = useState<TreeNode>(initialRootRef.current);
+  const [root, setRoot] = useStoredState<TreeNode>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceRoot,
+    isTreeNode,
+    initialRootRef.current,
+  );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
   const [collapsed, setCollapsed] = useState(false);
@@ -5330,7 +5401,12 @@ function AgentBrowserApp() {
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
-  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useState<Record<string, WorkspaceViewState>>(() => createWorkspaceViewState(initialRootRef.current!));
+  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceViewStateByWorkspace,
+    isWorkspaceViewStateRecord,
+    createWorkspaceViewState(root),
+  );
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
   const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
@@ -6641,6 +6717,8 @@ function AgentBrowserApp() {
     const paneId = renderPaneIdForNode(node);
     if (node.nodeKind === 'session') {
       delete bashBySessionRef.current[nodeId];
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, nodeId);
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatHistoryBySession, isStringArrayRecord, nodeId);
       setTerminalFsPathsBySession((current) => {
         if (!(nodeId in current)) return current;
         const next = { ...current };

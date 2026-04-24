@@ -31,11 +31,13 @@ export function buildCodiPrompt({
   workspacePromptContext,
   messages,
   loopMessages,
+  systemPrompt,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   messages: ChatMessage[];
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  systemPrompt?: string;
 }): Array<{ role: string; content: string }> {
   const aiMessages = loopMessages
     ? loopMessages.map((message, index) => ({
@@ -50,7 +52,7 @@ export function buildCodiPrompt({
     || workspacePromptContext;
   const scenario = resolveAgentScenario(latestText);
   const systemPromptPrefix = [
-    buildAgentSystemPrompt({
+    systemPrompt ?? buildAgentSystemPrompt({
       workspaceName,
       goal: 'Help the user in the active workspace with concise, grounded collaboration.',
       scenario,
@@ -89,11 +91,12 @@ function createCodiInferenceClient(
   workspacePromptContext: string,
   messages: ChatMessage[],
   callbacks: AgentStreamCallbacks,
+  systemPrompt?: string,
   signal?: AbortSignal,
 ): IInferenceClient {
   return {
     async infer(busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
-      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages });
+      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages, systemPrompt });
       let tokenBuffer = '';
       let inReasoning = false;
       const reasoningSplitter = createReasoningStepSplitter({
@@ -176,6 +179,7 @@ export async function streamCodiChat(
     voters = [],
     completionChecker,
     maxIterations = 5,
+    systemPrompt,
   }: {
     model: HFModel;
     messages: ChatMessage[];
@@ -186,6 +190,7 @@ export async function streamCodiChat(
     voters?: IVoter[];
     completionChecker?: ICompletionChecker;
     maxIterations?: number;
+    systemPrompt?: string;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
@@ -200,6 +205,7 @@ export async function streamCodiChat(
     workspacePromptContext,
     messages,
     deferred?.callbacks ?? callbacks,
+    systemPrompt,
     signal,
   );
 

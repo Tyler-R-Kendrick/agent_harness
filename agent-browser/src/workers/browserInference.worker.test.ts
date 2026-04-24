@@ -2,6 +2,14 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 const pipelineMock = vi.fn();
 const postMessageSpy = vi.fn();
+const textStreamerMock = vi.fn(function MockTextStreamer(
+  this: { kind: string; opts: unknown },
+  _tokenizer: unknown,
+  opts: unknown,
+) {
+  this.kind = 'streamer';
+  this.opts = opts;
+});
 const transformerEnv = { useBrowserCache: true, backends: { onnx: { wasm: { proxy: false, numThreads: 4 } } } };
 
 vi.stubGlobal('postMessage', postMessageSpy);
@@ -13,6 +21,7 @@ vi.stubGlobal('postMessage', postMessageSpy);
 beforeEach(() => {
   pipelineMock.mockReset();
   postMessageSpy.mockReset();
+  textStreamerMock.mockClear();
   if ('gpu' in globalThis.navigator) {
     delete (globalThis.navigator as Navigator & { gpu?: unknown }).gpu;
   }
@@ -22,7 +31,7 @@ beforeEach(() => {
   transformerEnv.backends.onnx.wasm.numThreads = 4;
   vi.doMock('@huggingface/transformers', () => ({
     pipeline: (...args: unknown[]) => pipelineMock(...args),
-    TextStreamer: vi.fn().mockImplementation((_tokenizer, opts) => ({ kind: 'streamer', opts })),
+    TextStreamer: textStreamerMock,
     env: transformerEnv,
   }));
 });

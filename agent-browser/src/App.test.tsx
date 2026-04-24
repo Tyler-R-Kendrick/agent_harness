@@ -1444,6 +1444,58 @@ describe('App', () => {
     expect(prompt.map((entry) => entry.content).join('\n')).not.toContain('GitHub Copilot');
   });
 
+  it('routes research tasks through the first-class Researcher agent', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onDone?.('Research complete.');
+      return { text: 'Research complete.', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Research current browser automation options with citations.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('researcher');
+    expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(1);
+    expect(runStagedToolPipelineMock.mock.calls[0][0]).toEqual(expect.objectContaining({
+      instructions: expect.stringContaining('## Researcher Operating Instructions'),
+    }));
+    expect(runStagedToolPipelineMock.mock.calls[0][0].instructions).toContain('.research/<task-id>/research.md');
+    expect(screen.getByText('Research complete.')).toBeInTheDocument();
+  });
+
   it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
     vi.useFakeTimers();
     let activeSignal: AbortSignal | undefined;
