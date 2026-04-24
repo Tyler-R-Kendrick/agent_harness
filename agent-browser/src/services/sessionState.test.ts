@@ -2,7 +2,13 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   STORAGE_KEYS,
+  isChatMessagesBySession,
+  isStringArrayRecord,
+  isStringRecord,
+  isTreeNode,
+  isWorkspaceViewStateRecord,
   loadJson,
+  removeStoredRecordEntry,
   saveJson,
   useStoredState,
 } from './sessionState';
@@ -34,13 +40,143 @@ describe('STORAGE_KEYS', () => {
       selectedCopilotModelBySession: expect.any(String),
       activeWorkspaceId: expect.any(String),
       activePanel: expect.any(String),
+      workspaceRoot: expect.any(String),
+      workspaceViewStateByWorkspace: expect.any(String),
+      chatMessagesBySession: expect.any(String),
+      chatHistoryBySession: expect.any(String),
     });
+  });
+});
+
+describe('persistent session validators', () => {
+  it('accepts valid workspace trees and rejects invalid tree nodes', () => {
+    expect(isTreeNode(null)).toBe(false);
+    expect(isTreeNode({
+      id: 'root',
+      name: 'Root',
+      type: 'root',
+      expanded: true,
+      children: [{ id: 'session-1', name: 'Session 1', type: 'tab', nodeKind: 'session' }],
+    })).toBe(true);
+
+    expect(isTreeNode({ id: 'root', name: 'Root', type: 'invalid' })).toBe(false);
+    expect(isTreeNode({
+      id: 'root',
+      name: 'Root',
+      type: 'root',
+      nodeKind: 'bogus',
+    })).toBe(false);
+    expect(isTreeNode({
+      id: 'root',
+      name: 'Root',
+      type: 'root',
+      nodeKind: 1,
+    })).toBe(false);
+    expect(isTreeNode({
+      id: 'root',
+      name: 'Root',
+      type: 'root',
+      memoryMB: 'large',
+    })).toBe(false);
+    expect(isTreeNode({
+      id: 'root',
+      name: 'Root',
+      type: 'root',
+      children: [{ id: 'child', name: 'Child', type: 'bogus' }],
+    })).toBe(false);
+  });
+
+  it('accepts valid workspace view state records and rejects bad active modes', () => {
+    expect(isWorkspaceViewStateRecord({
+      'ws-research': {
+        openTabIds: [],
+        editingFilePath: 'notes.md',
+        activeMode: 'agent',
+        activeSessionIds: ['session-1'],
+        mountedSessionFsIds: ['session-1'],
+        panelOrder: ['session:session-1'],
+      },
+    })).toBe(true);
+
+    expect(isWorkspaceViewStateRecord({
+      'ws-research': {
+        openTabIds: [],
+        editingFilePath: null,
+        activeMode: 'browser',
+        activeSessionIds: [],
+        mountedSessionFsIds: [],
+        panelOrder: [],
+      },
+    })).toBe(false);
+    expect(isWorkspaceViewStateRecord({ 'ws-research': null })).toBe(false);
+  });
+
+  it('accepts persisted chat transcripts and chat history records', () => {
+    expect(isChatMessagesBySession({
+      'session-1': [
+        { id: 'session-1:system', role: 'system', content: 'Ready' },
+        { id: 'message-1', role: 'user', content: 'Hello' },
+      ],
+    })).toBe(true);
+
+    expect(isChatMessagesBySession({
+      'session-1': [{ id: 'bad', role: 'bogus', content: 'Nope' }],
+    })).toBe(false);
+    expect(isStringArrayRecord({ 'session-1': ['Hello', 'Again'] })).toBe(true);
+    expect(isStringArrayRecord({ 'session-1': ['Hello', 42] })).toBe(false);
+  });
+
+  it('rejects invalid record and optional persisted chat fields', () => {
+    expect(isStringRecord(null)).toBe(false);
+    expect(isStringRecord({ valid: 'yes', invalid: 1 })).toBe(false);
+    expect(isStringRecord({ valid: 'yes' })).toBe(true);
+    expect(isStringArrayRecord(null)).toBe(false);
+    expect(isWorkspaceViewStateRecord(null)).toBe(false);
+    expect(isChatMessagesBySession(null)).toBe(false);
+    expect(isChatMessagesBySession({ 'session-1': [null] })).toBe(false);
+    expect(isChatMessagesBySession({
+      'session-1': [{ id: 'bad-status', role: 'assistant', content: '', status: 'paused' }],
+    })).toBe(false);
+    expect(isChatMessagesBySession({
+      'session-1': [{ id: 'bad-stream', role: 'assistant', content: '', streamedContent: 1 }],
+    })).toBe(false);
+    expect(isChatMessagesBySession({
+      'session-1': [{
+        id: 'ok-status',
+        role: 'assistant',
+        content: '',
+        status: 'complete',
+        loadingStatus: 'complete',
+        statusText: null,
+      }],
+    })).toBe(true);
+    expect(isChatMessagesBySession({
+      'session-1': [{
+        id: 'ok-status-text',
+        role: 'assistant',
+        content: '',
+        loadingStatus: null,
+        statusText: 'stopped',
+      }],
+    })).toBe(true);
   });
 });
 
 describe('loadJson', () => {
   it('returns the fallback when the key is missing', () => {
     expect(loadJson(window.localStorage, 'missing', isStringArray, ['default'])).toEqual(['default']);
+  });
+
+  it('returns the fallback when storage read throws', () => {
+    const failing = {
+      getItem: () => {
+        throw new Error('storage unavailable');
+      },
+      setItem: () => undefined,
+      removeItem: () => undefined,
+    } as unknown as Storage;
+
+    expect(loadJson(failing, 'missing', isStringArray, ['default'])).toEqual(['default']);
   });
 
   it('returns the fallback when the stored payload is not valid JSON', () => {
@@ -77,6 +213,45 @@ describe('saveJson', () => {
     saveJson(failing, 'k', [1], onError);
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
+  });
+
+  it('wraps non-Error storage failures before invoking onError', () => {
+    const onError = vi.fn();
+    const failing = {
+      getItem: () => null,
+      setItem: () => {
+        throw 'quota exceeded';
+      },
+      removeItem: () => undefined,
+    } as unknown as Storage;
+
+    saveJson(failing, 'k', [1], onError);
+
+    expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect(onError.mock.calls[0][0].message).toBe('quota exceeded');
+  });
+});
+
+describe('removeStoredRecordEntry', () => {
+  it('ignores missing storage backends', () => {
+    expect(() => removeStoredRecordEntry(null, 'record', isStringArrayRecord, 'remove')).not.toThrow();
+  });
+
+  it('removes one entry from a valid stored record', () => {
+    window.localStorage.setItem('record', JSON.stringify({ keep: ['a'], remove: ['b'] }));
+
+    removeStoredRecordEntry(window.localStorage, 'record', isStringArrayRecord, 'remove');
+
+    expect(JSON.parse(window.localStorage.getItem('record') ?? '{}')).toEqual({ keep: ['a'] });
+  });
+
+  it('does not rewrite storage when the entry is absent', () => {
+    window.localStorage.setItem('record', JSON.stringify({ keep: ['a'] }));
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    removeStoredRecordEntry(window.localStorage, 'record', isStringArrayRecord, 'missing');
+
+    expect(setItem).not.toHaveBeenCalled();
   });
 });
 
@@ -118,5 +293,37 @@ describe('useStoredState', () => {
       useStoredState(window.localStorage, 'bad', isStringArray, ['default']),
     );
     expect(result.current[0]).toEqual(['default']);
+  });
+
+  it('uses the fallback and skips persistence when no backend is available', () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() =>
+      useStoredState(null, 'missing-backend', isStringArray, ['default']),
+    );
+
+    act(() => {
+      result.current[1](['next']);
+      vi.runAllTimers();
+    });
+
+    expect(result.current[0]).toEqual(['next']);
+    expect(window.localStorage.getItem('missing-backend')).toBeNull();
+  });
+
+  it('clears pending persistence timers on unmount', () => {
+    vi.useFakeTimers();
+    const { result, unmount } = renderHook(() =>
+      useStoredState(window.localStorage, 'cleanup', isStringArray, [] as string[], { debounceMs: 1000 }),
+    );
+
+    act(() => {
+      result.current[1](['next']);
+    });
+    unmount();
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(window.localStorage.getItem('cleanup')).toBeNull();
   });
 });

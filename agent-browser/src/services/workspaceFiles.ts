@@ -2,6 +2,12 @@ import {
   createDefaultWorkspaceAgentSkillFiles,
   mergeDefaultWorkspaceAgentSkillFiles,
 } from './defaultAgentSkills';
+import {
+  buildWorkspaceMemoryPromptContext,
+  createDefaultWorkspaceMemoryFiles,
+  detectWorkspaceMemoryScope,
+  mergeDefaultWorkspaceMemoryFiles,
+} from './workspaceMemory';
 
 import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspaceHook, WorkspacePlugin, WorkspaceSkill } from '../types';
 
@@ -25,7 +31,10 @@ function nowIso() {
 }
 
 export function createDefaultWorkspaceFiles(updatedAt = nowIso()): WorkspaceFile[] {
-  return createDefaultWorkspaceAgentSkillFiles(updatedAt);
+  return [
+    ...createDefaultWorkspaceAgentSkillFiles(updatedAt),
+    ...createDefaultWorkspaceMemoryFiles(updatedAt),
+  ];
 }
 
 export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''): WorkspaceFile {
@@ -94,6 +103,7 @@ export function detectWorkspaceFileKind(path: string): WorkspaceFileKind | null 
   if (WORKSPACE_SKILL_DIRECTORIES.some((directory) => path.startsWith(directory) && path.endsWith('/SKILL.md'))) return 'skill';
   if (path.startsWith('.agents/hooks/')) return 'hook';
   if (path.startsWith('.agents/plugins/') && PLUGIN_MANIFESTS.some((manifest) => path.endsWith(`/${manifest}`))) return 'plugin';
+  if (path.startsWith('.memory/')) return 'memory';
   return null;
 }
 
@@ -135,6 +145,10 @@ export function validateWorkspaceFile(file: WorkspaceFile): string | null {
     return null;
   }
 
+  if (kind === 'memory') {
+    return detectWorkspaceMemoryScope(file.path) ? null : 'Unsupported memory file path.';
+  }
+
   return null;
 }
 
@@ -152,6 +166,7 @@ function parseSkillFrontmatter(content: string): Pick<WorkspaceSkill, 'name' | '
 
 export function discoverWorkspaceCapabilities(files: WorkspaceFile[]): WorkspaceCapabilities {
   const agents = files.filter((file) => detectWorkspaceFileKind(file.path) === 'agents');
+  const memory = files.filter((file) => detectWorkspaceFileKind(file.path) === 'memory');
   const hooks: WorkspaceHook[] = files
     .filter((file) => detectWorkspaceFileKind(file.path) === 'hook')
     .map((file) => ({ path: file.path, name: file.path.split('/').pop() ?? file.path, content: file.content }));
@@ -177,7 +192,7 @@ export function discoverWorkspaceCapabilities(files: WorkspaceFile[]): Workspace
         : { path: file.path, directory, name: directory, description: 'Skill file is missing required frontmatter.', content: file.content };
     });
 
-  return { agents, skills, plugins, hooks };
+  return { agents, skills, plugins, hooks, memory };
 }
 
 export function buildWorkspacePromptContext(files: WorkspaceFile[], activeAgentPath?: string | null): string {
@@ -188,12 +203,13 @@ export function buildWorkspacePromptContext(files: WorkspaceFile[], activeAgentP
   const otherAgents = activeAgent
     ? capabilities.agents.filter((file) => file.path !== activeAgent.path)
     : capabilities.agents;
-  if (!capabilities.agents.length && !capabilities.skills.length && !capabilities.plugins.length && !capabilities.hooks.length) {
+  if (!capabilities.agents.length && !capabilities.skills.length && !capabilities.plugins.length && !capabilities.hooks.length && !capabilities.memory.length) {
     return 'No workspace capability files are currently stored.';
   }
 
   return [
     'Workspace capability files loaded from browser storage:',
+    buildWorkspaceMemoryPromptContext(files),
     activeAgent
       ? `Active AGENTS.md:\n- ${activeAgent.path}\n${activeAgent.content}`
       : (otherAgents.length
@@ -224,7 +240,7 @@ export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, Works
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return Object.fromEntries(workspaceIds.map((workspaceId) => {
       const files = Array.isArray(parsed[workspaceId]) ? parsed[workspaceId] : [];
-      return [workspaceId, mergeDefaultWorkspaceAgentSkillFiles(files.filter((entry): entry is WorkspaceFile => (
+      const storedFiles = files.filter((entry): entry is WorkspaceFile => (
         Boolean(entry)
         && typeof entry === 'object'
         && 'path' in entry
@@ -232,7 +248,8 @@ export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, Works
         && typeof entry.path === 'string'
         && typeof entry.content === 'string'
         && typeof entry.updatedAt === 'string'
-      )))];
+      ));
+      return [workspaceId, mergeDefaultWorkspaceMemoryFiles(mergeDefaultWorkspaceAgentSkillFiles(storedFiles))];
     }));
   } catch {
     return fallback;

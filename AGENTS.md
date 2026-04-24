@@ -20,6 +20,8 @@ Always use TDD with code coverage metrics to ensure 100% coverage.
 Use Playwright to visually validate your work in the browser afterwards.
 Take screenshots of the outcomes and put them into your PR description so we can view the outcomes that you believe are successful.
 
+For `agent-browser` chat agents, implement first-class agents under `agent-browser/src/chat-agents/<AgentName>/` and wire them through the chat-agent provider/routing layer. Do not add product chat agents as default workspace `.agents/<name>/AGENTS.md` files; those workspace files are user/project instructions, not Agent Browser's internal agent implementation surface.
+
 Prefer deterministic, checked-in scripts over generated one-off CLI commands. Before writing an inline Playwright snippet, shell loop, temporary Node/Python script, or long ad hoc command, check `package.json`, `scripts/`, and relevant skill `scripts/` directories for an existing command. If you repeat a dynamic command sequence or expect future agents to need it, promote it into a documented repo script with tests or verification coverage, then call that script by name.
 
 For `agent-browser` changes, do not stop at targeted tests. Before final response or PR handoff, run `npm run verify:agent-browser` from the repo root. Treat every build, lint, test, npm install, and npm audit warning or error as blocking, including unrelated issues discovered while working. Fix those issues in the same turn whenever they are in the workspace and can be fixed without reverting user work.

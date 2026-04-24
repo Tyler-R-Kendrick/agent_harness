@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAgentSystemPrompt,
+  buildResearchTemplate,
   buildDelegationWorkerPrompt,
   buildDelegationWorkerTask,
+  buildMemoryRecallTemplate,
   buildPersonaTemplate,
   composeAgentPrompt,
   buildToolInstructionsTemplate,
@@ -25,7 +27,36 @@ describe('agentPromptTemplates', () => {
     expect(resolveAgentScenario('Fix the failing vitest run and refactor the code.')).toBe('coding');
     expect(resolveAgentScenario('Switch the workspace in agent-browser terminal mode.')).toBe('harness-control');
     expect(resolveAgentScenario('Open the overlay for this tab and switch the panel.')).toBe('harness-control');
+    expect(resolveAgentScenario('Research the current browser automation options with citations.')).toBe('research');
     expect(resolveAgentScenario('Hello there')).toBe('general-chat');
+  });
+
+  it('builds researcher guidance with provenance and persistence rules', () => {
+    const template = buildResearchTemplate();
+    expect(template).toContain('authoritative sources first');
+    expect(template).toContain('provenance');
+    expect(template).toContain('score source quality');
+    expect(template).toContain('resolve conflicting information');
+    expect(template).toContain('.research/<task-id>/research.md');
+
+    const prompt = buildAgentSystemPrompt({
+      workspaceName: 'Research',
+      goal: 'Research browser automation options.',
+      scenario: 'research',
+    });
+
+    expect(prompt).toContain('## Researcher Guidance');
+    expect(prompt).toContain('Active workspace: Research');
+    expect(prompt).toContain('Research browser automation options.');
+  });
+
+  it('builds file-backed memory recall guidance', () => {
+    const template = buildMemoryRecallTemplate();
+
+    expect(template).toContain('Memory agent');
+    expect(template).toContain('.memory/MEMORY.md');
+    expect(template).toContain('.memory/*.memory.md');
+    expect(template).toContain('markdown list item');
   });
 
   it('builds tool instructions with available tool detail', () => {
