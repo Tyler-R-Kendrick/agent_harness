@@ -5,7 +5,10 @@ describe('heuristicCompletion', () => {
   it('detects execution-oriented tasks', () => {
     expect(isExecutionTask()).toBe(false);
     expect(isExecutionTask('Implement the fix and run the tests.')).toBe(true);
+    expect(isExecutionTask('Fix the regression and explain what changed.')).toBe(true);
+    expect(isExecutionTask('Review the failure log and fix the bug.')).toBe(true);
     expect(isExecutionTask('Plan how to implement the fix.')).toBe(false);
+    expect(isExecutionTask('Explain how to implement the fix.')).toBe(false);
     expect(isExecutionTask('Explain the current architecture.')).toBe(false);
   });
 
