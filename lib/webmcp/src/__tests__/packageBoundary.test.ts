@@ -11,20 +11,27 @@ const packageRoot = path.resolve(testDir, '../..');
 describe('package boundaries', () => {
   it('exposes the documented package entry point', () => {
     expect(Object.keys(publicApi).sort()).toEqual([
+      'MODEL_CONTEXT_PROMPT_REGISTRY_SYMBOL',
+      'MODEL_CONTEXT_PROMPT_TEMPLATE_REGISTRY_SYMBOL',
+      'MODEL_CONTEXT_REGISTRY_SYMBOL',
+      'MODEL_CONTEXT_RESOURCE_REGISTRY_SYMBOL',
       'MODEL_CONTEXT_TOOL_NAME_PATTERN',
       'ModelContext',
       'ModelContextClient',
-      'ModelContextPromptRegistry',
-      'ModelContextPromptTemplateRegistry',
-      'ModelContextRegistry',
-      'ModelContextResourceRegistry',
+      'PromptRegistry',
+      'PromptTemplateRegistry',
+      'ResourceRegistry',
+      'TOOL_ACTIVATED_EVENT',
+      'TOOL_CANCELED_EVENT',
       'ToolRegistry',
-      'createModelContextToolEvent',
+      'dispatchToolActivated',
+      'dispatchToolCanceled',
       'getModelContextPromptRegistry',
       'getModelContextPromptTemplateRegistry',
       'getModelContextRegistry',
       'getModelContextResourceRegistry',
       'installModelContext',
+      'invokeModelContextTool',
     ]);
   });
 
