@@ -88,6 +88,7 @@ export async function streamAgentChat(
     messages: options.messages,
     workspaceName: options.workspaceName,
     workspacePromptContext: options.workspacePromptContext,
+    latestUserInput: options.latestUserInput,
     voters: options.voters,
   }, callbacks, signal);
 }
