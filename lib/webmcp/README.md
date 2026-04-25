@@ -82,6 +82,10 @@ console.log(tools.list().map((tool) => tool.name));
 unsubscribe();
 ```
 
+## Package contents
+
+Published package artifacts are limited to this README, `package.json`, and the runtime TypeScript source files under `src/`. Tests and local package configuration are excluded from the consumer artifact.
+
 ## Local development
 
 Run package checks from this directory:
