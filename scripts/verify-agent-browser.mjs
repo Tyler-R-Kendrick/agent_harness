@@ -1,11 +1,15 @@
 import { spawnSync } from 'node:child_process';
 
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 const steps = [
-  ['lint', ['npm', '--workspace', 'agent-browser', 'run', 'lint']],
-  ['coverage', ['npm', '--workspace', 'agent-browser', 'run', 'test:coverage']],
-  ['build', ['npm', '--workspace', 'agent-browser', 'run', 'build']],
-  ['audit', ['npm', 'audit', '--audit-level=moderate']],
-  ['visual-smoke', ['npm', 'run', 'visual:agent-browser']],
+  ['validate-evals', [npmCommand, '--workspace', 'agent-browser', 'run', 'validate:evals']],
+  ['test-evals', [npmCommand, '--workspace', 'agent-browser', 'run', 'test:evals']],
+  ['lint', [npmCommand, '--workspace', 'agent-browser', 'run', 'lint']],
+  ['coverage', [npmCommand, '--workspace', 'agent-browser', 'run', 'test:coverage']],
+  ['build', [npmCommand, '--workspace', 'agent-browser', 'run', 'build']],
+  ['audit', [npmCommand, 'audit', '--audit-level=moderate']],
+  ['visual-smoke', [npmCommand, 'run', 'visual:agent-browser']],
 ];
 
 const warningPatterns = [
