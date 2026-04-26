@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 
 const steps = [
   ['lint', ['npm', '--workspace', 'agent-browser', 'run', 'lint']],
+  ['eval-manifests', ['npm', '--workspace', 'agent-browser', 'run', 'validate:evals']],
   ['coverage', ['npm', '--workspace', 'agent-browser', 'run', 'test:coverage']],
   ['build', ['npm', '--workspace', 'agent-browser', 'run', 'build']],
   ['audit', ['npm', 'audit', '--audit-level=moderate']],
