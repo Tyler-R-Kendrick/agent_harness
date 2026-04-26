@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ActionabilityEngine } from '../actionability.js';
 import { NotAttachedError, NotVisibleError, NotEnabledError, NotEditableError } from '../errors.js';
 
@@ -15,6 +15,8 @@ describe('ActionabilityEngine', () => {
   const engine = new ActionabilityEngine();
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'elementFromPoint');
     document.body.innerHTML = '';
   });
 
@@ -45,6 +47,12 @@ describe('ActionabilityEngine', () => {
     it('returns false for visibility:hidden', () => {
       const el = makeEl('button');
       el.style.visibility = 'hidden';
+      expect(engine.isVisible(el)).toBe(false);
+    });
+
+    it('returns false for opacity zero', () => {
+      const el = makeEl('button');
+      el.style.opacity = '0';
       expect(engine.isVisible(el)).toBe(false);
     });
   });
@@ -101,14 +109,114 @@ describe('ActionabilityEngine', () => {
       expect(engine.isEditable(el)).toBe(true);
     });
 
+    it('returns false for disabled textarea', () => {
+      const el = makeEl('textarea') as HTMLTextAreaElement;
+      el.disabled = true;
+      expect(engine.isEditable(el)).toBe(false);
+    });
+
+    it('returns true for enabled select', () => {
+      const el = makeEl('select') as HTMLSelectElement;
+      expect(engine.isEditable(el)).toBe(true);
+    });
+
+    it('returns false for disabled select', () => {
+      const el = makeEl('select') as HTMLSelectElement;
+      el.disabled = true;
+      expect(engine.isEditable(el)).toBe(false);
+    });
+
     it('returns true for contenteditable', () => {
       const el = makeEl('div', { contenteditable: 'true' });
+      expect(engine.isEditable(el)).toBe(true);
+    });
+
+    it('returns true for empty contenteditable', () => {
+      const el = makeEl('div', { contenteditable: '' });
       expect(engine.isEditable(el)).toBe(true);
     });
 
     it('returns false for non-editable div', () => {
       const el = makeEl('div');
       expect(engine.isEditable(el)).toBe(false);
+    });
+  });
+
+  describe('isTopmostAtPoint', () => {
+    it('returns false when no element is found at the center point', () => {
+      const el = makeEl('button');
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        top: 0,
+        right: 10,
+        bottom: 10,
+        left: 0,
+        toJSON: () => ({}),
+      });
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: vi.fn().mockReturnValue(null),
+      });
+
+      expect(engine.isTopmostAtPoint(el)).toBe(false);
+    });
+
+    it('returns true when the element contains the topmost child', () => {
+      const el = makeEl('button');
+      const child = document.createElement('span');
+      el.appendChild(child);
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        top: 0,
+        right: 10,
+        bottom: 10,
+        left: 0,
+        toJSON: () => ({}),
+      });
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: vi.fn().mockReturnValue(child),
+      });
+
+      expect(engine.isTopmostAtPoint(el)).toBe(true);
+    });
+
+    it('returns true when the topmost element contains the target', () => {
+      const parent = makeEl('div');
+      const el = document.createElement('button');
+      parent.appendChild(el);
+      vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        top: 0,
+        right: 10,
+        bottom: 10,
+        left: 0,
+        toJSON: () => ({}),
+      });
+      Object.defineProperty(document, 'elementFromPoint', {
+        configurable: true,
+        value: vi.fn().mockReturnValue(parent),
+      });
+
+      expect(engine.isTopmostAtPoint(el)).toBe(true);
+    });
+
+    it('falls back to true when hit testing throws', () => {
+      const el = makeEl('button');
+      vi.spyOn(el, 'getBoundingClientRect').mockImplementation(() => {
+        throw new Error('layout unavailable');
+      });
+
+      expect(engine.isTopmostAtPoint(el)).toBe(true);
     });
   });
 
