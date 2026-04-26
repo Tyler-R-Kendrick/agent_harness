@@ -83,7 +83,7 @@ To print the forwarded preview URL for port `5173`:
 | `lib/logact` | LogAct agentic reliability pattern backed by a shared append-only log. |
 | `lib/ralph-loop` | Ralph Loop completion heuristics for iterative agent task execution. |
 | `lib/agent-browser-mcp` | Agent-browser MCP server tools, resources, prompts, and WebMCP bridge definitions. |
-| `lib/webmcp` | Generic WebMCP polyfill and runtime. |
+| `lib/webmcp` | Generic WebMCP polyfill and runtime. See [`lib/webmcp/README.md`](./lib/webmcp/README.md) for the public API, secure-context install rules, and local package checks. |
 
 ## Bundled skills
 

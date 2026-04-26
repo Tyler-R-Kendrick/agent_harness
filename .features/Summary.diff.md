@@ -1,10 +1,15 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-04-24
-Baseline: no previous `.features/Summary.md` found in this checkout.
-Diff type: additive baseline creation
+Updated: 2026-04-26
+Baseline: `.features/Summary.md` updated from the 2026-04-24 eight-harness corpus.
+Diff type: additive update after DeerFlow research
 
 ## Net new normalized features
+
+### Expanded: Parallel agent orchestration
+- Why now: DeerFlow reinforces that visible planning modes plus scoped parallel sub-agents are becoming a default harness expectation, not a premium edge case.
+- Research delta:
+  - DeerFlow 2.0 exposes planning and sub-tasking as headline product capability and documents an `ultra` mode for sub-agent execution.
 
 ### Added: Parallel agent orchestration
 - Why now: this is the clearest product trend across coding and browser-oriented harnesses.
@@ -55,6 +60,15 @@ Diff type: additive baseline creation
 - One-shot instruction for an LLM:
   - Implement shared agents that can be published, versioned, permissioned, and discovered by a team; include RBAC, audit visibility, and usage analytics.
 
+### Added: Chat-channel agent ingress
+- Why now: DeerFlow turns chat apps into a first-class control plane for starting work, checking status, and accessing memory, which is broader than simple notification delivery.
+- Linear issue title:
+  - `Accept browser-agent tasks from chat channels`
+- Suggested problem statement:
+  - Competing harnesses increasingly meet users in messaging surfaces, but `agent-browser` still assumes task intake begins inside its primary UI.
+- One-shot instruction for an LLM:
+  - Design and implement chat-channel ingress for browser agents with per-channel auth, conversation-to-run mapping, slash-style status and memory commands, file attachment handoff, and safe routing into existing runs without duplicating history.
+
 ## How to use this file
 
 1. Treat each `Added:` section as a candidate Linear epic or feature.
@@ -69,3 +83,4 @@ Diff type: additive baseline creation
 3. `Run browser automations on schedules`
 4. `Package repeatable browser workflows as skills`
 5. `Tie browser evidence to code and diff review`
+6. `Accept browser-agent tasks from chat channels`
