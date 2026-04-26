@@ -269,12 +269,20 @@ export async function invokeModelContextTool(
   options.signal?.addEventListener('abort', abortListener, { once: true });
 
   try {
-    const result = await tool.execute(input, client);
-    if (aborted) {
-      throw createAbortError();
-    }
+    try {
+      const result = await tool.execute(input, client);
+      if (aborted) {
+        throw createAbortError();
+      }
 
-    return result;
+      return result;
+    } catch (error) {
+      if (aborted) {
+        throw createAbortError();
+      }
+
+      throw error;
+    }
   } finally {
     options.signal?.removeEventListener('abort', abortListener);
   }
