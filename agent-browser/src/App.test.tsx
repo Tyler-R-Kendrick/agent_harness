@@ -204,7 +204,7 @@ describe('App', () => {
     });
 
     it('rejects unsafe entry names', () => {
-      expect(() => normalizeSessionFsEntryName('../escape')).toThrow(/traversal/i);
+      expect(() => normalizeSessionFsEntryName('../escape')).toThrow(/path separators/i);
       expect(() => normalizeSessionFsEntryName('nested/file')).toThrow(/path separators/i);
     });
 

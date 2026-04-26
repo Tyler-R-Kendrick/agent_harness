@@ -52,7 +52,7 @@ describe('sessionFsPath', () => {
   });
 
   it('rejects unsafe child names', () => {
-    expect(() => buildSessionFsChildPath('/workspace', '../notes.md')).toThrow('traversal');
+    expect(() => buildSessionFsChildPath('/workspace', '../notes.md')).toThrow('path separators');
   });
 
   it('builds renamed paths within the same parent directory', () => {
@@ -60,6 +60,6 @@ describe('sessionFsPath', () => {
   });
 
   it('rejects renames to unsafe names', () => {
-    expect(() => buildRenamedSessionFsPath('/workspace/notes.md', '../ideas.md')).toThrow('traversal');
+    expect(() => buildRenamedSessionFsPath('/workspace/notes.md', '../ideas.md')).toThrow('path separators');
   });
 });
