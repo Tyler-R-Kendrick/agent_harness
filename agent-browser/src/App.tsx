@@ -74,6 +74,7 @@ import {
   getAgentProviderSummary,
   getDefaultAgentProvider,
   resolveAgentProviderForTask,
+  buildDebuggerToolInstructions,
   buildResearcherToolInstructions,
   hasCodiModels,
   hasGhcpAccess,
@@ -115,6 +116,11 @@ import {
 import { browserInferenceEngine } from './services/browserInference';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { appendPendingLocalTurn } from './services/chatComposition';
+import {
+  buildRenamedSessionFsPath,
+  buildSessionFsChildPath,
+  normalizeSessionFsPath,
+} from './services/sessionFsPath';
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
@@ -1515,7 +1521,7 @@ function ChatPanel({
     Boolean(parseSandboxPrompt(input))
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
-    || (selectedProvider === 'researcher' && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || Boolean(activeLocalModel)
     ))
@@ -1836,7 +1842,7 @@ function ChatPanel({
     }
 
     if (runtimeProviderForRequest === 'codi' && !activeLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -1859,8 +1865,8 @@ function ChatPanel({
       };
       let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
         ? [createInitialLocalReasoningStep(
-          providerForRequest === 'researcher' ? 'Planning research run' : 'Planning tool run',
-          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : 'Codi is deciding how to use local tools and delegate work.',
+          providerForRequest === 'researcher' ? 'Planning research run' : providerForRequest === 'debugger' ? 'Planning debugging run' : 'Planning tool run',
+          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : providerForRequest === 'debugger' ? 'Debugger is deciding how to inspect symptoms, hypotheses, and evidence.' : 'Codi is deciding how to use local tools and delegate work.',
         )]
         : [];
       let delegationVoterSteps: VoterStep[] = [];
@@ -1893,8 +1899,8 @@ function ChatPanel({
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
-        agentId: providerForRequest === 'researcher' ? 'researcher' : 'tool-agent',
-        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : 'Tool Agent',
+        agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : 'tool-agent',
+        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : 'Tool Agent',
         modelId: runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
         modelProvider: providerForRequest,
       });
@@ -2744,6 +2750,13 @@ function ChatPanel({
             descriptors: selectedDescriptors,
             selectedToolIds,
           })
+          : providerForRequest === 'debugger'
+            ? buildDebuggerToolInstructions({
+              workspaceName,
+              workspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+            })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
@@ -3199,8 +3212,8 @@ function ChatPanel({
     let thinkingStart = 0;
     let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
       ? [createInitialLocalReasoningStep(
-        providerForRequest === 'researcher' ? 'Analyzing research request' : 'Analyzing request',
-        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+        providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : 'Analyzing request',
+        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
       )]
       : [];
     let voterSteps: VoterStep[] = [];
@@ -3222,13 +3235,13 @@ function ChatPanel({
       switch (phase) {
         case 'thinking':
           return {
-            title: providerForRequest === 'researcher' ? 'Analyzing research request' : 'Analyzing request',
-            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+            title: providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : 'Analyzing request',
+            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
           };
         case 'generating':
           return {
-            title: providerForRequest === 'researcher' ? 'Drafting research response' : 'Drafting response',
-            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : 'Codi is composing the local response.',
+            title: providerForRequest === 'researcher' ? 'Drafting research response' : providerForRequest === 'debugger' ? 'Drafting debugging response' : 'Drafting response',
+            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : providerForRequest === 'debugger' ? 'Debugger is composing the diagnosis, mitigation, and verification steps.' : 'Codi is composing the local response.',
           };
         default:
           return {
@@ -3515,6 +3528,8 @@ function ChatPanel({
             content: resolvedContent ? '' : (
               providerForRequest === 'researcher'
                 ? 'Researcher returned an empty response.'
+                : providerForRequest === 'debugger'
+                  ? 'Debugger returned an empty response.'
                 : runtimeProviderForRequest === 'ghcp'
                   ? 'GHCP returned an empty response.'
                   : 'Codi returned an empty response.'
@@ -3778,6 +3793,7 @@ function ChatPanel({
                     <option value="codi">Codi</option>
                     <option value="ghcp">GHCP</option>
                     <option value="researcher">Researcher</option>
+                    <option value="debugger">Debugger</option>
                   </select>
                 </label>
                 {selectedRuntimeProvider === 'ghcp'
@@ -3924,7 +3940,7 @@ function ChatPanel({
                 ? (!hasAvailableCopilotModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
-                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -5394,7 +5410,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher', 'debugger'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -6370,9 +6386,13 @@ function AgentBrowserApp() {
   async function handleAddToSessionFs(sessionId: string, basePath: string, isFolder: boolean) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    const name = addSessionFsName.trim();
-    if (!name) return;
-    const path = `${basePath.replace(/\/$/, '')}/${name}`;
+    let path: string;
+    try {
+      path = buildSessionFsChildPath(basePath, addSessionFsName);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
     if (isFolder) {
       await bash.fs.mkdir(path, { recursive: true });
     } else {
@@ -6397,17 +6417,31 @@ function AgentBrowserApp() {
   async function handleDeleteSessionFsNode(sessionId: string, path: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    await bash.exec(`rm -rf ${quoteShellArg(path)}`);
+    let normalizedPath: string;
+    try {
+      normalizedPath = normalizeSessionFsPath(path);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
+    await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
-    setToast({ msg: `Deleted ${path}`, type: 'success' });
+    setToast({ msg: `Deleted ${normalizedPath}`, type: 'success' });
   }
 
   async function handleRenameSessionFsNode(sessionId: string, oldPath: string, newName: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    const dir = oldPath.slice(0, oldPath.lastIndexOf('/'));
-    const newPath = `${dir}/${newName}`;
-    await bash.exec(`mv ${quoteShellArg(oldPath)} ${quoteShellArg(newPath)}`);
+    let normalizedOldPath: string;
+    let newPath: string;
+    try {
+      normalizedOldPath = normalizeSessionFsPath(oldPath);
+      newPath = buildRenamedSessionFsPath(normalizedOldPath, newName);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
+    await bash.exec(`mv ${quoteShellArg(normalizedOldPath)} ${quoteShellArg(newPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
     setRenameSessionFsMenu(null);
     setRenameSessionFsName('');
@@ -7199,18 +7233,19 @@ function AgentBrowserApp() {
     content?: string;
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const dir = path.slice(0, path.lastIndexOf('/'));
+    const normalizedPath = normalizeSessionFsPath(path);
+    const dir = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
     if (dir) {
       await bash.fs.mkdir(dir, { recursive: true });
     }
     if (kind === 'folder') {
-      await bash.fs.mkdir(path, { recursive: true });
+      await bash.fs.mkdir(normalizedPath, { recursive: true });
     } else {
-      await bash.fs.writeFile(path, content ?? '', 'utf-8');
+      await bash.fs.writeFile(normalizedPath, content ?? '', 'utf-8');
       if (content !== undefined) {
         setTerminalFsFileContentsBySession((current) => ({
           ...current,
-          [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+          [sessionId]: { ...(current[sessionId] ?? {}), [normalizedPath]: content },
         }));
       }
     }
@@ -7219,32 +7254,35 @@ function AgentBrowserApp() {
 
   const readSessionFsFileFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const content = await bash.fs.readFile(path, 'utf-8');
-    return { sessionId, path, kind: 'file' as const, content };
+    const normalizedPath = normalizeSessionFsPath(path);
+    const content = await bash.fs.readFile(normalizedPath, 'utf-8');
+    return { sessionId, path: normalizedPath, kind: 'file' as const, content };
   }, [getOrCreateSessionBash]);
 
   const writeSessionFsFileFromMcp = useCallback(async ({ sessionId, path, content }: { sessionId: string; path: string; content: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const dir = path.slice(0, path.lastIndexOf('/'));
+    const normalizedPath = normalizeSessionFsPath(path);
+    const dir = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
     if (dir) {
       await bash.fs.mkdir(dir, { recursive: true });
     }
-    await bash.fs.writeFile(path, content, 'utf-8');
+    await bash.fs.writeFile(normalizedPath, content, 'utf-8');
     setTerminalFsFileContentsBySession((current) => ({
       ...current,
-      [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+      [sessionId]: { ...(current[sessionId] ?? {}), [normalizedPath]: content },
     }));
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
   const deleteSessionFsEntryFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    await bash.exec(`rm -rf ${quoteShellArg(path)}`);
+    const normalizedPath = normalizeSessionFsPath(path);
+    await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     setTerminalFsFileContentsBySession((current) => {
       if (!current[sessionId]) return current;
       const updated = { ...current[sessionId] };
       for (const key of Object.keys(updated)) {
-        if (key === path || key.startsWith(`${path}/`)) {
+        if (key === normalizedPath || key.startsWith(`${normalizedPath}/`)) {
           delete updated[key];
         }
       }
@@ -7263,13 +7301,15 @@ function AgentBrowserApp() {
     newPath: string;
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    await bash.exec(`mv ${quoteShellArg(path)} ${quoteShellArg(newPath)}`);
+    const normalizedPath = normalizeSessionFsPath(path);
+    const normalizedNewPath = normalizeSessionFsPath(newPath);
+    await bash.exec(`mv ${quoteShellArg(normalizedPath)} ${quoteShellArg(normalizedNewPath)}`);
     setTerminalFsFileContentsBySession((current) => {
       if (!current[sessionId]) return current;
       const existing = current[sessionId];
-      if (!(path in existing)) return current;
-      const { [path]: movedContent, ...rest } = existing;
-      return { ...current, [sessionId]: { ...rest, [newPath]: movedContent } };
+      if (!(normalizedPath in existing)) return current;
+      const { [normalizedPath]: movedContent, ...rest } = existing;
+      return { ...current, [sessionId]: { ...rest, [normalizedNewPath]: movedContent } };
     });
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);

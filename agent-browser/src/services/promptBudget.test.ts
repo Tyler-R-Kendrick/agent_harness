@@ -22,6 +22,17 @@ describe('promptBudget', () => {
     expect(estimateTokenCount(fitted)).toBeLessThanOrEqual(4);
   });
 
+  it('returns no text when content or token budget is empty', () => {
+    expect(fitTextToTokenBudget('', 4)).toBe('');
+    expect(fitTextToTokenBudget('content', 0)).toBe('');
+  });
+
+  it('keeps very small text budgets within the token limit', () => {
+    const fitted = fitTextToTokenBudget('0123456789abcdefghijklmnopqrstuvwxyz', 1);
+
+    expect(estimateTokenCount(fitted)).toBeLessThanOrEqual(1);
+  });
+
   it('normalizes model messages with text arrays and tool results', () => {
     const normalized = normalizeModelMessage({
       role: 'assistant',
@@ -34,6 +45,21 @@ describe('promptBudget', () => {
     expect(normalized).toEqual({
       role: 'assistant',
       content: 'hello\n[tool_result:cli]',
+    });
+  });
+
+  it('omits unsupported model message parts when normalizing arrays', () => {
+    const normalized = normalizeModelMessage({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'visible' },
+        { type: 'file', data: 'ignored', mimeType: 'text/plain' },
+      ],
+    } as never);
+
+    expect(normalized).toEqual({
+      role: 'user',
+      content: 'visible',
     });
   });
 
@@ -59,5 +85,30 @@ describe('promptBudget', () => {
     expect(result.messages[0]?.role).toBe('system');
     expect(result.messages.at(-1)?.content).toContain('latest:');
     expect(result.usedTokens).toBeLessThanOrEqual(budget.maxInputTokens);
+  });
+
+  it('fits recent messages when there is no system message', () => {
+    const budget = createPromptBudget({ contextWindow: 16, maxOutputTokens: 4 }, 4);
+    const result = fitMessagesToBudget([
+      { role: 'user', content: 'old:' + 'a'.repeat(80) },
+      { role: 'assistant', content: 'latest' },
+    ], budget);
+
+    expect(result.messages[0]).toEqual({ role: 'user', content: expect.stringContaining('...') });
+    expect(result.messages.at(-1)).toEqual({ role: 'assistant', content: 'latest' });
+    expect(result.droppedMessages).toBe(0);
+    expect(result.usedTokens).toBeLessThanOrEqual(budget.maxInputTokens);
+  });
+
+  it('does not exceed the input budget when only a tiny message fragment fits', () => {
+    const budget = createPromptBudget({ contextWindow: 3, maxOutputTokens: 1 }, 1);
+    const result = fitMessagesToBudget([
+      { role: 'system', content: 'System:' + 's'.repeat(120) },
+      { role: 'user', content: 'latest:' + 'c'.repeat(120) },
+    ], budget);
+
+    expect(budget.maxInputTokens).toBe(1);
+    expect(result.usedTokens).toBeLessThanOrEqual(budget.maxInputTokens);
+    expect(result.droppedMessages).toBe(1);
   });
 });
