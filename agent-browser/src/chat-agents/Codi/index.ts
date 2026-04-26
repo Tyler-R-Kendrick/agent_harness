@@ -176,6 +176,7 @@ export async function streamCodiChat(
     messages,
     workspaceName,
     workspacePromptContext,
+    latestUserInput,
     voters = [],
     completionChecker,
     maxIterations = 5,
@@ -185,6 +186,7 @@ export async function streamCodiChat(
     messages: ChatMessage[];
     workspaceName: string;
     workspacePromptContext: string;
+    latestUserInput?: string;
     /** Optional logact voters treated as external agents. Each voter's
      *  decision is surfaced via the onVoterStep* callbacks. */
     voters?: IVoter[];
@@ -195,7 +197,7 @@ export async function streamCodiChat(
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const latestInput = messages.at(-1)?.streamedContent || messages.at(-1)?.content || '';
+  const latestInput = latestUserInput || messages.at(-1)?.streamedContent || messages.at(-1)?.content || '';
   const effectiveCompletionChecker = completionChecker
     ?? (isExecutionTask(latestInput) ? createHeuristicCompletionChecker(latestInput) : undefined);
   const deferred = effectiveCompletionChecker ? createDeferredAgentCallbacks(callbacks) : null;
@@ -213,6 +215,7 @@ export async function streamCodiChat(
     inferenceClient,
     messages,
     voters,
+    input: latestInput,
     completionChecker: effectiveCompletionChecker
       ? {
         async check(context) {
