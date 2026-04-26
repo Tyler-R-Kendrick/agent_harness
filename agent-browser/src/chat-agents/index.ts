@@ -3,11 +3,20 @@ import type { CopilotRuntimeState } from '../services/copilotApi';
 import type { ChatMessage, HFModel } from '../types';
 import type { AgentStreamCallbacks } from './types';
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
 
 export { CODI_LABEL, buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+export {
+  buildDebuggerOperatingInstructions,
+  buildDebuggerSystemPrompt,
+  buildDebuggerToolInstructions,
+  DEBUGGER_LABEL,
+  isDebuggingTaskText,
+  streamDebuggerChat,
+} from './Debugger';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 export {
   buildResearcherOperatingInstructions,
@@ -79,6 +88,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'debugger') {
+    await streamDebuggerChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext: options.workspacePromptContext,
+      messages: options.messages,
+      latestUserInput: options.latestUserInput ?? options.messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (!options.model) {
     throw new Error('Codi chat requires a local model.');
   }
@@ -114,11 +138,11 @@ export function getAgentDisplayName({
   activeGhcpModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher') {
+  if (provider === 'researcher' || provider === 'debugger') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : (activeCodiModelName ?? 'Codi');
-    return `${RESEARCHER_LABEL}: ${modelName}`;
+    return `${provider === 'researcher' ? RESEARCHER_LABEL : DEBUGGER_LABEL}: ${modelName}`;
   }
   return provider === 'ghcp'
     ? `${GHCP_LABEL}: ${activeGhcpModelName ?? 'Copilot'}`
@@ -141,6 +165,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCodiModelsReady)
       ? 'Ask Researcher…'
       : 'Sign in to GHCP or install a Codi model to research';
+  }
+  if (provider === 'debugger') {
+    return (hasGhcpModelsReady || hasCodiModelsReady)
+      ? 'Ask Debugger…'
+      : 'Sign in to GHCP or install a Codi model to debug';
   }
   return hasCodiModelsReady ? 'Ask Codi…' : 'Install a Codi model to start chatting';
 }
@@ -167,6 +196,14 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Researcher models`
       : 'Researcher needs GHCP or Codi';
   }
+  if (provider === 'debugger') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Debugger models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Debugger models`
+      : 'Debugger needs GHCP or Codi';
+  }
   return `${installedModels.length} Codi models ready`;
 }
 
@@ -177,7 +214,8 @@ export function resolveAgentProviderForTask({
   selectedProvider: AgentProvider;
   latestUserInput: string;
 }): AgentProvider {
-  return isResearchTaskText(latestUserInput) ? 'researcher' : selectedProvider;
+  if (isResearchTaskText(latestUserInput)) return 'researcher';
+  return isDebuggingTaskText(latestUserInput) ? 'debugger' : selectedProvider;
 }
 
 export function resolveRuntimeAgentProvider({
@@ -189,7 +227,7 @@ export function resolveRuntimeAgentProvider({
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   return hasCodiModelsReady ? 'codi' : 'ghcp';
 }
