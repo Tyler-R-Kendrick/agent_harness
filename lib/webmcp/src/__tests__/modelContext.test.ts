@@ -300,6 +300,45 @@ describe('ModelContext', () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
+  it('preserves tool failures when an invocation is not aborted', async () => {
+    const modelContext = new ModelContext();
+    const toolError = new Error('tool failed');
+
+    modelContext.registerTool({
+      name: 'fail',
+      description: 'fail',
+      execute: async () => {
+        throw toolError;
+      },
+    });
+
+    await expect(invokeModelContextTool(modelContext, 'fail', {}, new ModelContextClient())).rejects.toBe(toolError);
+  });
+
+  it('keeps abort as the rejection reason when an aborted invocation later fails', async () => {
+    const modelContext = new ModelContext();
+    const controller = new AbortController();
+    let rejectTool: ((reason: Error) => void) | undefined;
+
+    modelContext.registerTool({
+      name: 'abort-before-failure',
+      description: 'abort before failure',
+      execute: () =>
+        new Promise<string>((_, reject) => {
+          rejectTool = reject;
+        }),
+    });
+
+    const pending = invokeModelContextTool(modelContext, 'abort-before-failure', {}, new ModelContextClient(), {
+      signal: controller.signal,
+    });
+
+    controller.abort();
+    rejectTool?.(new Error('tool failed after cancellation'));
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('supports default and custom user interaction handlers', async () => {
     const defaultClient = new ModelContextClient();
     const customHandler = vi.fn(async <T,>(callback: () => T | Promise<T>) => callback());
