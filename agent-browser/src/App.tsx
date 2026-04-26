@@ -74,6 +74,7 @@ import {
   getAgentProviderSummary,
   getDefaultAgentProvider,
   resolveAgentProviderForTask,
+  buildDebuggerToolInstructions,
   buildResearcherToolInstructions,
   hasCodiModels,
   hasGhcpAccess,
@@ -1520,7 +1521,7 @@ function ChatPanel({
     Boolean(parseSandboxPrompt(input))
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
-    || (selectedProvider === 'researcher' && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || Boolean(activeLocalModel)
     ))
@@ -1841,7 +1842,7 @@ function ChatPanel({
     }
 
     if (runtimeProviderForRequest === 'codi' && !activeLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -1864,8 +1865,8 @@ function ChatPanel({
       };
       let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
         ? [createInitialLocalReasoningStep(
-          providerForRequest === 'researcher' ? 'Planning research run' : 'Planning tool run',
-          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : 'Codi is deciding how to use local tools and delegate work.',
+          providerForRequest === 'researcher' ? 'Planning research run' : providerForRequest === 'debugger' ? 'Planning debugging run' : 'Planning tool run',
+          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : providerForRequest === 'debugger' ? 'Debugger is deciding how to inspect symptoms, hypotheses, and evidence.' : 'Codi is deciding how to use local tools and delegate work.',
         )]
         : [];
       let delegationVoterSteps: VoterStep[] = [];
@@ -1898,8 +1899,8 @@ function ChatPanel({
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
-        agentId: providerForRequest === 'researcher' ? 'researcher' : 'tool-agent',
-        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : 'Tool Agent',
+        agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : 'tool-agent',
+        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : 'Tool Agent',
         modelId: runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
         modelProvider: providerForRequest,
       });
@@ -2749,6 +2750,13 @@ function ChatPanel({
             descriptors: selectedDescriptors,
             selectedToolIds,
           })
+          : providerForRequest === 'debugger'
+            ? buildDebuggerToolInstructions({
+              workspaceName,
+              workspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+            })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
@@ -3204,8 +3212,8 @@ function ChatPanel({
     let thinkingStart = 0;
     let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
       ? [createInitialLocalReasoningStep(
-        providerForRequest === 'researcher' ? 'Analyzing research request' : 'Analyzing request',
-        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+        providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : 'Analyzing request',
+        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
       )]
       : [];
     let voterSteps: VoterStep[] = [];
@@ -3227,13 +3235,13 @@ function ChatPanel({
       switch (phase) {
         case 'thinking':
           return {
-            title: providerForRequest === 'researcher' ? 'Analyzing research request' : 'Analyzing request',
-            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+            title: providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : 'Analyzing request',
+            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
           };
         case 'generating':
           return {
-            title: providerForRequest === 'researcher' ? 'Drafting research response' : 'Drafting response',
-            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : 'Codi is composing the local response.',
+            title: providerForRequest === 'researcher' ? 'Drafting research response' : providerForRequest === 'debugger' ? 'Drafting debugging response' : 'Drafting response',
+            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : providerForRequest === 'debugger' ? 'Debugger is composing the diagnosis, mitigation, and verification steps.' : 'Codi is composing the local response.',
           };
         default:
           return {
@@ -3520,6 +3528,8 @@ function ChatPanel({
             content: resolvedContent ? '' : (
               providerForRequest === 'researcher'
                 ? 'Researcher returned an empty response.'
+                : providerForRequest === 'debugger'
+                  ? 'Debugger returned an empty response.'
                 : runtimeProviderForRequest === 'ghcp'
                   ? 'GHCP returned an empty response.'
                   : 'Codi returned an empty response.'
@@ -3783,6 +3793,7 @@ function ChatPanel({
                     <option value="codi">Codi</option>
                     <option value="ghcp">GHCP</option>
                     <option value="researcher">Researcher</option>
+                    <option value="debugger">Debugger</option>
                   </select>
                 </label>
                 {selectedRuntimeProvider === 'ghcp'
@@ -3929,7 +3940,7 @@ function ChatPanel({
                 ? (!hasAvailableCopilotModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
-                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -5399,7 +5410,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher', 'debugger'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (

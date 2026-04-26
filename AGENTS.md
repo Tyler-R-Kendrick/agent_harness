@@ -3,6 +3,9 @@
 ## git usage
 
 Always use `git mv` to rename/move files.
+When running inside Codex Windows sandbox or automation sessions, prefer `scripts/codex-git.ps1` over bare `git` so the current worktree is passed through `safe.directory`.
+When a task needs `gh` in those same sessions, prefer `scripts/codex-gh.ps1` over bare `gh`. It initializes `CODEX_HOME`, seeds a readable GitHub CLI config under `$CODEX_HOME/gh-cli`, and sets `GH_CONFIG_DIR` before invoking the CLI.
+Do not assume `$env:CODEX_HOME` is already set in automation shells. If you need automation memory paths or GitHub CLI state, initialize the repo environment first with `scripts/codex-shell-init.ps1` or use the wrappers above.
 
 ## agent-skills
 
