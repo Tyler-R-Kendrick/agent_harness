@@ -56,8 +56,11 @@ describe('workspaceTools', () => {
         .map(({ name, readOnlyHint }) => ({ name, readOnlyHint }))
         .sort((left, right) => left.name.localeCompare(right.name)),
     ).toEqual([
+      { name: 'elicit_user_input', readOnlyHint: false },
       { name: 'list_filesystem_entries', readOnlyHint: true },
+      { name: 'read_browser_location', readOnlyHint: true },
       { name: 'read_filesystem_properties', readOnlyHint: true },
+      { name: 'recall_user_context', readOnlyHint: true },
     ]);
     expect(getModelContextRegistry(modelContext).has('list_tools')).toBe(false);
     expect(getModelContextRegistry(modelContext).has('list_resources')).toBe(false);

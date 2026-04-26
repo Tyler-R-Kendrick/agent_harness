@@ -28,14 +28,44 @@ export enum PayloadType {
 
 // ----- Concrete payload shapes -----------------------------------
 
+export type AgentBusActorRole =
+  | 'user'
+  | 'chat-agent'
+  | 'planner'
+  | 'router'
+  | 'orchestrator'
+  | 'tool-agent'
+  | 'driver'
+  | 'voter'
+  | 'decider'
+  | 'executor'
+  | 'completion-checker'
+  | 'policy'
+  | string;
+
+export type AgentBusPayloadMeta = {
+  actorId?: string;
+  actorRole?: AgentBusActorRole;
+  parentActorId?: string;
+  branchId?: string;
+  agentLabel?: string;
+  modelId?: string;
+  modelProvider?: string;
+  toolPolicy?: unknown;
+  rubric?: unknown;
+  passIndex?: number;
+};
+
 export type InfInPayload = {
   type: PayloadType.InfIn;
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type InfOutPayload = {
   type: PayloadType.InfOut;
   text: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type IntentPayload = {
@@ -44,6 +74,7 @@ export type IntentPayload = {
   intentId: string;
   /** The action code / description as emitted by the Driver. */
   action: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type VotePayload = {
@@ -60,17 +91,20 @@ export type VotePayload = {
    * VoterStep.thought so operators can audit voter reasoning.
    */
   thought?: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type CommitPayload = {
   type: PayloadType.Commit;
   intentId: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type AbortPayload = {
   type: PayloadType.Abort;
   intentId: string;
   reason?: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type ResultPayload = {
@@ -78,6 +112,7 @@ export type ResultPayload = {
   intentId: string;
   output: string;
   error?: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type CompletionScore = 'invalid' | 'low' | 'med' | 'med-high' | 'high';
@@ -88,12 +123,14 @@ export type CompletionPayload = {
   done: boolean;
   score?: CompletionScore;
   feedback?: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type MailPayload = {
   type: PayloadType.Mail;
   from: string;
   content: string;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type PolicyPayload = {
@@ -101,6 +138,7 @@ export type PolicyPayload = {
   /** Which policy domain this update targets (e.g. 'quorum', 'voter:<id>'). */
   target: string;
   value: unknown;
+  meta?: AgentBusPayloadMeta;
 };
 
 export type Payload =

@@ -22,6 +22,17 @@ const getSandboxFeatureFlagsMock = vi.fn(() => ({
 const createSandboxExecutionServiceMock = vi.fn();
 const buildRunSummaryInputMock = vi.fn();
 
+const flushAsyncUpdates = async (cycles = 25) => {
+  await act(async () => {
+    for (let index = 0; index < cycles; index += 1) {
+      await Promise.resolve();
+      if (vi.isFakeTimers()) {
+        vi.advanceTimersByTime(0);
+      }
+    }
+  });
+};
+
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
@@ -204,9 +215,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
   };
@@ -282,7 +291,7 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
-  it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace sub-groups', async () => {
+  it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context sub-groups', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
@@ -312,7 +321,7 @@ describe('App', () => {
 
     // All six surface sub-groups must appear inside the Built-In bucket —
     // not as separate top-level groups. Each must have a toggle-all checkbox.
-    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Workspace']) {
+    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Workspace', 'User Context']) {
       expect(
         screen.getByRole('checkbox', { name: `Toggle all ${subGroupLabel} tools` }),
         `Expected sub-group "${subGroupLabel}" inside Built-In, not as a separate top-level group`,
@@ -320,6 +329,62 @@ describe('App', () => {
     }
 
     fireEvent.keyDown(document, { key: 'Escape' });
+  });
+
+  it('renders an MCP elicitation card, submits the answer, and stores location in app memory', async () => {
+    vi.useFakeTimers();
+    const getCurrentPosition = vi.fn((_success: PositionCallback, error: PositionErrorCallback) => {
+      error({ code: 1, message: 'denied', PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 } as GeolocationPositionError);
+    });
+    Object.defineProperty(navigator, 'geolocation', {
+      value: { getCurrentPosition },
+      configurable: true,
+    });
+
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    const webmcpTool = createWebMcpTool(modelContext!);
+    await expect(webmcpTool.execute?.({
+      tool: 'recall_user_context',
+      args: { query: 'location' },
+    }, {} as never)).resolves.toEqual({ status: 'empty', query: 'location', memories: [] });
+    await expect(webmcpTool.execute?.({ tool: 'read_browser_location' }, {} as never)).resolves.toEqual({
+      status: 'denied',
+      reason: 'Browser location permission was denied.',
+    });
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'elicit_user_input',
+        args: {
+          prompt: 'What city or neighborhood should I use to list restaurants near you?',
+          fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
+        },
+      }, {} as never);
+    });
+
+    expect(screen.getByText('What city or neighborhood should I use to list restaurants near you?')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('City or neighborhood'), { target: { value: 'Chicago, IL' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit requested info' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Location: Chicago, IL')).toBeInTheDocument();
+    const stored = JSON.parse(window.localStorage.getItem('agent-browser:user-context-memory:v1') ?? '{}');
+    expect(stored.Research).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'location',
+        label: 'Location',
+        value: 'Chicago, IL',
+        source: 'workspace-memory',
+      }),
+    ]));
   });
 
   it('renders Files as a compute surface and mounts workspace directories as drives', async () => {
@@ -477,9 +542,7 @@ describe('App', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Files' })[0]);
     fireEvent.click(screen.getByRole('button', { name: '//session-1-fs' }));
     fireEvent.click(screen.getByRole('button', { name: 'workspace' }));
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
 
     const workspaceFolderRow = screen.getAllByRole('treeitem').find((row) =>
       row.textContent?.trim() === 'workspace' && row.querySelector('[data-icon="folder"], [data-icon="folderOpen"]'),
@@ -1223,6 +1286,40 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Refresh status' })).not.toBeInTheDocument();
   });
 
+  it('manages custom LogAct evaluation agents from settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /LogAct evaluation agents/i }));
+
+    fireEvent.change(screen.getByLabelText('Evaluation agent name'), { target: { value: 'Accessibility Teacher' } });
+    fireEvent.change(screen.getByLabelText('Evaluation agent instructions'), { target: { value: 'Steer candidates toward accessible UI.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save evaluation agent' }));
+
+    expect(screen.getByText('Accessibility Teacher')).toBeInTheDocument();
+    expect(window.localStorage.getItem('agent-browser:evaluation-agents:ws-research')).toContain('Accessibility Teacher');
+
+    fireEvent.click(screen.getByRole('button', { name: /Disable Accessibility Teacher/i }));
+    expect(screen.getByRole('button', { name: /Enable Accessibility Teacher/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export evaluation agents JSON' }));
+    const jsonField = screen.getByLabelText('Evaluation agents JSON') as HTMLTextAreaElement;
+    expect(jsonField.value).toContain('Accessibility Teacher');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset evaluation agents' }));
+    expect(screen.queryByText('Accessibility Teacher')).not.toBeInTheDocument();
+
+    fireEvent.change(jsonField, { target: { value: '[{"id":"judge-evals","kind":"judge","name":"Eval Judge","instructions":"Score with evals.","enabled":true,"rubricCriteria":["tests pass"]}]' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Import evaluation agents JSON' }));
+    expect(screen.getByText('Eval Judge')).toBeInTheDocument();
+  });
+
   it('defaults to GHCP when it is the only ready agent', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
@@ -1447,8 +1544,10 @@ describe('App', () => {
   it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
     vi.useFakeTimers();
     let activeSignal: AbortSignal | undefined;
+    let emitLateToken: ((token: string) => void) | undefined;
     generateMock.mockImplementation(async (_input, callbacks, signal?: AbortSignal) => {
       activeSignal = signal;
+      emitLateToken = callbacks.onToken;
       callbacks.onPhase?.('thinking');
       callbacks.onToken?.('Partial draft');
       return new Promise<void>((resolve, reject) => {
@@ -1509,6 +1608,14 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
     expect(screen.getByText('Stopped')).toBeInTheDocument();
     expect(screen.queryByText('Generation stopped.')).not.toBeInTheDocument();
+
+    act(() => {
+      emitLateToken?.('Late stream token');
+    });
+
+    expect(screen.queryByText('Late stream token')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Working/i)).not.toBeInTheDocument();
+    expect(document.querySelector('.stream-cursor')).not.toBeInTheDocument();
   });
 
   it('queues omnibar searches in the composer without auto-sending them', async () => {
@@ -2037,13 +2144,12 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use tools to solve this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
+    await flushAsyncUpdates();
+
+    expect(screen.getByRole('button', { name: /Planning tool run|Routing request/i })).toBeInTheDocument();
+
     await act(async () => {
       await Promise.resolve();
-    });
-
-    expect(screen.getByRole('button', { name: /Routing request/i })).toBeInTheDocument();
-
-    await act(async () => {
       resolveRun();
       await Promise.resolve();
     });
@@ -2088,17 +2194,15 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use tools to solve this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
 
     // Open the activity panel so we can read the streamed body.
-    const planningPill = screen.getByRole('button', { name: /Routing request/i });
+    const planningPill = screen.getByRole('button', { name: /Planning tool run|Routing request/i });
     fireEvent.click(planningPill);
 
     // Drill into the router pg-row to see the streamed transcript.
     const routerRow = screen.getAllByRole('button').find(
-      (row) => row.className.includes('pg-row') && /Routing request/.test(row.textContent ?? ''),
+      (row) => row.className.includes('pg-row') && /Planning tool run|Routing request/.test(row.textContent ?? ''),
     );
     expect(routerRow).toBeDefined();
     fireEvent.click(routerRow!);
@@ -2139,6 +2243,8 @@ describe('App', () => {
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use tools to solve this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await flushAsyncUpdates();
 
     await act(async () => {
       vi.advanceTimersByTime(180_001);
@@ -2186,6 +2292,8 @@ describe('App', () => {
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Keep streaming.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await flushAsyncUpdates();
 
     // Drip stage tokens every 15 seconds to keep the idle timer reset well
     // inside the 3 minute threshold without producing the timeout error.
@@ -2238,6 +2346,8 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Keep planning until streamed output stops.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
+    await flushAsyncUpdates();
+
     await act(async () => {
       vi.advanceTimersByTime(179_999);
       await Promise.resolve();
@@ -2286,6 +2396,8 @@ describe('App', () => {
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Choose the right tool groups.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await flushAsyncUpdates();
 
     await act(async () => {
       vi.advanceTimersByTime(119_999);
@@ -2339,7 +2451,7 @@ describe('App', () => {
       return new Promise(() => {});
     });
 
-    render(<App />);
+    const { container } = render(<App />);
 
     await act(async () => {
       vi.advanceTimersByTime(350);
@@ -2358,14 +2470,14 @@ describe('App', () => {
     });
 
     const activityTrigger = screen.queryByRole('button', { name: /Thought for|Process ·|Working…/i })
-      ?? screen.getByRole('button', { name: /Coordinator brief|AgentBus log/i });
+      ?? screen.getByRole('button', { name: /Coordinator brief|Mail|InfIn/i });
     fireEvent.click(activityTrigger);
 
-    const agentBusWorkflowCard = screen.getAllByRole('button', { name: /AgentBus log/i })
+    expect(container.querySelector('.pg-row[data-actor="agent-bus"]')).not.toBeInTheDocument();
+    const busWorkflowCard = screen.getAllByRole('button', { name: /InfIn · 2 message/i })
       .find((button) => button.className.includes('pg-row'));
-
-    expect(agentBusWorkflowCard).toBeDefined();
-    expect(agentBusWorkflowCard).not.toHaveTextContent(/Budget/i);
+    expect(busWorkflowCard).toBeDefined();
+    expect(busWorkflowCard).not.toHaveTextContent(/Budget/i);
 
     await act(async () => {
       vi.advanceTimersByTime(60_001);
@@ -2533,6 +2645,18 @@ describe('App', () => {
     }]);
 
     runParallelDelegationWorkflowMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStepStart?.('chat-agent', 'Chat agent', 'Receive the user prompt and delegate planning.');
+      callbacks.onAgentHandoff?.('chat-agent', 'planner', 'Agent handoff: classify and decompose the request.');
+      callbacks.onStepComplete?.('chat-agent', 'Delegated to planner.');
+      callbacks.onStepStart?.('planner', 'Planner', 'Classify, decompose, and prepare delegation.');
+      callbacks.onAgentHandoff?.('planner', 'orchestrator', 'Agent handoff: pass succinct tasks to the orchestrator.');
+      callbacks.onStepComplete?.('planner', 'Prepared succinct tasks.');
+      callbacks.onStepStart?.('orchestrator', 'Orchestrator', 'Choose the registered agents needed for the plan.');
+      callbacks.onAgentHandoff?.('orchestrator', 'tool-agent', 'Agent handoff: ask tool-agent to assign active tools.');
+      callbacks.onStepComplete?.('orchestrator', 'Selected registered agents.');
+      callbacks.onStepStart?.('tool-agent', 'Tool agent', 'Assign active workspace tools to the selected agents.');
+      callbacks.onAgentHandoff?.('tool-agent', 'logact', 'Agent handoff: submit the executable plan to LogAct.');
+      callbacks.onStepComplete?.('tool-agent', 'Assigned active tools.');
       callbacks.onStepStart?.('coordinator', 'Coordinator brief', 'Frame the delegated problem.');
       callbacks.onStepStart?.('breakdown-agent', 'Breakdown subagent', 'Split the work into parallel tracks.');
       callbacks.onStepStart?.('assignment-agent', 'Assignment subagent', 'Assign owners for each track.');
@@ -2630,7 +2754,7 @@ describe('App', () => {
       return { text: finalText, steps: 4 };
     });
 
-    render(<App />);
+    const { container } = render(<App />);
 
     await act(async () => {
       vi.advanceTimersByTime(350);
@@ -2660,8 +2784,13 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /Breakdown subagent/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Assignment subagent/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Validation subagent/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Agent handoff ·/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reviewer votes/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /AgentBus log/i })).toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="agent-bus"]')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mail · user/i })).toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="planner"]')).toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="orchestrator"]')).toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="tool-agent"]')).toBeInTheDocument();
     const breakdownRow = screen.getByRole('button', { name: /Breakdown subagent/i });
     expect(breakdownRow.querySelector('[data-connector="fork"][data-lane="breakdown-agent"]')).toBeInTheDocument();
     expect(breakdownRow.querySelector('[data-connector="merge"][data-lane="breakdown-agent"]')).toBeInTheDocument();
@@ -2741,7 +2870,7 @@ describe('App', () => {
     // InfIn (bus-1). Anything else means branch priority is back.
     const orderedRows = screen.getAllByRole('button').filter((button) => {
       const label = button.textContent ?? '';
-      return /Coordinator brief|Mail|InfIn|AgentBus log/.test(label);
+      return /Coordinator brief|Mail|InfIn/.test(label);
     });
     const summaries = orderedRows.map((button) => button.textContent ?? '');
     const mailIndex = summaries.findIndex((label) => /Mail/.test(label));
@@ -2755,9 +2884,7 @@ describe('App', () => {
     const infInRow = orderedRows[infInIndex];
     const infInFork = infInRow.querySelector('[data-connector="fork"][data-lane="bus"]') as HTMLElement | null;
     expect(infInFork).toBeInTheDocument();
-    expect(infInFork?.style.left).toBe('21px');
-    expect(infInFork?.style.width).toBe('14px');
-    expect(infInRow.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
+    expect(infInRow.querySelector('.pg-rail-lane[data-lane="mail:user"]')).not.toBeInTheDocument();
   });
 
   it('surfaces tool-agent activity in the activity panel for local Codi runs with tools enabled', async () => {
@@ -2794,18 +2921,401 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Search the workspace.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
 
     expect(screen.getByTestId('tool-chip-grep')).toBeInTheDocument();
 
-    const pill = screen.getByRole('button', { name: /Thought for|Process ·|Working…/i });
+    const pill = screen.getByRole('button', { name: /Planning tool run|Thought for|Process ·|Working…/i });
     fireEvent.click(pill);
 
     expect(screen.getByRole('complementary', { name: /Activity panel|Process graph/i })).toBeInTheDocument();
     expect(screen.getAllByText('grep').length).toBeGreaterThan(0);
     expect(screen.getByText('Found matches')).toBeInTheDocument();
+  });
+
+  it('renders dynamic LogAct actor rows without resurrecting the CodeMode planning branch', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('chat-agent', 'Receiving prompt.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onAgentHandoff?.('chat-agent', 'orchestrator', 'Agent handoff: classify, decompose, and select registered agents.');
+      callbacks.onStageComplete?.('chat-agent', 'Delegated to orchestrator.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onStageStart?.('orchestrator', 'Configuring actors.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onAgentHandoff?.('orchestrator', 'logact', 'Agent handoff: submit workflow to LogAct.');
+      callbacks.onStageComplete?.('orchestrator', 'Selected dynamic LogAct actors.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onStageStart?.('logact', 'LogAct actor workflow.', { agentId: 'logact', agentLabel: 'LogAct Pipeline' });
+      callbacks.onBusEntry?.({
+        id: 'tool-policy-entry',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Policy',
+        summary: 'Tool policy',
+        detail: 'tool-agent selected cli and assigned executor tools',
+        actorId: 'tool-agent',
+        actorRole: 'driver',
+        parentActorId: 'logact',
+        branchId: 'agent:tool-agent',
+      });
+      callbacks.onBusEntry?.({
+        id: 'student-entry',
+        position: 1,
+        realtimeTs: Date.now(),
+        payloadType: 'InfOut',
+        summary: 'Student candidate',
+        detail: 'student drafted a solution candidate',
+        actorId: 'student-driver',
+        actorRole: 'driver',
+        parentActorId: 'logact',
+        branchId: 'agent:student-driver',
+      });
+      callbacks.onBusEntry?.({
+        id: 'teacher-entry',
+        position: 2,
+        realtimeTs: Date.now(),
+        payloadType: 'Vote',
+        summary: 'Teacher vote',
+        detail: 'teacher approved the student candidate',
+        actor: 'voter:teacher',
+        actorId: 'voter:teacher',
+        actorRole: 'voter',
+        parentActorId: 'judge-decider',
+        branchId: 'agent:judge-decider',
+      });
+      callbacks.onBusEntry?.({
+        id: 'judge-entry',
+        position: 3,
+        realtimeTs: Date.now(),
+        payloadType: 'Commit',
+        summary: 'Judge commit',
+        detail: 'judge selected the student candidate',
+        actorId: 'judge-decider',
+        actorRole: 'decider',
+        parentActorId: 'logact',
+        branchId: 'agent:judge-decider',
+      });
+      callbacks.onStageStart?.('executor', 'Executing committed LogAct plan.', { agentId: 'executor', agentLabel: 'Executor Agent' });
+      callbacks.onBusEntry?.({
+        id: 'execute-plan-entry',
+        position: 4,
+        realtimeTs: Date.now(),
+        payloadType: 'Intent',
+        summary: 'Execute plan',
+        detail: 'executor accepted the committed plan',
+        actorId: 'execute-plan',
+        actorRole: 'executor',
+        parentActorId: 'executor',
+        branchId: 'agent:executor',
+      });
+      callbacks.onBusEntry?.({
+        id: 'executor-entry',
+        position: 5,
+        realtimeTs: Date.now(),
+        payloadType: 'Result',
+        summary: 'Executor result',
+        detail: 'executor completed the committed action',
+        actorId: 'executor',
+        actorRole: 'executor',
+        parentActorId: 'execute-plan',
+        branchId: 'agent:executor',
+      });
+      callbacks.onStageComplete?.('logact', 'LogAct completed.', { agentId: 'logact', agentLabel: 'LogAct Pipeline' });
+      callbacks.onDone?.('Tool run completed.');
+      return { text: 'Tool run completed.', steps: 1 };
+    });
+
+    const { container } = render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Search the workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await flushAsyncUpdates();
+
+    fireEvent.click(screen.getByRole('button', { name: /Planning tool run|LogAct pipeline|Tool agent|Executing tools|Thought for|Process ·|Working…/i }));
+
+    expect(container.querySelector('.pg-row[data-actor="tools:CodeMode"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="handoff"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="agent-bus"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="logact"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="planner"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="router-agent"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="router"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="voter-ensemble"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="teacher-voter"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="executor-agent"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="group-select"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="tool-select"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="tool-agent"]')).toHaveTextContent('Tool policy');
+    expect(container.querySelector('.pg-row[data-actor="student-driver"]')).toHaveTextContent('Student candidate');
+    expect(container.querySelector('.pg-row[data-actor="voter:teacher"]')).toHaveTextContent('Teacher vote');
+    expect(container.querySelector('.pg-row[data-actor="judge-decider"]')).toHaveTextContent('Judge commit');
+    const executorRows = Array.from(container.querySelectorAll('.pg-row[data-actor="executor"]'));
+    expect(executorRows.some((row) => row.textContent?.includes('Executor result'))).toBe(true);
+  });
+
+  it('renders staged tool workflow agent handoff as target agent nodes and closes planning branches before execution', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('chat-agent', 'Receiving prompt.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onAgentHandoff?.('chat-agent', 'orchestrator', 'Agent handoff: classify, decompose, and select registered agents.');
+      callbacks.onStageComplete?.('chat-agent', 'Delegated to orchestrator.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onStageStart?.('orchestrator', 'Selected registered agents.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onAgentHandoff?.('orchestrator', 'logact', 'Agent handoff: submit workflow to LogAct.');
+      callbacks.onStageComplete?.('orchestrator', 'Selected LogAct actors and executor.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onStageStart?.('logact', 'Reviewing with LogAct.', { agentId: 'logact', agentLabel: 'LogAct Pipeline' });
+      callbacks.onBusEntry?.({
+        id: 'tool-policy',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Policy',
+        summary: 'Tool policy',
+        detail: 'tool-agent selected cli and assigned executor tools',
+        actorId: 'tool-agent',
+        actorRole: 'driver',
+        parentActorId: 'logact',
+        branchId: 'agent:tool-agent',
+      });
+      callbacks.onBusEntry?.({
+        id: 'tool-agent-complete',
+        position: 1,
+        realtimeTs: Date.now(),
+        payloadType: 'Completion',
+        summary: 'Tools selected',
+        detail: 'tool-agent selected tools and returned policy',
+        actorId: 'tools-selected',
+        actorRole: 'operation',
+        parentActorId: 'tool-agent',
+        branchId: 'agent:logact',
+      });
+      callbacks.onBusEntry?.({
+        id: 'student-entry',
+        position: 2,
+        realtimeTs: Date.now(),
+        payloadType: 'Intent',
+        summary: 'Student candidate',
+        detail: 'student drafted a solution candidate',
+        actorId: 'student-driver',
+        actorRole: 'driver',
+        parentActorId: 'logact',
+        branchId: 'agent:student-driver',
+      });
+      callbacks.onBusEntry?.({
+        id: 'judge-rubric',
+        position: 3,
+        realtimeTs: Date.now(),
+        payloadType: 'Policy',
+        summary: 'Judge rubric',
+        detail: 'judge opened the scoring context',
+        actorId: 'judge-decider',
+        actorRole: 'decider',
+        parentActorId: 'logact',
+        branchId: 'agent:judge-decider',
+      });
+      callbacks.onBusEntry?.({
+        id: 'adversary-entry',
+        position: 4,
+        realtimeTs: Date.now(),
+        payloadType: 'Intent',
+        summary: 'Adversary attempt',
+        detail: 'adversary tried to exploit the rubric',
+        actorId: 'adversary-driver',
+        actorRole: 'driver',
+        parentActorId: 'judge-decider',
+        branchId: 'agent:adversary-driver',
+      });
+      callbacks.onBusEntry?.({
+        id: 'teacher-entry',
+        position: 5,
+        realtimeTs: Date.now(),
+        payloadType: 'Vote',
+        summary: 'Teacher vote',
+        detail: 'teacher approved the student candidate',
+        actor: 'voter:teacher',
+        actorId: 'voter:teacher',
+        actorRole: 'voter',
+        parentActorId: 'judge-decider',
+        branchId: 'agent:judge-decider',
+      });
+      callbacks.onBusEntry?.({
+        id: 'judge-entry',
+        position: 6,
+        realtimeTs: Date.now(),
+        payloadType: 'Commit',
+        summary: 'Judge commit',
+        detail: 'judge selected the student candidate',
+        actorId: 'judge-decider',
+        actorRole: 'decider',
+        parentActorId: 'logact',
+        branchId: 'agent:judge-decider',
+      });
+      callbacks.onBusEntry?.({
+        id: 'judge-approved',
+        position: 7,
+        realtimeTs: Date.now(),
+        payloadType: 'Completion',
+        summary: 'Judge approved',
+        detail: 'judge approved the operation on the AgentBus',
+        actorId: 'judge-approved',
+        actorRole: 'operation',
+        parentActorId: 'judge-decider',
+        branchId: 'agent:logact',
+      });
+      callbacks.onAgentHandoff?.('logact', 'executor', 'Agent handoff: execute committed intent.');
+      callbacks.onStageStart?.('executor', 'Executing committed LogAct plan.', { agentId: 'executor', agentLabel: 'Executor Agent' });
+      callbacks.onBusEntry?.({
+        id: 'execute-plan',
+        position: 8,
+        realtimeTs: Date.now(),
+        payloadType: 'Intent',
+        summary: 'Execute plan',
+        detail: 'executor accepted the committed plan',
+        actorId: 'execute-plan',
+        actorRole: 'executor',
+        parentActorId: 'executor',
+        branchId: 'agent:executor',
+      });
+      callbacks.onBusEntry?.({
+        id: 'bus-result',
+        position: 9,
+        realtimeTs: Date.now(),
+        payloadType: 'Result',
+        summary: 'Result · intent-1',
+        detail: 'Tool run completed.',
+        actorId: 'executor',
+        actorRole: 'executor',
+        parentActorId: 'execute-plan',
+        branchId: 'agent:executor',
+      });
+      callbacks.onBusEntry?.({
+        id: 'logact-executor-complete',
+        position: 10,
+        realtimeTs: Date.now(),
+        payloadType: 'Completion',
+        summary: 'Execution complete',
+        detail: 'executor merged back after completing the execution plan',
+        actorId: 'execution-complete',
+        actorRole: 'operation',
+        parentActorId: 'executor',
+        branchId: 'agent:logact',
+      });
+      callbacks.onBusEntry?.({
+        id: 'logact-complete',
+        position: 11,
+        realtimeTs: Date.now(),
+        payloadType: 'Completion',
+        summary: 'Workflow complete',
+        detail: 'workflow merged back to main after execution',
+        actorId: 'workflow-complete',
+        actorRole: 'operation',
+        parentActorId: 'execution-complete',
+        branchId: 'main',
+      });
+      callbacks.onStageComplete?.('executor', 'Tool run completed.', { agentId: 'executor', agentLabel: 'Executor Agent' });
+      callbacks.onStageComplete?.('logact', 'LogAct completed.', { agentId: 'logact', agentLabel: 'LogAct Pipeline' });
+      callbacks.onDone?.('Tool run completed.');
+      return { text: 'Tool run completed.', steps: 1 };
+    });
+
+    const { container } = render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Search the workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await flushAsyncUpdates();
+
+    fireEvent.click(screen.getByRole('button', { name: /Planning tool run|LogAct pipeline|Tool agent|Executing tools|Thought for|Process ·|Working…/i }));
+
+    expect(container.querySelector('.pg-row[data-actor="chat-agent"]')).toHaveTextContent('Chat agent');
+    expect(container.querySelector('.pg-row[data-actor="orchestrator"]')).toHaveTextContent('Orchestrator');
+    expect(container.querySelector('.pg-row[data-actor="tool-agent"]')).toHaveTextContent('Tool policy');
+    expect(container.querySelector('.pg-row[data-actor="handoff"]')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Agent handoff ·/i })).not.toBeInTheDocument();
+    ['planner', 'router-agent', 'router', 'group-select', 'tool-select', 'voter-ensemble', 'teacher-voter', 'executor-agent'].forEach((actor) => {
+      expect(container.querySelector(`.pg-row[data-actor="${actor}"]`)).not.toBeInTheDocument();
+    });
+
+    const orchestratorRow = container.querySelector('.pg-row[data-actor="orchestrator"]');
+    const toolAgentRow = container.querySelector('.pg-row[data-actor="tool-agent"]');
+    const groupSelectRow = container.querySelector('.pg-row[data-actor="group-select"]');
+    const toolSelectRow = container.querySelector('.pg-row[data-actor="tool-select"]');
+    const toolsSelectedRow = container.querySelector('.pg-row[data-actor="tools-selected"][data-branch="agent:logact"]');
+    const executorRow = container.querySelector('.pg-row[data-actor="executor"][data-branch="agent:executor"]');
+    const executePlanRow = container.querySelector('.pg-row[data-actor="execute-plan"]');
+    const teacherRow = container.querySelector('.pg-row[data-actor="voter:teacher"]');
+    const judgeRows = Array.from(container.querySelectorAll('.pg-row[data-actor="judge-decider"]'));
+    const executionCompleteRow = Array.from(container.querySelectorAll('.pg-row[data-actor="execution-complete"][data-branch="agent:logact"]'))
+      .find((row) => row.textContent?.includes('Execution complete'));
+    const workflowCompleteRow = Array.from(container.querySelectorAll('.pg-row[data-actor="workflow-complete"][data-branch="main"]'))
+      .find((row) => row.textContent?.includes('Workflow complete'));
+
+    expect(orchestratorRow?.querySelector('[data-connector="fork"][data-lane="agent:orchestrator"]')).toBeInTheDocument();
+    expect(toolAgentRow?.querySelector('[data-connector="fork"][data-lane="agent:tool-agent"]')).toBeInTheDocument();
+    expect(groupSelectRow).not.toBeInTheDocument();
+    expect(toolSelectRow).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="logact"]')).not.toBeInTheDocument();
+    expect(toolsSelectedRow?.querySelector('[data-connector="fork"][data-lane="agent:logact"]')).toBeInTheDocument();
+    ['agent:orchestrator'].forEach((lane) => {
+      expect(toolsSelectedRow?.querySelector(`.pg-rail-lane[data-lane="${lane}"]`)).not.toHaveClass('pg-rail-lane-active');
+    });
+
+    const expectedMergedLanes = ['agent:orchestrator', 'agent:tool-agent', 'agent:executor', 'agent:logact'];
+    const missingMergedLanes = expectedMergedLanes.filter((lane) => (
+      !container.querySelector(`[data-connector="merge"][data-lane="${lane}"]`)
+    ));
+    expect(missingMergedLanes).toEqual([]);
+
+    ['agent:orchestrator', 'agent:tool-agent'].forEach((lane) => {
+      expect(executorRow?.querySelector(`[data-lane="${lane}"]`)).not.toHaveClass('pg-rail-lane-active');
+    });
+    expect(container.querySelector('.pg-row[data-actor="student-driver"]')).toHaveTextContent('Student candidate');
+    expect(container.querySelector('.pg-row[data-actor="adversary-driver"]')).toHaveTextContent('Adversary attempt');
+    expect(teacherRow).toHaveTextContent('Teacher vote');
+    expect(judgeRows.some((row) => (
+      row.textContent?.includes('Judge commit')
+    ))).toBe(true);
+    expect(teacherRow).toHaveAttribute('data-branch', 'agent:judge-decider');
+    expect(judgeRows.at(-1)).toHaveAttribute('data-branch', 'agent:judge-decider');
+    expect(executorRow?.querySelector('[data-connector="fork"][data-lane="agent:executor"]')).toBeInTheDocument();
+    expect(executePlanRow).toHaveAttribute('data-branch', 'agent:executor');
+    expect(executionCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:executor"]')).toBeInTheDocument();
+    expect(workflowCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:logact"]')).toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="voter:planner-decomposition"]')).not.toBeInTheDocument();
+    expect(container.querySelector('.pg-row[data-actor="agent-bus"]')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Result · intent-1/i })).toBeInTheDocument();
   });
 
   it('parents staged bus and model-turn graph rows to the open branch context', async () => {
@@ -2822,13 +3332,21 @@ describe('App', () => {
       status: 'available',
     }]);
     runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
-      callbacks.onStageStart?.('router', '');
-      callbacks.onStageComplete?.('router', 'Route to tools.');
+      callbacks.onStageStart?.('chat-agent', '', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onAgentHandoff?.('chat-agent', 'orchestrator', 'Agent handoff: classify and select agents.');
+      callbacks.onStageComplete?.('chat-agent', 'Delegated to orchestrator.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onStageStart?.('orchestrator', '', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onAgentHandoff?.('orchestrator', 'tool-agent', 'Agent handoff: assign tools.');
+      callbacks.onStageComplete?.('orchestrator', 'Selected tool-agent.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onStageStart?.('tool-agent', '', { agentId: 'tool-agent', agentLabel: 'Tool Agent' });
       callbacks.onStageStart?.('group-select', '');
       callbacks.onStageComplete?.('group-select', 'Use local tools.');
       callbacks.onStageStart?.('tool-select', '');
       callbacks.onStageComplete?.('tool-select', 'Selected Browser.');
-      callbacks.onStageStart?.('executor', '');
+      callbacks.onAgentHandoff?.('tool-select', 'logact', 'Agent handoff: submit workflow to LogAct.');
+      callbacks.onStageStart?.('logact', '', { agentId: 'logact', agentLabel: 'LogAct Pipeline' });
+      callbacks.onAgentHandoff?.('logact', 'executor', 'Agent handoff: execute committed intent.');
+      callbacks.onStageStart?.('executor', '', { agentId: 'executor', agentLabel: 'Executor Agent' });
       callbacks.onBusEntry?.({
         id: 'bus-0',
         position: 0,
@@ -2865,27 +3383,20 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Search the workspace.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
 
-    fireEvent.click(screen.getByRole('button', { name: /Thought for|Process ·|Working…/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Planning tool run|Thought for|Process ·|Working…/i }));
 
     const busRow = container.querySelector('.pg-row[data-actor="bus"]');
     const turnRows = Array.from(container.querySelectorAll('.pg-row[data-actor="executor"]'));
     const turnRow = turnRows.find((row) => row.textContent?.includes('Ready to call the tool.'));
     const busFork = busRow?.querySelector('[data-connector="fork"][data-lane="bus"]') as HTMLElement | null;
-    const turnFork = turnRow?.querySelector('[data-connector="fork"][data-lane="executor"]') as HTMLElement | null;
 
+    expect(container.querySelector('.pg-row[data-actor="logact"]')).not.toBeInTheDocument();
     expect(busFork).toBeInTheDocument();
-    expect(busFork?.style.left).toBe('21px');
-    expect(busFork?.style.width).toBe('14px');
-    expect(turnFork).toBeInTheDocument();
-    expect(turnFork?.style.left).toBe('35px');
-    expect(turnFork?.style.width).toBe('14px');
-    expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
-    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).toHaveClass('pg-rail-lane-active');
-    expect(turnRow?.querySelector('[data-connector="merge"][data-lane="bus"]')).toBeInTheDocument();
+    expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).not.toHaveClass('pg-rail-lane-active');
+    expect(turnRow).toHaveAttribute('data-branch', 'agent:executor');
+    expect(turnRow?.querySelector('[data-connector="fork"][data-lane="agent:executor"]')).not.toBeInTheDocument();
   });
 
   it('runs the flag-gated sandbox chat command and summarizes persisted files', async () => {

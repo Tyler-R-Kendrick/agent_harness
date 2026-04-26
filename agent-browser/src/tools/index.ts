@@ -12,7 +12,8 @@ export type ToolGroup =
   | 'browser-worktree-mcp'
   | 'sessions-worktree-mcp'
   | 'files-worktree-mcp'
-  | 'clipboard-worktree-mcp';
+  | 'clipboard-worktree-mcp'
+  | 'user-context-mcp';
 
 export interface ToolDescriptor {
   id: string;
@@ -41,6 +42,7 @@ const TOOL_GROUP_DESCRIPTIONS: Readonly<Record<ToolGroup, string>> = {
   'sessions-worktree-mcp': 'Session management, agent switching, and conversation control tools.',
   'files-worktree-mcp': 'Workspace and session filesystem tools for reading and editing files.',
   'clipboard-worktree-mcp': 'Clipboard inspection and restore tools.',
+  'user-context-mcp': 'User context tools for app memory, browser location, and eliciting missing data.',
 };
 
 export const DEFAULT_TOOL_DESCRIPTORS: ToolDescriptor[] = [

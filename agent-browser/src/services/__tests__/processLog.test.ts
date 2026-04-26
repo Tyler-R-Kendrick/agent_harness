@@ -40,6 +40,9 @@ describe('ProcessLog', () => {
       agentLabel: 'Tool Agent',
       modelId: 'test-model',
       modelProvider: 'local',
+      actorId: 'tool-agent',
+      actorRole: 'tool-agent',
+      parentActorId: 'orchestrator',
     });
     expect(entry.status).toBe('active');
     expect(entry.transcript).toBe('tokens');
@@ -52,6 +55,9 @@ describe('ProcessLog', () => {
     expect(entry.agentLabel).toBe('Tool Agent');
     expect(entry.modelId).toBe('test-model');
     expect(entry.modelProvider).toBe('local');
+    expect(entry.actorId).toBe('tool-agent');
+    expect(entry.actorRole).toBe('tool-agent');
+    expect(entry.parentActorId).toBe('orchestrator');
   });
 
   it('updates existing entries in place and stamps endedAt on done', () => {
@@ -154,6 +160,34 @@ describe('entryToProcessAppend', () => {
     expect(intent.kind).toBe('intent');
     expect(intent.summary).toBe('Intent · i1');
     expect(intent.transcript).toBe('do thing');
+  });
+
+  it('uses LogAct actor metadata when translating AgentBus entries', () => {
+    const append = entryToProcessAppend(
+      buildEntry({
+        type: PayloadType.Intent,
+        intentId: 'student-1',
+        action: 'candidate solution',
+        meta: {
+          actorId: 'student-driver',
+          actorRole: 'driver',
+          parentActorId: 'logact',
+          branchId: 'agent:student-driver',
+          agentLabel: 'Student Driver',
+        },
+      }),
+    );
+
+    expect(append).toMatchObject({
+      kind: 'intent',
+      actor: 'student-driver',
+      actorId: 'student-driver',
+      actorRole: 'driver',
+      parentActorId: 'logact',
+      branchId: 'agent:student-driver',
+      agentId: 'student-driver',
+      agentLabel: 'Student Driver',
+    });
   });
 
   it('uses singular wording for one-message InfIn', () => {

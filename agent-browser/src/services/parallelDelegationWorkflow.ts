@@ -6,8 +6,8 @@ import { buildDelegationWorkerPrompt } from './agentPromptTemplates';
 import { fitTextToTokenBudget } from './promptBudget';
 import type { ModelCapabilities } from './agentProvider';
 import { createHeuristicCompletionChecker } from 'ralph-loop';
-import { ClassicVoter, InMemoryAgentBus, PayloadType } from 'logact';
-import type { Entry, IVoter } from 'logact';
+import { InMemoryAgentBus, PayloadType } from 'logact';
+import type { AgentBusPayloadMeta, Entry, VotePayload } from 'logact';
 import type { BusEntryStep, VoterStep } from '../types';
 import { createObservedBus, summarisePayload } from './observedAgentBus';
 import { runStagedToolPipeline, type StagedToolPipelineCallbacks } from './stagedToolPipeline';
@@ -21,12 +21,22 @@ type StreamableModel = {
   doStream?: (options: unknown) => Promise<{ stream: ReadableStream<LanguageModelV3StreamPart> }>;
 };
 
-export type ParallelDelegationStepId = 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent';
+export type ParallelDelegationStepId =
+  | 'chat-agent'
+  | 'planner'
+  | 'router-agent'
+  | 'coordinator'
+  | 'breakdown-agent'
+  | 'assignment-agent'
+  | 'validation-agent'
+  | 'orchestrator'
+  | 'tool-agent';
 
 export type ParallelDelegationCallbacks = {
   onStepStart?: (stepId: ParallelDelegationStepId, title: string, body: string) => void;
   onStepToken?: (stepId: ParallelDelegationStepId, delta: string) => void;
   onStepComplete?: (stepId: ParallelDelegationStepId, text: string) => void;
+  onAgentHandoff?: (fromAgentId: string, toAgentId: string, summary: string) => void;
   /** Voter ensemble lifecycle, mirrors stagedToolPipeline. */
   onVoterStep?: (step: VoterStep) => void;
   onVoterStepUpdate?: (id: string, patch: Partial<VoterStep>) => void;
@@ -58,7 +68,6 @@ export type ParallelDelegationExecutionOptions = {
   toolDescriptors: ToolDescriptor[];
   instructions: string;
   messages: ModelMessage[];
-  voters?: IVoter[];
   maxIterations?: number;
   maxTaskConcurrency?: number;
   writePlanFile?: (path: string, content: string) => Promise<unknown> | unknown;
@@ -83,16 +92,22 @@ type SectionKey = 'problem' | 'breakdown' | 'assignment' | 'validation';
 type DelegationPlanResult = {
   problemBrief: string;
   coordinatorProblem: string;
-  outputs: Record<Exclude<ParallelDelegationStepId, 'coordinator'>, string>;
-  votes: DelegationVote[];
-  busEntries: Entry[];
+  outputs: Record<DelegationOutputStepId, string>;
   steps: number;
 };
+
+type DelegationOutputStepId = 'breakdown-agent' | 'assignment-agent' | 'validation-agent';
 
 type ExecutedTaskResult = {
   task: PlannedTask;
   text: string;
   validationFeedback: string;
+};
+
+type DelegationLogActOutcome = {
+  decision: 'commit' | 'abort';
+  votes: DelegationVote[];
+  busEntries: Entry[];
 };
 
 export const DELEGATION_SECTION_MARKERS: Record<SectionKey, string> = {
@@ -102,7 +117,7 @@ export const DELEGATION_SECTION_MARKERS: Record<SectionKey, string> = {
   validation: '===VALIDATION===',
 };
 
-const SECTION_TO_STEP: Record<Exclude<SectionKey, 'problem'>, Exclude<ParallelDelegationStepId, 'coordinator'>> = {
+const SECTION_TO_STEP: Record<Exclude<SectionKey, 'problem'>, DelegationOutputStepId> = {
   breakdown: 'breakdown-agent',
   assignment: 'assignment-agent',
   validation: 'validation-agent',
@@ -346,7 +361,7 @@ export function isParallelDelegationPrompt(prompt: string): boolean {
  * Gates the parallel delegation pipeline so it only runs when the active
  * model can realistically drive the multi-stage flow. Local models (e.g.
  * Qwen3-0.6B-ONNX) repeatedly stall the per-stage watchdogs and produce
- * outputs that fail the strict sectioned-plan voters, so we fall back to
+ * outputs that fail the strict sectioned-plan rubric, so we fall back to
  * the simpler staged tool pipeline + chat path for them.
  */
 export function shouldRunParallelDelegation(
@@ -454,114 +469,270 @@ export function parseDelegationAssignmentContracts(text: string): DelegationAssi
     });
 }
 
-function buildDelegationVoters() {
-  return [
-    new ClassicVoter(
-      'breakdown-distinct-tracks',
-      (action) => {
-        try {
-          const sections = JSON.parse(action) as DelegationSections;
-          return bulletCount(sections.breakdown) >= 2;
-        } catch {
-          return false;
-        }
-      },
-      'breakdown subagent did not emit at least two distinct parallel tracks',
-      (_action, approve) => approve
-        ? 'Confirmed the breakdown subagent emitted at least two distinct parallel tracks.'
-        : 'The breakdown subagent did not emit at least two distinct parallel tracks; the plan cannot be parallelized.',
-    ),
-    new ClassicVoter(
-      'assignment-has-roles',
-      (action) => {
-        try {
-          const sections = JSON.parse(action) as DelegationSections;
-          return assignmentsCoverBreakdownTracks(sections.breakdown, sections.assignment);
-        } catch {
-          return false;
-        }
-      },
-      'assignment subagent did not map each emitted track to an explicit role or owner',
-      (_action, approve) => approve
-        ? 'Each track has an explicit role or owner with a stated handoff.'
-        : 'The assignment subagent did not map each emitted track to an explicit role or owner with a stated handoff.',
-    ),
-    new ClassicVoter(
-      'validation-not-restatement',
-      (action) => {
-        try {
-          const sections = JSON.parse(action) as DelegationSections;
-          if (!sections.validation.trim()) return false;
-          const validation = sections.validation.toLowerCase();
-          const breakdown = sections.breakdown.toLowerCase();
-          if (breakdown && validation === breakdown) return false;
-          return /(check|verify|risk|test|ensure|validate|confirm)/i.test(sections.validation);
-        } catch {
-          return false;
-        }
-      },
-      'validation subagent did not emit distinct verification checks or risks',
-      (_action, approve) => approve
-        ? 'Validation includes verification language distinct from the work bullets.'
-        : 'Validation either restates the breakdown or omits explicit verification language.',
-    ),
-  ];
+type DelegationRubricScore = {
+  criterion: string;
+  approve: boolean;
+  reason: string;
+};
+
+type DelegationRubricResult = {
+  approve: boolean;
+  thought: string;
+  reason?: string;
+  scores: DelegationRubricScore[];
+};
+
+const DELEGATION_ACTOR_META: Record<string, AgentBusPayloadMeta> = {
+  'student-driver': {
+    actorId: 'student-driver',
+    actorRole: 'driver',
+    parentActorId: 'logact',
+    branchId: 'agent:student-driver',
+    agentLabel: 'Student Driver',
+    modelProvider: 'logact',
+  },
+  'teacher-voter': {
+    actorId: 'teacher-voter',
+    actorRole: 'voter',
+    parentActorId: 'student-driver',
+    branchId: 'agent:teacher-voter',
+    agentLabel: 'Teacher Voter',
+    modelProvider: 'logact',
+  },
+  'adversary-driver': {
+    actorId: 'adversary-driver',
+    actorRole: 'driver',
+    parentActorId: 'judge-decider',
+    branchId: 'agent:adversary-driver',
+    agentLabel: 'Adversary Driver',
+    modelProvider: 'logact',
+  },
+  'judge-decider': {
+    actorId: 'judge-decider',
+    actorRole: 'decider',
+    parentActorId: 'logact',
+    branchId: 'agent:judge-decider',
+    agentLabel: 'Judge Decider',
+    modelProvider: 'logact',
+  },
+  'executor-agent': {
+    actorId: 'executor-agent',
+    actorRole: 'executor',
+    parentActorId: 'judge-decider',
+    branchId: 'agent:executor-agent',
+    agentLabel: 'Executor Agent',
+    modelProvider: 'logact',
+  },
+};
+
+const DELEGATION_RUBRIC_CRITERIA = [
+  'breakdown contains at least two distinct parallel tracks',
+  'assignment maps every emitted track to an explicit role and handoff',
+  'validation contains checks or risks distinct from the work breakdown',
+];
+
+function validationIncludesDistinctChecks(sections: DelegationSections): boolean {
+  if (!sections.validation.trim()) return false;
+  const validation = sections.validation.toLowerCase();
+  const breakdown = sections.breakdown.toLowerCase();
+  if (breakdown && validation === breakdown) return false;
+  return /(check|verify|risk|test|ensure|validate|confirm)/i.test(sections.validation);
 }
 
-async function runDelegationVoters(
+function evaluateDelegationSections(sections: DelegationSections): DelegationRubricResult {
+  const breakdownOk = bulletCount(sections.breakdown) >= 2;
+  const assignmentOk = assignmentsCoverBreakdownTracks(sections.breakdown, sections.assignment);
+  const validationOk = validationIncludesDistinctChecks(sections);
+  const scores: DelegationRubricScore[] = [
+    {
+      criterion: DELEGATION_RUBRIC_CRITERIA[0],
+      approve: breakdownOk,
+      reason: breakdownOk
+        ? 'Student proposed at least two parallel tracks.'
+        : 'Student did not emit at least two distinct parallel tracks.',
+    },
+    {
+      criterion: DELEGATION_RUBRIC_CRITERIA[1],
+      approve: assignmentOk,
+      reason: assignmentOk
+        ? 'Each track has an explicit role or owner with a stated handoff.'
+        : 'Student did not map each emitted track to an explicit role or owner with a stated handoff.',
+    },
+    {
+      criterion: DELEGATION_RUBRIC_CRITERIA[2],
+      approve: validationOk,
+      reason: validationOk
+        ? 'Validation includes verification language distinct from the work bullets.'
+        : 'Student validation either restates the breakdown or omits explicit verification language.',
+    },
+  ];
+  const failedScore = scores.find((score) => !score.approve);
+  const thought = failedScore
+    ? `Teacher rejected the student candidate: ${failedScore.reason}`
+    : 'Teacher approved the student candidate after checking decomposition, ownership, and validation.';
+
+  return {
+    approve: !failedScore,
+    thought,
+    ...(failedScore ? { reason: failedScore.reason } : {}),
+    scores,
+  };
+}
+
+function buildStudentDelegationDesign(sections: DelegationSections): string {
+  return [
+    'Student delegation candidate',
+    `Problem: ${sections.problem}`,
+    `Breakdown:\n${sections.breakdown}`,
+    `Assignments:\n${sections.assignment}`,
+    `Validation:\n${sections.validation}`,
+  ].join('\n\n');
+}
+
+function buildAdversaryDelegationDesign(evaluation: DelegationRubricResult): string {
+  const failed = evaluation.scores.find((score) => !score.approve);
+  return failed
+    ? `Adversary attempt: exploit the rubric by claiming "${failed.criterion}" is satisfied without matching the concrete AgentBus evidence.`
+    : 'Adversary attempt: game the rubric by over-weighting role labels and ignoring whether handoffs are actually executable.';
+}
+
+async function runDelegationLogActPipeline(
   sections: DelegationSections,
   callbacks: ParallelDelegationCallbacks,
   bus: InMemoryAgentBus,
-): Promise<DelegationVote[]> {
-  const voters = buildDelegationVoters();
+  execute: (context: { votes: DelegationVote[]; busEntries: Entry[] }) => Promise<string>,
+): Promise<DelegationLogActOutcome> {
   const intentId = `delegation-${Date.now().toString(36)}`;
   const intentAction = JSON.stringify(sections);
+  const studentDesign = buildStudentDelegationDesign(sections);
+  const evaluation = evaluateDelegationSections(sections);
   const votes: DelegationVote[] = [];
-  await bus.append({ type: PayloadType.Intent, intentId, action: 'evaluate parallel-delegation plan' });
-  await Promise.all(voters.map(async (voter) => {
-    const stepId = `voter-${voter.id}-${intentId}`;
-    callbacks.onVoterStep?.({
-      id: stepId,
-      kind: 'agent',
-      title: voter.id,
-      voterId: voter.id,
-      startedAt: Date.now(),
-      status: 'active',
+
+  callbacks.onAgentHandoff?.('logact', 'student-driver', 'Agent handoff: student driver drafts the delegation candidate.');
+  await bus.append({
+    type: PayloadType.InfIn,
+    messages: [
+      { role: 'system', content: 'Student driver: draft and self-check a parallel delegation design before submitting it.' },
+      { role: 'user', content: sections.problem },
+    ],
+    meta: DELEGATION_ACTOR_META['student-driver'],
+  });
+  await bus.append({
+    type: PayloadType.InfOut,
+    text: studentDesign,
+    meta: DELEGATION_ACTOR_META['student-driver'],
+  });
+  await bus.append({
+    type: PayloadType.Intent,
+    intentId,
+    action: intentAction,
+    meta: DELEGATION_ACTOR_META['student-driver'],
+  });
+
+  callbacks.onAgentHandoff?.('student-driver', 'teacher-voter', 'Agent handoff: teacher voter steers and evaluates the student candidate.');
+  const teacherStepId = `voter-teacher-voter-${intentId}`;
+  callbacks.onVoterStep?.({
+    id: teacherStepId,
+    kind: 'agent',
+    title: 'teacher-voter',
+    voterId: 'teacher-voter',
+    startedAt: Date.now(),
+    status: 'active',
+  });
+  const teacherVote: VotePayload = {
+    type: PayloadType.Vote,
+    intentId,
+    voterId: 'teacher-voter',
+    approve: evaluation.approve,
+    ...(evaluation.reason !== undefined ? { reason: evaluation.reason } : {}),
+    thought: evaluation.thought,
+    meta: { ...DELEGATION_ACTOR_META['teacher-voter'], rubric: evaluation.scores },
+  };
+  votes.push({
+    voterId: 'teacher-voter',
+    approve: evaluation.approve,
+    thought: evaluation.thought,
+    ...(evaluation.reason !== undefined ? { reason: evaluation.reason } : {}),
+  });
+  await bus.append(teacherVote);
+  callbacks.onVoterStepUpdate?.(teacherStepId, {
+    status: 'done',
+    approve: evaluation.approve,
+    body: evaluation.approve ? 'Approved' : `Rejected${evaluation.reason ? `: ${evaluation.reason}` : ''}`,
+    thought: evaluation.thought,
+    endedAt: Date.now(),
+  });
+  callbacks.onVoterStepEnd?.(teacherStepId);
+
+  await bus.append({
+    type: PayloadType.Policy,
+    target: 'delegation-judge-rubric',
+    value: { criteria: DELEGATION_RUBRIC_CRITERIA, scores: evaluation.scores },
+    meta: { ...DELEGATION_ACTOR_META['judge-decider'], rubric: evaluation.scores },
+  });
+  callbacks.onAgentHandoff?.('judge-decider', 'adversary-driver', 'Agent handoff: adversary driver probes the delegation rubric.');
+  const adversaryIntentId = `${intentId}:adversary`;
+  const adversaryDesign = buildAdversaryDelegationDesign(evaluation);
+  await bus.append({
+    type: PayloadType.InfIn,
+    messages: [
+      { role: 'system', content: 'Adversary driver: try to subvert the judge rubric before execution can be committed.' },
+      { role: 'user', content: adversaryDesign },
+    ],
+    meta: DELEGATION_ACTOR_META['adversary-driver'],
+  });
+  await bus.append({
+    type: PayloadType.InfOut,
+    text: adversaryDesign,
+    meta: DELEGATION_ACTOR_META['adversary-driver'],
+  });
+  await bus.append({
+    type: PayloadType.Intent,
+    intentId: adversaryIntentId,
+    action: adversaryDesign,
+    meta: DELEGATION_ACTOR_META['adversary-driver'],
+  });
+
+  if (!evaluation.approve) {
+    await bus.append({
+      type: PayloadType.Abort,
+      intentId,
+      reason: evaluation.reason ?? 'teacher-voter rejected the student delegation design',
+      meta: DELEGATION_ACTOR_META['judge-decider'],
     });
-    try {
-      const vote = await voter.vote({ type: PayloadType.Intent, intentId, action: intentAction }, bus);
-      votes.push({
-        voterId: vote.voterId,
-        approve: vote.approve,
-        ...(vote.thought !== undefined ? { thought: vote.thought } : {}),
-        ...(vote.reason !== undefined ? { reason: vote.reason } : {}),
-      });
-      await bus.append(vote);
-      callbacks.onVoterStepUpdate?.(stepId, {
-        status: 'done',
-        approve: vote.approve,
-        body: vote.approve ? 'Approved' : `Rejected${vote.reason ? `: ${vote.reason}` : ''}`,
-        ...(vote.thought !== undefined ? { thought: vote.thought } : {}),
-        endedAt: Date.now(),
-      });
-      callbacks.onVoterStepEnd?.(stepId);
-    } catch (error) {
-      callbacks.onVoterStepUpdate?.(stepId, {
-        status: 'done',
-        approve: false,
-        body: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        endedAt: Date.now(),
-      });
-      votes.push({
-        voterId: voter.id,
-        approve: false,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      callbacks.onVoterStepEnd?.(stepId);
-    }
-  }));
-  await bus.append({ type: PayloadType.Commit, intentId });
-  return votes;
+    return {
+      decision: 'abort',
+      votes,
+      busEntries: await bus.read(0, await bus.tail()),
+    };
+  }
+
+  await bus.append({ type: PayloadType.Commit, intentId, meta: DELEGATION_ACTOR_META['judge-decider'] });
+  callbacks.onAgentHandoff?.('judge-decider', 'executor-agent', 'Agent handoff: committed delegation plan is ready for executor action.');
+  try {
+    const resultText = await execute({ votes, busEntries: await bus.read(0, await bus.tail()) });
+    await bus.append({
+      type: PayloadType.Result,
+      intentId,
+      output: resultText,
+      meta: DELEGATION_ACTOR_META['executor-agent'],
+    });
+    return {
+      decision: 'commit',
+      votes,
+      busEntries: await bus.read(0, await bus.tail()),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await bus.append({
+      type: PayloadType.Result,
+      intentId,
+      output: '',
+      error: message,
+      meta: DELEGATION_ACTOR_META['executor-agent'],
+    });
+    throw error;
+  }
 }
 
 
@@ -645,7 +816,7 @@ function buildTaskExecutionPrompt(args: {
   plan: TaskPlan;
   task: PlannedTask;
   coordinatorProblem: string;
-  outputs: Record<Exclude<ParallelDelegationStepId, 'coordinator'>, string>;
+  outputs: Record<DelegationOutputStepId, string>;
 }): string {
   const { plan, task, coordinatorProblem, outputs } = args;
   return [
@@ -724,7 +895,7 @@ function formatTaskResults(results: ExecutedTaskResult[]): string[] {
 
 function synthesizeDelegationExecutionReportWithProcess(args: {
   problemBrief: string;
-  outputs: Record<Exclude<ParallelDelegationStepId, 'coordinator'>, string>;
+  outputs: Record<DelegationOutputStepId, string>;
   plan: TaskPlan;
   results: ExecutedTaskResult[];
   votes: DelegationVote[];
@@ -767,7 +938,7 @@ async function executeTaskPlan(args: {
   callbacks: ParallelDelegationCallbacks;
   plan: TaskPlan;
   coordinatorProblem: string;
-  outputs: Record<Exclude<ParallelDelegationStepId, 'coordinator'>, string>;
+  outputs: Record<DelegationOutputStepId, string>;
 }): Promise<{ plan: TaskPlan; results: ExecutedTaskResult[] }> {
   const { options, callbacks, coordinatorProblem, outputs } = args;
   const execution = options.execution;
@@ -807,7 +978,6 @@ async function executeTaskPlan(args: {
             workspaceName: options.workspaceName,
             capabilities: options.capabilities,
             signal: options.signal,
-            voters: execution.voters,
             maxIterations: execution.maxIterations,
             completionChecker: {
               async check(context) {
@@ -914,7 +1084,7 @@ function formatBusLogSection(entries: Entry[]): string[] {
 
 function synthesizeDelegationReportWithProcess(
   problemBrief: string,
-  outputs: Record<Exclude<ParallelDelegationStepId, 'coordinator'>, string>,
+  outputs: Record<DelegationOutputStepId, string>,
   votes: DelegationVote[],
   busEntries: Entry[],
 ): string {
@@ -1137,13 +1307,6 @@ async function runSectionedLocalDelegation(
   callbacks.onStepComplete?.('assignment-agent', assignmentText);
   callbacks.onStepComplete?.('validation-agent', validationText);
 
-  const votes = await runDelegationVoters(
-    { problem: problemText, breakdown: breakdownText, assignment: assignmentText, validation: validationText },
-    callbacks,
-    bus,
-  );
-  const busEntries = await bus.read(0, await bus.tail());
-
   return {
     problemBrief,
     coordinatorProblem: problemText,
@@ -1152,8 +1315,6 @@ async function runSectionedLocalDelegation(
       'assignment-agent': assignmentText,
       'validation-agent': validationText,
     },
-    votes,
-    busEntries,
     steps: 4,
   };
 }
@@ -1211,13 +1372,6 @@ async function runSectionedRemoteDelegation(
   callbacks.onStepComplete?.('assignment-agent', assignmentText);
   callbacks.onStepComplete?.('validation-agent', validationText);
 
-  const votes = await runDelegationVoters(
-    { problem: coordinatorProblem, breakdown: breakdownText, assignment: assignmentText, validation: validationText },
-    callbacks,
-    bus,
-  );
-  const busEntries = await bus.read(0, await bus.tail());
-
   return {
     problemBrief: buildDelegationProblemBrief(prompt, workspaceName),
     coordinatorProblem,
@@ -1226,8 +1380,6 @@ async function runSectionedRemoteDelegation(
       'assignment-agent': assignmentText,
       'validation-agent': validationText,
     },
-    votes,
-    busEntries,
     steps: 4,
   };
 }
@@ -1242,6 +1394,13 @@ export async function runParallelDelegationWorkflow(
     const compactBudget = estimatePromptBudget(capabilities);
     const problemBrief = fitTextToTokenBudget(buildDelegationProblemBrief(prompt, workspaceName), compactBudget);
     const bus = createObservedBus(callbacks.onBusEntry);
+    const hasExecutionRuntime = canExecuteDelegationTasks(options.execution);
+
+    callbacks.onStepStart?.('chat-agent', 'Chat agent', 'Receiving the user prompt and delegating planning.');
+    callbacks.onStepComplete?.('chat-agent', prompt);
+    callbacks.onAgentHandoff?.('chat-agent', 'planner', 'Agent handoff: classify the prompt and decompose it into delegated work.');
+
+    callbacks.onStepStart?.('planner', 'Planner', 'Classifying the prompt, decomposing the task, and preparing delegation.');
 
     let planResult: DelegationPlanResult;
 
@@ -1270,37 +1429,104 @@ export async function runParallelDelegationWorkflow(
       planResult = await runSectionedRemoteDelegation(options, callbacks, coordinatorProblem, compactBudget, bus);
     }
 
-    if (!canExecuteDelegationTasks(options.execution)) {
-      const text = synthesizeDelegationReportWithProcess(
+    const sections: DelegationSections = {
+      problem: planResult.coordinatorProblem,
+      breakdown: planResult.outputs['breakdown-agent'],
+      assignment: planResult.outputs['assignment-agent'],
+      validation: planResult.outputs['validation-agent'],
+    };
+    callbacks.onStepComplete?.('planner', [
+      planResult.coordinatorProblem,
+      planResult.outputs['breakdown-agent'],
+      planResult.outputs['assignment-agent'],
+      planResult.outputs['validation-agent'],
+    ].join('\n\n'));
+    callbacks.onAgentHandoff?.('planner', 'router-agent', 'Agent handoff: classify succinct tasks before orchestration.');
+
+    callbacks.onStepStart?.('router-agent', 'Router agent', 'Classifying the delegation plan against the registered agent workflow.');
+    callbacks.onStepComplete?.('router-agent', 'Routed the classified delegation plan to the orchestrator for actor selection.');
+    callbacks.onAgentHandoff?.('router-agent', 'orchestrator', 'Agent handoff: pass routed tasks and delegation constraints to the orchestrator.');
+
+    callbacks.onStepStart?.('orchestrator', 'Orchestrator', 'Reviewing registered agents and selecting the execution workflow.');
+    const registeredAgents = [
+      'chat-agent',
+      'planner',
+      'router-agent',
+      'orchestrator',
+      'tool-agent',
+      'student-driver',
+      'teacher-voter',
+      'adversary-driver',
+      'judge-decider',
+      'executor-agent',
+    ];
+    callbacks.onStepComplete?.(
+      'orchestrator',
+      `Registered agents: ${registeredAgents.join(', ')}. ${hasExecutionRuntime ? 'Execution runtime is available.' : 'No executable tool runtime is active.'}`,
+    );
+    callbacks.onAgentHandoff?.('orchestrator', 'tool-agent', 'Agent handoff: assign active workspace tools to the selected agents.');
+
+    callbacks.onStepStart?.('tool-agent', 'Tool agent', 'Inspecting active workspace tools and preparing execution assignments.');
+    let initialPlan: TaskPlan | undefined;
+    if (hasExecutionRuntime) {
+      initialPlan = await buildExecutableTaskPlan(options, planResult.coordinatorProblem, compactBudget);
+      callbacks.onStepComplete?.('tool-agent', renderPlanMarkdown(initialPlan));
+    } else {
+      callbacks.onStepComplete?.('tool-agent', 'No active execution tools were selected; submitting the delegation plan itself to LogAct.');
+    }
+    callbacks.onAgentHandoff?.('tool-agent', 'logact', 'Agent handoff: submit the prepared execution workflow to the LogAct AgentBus.');
+
+    let executed: { plan: TaskPlan; results: ExecutedTaskResult[] } | undefined;
+    const logactOutcome = await runDelegationLogActPipeline(
+      sections,
+      callbacks,
+      bus,
+      async ({ votes, busEntries }) => {
+        if (!hasExecutionRuntime || !initialPlan) {
+          return synthesizeDelegationReportWithProcess(
+            planResult.problemBrief,
+            planResult.outputs,
+            votes,
+            busEntries,
+          );
+        }
+
+        executed = await executeTaskPlan({
+          options,
+          callbacks,
+          plan: initialPlan,
+          coordinatorProblem: planResult.coordinatorProblem,
+          outputs: planResult.outputs,
+        });
+
+        return synthesizeDelegationExecutionReportWithProcess({
+          problemBrief: planResult.problemBrief,
+          outputs: planResult.outputs,
+          plan: executed.plan,
+          results: executed.results,
+          votes,
+          busEntries,
+        });
+      },
+    );
+
+    const text = executed && logactOutcome.decision === 'commit'
+      ? synthesizeDelegationExecutionReportWithProcess({
+        problemBrief: planResult.problemBrief,
+        outputs: planResult.outputs,
+        plan: executed.plan,
+        results: executed.results,
+        votes: logactOutcome.votes,
+        busEntries: logactOutcome.busEntries,
+      })
+      : synthesizeDelegationReportWithProcess(
         planResult.problemBrief,
         planResult.outputs,
-        planResult.votes,
-        planResult.busEntries,
+        logactOutcome.votes,
+        logactOutcome.busEntries,
       );
-      await bus.append({ type: PayloadType.Result, intentId: 'delegation', output: text });
-      callbacks.onDone?.(text);
-      return { text, steps: planResult.steps };
-    }
-
-    const initialPlan = await buildExecutableTaskPlan(options, planResult.coordinatorProblem, compactBudget);
-    const { plan, results } = await executeTaskPlan({
-      options,
-      callbacks,
-      plan: initialPlan,
-      coordinatorProblem: planResult.coordinatorProblem,
-      outputs: planResult.outputs,
-    });
-    const text = synthesizeDelegationExecutionReportWithProcess({
-      problemBrief: planResult.problemBrief,
-      outputs: planResult.outputs,
-      plan,
-      results,
-      votes: planResult.votes,
-      busEntries: planResult.busEntries,
-    });
-    await bus.append({ type: PayloadType.Result, intentId: 'delegation', output: text });
     callbacks.onDone?.(text);
-    return { text, steps: planResult.steps + results.length };
+    return { text, steps: planResult.steps + (executed?.results.length ?? 0) };
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error(String(error));
     callbacks.onError?.(normalized);

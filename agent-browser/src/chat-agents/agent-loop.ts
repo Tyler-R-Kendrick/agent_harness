@@ -2,6 +2,7 @@ import { InMemoryAgentBus, LogActAgent, QuorumPolicy } from 'logact';
 import type {
   IAgentBus,
   ICompletionChecker,
+  IExecutor,
   IInferenceClient,
   IVoter,
   IntentPayload,
@@ -20,6 +21,7 @@ export type AgentLoopOptions = {
   maxIterations?: number;
   quorumPolicy?: QuorumPolicy;
   completionChecker?: ICompletionChecker;
+  executor?: IExecutor;
 };
 
 export function wrapVoterWithCallbacks(
@@ -125,6 +127,7 @@ export async function runAgentLoop(
     maxIterations,
     quorumPolicy = voters.length > 0 ? QuorumPolicy.BooleanAnd : QuorumPolicy.OnByDefault,
     completionChecker,
+    executor,
   }: AgentLoopOptions,
   callbacks: Pick<AgentStreamCallbacks,
     'onVoterStep'
@@ -139,6 +142,7 @@ export async function runAgentLoop(
     bus,
     inferenceClient,
     voters: voters.map((voter) => wrapVoterWithCallbacks(voter, callbacks)),
+    ...(executor ? { executor } : {}),
     completionChecker: completionChecker
       ? wrapCompletionCheckerWithCallbacks(completionChecker, callbacks)
       : undefined,

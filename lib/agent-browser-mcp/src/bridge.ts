@@ -63,6 +63,10 @@ const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGro
   list_clipboard_history: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
   read_clipboard_entry: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
   restore_clipboard_entry: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
+  // User context
+  recall_user_context: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
+  read_browser_location: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
+  elicit_user_input: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
   // Renderer viewport panes
   list_render_panes: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
   close_render_pane: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },

@@ -179,6 +179,52 @@ export interface WorkspaceMcpClipboardEntry {
   isActive: boolean;
 }
 
+export interface WorkspaceMcpUserContextMemory {
+  id: string;
+  label: string;
+  value: string;
+  source: 'workspace-memory' | 'session-memory';
+  updatedAt: string;
+}
+
+export interface WorkspaceMcpUserContextMemoryResult {
+  status: 'found' | 'empty';
+  query?: string;
+  memories: readonly WorkspaceMcpUserContextMemory[];
+}
+
+export type WorkspaceMcpBrowserLocationResult =
+  | {
+    status: 'available';
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+  }
+  | {
+    status: 'denied' | 'unavailable';
+    reason: string;
+  };
+
+export interface WorkspaceMcpElicitationField {
+  id: string;
+  label: string;
+  required?: boolean;
+  placeholder?: string;
+}
+
+export interface WorkspaceMcpElicitationRequest {
+  prompt: string;
+  reason?: string;
+  fields: readonly WorkspaceMcpElicitationField[];
+}
+
+export interface WorkspaceMcpElicitationResult {
+  status: 'needs_user_input';
+  requestId: string;
+  prompt: string;
+  fields: readonly WorkspaceMcpElicitationField[];
+}
+
 export interface WorkspaceMcpWriteSessionInput {
   sessionId: string;
   name?: string;
@@ -201,6 +247,14 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   clipboardEntries?: readonly WorkspaceMcpClipboardEntry[];
   getSessionState?: (sessionId: string) => WorkspaceMcpSessionState | null | undefined;
   getBrowserPageHistory?: (pageId: string) => WorkspaceMcpBrowserPageHistory | null | undefined;
+  getUserContextMemory?: (input: {
+    query?: string;
+    limit: number;
+  }) => Promise<WorkspaceMcpUserContextMemoryResult> | WorkspaceMcpUserContextMemoryResult;
+  getBrowserLocation?: () => Promise<WorkspaceMcpBrowserLocationResult> | WorkspaceMcpBrowserLocationResult;
+  onElicitUserInput?: (
+    input: WorkspaceMcpElicitationRequest
+  ) => Promise<WorkspaceMcpElicitationResult> | WorkspaceMcpElicitationResult;
   sessionFsEntries?: readonly WorkspaceMcpSessionFsEntry[];
   worktreeItems?: readonly WorkspaceMcpWorktreeItem[];
   onCreateBrowserPage?: (input: { url: string; title?: string }) => Promise<WorkspaceMcpBrowserPage | void> | WorkspaceMcpBrowserPage | void;

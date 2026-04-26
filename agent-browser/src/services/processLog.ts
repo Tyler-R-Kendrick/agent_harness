@@ -8,7 +8,7 @@
  * log and renders it as a minimal git-graph timeline.
  */
 
-import type { Entry, Payload } from 'logact';
+import type { AgentBusPayloadMeta, Entry, Payload } from 'logact';
 import { PayloadType } from 'logact';
 
 export type ProcessEntryStatus = 'active' | 'done' | 'failed';
@@ -26,6 +26,7 @@ export type ProcessEntryKind =
   | 'tool-call'
   | 'tool-result'
   | 'subagent'
+  | 'handoff'
   | 'mail'
   | 'inf-in'
   | 'inf-out'
@@ -48,6 +49,12 @@ export interface ProcessEntry {
   kind: ProcessEntryKind;
   /** Originating actor id (e.g. 'coordinator', 'breakdown-agent', 'voter:foo'). */
   actor: string;
+  /** LogAct actor id when this row comes from a deconstructed state-machine actor. */
+  actorId?: string;
+  /** LogAct actor role (Driver, Voter, Decider, Executor, etc.). */
+  actorRole?: string;
+  /** Parent LogAct actor id for branch/lifeline rendering. */
+  parentActorId?: string;
   /** Stable id of the agent responsible for this row, when known. */
   agentId?: string;
   /** Compact human label for the responsible agent. */
@@ -80,6 +87,9 @@ export interface ProcessLogAppendInput {
   id: string;
   kind: ProcessEntryKind;
   actor: string;
+  actorId?: string;
+  actorRole?: string;
+  parentActorId?: string;
   agentId?: string;
   agentLabel?: string;
   modelId?: string;
@@ -99,6 +109,7 @@ export type ProcessLogPatch = Partial<
     ProcessEntry,
     'summary' | 'transcript' | 'payload' | 'status' | 'endedAt' | 'timeoutMs' | 'kind'
     | 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'
+    | 'actorId' | 'actorRole' | 'parentActorId'
   >
 >;
 
@@ -119,6 +130,9 @@ export class ProcessLog {
       ts: input.ts ?? Date.now(),
       kind: input.kind,
       actor: input.actor,
+      ...(input.actorId !== undefined ? { actorId: input.actorId } : {}),
+      ...(input.actorRole !== undefined ? { actorRole: input.actorRole } : {}),
+      ...(input.parentActorId !== undefined ? { parentActorId: input.parentActorId } : {}),
       ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
       ...(input.agentLabel !== undefined ? { agentLabel: input.agentLabel } : {}),
       ...(input.modelId !== undefined ? { modelId: input.modelId } : {}),
@@ -184,17 +198,30 @@ export class ProcessLog {
  */
 export function entryToProcessAppend(entry: Entry): ProcessLogAppendInput {
   const { kind, actor, summary, transcript } = describePayload(entry.payload);
+  const meta = actorMeta(entry.payload);
+  const actorId = meta?.actorId;
   return {
     id: `bus-${entry.position}`,
     kind,
-    actor,
+    actor: actorId ?? actor,
+    ...(actorId !== undefined ? { actorId } : {}),
+    ...(meta?.actorRole !== undefined ? { actorRole: meta.actorRole } : {}),
+    ...(meta?.parentActorId !== undefined ? { parentActorId: meta.parentActorId } : {}),
+    ...(actorId !== undefined ? { agentId: actorId } : {}),
+    ...(meta?.agentLabel !== undefined ? { agentLabel: meta.agentLabel } : {}),
+    ...(meta?.modelId !== undefined ? { modelId: meta.modelId } : {}),
+    ...(meta?.modelProvider !== undefined ? { modelProvider: meta.modelProvider } : {}),
     summary,
     payload: entry.payload,
     ...(transcript !== undefined ? { transcript } : {}),
     ts: entry.realtimeTs,
-    branchId: 'bus',
+    branchId: meta?.branchId ?? 'bus',
     status: 'done',
   };
+}
+
+function actorMeta(payload: Payload): AgentBusPayloadMeta | undefined {
+  return 'meta' in payload ? payload.meta : undefined;
 }
 
 interface PayloadDescription {
