@@ -87,6 +87,29 @@ describe('frameRpc', () => {
       ).rejects.toThrow(RemoteRPCError);
     });
 
+    it('uses default remote error details when response omits them', async () => {
+      const channel: CrossOriginFrameChannel = {
+        targetOrigin: 'https://other.com',
+        send: vi.fn().mockResolvedValue({
+          rpc: 'in-app-playwright',
+          id: 'test-unknown',
+          ok: false,
+        } satisfies FrameRPCResponse),
+      };
+
+      await expect(
+        sendFrameAction(
+          channel,
+          { steps: [] },
+          { type: 'click' },
+          1000,
+        ),
+      ).rejects.toMatchObject({
+        code: 'REMOTE_RPC_ERROR',
+        message: expect.stringContaining('UNKNOWN'),
+      });
+    });
+
     it('throws RemoteRPCTimeoutError on timeout', async () => {
       const channel: CrossOriginFrameChannel = {
         targetOrigin: 'https://other.com',
@@ -153,6 +176,42 @@ describe('frameRpc', () => {
       expect(executeAction).toHaveBeenCalledOnce();
     });
 
+    it('handles locator-query RPC from wildcard origin', async () => {
+      const executeAction = vi.fn();
+      const executeQuery = vi.fn().mockResolvedValue({ text: 'ready' });
+      const mockWindow = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+
+      installFrameRPCHandler(
+        ['*'],
+        { executeAction, executeQuery },
+        mockWindow as unknown as Window,
+      );
+
+      const handler = (mockWindow.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const postMessage = vi.fn();
+      await handler({
+        origin: 'https://parent.com',
+        data: {
+          rpc: 'in-app-playwright',
+          id: 'test-rpc-query',
+          kind: 'locator-query',
+          plan: { steps: [] },
+          query: { type: 'textContent' },
+        } satisfies FrameRPCRequest,
+        source: { postMessage } as unknown as Window,
+      });
+
+      expect(executeQuery).toHaveBeenCalledOnce();
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'test-rpc-query',
+          ok: true,
+          result: { text: 'ready' },
+        }),
+        { targetOrigin: 'https://parent.com' },
+      );
+    });
+
     it('ignores messages from disallowed origins', async () => {
       const executeAction = vi.fn();
       const mockWindow = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
@@ -171,6 +230,103 @@ describe('frameRpc', () => {
       });
 
       expect(executeAction).not.toHaveBeenCalled();
+    });
+
+    it('ignores malformed in-app RPC messages', async () => {
+      const executeAction = vi.fn();
+      const mockWindow = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+
+      installFrameRPCHandler(
+        ['*'],
+        { executeAction, executeQuery: vi.fn() },
+        mockWindow as unknown as Window,
+      );
+
+      const handler = (mockWindow.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      await handler({
+        origin: 'https://parent.com',
+        data: { rpc: 'not-in-app-playwright', id: 'x', kind: 'locator-action', plan: { steps: [] } },
+        source: { postMessage: vi.fn() },
+      });
+
+      expect(executeAction).not.toHaveBeenCalled();
+    });
+
+    it('responds with unsupported for unknown RPC kinds', async () => {
+      const mockWindow = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+
+      installFrameRPCHandler(
+        ['*'],
+        { executeAction: vi.fn(), executeQuery: vi.fn() },
+        mockWindow as unknown as Window,
+      );
+
+      const handler = (mockWindow.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const postMessage = vi.fn();
+      await handler({
+        origin: 'https://parent.com',
+        data: {
+          rpc: 'in-app-playwright',
+          id: 'test-rpc-unsupported',
+          kind: 'unknown',
+          plan: { steps: [] },
+        },
+        source: { postMessage } as unknown as Window,
+      });
+
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'test-rpc-unsupported',
+          ok: false,
+          error: expect.objectContaining({ code: 'UNSUPPORTED' }),
+        }),
+        { targetOrigin: 'https://parent.com' },
+      );
+    });
+
+    it('responds with runtime errors', async () => {
+      const mockWindow = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+
+      installFrameRPCHandler(
+        ['*'],
+        {
+          executeAction: vi.fn().mockRejectedValue(
+            Object.assign(new Error('not found'), {
+              code: 'NOT_FOUND',
+              details: { selector: 'button' },
+            }),
+          ),
+          executeQuery: vi.fn(),
+        },
+        mockWindow as unknown as Window,
+      );
+
+      const handler = (mockWindow.addEventListener as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      const postMessage = vi.fn();
+      await handler({
+        origin: 'https://parent.com',
+        data: {
+          rpc: 'in-app-playwright',
+          id: 'test-rpc-error',
+          kind: 'locator-action',
+          plan: { steps: [] },
+          action: { type: 'click' },
+        } satisfies FrameRPCRequest,
+        source: { postMessage } as unknown as Window,
+      });
+
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'test-rpc-error',
+          ok: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'not found',
+            details: { selector: 'button' },
+          },
+        }),
+        { targetOrigin: 'https://parent.com' },
+      );
     });
 
     it('returns cleanup function that removes listener', () => {
