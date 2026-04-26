@@ -1,234 +1,171 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   findEvalManifestPaths,
-  runValidation,
-  validateManifestFile,
-  validateManifestText,
+  validateEvalManifestContent,
+  validateEvalManifestFile,
+  validateRepoEvalManifests,
 } from './eval-manifest-validator.mjs';
 
-async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'eval-manifest-validator-'));
-  await run(tempDir);
+const tempDirs = [];
+
+async function makeTempDir() {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'eval-manifest-validator-'));
+  tempDirs.push(tempDir);
+  return tempDir;
 }
 
-function manifestPath(rootDir, skillName) {
-  return path.join(rootDir, 'skills', skillName, 'evals', 'evals.json');
+async function cleanupTempDirs() {
+  await Promise.all(
+    tempDirs.splice(0).map(async (tempDir) => {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }),
+  );
 }
 
-async function writeManifest(rootDir, skillName, content) {
-  const target = manifestPath(rootDir, skillName);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, content);
-  return target;
+async function writeSkillManifest(repoRoot, skillName, manifestBody, extraFiles = []) {
+  const skillRoot = path.join(repoRoot, 'skills', skillName);
+  await fs.mkdir(path.join(skillRoot, 'evals'), { recursive: true });
+  await fs.writeFile(path.join(skillRoot, 'evals', 'evals.json'), manifestBody);
+
+  for (const relativeFile of extraFiles) {
+    const targetPath = path.join(skillRoot, relativeFile);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(targetPath, 'fixture');
+  }
+
+  return path.join(skillRoot, 'evals', 'evals.json');
 }
 
-test('validateManifestText accepts files-based manifests', () => {
-  const parsed = validateManifestText(
+test('finds eval manifests while skipping ignored directories', async () => {
+  const repoRoot = await makeTempDir();
+  await writeSkillManifest(
+    repoRoot,
+    'alpha',
     JSON.stringify({
-      skill_name: 'demo-skill',
+      skill_name: 'alpha',
+      evals: [{ id: 1, prompt: 'Do alpha.', expected_output: 'Done.', files: [], expectations: ['alpha'] }],
+    }),
+  );
+  await fs.mkdir(path.join(repoRoot, 'node_modules', 'ignored', 'evals'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'node_modules', 'ignored', 'evals', 'evals.json'), '{}');
+  await fs.mkdir(path.join(repoRoot, 'skills', 'beta', 'notes'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'skills', 'beta', 'notes', 'evals.json'), '{}');
+
+  assert.deepEqual(await findEvalManifestPaths(repoRoot), [
+    path.join(repoRoot, 'skills', 'alpha', 'evals', 'evals.json'),
+  ]);
+});
+
+test('rejects malformed JSON content', () => {
+  const repoRoot = 'C:/repo';
+  const manifestPath = 'C:/repo/skills/alpha/evals/evals.json';
+  assert.throws(
+    () => validateEvalManifestContent('{"skill_name":"alpha"}\n*** Add File: leaked', manifestPath, repoRoot),
+    /Invalid JSON/,
+  );
+});
+
+test('rejects mismatched skill names', () => {
+  const repoRoot = 'C:/repo';
+  const manifestPath = 'C:/repo/skills/alpha/evals/evals.json';
+  const body = JSON.stringify({
+    skill_name: 'beta',
+    evals: [{ id: 1, prompt: 'First.', expected_output: 'Done.', files: [], expectations: ['x'] }],
+  });
+
+  assert.throws(() => validateEvalManifestContent(body, manifestPath, repoRoot), /must match the skill directory name/);
+});
+
+test('rejects duplicate ids and empty eval checks', () => {
+  const repoRoot = 'C:/repo';
+  const manifestPath = 'C:/repo/skills/alpha/evals/evals.json';
+  const body = JSON.stringify({
+    skill_name: 'alpha',
+    evals: [
+      { id: 1, prompt: 'First.', expected_output: 'Done.', files: [] },
+      { id: 1, prompt: 'Second.', expected_output: 'Done again.', files: [] },
+    ],
+  });
+
+  assert.throws(() => validateEvalManifestContent(body, manifestPath, repoRoot), /must be unique/);
+  assert.throws(() => validateEvalManifestContent(body, manifestPath, repoRoot), /must include at least one fixture path or expectation/);
+});
+
+test('rejects unsafe and duplicate file paths', () => {
+  const repoRoot = 'C:/repo';
+  const manifestPath = 'C:/repo/skills/alpha/evals/evals.json';
+  const body = JSON.stringify({
+    skill_name: 'alpha',
+    evals: [
+      {
+        id: 1,
+        prompt: 'First.',
+        expected_output: 'Done.',
+        files: ['../escape.txt', 'fixture.txt', 'fixture.txt'],
+      },
+    ],
+  });
+
+  assert.throws(() => validateEvalManifestContent(body, manifestPath, repoRoot), /must stay within the skill root/);
+  assert.throws(() => validateEvalManifestContent(body, manifestPath, repoRoot), /must be unique within the eval/);
+});
+
+test('rejects missing fixture files', async () => {
+  const repoRoot = await makeTempDir();
+  const manifestPath = await writeSkillManifest(
+    repoRoot,
+    'alpha',
+    JSON.stringify({
+      skill_name: 'alpha',
+      evals: [{ id: 1, prompt: 'Do alpha.', expected_output: 'Done.', files: ['missing.txt'] }],
+    }),
+  );
+
+  await assert.rejects(validateEvalManifestFile(manifestPath, repoRoot), /references missing file `missing.txt`/);
+});
+
+test('validates a repository of well-formed eval manifests with repo-relative files', async () => {
+  const repoRoot = await makeTempDir();
+  await fs.mkdir(path.join(repoRoot, 'shared'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'shared', 'guide.md'), 'repo fixture');
+
+  await writeSkillManifest(
+    repoRoot,
+    'alpha',
+    JSON.stringify({
+      skill_name: 'alpha',
       evals: [
         {
           id: 1,
-          prompt: 'Fix the bug.',
-          expected_output: 'A code fix.',
-          files: ['README.md'],
+          prompt: 'Do alpha.',
+          expected_output: 'Alpha done.',
+          files: ['fixtures/example.txt', 'shared/guide.md'],
+          expectations: ['Uses the checked-in fixtures.'],
         },
       ],
     }),
-    'skills/demo-skill/evals/evals.json',
+    ['fixtures/example.txt'],
   );
-
-  assert.equal(parsed.skill_name, 'demo-skill');
-  assert.equal(parsed.evals.length, 1);
-});
-
-test('validateManifestText accepts expectations-based manifests', () => {
-  const parsed = validateManifestText(
+  await writeSkillManifest(
+    repoRoot,
+    'beta',
     JSON.stringify({
-      skill_name: 'demo-skill',
-      evals: [
-        {
-          id: 1,
-          prompt: 'Explain the workflow.',
-          expected_output: 'A grounded explanation.',
-          files: [],
-          expectations: ['Mentions the deterministic validator.'],
-        },
-      ],
+      skill_name: 'beta',
+      evals: [{ id: 1, prompt: 'Do beta.', expected_output: 'Beta done.', files: [], expectations: ['Responds clearly.'] }],
     }),
-    'skills/demo-skill/evals/evals.json',
   );
 
-  assert.deepEqual(parsed.evals[0].expectations, ['Mentions the deterministic validator.']);
-});
-
-test('validateManifestText rejects malformed JSON with trailing residue', () => {
-  assert.throws(
-    () =>
-      validateManifestText(
-        '{"skill_name":"demo","evals":[]}\n*** Add File: /tmp/demo.sh',
-        'skills/demo/evals/evals.json',
-      ),
-    /invalid JSON/i,
-  );
-});
-
-test('validateManifestText rejects duplicate ids', () => {
-  assert.throws(
-    () =>
-      validateManifestText(
-        JSON.stringify({
-          skill_name: 'demo-skill',
-          evals: [
-            {
-              id: 1,
-              prompt: 'A',
-              expected_output: 'B',
-              files: ['README.md'],
-            },
-            {
-              id: 1,
-              prompt: 'C',
-              expected_output: 'D',
-              files: ['package.json'],
-            },
-          ],
-        }),
-        'skills/demo-skill/evals/evals.json',
-      ),
-    /duplicate eval id 1/i,
-  );
-});
-
-test('validateManifestText rejects entries without files or expectations', () => {
-  assert.throws(
-    () =>
-      validateManifestText(
-        JSON.stringify({
-          skill_name: 'demo-skill',
-          evals: [
-            {
-              id: 1,
-              prompt: 'A',
-              expected_output: 'B',
-              files: [],
-            },
-          ],
-        }),
-        'skills/demo-skill/evals/evals.json',
-      ),
-    /at least one file or expectation/i,
-  );
-});
-
-test('validateManifestFile resolves files relative to the skill or repo root', async () => {
-  await withTempDir(async (rootDir) => {
-    const repoFile = path.join(rootDir, 'README.md');
-    const skillFile = path.join(rootDir, 'skills', 'demo-skill', 'docs', 'guide.md');
-    await mkdir(path.dirname(skillFile), { recursive: true });
-    await writeFile(repoFile, '# repo');
-    await writeFile(skillFile, '# guide');
-    const target = await writeManifest(
-      rootDir,
-      'demo-skill',
-      JSON.stringify({
-        skill_name: 'demo-skill',
-        evals: [
-          {
-            id: 1,
-            prompt: 'A',
-            expected_output: 'B',
-            files: ['README.md', 'docs/guide.md'],
-          },
-        ],
-      }),
-    );
-
-    const previousCwd = process.cwd();
-    process.chdir(rootDir);
-    try {
-      const parsed = await validateManifestFile(target);
-      assert.equal(parsed.evals[0].files.length, 2);
-    } finally {
-      process.chdir(previousCwd);
-    }
+  assert.deepEqual(await validateRepoEvalManifests(repoRoot), {
+    manifestCount: 2,
+    evalCount: 2,
   });
 });
 
-test('validateManifestFile rejects missing files', async () => {
-  await withTempDir(async (rootDir) => {
-    const target = await writeManifest(
-      rootDir,
-      'demo-skill',
-      JSON.stringify({
-        skill_name: 'demo-skill',
-        evals: [
-          {
-            id: 1,
-            prompt: 'A',
-            expected_output: 'B',
-            files: ['missing.md'],
-          },
-        ],
-      }),
-    );
-
-    const previousCwd = process.cwd();
-    process.chdir(rootDir);
-    try {
-      await assert.rejects(() => validateManifestFile(target), /references missing file missing\.md/i);
-    } finally {
-      process.chdir(previousCwd);
-    }
-  });
-});
-
-test('findEvalManifestPaths only returns evals/evals.json manifests', async () => {
-  await withTempDir(async (rootDir) => {
-    await writeManifest(
-      rootDir,
-      'demo-a',
-      JSON.stringify({
-        skill_name: 'demo-a',
-        evals: [{ id: 1, prompt: 'A', expected_output: 'B', files: ['README.md'] }],
-      }),
-    );
-    const otherFile = path.join(rootDir, 'skills', 'demo-b', 'notes', 'evals.json');
-    await mkdir(path.dirname(otherFile), { recursive: true });
-    await writeFile(otherFile, '{}');
-
-    const manifests = await findEvalManifestPaths(path.join(rootDir, 'skills'));
-    assert.deepEqual(manifests, [manifestPath(rootDir, 'demo-a')]);
-  });
-});
-
-test('runValidation reports manifest and eval counts', async () => {
-  await withTempDir(async (rootDir) => {
-    await writeFile(path.join(rootDir, 'README.md'), '# repo');
-    await writeManifest(
-      rootDir,
-      'demo-a',
-      JSON.stringify({
-        skill_name: 'demo-a',
-        evals: [{ id: 1, prompt: 'A', expected_output: 'B', files: ['README.md'] }],
-      }),
-    );
-    await writeManifest(
-      rootDir,
-      'demo-b',
-      JSON.stringify({
-        skill_name: 'demo-b',
-        evals: [{ id: 1, prompt: 'A', expected_output: 'B', files: [], expectations: ['C'] }],
-      }),
-    );
-
-    const result = await runValidation(path.join(rootDir, 'skills'));
-    assert.deepEqual(result, { manifestCount: 2, evalCount: 2 });
-  });
+test.after(async () => {
+  await cleanupTempDirs();
 });

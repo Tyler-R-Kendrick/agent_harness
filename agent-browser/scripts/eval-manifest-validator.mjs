@@ -1,166 +1,205 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import fs from 'node:fs/promises';
 import path from 'node:path';
-import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..');
-const SKILLS_DIR = path.join(REPO_ROOT, 'skills');
-const EVALS_FILENAME = 'evals.json';
+const MANIFEST_FILENAME = 'evals.json';
+const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', '.npm-cache', 'dist', 'coverage']);
 
-function fail(message) {
-  throw new Error(message);
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
-function ensureNonEmptyString(value, label, context) {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    fail(`${context} must include a non-empty ${label}.`);
-  }
+function toDisplayPath(filePath, repoRoot) {
+  return path.relative(repoRoot, filePath).split(path.sep).join('/');
 }
 
-function ensureStringArray(value, label, context) {
-  if (!Array.isArray(value)) {
-    fail(`${context} must include a ${label} array.`);
-  }
+export async function findEvalManifestPaths(repoRoot) {
+  const manifests = [];
 
-  value.forEach((item, index) => {
-    if (typeof item !== 'string' || item.trim().length === 0) {
-      fail(`${context} ${label}[${index}] must be a non-empty string.`);
+  async function walk(currentPath) {
+    const entries = await fs.readdir(currentPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (IGNORED_DIRECTORIES.has(entry.name)) {
+        continue;
+      }
+
+      const entryPath = path.join(currentPath, entry.name);
+      if (entry.isDirectory()) {
+        await walk(entryPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name === MANIFEST_FILENAME && path.basename(path.dirname(entryPath)) === 'evals') {
+        manifests.push(entryPath);
+      }
     }
-  });
+  }
+
+  await walk(repoRoot);
+  manifests.sort((left, right) => left.localeCompare(right));
+  return manifests;
 }
 
-function resolveSkillFile(manifestPath, filePath) {
-  const skillRoot = path.resolve(path.dirname(manifestPath), '..');
-  const skillRelative = path.resolve(skillRoot, filePath);
-  const repoRelative = path.resolve(REPO_ROOT, filePath);
-  return [skillRelative, repoRelative];
-}
-
-export function validateManifestText(text, manifestPath) {
-  let parsed;
-
+export function validateEvalManifestContent(rawContent, manifestPath, repoRoot) {
+  let manifest;
   try {
-    parsed = JSON.parse(text);
+    manifest = JSON.parse(rawContent);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    fail(`${manifestPath} contains invalid JSON: ${reason}`);
+    throw new Error(`Invalid JSON in ${toDisplayPath(manifestPath, repoRoot)}: ${error.message}`);
   }
 
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    fail(`${manifestPath} must contain a JSON object.`);
+  const errors = [];
+  const displayPath = toDisplayPath(manifestPath, repoRoot);
+  const skillRoot = path.dirname(path.dirname(manifestPath));
+  const expectedSkillName = path.basename(skillRoot);
+
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    errors.push('Manifest root must be an object.');
   }
 
-  ensureNonEmptyString(parsed.skill_name, 'skill_name', manifestPath);
+  if (!isNonEmptyString(manifest?.skill_name)) {
+    errors.push('`skill_name` must be a non-empty string.');
+  } else if (manifest.skill_name !== expectedSkillName) {
+    errors.push(`\`skill_name\` must match the skill directory name \`${expectedSkillName}\`.`);
+  }
 
-  if (!Array.isArray(parsed.evals) || parsed.evals.length === 0) {
-    fail(`${manifestPath} must contain a non-empty evals array.`);
+  if (!Array.isArray(manifest?.evals) || manifest.evals.length === 0) {
+    errors.push('`evals` must be a non-empty array.');
   }
 
   const seenIds = new Set();
-
-  for (const [index, entry] of parsed.evals.entries()) {
-    const context = `${manifestPath} evals[${index}]`;
-
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-      fail(`${context} must be an object.`);
-    }
-
-    if (!Number.isInteger(entry.id)) {
-      fail(`${context} id must be an integer.`);
-    }
-
-    if (seenIds.has(entry.id)) {
-      fail(`${manifestPath} contains duplicate eval id ${entry.id}.`);
-    }
-    seenIds.add(entry.id);
-
-    ensureNonEmptyString(entry.prompt, 'prompt', context);
-    ensureNonEmptyString(entry.expected_output, 'expected_output', context);
-    ensureStringArray(entry.files ?? [], 'files', context);
-
-    if (entry.expectations !== undefined) {
-      ensureStringArray(entry.expectations, 'expectations', context);
-    }
-
-    const fileCount = entry.files.length;
-    const expectationCount = Array.isArray(entry.expectations) ? entry.expectations.length : 0;
-
-    if (fileCount === 0 && expectationCount === 0) {
-      fail(`${context} must include at least one file or expectation.`);
-    }
-
-    const seenFiles = new Set();
-    for (const filePath of entry.files) {
-      if (seenFiles.has(filePath)) {
-        fail(`${context} contains duplicate file reference ${filePath}.`);
+  if (Array.isArray(manifest?.evals)) {
+    for (const [index, evalCase] of manifest.evals.entries()) {
+      const label = `evals[${index}]`;
+      if (!evalCase || typeof evalCase !== 'object' || Array.isArray(evalCase)) {
+        errors.push(`${label} must be an object.`);
+        continue;
       }
-      seenFiles.add(filePath);
+
+      if (!Number.isInteger(evalCase.id) || evalCase.id <= 0) {
+        errors.push(`${label}.id must be a positive integer.`);
+      } else if (seenIds.has(evalCase.id)) {
+        errors.push(`${label}.id must be unique; found duplicate id ${evalCase.id}.`);
+      } else {
+        seenIds.add(evalCase.id);
+      }
+
+      if (!isNonEmptyString(evalCase.prompt)) {
+        errors.push(`${label}.prompt must be a non-empty string.`);
+      }
+
+      if (!isNonEmptyString(evalCase.expected_output)) {
+        errors.push(`${label}.expected_output must be a non-empty string.`);
+      }
+
+      if (!Array.isArray(evalCase.files)) {
+        errors.push(`${label}.files must be an array.`);
+      } else {
+        const seenFiles = new Set();
+        for (const filePath of evalCase.files) {
+          if (!isNonEmptyString(filePath)) {
+            errors.push(`${label}.files entries must be non-empty strings.`);
+            continue;
+          }
+
+          const normalizedFile = filePath.replace(/\\/g, '/');
+          if (path.isAbsolute(normalizedFile) || normalizedFile.startsWith('../') || normalizedFile.includes('/../')) {
+            errors.push(`${label}.files entry \`${normalizedFile}\` must stay within the skill root.`);
+            continue;
+          }
+
+          if (seenFiles.has(normalizedFile)) {
+            errors.push(`${label}.files entry \`${normalizedFile}\` must be unique within the eval.`);
+            continue;
+          }
+
+          seenFiles.add(normalizedFile);
+        }
+      }
+
+      if (evalCase.expectations !== undefined) {
+        if (!Array.isArray(evalCase.expectations)) {
+          errors.push(`${label}.expectations must be an array when present.`);
+        } else if (evalCase.expectations.some((expectation) => !isNonEmptyString(expectation))) {
+          errors.push(`${label}.expectations entries must be non-empty strings.`);
+        }
+      }
+
+      if ((!Array.isArray(evalCase.files) || evalCase.files.length === 0) && (!Array.isArray(evalCase.expectations) || evalCase.expectations.length === 0)) {
+        errors.push(`${label} must include at least one fixture path or expectation.`);
+      }
     }
   }
 
-  return parsed;
-}
-
-export async function validateManifestFile(manifestPath) {
-  const manifest = validateManifestText(await readFile(manifestPath, 'utf8'), manifestPath);
-
-  for (const entry of manifest.evals) {
-    for (const filePath of entry.files) {
-      const candidatePaths = resolveSkillFile(manifestPath, filePath);
-      const exists = await Promise.any(
-        candidatePaths.map(async (candidatePath) => {
-          const info = await stat(candidatePath);
-          return info.isFile() ? candidatePath : Promise.reject(new Error(`${candidatePath} is not a file`));
-        }),
-      ).catch(() => null);
-
-      if (!exists) {
-        fail(`${manifestPath} references missing file ${filePath}. Checked ${candidatePaths.join(' and ')}.`);
-      }
-    }
+  if (errors.length > 0) {
+    throw new Error(`Invalid eval manifest ${displayPath}:\n- ${errors.join('\n- ')}`);
   }
 
   return manifest;
 }
 
-export async function findEvalManifestPaths(skillsDir = SKILLS_DIR) {
-  const manifests = [];
+export async function validateEvalManifestFile(manifestPath, repoRoot) {
+  const rawContent = await fs.readFile(manifestPath, 'utf8');
+  const manifest = validateEvalManifestContent(rawContent, manifestPath, repoRoot);
+  const skillRoot = path.dirname(path.dirname(manifestPath));
+  const displayPath = toDisplayPath(manifestPath, repoRoot);
 
-  async function walk(currentDir) {
-    const entries = await readdir(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-        continue;
+  for (const [index, evalCase] of manifest.evals.entries()) {
+    for (const relativeFile of evalCase.files) {
+      const candidatePaths = [
+        path.resolve(skillRoot, relativeFile),
+        path.resolve(repoRoot, relativeFile),
+      ];
+      let foundFile = false;
+
+      for (const candidatePath of candidatePaths) {
+        try {
+          const stats = await fs.stat(candidatePath);
+          if (stats.isFile()) {
+            foundFile = true;
+            break;
+          }
+        } catch {
+          // Keep checking alternate roots.
+        }
       }
 
-      if (entry.isFile() && entry.name === EVALS_FILENAME && path.basename(path.dirname(fullPath)) === 'evals') {
-        manifests.push(fullPath);
+      if (!foundFile) {
+        throw new Error(`Invalid eval manifest ${displayPath}:\n- evals[${index}].files references missing file \`${relativeFile.replace(/\\/g, '/')}\`.`);
       }
     }
   }
 
-  await walk(skillsDir);
-  manifests.sort();
-  return manifests;
+  return {
+    manifest,
+    evalCount: manifest.evals.length,
+  };
 }
 
-export async function runValidation(skillsDir = SKILLS_DIR) {
-  const manifests = await findEvalManifestPaths(skillsDir);
-  let evalCount = 0;
+export async function validateRepoEvalManifests(repoRoot) {
+  const manifestPaths = await findEvalManifestPaths(repoRoot);
+  const results = [];
 
-  for (const manifestPath of manifests) {
-    const manifest = await validateManifestFile(manifestPath);
-    evalCount += manifest.evals.length;
+  for (const manifestPath of manifestPaths) {
+    results.push(await validateEvalManifestFile(manifestPath, repoRoot));
   }
 
-  return { manifestCount: manifests.length, evalCount };
+  return {
+    manifestCount: results.length,
+    evalCount: results.reduce((total, result) => total + result.evalCount, 0),
+  };
 }
 
-const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
-if (invokedPath === fileURLToPath(import.meta.url)) {
-  const { manifestCount, evalCount } = await runValidation();
-  console.log(`Validated ${manifestCount} eval manifests with ${evalCount} total evals.`);
+async function main() {
+  const scriptPath = fileURLToPath(import.meta.url);
+  const repoRoot = path.resolve(path.dirname(scriptPath), '..', '..');
+  const summary = await validateRepoEvalManifests(repoRoot);
+  process.stdout.write(`Validated ${summary.manifestCount} eval manifests covering ${summary.evalCount} eval cases.\n`);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    process.stderr.write(`${error.message}\n`);
+    process.exit(1);
+  });
 }
