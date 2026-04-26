@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const MANIFEST_FILENAME = 'evals.json';
+const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', '.npm-cache', 'dist', 'coverage']);
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -14,12 +15,11 @@ function toDisplayPath(filePath, repoRoot) {
 
 export async function findEvalManifestPaths(repoRoot) {
   const manifests = [];
-  const ignored = new Set(['.git', 'node_modules', '.npm-cache', 'dist', 'coverage']);
 
   async function walk(currentPath) {
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
     for (const entry of entries) {
-      if (ignored.has(entry.name)) {
+      if (IGNORED_DIRECTORIES.has(entry.name)) {
         continue;
       }
 
@@ -29,7 +29,7 @@ export async function findEvalManifestPaths(repoRoot) {
         continue;
       }
 
-      if (entry.isFile() && entry.name === MANIFEST_FILENAME) {
+      if (entry.isFile() && entry.name === MANIFEST_FILENAME && path.basename(path.dirname(entryPath)) === 'evals') {
         manifests.push(entryPath);
       }
     }
