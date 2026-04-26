@@ -3,6 +3,12 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createWebMcpTool } from 'agent-browser-mcp';
 import { installModelContext } from 'webmcp';
 import App from './App';
+import {
+  buildRenamedSessionFsPath,
+  buildSessionFsChildPath,
+  normalizeSessionFsEntryName,
+  normalizeSessionFsPath,
+} from './services/sessionFsPath';
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
 import type { CopilotRuntimeState } from './services/copilotApi';
 
@@ -188,6 +194,26 @@ vi.mock('just-bash/browser', () => {
 });
 
 describe('App', () => {
+  describe('session filesystem path guards', () => {
+    it('rejects traversal paths', () => {
+      expect(() => normalizeSessionFsPath('/workspace/../secret')).toThrow(/traversal/i);
+    });
+
+    it('rejects root deletion targets', () => {
+      expect(() => normalizeSessionFsPath('/')).toThrow(/root cannot be modified/i);
+    });
+
+    it('rejects unsafe entry names', () => {
+      expect(() => normalizeSessionFsEntryName('../escape')).toThrow(/path separators/i);
+      expect(() => normalizeSessionFsEntryName('nested/file')).toThrow(/path separators/i);
+    });
+
+    it('keeps child and rename paths inside the same parent', () => {
+      expect(buildSessionFsChildPath('/workspace', 'notes.md')).toBe('/workspace/notes.md');
+      expect(buildRenamedSessionFsPath('/workspace/notes.md', 'ideas.md')).toBe('/workspace/ideas.md');
+    });
+  });
+
   const disableAllTools = () => {
     fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
     for (const toggle of screen.getAllByRole('checkbox').filter((checkbox) => {
