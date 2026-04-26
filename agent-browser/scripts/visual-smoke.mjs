@@ -93,7 +93,7 @@ async function main() {
       });
     });
 
-    await page.goto(baseURL, { waitUntil: 'commit' });
+    await page.goto(baseURL, { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveTitle('Agent Browser');
     await expect(page.getByLabel('Omnibar')).toBeVisible();
     await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
