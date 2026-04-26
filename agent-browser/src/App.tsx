@@ -116,6 +116,11 @@ import {
 import { browserInferenceEngine } from './services/browserInference';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { appendPendingLocalTurn } from './services/chatComposition';
+import {
+  buildRenamedSessionFsPath,
+  buildSessionFsChildPath,
+  normalizeSessionFsPath,
+} from './services/sessionFsPath';
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
@@ -6381,9 +6386,13 @@ function AgentBrowserApp() {
   async function handleAddToSessionFs(sessionId: string, basePath: string, isFolder: boolean) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    const name = addSessionFsName.trim();
-    if (!name) return;
-    const path = `${basePath.replace(/\/$/, '')}/${name}`;
+    let path: string;
+    try {
+      path = buildSessionFsChildPath(basePath, addSessionFsName);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
     if (isFolder) {
       await bash.fs.mkdir(path, { recursive: true });
     } else {
@@ -6408,17 +6417,31 @@ function AgentBrowserApp() {
   async function handleDeleteSessionFsNode(sessionId: string, path: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    await bash.exec(`rm -rf ${quoteShellArg(path)}`);
+    let normalizedPath: string;
+    try {
+      normalizedPath = normalizeSessionFsPath(path);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
+    await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
-    setToast({ msg: `Deleted ${path}`, type: 'success' });
+    setToast({ msg: `Deleted ${normalizedPath}`, type: 'success' });
   }
 
   async function handleRenameSessionFsNode(sessionId: string, oldPath: string, newName: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    const dir = oldPath.slice(0, oldPath.lastIndexOf('/'));
-    const newPath = `${dir}/${newName}`;
-    await bash.exec(`mv ${quoteShellArg(oldPath)} ${quoteShellArg(newPath)}`);
+    let normalizedOldPath: string;
+    let newPath: string;
+    try {
+      normalizedOldPath = normalizeSessionFsPath(oldPath);
+      newPath = buildRenamedSessionFsPath(normalizedOldPath, newName);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
+    await bash.exec(`mv ${quoteShellArg(normalizedOldPath)} ${quoteShellArg(newPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
     setRenameSessionFsMenu(null);
     setRenameSessionFsName('');
@@ -7210,18 +7233,19 @@ function AgentBrowserApp() {
     content?: string;
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const dir = path.slice(0, path.lastIndexOf('/'));
+    const normalizedPath = normalizeSessionFsPath(path);
+    const dir = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
     if (dir) {
       await bash.fs.mkdir(dir, { recursive: true });
     }
     if (kind === 'folder') {
-      await bash.fs.mkdir(path, { recursive: true });
+      await bash.fs.mkdir(normalizedPath, { recursive: true });
     } else {
-      await bash.fs.writeFile(path, content ?? '', 'utf-8');
+      await bash.fs.writeFile(normalizedPath, content ?? '', 'utf-8');
       if (content !== undefined) {
         setTerminalFsFileContentsBySession((current) => ({
           ...current,
-          [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+          [sessionId]: { ...(current[sessionId] ?? {}), [normalizedPath]: content },
         }));
       }
     }
@@ -7230,32 +7254,35 @@ function AgentBrowserApp() {
 
   const readSessionFsFileFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const content = await bash.fs.readFile(path, 'utf-8');
-    return { sessionId, path, kind: 'file' as const, content };
+    const normalizedPath = normalizeSessionFsPath(path);
+    const content = await bash.fs.readFile(normalizedPath, 'utf-8');
+    return { sessionId, path: normalizedPath, kind: 'file' as const, content };
   }, [getOrCreateSessionBash]);
 
   const writeSessionFsFileFromMcp = useCallback(async ({ sessionId, path, content }: { sessionId: string; path: string; content: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const dir = path.slice(0, path.lastIndexOf('/'));
+    const normalizedPath = normalizeSessionFsPath(path);
+    const dir = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
     if (dir) {
       await bash.fs.mkdir(dir, { recursive: true });
     }
-    await bash.fs.writeFile(path, content, 'utf-8');
+    await bash.fs.writeFile(normalizedPath, content, 'utf-8');
     setTerminalFsFileContentsBySession((current) => ({
       ...current,
-      [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+      [sessionId]: { ...(current[sessionId] ?? {}), [normalizedPath]: content },
     }));
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
   const deleteSessionFsEntryFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    await bash.exec(`rm -rf ${quoteShellArg(path)}`);
+    const normalizedPath = normalizeSessionFsPath(path);
+    await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     setTerminalFsFileContentsBySession((current) => {
       if (!current[sessionId]) return current;
       const updated = { ...current[sessionId] };
       for (const key of Object.keys(updated)) {
-        if (key === path || key.startsWith(`${path}/`)) {
+        if (key === normalizedPath || key.startsWith(`${normalizedPath}/`)) {
           delete updated[key];
         }
       }
@@ -7274,13 +7301,15 @@ function AgentBrowserApp() {
     newPath: string;
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    await bash.exec(`mv ${quoteShellArg(path)} ${quoteShellArg(newPath)}`);
+    const normalizedPath = normalizeSessionFsPath(path);
+    const normalizedNewPath = normalizeSessionFsPath(newPath);
+    await bash.exec(`mv ${quoteShellArg(normalizedPath)} ${quoteShellArg(normalizedNewPath)}`);
     setTerminalFsFileContentsBySession((current) => {
       if (!current[sessionId]) return current;
       const existing = current[sessionId];
-      if (!(path in existing)) return current;
-      const { [path]: movedContent, ...rest } = existing;
-      return { ...current, [sessionId]: { ...rest, [newPath]: movedContent } };
+      if (!(normalizedPath in existing)) return current;
+      const { [normalizedPath]: movedContent, ...rest } = existing;
+      return { ...current, [sessionId]: { ...rest, [normalizedNewPath]: movedContent } };
     });
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
