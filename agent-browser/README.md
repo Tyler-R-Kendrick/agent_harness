@@ -1,8 +1,37 @@
 # agent-browser
 
-The `agent-browser` app is a React and Vite workspace inside the `agent_harness` repository.
+`agent-browser` is the primary runnable app in the `agent-harness` monorepo. It is a React + Vite prototype for the in-browser agent workspace described in the root [`README.md`](../README.md).
 
-The `agent-skills/` directory contains the checked-in default workspace skills that the app copies into each runtime workspace under `.agents/skills/`.
+## Default workspace content
+
+Each new workspace is pre-seeded with checked-in files under `.agents/skills/` and `.memory/`.
+
+- `agent-browser/agent-skills/` is the app-local default skill bundle copied into runtime workspaces by [`src/services/defaultAgentSkills.ts`](./src/services/defaultAgentSkills.ts).
+- Repo-root [`../skills/`](../skills/) contains the broader bundled skill library used across the repository and by compatible agents outside the browser app.
+- Runtime tests cover the default seeded files under `.agents/skills/...`, including `agent-browser`, `create-agent`, `create-agent-skill`, `create-agent-eval`, and `memory`.
+
+Use the app-local bundle when documenting what appears in a fresh browser workspace. Use the repo-root skill library when documenting reusable checked-in skills for the wider repository.
+
+## Commands
+
+From `agent-browser/`:
+
+- `npm run dev` starts the hot-reload server on port `5173`.
+- `npm run dev:cucumber` starts the dedicated browser test server on port `4173`.
+- `npm run build` produces the production bundle.
+- `npm run lint` runs TypeScript in no-emit mode.
+- `npm run test` runs the Vitest suite.
+- `npm run test:coverage` runs Vitest with coverage.
+- `npm run test:cucumber` starts the test server and runs the Cucumber suite.
+- `npm run visual:smoke` runs the Playwright visual smoke check for the app workspace.
+
+From the repository root:
+
+- `npm run dev:agent-browser` runs the app without changing directories.
+- `npm run visual:agent-browser` runs the repeatable smoke validation and writes `output/playwright/agent-browser-visual-smoke.png`.
+- `npm run verify:agent-browser` runs the documented repo-level verification flow: lint, eval-manifest validation, coverage, production build, `npm audit --audit-level=moderate`, and the visual smoke check.
+
+Prefer the repo-root wrapper scripts for contributor onboarding, CI parity, and repeatable validation.
 
 ## Hot reload in Codespaces
 
@@ -12,18 +41,8 @@ The browser-facing URL should always come from `../skills/agent-harness-context/
 
 If the helper extension was installed during the current session, reload the VS Code window once so the startup activation runs.
 
-## Commands
+## Troubleshooting
 
-- `npm run dev` starts the hot-reload server on port `5173`.
-- `npm run dev:cucumber` starts the test server on port `4173`.
-- `npm run build` produces the production bundle.
-- `npm run test` runs the Vitest suite.
-- `npm run test:coverage` runs Vitest with coverage.
-- `npm run test:cucumber` starts the dedicated test server and runs the Cucumber tests.
-- `npm run lint` runs TypeScript in no-emit mode.
-
-## Manual fallbacks
-
-- Run the `Agent Harness: Open Agent Browser Preview` command if the preview did not open automatically.
-- Use `.vscode/launch.json` if you want to start or debug the dev server manually.
-- Run `../skills/agent-harness-context/scripts/codespaces-uri.sh 5173` if you need to inspect or reuse the forwarded URL directly.
+- If the preview did not open automatically, run the `Agent Harness: Open Agent Browser Preview` command.
+- If the forwarded preview URL fails in Codespaces, run `../skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5173` and retry the preview.
+- If you want to start or debug the dev server manually, use `.vscode/launch.json`.
