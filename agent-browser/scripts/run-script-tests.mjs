@@ -13,6 +13,8 @@ async function readScript(relativePath) {
 async function main() {
   const visualSmokeScript = await readScript('agent-browser/scripts/visual-smoke.mjs');
   assert.match(visualSmokeScript, /waitUntil:\s*'domcontentloaded'/);
+  assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*120_000/);
+  assert.match(visualSmokeScript, /shellTimeoutMs\s*=\s*30_000/);
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');
