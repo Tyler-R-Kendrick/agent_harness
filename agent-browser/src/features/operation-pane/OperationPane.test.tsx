@@ -118,6 +118,12 @@ describe('OperationTimeline', () => {
     expect(screen.getByText('openreview.net')).toBeInTheDocument();
   });
 
+  it('renders source chips without remote favicon images', () => {
+    const { container } = render(<OperationTimeline steps={[searchStep]} />);
+    expect(container.querySelector('.op-source-chip img')).toBeNull();
+    expect(screen.getByTitle('openreview.net')).toHaveTextContent('O');
+  });
+
   it('shows a hidden-chip count when more than 2 sources', () => {
     const stepWithManySources: OperationStep = {
       ...searchStep,
