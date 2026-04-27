@@ -1,73 +1,52 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-04-26
-Baseline: `.features/Summary.md` updated from the 2026-04-24 eight-harness corpus.
-Diff type: additive update after DeerFlow research
+Updated: 2026-04-27
+Baseline: `.features/Summary.md` updated from the 2026-04-26 nine-harness corpus.
+Diff type: additive update after OpenCode research
 
 ## Net new normalized features
 
 ### Expanded: Parallel agent orchestration
-- Why now: DeerFlow reinforces that visible planning modes plus scoped parallel sub-agents are becoming a default harness expectation, not a premium edge case.
+- Why now: OpenCode reinforces that visible parallel sessions and navigable subagent trees are becoming a default harness expectation, not a premium edge case.
 - Research delta:
-  - DeerFlow 2.0 exposes planning and sub-tasking as headline product capability and documents an `ultra` mode for sub-agent execution.
+  - OpenCode exposes `Multi-session` on the homepage, documents parent/child session navigation, and ships built-in primary and subagent roles.
 
-### Added: Parallel agent orchestration
-- Why now: this is the clearest product trend across coding and browser-oriented harnesses.
-- Linear issue title:
-  - `Orchestrate parallel browser agents in one workspace`
-- Suggested problem statement:
-  - Users can run one browser-oriented task at a time, but competing harnesses increasingly support multiple isolated agents, subagents, or routed workspaces.
-- One-shot instruction for an LLM:
-  - Design and implement a workspace feature that launches multiple isolated agent runs against a shared project, shows per-run status, preserves separate context, lets users compare outputs, and supports pause, resume, cancel, and merge-ready handoff.
+### Expanded: Skills and reusable browser workflows
+- Why now: OpenCode shows that repeatable workflows are converging around repo-local command packs and portable `SKILL.md` definitions, not just marketplace-style plugins.
+- Research delta:
+  - OpenCode supports project/global command files under `.opencode/commands/`
+  - OpenCode discovers project/global skills across `.opencode`, `.claude`, and `.agents`
 
-### Added: Layered memory and guidance
-- Linear issue title:
-  - `Add layered memory with explicit scopes`
-- Suggested problem statement:
-  - Users repeatedly restate repo conventions, browser constraints, and workflow preferences because memory is either absent or opaque.
-- One-shot instruction for an LLM:
-  - Implement memory scopes for user, project, workspace, and run; support import/edit/disable, show provenance, and expose memory in a simple inspector UI that explains which guidance affected the current run.
+### Expanded: External tool connectivity and policy control
+- Why now: OpenCode couples MCP integration with explicit tool-permission policy, which is stronger than simply exposing more integrations.
+- Research delta:
+  - OpenCode supports local and remote MCP servers plus custom tools
+  - permissions can be allowed, denied, or routed to approval globally or per agent
 
-### Added: Skills and reusable browser workflows
+### Added: Shareable session links and debug handoff
+- Why now: OpenCode treats session sharing as a first-class collaboration primitive, with explicit privacy modes instead of an ad hoc export.
 - Linear issue title:
-  - `Package repeatable browser workflows as skills`
+  - `Share browser-agent runs with review-safe links`
 - Suggested problem statement:
-  - Powerful workflows are trapped in long prompts instead of reusable, testable packages.
+  - Review and debugging are slower than they need to be because browser-agent runs are hard to hand off intact without manually copying logs, screenshots, and narrative context.
 - One-shot instruction for an LLM:
-  - Create a skill format for browser workflows containing metadata, instructions, permissions, assets, and scripts; add discovery/install/use flows and task-time skill suggestions.
+  - Design and implement shareable run links for browser-agent sessions with privacy modes, artifact redaction, expiration or unshare controls, and a review view that preserves prompts, tool calls, outputs, screenshots, and validation evidence.
 
-### Added: Scheduled automations with inbox results
+### Added: Policy-driven agent permissions
 - Linear issue title:
-  - `Run browser automations on schedules`
+  - `Add policy-driven permission presets for agent actions`
 - Suggested problem statement:
-  - Users need recurring checks, audits, and verification runs without manually re-triggering the harness.
+  - Browser-capable agents need more than a single autonomy toggle because teams want safe defaults for edits, shell commands, browser actions, and external tools.
 - One-shot instruction for an LLM:
-  - Add scheduled one-off and recurring automations with execution history, last-run evidence, retry controls, notification routing, and an inbox queue for results requiring review.
+  - Implement granular permission presets with allow, ask, and deny outcomes for major action classes, support path or command pattern overrides, and let shared agents carry reviewed policy bundles for common workflows.
 
-### Added: Browser evidence plus code verification loop
+### Added: Project command packs for repeatable tasks
 - Linear issue title:
-  - `Tie browser evidence to code and diff review`
+  - `Ship project command packs for browser workflows`
 - Suggested problem statement:
-  - Browser automation becomes much more trustworthy when screenshots, console logs, network traces, and DOM evidence are attached to the code changes they validate.
+  - Teams repeat the same browser verification, triage, and debugging prompts, but the harness does not yet expose a clean project-local command layer for them.
 - One-shot instruction for an LLM:
-  - Build a verification flow that captures screenshots, console/network state, and structured browser assertions, associates them with code changes and diffs, and shows pass/fail evidence before PR handoff.
-
-### Added: Shared team agents and governance
-- Linear issue title:
-  - `Publish shared workspace agents with governance`
-- Suggested problem statement:
-  - Teams need reusable browser-capable agents with ownership, permissions, and visibility, not just personal prompts.
-- One-shot instruction for an LLM:
-  - Implement shared agents that can be published, versioned, permissioned, and discovered by a team; include RBAC, audit visibility, and usage analytics.
-
-### Added: Chat-channel agent ingress
-- Why now: DeerFlow turns chat apps into a first-class control plane for starting work, checking status, and accessing memory, which is broader than simple notification delivery.
-- Linear issue title:
-  - `Accept browser-agent tasks from chat channels`
-- Suggested problem statement:
-  - Competing harnesses increasingly meet users in messaging surfaces, but `agent-browser` still assumes task intake begins inside its primary UI.
-- One-shot instruction for an LLM:
-  - Design and implement chat-channel ingress for browser agents with per-channel auth, conversation-to-run mapping, slash-style status and memory commands, file attachment handoff, and safe routing into existing runs without duplicating history.
+  - Implement project-local command packs for browser workflows with metadata, prompt templates, recommended agents, optional model hints, and a slash-command style launcher so repeated tasks become versioned repo assets.
 
 ## How to use this file
 
@@ -78,9 +57,6 @@ Diff type: additive update after DeerFlow research
 
 ## Recommended first Linear batch
 
-1. `Orchestrate parallel browser agents in one workspace`
-2. `Add layered memory with explicit scopes`
-3. `Run browser automations on schedules`
-4. `Package repeatable browser workflows as skills`
-5. `Tie browser evidence to code and diff review`
-6. `Accept browser-agent tasks from chat channels`
+1. `Share browser-agent runs with review-safe links`
+2. `Add policy-driven permission presets for agent actions`
+3. `Ship project command packs for browser workflows`
