@@ -26,6 +26,7 @@ describe('streamAgentChat', () => {
         sizeMB: 1,
         status: 'installed',
       },
+      latestUserInput: 'hello from the composer',
       messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
       workspaceName: 'Research',
       workspacePromptContext: 'Use workspace files.',
@@ -33,6 +34,7 @@ describe('streamAgentChat', () => {
 
     expect(streamCodiChatSpy).toHaveBeenCalledWith(expect.objectContaining({
       workspaceName: 'Research',
+      latestUserInput: 'hello from the composer',
       messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
     }), {}, undefined);
   });
