@@ -116,6 +116,34 @@ describe('LogActAgent – completion checker / Ralph Loop', () => {
     )).toBe(true);
   });
 
+  it('does not enqueue blank checker feedback for another turn', async () => {
+    const bus = new InMemoryAgentBus();
+
+    const agent = new LogActAgent({
+      bus,
+      inferenceClient: makeInference(['partial answer'], []),
+      executor: makeExecutor(async () => 'partial result'),
+      completionChecker: {
+        async check({ lastResult }) {
+          return {
+            type: PayloadType.Completion,
+            intentId: lastResult.intentId,
+            done: false,
+            feedback: '   ',
+          };
+        },
+      },
+      maxTurns: 1,
+    });
+
+    await agent.send('Make progress.');
+    const results = await agent.run();
+
+    expect(results).toHaveLength(1);
+    const entries = await bus.read(0, await bus.tail());
+    expect(entries.filter((entry) => entry.payload.type === PayloadType.Mail)).toHaveLength(1);
+  });
+
   it('keeps existing single-turn behavior when no completion checker is configured', async () => {
     const bus = new InMemoryAgentBus();
     const seenMessages: Array<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>> = [];
