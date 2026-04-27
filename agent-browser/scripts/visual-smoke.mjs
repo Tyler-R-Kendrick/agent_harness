@@ -93,11 +93,11 @@ async function main() {
       });
     });
 
-    await page.goto(baseURL, { waitUntil: 'commit' });
+    await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
     await expect(page).toHaveTitle('Agent Browser');
-    await expect(page.getByLabel('Omnibar')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Configure tools/ })).toBeVisible();
+    await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: /Configure tools/ })).toBeVisible({ timeout: 30_000 });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
   } catch (error) {

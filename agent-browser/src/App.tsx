@@ -92,6 +92,7 @@ import { formatOperationDuration } from './features/operation-pane';
 // Unified per-turn process visualization surfaced via InlineProcess and
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
+import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import { LocalLanguageModel } from './services/localLanguageModel';
@@ -435,13 +436,34 @@ function Icon({ name, size = 16, color = 'currentColor', className = '' }: { nam
 }
 
 function Favicon({ url, size = 14 }: { url?: string; size?: number }) {
-  const [err, setErr] = useState(false);
-  const domain = useMemo(() => {
-    if (!url) return null;
-    try { return new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { return null; }
-  }, [url]);
-  if (!domain || err) return <Icon name="globe" size={size} color="rgba(255,255,255,.3)" />;
-  return <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} width={size} height={size} onError={() => setErr(true)} style={{ borderRadius: 2, flexShrink: 0, display: 'block' }} alt="" aria-hidden="true" />;
+  const domain = useMemo(() => normalizeHostname(url), [url]);
+  const label = useMemo(() => getFaviconBadgeLabel(url), [url]);
+  if (!domain || !label) return <Icon name="globe" size={size} color="rgba(255,255,255,.3)" />;
+  // Keep favicon rendering local-only so browsing history and internal hostnames
+  // are not leaked to a third-party favicon proxy.
+  return (
+    <span
+      title={domain}
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 3,
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(148, 163, 184, 0.18)',
+        color: 'rgba(255,255,255,0.86)',
+        fontSize: Math.max(9, Math.floor(size * 0.64)),
+        fontWeight: 700,
+        lineHeight: 1,
+        textTransform: 'uppercase',
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function ActiveMemoryPulse() {
