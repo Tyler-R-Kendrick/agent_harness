@@ -1,8 +1,8 @@
 # logact
 
-Shared-log primitives for building LogAct-style agents in TypeScript.
+LogAct agentic reliability primitives backed by a shared append-only agent log.
 
-This package implements the core pieces described by the LogAct paper: an append-only `IAgentBus`, a `LogActAgent` loop that writes every decision to that log, quorum evaluation helpers, voter implementations, and introspection utilities for reading execution history back out of the bus.
+This package implements the core pieces described by the LogAct paper: an append-only `IAgentBus`, a `LogActAgent` loop that records each decision, quorum evaluation helpers, voter implementations, and introspection utilities for reading execution history back out of the bus.
 
 ## Public Entry Point
 
@@ -24,15 +24,16 @@ import {
 } from 'logact';
 ```
 
-The package exports TypeScript source directly through `src/index.ts`. Consumers should treat the package root as the public API and avoid deep-importing `src/*.ts`.
+The package exposes a single public entry point declared in [`package.json`](./package.json). Do not deep-import `src/*`; internal file paths are not a stable contract.
 
-## Main Components
+## What It Provides
 
-- `InMemoryAgentBus`: append-only shared log with `append`, `read`, `tail`, and blocking `poll`.
+- `InMemoryAgentBus`: append-only log implementation for local agent workflows.
 - `LogActAgent`: driver, voter, decider, executor, and optional completion-check loop over the shared log.
 - `ClassicVoter`, `AllowlistVoter`, `LLMPassiveVoter`: starter voter implementations for rule-based and model-based approval.
 - `evaluateQuorum`: commit/abort/pending decision helper for `on_by_default`, `first_voter`, `boolean_and`, and `boolean_or`.
 - `buildExecutionSummary`, `getResults`, `getAbortedIntents`: introspection helpers for audits, debugging, and recovery flows.
+- Shared payload and component contracts exported as TypeScript types.
 
 ## Minimal Example
 
@@ -47,7 +48,6 @@ import {
 } from 'logact';
 
 const bus = new InMemoryAgentBus();
-
 const agent = new LogActAgent({
   bus,
   inferenceClient: {
@@ -92,7 +92,11 @@ Expected behavior:
 - `LLMPassiveVoter` treats a response starting with `APPROVE` as approval and any other response as rejection.
 - `buildExecutionSummary` intentionally omits raw `InfIn`, `InfOut`, and `Policy` entries to keep summaries concise.
 
-## Local Validation
+## Package Contents
+
+Published package artifacts are limited to this README, `package.json`, and the runtime TypeScript source files under `src/`. Tests and local package configuration are excluded from the consumer artifact.
+
+## Local Development
 
 Run package checks from this directory:
 

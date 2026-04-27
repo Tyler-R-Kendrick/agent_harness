@@ -239,6 +239,35 @@ describe('Codi', () => {
     const secondPrompt = generateMock.mock.calls[startingCalls + 1][0].prompt as Array<{ role: string; content: string }>;
     expect(secondPrompt.some((message) => String(message.content).includes('Do the work to completion'))).toBe(true);
   });
+
+  it('uses latestUserInput for Codi loop input and execution completion checks', async () => {
+    const startingCalls = generateMock.mock.calls.length;
+    generateMock
+      .mockImplementationOnce(async (_input, callbacks) => {
+        callbacks.onToken?.('Plan:\n1. Inspect the failing test\n2. Patch the implementation');
+        callbacks.onDone?.({ generated_text: 'Plan:\n1. Inspect the failing test\n2. Patch the implementation' });
+      })
+      .mockImplementationOnce(async (_input, callbacks) => {
+        callbacks.onToken?.('Implemented the patch and verified the focused test.');
+        callbacks.onDone?.({ generated_text: 'Implemented the patch and verified the focused test.' });
+      });
+
+    const onDone = vi.fn();
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      latestUserInput: 'Implement the fix and run the focused test.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Earlier chat context, not the submitted request.' }],
+      workspaceName: 'Build',
+      workspacePromptContext: 'Use workspace files.',
+    }, { onDone });
+
+    expect(generateMock.mock.calls.length - startingCalls).toBe(2);
+    const firstPrompt = generateMock.mock.calls[startingCalls][0].prompt as Array<{ role: string; content: string }>;
+    expect(firstPrompt.some((message) => String(message.content).includes('Implement the fix and run the focused test.'))).toBe(true);
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith('Implemented the patch and verified the focused test.');
+  });
 });
 
 describe('wrapVoterWithCallbacks', () => {

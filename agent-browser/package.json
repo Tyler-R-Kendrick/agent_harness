@@ -14,7 +14,7 @@
     "test": "node ../scripts/run-package-bin.mjs vitest run",
     "test:evals": "node scripts/eval-manifest-validator.test.mjs",
     "test:watch": "node ../scripts/run-package-bin.mjs vitest",
-    "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage --maxWorkers=4",
+    "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage",
     "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit",
     "validate:evals": "node scripts/eval-manifest-validator.mjs",
     "visual:smoke": "node scripts/visual-smoke.mjs"
@@ -62,9 +62,9 @@
     "vitest": "^4.1.5"
   },
   "optionalDependencies": {
-    "@img/sharp-libvips-win32-x64": "^1.2.4",
     "@img/sharp-libvips-win32-arm64": "^1.2.4",
-    "@img/sharp-win32-x64": "^0.34.5",
-    "@img/sharp-win32-arm64": "^0.34.5"
+    "@img/sharp-libvips-win32-x64": "^1.2.4",
+    "@img/sharp-win32-arm64": "^0.34.5",
+    "@img/sharp-win32-x64": "^0.34.5"
   }
 }
