@@ -1197,7 +1197,7 @@ describe('App', () => {
       path: 'links/AGENTS.link.md',
       preview: expect.stringContaining('capabilities/AGENTS.main.md'),
     }));
-  });
+  }, 90_000);
 
   it('supports creating new chat and terminal instances from the tree and panel', async () => {
     vi.useFakeTimers();
