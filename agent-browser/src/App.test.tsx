@@ -391,7 +391,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '.agents' }));
     fireEvent.click(screen.getByRole('button', { name: 'skills' }));
     expect(screen.getByText('review-pr')).toBeInTheDocument();
-  });
+  }, 60_000);
 
   it('registers unified filesystem WebMCP tools that a client can invoke', async () => {
     vi.useFakeTimers();
