@@ -9,6 +9,7 @@ describe('visual-smoke script', () => {
     expect(script).toContain("waitUntil: 'domcontentloaded'");
     expect(script).toContain('navigationTimeoutMs = 120_000');
     expect(script).toContain('shellTimeoutMs = 30_000');
+    expect(script).toContain("getByLabel('Chat input')");
     expect(script).not.toContain("waitUntil: 'networkidle'");
     expect(script).toContain('toBeVisible({ timeout: shellTimeoutMs })');
   });
