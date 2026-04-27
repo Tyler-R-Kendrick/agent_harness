@@ -63,6 +63,8 @@
   },
   "optionalDependencies": {
     "@img/sharp-libvips-win32-arm64": "^1.2.4",
-    "@img/sharp-win32-arm64": "^0.34.5"
+    "@img/sharp-libvips-win32-x64": "^1.2.4",
+    "@img/sharp-win32-arm64": "^0.34.5",
+    "@img/sharp-win32-x64": "^0.34.5"
   }
 }
