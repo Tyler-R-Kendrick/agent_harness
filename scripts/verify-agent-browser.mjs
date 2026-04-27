@@ -6,7 +6,7 @@ const steps = [
   ['validate-evals', [npmCommand, '--workspace', 'agent-browser', 'run', 'validate:evals']],
   ['test-evals', [npmCommand, '--workspace', 'agent-browser', 'run', 'test:evals']],
   ['lint', [npmCommand, '--workspace', 'agent-browser', 'run', 'lint']],
-  ['coverage', [npmCommand, '--workspace', 'agent-browser', 'run', 'test:coverage']],
+  ['coverage', [npmCommand, '--workspace', 'agent-browser', 'run', 'test:coverage', '--', '--maxWorkers=4']],
   ['build', [npmCommand, '--workspace', 'agent-browser', 'run', 'build']],
   ['audit', [npmCommand, 'audit', '--audit-level=moderate']],
   ['visual-smoke', [npmCommand, 'run', 'visual:agent-browser']],
