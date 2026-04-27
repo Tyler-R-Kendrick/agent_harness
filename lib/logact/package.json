@@ -8,6 +8,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "files": [
+    "README.md",
+    "src/**/*.ts",
+    "!src/__tests__/**"
+  ],
   "scripts": {
     "test": "node ../../scripts/run-package-bin.mjs vitest run",
     "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
