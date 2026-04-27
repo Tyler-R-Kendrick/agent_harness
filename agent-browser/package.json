@@ -13,6 +13,7 @@
     "test:cucumber": "node ../scripts/run-package-bin.mjs start-server-and-test \"npm run dev:cucumber\" http://127.0.0.1:4173 \"npm run cucumber\"",
     "test": "node ../scripts/run-package-bin.mjs vitest run",
     "test:evals": "node scripts/eval-manifest-validator.test.mjs",
+    "test:scripts": "node scripts/run-script-tests.mjs",
     "test:watch": "node ../scripts/run-package-bin.mjs vitest",
     "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage",
     "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit",
