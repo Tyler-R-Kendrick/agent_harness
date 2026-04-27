@@ -100,6 +100,7 @@ async function main() {
     await expect(page).toHaveTitle('Agent Browser');
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Chat input')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('button', { name: /Configure tools/ })).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
