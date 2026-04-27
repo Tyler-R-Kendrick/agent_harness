@@ -74,7 +74,10 @@ export function createObservedBus(onBusEntry: ((entry: BusEntryStep) => void) | 
   const originalAppend = bus.append.bind(bus);
   bus.append = async (payload: Payload) => {
     const position = await originalAppend(payload);
-    onBusEntry(entryToBusStep({ position, realtimeTs: Date.now(), payload }));
+    const [entry] = await bus.read(position, position + 1);
+    if (entry) {
+      onBusEntry(entryToBusStep(entry));
+    }
     return position;
   };
   return bus;

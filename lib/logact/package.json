@@ -5,14 +5,14 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "files": [
     "README.md",
     "src/**/*.ts",
     "!src/__tests__/**"
   ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "test": "node ../../scripts/run-package-bin.mjs vitest run",
     "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
