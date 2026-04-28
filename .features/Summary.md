@@ -1,28 +1,28 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-04-26
-Scope: `Codex`, `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenClaw`
+Updated: 2026-04-28
+Scope: `Codex`, `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenClaw`, `OpenCode`
 Method: current-product research from first-party product pages, help centers, docs, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
 
 ### 2. Persistent memory plus project instructions
 - Common pattern: harnesses retain repo, workflow, and user preferences across runs.
-- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Copilot Memory, DeerFlow long-term memory, Hermes persistent memory, Codex skills/team config, OpenClaw workspace identity/config.
+- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Copilot Memory, DeerFlow long-term memory, Hermes persistent memory, Codex skills/team config, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules.
 - Why it matters: repeated steering is turning into the main productivity tax.
 - One-shot build instruction:
   - Add layered memory with explicit scopes (`workspace`, `project`, `user`, `agent`) and clear precedence, plus a memory inspector/editor so users can see, edit, import, disable, and diff what the harness has learned.
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -43,7 +43,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Copilot terminal + GitHub + mobile, DeerFlow IM channels, Hermes chat apps + CLI, OpenClaw any messenger + local runtime.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Copilot terminal + GitHub + mobile, DeerFlow IM channels, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
@@ -57,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Copilot MCP, Claude Cowork connectors/plugins, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, OpenClaw integrations.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Copilot MCP, Claude Cowork connectors/plugins, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, OpenClaw integrations, OpenCode MCP servers and custom tools.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -71,7 +71,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 10. Personalization, routing, and specialized personas
 - Common pattern: harnesses increasingly expose custom personas, routing, or specialized sub-agents.
-- Seen in: Codex personalities, Claude Code subagents, Copilot custom agents, DeerFlow custom agent routing in IM channels, OpenClaw agent identities/routing, Hermes self-improving skills.
+- Seen in: Codex personalities, Claude Code subagents, Copilot custom agents, DeerFlow custom agent routing in IM channels, OpenClaw agent identities/routing, Hermes self-improving skills, OpenCode primary and subagent roles.
 - Why it matters: one general-purpose agent is less effective than a small system of constrained specialists.
 - One-shot build instruction:
   - Support specialized agent profiles with explicit purpose, tool allowances, routing rules, and invocation heuristics, plus a way to compare outcomes across specialists on the same task.
@@ -83,6 +83,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add chat-native ingress for supported channels with per-channel auth, thread/session mapping, slash-style commands, file handoff, and safe routing into existing agent runs without fragmenting history.
 
+### 12. Shareable sessions and debug handoff
+- Common pattern: harnesses increasingly let users publish a run artifact that others can inspect without replaying the whole session locally.
+- Seen in: OpenCode share links, GitHub Copilot cloud logs and PR sessions, Codex thread sharing and review surfaces.
+- Why it matters: async debugging and review improve when the run itself is a portable artifact rather than an anecdote.
+- One-shot build instruction:
+  - Add review-safe run sharing that publishes a sanitized session artifact with transcript, artifacts, diff links, and verification evidence, plus retention controls and a clear private-by-default policy.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -90,8 +97,9 @@ Method: current-product research from first-party product pages, help centers, d
 3. Scheduled browser automations with inbox-style results.
 4. A first-class skills/plugin package model for repeatable browser workflows.
 5. Branch/diff/verification loops that join browser evidence with code changes.
-6. Chat-channel ingress for ambient task intake and result follow-up.
+6. Share review-safe run links for async debugging and handoff.
+7. Add policy-driven permission presets for browser-capable agents.
 
 ## Notes
-- This pass extends the earlier eight-harness corpus with `DeerFlow` as a ninth competitor.
+- This pass extends the earlier nine-harness corpus with `OpenCode` as a tenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
