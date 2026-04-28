@@ -1,4 +1,4 @@
-import { ModelContext } from '../../webmcp/src/index';
+import { ModelContext } from '@agent-harness/webmcp';
 
 import type { RegisterWorkspaceToolsOptions, WorkspaceMcpBrowserPage } from './workspaceToolTypes';
 import type { BrowserPageInput } from './workspaceToolShared';

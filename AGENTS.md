@@ -3,6 +3,9 @@
 ## git usage
 
 Always use `git mv` to rename/move files.
+When running inside Codex Windows sandbox or automation sessions, prefer `scripts/codex-git.ps1` over bare `git` so the current worktree is passed through `safe.directory`.
+When a task needs `gh` in those same sessions, prefer `scripts/codex-gh.ps1` over bare `gh`. It initializes `CODEX_HOME`, seeds a readable GitHub CLI config under `$CODEX_HOME/gh-cli`, and sets `GH_CONFIG_DIR` before invoking the CLI.
+Do not assume `$env:CODEX_HOME` is already set in automation shells. If you need automation memory paths or GitHub CLI state, initialize the repo environment first with `scripts/codex-shell-init.ps1` or use the wrappers above.
 
 ## agent-skills
 
@@ -19,6 +22,8 @@ Always make them using Anthropic's "skill-creator" skill (npx skills add https:/
 Always use TDD with code coverage metrics to ensure 100% coverage.
 Use Playwright to visually validate your work in the browser afterwards.
 Take screenshots of the outcomes and put them into your PR description so we can view the outcomes that you believe are successful.
+
+For `agent-browser` chat agents, implement first-class agents under `agent-browser/src/chat-agents/<AgentName>/` and wire them through the chat-agent provider/routing layer. Do not add product chat agents as default workspace `.agents/<name>/AGENTS.md` files; those workspace files are user/project instructions, not Agent Browser's internal agent implementation surface.
 
 Prefer deterministic, checked-in scripts over generated one-off CLI commands. Before writing an inline Playwright snippet, shell loop, temporary Node/Python script, or long ad hoc command, check `package.json`, `scripts/`, and relevant skill `scripts/` directories for an existing command. If you repeat a dynamic command sequence or expect future agents to need it, promote it into a documented repo script with tests or verification coverage, then call that script by name.
 

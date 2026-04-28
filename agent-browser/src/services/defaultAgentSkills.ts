@@ -25,11 +25,13 @@ const DEFAULT_AGENT_SKILL_FILES = Object.entries(DEFAULT_AGENT_SKILL_MODULES)
   .sort((left, right) => left.path.localeCompare(right.path));
 
 export function createDefaultWorkspaceAgentSkillFiles(updatedAt = new Date().toISOString()): WorkspaceFile[] {
-  return DEFAULT_AGENT_SKILL_FILES.map((file) => ({
-    path: file.path,
-    content: file.content,
-    updatedAt,
-  }));
+  return [
+    ...DEFAULT_AGENT_SKILL_FILES.map((file) => ({
+      path: file.path,
+      content: file.content,
+      updatedAt,
+    })),
+  ];
 }
 
 export function mergeDefaultWorkspaceAgentSkillFiles(

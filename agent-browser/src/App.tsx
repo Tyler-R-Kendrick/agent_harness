@@ -15,6 +15,8 @@ import type { ToolSet } from 'ai';
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
+  BellOff,
   Bookmark,
   BookmarkMinus,
   ChevronDown,
@@ -73,9 +75,13 @@ import {
   getAgentInputPlaceholder,
   getAgentProviderSummary,
   getDefaultAgentProvider,
+  resolveAgentProviderForTask,
+  buildDebuggerToolInstructions,
+  buildResearcherToolInstructions,
   hasCodiModels,
   hasGhcpAccess,
   resolveAgentModelIds,
+  resolveRuntimeAgentProvider,
   streamAgentChat,
   type AgentProvider,
 } from './chat-agents';
@@ -88,6 +94,7 @@ import { formatOperationDuration } from './features/operation-pane';
 // Unified per-turn process visualization surfaced via InlineProcess and
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
+import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import { LocalLanguageModel } from './services/localLanguageModel';
@@ -113,9 +120,19 @@ import {
 import { browserInferenceEngine } from './services/browserInference';
 import { searchBrowserModels } from './services/huggingFaceRegistry';
 import { appendPendingLocalTurn } from './services/chatComposition';
+import {
+  buildRenamedSessionFsPath,
+  buildSessionFsChildPath,
+  normalizeSessionFsPath,
+} from './services/sessionFsPath';
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
+import {
+  createMessageCopyLabel,
+  formatMessageCopyContent,
+  type ClipboardCopyFormat,
+} from './services/chatMessageCopy';
 import {
   buildWorkspacePromptContext,
   createDefaultWorkspaceFiles,
@@ -130,7 +147,29 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
-import { STORAGE_KEYS, isString, isStringRecord, useStoredState } from './services/sessionState';
+import {
+  DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
+  buildChatCompletionNotification,
+  buildChatElicitationNotification,
+  createBrowserNotificationApi,
+  createBrowserNotificationDispatcher,
+  getBrowserNotificationPermission,
+  isBrowserNotificationSettings,
+  isLikelyUserElicitation,
+  requestBrowserNotificationPermission,
+  type BrowserNotificationPermission,
+} from './services/browserNotifications';
+import {
+  STORAGE_KEYS,
+  isChatMessagesBySession,
+  isString,
+  isStringArrayRecord,
+  isStringRecord,
+  isTreeNode,
+  isWorkspaceViewStateRecord,
+  removeStoredRecordEntry,
+  useStoredState,
+} from './services/sessionState';
 import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
@@ -385,6 +424,8 @@ const TOOL_GROUP_ORDER = [
 const DEFAULT_COLLAPSED_TOOL_GROUPS = new Set<string>(['mcp', 'webmcp']);
 
 const icons = {
+  bell: Bell,
+  bellOff: BellOff,
   layers: Layers3,
   messageSquare: MessageSquare,
   clock: History,
@@ -430,13 +471,34 @@ function Icon({ name, size = 16, color = 'currentColor', className = '' }: { nam
 }
 
 function Favicon({ url, size = 14 }: { url?: string; size?: number }) {
-  const [err, setErr] = useState(false);
-  const domain = useMemo(() => {
-    if (!url) return null;
-    try { return new URL(url.startsWith('http') ? url : `https://${url}`).hostname; } catch { return null; }
-  }, [url]);
-  if (!domain || err) return <Icon name="globe" size={size} color="rgba(255,255,255,.3)" />;
-  return <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=32`} width={size} height={size} onError={() => setErr(true)} style={{ borderRadius: 2, flexShrink: 0, display: 'block' }} alt="" aria-hidden="true" />;
+  const domain = useMemo(() => normalizeHostname(url), [url]);
+  const label = useMemo(() => getFaviconBadgeLabel(url), [url]);
+  if (!domain || !label) return <Icon name="globe" size={size} color="rgba(255,255,255,.3)" />;
+  // Keep favicon rendering local-only so browsing history and internal hostnames
+  // are not leaked to a third-party favicon proxy.
+  return (
+    <span
+      title={domain}
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 3,
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(148, 163, 184, 0.18)',
+        color: 'rgba(255,255,255,0.86)',
+        fontSize: Math.max(9, Math.floor(size * 0.64)),
+        fontWeight: 700,
+        lineHeight: 1,
+        textTransform: 'uppercase',
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 function ActiveMemoryPulse() {
@@ -813,12 +875,14 @@ function ChatMessageView({
   activitySelected,
   onOpenActivity,
   onSubmitElicitation,
+  onCopyMessage,
 }: {
   message: ChatMessage;
   agentName: string;
   activitySelected?: boolean;
   onOpenActivity?: (messageId: string) => void;
   onSubmitElicitation?: (messageId: string, requestId: string, values: Record<string, string>) => void;
+  onCopyMessage?: (input: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => Promise<void>;
 }) {
   const content = message.streamedContent || message.content;
   const isTerminalMessage = message.statusText?.startsWith('terminal') ?? false;
@@ -844,11 +908,36 @@ function ChatMessageView({
   const isError = message.isError ?? message.status === 'error';
   const hasReasoning = Boolean(allReasoningSteps.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
   const hasVoters = Boolean((message.voterSteps?.length ?? 0) || message.isVoting);
+  const canCopy = Boolean(content.trim() && onCopyMessage);
   return (
     <div className={`message ${message.role}${isTerminalMessage ? ' terminal-message' : ''}${isError ? ' message-error' : ''}`}>
-      {!isSystem && (
+      {(!isSystem || canCopy) && (
         <div className={`message-sender ${isUser ? 'message-sender-user' : 'message-sender-agent'}`}>
           <span className="sender-name">{senderLabel}</span>
+          {canCopy ? (
+            <span className="message-actions" aria-label={`${senderLabel} message actions`}>
+              <button
+                type="button"
+                className="message-action-button"
+                aria-label={`Copy ${senderLabel} message as markdown`}
+                title="Copy as markdown"
+                data-tooltip="Copy markdown"
+                onClick={() => void onCopyMessage?.({ content, senderLabel, format: 'markdown' })}
+              >
+                <Icon name="panes" size={11} />
+              </button>
+              <button
+                type="button"
+                className="message-action-button"
+                aria-label={`Copy ${senderLabel} message as plaintext`}
+                title="Copy as plaintext"
+                data-tooltip="Copy plaintext"
+                onClick={() => void onCopyMessage?.({ content, senderLabel, format: 'plaintext' })}
+              >
+                <Icon name="clipboard" size={11} />
+              </button>
+            </span>
+          ) : null}
         </div>
       )}
       {hasReasoning || hasVoters || (message.processEntries?.length ?? 0) > 0 ? (
@@ -1448,6 +1537,7 @@ function ChatPanel({
   onTerminalFsPathsChanged,
   onOpenSettings,
   onWorkspaceFileUpsert,
+  onCopyToClipboard,
   bashBySessionRef,
   webMcpModelContext,
   onSessionMcpControllerChange,
@@ -1472,14 +1562,31 @@ function ChatPanel({
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
   onOpenSettings: () => void;
   onWorkspaceFileUpsert: (file: WorkspaceFile) => void;
+  onCopyToClipboard: (text: string, label: string) => Promise<void>;
   bashBySessionRef: React.MutableRefObject<Record<string, Bash>>;
   webMcpModelContext: ModelContext;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
-  const [messagesBySession, setMessagesBySession] = useState<Record<string, ChatMessage[]>>({});
+  const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.chatMessagesBySession,
+    isChatMessagesBySession,
+    {},
+  );
   const [input, setInput] = useState('');
-  const [chatHistoryBySession, setChatHistoryBySession] = useState<Record<string, string[]>>({});
+  const [chatHistoryBySession, setChatHistoryBySession] = useStoredState<Record<string, string[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.chatHistoryBySession,
+    isStringArrayRecord,
+    {},
+  );
+  const [browserNotificationSettings, setBrowserNotificationSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.browserNotificationSettings,
+    isBrowserNotificationSettings,
+    DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
+  );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
     STORAGE_KEYS.selectedCodiModelBySession,
@@ -1514,12 +1621,30 @@ function ChatPanel({
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
   const consumedPendingSearchRef = useRef<string | null>(null);
+  const browserNotificationApi = useMemo(
+    () => createBrowserNotificationApi(typeof window !== 'undefined' ? window.Notification : undefined),
+    [],
+  );
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState<BrowserNotificationPermission>(
+    () => getBrowserNotificationPermission(browserNotificationApi),
+  );
+  const browserNotificationSettingsRef = useRef(browserNotificationSettings);
   const activeGenerationRef = useRef<{
     assistantId: string;
     sessionId: string;
     cancel: () => void;
     finalizeCancelled: () => void;
   } | null>(null);
+  useEffect(() => {
+    browserNotificationSettingsRef.current = browserNotificationSettings;
+  }, [browserNotificationSettings]);
+  const browserNotificationDispatcher = useMemo(
+    () => createBrowserNotificationDispatcher({
+      api: browserNotificationApi,
+      getSettings: () => browserNotificationSettingsRef.current,
+    }),
+    [browserNotificationApi],
+  );
   const webMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
@@ -1546,6 +1671,11 @@ function ChatPanel({
   const activeCopilotModel = copilotState.models.find((model) => model.id === effectiveSelectedCopilotModelId);
   const hasInstalledModels = hasCodiModels(installedModels);
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
+  const selectedRuntimeProvider = resolveRuntimeAgentProvider({
+    provider: selectedProvider,
+    hasCodiModelsReady: Boolean(activeLocalModel),
+    hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+  });
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
   const toolDescriptors = useMemo(
@@ -1596,6 +1726,10 @@ function ChatPanel({
     Boolean(parseSandboxPrompt(input))
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger') && (
+      (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+      || Boolean(activeLocalModel)
+    ))
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
   const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
@@ -1849,6 +1983,46 @@ function ChatPanel({
     return () => window.removeEventListener(USER_ELICITATION_EVENT, listener);
   }, [appendElicitationCard]);
 
+  const handleToggleBrowserNotifications = useCallback(async () => {
+    if (browserNotificationSettings.enabled) {
+      setBrowserNotificationSettings({ enabled: false });
+      onToast({ msg: 'Browser notifications disabled', type: 'info' });
+      return;
+    }
+
+    const permission = await requestBrowserNotificationPermission(browserNotificationApi);
+    setBrowserNotificationPermission(permission);
+    if (permission === 'granted') {
+      setBrowserNotificationSettings({ enabled: true });
+      onToast({ msg: 'Browser notifications enabled', type: 'success' });
+      return;
+    }
+
+    onToast({
+      msg: permission === 'unsupported'
+        ? 'Browser notifications are not supported in this browser'
+        : 'Browser notification permission was not granted',
+      type: 'warning',
+    });
+  }, [browserNotificationApi, browserNotificationSettings.enabled, onToast, setBrowserNotificationSettings]);
+
+  const notifyAssistantComplete = useCallback((assistantId: string, content: string) => {
+    const notificationContent = content.trim();
+    browserNotificationDispatcher.notify(buildChatCompletionNotification({
+      eventId: `${activeChatSessionId}:${assistantId}:complete`,
+      sessionName: workspaceName,
+      content: notificationContent,
+    }));
+    if (!isLikelyUserElicitation(notificationContent)) {
+      return;
+    }
+    browserNotificationDispatcher.notify(buildChatElicitationNotification({
+      eventId: `${activeChatSessionId}:${assistantId}:elicitation`,
+      sessionName: workspaceName,
+      content: notificationContent,
+    }));
+  }, [activeChatSessionId, browserNotificationDispatcher, workspaceName]);
+
   const selectActivityMessage = useCallback((messageId: string) => {
     setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: { messageId } }));
   }, [activeChatSessionId]);
@@ -1909,6 +2083,9 @@ function ChatPanel({
           },
         }],
       });
+      if (result.status === 'succeeded') {
+        notifyAssistantComplete(assistantId, `Sandbox run ${summary.metadata.status}.`);
+      }
       await session.dispose();
     } catch (error) {
       updateMessage(assistantId, {
@@ -1919,13 +2096,26 @@ function ChatPanel({
       });
     }
     return true;
-  }, [activeSessionId, getSessionBash, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
+  }, [activeSessionId, getSessionBash, notifyAssistantComplete, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || activeGenerationRef.current) return;
     const assistantId = createUniqueId();
     const userId = createUniqueId();
     const trimmedText = text.trim();
+    const providerForRequest = resolveAgentProviderForTask({
+      selectedProvider,
+      latestUserInput: trimmedText,
+    });
+    const runtimeProviderForRequest = resolveRuntimeAgentProvider({
+      provider: providerForRequest,
+      hasCodiModelsReady: Boolean(activeLocalModel),
+      hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+    });
+    if (providerForRequest !== selectedProvider) {
+      selectedProviderRef.current = providerForRequest;
+      setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: providerForRequest }));
+    }
     setChatHistoryBySession((current) => ({
       ...current,
       [activeChatSessionId]: [...(current[activeChatSessionId] ?? []), trimmedText],
@@ -1940,7 +2130,7 @@ function ChatPanel({
       return;
     }
 
-    if (selectedProvider === 'ghcp' && !hasAvailableCopilotModels) {
+    if (runtimeProviderForRequest === 'ghcp' && (!effectiveSelectedCopilotModelId || !hasAvailableCopilotModels)) {
       updateMessage(assistantId, {
         status: 'error',
         content: copilotState.authenticated
@@ -1950,8 +2140,8 @@ function ChatPanel({
       return;
     }
 
-    if (selectedProvider === 'codi' && !activeLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+    if (runtimeProviderForRequest === 'codi' && !activeLocalModel) {
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -1972,8 +2162,11 @@ function ChatPanel({
         thinkingIdleMs: number;
         streamingIdleMs: number;
       };
-      let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
-        ? [createInitialLocalReasoningStep('Planning tool run', 'Codi is deciding how to use local tools and delegate work.')]
+      let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
+        ? [createInitialLocalReasoningStep(
+          providerForRequest === 'researcher' ? 'Planning research run' : providerForRequest === 'debugger' ? 'Planning debugging run' : 'Planning tool run',
+          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : providerForRequest === 'debugger' ? 'Debugger is deciding how to inspect symptoms, hypotheses, and evidence.' : 'Codi is deciding how to use local tools and delegate work.',
+        )]
         : [];
       let delegationVoterSteps: VoterStep[] = [];
       let delegationBusEntries: BusEntryStep[] = [];
@@ -2024,10 +2217,10 @@ function ChatPanel({
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
-        agentId: 'tool-agent',
-        agentLabel: 'Tool Agent',
-        modelId: selectedProvider === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
-        modelProvider: selectedProvider,
+        agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : 'tool-agent',
+        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : 'Tool Agent',
+        modelId: runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
+        modelProvider: providerForRequest,
       });
       const processMetaFromStageMeta = (meta?: StageMeta): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
         agentId: meta?.agentId ?? currentToolAgentLogMeta().agentId,
@@ -2981,7 +3174,7 @@ function ChatPanel({
           mode: LocalToolWatchdogMode = localToolWatchdogMode,
         ) => {
           const timeoutStage = resolveWatchdogPlanningStage(stage);
-          if (selectedProvider !== 'codi' || !timeoutStage) return;
+          if (runtimeProviderForRequest !== 'codi' || !timeoutStage) return;
           localToolWatchdogMode = mode;
           activePlanningStage = timeoutStage;
           setPlanningStageTimeout(timeoutStage, mode === 'thinking' ? 'thinking-idle' : 'streaming-idle');
@@ -2994,7 +3187,7 @@ function ChatPanel({
         };
         const scheduleLocalToolHardTimeout = (stage: PlanningStageName | null = activePlanningStage) => {
           const timeoutStage = resolveWatchdogPlanningStage(stage);
-          if (selectedProvider !== 'codi' || !timeoutStage) return;
+          if (runtimeProviderForRequest !== 'codi' || !timeoutStage) return;
           activePlanningStage = timeoutStage;
           setPlanningStageTimeout(timeoutStage, 'no-output');
           if (localToolHardTimeoutId !== null) {
@@ -3029,10 +3222,10 @@ function ChatPanel({
           scheduleLocalToolIdleTimeout(resolveWatchdogPlanningStage(activePlanningStage), mode);
         };
 
-        const modelConfig = selectedProvider === 'ghcp'
+        const modelConfig = runtimeProviderForRequest === 'ghcp'
           ? { kind: 'copilot' as const, modelId: effectiveSelectedCopilotModelId, sessionId: activeChatSessionId }
           : { kind: 'local' as const, modelId: activeLocalModel!.id, task: activeLocalModel!.task };
-        const model = selectedProvider === 'ghcp'
+        const model = runtimeProviderForRequest === 'ghcp'
           ? resolveLanguageModel(modelConfig)
           : new LocalLanguageModel(
               activeLocalModel!.id,
@@ -3080,7 +3273,21 @@ function ChatPanel({
           ...bridgeTools,
         } as ToolSet, selectedToolIds);
         const selectedDescriptors = selectToolDescriptorsByIds(toolDescriptors, selectedToolIds);
-        const toolInstructions = buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
+        const toolInstructions = providerForRequest === 'researcher'
+          ? buildResearcherToolInstructions({
+            workspaceName,
+            workspacePromptContext,
+            descriptors: selectedDescriptors,
+            selectedToolIds,
+          })
+          : providerForRequest === 'debugger'
+            ? buildDebuggerToolInstructions({
+              workspaceName,
+              workspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+            })
+          : buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
         const inputMessages = nextMessages
           .filter((message) => message.id !== assistantId)
           .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
@@ -3112,6 +3319,7 @@ function ChatPanel({
                 busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
                 processEntries: snapshotProcess(),
               });
+              notifyAssistantComplete(assistantId, finalText.trim() || 'Tool run completed.');
             },
             onError: (error: Error) => {
               clearLocalToolWatchdogs();
@@ -3543,8 +3751,11 @@ function ChatPanel({
     let tokenBuffer = '';
     let thinkingBuffer = '';
     let thinkingStart = 0;
-    let reasoningSteps: ReasoningStep[] = selectedProvider === 'codi'
-      ? [createInitialLocalReasoningStep('Analyzing request', 'Codi is reviewing the prompt and workspace context locally.')]
+    let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
+      ? [createInitialLocalReasoningStep(
+        providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : 'Analyzing request',
+        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+      )]
       : [];
     let voterSteps: VoterStep[] = [];
     let hasStructuredReasoning = false;
@@ -3565,13 +3776,13 @@ function ChatPanel({
       switch (phase) {
         case 'thinking':
           return {
-            title: 'Analyzing request',
-            body: 'Codi is reviewing the prompt and workspace context locally.',
+            title: providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : 'Analyzing request',
+            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
           };
         case 'generating':
           return {
-            title: 'Drafting response',
-            body: 'Codi is composing the local response.',
+            title: providerForRequest === 'researcher' ? 'Drafting research response' : providerForRequest === 'debugger' ? 'Drafting debugging response' : 'Drafting response',
+            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : providerForRequest === 'debugger' ? 'Debugger is composing the diagnosis, mitigation, and verification steps.' : 'Codi is composing the local response.',
           };
         default:
           return {
@@ -3591,7 +3802,7 @@ function ChatPanel({
       const resolveDirectReasoningActor = (step: ReasoningStep): string => {
         if (step.toolName) return step.toolName;
         if (step.kind === 'search') return 'search';
-        return selectedProvider;
+        return providerForRequest;
       };
 
       const syncReasoningProcessEntry = (step: ReasoningStep | undefined) => {
@@ -3671,7 +3882,7 @@ function ChatPanel({
           processLog.update(rawThinkingProcessId, {
             summary,
             transcript,
-            payload: { provider: selectedProvider, transcript },
+            payload: { provider: providerForRequest, runtimeProvider: runtimeProviderForRequest, transcript },
             status,
           });
           return;
@@ -3679,10 +3890,10 @@ function ChatPanel({
         processLog.append({
           id: rawThinkingProcessId,
           kind: 'reasoning',
-          actor: selectedProvider,
+          actor: providerForRequest,
           summary,
           transcript,
-          payload: { provider: selectedProvider, transcript },
+          payload: { provider: providerForRequest, runtimeProvider: runtimeProviderForRequest, transcript },
           branchId: 'coordinator',
           status,
           ts: thinkingStart || Date.now(),
@@ -3706,7 +3917,7 @@ function ChatPanel({
     };
 
     const syncPhaseStep = (phase: string) => {
-      if (selectedProvider !== 'codi' || hasStructuredReasoning || thinkingBuffer) return;
+      if (runtimeProviderForRequest !== 'codi' || hasStructuredReasoning || thinkingBuffer) return;
       ensureThinkingStarted();
       const meta = getPhaseStepMeta(phase);
       if (phaseStepId && phaseStepTitle === meta.title) {
@@ -3855,8 +4066,23 @@ function ChatPanel({
             isVoting: false,
             loadingStatus: null,
             streamedContent: resolvedContent || undefined,
-            content: resolvedContent ? '' : (selectedProvider === 'ghcp' ? 'GHCP returned an empty response.' : 'Codi returned an empty response.'),
+            content: resolvedContent ? '' : (
+              providerForRequest === 'researcher'
+                ? 'Researcher returned an empty response.'
+                : providerForRequest === 'debugger'
+                  ? 'Debugger returned an empty response.'
+                : runtimeProviderForRequest === 'ghcp'
+                  ? 'GHCP returned an empty response.'
+                : 'Codi returned an empty response.'
+            ),
           }));
+          notifyAssistantComplete(assistantId, resolvedContent || (
+            providerForRequest === 'researcher'
+              ? 'Researcher returned an empty response.'
+              : runtimeProviderForRequest === 'ghcp'
+                ? 'GHCP returned an empty response.'
+                : 'Codi returned an empty response.'
+          ));
         },
         onError: (error: Error) => {
           finalizePhaseStep();
@@ -3870,7 +4096,8 @@ function ChatPanel({
       };
 
       await streamAgentChat({
-        provider: selectedProvider,
+        provider: providerForRequest,
+        runtimeProvider: runtimeProviderForRequest,
         model: activeLocalModel,
         modelId: effectiveSelectedCopilotModelId,
         sessionId: activeChatSessionId,
@@ -3891,7 +4118,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -4112,6 +4339,20 @@ function ChatPanel({
     onSearchConsumed();
   }, [activeGenerationSessionId, onSearchConsumed, pendingSearch]);
 
+  const handleCopyMessage = useCallback(async ({ content, senderLabel, format }: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => {
+    try {
+      await onCopyToClipboard(
+        formatMessageCopyContent(content, format),
+        createMessageCopyLabel(senderLabel, format),
+      );
+      onToast({ msg: `Message copied as ${format}`, type: 'success' });
+    } catch {
+      onToast({ msg: 'Failed to copy message', type: 'error' });
+    }
+  }, [onCopyToClipboard, onToast]);
+
+  const browserNotificationsEnabled = browserNotificationSettings.enabled && browserNotificationPermission === 'granted';
+
   return (
     <section className={`chat-panel shared-console ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className={`chat-header shared-console-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
@@ -4130,9 +4371,11 @@ function ChatPanel({
                   <select aria-label="Agent provider" value={selectedProvider} onChange={(event) => setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value as AgentProvider }))} {...panelTitlebarControlProps}>
                     <option value="codi">Codi</option>
                     <option value="ghcp">GHCP</option>
+                    <option value="researcher">Researcher</option>
+                    <option value="debugger">Debugger</option>
                   </select>
                 </label>
-                {selectedProvider === 'ghcp'
+                {selectedRuntimeProvider === 'ghcp'
                   ? (hasAvailableCopilotModels
                       ? (
                         <label className="header-model-selector" {...panelTitlebarControlProps}>
@@ -4185,6 +4428,25 @@ function ChatPanel({
           </div>
         </div>
         <div className="panel-titlebar-actions">
+          {!showBash ? (
+            <button
+              type="button"
+              className={`icon-button${browserNotificationSettings.enabled ? ' is-active' : ''}`}
+              aria-label={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+              title={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+              data-tooltip={
+                browserNotificationSettings.enabled
+                  ? browserNotificationsEnabled
+                    ? 'Notifications on'
+                    : 'Notifications blocked in browser settings'
+                  : 'Notifications off'
+              }
+              onClick={() => void handleToggleBrowserNotifications()}
+              {...panelTitlebarControlProps}
+            >
+              <Icon name={browserNotificationSettings.enabled ? 'bell' : 'bellOff'} size={13} />
+            </button>
+          ) : null}
           <div className="chat-mode-controls">
             <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
               <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" title="Chat mode" data-tooltip="Chat" className={`mode-tab mode-tab-icon ${!showBash ? 'active' : ''}`} onClick={() => onSwitchMode('agent')} {...panelTitlebarControlProps}><Icon name="sparkles" size={14} /></button>
@@ -4201,7 +4463,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onCopyMessage={handleCopyMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -4272,11 +4534,11 @@ function ChatPanel({
                   </div>
                 ) : null}
               </div>
-              {selectedProvider === 'ghcp'
+              {selectedRuntimeProvider === 'ghcp'
                 ? (!hasAvailableCopilotModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
-                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>No Codi model loaded. Open Models to load one.</button> : null)}
+                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -5916,7 +6178,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher', 'debugger'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -5936,7 +6198,12 @@ function AgentBrowserApp() {
   const { toast, setToast } = useToast();
   const initialRootRef = useRef<TreeNode | null>(null);
   if (!initialRootRef.current) initialRootRef.current = createInitialRoot();
-  const [root, setRoot] = useState<TreeNode>(initialRootRef.current);
+  const [root, setRoot] = useStoredState<TreeNode>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceRoot,
+    isTreeNode,
+    initialRootRef.current,
+  );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
   const [collapsed, setCollapsed] = useState(false);
@@ -5970,7 +6237,12 @@ function AgentBrowserApp() {
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
-  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useState<Record<string, WorkspaceViewState>>(() => createWorkspaceViewState(initialRootRef.current!));
+  const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceViewStateByWorkspace,
+    isWorkspaceViewStateRecord,
+    createWorkspaceViewState(root),
+  );
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
   const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
@@ -6912,9 +7184,13 @@ function AgentBrowserApp() {
   async function handleAddToSessionFs(sessionId: string, basePath: string, isFolder: boolean) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    const name = addSessionFsName.trim();
-    if (!name) return;
-    const path = `${basePath.replace(/\/$/, '')}/${name}`;
+    let path: string;
+    try {
+      path = buildSessionFsChildPath(basePath, addSessionFsName);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
     if (isFolder) {
       await bash.fs.mkdir(path, { recursive: true });
     } else {
@@ -6939,17 +7215,31 @@ function AgentBrowserApp() {
   async function handleDeleteSessionFsNode(sessionId: string, path: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    await bash.exec(`rm -rf "${path}"`);
+    let normalizedPath: string;
+    try {
+      normalizedPath = normalizeSessionFsPath(path);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
+    await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
-    setToast({ msg: `Deleted ${path}`, type: 'success' });
+    setToast({ msg: `Deleted ${normalizedPath}`, type: 'success' });
   }
 
   async function handleRenameSessionFsNode(sessionId: string, oldPath: string, newName: string) {
     const bash = bashBySessionRef.current[sessionId];
     if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
-    const dir = oldPath.slice(0, oldPath.lastIndexOf('/'));
-    const newPath = `${dir}/${newName}`;
-    await bash.exec(`mv "${oldPath}" "${newPath}"`);
+    let normalizedOldPath: string;
+    let newPath: string;
+    try {
+      normalizedOldPath = normalizeSessionFsPath(oldPath);
+      newPath = buildRenamedSessionFsPath(normalizedOldPath, newName);
+    } catch (error) {
+      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return;
+    }
+    await bash.exec(`mv ${quoteShellArg(normalizedOldPath)} ${quoteShellArg(newPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
     setRenameSessionFsMenu(null);
     setRenameSessionFsName('');
@@ -7305,6 +7595,8 @@ function AgentBrowserApp() {
     const paneId = renderPaneIdForNode(node);
     if (node.nodeKind === 'session') {
       delete bashBySessionRef.current[nodeId];
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, nodeId);
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatHistoryBySession, isStringArrayRecord, nodeId);
       setTerminalFsPathsBySession((current) => {
         if (!(nodeId in current)) return current;
         const next = { ...current };
@@ -7739,18 +8031,19 @@ function AgentBrowserApp() {
     content?: string;
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const dir = path.slice(0, path.lastIndexOf('/'));
+    const normalizedPath = normalizeSessionFsPath(path);
+    const dir = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
     if (dir) {
       await bash.fs.mkdir(dir, { recursive: true });
     }
     if (kind === 'folder') {
-      await bash.fs.mkdir(path, { recursive: true });
+      await bash.fs.mkdir(normalizedPath, { recursive: true });
     } else {
-      await bash.fs.writeFile(path, content ?? '', 'utf-8');
+      await bash.fs.writeFile(normalizedPath, content ?? '', 'utf-8');
       if (content !== undefined) {
         setTerminalFsFileContentsBySession((current) => ({
           ...current,
-          [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+          [sessionId]: { ...(current[sessionId] ?? {}), [normalizedPath]: content },
         }));
       }
     }
@@ -7759,32 +8052,35 @@ function AgentBrowserApp() {
 
   const readSessionFsFileFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const content = await bash.fs.readFile(path, 'utf-8');
-    return { sessionId, path, kind: 'file' as const, content };
+    const normalizedPath = normalizeSessionFsPath(path);
+    const content = await bash.fs.readFile(normalizedPath, 'utf-8');
+    return { sessionId, path: normalizedPath, kind: 'file' as const, content };
   }, [getOrCreateSessionBash]);
 
   const writeSessionFsFileFromMcp = useCallback(async ({ sessionId, path, content }: { sessionId: string; path: string; content: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    const dir = path.slice(0, path.lastIndexOf('/'));
+    const normalizedPath = normalizeSessionFsPath(path);
+    const dir = normalizedPath.slice(0, normalizedPath.lastIndexOf('/'));
     if (dir) {
       await bash.fs.mkdir(dir, { recursive: true });
     }
-    await bash.fs.writeFile(path, content, 'utf-8');
+    await bash.fs.writeFile(normalizedPath, content, 'utf-8');
     setTerminalFsFileContentsBySession((current) => ({
       ...current,
-      [sessionId]: { ...(current[sessionId] ?? {}), [path]: content },
+      [sessionId]: { ...(current[sessionId] ?? {}), [normalizedPath]: content },
     }));
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
 
   const deleteSessionFsEntryFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    await bash.exec(`rm -rf ${quoteShellArg(path)}`);
+    const normalizedPath = normalizeSessionFsPath(path);
+    await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     setTerminalFsFileContentsBySession((current) => {
       if (!current[sessionId]) return current;
       const updated = { ...current[sessionId] };
       for (const key of Object.keys(updated)) {
-        if (key === path || key.startsWith(`${path}/`)) {
+        if (key === normalizedPath || key.startsWith(`${normalizedPath}/`)) {
           delete updated[key];
         }
       }
@@ -7803,13 +8099,15 @@ function AgentBrowserApp() {
     newPath: string;
   }) => {
     const bash = getOrCreateSessionBash(sessionId);
-    await bash.exec(`mv ${quoteShellArg(path)} ${quoteShellArg(newPath)}`);
+    const normalizedPath = normalizeSessionFsPath(path);
+    const normalizedNewPath = normalizeSessionFsPath(newPath);
+    await bash.exec(`mv ${quoteShellArg(normalizedPath)} ${quoteShellArg(normalizedNewPath)}`);
     setTerminalFsFileContentsBySession((current) => {
       if (!current[sessionId]) return current;
       const existing = current[sessionId];
-      if (!(path in existing)) return current;
-      const { [path]: movedContent, ...rest } = existing;
-      return { ...current, [sessionId]: { ...rest, [newPath]: movedContent } };
+      if (!(normalizedPath in existing)) return current;
+      const { [normalizedPath]: movedContent, ...rest } = existing;
+      return { ...current, [sessionId]: { ...rest, [normalizedNewPath]: movedContent } };
     });
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
@@ -8728,6 +9026,7 @@ function AgentBrowserApp() {
                   ...current,
                   [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
                 }))}
+                onCopyToClipboard={writeToClipboard}
                 bashBySessionRef={bashBySessionRef}
                 webMcpModelContext={webMcpModelContext}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}

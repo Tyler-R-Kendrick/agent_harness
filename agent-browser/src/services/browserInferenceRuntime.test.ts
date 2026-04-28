@@ -1,6 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const textStreamerSpy = vi.fn();
+const textStreamerSpy = vi.fn(function MockTextStreamer(
+  this: { kind: string; options: unknown },
+  _tokenizer: unknown,
+  options: unknown,
+) {
+  this.kind = 'streamer';
+  this.options = options;
+});
 
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: textStreamerSpy,
@@ -8,8 +15,7 @@ vi.mock('@huggingface/transformers', () => ({
 
 describe('browser inference runtime helpers', () => {
   beforeEach(() => {
-    textStreamerSpy.mockReset();
-    textStreamerSpy.mockImplementation((_tokenizer, options) => ({ kind: 'streamer', options }));
+    textStreamerSpy.mockClear();
   });
 
   it('builds Transformers v4 text-generation options with a TextStreamer and return_full_text disabled', async () => {

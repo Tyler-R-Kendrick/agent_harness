@@ -1,19 +1,16 @@
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import type { OperationSourceChip, OperationStep } from './types';
+import { getFaviconBadgeLabel, normalizeHostname } from '../../utils/favicon';
 
 // ─── Favicon helper ────────────────────────────────────────────────────────
 
-function resolveChipFavicon(source: OperationSourceChip): string | undefined {
-  if (source.faviconUrl) return source.faviconUrl;
-  const base = source.url ?? (source.domain ? `https://${source.domain}` : undefined);
-  if (!base) return undefined;
-  try {
-    const { hostname } = new URL(base.startsWith('http') ? base : `https://${base}`);
-    return `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`;
-  } catch {
-    return undefined;
-  }
+function resolveChipBadge(source: OperationSourceChip): { domain: string; label: string | null } {
+  const base = source.url ?? source.domain;
+  return {
+    domain: normalizeHostname(base) ?? source.domain ?? 'Unknown source',
+    label: getFaviconBadgeLabel(base),
+  };
 }
 
 // ─── Source chips ──────────────────────────────────────────────────────────
@@ -25,11 +22,34 @@ function SourceRow({ sources }: { sources?: OperationSourceChip[] }) {
   return (
     <div className="op-source-row">
       {visible.map((s, i) => {
-        const favicon = resolveChipFavicon(s);
+        const { domain, label } = resolveChipBadge(s);
         return (
           <span key={`${s.domain ?? ''}-${s.url ?? i}`} className="op-source-chip">
-            {favicon ? <img src={favicon} alt="" aria-hidden="true" width="14" height="14" /> : null}
-            <span>{s.domain}</span>
+            {label ? (
+              // Keep source-chip badges local-only even when a model returns a
+              // remote favicon url.
+              <span
+                aria-hidden="true"
+                title={domain}
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(148, 163, 184, 0.18)',
+                  color: 'rgba(255,255,255,0.86)',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {label}
+              </span>
+            ) : null}
+            <span>{domain}</span>
           </span>
         );
       })}

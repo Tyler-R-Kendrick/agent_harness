@@ -1,4 +1,5 @@
-export type AgentProvider = 'codi' | 'ghcp';
+export type ModelBackedAgentProvider = 'codi' | 'ghcp';
+export type AgentProvider = ModelBackedAgentProvider | 'researcher' | 'debugger';
 
 import type { IterationStep, ReasoningStep, VoterStep } from '../types';
 
