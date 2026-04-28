@@ -3967,14 +3967,20 @@ function ChatPanel({
           {!showBash ? (
             <button
               type="button"
-              className={`icon-button${browserNotificationsEnabled ? ' is-active' : ''}`}
-              aria-label={browserNotificationsEnabled ? 'Disable browser notifications' : 'Enable browser notifications'}
-              title={browserNotificationsEnabled ? 'Disable browser notifications' : 'Enable browser notifications'}
-              data-tooltip={browserNotificationsEnabled ? 'Notifications on' : 'Notifications off'}
+              className={`icon-button${browserNotificationSettings.enabled ? ' is-active' : ''}`}
+              aria-label={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+              title={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+              data-tooltip={
+                browserNotificationSettings.enabled
+                  ? browserNotificationsEnabled
+                    ? 'Notifications on'
+                    : 'Notifications blocked in browser settings'
+                  : 'Notifications off'
+              }
               onClick={() => void handleToggleBrowserNotifications()}
               {...panelTitlebarControlProps}
             >
-              <Icon name={browserNotificationsEnabled ? 'bell' : 'bellOff'} size={13} />
+              <Icon name={browserNotificationSettings.enabled ? 'bell' : 'bellOff'} size={13} />
             </button>
           ) : null}
           <div className="chat-mode-controls">

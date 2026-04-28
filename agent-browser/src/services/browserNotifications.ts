@@ -73,6 +73,8 @@ export async function requestBrowserNotificationPermission(api: BrowserNotificat
   return api.requestPermission();
 }
 
+const MAX_SENT_IDS = 100;
+
 export function createBrowserNotificationDispatcher({
   api,
   getSettings,
@@ -89,6 +91,10 @@ export function createBrowserNotificationDispatcher({
       if (api.permission !== 'granted') return 'permission-denied';
       if (sentEventIds.has(event.id)) return 'duplicate';
 
+      if (sentEventIds.size >= MAX_SENT_IDS) {
+        const oldest = sentEventIds.keys().next().value;
+        if (oldest !== undefined) sentEventIds.delete(oldest);
+      }
       sentEventIds.add(event.id);
       try {
         api.showNotification(event.title, {

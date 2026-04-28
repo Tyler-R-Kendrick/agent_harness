@@ -1571,21 +1571,32 @@ describe('App', () => {
         notifications.push({ title, options });
       }
     }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
     Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
 
-    render(<App />);
+    try {
+      render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Enable browser notifications' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Enable browser notifications' }));
 
-    await act(async () => {
-      await Promise.resolve();
-      vi.advanceTimersByTime(150);
-    });
+      // Flush the async permission-request chain (requestPermission → requestBrowserNotificationPermission → handler continuation)
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      // Flush the debounced localStorage write (120 ms debounce)
+      await act(async () => { vi.advanceTimersByTime(200); await Promise.resolve(); });
 
-    expect(requestPermission).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(window.localStorage.getItem('agent-browser.browser-notification-settings') ?? '{}')).toEqual({ enabled: true });
-    expect(screen.getByRole('button', { name: 'Disable browser notifications' })).toBeInTheDocument();
-    expect(notifications).toEqual([]);
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(window.localStorage.getItem('agent-browser.browser-notification-settings') ?? '{}')).toEqual({ enabled: true });
+      expect(screen.getByRole('button', { name: 'Disable browser notifications' })).toBeInTheDocument();
+      expect(notifications).toEqual([]);
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
   });
 
   it('shows a browser notification when session chat work completes', async () => {
@@ -1597,6 +1608,7 @@ describe('App', () => {
         notifications.push({ title, options });
       }
     }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
     Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
     window.localStorage.setItem('agent-browser.browser-notification-settings', JSON.stringify({ enabled: true }));
     vi.useFakeTimers();
@@ -1616,27 +1628,35 @@ describe('App', () => {
       return undefined;
     });
 
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-    await installLocalModel();
-    disableAllTools();
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await installLocalModel();
+      disableAllTools();
 
-    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Finish the task.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Finish the task.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-    expect(notifications).toEqual([
-      {
-        title: 'Session work complete',
-        options: expect.objectContaining({
-          body: 'Research: Implementation finished and checks passed.',
-          tag: expect.stringMatching(/:complete$/),
-        }),
-      },
-    ]);
+      expect(notifications).toEqual([
+        {
+          title: 'Session work complete',
+          options: expect.objectContaining({
+            body: 'Research: Implementation finished and checks passed.',
+            tag: expect.stringMatching(/:complete$/),
+          }),
+        },
+      ]);
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
   });
 
   it('shows a browser notification when an assistant response needs user input', async () => {
@@ -1648,6 +1668,7 @@ describe('App', () => {
         notifications.push({ title, options });
       }
     }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
     Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
     window.localStorage.setItem('agent-browser.browser-notification-settings', JSON.stringify({ enabled: true }));
     vi.useFakeTimers();
@@ -1667,26 +1688,34 @@ describe('App', () => {
       return undefined;
     });
 
-    render(<App />);
-    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
-    await installLocalModel();
-    disableAllTools();
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await installLocalModel();
+      disableAllTools();
 
-    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Prepare the patch.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Prepare the patch.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+      await act(async () => {
+        await Promise.resolve();
+      });
 
-    expect(notifications.map((entry) => entry.title)).toEqual([
-      'Session work complete',
-      'Agent needs input',
-    ]);
-    expect(notifications[1]?.options).toEqual(expect.objectContaining({
-      body: 'Research: Can I apply these changes?',
-      tag: expect.stringMatching(/:elicitation$/),
-    }));
+      expect(notifications.map((entry) => entry.title)).toEqual([
+        'Session work complete',
+        'Agent needs input',
+      ]);
+      expect(notifications[1]?.options).toEqual(expect.objectContaining({
+        body: 'Research: Can I apply these changes?',
+        tag: expect.stringMatching(/:elicitation$/),
+      }));
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
   });
 
   it('routes research tasks through the first-class Researcher agent', async () => {

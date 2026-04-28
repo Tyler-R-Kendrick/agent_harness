@@ -24,3 +24,4 @@ file-editor-edit-mode.png
 file-editor-label-mode.png
 output/playwright/
 .dev-server*.log
+.codex-tk26-objects/
