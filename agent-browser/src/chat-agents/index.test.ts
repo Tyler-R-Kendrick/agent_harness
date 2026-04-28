@@ -77,6 +77,7 @@ describe('agent helpers', () => {
     expect(getAgentDisplayName({ provider: 'ghcp' })).toBe('GHCP: Copilot');
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Researcher: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'codi', activeCodiModelName: 'Qwen' })).toBe('Researcher: Qwen');
+    expect(getAgentDisplayName({ provider: 'debugger', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Debugger: GPT-4.1');
 
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Codi…');
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Install a Codi model to start chatting');
@@ -84,6 +85,7 @@ describe('agent helpers', () => {
     expect(getAgentInputPlaceholder({ provider: 'ghcp', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP to start chatting');
     expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: true })).toBe('Ask Researcher…');
     expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or install a Codi model to research');
+    expect(getAgentInputPlaceholder({ provider: 'debugger', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Debugger…');
   });
 
   it('builds provider summaries and resolves model ids', () => {
@@ -125,6 +127,11 @@ describe('agent helpers', () => {
       installedModels: [],
       copilotState: createCopilotState(),
     })).toBe('Researcher needs GHCP or Codi');
+    expect(getAgentProviderSummary({
+      provider: 'debugger',
+      installedModels,
+      copilotState: createCopilotState(),
+    })).toBe('1 Codi-backed Debugger models');
 
     expect(resolveAgentModelIds({
       installedModels,
@@ -143,6 +150,14 @@ describe('agent helpers', () => {
       selectedProvider: 'ghcp',
       latestUserInput: 'Say hello.',
     })).toBe('ghcp');
+    expect(resolveAgentProviderForTask({
+      selectedProvider: 'codi',
+      latestUserInput: 'Debug why uploads are failing after release.',
+    })).toBe('debugger');
+    expect(resolveAgentProviderForTask({
+      selectedProvider: 'codi',
+      latestUserInput: 'Research debugging practices with citations.',
+    })).toBe('researcher');
 
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
@@ -158,6 +173,11 @@ describe('agent helpers', () => {
       provider: 'codi',
       hasCodiModelsReady: true,
       hasGhcpModelsReady: true,
+    })).toBe('codi');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'debugger',
+      hasCodiModelsReady: true,
+      hasGhcpModelsReady: false,
     })).toBe('codi');
   });
 });

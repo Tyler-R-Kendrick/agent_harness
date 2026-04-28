@@ -8,6 +8,7 @@ import {
   NotEnabledError,
   NotEditableError,
   NotAttachedError,
+  ObscuredError,
   FrameNotFoundError,
   FrameNotCooperativeError,
   RemoteRPCTimeoutError,
@@ -61,6 +62,12 @@ describe('errors', () => {
   it('NotAttachedError', () => {
     const err = new NotAttachedError('span');
     expect(err.code).toBe('NOT_ATTACHED');
+  });
+
+  it('ObscuredError', () => {
+    const err = new ObscuredError('button');
+    expect(err.code).toBe('OBSCURED');
+    expect(err.message).toContain('button');
   });
 
   it('FrameNotFoundError', () => {
