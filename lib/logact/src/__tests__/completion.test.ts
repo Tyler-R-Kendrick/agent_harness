@@ -118,11 +118,12 @@ describe('LogActAgent – completion checker / Ralph Loop', () => {
 
   it('does not enqueue blank checker feedback for another turn', async () => {
     const bus = new InMemoryAgentBus();
+    const seenMessages: Array<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>> = [];
 
     const agent = new LogActAgent({
       bus,
-      inferenceClient: makeInference(['partial answer'], []),
-      executor: makeExecutor(async () => 'partial result'),
+      inferenceClient: makeInference(['needs review'], seenMessages),
+      executor: makeExecutor(async (action) => `executed:${action}`),
       completionChecker: {
         async check({ lastResult }) {
           return {
@@ -133,15 +134,22 @@ describe('LogActAgent – completion checker / Ralph Loop', () => {
           };
         },
       },
-      maxTurns: 1,
+      maxTurns: 2,
     });
 
-    await agent.send('Make progress.');
+    await agent.send('Complete the task.');
     const results = await agent.run();
 
     expect(results).toHaveLength(1);
+    expect(seenMessages).toHaveLength(2);
+
     const entries = await bus.read(0, await bus.tail());
-    expect(entries.filter((entry) => entry.payload.type === PayloadType.Mail)).toHaveLength(1);
+    const mailEntries = entries.filter((entry) => entry.payload.type === PayloadType.Mail);
+    expect(mailEntries).toHaveLength(1);
+    expect(mailEntries[0].payload).toMatchObject({
+      from: 'user',
+      content: 'Complete the task.',
+    });
   });
 
   it('keeps existing single-turn behavior when no completion checker is configured', async () => {
@@ -161,34 +169,6 @@ describe('LogActAgent – completion checker / Ralph Loop', () => {
     expect(results).toHaveLength(1);
     const entries = await bus.read(0, await bus.tail());
     expect(entries.some((entry) => entry.payload.type === PayloadType.Completion)).toBe(false);
-  });
-
-  it('does not enqueue blank checker feedback for another turn', async () => {
-    const bus = new InMemoryAgentBus();
-
-    const agent = new LogActAgent({
-      bus,
-      inferenceClient: makeInference(['unfinished draft', 'should not run'], []),
-      executor: makeExecutor(async () => 'draft result'),
-      completionChecker: {
-        async check({ lastResult }) {
-          return {
-            type: PayloadType.Completion,
-            intentId: lastResult.intentId,
-            done: false,
-            feedback: '   ',
-          };
-        },
-      },
-      maxTurns: 1,
-    });
-
-    await agent.send('Complete the task.');
-    const results = await agent.run();
-
-    expect(results).toHaveLength(1);
-    const entries = await bus.read(0, await bus.tail());
-    expect(entries.filter((entry) => entry.payload.type === PayloadType.Mail)).toHaveLength(1);
   });
 
   it('passes an undefined task to the checker when the history has no mail entries', async () => {
