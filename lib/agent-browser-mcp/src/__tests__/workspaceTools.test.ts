@@ -60,7 +60,9 @@ describe('workspaceTools', () => {
       { name: 'list_filesystem_entries', readOnlyHint: true },
       { name: 'read_browser_location', readOnlyHint: true },
       { name: 'read_filesystem_properties', readOnlyHint: true },
+      { name: 'read_web_page', readOnlyHint: true },
       { name: 'recall_user_context', readOnlyHint: true },
+      { name: 'search_web', readOnlyHint: true },
     ]);
     expect(getModelContextRegistry(modelContext).has('list_tools')).toBe(false);
     expect(getModelContextRegistry(modelContext).has('list_resources')).toBe(false);

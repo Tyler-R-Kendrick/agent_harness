@@ -1,0 +1,99 @@
+name: generic-search-fulfillment
+version: "1.0"
+description: >
+  Real AgentV/AgentEvals gate for generic local entity search fulfillment.
+  The workflow must return requested entities, not page chrome, and must run
+  analyzer, validation, post-processing, and verification steps.
+metadata:
+  owner: agent-browser
+  tags: [search, logact, tool-trajectory, user-memory, runtime-regression]
+execution:
+  target: agent-browser-search-fulfillment
+  timeout_seconds: 60
+assertions:
+  - name: tool-path
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: webmcp:recall_user_context
+      - tool: webmcp:search_web
+      - tool: search-analyzer
+      - tool: webmcp:read_web_page
+      - tool: validation-agent
+      - tool: post-processor
+      - tool: verification-agent
+
+  - name: bounded-work
+    type: execution-metrics
+    required: true
+    max_tool_calls: 40
+    max_tokens: 5000
+    max_duration_ms: 30000
+
+  - name: output-quality
+    type: code-grader
+    required: true
+    command: ["node", "./graders/search-quality-gate.mjs"]
+
+  - name: actual-entity-rubric
+    type: rubric
+    required: true
+    rubrics:
+      - id: actual-entity-names
+        outcome: The answer lists actual named real-world entities of the requested subject, not page chrome, navigation text, content titles, source categories, or generic listing titles.
+        required: true
+        weight: 3
+      - id: requested-subject-match
+        outcome: Every listed item matches the current request subject and does not leak stale subjects from prior turns.
+        required: true
+        weight: 2
+      - id: geographic-evidence
+        outcome: Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity.
+        required: true
+        weight: 2
+      - id: source-backed-links
+        outcome: Entity names are linked to source-backed entity-specific URLs when those URLs are available.
+        required: true
+        weight: 2
+      - id: page-chrome-rejection
+        outcome: Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities.
+        required: true
+        weight: 3
+
+  - name: actual-entity-llm-judge
+    type: llm-grader
+    required: true
+    prompt: ./prompts/actual-entity-judge.md
+
+  - name: search-quality-composite
+    type: composite
+    required: true
+    aggregator:
+      type: threshold
+      threshold: 1
+    assertions:
+      - name: composite-tool-path
+        type: tool-trajectory
+        mode: in_order
+        expected:
+          - tool: webmcp:recall_user_context
+          - tool: webmcp:search_web
+          - tool: search-analyzer
+          - tool: webmcp:read_web_page
+          - tool: validation-agent
+          - tool: post-processor
+          - tool: verification-agent
+      - name: composite-output-quality
+        type: code-grader
+        command: ["node", "./graders/search-quality-gate.mjs"]
+      - name: composite-llm-judge
+        type: llm-grader
+        prompt: ./prompts/actual-entity-judge.md
+      - name: composite-bounded-work
+        type: execution-metrics
+        max_tool_calls: 40
+        max_tokens: 5000
+        max_duration_ms: 30000
+
+tests: ./cases.jsonl

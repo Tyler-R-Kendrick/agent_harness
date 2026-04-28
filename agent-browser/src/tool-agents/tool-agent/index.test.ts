@@ -103,6 +103,15 @@ describe('Tool Agent', () => {
         subGroup: 'user-context-mcp',
         subGroupLabel: 'User Context',
       },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local restaurant results.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
     ];
 
     const plan = createStaticToolPlan({
@@ -110,14 +119,16 @@ describe('Tool Agent', () => {
       descriptors: userContextDescriptors,
     }, 'list restaurants near me');
 
-    expect(plan.selectedToolIds.slice(0, 3)).toEqual([
+    expect(plan.selectedToolIds.slice(0, 4)).toEqual([
       'webmcp:recall_user_context',
       'webmcp:read_browser_location',
+      'webmcp:search_web',
       'webmcp:elicit_user_input',
     ]);
     expect(plan.actorToolAssignments?.executor).toEqual(expect.arrayContaining([
       'webmcp:recall_user_context',
       'webmcp:read_browser_location',
+      'webmcp:search_web',
       'webmcp:elicit_user_input',
     ]));
     expect(plan.actorToolAssignments?.executor).not.toContain('cli');

@@ -104,6 +104,8 @@ type StepOutputMap = Record<string, { output?: unknown; error?: string }>;
 const LOCATION_CONTEXT_TOOL_ORDER = [
   'webmcp:recall_user_context',
   'webmcp:read_browser_location',
+  'webmcp:search_web',
+  'webmcp:read_web_page',
   'webmcp:elicit_user_input',
 ] as const;
 

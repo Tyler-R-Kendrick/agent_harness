@@ -1,0 +1,56 @@
+{
+  "metadata": {
+    "eval_file": "C:\\src\\agent-harness\\agent-browser\\evals\\search-fulfillment\\EVAL.live.yaml",
+    "timestamp": "2026-04-27T21:04:31.027Z",
+    "targets": [
+      "agent-browser-search-fulfillment-live"
+    ],
+    "tests_run": [
+      "cafes-nearest"
+    ],
+    "experiment": "default"
+  },
+  "run_summary": {
+    "agent-browser-search-fulfillment-live": {
+      "pass_rate": {
+        "mean": 1,
+        "stddev": 0
+      },
+      "time_seconds": {
+        "mean": 0.04,
+        "stddev": 0
+      },
+      "tokens": {
+        "mean": 397,
+        "stddev": 0
+      }
+    }
+  },
+  "per_grader_summary": {
+    "tool-path:tool-trajectory": {
+      "mean": 1,
+      "stddev": 0
+    },
+    "bounded-work:execution-metrics": {
+      "mean": 1,
+      "stddev": 0
+    },
+    "semantic-output-quality:code-grader": {
+      "mean": 0.889,
+      "stddev": 0
+    },
+    "live-entity-rubric:llm-grader": {
+      "mean": 1,
+      "stddev": 0
+    },
+    "actual-entity-llm-judge:llm-grader": {
+      "mean": 1,
+      "stddev": 0
+    },
+    "live-search-quality-composite:composite": {
+      "mean": 1,
+      "stddev": 0
+    }
+  },
+  "notes": []
+}

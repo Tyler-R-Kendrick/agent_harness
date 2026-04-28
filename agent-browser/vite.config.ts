@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
 import path from 'node:path';
 import { createCopilotApiMiddleware } from './server/copilotMiddleware';
+import { createSearchApiMiddleware, createWebPageApiMiddleware } from './server/searchMiddleware';
 
 // just-bash/browser imports gunzipSync from node:zlib for gzip/gunzip/zcat.
 // Those commands are documented as unsupported in browsers. This plugin stubs
@@ -30,9 +31,13 @@ const copilotApiPlugin: Plugin = {
   name: 'copilot-api',
   configureServer(server) {
     server.middlewares.use(createCopilotApiMiddleware());
+    server.middlewares.use(createSearchApiMiddleware());
+    server.middlewares.use(createWebPageApiMiddleware());
   },
   configurePreviewServer(server) {
     server.middlewares.use(createCopilotApiMiddleware());
+    server.middlewares.use(createSearchApiMiddleware());
+    server.middlewares.use(createWebPageApiMiddleware());
   },
 };
 

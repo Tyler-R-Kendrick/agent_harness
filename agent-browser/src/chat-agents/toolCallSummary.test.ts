@@ -230,6 +230,15 @@ describe('webmcp: user context tools', () => {
   });
 });
 
+describe('webmcp: search tools', () => {
+  it('summarizes web search calls', () => {
+    expect(summarizeToolCall('webmcp:search_web', { query: 'best restaurants Arlington Heights IL' })).toBe(
+      'Searched web for "best restaurants Arlington Heights IL"',
+    );
+    expect(summarizeToolCall('webmcp:search_web', {})).toBe('Searched web');
+  });
+});
+
 describe('webmcp: workspace tools', () => {
     it('reads workspace overview', () => {
       expect(summarizeToolCall('webmcp:workspace_overview', {})).toBe('Read workspace overview');

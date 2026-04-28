@@ -24,11 +24,17 @@ export function InlineProcess({
   const voterSteps = message.voterSteps ?? [];
   const busEntries = message.busEntries ?? [];
 
-  const isStopped = message.statusText === 'stopped';
-  const isStreaming = !isStopped && (message.status === 'streaming' || message.isThinking);
   const hasActiveProcessEntry = processEntries.some((entry) => entry.status === 'active');
   const hasActiveReasoning = reasoningSteps.some((step) => step.status === 'active');
   const hasActiveVoter = voterSteps.some((step) => step.status === 'active');
+  const isStopped = message.statusText === 'stopped';
+  const isStreaming = !isStopped && (
+    Boolean(message.isThinking)
+    || (
+      message.status === 'streaming'
+      && (hasActiveProcessEntry || hasActiveReasoning || hasActiveVoter)
+    )
+  );
   const isActive = !isStopped && (isStreaming || hasActiveProcessEntry || hasActiveReasoning || hasActiveVoter);
 
   const duration = useMemo(() => {

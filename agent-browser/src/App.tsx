@@ -497,6 +497,85 @@ function readBrowserLocationFromNavigator(): Promise<
   });
 }
 
+async function searchWebFromApi({ query, limit }: { query: string; limit: number }) {
+  try {
+    const response = await fetch('/api/web-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit }),
+    });
+    if (!response.ok) {
+      return {
+        status: 'unavailable' as const,
+        query,
+        reason: `Web search returned ${response.status}.`,
+        results: [],
+      };
+    }
+    const result = await response.json();
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      return {
+        status: 'unavailable' as const,
+        query,
+        reason: 'Web search returned an invalid response.',
+        results: [],
+      };
+    }
+    return result;
+  } catch (error) {
+    return {
+      status: 'unavailable' as const,
+      query,
+      reason: error instanceof Error ? error.message : 'Web search is unavailable.',
+      results: [],
+    };
+  }
+}
+
+async function readWebPageFromApi({ url }: { url: string }) {
+  try {
+    const response = await fetch('/api/web-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) {
+      return {
+        status: 'unavailable' as const,
+        url,
+        reason: `Web page read returned ${response.status}.`,
+        links: [],
+        jsonLd: [],
+        entities: [],
+        observations: [],
+      };
+    }
+    const result = await response.json();
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      return {
+        status: 'unavailable' as const,
+        url,
+        reason: 'Web page read returned an invalid response.',
+        links: [],
+        jsonLd: [],
+        entities: [],
+        observations: [],
+      };
+    }
+    return result;
+  } catch (error) {
+    return {
+      status: 'unavailable' as const,
+      url,
+      reason: error instanceof Error ? error.message : 'Web page reading is unavailable.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    };
+  }
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
@@ -2016,6 +2095,14 @@ function ChatPanel({
         return branch;
       };
       const snapshotProcess = (): ProcessEntry[] => processLog.snapshot();
+      const finalizeActiveProcessEntries = (): ProcessEntry[] => {
+        for (const entry of processLog.snapshot()) {
+          if (entry.status === 'active') {
+            processLog.update(entry.id, { status: 'done' });
+          }
+        }
+        return snapshotProcess();
+      };
       let localToolRunTimedOut = false;
       let activePlanningStage: PlanningStageName | null = null;
       const lastProcessIdByBranch = new Map<string, string>();
@@ -2379,6 +2466,17 @@ function ChatPanel({
           if (mainParentProcessId) {
             processHandoffParentByStage.set(targetStage, mainParentProcessId);
             processIdByActorId.set('logact', mainParentProcessId);
+          }
+          return;
+        }
+        if (fromAgentId === 'logact' && targetStage === 'executor') {
+          const logactParentProcessId = lastProcessIdByBranch.get('agent:logact')
+            ?? processIdByActorId.get('judge-approved')
+            ?? processIdByActorId.get('tools-selected')
+            ?? processIdByActorId.get('logact')
+            ?? resolveMainThreadProcessParentId();
+          if (logactParentProcessId) {
+            processHandoffParentByStage.set(targetStage, logactParentProcessId);
           }
           return;
         }
@@ -3099,6 +3197,7 @@ function ChatPanel({
                 syncPlanningStage('agent-bus', buildDelegationBusStageBody(delegationBusEntries), 'done');
               }
               const finalizedSteps = finalizeToolReasoningSteps();
+              const finalizedProcessEntries = finalizeActiveProcessEntries();
               updateMessage(assistantId, {
                 status: 'complete',
                 loadingStatus: null,
@@ -3110,7 +3209,7 @@ function ChatPanel({
                 voterSteps: finalizedVoters.length ? finalizedVoters : undefined,
                 isVoting: false,
                 busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
-                processEntries: snapshotProcess(),
+                processEntries: finalizedProcessEntries,
               });
             },
             onError: (error: Error) => {
@@ -3124,6 +3223,7 @@ function ChatPanel({
               if (delegationBusEntries.length) {
                 syncPlanningStage('agent-bus', buildDelegationBusStageBody(delegationBusEntries), 'done');
               }
+              const finalizedProcessEntries = finalizeActiveProcessEntries();
               updateMessage(assistantId, {
                 status: 'error',
                 loadingStatus: null,
@@ -3135,13 +3235,13 @@ function ChatPanel({
                 voterSteps: finalizedVoters.length ? finalizedVoters : undefined,
                 isVoting: false,
                 busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
-                processEntries: snapshotProcess(),
+                processEntries: finalizedProcessEntries,
               });
             },
           };
 
           if (shouldRunParallelDelegation(text, capabilities)) {
-            await runParallelDelegationWorkflow({
+            const result = await runParallelDelegationWorkflow({
               model,
               prompt: text,
               workspaceName,
@@ -3340,8 +3440,9 @@ function ChatPanel({
               },
               ...sharedCallbacks,
             });
+            sharedCallbacks.onDone?.(result.text);
           } else {
-            await runStagedToolPipeline({
+            const result = await runStagedToolPipeline({
               model,
               tools,
               toolDescriptors: selectedDescriptors,
@@ -3516,6 +3617,7 @@ function ChatPanel({
               },
               ...sharedCallbacks,
             });
+            sharedCallbacks.onDone?.(result.text);
           }
         } finally {
           clearLocalToolWatchdogs();
@@ -4538,6 +4640,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
   const copilotReady = hasGhcpAccess(copilotState);
+  const copilotNeedsSignIn = !copilotState.authenticated;
   // Recommended = seed models not yet installed, only shown when no filter active
   const recommended = !isFiltering ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
   const recommendedIds = new Set(recommended.map((m) => m.id));
@@ -4571,7 +4674,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
             </div>
             {copilotState.statusMessage ? <p className="muted">{copilotState.statusMessage}</p> : null}
             {copilotState.error ? <p className="file-editor-error">{copilotState.error}</p> : null}
-            {!copilotReady ? (
+            {!copilotReady && copilotNeedsSignIn ? (
               <>
                 <div className="provider-actions">
                   <a className="secondary-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Copilot</a>
@@ -4582,6 +4685,11 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
                   <input aria-label="GitHub Copilot sign-in command" value={copilotState.signInCommand} readOnly />
                 </label>
               </>
+            ) : !copilotReady ? (
+              <div className="provider-actions">
+                <span className="badge">No enabled models</span>
+                <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
             ) : (
               <div className="provider-actions">
                 <span className="badge connected">GHCP available</span>
@@ -8416,6 +8524,8 @@ function AgentBrowserApp() {
       getBrowserPageHistory: getBrowserPageHistoryFromMcp,
       getUserContextMemory: ({ query, limit }) => searchUserContextMemory(activeWorkspace.name, query, limit),
       getBrowserLocation: readBrowserLocationFromNavigator,
+      onSearchWeb: searchWebFromApi,
+      onReadWebPage: readWebPageFromApi,
       onElicitUserInput: (input) => {
         const requestId = `elicitation-${createUniqueId()}`;
         const detail: UserElicitationEventDetail = {

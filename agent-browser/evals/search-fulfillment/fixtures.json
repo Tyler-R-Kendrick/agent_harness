@@ -1,0 +1,105 @@
+{
+  "tests": [
+    {
+      "id": "movie-theaters-arlington-heights",
+      "query": "best movie theaters Arlington Heights IL",
+      "toolTrajectory": [
+        "webmcp:recall_user_context",
+        "webmcp:search_web",
+        "search-analyzer",
+        "webmcp:read_web_page",
+        "validation-agent",
+        "post-processor",
+        "verification-agent",
+        "agentevals:llm_as_judge"
+      ],
+      "answer": "Here are movie theaters near Arlington Heights, IL:\n\n1. [AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12) - Why: Theater listing at Randhurst Village in Mount Prospect, near Arlington Heights, IL.\n2. [CMX Arlington Heights](https://www.cmxcinemas.com/location/cmx-arlington-heights) - Why: Theater listing in Arlington Heights, IL.\n3. [Classic Cinemas Elk Grove Theatre](https://www.classiccinemas.com/elk-grove) - Why: Theater listing in Elk Grove Village near Arlington Heights, IL.",
+      "expectedEntities": [
+        "AMC Randhurst 12",
+        "CMX Arlington Heights",
+        "Classic Cinemas Elk Grove Theatre"
+      ],
+      "expectedLocations": [
+        "Mount Prospect",
+        "Arlington Heights",
+        "Elk Grove Village"
+      ],
+      "forbiddenEntityLabels": [
+        "Theaters",
+        "TV Shows",
+        "FanStore",
+        "Movie Charts",
+        "Movie News",
+        "Movies",
+        "At Home",
+        "Streaming",
+        "Coming Soon",
+        "'Supergirl' Trailer",
+        "Skip to Main Content"
+      ],
+      "forbidden": [
+        "Skip to Main Content",
+        "At Home",
+        "Streaming",
+        "Coming Soon",
+        "Showtimes",
+        "Tickets",
+        "period. It's a unique theater",
+        "they have a nice bar",
+        "Local Movie Times and Movie Theaters near 60004",
+        "Bar Salotto",
+        "Francesca",
+        "Kaido Sushi"
+      ]
+    },
+    {
+      "id": "ranking-intents",
+      "queries": [
+        "worst bars Arlington Heights IL",
+        "closest parks Arlington Heights IL",
+        "most popular coffee shops Arlington Heights IL",
+        "best restaurants Arlington Heights IL"
+      ],
+      "forbidden": [
+        "worst worst",
+        "closest closest",
+        "most popular most popular",
+        "Movies",
+        "'Supergirl' Trailer",
+        "Skip to Main Content"
+      ]
+    },
+    {
+      "id": "restaurant-preference-memory",
+      "query": "best indian restaurants Arlington Heights IL",
+      "answer": "Here are restaurants near Arlington Heights, IL:\n\n1. [Maharaj Indian Grill](https://example.com/maharaj-indian-grill) - Why: Sourced restaurant result.",
+      "expectedEntities": [
+        "Maharaj Indian Grill"
+      ],
+      "forbidden": [
+        "movie theater",
+        "AMC Randhurst"
+      ]
+    }
+  ],
+  "negativeTests": [
+    {
+      "id": "movie-theaters-runtime-page-chrome-negative",
+      "query": "best movie theaters Arlington Heights IL",
+      "badAnswer": "Here are movie theaters near Arlington Heights, IL:\n\n1. [At Home](https://www.fandango.com/watch-at-home) - Why: Found on a showtimes source source page for Arlington Heights, IL. page link\n2. [Movie Charts](https://www.fandango.com/movie-charts) - Why: Found on a showtimes source source page for Arlington Heights, IL. page link\n3. [Movie News](https://www.fandango.com/movie-news) - Why: Found on a showtimes source source page for Arlington Heights, IL. page link",
+      "forbiddenEntityLabels": [
+        "At Home",
+        "Movie Charts",
+        "Movie News"
+      ],
+      "expectedEntities": [
+        "AMC Randhurst 12",
+        "CMX Arlington Heights",
+        "Classic Cinemas Elk Grove Theatre"
+      ],
+      "expectedResult": "verification_fail",
+      "forbiddenResponseReady": true,
+      "expectedJudge": "llm_as_judge_fail"
+    }
+  ]
+}

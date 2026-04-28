@@ -30,6 +30,7 @@ export interface OrchestratorTask {
   prompt: string;
   source: string;
   dependsOnPrevious: boolean;
+  verificationCriteria: string[];
 }
 
 export interface OrchestratorTaskPlan {
@@ -142,6 +143,30 @@ function formatMessages(messages: ModelMessage[]): string {
     .join('\n\n');
 }
 
+function buildVerificationCriteria(task: string): string[] {
+  const criteria = [
+    'Final answer must answer the current user request.',
+    'Final answer must not expose internal AgentBus or process summaries.',
+  ];
+  const searchLike = /\b(best|top|worst|closest|most popular|recommend|recommendations?|reviews?|showtimes?|near me|nearby|around me|local|current|latest|search|find)\b/i.test(task);
+  if (searchLike) {
+    criteria.push(
+      'Answer must contain actual named entities or direct task outputs supported by evidence.',
+      'Each linked item must be a specific instance of the current requested subject, not a generic category, site section, navigation label, or content type.',
+      'Entity links must be source-backed and entity-specific when links are available.',
+      'Entities, facts, and output structure must match the current requested subject.',
+      'Generic page/navigation labels are forbidden as final answers.',
+    );
+  }
+  if (searchLike && /\b(near me|nearby|around me|close to me|in my area|local|near us|around us)\b/i.test(task)) {
+    criteria.splice(4, 0, 'Nearby results must include per-entity geographic, address, distance, or proximity evidence for the resolved location.');
+  }
+  if (searchLike && /\b(best|top|worst|closest|popular|recommend|recommendations?)\b/i.test(task)) {
+    criteria.push('Ranking claims must be grounded in source evidence appropriate to the requested ranking goal.');
+  }
+  return criteria;
+}
+
 export function planOrchestratorTasks(
   messages: ModelMessage[],
   workspaceName = 'Workspace',
@@ -160,16 +185,20 @@ export function planOrchestratorTasks(
     mode,
     tasks: taskSources.map((source, index) => {
       const dependsOnPrevious = mode === 'sequential' && index > 0;
+      const verificationCriteria = buildVerificationCriteria(source);
       return {
         id: `task-${index + 1}`,
         source,
         dependsOnPrevious,
+        verificationCriteria,
         prompt: [
           `Orchestrator task ${index + 1} of ${taskSources.length} (${mode}).`,
           `Workspace: ${workspaceName}.`,
           `Original request: ${rawTask}`,
           `Enhanced task prompt: ${source}`,
           dependsOnPrevious ? 'Sequence dependency: use prior task results before starting this task.' : null,
+          'Verification criteria:',
+          ...verificationCriteria.map((criterion) => `- ${criterion}`),
           'Completion contract: write candidate design, votes, judge decision, execution result, and any recovery back to AgentBus.',
         ].filter(Boolean).join('\n'),
       };
@@ -365,6 +394,7 @@ export async function runStagedToolPipeline(
         plan: fallbackSelection.plan,
         selectedDescriptors: fallbackSelection.selectedDescriptors,
         selectedTools: fallbackSelection.selectedTools,
+        verificationCriteria: task.verificationCriteria,
         selectTools: async ({ messages }) => {
           const planned = await runToolPlanningAgent({
             model: options.model,
@@ -400,6 +430,7 @@ export async function runStagedToolPipeline(
           }, context.plan, context.selectedDescriptors, context.selectedTools, {
             ...taskCallbacks,
             onBusEntry: undefined,
+            onDone: undefined,
           }, context);
         },
       }, taskCallbacks);
@@ -420,9 +451,14 @@ export async function runStagedToolPipeline(
     }
 
     const result = combineTaskResults(taskResults);
+    callbacks.onStageComplete?.('orchestrator', [
+      `Execution mode: ${orchestrated.mode}.`,
+      `State machine completed: ${orchestrated.tasks.map((task) => task.id).join(', ')}.`,
+    ].join('\n'), orchestratorMeta);
     if (executorStarted) {
       callbacks.onStageComplete?.('executor', result.text, executorMeta);
     }
+    callbacks.onDone?.(result.text);
     return result;
   } catch (error) {
     const wrapped = error instanceof Error ? error : new Error(String(error));

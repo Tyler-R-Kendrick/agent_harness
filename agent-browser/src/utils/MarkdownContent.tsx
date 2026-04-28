@@ -17,6 +17,7 @@ function renderMarkdown(content: string): string {
   return DOMPurify.sanitize(html, {
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form'],
     FORBID_ATTR: ['onerror', 'onclick', 'onload', 'onmouseover'],
+    ADD_ATTR: ['target', 'rel'],
   });
 }
 

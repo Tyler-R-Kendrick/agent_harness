@@ -4,6 +4,7 @@ import { registerBrowserPageSurface } from './browserPageTools';
 import { registerClipboardTools } from './clipboardTools';
 import { registerFilesystemTools } from './filesystemTools';
 import { registerRendererViewportTools } from './rendererViewportTools';
+import { registerSearchTools } from './searchTools';
 import { registerUserContextTools } from './userContextTools';
 import { registerWorkspaceIntrospectionTools } from './workspaceIntrospectionTools';
 import { registerWorkspaceFileSurface } from './workspaceFileTools';
@@ -23,6 +24,7 @@ export { registerBrowserPageSurface } from './browserPageTools';
 export { registerClipboardTools } from './clipboardTools';
 export { registerFilesystemTools } from './filesystemTools';
 export { registerRendererViewportTools } from './rendererViewportTools';
+export { registerSearchTools } from './searchTools';
 export { registerSessionTools } from './sessionTools';
 export { registerSessionFilesystemTools } from './sessionFilesystemTools';
 export { registerUserContextTools } from './userContextTools';
@@ -43,6 +45,7 @@ export function registerWorkspaceTools(modelContext: ModelContext, options: Regi
   registerRendererViewportTools(modelContext, options);
   registerClipboardTools(modelContext, options);
   registerUserContextTools(modelContext, options);
+  registerSearchTools(modelContext, options);
 }
 
 export function registerWorkspaceFileTools(modelContext: ModelContext, options: RegisterWorkspaceFileToolsOptions): void {
