@@ -182,7 +182,7 @@ describe('summarizeToolCall', () => {
     });
   });
 
-  describe('webmcp: session tools', () => {
+describe('webmcp: session tools', () => {
     it('reads session', () => {
       expect(summarizeToolCall('webmcp:read_session', {})).toBe('Read session');
     });
@@ -220,9 +220,17 @@ describe('summarizeToolCall', () => {
     it('creates session', () => {
       expect(summarizeToolCall('webmcp:create_session', {})).toBe('Created session');
     });
-  });
+});
 
-  describe('webmcp: workspace tools', () => {
+describe('webmcp: user context tools', () => {
+  it('summarizes user-context MCP calls', () => {
+    expect(summarizeToolCall('webmcp:recall_user_context', { query: 'location' })).toBe('Recalled user context for location');
+    expect(summarizeToolCall('webmcp:read_browser_location', {})).toBe('Read browser location');
+    expect(summarizeToolCall('webmcp:elicit_user_input', {})).toBe('Requested user input');
+  });
+});
+
+describe('webmcp: workspace tools', () => {
     it('reads workspace overview', () => {
       expect(summarizeToolCall('webmcp:workspace_overview', {})).toBe('Read workspace overview');
     });

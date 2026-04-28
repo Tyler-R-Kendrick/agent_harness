@@ -36,6 +36,17 @@ export interface TreeNode {
 export interface McpCard {
   app: string;
   args: Record<string, unknown>;
+  kind?: 'elicitation';
+  requestId?: string;
+  prompt?: string;
+  fields?: Array<{
+    id: string;
+    label: string;
+    required?: boolean;
+    placeholder?: string;
+  }>;
+  status?: 'pending' | 'submitted';
+  response?: Record<string, string>;
 }
 
 export interface SourceChip {
@@ -125,6 +136,22 @@ export interface BusEntryStep {
   detail: string;
   /** Optional originating actor id — voter id, subagent id, etc. */
   actor?: string;
+  /** LogAct actor id for deconstructed state-machine actors. */
+  actorId?: string;
+  /** LogAct actor role: driver, voter, decider, executor, etc. */
+  actorRole?: string;
+  /** Parent LogAct actor id for graph branch attachment. */
+  parentActorId?: string;
+  /** Preferred graph branch/lifeline id for this AgentBus row. */
+  branchId?: string;
+  /** Human label for actor rows. */
+  agentLabel?: string;
+  /** Model id used by this actor, if known. */
+  modelId?: string;
+  /** Model provider/runtime used by this actor, if known. */
+  modelProvider?: string;
+  /** Bounded LogAct rerun pass for dynamic actor entries. */
+  passIndex?: number;
 }
 
 export interface ChatMessage {

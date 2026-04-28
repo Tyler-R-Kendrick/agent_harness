@@ -24,11 +24,12 @@ export function InlineProcess({
   const voterSteps = message.voterSteps ?? [];
   const busEntries = message.busEntries ?? [];
 
-  const isStreaming = message.status === 'streaming' || message.isThinking;
+  const isStopped = message.statusText === 'stopped';
+  const isStreaming = !isStopped && (message.status === 'streaming' || message.isThinking);
   const hasActiveProcessEntry = processEntries.some((entry) => entry.status === 'active');
   const hasActiveReasoning = reasoningSteps.some((step) => step.status === 'active');
   const hasActiveVoter = voterSteps.some((step) => step.status === 'active');
-  const isActive = isStreaming || hasActiveProcessEntry || hasActiveReasoning || hasActiveVoter;
+  const isActive = !isStopped && (isStreaming || hasActiveProcessEntry || hasActiveReasoning || hasActiveVoter);
 
   const duration = useMemo(() => {
     if (processEntries.length) {
@@ -70,11 +71,12 @@ export function InlineProcess({
   const doneLabelPrefix = count
     ? `Process · ${count} event${count === 1 ? '' : 's'} ·`
     : 'Process ·';
+  const durationSeconds = duration ?? (isStopped && count ? 1 : undefined);
 
   return (
     <OperationTrigger
       isActive={isActive}
-      durationSeconds={duration}
+      durationSeconds={durationSeconds}
       activeLabel={activeLabel}
       doneLabelPrefix={doneLabelPrefix}
       activeIcon={

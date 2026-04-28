@@ -18,6 +18,8 @@ export {
 export type {
   Entry,
   Payload,
+  AgentBusActorRole,
+  AgentBusPayloadMeta,
   CompletionPayload,
   CompletionScore,
   InfInPayload,

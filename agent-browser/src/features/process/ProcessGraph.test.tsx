@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { ProcessGraph } from './ProcessGraph';
+import { findOrphanBranches, ProcessGraph } from './ProcessGraph';
 import type { ProcessEntry } from '../../services/processLog';
 
 function entry(partial: Partial<ProcessEntry> & { id: string; ts: number; position: number }): ProcessEntry {
@@ -75,7 +75,7 @@ describe('ProcessGraph', () => {
     expect(merge?.style.top).not.toBe(fork?.style.top);
   });
 
-  it('keeps the parent rail running through the child branch instead of ending at it', () => {
+  it('ends the parent rail where its direct child branch returns', () => {
     const entries: ProcessEntry[] = [
       entry({ id: 'root', ts: 1000, position: 1, branchId: 'coordinator', actor: 'root' }),
       entry({ id: 'child-a', ts: 2000, position: 2, branchId: 'worker', parentId: 'root', actor: 'worker-a' }),
@@ -88,7 +88,8 @@ describe('ProcessGraph', () => {
     childRows.forEach((row) => {
       expect(row?.querySelector('[data-lane="coordinator"]')).toHaveClass('pg-rail-lane-active');
     });
-    expect(childRows.at(-1)?.querySelector('[data-lane="coordinator"]')).not.toHaveClass('pg-rail-lane-end');
+    expect(childRows.at(-1)?.querySelector('.pg-rail-lane[data-lane="coordinator"]')).toHaveClass('pg-rail-lane-end');
+    expect(childRows.at(-1)?.querySelector('[data-connector="merge"][data-lane="worker"]')).toBeInTheDocument();
   });
 
   it('renders visible return merges for each completed sibling branch', () => {
@@ -120,7 +121,7 @@ describe('ProcessGraph', () => {
     });
   });
 
-  it('keeps intermediate parent branches open when bus work nests under mail', () => {
+  it('keeps ancestor branches open while nested child threads are active', () => {
     const entries: ProcessEntry[] = [
       entry({ id: 'router', ts: 1000, position: 1, branchId: 'main', actor: 'router' }),
       entry({ id: 'tool-select', ts: 2000, position: 2, branchId: 'main', actor: 'tool-select' }),
@@ -146,8 +147,11 @@ describe('ProcessGraph', () => {
     expect(turnFork?.style.width).toBe('14px');
     expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
     expect(busRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).not.toHaveClass('pg-rail-lane-end');
+    expect(busRow?.querySelector('[data-connector="merge"][data-lane="mail:user"]')).not.toBeInTheDocument();
+    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-active');
+    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="mail:user"]')).toHaveClass('pg-rail-lane-end');
     expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).toHaveClass('pg-rail-lane-active');
-    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).not.toHaveClass('pg-rail-lane-end');
+    expect(turnRow?.querySelector('.pg-rail-lane[data-lane="bus"]')).toHaveClass('pg-rail-lane-end');
     expect(turnRow?.querySelector('[data-connector="merge"][data-lane="bus"]')).toBeInTheDocument();
     expect(turnRow?.querySelector('[data-connector="merge"][data-lane="mail:user"]')).toBeInTheDocument();
   });
@@ -162,6 +166,126 @@ describe('ProcessGraph', () => {
 
     expect(container.querySelector('[data-connector="fork"][data-lane="worker"]')).toBeInTheDocument();
     expect(container.querySelector('[data-connector="merge"][data-lane="worker"]')).not.toBeInTheDocument();
+  });
+
+  it('flags non-main branches that do not have a real parent row', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'tool', ts: 1000, position: 1, branchId: 'tools:CodeMode', actor: 'tools:CodeMode' }),
+    ];
+
+    expect(findOrphanBranches(entries)).toEqual(['tools:CodeMode']);
+  });
+
+  it('does not flag child branches that fork from an existing parent row', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'main', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent' }),
+      entry({ id: 'tool', ts: 2000, position: 2, branchId: 'tools:CodeMode', parentId: 'main', actor: 'tools:CodeMode' }),
+    ];
+
+    expect(findOrphanBranches(entries)).toEqual([]);
+  });
+
+  it('keeps agent parent branches open until descendant handoff work returns', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'chat', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent' }),
+      entry({ id: 'planner', ts: 2000, position: 2, branchId: 'agent:planner', parentId: 'chat', actor: 'planner' }),
+      entry({ id: 'router', ts: 3000, position: 3, branchId: 'agent:router-agent', parentId: 'planner', actor: 'router-agent' }),
+      entry({ id: 'orchestrator', ts: 4000, position: 4, branchId: 'agent:orchestrator', parentId: 'router', actor: 'orchestrator' }),
+    ];
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+    const routerRow = container.querySelector('[data-actor="router-agent"]');
+    const orchestratorRow = container.querySelector('[data-actor="orchestrator"]');
+
+    expect(routerRow?.querySelector('[data-connector="merge"][data-lane="agent:planner"]')).not.toBeInTheDocument();
+    expect(routerRow?.querySelector('.pg-rail-lane[data-lane="agent:planner"]')).toHaveClass('pg-rail-lane-active');
+    expect(orchestratorRow?.querySelector('.pg-rail-lane[data-lane="agent:planner"]')).toHaveClass('pg-rail-lane-active');
+    expect(orchestratorRow?.querySelector('.pg-rail-lane[data-lane="agent:planner"]')).toHaveClass('pg-rail-lane-end');
+    expect(orchestratorRow?.querySelector('[data-connector="merge"][data-lane="agent:planner"]')).toBeInTheDocument();
+  });
+
+  it('merges a completed agent branch back onto an existing main lane row', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'chat', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent' }),
+      entry({ id: 'tools-selected', ts: 2000, position: 2, branchId: 'agent:logact', parentId: 'chat', actor: 'tools-selected' }),
+      entry({ id: 'workflow-complete', ts: 3000, position: 3, branchId: 'main', parentId: 'tools-selected', actor: 'workflow-complete' }),
+    ];
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+    const completeRow = container.querySelector('[data-actor="workflow-complete"]');
+
+    expect(completeRow).toHaveAttribute('data-branch', 'main');
+    expect(completeRow?.querySelector('.pg-rail-lane[data-lane="agent:logact"]')).toHaveClass('pg-rail-lane-end');
+    expect(completeRow?.querySelector('[data-connector="merge"][data-lane="agent:logact"]')).toBeInTheDocument();
+  });
+
+  it('renders the LogAct operation branch from main after planning branches have already merged', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'chat', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent' }),
+      entry({ id: 'orchestrator', ts: 2000, position: 2, branchId: 'agent:orchestrator', parentId: 'chat', actor: 'orchestrator' }),
+      entry({ id: 'tools-selected', ts: 3000, position: 3, branchId: 'agent:logact', parentId: 'chat', actor: 'tools-selected' }),
+      entry({ id: 'student', ts: 4000, position: 4, branchId: 'agent:student-driver', parentId: 'tools-selected', actor: 'student-driver' }),
+    ];
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+    const toolsSelectedRow = container.querySelector('[data-actor="tools-selected"]');
+    const studentRow = container.querySelector('[data-actor="student-driver"]');
+
+    expect(container.querySelector('[data-actor="logact"]')).not.toBeInTheDocument();
+    expect(toolsSelectedRow?.querySelector('[data-connector="fork"][data-lane="agent:logact"]')).toBeInTheDocument();
+    ['agent:orchestrator'].forEach((lane) => {
+      expect(toolsSelectedRow?.querySelector(`.pg-rail-lane[data-lane="${lane}"]`)).not.toHaveClass('pg-rail-lane-active');
+      expect(studentRow?.querySelector(`.pg-rail-lane[data-lane="${lane}"]`)).not.toHaveClass('pg-rail-lane-active');
+    });
+    expect(studentRow?.querySelector('.pg-rail-lane[data-lane="agent:logact"]')).toHaveClass('pg-rail-lane-active');
+  });
+
+  it('renders judge, adversary, executor, and named operation merges in the corrected lifecycle', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'chat', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent' }),
+      entry({ id: 'tools-selected', ts: 2000, position: 2, branchId: 'agent:logact', parentId: 'chat', actor: 'tools-selected' }),
+      entry({ id: 'student', ts: 3000, position: 3, branchId: 'agent:student-driver', parentId: 'tools-selected', actor: 'student-driver' }),
+      entry({ id: 'teacher', ts: 4000, position: 4, branchId: 'agent:judge-decider', parentId: 'tools-selected', actor: 'voter:teacher' }),
+      entry({ id: 'judge-rubric', ts: 5000, position: 5, branchId: 'agent:judge-decider', parentId: 'teacher', actor: 'judge-decider' }),
+      entry({ id: 'adversary', ts: 6000, position: 6, branchId: 'agent:adversary-driver', parentId: 'judge-rubric', actor: 'adversary-driver' }),
+      entry({ id: 'judge-commit', ts: 7000, position: 7, branchId: 'agent:judge-decider', parentId: 'adversary', actor: 'judge-decider' }),
+      entry({ id: 'judge-approved', ts: 8000, position: 8, branchId: 'agent:logact', parentId: 'judge-commit', actor: 'judge-approved' }),
+      entry({ id: 'executor', ts: 9000, position: 9, branchId: 'agent:executor', parentId: 'judge-approved', actor: 'executor' }),
+      entry({ id: 'execute-plan', ts: 10000, position: 10, branchId: 'agent:executor', parentId: 'executor', actor: 'execute-plan' }),
+      entry({ id: 'executor-result', ts: 11000, position: 11, branchId: 'agent:executor', parentId: 'execute-plan', actor: 'executor' }),
+      entry({ id: 'execution-complete', ts: 12000, position: 12, branchId: 'agent:logact', parentId: 'executor-result', actor: 'execution-complete' }),
+      entry({ id: 'workflow-complete', ts: 13000, position: 13, branchId: 'main', parentId: 'execution-complete', actor: 'workflow-complete' }),
+    ];
+
+    expect(findOrphanBranches(entries)).toEqual([]);
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+    const teacherRow = container.querySelector('[data-actor="voter:teacher"]');
+    const judgeRow = container.querySelectorAll('[data-actor="judge-decider"]').item(1);
+    const adversaryRow = container.querySelector('[data-actor="adversary-driver"]');
+    const executePlanRow = container.querySelector('[data-actor="execute-plan"]');
+    const executionCompleteRow = Array.from(container.querySelectorAll('[data-actor="execution-complete"][data-branch="agent:logact"]'))
+      .find((row) => row.textContent?.includes('execution-complete'));
+    const workflowCompleteRow = Array.from(container.querySelectorAll('[data-actor="workflow-complete"][data-branch="main"]'))
+      .find((row) => row.textContent?.includes('workflow-complete'));
+
+    expect(container.querySelector('[data-actor="logact"]')).not.toBeInTheDocument();
+    expect(teacherRow).toHaveAttribute('data-branch', 'agent:judge-decider');
+    expect(judgeRow).toHaveAttribute('data-branch', 'agent:judge-decider');
+    expect(adversaryRow?.querySelector('[data-connector="fork"][data-lane="agent:adversary-driver"]')).toBeInTheDocument();
+    expect(judgeRow?.querySelector('.pg-rail-lane[data-lane="agent:adversary-driver"]')).toHaveClass('pg-rail-lane-active');
+    expect(executePlanRow).toHaveAttribute('data-branch', 'agent:executor');
+    expect(executePlanRow?.querySelector('.pg-rail-lane[data-lane="agent:logact"]')).toHaveClass('pg-rail-lane-active');
+    expect(executionCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:executor"]')).toBeInTheDocument();
+    expect(workflowCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:logact"]')).toBeInTheDocument();
+  });
+
+  it('flags active AgentBus mirror rows as orphan branches when they have no parent', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'agent-bus', ts: 1000, position: 1, branchId: 'agent:agent-bus', actor: 'agent-bus', status: 'active' }),
+    ];
+
+    expect(findOrphanBranches(entries)).toEqual(['agent:agent-bus']);
   });
 
   it('marks failed branch rows with the failed dot icon', () => {

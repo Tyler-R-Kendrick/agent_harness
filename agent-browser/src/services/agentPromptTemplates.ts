@@ -265,6 +265,7 @@ export function buildToolInstructionsTemplate({
     selectedGroups?.length ? `Selected tool groups: ${selectedGroups.join(', ')}` : null,
     selectedToolIds?.length ? `Selected tool ids: ${selectedToolIds.join(', ')}` : null,
     'For Files tools, use locations exactly as shown in the Files tree, including workspace paths like //workspace/AGENTS.md and session filesystem locations like //session-1-fs/workspace.',
+    'For location-dependent requests such as "near me" or restaurants, when available try webmcp:recall_user_context first, then webmcp:read_browser_location, then webmcp:elicit_user_input before execution. Do not use cli to fake missing location data.',
     'For cli, prefer short, non-interactive bash commands. Do not use cli for clear or long-running interactive shells.',
     'Emit at most one tool call per step unless the task is explicitly parallel or batched.',
     'After any tool usage, summarize what you found or changed and note any uncertainty.',

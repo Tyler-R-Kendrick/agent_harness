@@ -113,6 +113,7 @@ import {
   type WorkspaceMcpSessionDrive,
   type WorkspaceMcpSessionFsEntry,
   type WorkspaceMcpSessionState,
+  type WorkspaceMcpElicitationField,
   type WorkspaceMcpWorktreeItem,
   type WorkspaceMcpWriteSessionInput,
 } from 'agent-browser-mcp';
@@ -169,7 +170,16 @@ import {
   removeStoredRecordEntry,
   useStoredState,
 } from './services/sessionState';
+import {
+  createEvaluationAgentRegistry,
+  type CustomEvaluationAgent,
+  type EvaluationAgentKind,
+} from './services/evaluationAgentRegistry';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
+import {
+  searchUserContextMemory,
+  upsertUserContextMemory,
+} from './services/userContextMemory';
 import {
   WORKSPACE_COLORS,
   buildWorkspaceNodeMap,
@@ -239,6 +249,15 @@ type SessionMcpRuntimeState = {
 type SessionMcpController = {
   getRuntimeState: () => SessionMcpRuntimeState;
   writeSession: (input: WorkspaceMcpWriteSessionInput) => Promise<void>;
+};
+
+const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
+
+type UserElicitationEventDetail = {
+  requestId: string;
+  prompt: string;
+  reason?: string;
+  fields: WorkspaceMcpElicitationField[];
 };
 
 const DEFAULT_IDENTITIES: Identity[] = [
@@ -511,6 +530,35 @@ function quoteShellArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function readBrowserLocationFromNavigator(): Promise<
+  | { status: 'available'; latitude: number; longitude: number; accuracy?: number | null }
+  | { status: 'denied' | 'unavailable'; reason: string }
+> {
+  if (!navigator.geolocation) {
+    return Promise.resolve({
+      status: 'unavailable',
+      reason: 'Browser location is not available in this workspace.',
+    });
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        status: 'available',
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy,
+      }),
+      (error) => resolve({
+        status: error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable',
+        reason: error.code === error.PERMISSION_DENIED
+          ? 'Browser location permission was denied.'
+          : (error.message || 'Browser location is not available in this workspace.'),
+      }),
+      { maximumAge: 60_000, timeout: 10_000 },
+    );
+  });
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
@@ -599,6 +647,30 @@ function patchVoterStep(steps: VoterStep[], id: string, patch: Partial<VoterStep
 
 function finalizeVoterSteps(steps: VoterStep[], endedAt = Date.now()): VoterStep[] {
   return steps.map((step) => (step.status === 'active' ? { ...step, status: 'done', endedAt: step.endedAt ?? endedAt } : step));
+}
+
+function finalizeProcessEntries(entries: ProcessEntry[] | undefined, endedAt = Date.now()): ProcessEntry[] | undefined {
+  return entries?.map((entry) => (
+    entry.status === 'active'
+      ? { ...entry, status: 'done', endedAt: entry.endedAt ?? endedAt, timeoutMs: undefined }
+      : entry
+  ));
+}
+
+function neutralizeStoppedMessage(message: ChatMessage): ChatMessage {
+  const endedAt = Date.now();
+  return {
+    ...message,
+    status: 'complete',
+    statusText: 'stopped',
+    loadingStatus: null,
+    isThinking: false,
+    isVoting: false,
+    currentStepId: undefined,
+    reasoningSteps: message.reasoningSteps ? finalizeReasoningSteps(message.reasoningSteps, endedAt) : undefined,
+    voterSteps: message.voterSteps ? finalizeVoterSteps(message.voterSteps, endedAt) : undefined,
+    processEntries: finalizeProcessEntries(message.processEntries, endedAt),
+  };
 }
 
 function getStepDurationSeconds(steps: Array<{ startedAt: number; endedAt?: number }>): number | undefined {
@@ -745,17 +817,71 @@ function MemBar({ root }: { root: TreeNode }) {
   );
 }
 
+function McpElicitationCard({
+  messageId,
+  card,
+  onSubmit,
+}: {
+  messageId: string;
+  card: NonNullable<ChatMessage['cards']>[number];
+  onSubmit?: (messageId: string, requestId: string, values: Record<string, string>) => void;
+}) {
+  const fields = card.fields ?? [];
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(
+    fields.map((field) => [field.id, card.response?.[field.id] ?? '']),
+  ));
+  const requestId = card.requestId ?? `elicitation:${messageId}`;
+  if (card.status === 'submitted') {
+    return (
+      <div className="message-tool-call message-tool-call-elicitation">
+        <span className="tool-call-label">User input received</span>
+        <pre className="tool-call-args">{JSON.stringify(card.response ?? {}, null, 2)}</pre>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="message-tool-call message-tool-call-elicitation"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit?.(messageId, requestId, values);
+      }}
+    >
+      <span className="tool-call-label">User input needed</span>
+      {card.prompt ? <p className="elicitation-prompt">{card.prompt}</p> : null}
+      {fields.map((field) => (
+        <label key={field.id} className="elicitation-field">
+          <span>{field.label}</span>
+          <input
+            aria-label={field.label}
+            value={values[field.id] ?? ''}
+            placeholder={field.placeholder}
+            required={field.required}
+            onChange={(event) => setValues((current) => ({
+              ...current,
+              [field.id]: event.target.value,
+            }))}
+          />
+        </label>
+      ))}
+      <button type="submit" className="elicitation-submit">Submit requested info</button>
+    </form>
+  );
+}
+
 function ChatMessageView({
   message,
   agentName,
   activitySelected,
   onOpenActivity,
+  onSubmitElicitation,
   onCopyMessage,
 }: {
   message: ChatMessage;
   agentName: string;
   activitySelected?: boolean;
   onOpenActivity?: (messageId: string) => void;
+  onSubmitElicitation?: (messageId: string, requestId: string, values: Record<string, string>) => void;
   onCopyMessage?: (input: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => Promise<void>;
 }) {
   const content = message.streamedContent || message.content;
@@ -777,9 +903,9 @@ function ChatMessageView({
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const senderLabel = isSystem ? 'system' : isUser ? 'you' : isTerminalMessage ? 'terminal' : agentName;
-  const isStreaming = message.status === 'streaming';
-  const isError = message.isError ?? message.status === 'error';
   const isStopped = message.statusText === 'stopped';
+  const isStreaming = message.status === 'streaming' && !isStopped;
+  const isError = message.isError ?? message.status === 'error';
   const hasReasoning = Boolean(allReasoningSteps.length || message.thinkingContent || message.thinkingDuration || message.isThinking);
   const hasVoters = Boolean((message.voterSteps?.length ?? 0) || message.isVoting);
   const canCopy = Boolean(content.trim() && onCopyMessage);
@@ -836,11 +962,22 @@ function ChatMessageView({
         </div>
       )}
       {toolSteps.map((step) => <ToolCallChip key={step.id} step={step} />)}
-      {!(allReasoningSteps.length) && (message.cards ?? []).map((card, i) => (
-        <div key={i} className="message-tool-call">
-          <span className="tool-call-label">⚙ {card.app}</span>
-          <pre className="tool-call-args">{JSON.stringify(card.args, null, 2)}</pre>
-        </div>
+      {(message.cards ?? []).map((card, i) => (
+        card.kind === 'elicitation'
+          ? (
+            <McpElicitationCard
+              key={card.requestId ?? i}
+              messageId={message.id}
+              card={card}
+              onSubmit={onSubmitElicitation}
+            />
+          )
+          : (
+            <div key={i} className="message-tool-call">
+              <span className="tool-call-label">⚙ {card.app}</span>
+              <pre className="tool-call-args">{JSON.stringify(card.args, null, 2)}</pre>
+            </div>
+          )
       ))}
       {content ? (
         (isUser || isTerminalMessage || isError)
@@ -1389,6 +1526,9 @@ function ChatPanel({
   workspaceName,
   workspaceFiles,
   workspaceCapabilities,
+  evaluationAgents,
+  negativeRubricTechniques,
+  onNegativeRubricTechnique,
   activeSessionId,
   activeMode,
   onSwitchMode,
@@ -1411,6 +1551,9 @@ function ChatPanel({
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
   workspaceCapabilities: WorkspaceCapabilities;
+  evaluationAgents: CustomEvaluationAgent[];
+  negativeRubricTechniques: string[];
+  onNegativeRubricTechnique: (technique: string) => void;
   activeSessionId: string | null;
   activeMode: 'agent' | 'terminal';
   onSwitchMode: (mode: 'agent' | 'terminal') => void;
@@ -1783,11 +1926,63 @@ function ChatPanel({
   }
 
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
-    setMessagesBySession((current) => ({
-      ...current,
-      [activeChatSessionId]: (current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)]).map((message) => message.id === id ? { ...message, ...patch } : message),
-    }));
+    setMessagesBySession((current) => {
+      const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+      const nextMessages = sessionMessages.map((message) => {
+        if (message.id !== id) return message;
+        if (message.statusText === 'stopped') return neutralizeStoppedMessage(message);
+        const nextMessage = { ...message, ...patch };
+        return nextMessage.statusText === 'stopped' ? neutralizeStoppedMessage(nextMessage) : nextMessage;
+      });
+      return { ...current, [activeChatSessionId]: nextMessages };
+    });
   }
+
+  const appendElicitationCard = useCallback((detail: UserElicitationEventDetail) => {
+    const card: NonNullable<ChatMessage['cards']>[number] = {
+      app: 'Elicitation',
+      kind: 'elicitation',
+      requestId: detail.requestId,
+      prompt: detail.prompt,
+      fields: detail.fields,
+      status: 'pending',
+      args: {
+        prompt: detail.prompt,
+        reason: detail.reason,
+        fields: detail.fields,
+      },
+    };
+    const targetAssistantId = activeGenerationRef.current?.assistantId;
+    if (!targetAssistantId) {
+      appendSharedMessages([{
+        id: createUniqueId(),
+        role: 'assistant',
+        status: 'complete',
+        content: '',
+        cards: [card],
+      }]);
+      return;
+    }
+    setMessagesBySession((current) => {
+      const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+      const nextMessages = sessionMessages.map((message) => (
+        message.id === targetAssistantId
+          ? { ...message, cards: [...(message.cards ?? []), card] }
+          : message
+      ));
+      messagesRef.current = nextMessages;
+      return { ...current, [activeChatSessionId]: nextMessages };
+    });
+  }, [activeChatSessionId]);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      appendElicitationCard((event as CustomEvent<UserElicitationEventDetail>).detail);
+    };
+    window.addEventListener(USER_ELICITATION_EVENT, listener);
+    return () => window.removeEventListener(USER_ELICITATION_EVENT, listener);
+  }, [appendElicitationCard]);
+
 
   const handleToggleBrowserNotifications = useCallback(async () => {
     if (browserNotificationSettings.enabled) {
@@ -1958,7 +2153,7 @@ function ChatPanel({
       }
 
       const controller = new AbortController();
-      type PlanningStageName = 'router' | 'group-select' | 'tool-select' | 'executor' | 'chat' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent' | 'voter-ensemble' | 'agent-bus';
+      type PlanningStageName = 'chat-agent' | 'planner' | 'router-agent' | 'router' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent' | 'orchestrator' | 'tool-agent' | 'group-select' | 'tool-select' | 'logact' | 'voter-ensemble' | 'agent-bus' | 'executor' | 'chat';
       type PlanningStageLayout = {
         parentStage?: PlanningStageName;
         lane?: 'sequential' | 'parallel';
@@ -1979,19 +2174,37 @@ function ChatPanel({
       const processLog = new ProcessLog();
       const processBranchByStage = new Map<PlanningStageName, string>();
       const processIdByStage = new Map<PlanningStageName, string>();
+      const processHandoffParentByStage = new Map<PlanningStageName, string>();
+      const processIdByActorId = new Map<string, string>();
       const processIdByVoterStepId = new Map<string, string>();
       const processIdByToolCallId = new Map<string, string>();
+      const processAgentOwnerByStage: Partial<Record<PlanningStageName, string>> = {
+        planner: 'planner',
+        'router-agent': 'router-agent',
+        router: 'router-agent',
+        orchestrator: 'orchestrator',
+        'tool-agent': 'tool-agent',
+        'group-select': 'tool-agent',
+        'tool-select': 'tool-agent',
+        logact: 'logact',
+        executor: 'executor',
+      };
       const resolveProcessBranch = (stage: PlanningStageName): string => {
         const cached = processBranchByStage.get(stage);
         if (cached) return cached;
-        // Parallel subagents get their own colored rail; everything else
-        // collapses onto the coordinator/root branch.
+        if (stage === 'chat-agent' || stage === 'chat') {
+          processBranchByStage.set(stage, 'main');
+          return 'main';
+        }
+        const agentOwner = processAgentOwnerByStage[stage];
         const branch = (
-          stage === 'breakdown-agent' || stage === 'assignment-agent' || stage === 'validation-agent'
-            ? stage
-            : stage === 'voter-ensemble'
-              ? 'voters'
-              : 'coordinator'
+          agentOwner
+            ? `agent:${agentOwner}`
+            : stage === 'breakdown-agent' || stage === 'assignment-agent' || stage === 'validation-agent'
+              ? stage
+              : stage === 'voter-ensemble'
+                ? 'voters'
+                : 'coordinator'
         );
         processBranchByStage.set(stage, branch);
         return branch;
@@ -1999,7 +2212,8 @@ function ChatPanel({
       const snapshotProcess = (): ProcessEntry[] => processLog.snapshot();
       let localToolRunTimedOut = false;
       let activePlanningStage: PlanningStageName | null = null;
-      let lastBusProcessId: string | undefined;
+      const lastProcessIdByBranch = new Map<string, string>();
+      let mirrorVoterStageToProcess = false;
       const toolStepIdsByCallId = new Map<string, string>();
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
@@ -2015,6 +2229,59 @@ function ChatPanel({
         modelId: meta?.modelId ?? currentToolAgentLogMeta().modelId,
         modelProvider: meta?.modelProvider ?? currentToolAgentLogMeta().modelProvider,
       });
+      const processMetaFromBusEntry = (entry: BusEntryStep): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => {
+        const baseModel = currentToolAgentLogMeta();
+        if (entry.actorId) {
+          return {
+            agentId: entry.actorId,
+            agentLabel: entry.agentLabel ?? entry.actorId,
+            modelId: entry.modelId ?? baseModel.modelId,
+            modelProvider: entry.modelProvider ?? 'logact',
+          };
+        }
+        switch (entry.payloadType) {
+          case 'Vote':
+            return {
+              agentId: `voter:${entry.actor ?? 'unknown'}`,
+              agentLabel: `Voter Agent · ${entry.actor ?? 'unknown'}`,
+              modelId: baseModel.modelId,
+              modelProvider: 'logact',
+            };
+          case 'Commit':
+          case 'Abort':
+            return {
+              agentId: 'decider-agent',
+              agentLabel: 'Decider Agent',
+              modelId: baseModel.modelId,
+              modelProvider: 'logact',
+            };
+          case 'Result':
+            return {
+              agentId: 'executor',
+              agentLabel: 'Executor Agent',
+              modelId: baseModel.modelId,
+              modelProvider: 'logact',
+            };
+          case 'Completion':
+            return {
+              agentId: 'completion-checker',
+              agentLabel: 'Completion Checker Agent',
+              modelId: baseModel.modelId,
+              modelProvider: 'logact',
+            };
+          case 'InfIn':
+          case 'InfOut':
+          case 'Intent':
+            return {
+              agentId: 'driver-agent',
+              agentLabel: 'LogAct Driver Agent',
+              modelId: baseModel.modelId,
+              modelProvider: 'logact',
+            };
+          default:
+            return baseModel;
+        }
+      };
       const previewPlanningBody = (content: string) => (
         content.length > 1_500 ? `…${content.slice(-1_500)}` : content
       );
@@ -2027,6 +2294,10 @@ function ChatPanel({
         router: {
           title: 'Routing request',
           body: 'Choosing between direct chat and targeted tool use.',
+        },
+        'router-agent': {
+          title: 'Router agent',
+          body: 'Classifying the request and routing it through the registered agent workflow.',
         },
         'group-select': {
           title: 'Selecting tool groups',
@@ -2044,6 +2315,14 @@ function ChatPanel({
           title: 'Answering directly',
           body: 'Handling the request without tool execution.',
         },
+        'chat-agent': {
+          title: 'Chat agent',
+          body: 'Receiving the user prompt and delegating planning.',
+        },
+        planner: {
+          title: 'Planner',
+          body: 'Classifying the prompt, decomposing the task, and preparing delegation.',
+        },
         coordinator: {
           title: 'Coordinator brief',
           body: 'Framing a compact delegation problem for focused subagents.',
@@ -2060,6 +2339,18 @@ function ChatPanel({
           title: 'Validation subagent',
           body: 'Checking risks, coordination, and success criteria.',
         },
+        orchestrator: {
+          title: 'Orchestrator',
+          body: 'Choosing registered agents for the prepared tasks.',
+        },
+        'tool-agent': {
+          title: 'Tool agent',
+          body: 'Assigning active workspace tools to selected agents.',
+        },
+        logact: {
+          title: 'LogAct pipeline',
+          body: 'Submitting the prepared plan to AgentBus for voter review, commit, and execution.',
+        },
         'voter-ensemble': {
           title: 'Reviewer votes',
           body: 'Reviewing the delegated plan with focused classic voters.',
@@ -2070,33 +2361,45 @@ function ChatPanel({
         },
       };
       const planningStageLayout: Record<PlanningStageName, PlanningStageLayout> = {
-        router: {},
-        'group-select': { parentStage: 'router' },
-        'tool-select': { parentStage: 'group-select' },
-        executor: { parentStage: 'tool-select' },
-        chat: { parentStage: 'router' },
-        coordinator: {},
+        'chat-agent': {},
+        planner: { parentStage: 'chat-agent' },
+        'router-agent': { parentStage: 'planner' },
+        router: { parentStage: 'router-agent' },
+        coordinator: { parentStage: 'planner' },
         'breakdown-agent': { parentStage: 'coordinator', lane: 'parallel' },
         'assignment-agent': { parentStage: 'coordinator', lane: 'parallel' },
         'validation-agent': { parentStage: 'coordinator', lane: 'parallel' },
-        'voter-ensemble': { parentStage: 'coordinator' },
-        'agent-bus': { parentStage: 'coordinator' },
+        orchestrator: { parentStage: 'router-agent' },
+        'tool-agent': { parentStage: 'orchestrator' },
+        'group-select': { parentStage: 'tool-agent' },
+        'tool-select': { parentStage: 'group-select' },
+        logact: { parentStage: 'chat-agent' },
+        'voter-ensemble': { parentStage: 'logact' },
+        'agent-bus': { parentStage: 'logact' },
+        executor: { parentStage: 'logact' },
+        chat: { parentStage: 'router' },
       };
-      const planningMirrorStages = new Set<PlanningStageName>(['voter-ensemble', 'agent-bus']);
+      const planningMirrorStages = new Set<PlanningStageName>(['voter-ensemble']);
       const planningStageTimeouts: Record<PlanningStageName, PlanningStageTimeouts> = {
         router: {
           hardMs: LOCAL_TOOL_HARD_TIMEOUT_MS,
           thinkingIdleMs: LOCAL_TOOL_THINKING_IDLE_TIMEOUT_MS,
           streamingIdleMs: LOCAL_TOOL_STREAMING_IDLE_TIMEOUT_MS,
         },
+        'router-agent': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
         'group-select': { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
         'tool-select': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 135_000 },
         executor: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
         chat: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
+        'chat-agent': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
+        planner: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
         coordinator: { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
         'breakdown-agent': { hardMs: 240_000, thinkingIdleMs: 180_000, streamingIdleMs: 150_000 },
         'assignment-agent': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 120_000 },
         'validation-agent': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 120_000 },
+        orchestrator: { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
+        'tool-agent': { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
+        logact: { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
         'voter-ensemble': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
         'agent-bus': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
       };
@@ -2110,6 +2413,8 @@ function ChatPanel({
         return undefined;
       };
       const resolveProcessParentId = (stage: PlanningStageName): string | undefined => {
+        const handoffParentProcessId = processHandoffParentByStage.get(stage);
+        if (handoffParentProcessId) return handoffParentProcessId;
         let parentStage = planningStageLayout[stage].parentStage;
         while (parentStage) {
           const processId = processIdByStage.get(parentStage);
@@ -2164,7 +2469,8 @@ function ChatPanel({
         ].join('\n');
       };
       const resolveBusBranch = (entry: BusEntryStep): string => (
-        entry.payloadType === 'Mail' ? `mail:${entry.actor ?? 'unknown'}` : 'bus'
+        entry.branchId
+          ?? (entry.payloadType === 'Mail' ? `mail:${entry.actor ?? 'unknown'}` : 'bus')
       );
       const appendBusProcessEntry = (entry: BusEntryStep, fallbackParentId?: string) => {
         const kindMap: Record<string, ProcessEntryKind> = {
@@ -2179,21 +2485,100 @@ function ChatPanel({
           Completion: 'completion',
           Policy: 'policy',
         };
-        const parentProcessId = lastBusProcessId ?? fallbackParentId;
-        processLog.append({
+        const branchId = resolveBusBranch(entry);
+        const startsLogActOperationBranch = branchId === 'agent:logact'
+          && !lastProcessIdByBranch.has(branchId);
+        const metadataParentProcessId = startsLogActOperationBranch
+          ? processIdByActorId.get('logact')
+          : entry.parentActorId
+          ? processIdByActorId.get(entry.parentActorId)
+          : undefined;
+        const parentProcessId = metadataParentProcessId ?? lastProcessIdByBranch.get(branchId) ?? fallbackParentId;
+        const busMeta = processMetaFromBusEntry(entry);
+        const appended = processLog.append({
           id: entry.id,
           kind: kindMap[entry.payloadType] ?? 'reasoning',
-          actor: entry.actor ? entry.actor : 'bus',
+          actor: entry.actorId ?? (entry.payloadType === 'Vote' && entry.actor ? `voter:${entry.actor}` : entry.actor ? entry.actor : 'bus'),
+          ...(entry.actorId ? { actorId: entry.actorId } : {}),
+          ...(entry.actorRole ? { actorRole: entry.actorRole } : {}),
+          ...(entry.parentActorId ? { parentActorId: entry.parentActorId } : {}),
           summary: entry.summary,
           transcript: entry.detail,
           payload: entry,
-          branchId: resolveBusBranch(entry),
-          ...currentToolAgentLogMeta(),
+          branchId,
+          ...busMeta,
           ...(parentProcessId ? { parentId: parentProcessId } : {}),
           status: 'done',
           ts: entry.realtimeTs,
         });
-        lastBusProcessId = entry.id;
+        if (entry.actorId) {
+          processIdByActorId.set(entry.actorId, appended.id);
+        }
+        lastProcessIdByBranch.set(branchId, appended.id);
+      };
+      const isPlanningStageName = (value: string): value is PlanningStageName => (
+        Object.prototype.hasOwnProperty.call(planningStageMeta, value)
+      );
+      const closePlanningStagesBeforeLogAct = () => {
+        const planningStages: PlanningStageName[] = [
+          'planner',
+          'router-agent',
+          'router',
+          'orchestrator',
+          'tool-agent',
+          'group-select',
+          'tool-select',
+        ];
+        planningStages.forEach((stage) => {
+          const stepId = planningStepIdsByStage.get(stage);
+          if (stepId) {
+            const body = planningTokensByStage.get(stage)?.trim() || planningStageMeta[stage].body;
+            reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+              body: previewPlanningBody(body),
+              transcript: body,
+              parentStepId: resolvePlanningParentStepId(stage),
+              lane: planningStageLayout[stage].lane,
+              status: 'done',
+              endedAt: Date.now(),
+            });
+          }
+          const processId = processIdByStage.get(stage);
+          if (processId) {
+            processLog.update(processId, { status: 'done' });
+          }
+        });
+        if (activePlanningStage && planningStages.includes(activePlanningStage)) {
+          activePlanningStage = null;
+        }
+      };
+      const resolveMainThreadProcessParentId = (): string | undefined => (
+        processIdByStage.get('chat-agent')
+        ?? snapshotProcess().find((entry) => entry.branchId === 'main')?.id
+      );
+      const appendAgentHandoff = (fromAgentId: string, toAgentId: string, summary: string) => {
+        void summary;
+        if (isPlanningStageName(fromAgentId)) {
+          const sourceProcessId = processIdByStage.get(fromAgentId);
+          if (sourceProcessId) {
+            processLog.update(sourceProcessId, { status: 'done' });
+          }
+        }
+        const parentProcessId = isPlanningStageName(fromAgentId)
+          ? processIdByStage.get(fromAgentId)
+          : undefined;
+        const targetStage = isPlanningStageName(toAgentId) ? toAgentId : undefined;
+        if (targetStage === 'logact') {
+          closePlanningStagesBeforeLogAct();
+          const mainParentProcessId = resolveMainThreadProcessParentId();
+          if (mainParentProcessId) {
+            processHandoffParentByStage.set(targetStage, mainParentProcessId);
+            processIdByActorId.set('logact', mainParentProcessId);
+          }
+          return;
+        }
+        if (targetStage && parentProcessId) {
+          processHandoffParentByStage.set(targetStage, parentProcessId);
+        }
       };
       const resolvePlanningStageTimeoutMs = (stage: PlanningStageName, reason: LocalToolTimeoutReason): number => {
         const timeout = planningStageTimeouts[stage];
@@ -2350,32 +2735,38 @@ function ChatPanel({
           }];
         }
 
-        // Mirror to ProcessLog
-        const processId = processIdByStage.get(stage);
-        const branch = resolveProcessBranch(stage);
-        if (processId) {
-          processLog.update(processId, {
-            summary: metadata.title,
-            transcript,
-            status: 'active',
-            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
-            ...processMetaFromStageMeta(stageMeta),
-          });
-        } else {
-          const newId = `stage:${stage}:${createUniqueId()}`;
-          processIdByStage.set(stage, newId);
-          processLog.append({
-            id: newId,
-            kind: stage === 'voter-ensemble' || stage === 'agent-bus' ? 'reasoning' : 'stage-start',
-            actor: stage,
-            summary: metadata.title,
-            transcript,
-            branchId: branch,
-            ...processMetaFromStageMeta(stageMeta),
-            ...(parentProcessId ? { parentId: parentProcessId } : {}),
-            status: 'active',
-            timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
-          });
+        // Mirror to ProcessLog. AgentBus summaries and the LogAct
+        // infrastructure stage stay in the reasoning pane only; individual
+        // AgentBus operation entries render as actor rows below.
+        if (stage !== 'agent-bus' && stage !== 'logact') {
+          const processId = processIdByStage.get(stage);
+          const branch = resolveProcessBranch(stage);
+          if (processId) {
+            processLog.update(processId, {
+              summary: metadata.title,
+              transcript,
+              status: 'active',
+              timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
+              ...processMetaFromStageMeta(stageMeta),
+            });
+            processIdByActorId.set(stageMeta?.agentId ?? processAgentOwnerByStage[stage] ?? stage, processId);
+          } else {
+            const newId = `stage:${stage}:${createUniqueId()}`;
+            processIdByStage.set(stage, newId);
+            processLog.append({
+              id: newId,
+              kind: stage === 'voter-ensemble' ? 'reasoning' : 'stage-start',
+              actor: stage,
+              summary: metadata.title,
+              transcript,
+              branchId: branch,
+              ...processMetaFromStageMeta(stageMeta),
+              ...(parentProcessId ? { parentId: parentProcessId } : {}),
+              status: 'active',
+              timeoutMs: resolvePlanningStageDisplayTimeoutMs(stage, timeoutReason),
+            });
+            processIdByActorId.set(stageMeta?.agentId ?? processAgentOwnerByStage[stage] ?? stage, newId);
+          }
         }
 
         emitReasoningUpdate(true);
@@ -2448,6 +2839,39 @@ function ChatPanel({
           });
         }
         emitReasoningUpdate(status === 'active');
+      };
+      const syncAgentBusSummary = (entries: BusEntryStep[]) => {
+        const stage: PlanningStageName = 'agent-bus';
+        const metadata = planningStageMeta[stage];
+        const transcript = buildDelegationBusStageBody(entries);
+        let stepId = planningStepIdsByStage.get(stage);
+        planningTokensByStage.set(stage, transcript);
+        if (stepId) {
+          reasoningSteps = patchReasoningStep(reasoningSteps, stepId, {
+            body: previewPlanningBody(transcript),
+            transcript,
+            parentStepId: resolvePlanningParentStepId(stage),
+            lane: planningStageLayout[stage].lane,
+            status: 'done',
+            endedAt: Date.now(),
+          });
+        } else {
+          stepId = createUniqueId();
+          planningStepIdsByStage.set(stage, stepId);
+          reasoningSteps = [...reasoningSteps, {
+            id: stepId,
+            kind: 'thinking',
+            title: metadata.title,
+            body: previewPlanningBody(transcript),
+            transcript,
+            startedAt: Date.now(),
+            endedAt: Date.now(),
+            status: 'done',
+            parentStepId: resolvePlanningParentStepId(stage),
+            lane: planningStageLayout[stage].lane,
+          }];
+        }
+        emitReasoningUpdate(false);
       };
       // ── Sub-stage support: parallel per-group tool-select children ─────
       // Sub-stages are addressed by composite `${stage}:${subStageId}` keys
@@ -2553,7 +2977,9 @@ function ChatPanel({
         const active = subStageActiveByParent.get(stage) ?? new Set<string>();
         active.add(subStageId);
         subStageActiveByParent.set(stage, active);
-        const parentProcessId = processIdByStage.get(stage);
+        const parentProcessId = processIdByStage.get(stage)
+          ?? resolveProcessParentId(stage)
+          ?? (activePlanningStage ? processIdByStage.get(activePlanningStage) : undefined);
         if (!subStageProcessIds.has(key)) {
           const processId = `stage:${stage}:${subStageId}:${createUniqueId()}`;
           subStageProcessIds.set(key, processId);
@@ -2874,7 +3300,7 @@ function ChatPanel({
               if (localToolRunTimedOut) return;
               const finalizedVoters = finalizeVoterSteps(delegationVoterSteps);
               delegationVoterSteps = finalizedVoters;
-              if (finalizedVoters.length) {
+              if (mirrorVoterStageToProcess && finalizedVoters.length) {
                 syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(finalizedVoters), 'done');
               }
               if (delegationBusEntries.length) {
@@ -2901,7 +3327,7 @@ function ChatPanel({
               if (localToolRunTimedOut) return;
               const finalizedVoters = finalizeVoterSteps(delegationVoterSteps);
               delegationVoterSteps = finalizedVoters;
-              if (finalizedVoters.length) {
+              if (mirrorVoterStageToProcess && finalizedVoters.length) {
                 syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(finalizedVoters), 'done');
               }
               if (delegationBusEntries.length) {
@@ -3004,13 +3430,19 @@ function ChatPanel({
                 noteLocalToolPlanningOutput(stepId, 'streaming');
                 completePlanningStage(stepId, resultText);
               },
+              onAgentHandoff: (fromAgentId, toAgentId, summary) => {
+                noteLocalToolMirrorOutput('streaming');
+                appendAgentHandoff(fromAgentId, toAgentId, summary);
+              },
               onVoterStep: (step) => {
                 noteLocalToolMirrorOutput('streaming');
+                mirrorVoterStageToProcess = true;
                 delegationVoterSteps = upsertVoterStep(delegationVoterSteps, step);
                 syncPlanningStage('voter-ensemble', buildDelegationVoterStageBody(delegationVoterSteps), 'active');
                 const pId = `vote:${step.id}`;
                 processIdByVoterStepId.set(step.id, pId);
                 const parentProcessId = processIdByStage.get('voter-ensemble')
+                  ?? processIdByStage.get('tool-agent')
                   ?? processIdByStage.get('coordinator');
                 processLog.append({
                   id: pId,
@@ -3058,10 +3490,13 @@ function ChatPanel({
               onBusEntry: (entry) => {
                 noteLocalToolMirrorOutput('streaming');
                 delegationBusEntries = [...delegationBusEntries, entry];
-                syncPlanningStage('agent-bus', buildDelegationBusStageBody([...delegationBusEntries]), 'active');
+                syncAgentBusSummary(delegationBusEntries);
                 appendBusProcessEntry(
                   entry,
-                  processIdByStage.get('agent-bus') ?? processIdByStage.get('coordinator'),
+                  processIdByStage.get('logact')
+                    ?? processIdByStage.get('tool-agent')
+                    ?? processIdByStage.get('coordinator')
+                    ?? processIdByStage.get('chat-agent'),
                 );
                 updateMessage(assistantId, { processEntries: snapshotProcess(), busEntries: delegationBusEntries });
               },
@@ -3124,12 +3559,19 @@ function ChatPanel({
               workspaceName,
               capabilities,
               signal: controller.signal,
+              evaluationAgents,
+              negativeRubricTechniques,
+              onNegativeRubricTechnique,
               onGeneratedTool: (file) => onWorkspaceFileUpsert({
                 path: file.path,
                 content: file.source,
                 updatedAt: new Date().toISOString(),
               }),
             }, {
+              onAgentHandoff: (fromAgentId, toAgentId, summary) => {
+                noteLocalToolMirrorOutput('streaming');
+                appendAgentHandoff(fromAgentId, toAgentId, summary);
+              },
               onStageStart: (stage, _detail, meta) => {
                 if (meta?.subStageId) {
                   beginSubStage(stage, meta.subStageId, meta.label, meta);
@@ -3175,51 +3617,45 @@ function ChatPanel({
                 recordToolResult(toolName, args, result, isError, toolCallId);
               },
               onVoterStep: (step) => {
-                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
-                const pId = `vote:${step.id}`;
-                processIdByVoterStepId.set(step.id, pId);
-                const parentProcessId = (activePlanningStage && processIdByStage.get(activePlanningStage))
-                  ?? processIdByStage.get('executor')
-                  ?? processIdByStage.get('coordinator');
-                processLog.append({
-                  id: pId,
-                  kind: 'vote',
-                  actor: `voter:${step.voterId}`,
-                  summary: `${step.voterId} reviewing`,
-                  payload: step,
-                  branchId: 'voters',
-                  ...(parentProcessId ? { parentId: parentProcessId } : {}),
-                  status: 'active',
-                });
-                updateMessage(assistantId, { processEntries: snapshotProcess() });
+                noteLocalToolMirrorOutput('streaming');
+                delegationVoterSteps = upsertVoterStep(delegationVoterSteps, step);
+                updateMessage(assistantId, { voterSteps: delegationVoterSteps });
               },
               onVoterStepUpdate: (id, patch) => {
-                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
+                noteLocalToolMirrorOutput('streaming');
+                delegationVoterSteps = patchVoterStep(delegationVoterSteps, id, patch);
                 const pId = processIdByVoterStepId.get(id);
-                if (pId) {
-                  const verdict = patch.approve === true ? '✓' : patch.approve === false ? '✗' : '·';
+                const merged = delegationVoterSteps.find((step) => step.id === id);
+                if (pId && merged) {
+                  const verdict = merged.approve === true ? '✓' : merged.approve === false ? '✗' : '·';
                   processLog.update(pId, {
-                    summary: `${patch.voterId ?? id} ${verdict}`,
-                    transcript: patch.thought ?? patch.body ?? undefined,
-                    payload: patch,
-                    status: patch.status ?? 'active',
+                    summary: `${merged.voterId} ${verdict}`,
+                    transcript: merged.thought ?? merged.body ?? undefined,
+                    payload: merged,
+                    status: merged.status,
                   });
-                  updateMessage(assistantId, { processEntries: snapshotProcess() });
                 }
+                updateMessage(assistantId, { voterSteps: delegationVoterSteps, processEntries: snapshotProcess() });
               },
               onVoterStepEnd: (id) => {
+                noteLocalToolMirrorOutput('streaming');
+                delegationVoterSteps = patchVoterStep(delegationVoterSteps, id, { status: 'done', endedAt: Date.now() });
                 const pId = processIdByVoterStepId.get(id);
                 if (pId) {
                   processLog.update(pId, { status: 'done' });
-                  updateMessage(assistantId, { processEntries: snapshotProcess() });
                 }
+                updateMessage(assistantId, { voterSteps: delegationVoterSteps, processEntries: snapshotProcess() });
               },
               onBusEntry: (entry) => {
-                noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
-                const parentProcessId = (activePlanningStage && processIdByStage.get(activePlanningStage))
-                  ?? processIdByStage.get('executor');
+                noteLocalToolMirrorOutput('streaming');
+                delegationBusEntries = [...delegationBusEntries, entry];
+                syncAgentBusSummary(delegationBusEntries);
+                const parentProcessId = processIdByStage.get('logact')
+                  ?? (activePlanningStage && processIdByStage.get(activePlanningStage))
+                  ?? processIdByStage.get('executor')
+                  ?? processIdByStage.get('chat-agent');
                 appendBusProcessEntry(entry, parentProcessId);
-                updateMessage(assistantId, { processEntries: snapshotProcess() });
+                updateMessage(assistantId, { processEntries: snapshotProcess(), busEntries: delegationBusEntries });
               },
               onIterationStep: (step) => {
                 const pId = `iter:${step.id}`;
@@ -3253,13 +3689,13 @@ function ChatPanel({
               },
               onModelTurnStart: (turnId, stepIndex) => {
                 noteLocalToolPlanningOutput(activePlanningStage, 'streaming');
-                const parentProcessId = lastBusProcessId ?? processIdByStage.get('executor');
+                const parentProcessId = lastProcessIdByBranch.get('agent:executor') ?? processIdByStage.get('executor');
                 processLog.append({
                   id: `turn:${turnId}`,
                   kind: 'inf-in',
                   actor: 'executor',
                   summary: `Model turn ${stepIndex + 1}`,
-                  branchId: 'executor',
+                  branchId: 'agent:executor',
                   ...(parentProcessId ? { parentId: parentProcessId } : {}),
                   status: 'active',
                 });
@@ -3683,7 +4119,36 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, notifyAssistantComplete, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+
+  const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
+    const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
+    if (!locationValue) return;
+    upsertUserContextMemory(workspaceName, {
+      id: 'location',
+      label: 'Location',
+      value: locationValue,
+      source: 'workspace-memory',
+    });
+    setMessagesBySession((current) => {
+      const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+      const nextMessages = sessionMessages.map((message) => (
+        message.id === messageId
+          ? {
+            ...message,
+            cards: (message.cards ?? []).map((card) => (
+              card.requestId === requestId
+                ? { ...card, status: 'submitted' as const, response: values }
+                : card
+            )),
+          }
+          : message
+      ));
+      messagesRef.current = nextMessages;
+      return { ...current, [activeChatSessionId]: nextMessages };
+    });
+    void sendMessage(`Location: ${locationValue}`);
+  }, [activeChatSessionId, sendMessage, workspaceName]);
 
   const handleChatInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isSkillAutocompleteOpen) {
@@ -3999,7 +4464,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onCopyMessage={handleCopyMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onCopyMessage={handleCopyMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -4169,7 +4634,169 @@ function SettingsSection({
   );
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete }: { copilotState: CopilotRuntimeState; isCopilotLoading: boolean; onRefreshCopilot: () => void; registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void }) {
+function slugifyEvaluationAgentId(value: string): string {
+  const slug = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || `agent-${Date.now().toString(36)}`;
+}
+
+function EvaluationAgentsSettings({
+  agents,
+  negativeRubricTechniques,
+  onSaveAgents,
+  onResetAgents,
+  onResetNegativeRubric,
+}: {
+  agents: CustomEvaluationAgent[];
+  negativeRubricTechniques: string[];
+  onSaveAgents: (agents: CustomEvaluationAgent[]) => void;
+  onResetAgents: () => void;
+  onResetNegativeRubric: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [kind, setKind] = useState<EvaluationAgentKind>('teacher');
+  const [name, setName] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [rubricCriteria, setRubricCriteria] = useState('');
+  const [json, setJson] = useState('');
+
+  const resetForm = () => {
+    setEditingId(null);
+    setKind('teacher');
+    setName('');
+    setInstructions('');
+    setRubricCriteria('');
+  };
+  const saveAgent = () => {
+    const trimmedName = name.trim();
+    const trimmedInstructions = instructions.trim();
+    if (!trimmedName || !trimmedInstructions) return;
+    const id = editingId ?? `${kind}-${slugifyEvaluationAgentId(trimmedName)}`;
+    const nextAgent: CustomEvaluationAgent = {
+      id,
+      kind,
+      name: trimmedName,
+      instructions: trimmedInstructions,
+      enabled: agents.find((agent) => agent.id === id)?.enabled ?? true,
+      ...(kind === 'judge'
+        ? {
+          rubricCriteria: rubricCriteria
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean),
+        }
+        : {}),
+    };
+    onSaveAgents([...agents.filter((agent) => agent.id !== id), nextAgent]);
+    resetForm();
+  };
+  const editAgent = (agent: CustomEvaluationAgent) => {
+    setEditingId(agent.id);
+    setKind(agent.kind);
+    setName(agent.name);
+    setInstructions(agent.instructions);
+    setRubricCriteria((agent.rubricCriteria ?? []).join('\n'));
+  };
+  const toggleAgent = (agent: CustomEvaluationAgent) => {
+    onSaveAgents(agents.map((candidate) => (
+      candidate.id === agent.id ? { ...candidate, enabled: !candidate.enabled } : candidate
+    )));
+  };
+  const exportAgents = () => {
+    setJson(JSON.stringify(agents, null, 2));
+  };
+  const importAgents = () => {
+    try {
+      const parsed = JSON.parse(json) as CustomEvaluationAgent[];
+      if (Array.isArray(parsed)) {
+        onSaveAgents(parsed);
+        resetForm();
+      }
+    } catch {
+      // Keep the text in place so the user can fix malformed JSON.
+    }
+  };
+
+  return (
+    <SettingsSection title={`LogAct evaluation agents (${agents.length})`} defaultOpen={false}>
+      <div className="provider-list">
+        <article className="provider-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Custom voters and judges</strong>
+              <p>Teachers steer student candidates. Judge configs extend rubrics and eval checks.</p>
+            </div>
+            <span className="badge">{negativeRubricTechniques.length} hardened</span>
+          </div>
+          <div className="provider-actions">
+            <button type="button" className="secondary-button" onClick={exportAgents}>Export evaluation agents JSON</button>
+            <button type="button" className="secondary-button" onClick={importAgents}>Import evaluation agents JSON</button>
+            <button type="button" className="secondary-button" onClick={onResetAgents}>Reset evaluation agents</button>
+            <button type="button" className="secondary-button" onClick={onResetNegativeRubric}>Reset rubric hardening</button>
+          </div>
+          <label className="provider-command-field">
+            <span>Evaluation agents JSON</span>
+            <textarea aria-label="Evaluation agents JSON" value={json} onChange={(event) => setJson(event.target.value)} rows={4} />
+          </label>
+        </article>
+
+        <article className="provider-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>{editingId ? 'Edit evaluation agent' : 'Create evaluation agent'}</strong>
+              <p>Only teachers vote. Judge configs feed the decider rubric.</p>
+            </div>
+          </div>
+          <label className="provider-command-field">
+            <span>Kind</span>
+            <select aria-label="Evaluation agent kind" value={kind} onChange={(event) => setKind(event.target.value as EvaluationAgentKind)}>
+              <option value="teacher">Teacher voter</option>
+              <option value="judge">Judge rubric</option>
+            </select>
+          </label>
+          <label className="provider-command-field">
+            <span>Name</span>
+            <input aria-label="Evaluation agent name" value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label className="provider-command-field">
+            <span>Instructions</span>
+            <textarea aria-label="Evaluation agent instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={3} />
+          </label>
+          {kind === 'judge' ? (
+            <label className="provider-command-field">
+              <span>Rubric criteria</span>
+              <textarea aria-label="Evaluation judge rubric criteria" value={rubricCriteria} onChange={(event) => setRubricCriteria(event.target.value)} rows={3} />
+            </label>
+          ) : null}
+          <div className="provider-actions">
+            <button type="button" className="secondary-button" onClick={saveAgent}>Save evaluation agent</button>
+            <button type="button" className="secondary-button" onClick={resetForm}>Clear form</button>
+          </div>
+        </article>
+
+        {agents.map((agent) => (
+          <article key={agent.id} className="provider-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>{agent.name}</strong>
+                <p>{agent.kind === 'teacher' ? 'Teacher voter' : 'Judge rubric'} · {agent.enabled ? 'enabled' : 'disabled'}</p>
+              </div>
+              <span className={`badge${agent.enabled ? ' connected' : ''}`}>{agent.enabled ? 'Enabled' : 'Disabled'}</span>
+            </div>
+            <p className="muted">{agent.instructions}</p>
+            <div className="provider-actions">
+              <button type="button" className="secondary-button" onClick={() => editAgent(agent)}>Edit {agent.name}</button>
+              <button type="button" className="secondary-button" onClick={() => toggleAgent(agent)}>
+                {agent.enabled ? 'Disable' : 'Enable'} {agent.name}
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </SettingsSection>
+  );
+}
+
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric }: { copilotState: CopilotRuntimeState; isCopilotLoading: boolean; onRefreshCopilot: () => void; registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void; evaluationAgents: CustomEvaluationAgent[]; negativeRubricTechniques: string[]; onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void; onResetEvaluationAgents: () => void; onResetNegativeRubric: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -4235,6 +4862,14 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
           ))}
         </SettingsSection>
       )}
+
+      <EvaluationAgentsSettings
+        agents={evaluationAgents}
+        negativeRubricTechniques={negativeRubricTechniques}
+        onSaveAgents={onSaveEvaluationAgents}
+        onResetAgents={onResetEvaluationAgents}
+        onResetNegativeRubric={onResetNegativeRubric}
+      />
 
       <SettingsSection title="Local models" scrollBody bodyClassName="local-models-body">
         <div className="local-model-controls">
@@ -5577,6 +6212,12 @@ function AgentBrowserApp() {
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useStoredState<HFModel[]>(localStorageBackend, STORAGE_KEYS.installedModels, isHFModelArray, []);
+  const evaluationAgentRegistry = useMemo(
+    () => createEvaluationAgentRegistry(localStorageBackend, activeWorkspaceId),
+    [activeWorkspaceId],
+  );
+  const [evaluationAgents, setEvaluationAgents] = useState<CustomEvaluationAgent[]>(() => evaluationAgentRegistry.list());
+  const [negativeRubricTechniques, setNegativeRubricTechniques] = useState<string[]>(() => evaluationAgentRegistry.listNegativeRubricTechniques());
   const [copilotState, setCopilotState] = useState<CopilotRuntimeState>(EMPTY_COPILOT_STATE);
   const [isCopilotStateLoading, setIsCopilotStateLoading] = useState(true);
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
@@ -5641,6 +6282,30 @@ function AgentBrowserApp() {
     [],
   );
   const workspaceWebMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
+
+  useEffect(() => {
+    setEvaluationAgents(evaluationAgentRegistry.list());
+    setNegativeRubricTechniques(evaluationAgentRegistry.listNegativeRubricTechniques());
+  }, [evaluationAgentRegistry]);
+
+  const saveEvaluationAgents = useCallback((agents: CustomEvaluationAgent[]) => {
+    evaluationAgentRegistry.save(agents);
+    setEvaluationAgents(evaluationAgentRegistry.list());
+  }, [evaluationAgentRegistry]);
+
+  const resetEvaluationAgents = useCallback(() => {
+    evaluationAgentRegistry.reset();
+    setEvaluationAgents([]);
+  }, [evaluationAgentRegistry]);
+
+  const resetNegativeRubric = useCallback(() => {
+    evaluationAgentRegistry.resetNegativeRubricTechniques();
+    setNegativeRubricTechniques([]);
+  }, [evaluationAgentRegistry]);
+  const addNegativeRubricTechnique = useCallback((technique: string) => {
+    evaluationAgentRegistry.addNegativeRubricTechnique(technique);
+    setNegativeRubricTechniques(evaluationAgentRegistry.listNegativeRubricTechniques());
+  }, [evaluationAgentRegistry]);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
@@ -8048,6 +8713,24 @@ function AgentBrowserApp() {
       clipboardEntries: activeClipboardEntries,
       getSessionState: getSessionStateFromMcp,
       getBrowserPageHistory: getBrowserPageHistoryFromMcp,
+      getUserContextMemory: ({ query, limit }) => searchUserContextMemory(activeWorkspace.name, query, limit),
+      getBrowserLocation: readBrowserLocationFromNavigator,
+      onElicitUserInput: (input) => {
+        const requestId = `elicitation-${createUniqueId()}`;
+        const detail: UserElicitationEventDetail = {
+          requestId,
+          prompt: input.prompt,
+          reason: input.reason,
+          fields: [...input.fields],
+        };
+        window.dispatchEvent(new CustomEvent<UserElicitationEventDetail>(USER_ELICITATION_EVENT, { detail }));
+        return {
+          status: 'needs_user_input',
+          requestId,
+          prompt: input.prompt,
+          fields: input.fields,
+        };
+      },
       sessionFsEntries: activeSessionFsEntries,
       worktreeItems: activeWorktreeItems,
       onOpenFile: openActiveWorkspaceFileFromMcp,
@@ -8168,7 +8851,7 @@ function AgentBrowserApp() {
     }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
-    if (activePanel === 'settings') return <SettingsPanel copilotState={copilotState} isCopilotLoading={isCopilotStateLoading} onRefreshCopilot={() => void refreshCopilotState(true)} registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} />;
+    if (activePanel === 'settings') return <SettingsPanel copilotState={copilotState} isCopilotLoading={isCopilotStateLoading} onRefreshCopilot={() => void refreshCopilotState(true)} registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} evaluationAgents={evaluationAgents} negativeRubricTechniques={negativeRubricTechniques} onSaveEvaluationAgents={saveEvaluationAgents} onResetEvaluationAgents={resetEvaluationAgents} onResetNegativeRubric={resetNegativeRubric} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 
@@ -8321,6 +9004,9 @@ function AgentBrowserApp() {
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
                 workspaceCapabilities={activeWorkspaceCapabilities}
+                evaluationAgents={evaluationAgents}
+                negativeRubricTechniques={negativeRubricTechniques}
+                onNegativeRubricTechnique={addNegativeRubricTechnique}
                 activeSessionId={panel.id}
                 activeMode={activeSessionMode}
                 onSwitchMode={(mode) => switchSessionMode(activeWorkspaceId, mode)}

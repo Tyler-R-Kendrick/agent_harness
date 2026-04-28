@@ -1,5 +1,6 @@
 import { tool, type LanguageModel, type ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import { ClassicVoter } from 'logact';
 import type { ICompletionChecker, IVoter } from 'logact';
 import { createHeuristicCompletionChecker, isExecutionTask } from 'ralph-loop';
 import { z } from 'zod';
@@ -35,6 +36,7 @@ export interface ToolPlan {
   selectedToolIds: string[];
   steps: ToolPlanStep[];
   createdToolFiles: string[];
+  actorToolAssignments?: Record<string, string[]>;
 }
 
 export interface GeneratedToolSource {
@@ -98,6 +100,12 @@ export type ToolPlanningCallbacks = AgentRunCallbacks & {
 };
 
 type StepOutputMap = Record<string, { output?: unknown; error?: string }>;
+
+const LOCATION_CONTEXT_TOOL_ORDER = [
+  'webmcp:recall_user_context',
+  'webmcp:read_browser_location',
+  'webmcp:elicit_user_input',
+] as const;
 
 function messageContentToText(content: ModelMessage['content']): string {
   if (typeof content === 'string') return content;
@@ -164,14 +172,85 @@ export function findTool(runtime: ToolAgentRuntime, query: string, limit = 5): T
 
 export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, maxTools = 4): ToolPlan {
   const ranked = findTool(runtime, goal, maxTools);
-  const selected = ranked.length ? ranked : listTools(runtime).slice(0, Math.max(1, maxTools));
+  const availableTools = listTools(runtime);
+  const orderedLocationTools = isLocationDependentGoal(goal)
+    ? LOCATION_CONTEXT_TOOL_ORDER
+      .map((toolId) => availableTools.find((descriptor) => descriptor.id === toolId))
+      .filter((descriptor): descriptor is ToolDescriptor => Boolean(descriptor))
+    : [];
+  const selected = [
+    ...orderedLocationTools,
+    ...(ranked.length ? ranked : availableTools).filter((descriptor) => (
+      !orderedLocationTools.some((locationTool) => locationTool.id === descriptor.id)
+    )),
+  ].slice(0, Math.max(1, maxTools, orderedLocationTools.length));
+  const selectedToolIds = selected.map((descriptor) => descriptor.id);
   return {
     version: 1,
     goal,
-    selectedToolIds: selected.map((descriptor) => descriptor.id),
+    selectedToolIds,
     steps: [],
     createdToolFiles: [],
+    actorToolAssignments: {
+      'tool-agent': [],
+      'student-driver': [],
+      'voter:teacher': [],
+      'adversary-driver': [],
+      'judge-decider': [],
+      executor: selectedToolIds,
+    },
   };
+}
+
+function isLocationDependentGoal(goal: string): boolean {
+  return /\b(near me|nearby|restaurants?|location|city|neighbou?rhood)\b/i.test(goal);
+}
+
+function createExecutionWorkflowVoters(selectedDescriptors: ToolDescriptor[]): IVoter[] {
+  const selectedToolIds = selectedDescriptors.map((descriptor) => descriptor.id);
+  const hasSelectedTools = selectedToolIds.length > 0;
+  return [
+    new ClassicVoter(
+      'planner-decomposition',
+      (action) => /succinct tasks/i.test(action) && /classification/i.test(action),
+      'Planner did not classify and decompose the request before execution.',
+      (_action, approve) => approve
+        ? 'Planner classified the prompt and decomposed it into succinct execution tasks.'
+        : 'Planner output is missing classification or task decomposition.',
+    ),
+    new ClassicVoter(
+      'orchestrator-agent-selection',
+      (action) => /registered agents/i.test(action) && /executor/i.test(action),
+      'Orchestrator did not select registered agents for the task.',
+      (_action, approve) => approve
+        ? 'Orchestrator selected from registered agents before execution.'
+        : 'Orchestrator output is missing registered-agent selection.',
+    ),
+    new ClassicVoter(
+      'tool-agent-assignment',
+      (action) => hasSelectedTools && selectedToolIds.every((toolId) => action.includes(toolId)),
+      'Tool agent did not assign the active workspace tools needed for execution.',
+      (_action, approve) => approve
+        ? `Tool agent assigned active workspace tools: ${selectedToolIds.join(', ')}.`
+        : 'Tool assignment did not reference every selected active workspace tool.',
+    ),
+  ];
+}
+
+function buildExecutionWorkflowIntent(
+  plan: ToolPlan,
+  selectedDescriptors: ToolDescriptor[],
+  feedback: string | null,
+): string {
+  const selectedToolIds = selectedDescriptors.map((descriptor) => descriptor.id);
+  return [
+    'Execution workflow ready for LogAct.',
+    'Classification: tool-enabled workspace task.',
+    `Succinct tasks: ${plan.goal}`,
+    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, voter agents, executor.`,
+    `Tool assignments: ${selectedToolIds.length ? selectedToolIds.join(', ') : '(none)'}.`,
+    feedback ? `Completion feedback: ${feedback}` : null,
+  ].filter(Boolean).join('\n');
 }
 
 function validateToolPlan(plan: ToolPlan): ToolPlan {
@@ -209,28 +288,29 @@ export async function callToolPlan(
   plan: ToolPlan,
   callbacks: ToolPlanningCallbacks = {},
   parentOutputs: StepOutputMap = {},
+  parentBranchId = 'tool-agent',
 ): Promise<StepOutputMap> {
   const validated = validateToolPlan(plan);
   const outputs: StepOutputMap = {};
   for (const step of validated.steps) {
     const scopedOutputs = { ...parentOutputs, ...outputs };
-    callbacks.onToolAgentEvent?.({
-      kind: 'tool-call',
-      summary: step.kind === 'call-tool' ? `Calling ${step.toolId}` : 'Calling nested tool plan',
-      branchId: step.kind === 'call-tool' ? `tool:${step.toolId}` : `tool-plan:${step.id}`,
-      parentBranchId: 'tool-agent',
-      payload: step,
-    });
+      callbacks.onToolAgentEvent?.({
+        kind: 'tool-call',
+        summary: step.kind === 'call-tool' ? `Calling ${step.toolId}` : 'Calling nested tool plan',
+        branchId: step.kind === 'call-tool' ? `tool:${step.toolId}` : `tool-plan:${step.id}`,
+        parentBranchId,
+        payload: step,
+      });
     try {
       const output = step.kind === 'call-tool'
         ? await callTool(runtime, step.toolId, resolveTemplate(step.inputTemplate ?? {}, scopedOutputs))
-        : await callToolPlan(runtime, step.plan, callbacks, scopedOutputs);
+        : await callToolPlan(runtime, step.plan, callbacks, scopedOutputs, parentBranchId);
       outputs[step.saveAs ?? step.id] = { output };
       callbacks.onToolAgentEvent?.({
         kind: 'tool-result',
         summary: step.kind === 'call-tool' ? `${step.toolId} complete` : 'Nested tool plan complete',
         branchId: step.kind === 'call-tool' ? `tool:${step.toolId}` : `tool-plan:${step.id}`,
-        parentBranchId: 'tool-agent',
+        parentBranchId,
         payload: output,
       });
     } catch (error) {
@@ -286,6 +366,7 @@ export async function makeTool(
 }
 
 export function createToolAgentTools(runtime: ToolAgentRuntime, callbacks: ToolPlanningCallbacks = {}): ToolSet {
+  void callbacks;
   return {
     'list-tools': tool({
       description: 'List the tools available to the Tool Agent.',
@@ -308,40 +389,6 @@ export function createToolAgentTools(runtime: ToolAgentRuntime, callbacks: ToolP
       }),
       execute: async ({ goal, maxTools }) => createStaticToolPlan(runtime, goal, maxTools),
     }),
-    'make-tool': tool({
-      description: 'Use CodeMode to create and persist a new workspace tool.',
-      inputSchema: z.object({
-        id: z.string(),
-        label: z.string().optional(),
-        description: z.string(),
-      }),
-      execute: async (input) => makeTool(runtime, input, callbacks),
-    }),
-    'call-tool': tool({
-      description: 'Call one available tool by id.',
-      inputSchema: z.object({
-        toolId: z.string(),
-        input: z.unknown().optional(),
-      }),
-      execute: async ({ toolId, input }) => callTool(runtime, toolId, input),
-    }),
-    'call-tool-plan': tool({
-      description: 'Validate and execute a serialized ToolPlan.',
-      inputSchema: z.object({
-        plan: z.custom<ToolPlan>(),
-      }),
-      execute: async ({ plan }) => callToolPlan(runtime, plan, callbacks),
-    }),
-    codemode: tool({
-      description: 'Execute CodeMode JavaScript against explicitly bound tools.',
-      inputSchema: z.object({
-        code: z.string(),
-      }),
-      execute: async ({ code }) => (runtime.codeMode ?? createCodeModeExecutor()).executeCode({
-        code,
-        bindings: [{ namespace: 'codemode', tools: allTools(runtime) }],
-      }),
-    }),
   } as ToolSet;
 }
 
@@ -356,18 +403,6 @@ export async function runToolPlanningAgent(
     summary: 'Tool Agent planning tool use',
     branchId: 'tool-agent',
     payload: { goal },
-  });
-  callbacks.onToolAgentEvent?.({
-    kind: 'codemode',
-    summary: 'CodeMode building static tool plan',
-    branchId: 'codemode',
-    parentBranchId: 'tool-agent',
-    payload: { goal, tools: runtime.descriptors.map((descriptor) => descriptor.id) },
-  });
-  const codeMode = runtime.codeMode ?? createCodeModeExecutor();
-  await codeMode.executeCode({
-    code: 'async () => ({ planned: true })',
-    bindings: [{ namespace: 'codemode', tools: createToolAgentTools(runtime, callbacks) }],
   });
   const plan = createStaticToolPlan(runtime, goal);
   const selectedDescriptors = selectToolDescriptorsByIds(allDescriptors(runtime), plan.selectedToolIds);
@@ -403,7 +438,7 @@ export async function runToolAgentExecutor(
     selectedToolIds: selectedDescriptors.map((descriptor) => descriptor.id),
   });
   const task = options.messages.at(-1) ? messageContentToText(options.messages.at(-1)!.content) : '';
-  const voters = options.voters ?? [];
+  const voters = [...createExecutionWorkflowVoters(selectedDescriptors), ...(options.voters ?? [])];
   const completionChecker = options.completionChecker
     ?? (isExecutionTask(task) ? createHeuristicCompletionChecker(task) : undefined);
   const maxIterations = options.maxIterations ?? 5;
@@ -430,24 +465,30 @@ export async function runToolAgentExecutor(
     messages,
     signal: options.signal,
     maxSteps: options.maxSteps,
-  }, completionChecker ? { ...callbacks, onToken: undefined, onDone: undefined } : callbacks);
-
-  if (voters.length === 0 && !completionChecker) {
-    return runOnce(options.messages);
-  }
+  }, { ...callbacks, onToken: undefined, onDone: undefined });
 
   let captured: AgentRunResult = { text: '', steps: 0 };
   let failure: Error | null = null;
-  let feedbackMessages: ModelMessage[] = [];
+  let pendingFeedback: string | null = null;
   const observedBus = createObservedBus(callbacks.onBusEntry);
 
   await runAgentLoop({
     bus: observedBus,
     inferenceClient: {
-      async infer() {
+      async infer(messages) {
+        pendingFeedback = [...messages].reverse()
+          .find((message) => message.role === 'user' && /you have not done the work yet|try again|feedback/i.test(message.content))
+          ?.content
+          ?? null;
+        return buildExecutionWorkflowIntent(plan, selectedDescriptors, pendingFeedback);
+      },
+    },
+    executor: {
+      tier: 'llm-active',
+      async execute() {
         try {
-          const executorMessages = feedbackMessages.length > 0
-            ? [...options.messages, ...feedbackMessages]
+          const executorMessages = pendingFeedback
+            ? [...options.messages, { role: 'system' as const, content: pendingFeedback }]
             : options.messages;
           captured = await runOnce(executorMessages);
           return captured.text;
@@ -463,14 +504,6 @@ export async function runToolAgentExecutor(
       ? {
         async check(context) {
           const result = await completionChecker.check(context);
-          if (!result.done && result.feedback?.trim()) {
-            feedbackMessages = [
-              { role: 'assistant', content: [{ type: 'text', text: captured.text }] },
-              { role: 'system', content: result.feedback.trim() },
-            ];
-          } else {
-            feedbackMessages = [];
-          }
           return result;
         },
       }
@@ -479,9 +512,7 @@ export async function runToolAgentExecutor(
   }, callbacks);
 
   if (failure) throw failure;
-  if (completionChecker) {
-    callbacks.onToken?.(captured.text);
-    callbacks.onDone?.(captured.text);
-  }
+  callbacks.onToken?.(captured.text);
+  callbacks.onDone?.(captured.text);
   return captured;
 }

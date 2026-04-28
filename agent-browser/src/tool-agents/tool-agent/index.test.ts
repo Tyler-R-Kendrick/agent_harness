@@ -3,10 +3,12 @@ import type { ToolSet } from 'ai';
 import {
   callTool,
   callToolPlan,
+  createToolAgentTools,
   createStaticToolPlan,
   findTool,
   listTools,
   makeTool,
+  runToolPlanningAgent,
   type ToolAgentRuntime,
   type ToolPlan,
 } from '.';
@@ -61,7 +63,103 @@ describe('Tool Agent', () => {
       selectedToolIds: ['read_session_file'],
       steps: [],
       createdToolFiles: [],
+      actorToolAssignments: {
+        'student-driver': [],
+        'voter:teacher': [],
+        'adversary-driver': [],
+        'judge-decider': [],
+        executor: ['read_session_file'],
+      },
     });
+  });
+
+  it('prefers user-context tools over cli for restaurant near-me prompts', () => {
+    const userContextDescriptors: ToolDescriptor[] = [
+      descriptors[0],
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask for missing city or neighborhood for restaurant near-me tasks.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:read_browser_location',
+        label: 'Read browser location',
+        description: 'Read browser geolocation for restaurant near-me tasks.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for location context before restaurant near-me tasks.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+
+    const plan = createStaticToolPlan({
+      tools: {},
+      descriptors: userContextDescriptors,
+    }, 'list restaurants near me');
+
+    expect(plan.selectedToolIds.slice(0, 3)).toEqual([
+      'webmcp:recall_user_context',
+      'webmcp:read_browser_location',
+      'webmcp:elicit_user_input',
+    ]);
+    expect(plan.actorToolAssignments?.executor).toEqual(expect.arrayContaining([
+      'webmcp:recall_user_context',
+      'webmcp:read_browser_location',
+      'webmcp:elicit_user_input',
+    ]));
+    expect(plan.actorToolAssignments?.executor).not.toContain('cli');
+  });
+
+  it('exposes planning-only tools to the tool agent', () => {
+    const tools = createToolAgentTools(runtime());
+
+    expect(Object.keys(tools).sort()).toEqual([
+      'find-tool',
+      'list-tools',
+      'plan-tools',
+    ]);
+    expect(tools).not.toHaveProperty('call-tool');
+    expect(tools).not.toHaveProperty('call-tool-plan');
+    expect(tools).not.toHaveProperty('codemode');
+    expect(tools).not.toHaveProperty('make-tool');
+  });
+
+  it('plans tool assignments without executing CodeMode or workspace tools', async () => {
+    const executeCode = vi.fn();
+    const onToolAgentEvent = vi.fn();
+
+    const planned = await runToolPlanningAgent({
+      model: {} as never,
+      messages: [{ role: 'user', content: 'read the session file' }],
+      instructions: 'Plan tool access only.',
+      runtime: {
+        ...runtime({ read_session_file: { execute: vi.fn() } } as unknown as ToolSet),
+        codeMode: { executeCode },
+      },
+    }, { onToolAgentEvent });
+
+    expect(executeCode).not.toHaveBeenCalled();
+    expect(planned.plan.actorToolAssignments?.executor).toEqual(['read_session_file']);
+    expect(onToolAgentEvent).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'plan',
+      branchId: 'tool-agent',
+    }));
+    expect(onToolAgentEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      branchId: 'codemode',
+    }));
   });
 
   it('calls one tool by id', async () => {

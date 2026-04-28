@@ -12,16 +12,43 @@ import type { BusEntryStep } from '../types';
 import {
   TOOL_AGENT_ID,
   TOOL_AGENT_LABEL,
-  runToolAgentExecutor,
+  createStaticToolPlan,
   runToolPlanningAgent,
   type GeneratedToolSource,
   type ToolAgentEvent,
   type ToolAgentRuntime,
+  type ToolPlan,
 } from '../tool-agents/tool-agent';
+import { runConfiguredExecutorAgent } from './executorAgent';
+import { runLogActActorWorkflow } from './logactActorWorkflow';
+import type { CustomEvaluationAgent } from './evaluationAgentRegistry';
 
 const CHAT_OUTPUT_TOKENS = 512;
 
-type StageName = 'router' | 'group-select' | 'tool-select' | 'executor' | 'chat';
+export interface OrchestratorTask {
+  id: string;
+  prompt: string;
+  source: string;
+  dependsOnPrevious: boolean;
+}
+
+export interface OrchestratorTaskPlan {
+  mode: 'single' | 'parallel' | 'sequential';
+  tasks: OrchestratorTask[];
+}
+
+type StageName =
+  | 'chat-agent'
+  | 'planner'
+  | 'router-agent'
+  | 'router'
+  | 'orchestrator'
+  | 'tool-agent'
+  | 'group-select'
+  | 'tool-select'
+  | 'logact'
+  | 'executor'
+  | 'chat';
 
 export interface StageMeta {
   subStageId?: string;
@@ -50,6 +77,9 @@ export type StagedToolPipelineOptions = {
   completionChecker?: ICompletionChecker;
   maxIterations?: number;
   voters?: IVoter[];
+  evaluationAgents?: CustomEvaluationAgent[];
+  negativeRubricTechniques?: string[];
+  onNegativeRubricTechnique?: (technique: string) => void;
   onGeneratedTool?: (file: GeneratedToolSource) => Promise<void> | void;
 };
 
@@ -74,6 +104,7 @@ export type StagedToolPipelineCallbacks = AgentRunCallbacks
     onStageToken?: (stage: StageName, delta: string, meta?: StageMeta) => void;
     onStageComplete?: (stage: StageName, text: string, meta?: StageMeta) => void;
     onStageError?: (stage: StageName, error: Error, meta?: StageMeta) => void;
+    onAgentHandoff?: (fromAgentId: string, toAgentId: string, summary: string) => void;
     onToolAgentEvent?: (event: ToolAgentEvent) => void;
   };
 
@@ -82,14 +113,18 @@ type StreamableModel = {
   doStream?: (options: unknown) => Promise<{ stream: ReadableStream<LanguageModelV3StreamPart> }>;
 };
 
-function modelMeta(model: LanguageModel): StageMeta {
+function agentMeta(model: LanguageModel, agentId: string, agentLabel: string): StageMeta {
   const candidate = model as { provider?: string; modelId?: string; id?: string };
   return {
-    agentId: TOOL_AGENT_ID,
-    agentLabel: TOOL_AGENT_LABEL,
+    agentId,
+    agentLabel,
     modelProvider: candidate.provider ?? 'unknown',
     modelId: candidate.modelId ?? candidate.id ?? candidate.provider ?? 'unknown',
   };
+}
+
+function modelMeta(model: LanguageModel): StageMeta {
+  return agentMeta(model, TOOL_AGENT_ID, TOOL_AGENT_LABEL);
 }
 
 function messageContentToText(content: ModelMessage['content']): string {
@@ -105,6 +140,59 @@ function formatMessages(messages: ModelMessage[]): string {
     .slice(-6)
     .map((message) => `[${message.role}]\n${messageContentToText(message.content)}`)
     .join('\n\n');
+}
+
+export function planOrchestratorTasks(
+  messages: ModelMessage[],
+  workspaceName = 'Workspace',
+): OrchestratorTaskPlan {
+  const rawTask = messageContentToText(messages.at(-1)?.content ?? 'Use the available tools to help the user.')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const sequential = /\b(first|then|next|after|before|finally)\b/i.test(rawTask);
+  const taskSources = splitTaskSource(rawTask, sequential);
+  const mode: OrchestratorTaskPlan['mode'] = taskSources.length <= 1
+    ? 'single'
+    : sequential
+      ? 'sequential'
+      : 'parallel';
+  return {
+    mode,
+    tasks: taskSources.map((source, index) => {
+      const dependsOnPrevious = mode === 'sequential' && index > 0;
+      return {
+        id: `task-${index + 1}`,
+        source,
+        dependsOnPrevious,
+        prompt: [
+          `Orchestrator task ${index + 1} of ${taskSources.length} (${mode}).`,
+          `Workspace: ${workspaceName}.`,
+          `Original request: ${rawTask}`,
+          `Enhanced task prompt: ${source}`,
+          dependsOnPrevious ? 'Sequence dependency: use prior task results before starting this task.' : null,
+          'Completion contract: write candidate design, votes, judge decision, execution result, and any recovery back to AgentBus.',
+        ].filter(Boolean).join('\n'),
+      };
+    }),
+  };
+}
+
+function splitTaskSource(rawTask: string, sequential: boolean): string[] {
+  const withoutLeadingOrder = rawTask.replace(/^\s*(first|then|next|finally)\s+/i, '');
+  const separator = sequential
+    ? /\s*(?:,\s*)?\b(?:then|next|finally)\b\s*/i
+    : /\s+\b(?:and|also)\b\s+/i;
+  const pieces = withoutLeadingOrder
+    .split(separator)
+    .map((piece) => piece.replace(/^\s*(first|then|next|finally)\s+/i, '').trim())
+    .map((piece) => piece.replace(/[.。]+$/u, '').trim())
+    .filter(Boolean);
+  return pieces.length > 0 ? pieces : [rawTask];
+}
+
+function messagesForOrchestratorTask(messages: ModelMessage[], task: OrchestratorTask): ModelMessage[] {
+  const priorMessages = messages.slice(0, -1);
+  return [...priorMessages, { role: 'user', content: task.prompt }];
 }
 
 function extractTextFromGenerateResult(result: LanguageModelV3GenerateResult): string {
@@ -209,8 +297,20 @@ export async function runStagedToolPipeline(
     return runDirectChat(options, callbacks);
   }
 
-  const meta = modelMeta(options.model);
-  emitToolAgentStages(callbacks, 'router', 'Routing request through Tool Agent.', meta);
+  const chatMeta = agentMeta(options.model, 'chat-agent', 'Chat Agent');
+  const orchestratorMeta = agentMeta(options.model, 'orchestrator', 'Orchestrator Agent');
+  const executorMeta = agentMeta(options.model, 'executor', 'Executor Agent');
+  const orchestrated = planOrchestratorTasks(options.messages, options.workspaceName);
+
+  emitToolAgentStages(callbacks, 'chat-agent', 'Receiving the user prompt and delegating planning.', chatMeta);
+  callbacks.onAgentHandoff?.('chat-agent', 'orchestrator', 'Agent handoff: classify the prompt, decompose the task, and choose registered agents.');
+  emitToolAgentStages(callbacks, 'orchestrator', [
+    'Registered agents available for this task:',
+    'chat-agent, orchestrator, dynamic LogAct actors, executor.',
+    'Tool selection will be logged by the LogAct tool-agent driver.',
+    `Execution mode: ${orchestrated.mode}.`,
+    ...orchestrated.tasks.map((task) => `${task.id}: ${task.source}${task.dependsOnPrevious ? ' (after previous task)' : ''}`),
+  ].join('\n'), orchestratorMeta);
 
   const runtime: ToolAgentRuntime = {
     tools: options.tools,
@@ -224,43 +324,170 @@ export async function runStagedToolPipeline(
     ...callbacks,
     onToolAgentEvent: (event) => {
       callbacks.onToolAgentEvent?.(event);
-      const subStageMeta = eventToSubStage(event, options.model);
-      if (event.branchId === 'tool-agent') {
+      if (event.kind !== 'tool-call' && event.kind !== 'tool-result') {
         return;
       }
-      callbacks.onStageStart?.('tool-select', event.summary, subStageMeta);
-      callbacks.onStageToken?.('tool-select', event.summary, subStageMeta);
-      callbacks.onStageComplete?.('tool-select', event.summary, subStageMeta);
+      const subStageMeta = eventToSubStage(event, options.model);
+      if (event.branchId === 'tool-agent' || event.parentBranchId === 'tool-agent') {
+        return;
+      }
+      const targetStage = event.parentBranchId === 'execute-plan' || event.parentBranchId === 'executor'
+        ? 'executor'
+        : 'tool-select';
+      callbacks.onStageStart?.(targetStage, event.summary, subStageMeta);
+      callbacks.onStageToken?.(targetStage, event.summary, subStageMeta);
+      callbacks.onStageComplete?.(targetStage, event.summary, subStageMeta);
     },
   };
 
-  const planned = await runToolPlanningAgent({
-    model: options.model,
-    messages: options.messages,
-    instructions: options.instructions,
-    workspaceName: options.workspaceName,
-    capabilities: options.capabilities,
-    signal: options.signal,
-    maxSteps: options.maxSteps,
-    runtime,
-  }, planningCallbacks);
+  callbacks.onAgentHandoff?.('orchestrator', 'logact', 'Agent handoff: submit the tool-aware workflow to the LogAct AgentBus.');
+  callbacks.onStageToken?.('orchestrator', [
+    `Execution mode: ${orchestrated.mode}.`,
+    `State machine pending: ${orchestrated.tasks.map((task) => task.id).join(', ')}.`,
+  ].join('\n'), orchestratorMeta);
 
-  emitToolAgentStages(callbacks, 'group-select', `Selected ${planned.selectedDescriptors.length} tool candidate${planned.selectedDescriptors.length === 1 ? '' : 's'}.`, meta);
-  emitToolAgentStages(callbacks, 'tool-select', JSON.stringify(planned.plan, null, 2), meta);
+  let executorStarted = false;
+  const beginExecutor = () => {
+    if (executorStarted) return;
+    executorStarted = true;
+    callbacks.onStageStart?.('executor', 'Executing committed LogAct plan.', executorMeta);
+  };
 
-  callbacks.onStageStart?.('executor', 'Executing Tool Agent plan.', meta);
   try {
-    const result = await runToolAgentExecutor({
-      ...options,
-      runtime,
-    }, planned.plan, planned.selectedDescriptors, planned.tools, planningCallbacks);
-    callbacks.onStageComplete?.('executor', result.text, meta);
+    const runTask = (task: OrchestratorTask) => {
+      const taskMessages = messagesForOrchestratorTask(options.messages, task);
+      const taskCallbacks = callbacksForOrchestratorTask(planningCallbacks, task, orchestrated.tasks.length > 1);
+      const fallbackSelection = createFallbackToolSelection(runtime, task.source, options.maxTools);
+      return runLogActActorWorkflow({
+        messages: taskMessages,
+        instructions: options.instructions,
+        workspaceName: options.workspaceName,
+        plan: fallbackSelection.plan,
+        selectedDescriptors: fallbackSelection.selectedDescriptors,
+        selectedTools: fallbackSelection.selectedTools,
+        selectTools: async ({ messages }) => {
+          const planned = await runToolPlanningAgent({
+            model: options.model,
+            messages,
+            instructions: options.instructions,
+            workspaceName: options.workspaceName,
+            capabilities: options.capabilities,
+            signal: options.signal,
+            maxSteps: options.maxSteps,
+            runtime,
+          }, taskCallbacks);
+          return {
+            plan: planned.plan,
+            selectedDescriptors: planned.selectedDescriptors,
+            selectedTools: planned.tools,
+          };
+        },
+        negativeRubricTechniques: options.negativeRubricTechniques,
+        customTeacherInstructions: (options.evaluationAgents ?? [])
+          .filter((agent) => agent.enabled && agent.kind === 'teacher')
+          .map((agent) => agent.instructions),
+        customJudgeRubricCriteria: (options.evaluationAgents ?? [])
+          .filter((agent) => agent.enabled && agent.kind === 'judge')
+          .flatMap((agent) => agent.rubricCriteria ?? [agent.instructions]),
+        onNegativeRubricTechnique: options.onNegativeRubricTechnique,
+        onExecutorStart: beginExecutor,
+        execute: (context) => {
+          beginExecutor();
+          return runConfiguredExecutorAgent({
+            ...options,
+            messages: taskMessages,
+            runtime,
+          }, context.plan, context.selectedDescriptors, context.selectedTools, {
+            ...taskCallbacks,
+            onBusEntry: undefined,
+          }, context);
+        },
+      }, taskCallbacks);
+    };
+
+    const taskResults: AgentRunResult[] = [];
+    if (orchestrated.mode === 'sequential') {
+      for (const task of orchestrated.tasks) {
+        callbacks.onStageToken?.('orchestrator', `State machine running: ${task.id}.`, orchestratorMeta);
+        const taskResult = await runTask(task);
+        taskResults.push(taskResult);
+        callbacks.onStageToken?.('orchestrator', `State machine completed: ${task.id}.`, orchestratorMeta);
+        if (taskResult.failed) break;
+      }
+    } else {
+      taskResults.push(...await Promise.all(orchestrated.tasks.map((task) => runTask(task))));
+      callbacks.onStageToken?.('orchestrator', `State machine completed: ${orchestrated.tasks.map((task) => task.id).join(', ')}.`, orchestratorMeta);
+    }
+
+    const result = combineTaskResults(taskResults);
+    if (executorStarted) {
+      callbacks.onStageComplete?.('executor', result.text, executorMeta);
+    }
     return result;
   } catch (error) {
     const wrapped = error instanceof Error ? error : new Error(String(error));
-    callbacks.onStageError?.('executor', wrapped, meta);
+    if (executorStarted) {
+      callbacks.onStageError?.('executor', wrapped, executorMeta);
+    } else {
+      callbacks.onStageError?.('orchestrator', wrapped, orchestratorMeta);
+    }
     throw wrapped;
   }
+}
+
+function createFallbackToolSelection(
+  runtime: ToolAgentRuntime,
+  goal: string,
+  maxTools?: number,
+): { plan: ToolPlan; selectedDescriptors: ToolDescriptor[]; selectedTools: ToolSet } {
+  const plan = createStaticToolPlan(runtime, goal, maxTools);
+  const selectedDescriptors = selectToolDescriptorsByIds(runtime.descriptors, plan.selectedToolIds);
+  const selectedTools = Object.fromEntries(plan.selectedToolIds
+    .filter((id) => runtime.tools[id])
+    .map((id) => [id, runtime.tools[id]])) as ToolSet;
+  return { plan, selectedDescriptors, selectedTools };
+}
+
+function callbacksForOrchestratorTask(
+  callbacks: StagedToolPipelineCallbacks,
+  task: OrchestratorTask,
+  scope: boolean,
+): StagedToolPipelineCallbacks {
+  if (!scope) return callbacks;
+  const scopeId = (id: string) => `${task.id}:${id}`;
+  return {
+    ...callbacks,
+    onBusEntry: (entry) => callbacks.onBusEntry?.({
+      ...entry,
+      id: scopeId(entry.id),
+      branchId: entry.branchId ? `${entry.branchId}:${task.id}` : entry.branchId,
+    }),
+    onVoterStep: (step) => callbacks.onVoterStep?.({
+      ...step,
+      id: scopeId(step.id),
+      title: `${task.id} · ${step.title}`,
+    }),
+    onVoterStepUpdate: (id, patch) => callbacks.onVoterStepUpdate?.(scopeId(id), patch),
+    onVoterStepEnd: (id) => callbacks.onVoterStepEnd?.(scopeId(id)),
+    onAgentHandoff: (fromAgentId, toAgentId, summary) => (
+      callbacks.onAgentHandoff?.(fromAgentId, toAgentId, `${task.id}: ${summary}`)
+    ),
+  };
+}
+
+function combineTaskResults(results: AgentRunResult[]): AgentRunResult {
+  const failed = results.find((result) => result.failed);
+  return {
+    text: results.map((result) => result.text).join('\n\n'),
+    steps: results.reduce((sum, result) => sum + result.steps, 0),
+    ...(failed ? {
+      failed: true,
+      error: results
+        .filter((result) => result.failed)
+        .map((result) => result.error ?? result.text)
+        .join('\n'),
+    } : {}),
+  };
 }
 
 export function selectStageDescriptors(

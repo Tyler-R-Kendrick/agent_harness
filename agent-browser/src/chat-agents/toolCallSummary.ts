@@ -172,6 +172,14 @@ function summarizeWebMcpCall(name: string, args: unknown): string {
   if (name === 'switch_session_mode') return 'Switched session mode';
   if (name === 'change_session_tools') return 'Changed session tools';
 
+  // User context
+  if (name === 'recall_user_context') {
+    const query = at ? readString(args.query) : null;
+    return query ? `Recalled user context for ${query}` : 'Recalled user context';
+  }
+  if (name === 'read_browser_location') return 'Read browser location';
+  if (name === 'elicit_user_input') return 'Requested user input';
+
   // Workspace
   if (name === 'workspace_overview') return 'Read workspace overview';
   if (name === 'workspace_file') {

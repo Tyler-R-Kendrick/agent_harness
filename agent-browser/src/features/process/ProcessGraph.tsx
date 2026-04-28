@@ -9,6 +9,7 @@ import {
   Mail,
   MessageSquare,
   Package,
+  Route,
   ScrollText,
   Send,
   ShieldQuestion,
@@ -31,6 +32,7 @@ const KIND_ICON: Record<ProcessEntryKind, LucideIcon> = {
   'tool-call': Wrench,
   'tool-result': Package,
   subagent: CornerDownRight,
+  handoff: Route,
   mail: Mail,
   'inf-in': Inbox,
   'inf-out': Send,
@@ -61,6 +63,38 @@ type LaneSpan = {
   parent?: string;
   hasActive: boolean;
 };
+
+export function findOrphanBranches(entries: ProcessEntry[]): string[] {
+  const sorted = [...entries].sort((a, b) => {
+    if (a.ts !== b.ts) return a.ts - b.ts;
+    return a.position - b.position;
+  });
+  const seenEntryIds = new Set<string>();
+  const seenBranches = new Set<string>();
+  const orphanBranches = new Set<string>();
+
+  for (const entry of sorted) {
+    const branch = entry.branchId ?? entry.actor ?? 'main';
+    const isFirstOnBranch = !seenBranches.has(branch);
+    if (
+      isFirstOnBranch
+      && branch !== 'main'
+      && isStructuredChildBranch(branch)
+      && (!entry.parentId || !seenEntryIds.has(entry.parentId))
+    ) {
+      orphanBranches.add(branch);
+    }
+    seenBranches.add(branch);
+    seenEntryIds.add(entry.id);
+  }
+
+  return [...orphanBranches];
+}
+
+function isStructuredChildBranch(branch: string): boolean {
+  return /^(agent|tools|tool|voter|mail|bus|iteration|iterations):/.test(branch)
+    || branch === 'bus';
+}
 
 function connectorStyle(fromIndex: number, toIndex: number, color: string, type: 'fork' | 'merge') {
   return {
@@ -101,8 +135,12 @@ export function ProcessGraph({
     if (a.ts !== b.ts) return a.ts - b.ts;
     return a.position - b.position;
   });
+  const orphanBranches = new Set(findOrphanBranches(sorted));
 
-  const branchOf = (entry: ProcessEntry): string => entry.branchId ?? entry.actor ?? 'main';
+  const branchOf = (entry: ProcessEntry): string => {
+    const branch = entry.branchId ?? entry.actor ?? 'main';
+    return orphanBranches.has(branch) ? 'main' : branch;
+  };
 
   // Lanes assigned in first-seen execution order so the leftmost lane is
   // whichever branch appeared first chronologically.
@@ -135,12 +173,18 @@ export function ProcessGraph({
       existing.ownLast = rowIndex;
       existing.last = rowIndex;
       existing.hasActive = existing.hasActive || entry.status === 'active';
-      if (!existing.parent && parent) existing.parent = parent;
+      if (parent) {
+        const parentSpan = laneSpans.get(parent);
+        if (parentSpan) {
+          parentSpan.last = Math.max(parentSpan.last, rowIndex);
+        }
+      }
     }
   });
 
-  // A parent lane should remain visible while its child branches are running,
-  // even when the parent has no row of its own between fork and merge.
+  // A parent lane remains open while its child branch, and that child's
+  // descendants, are active. This keeps every merge connected to an existing
+  // parent rail while still letting the lane close at the descendant return.
   let extendedParentSpan = true;
   while (extendedParentSpan) {
     extendedParentSpan = false;
@@ -175,9 +219,10 @@ export function ProcessGraph({
     connectorsByRow.set(span.first, fork);
 
     if (!span.hasActive) {
-      const merge = connectorsByRow.get(span.last) ?? [];
-      merge.push({ key: `${laneId}:merge`, type: 'merge', laneId, fromIndex: toIndex, toIndex: fromIndex, color });
-      connectorsByRow.set(span.last, merge);
+      const mergeRow = span.last;
+      const mergeConnectors = connectorsByRow.get(mergeRow) ?? [];
+      mergeConnectors.push({ key: `${laneId}:merge`, type: 'merge', laneId, fromIndex: toIndex, toIndex: fromIndex, color });
+      connectorsByRow.set(mergeRow, mergeConnectors);
     }
   });
 
@@ -229,7 +274,7 @@ export function ProcessGraph({
                 if (!span) return null;
                 const inSpan = rowIndex >= span.first && rowIndex <= span.last;
                 const isFirst = rowIndex === span.first;
-                const isLast = rowIndex === span.last && span.last === span.ownLast;
+                const isLast = rowIndex === span.last;
                 const laneColor = branchColor(laneId);
                 const isActiveLane = i === laneIndex;
                 return (

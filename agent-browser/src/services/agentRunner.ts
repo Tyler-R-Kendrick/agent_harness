@@ -53,6 +53,11 @@ export type AgentRunCallbacks = {
 export type AgentRunResult = {
   text: string;
   steps: number;
+  failed?: boolean;
+  error?: string;
+  blocked?: boolean;
+  needsUserInput?: boolean;
+  elicitation?: unknown;
 };
 
 // ── Runner ────────────────────────────────────────────────────────────────────

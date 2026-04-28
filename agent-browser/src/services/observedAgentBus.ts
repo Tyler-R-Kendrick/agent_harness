@@ -9,7 +9,7 @@
  */
 
 import { InMemoryAgentBus, PayloadType } from 'logact';
-import type { Entry, Payload } from 'logact';
+import type { AgentBusPayloadMeta, Entry, Payload } from 'logact';
 import type { BusEntryStep } from '../types';
 
 export function summarisePayload(payload: Payload): { summary: string; detail: string; actor?: string } {
@@ -52,6 +52,7 @@ export function summarisePayload(payload: Payload): { summary: string; detail: s
 
 export function entryToBusStep(entry: Entry): BusEntryStep {
   const { summary, detail, actor } = summarisePayload(entry.payload);
+  const meta = actorMeta(entry.payload);
   return {
     id: `bus-${entry.position}`,
     position: entry.position,
@@ -60,7 +61,19 @@ export function entryToBusStep(entry: Entry): BusEntryStep {
     summary,
     detail,
     ...(actor ? { actor } : {}),
+    ...(meta?.actorId !== undefined ? { actorId: meta.actorId } : {}),
+    ...(meta?.actorRole !== undefined ? { actorRole: meta.actorRole } : {}),
+    ...(meta?.parentActorId !== undefined ? { parentActorId: meta.parentActorId } : {}),
+    ...(meta?.branchId !== undefined ? { branchId: meta.branchId } : {}),
+    ...(meta?.agentLabel !== undefined ? { agentLabel: meta.agentLabel } : {}),
+    ...(meta?.modelId !== undefined ? { modelId: meta.modelId } : {}),
+    ...(meta?.modelProvider !== undefined ? { modelProvider: meta.modelProvider } : {}),
+    ...(meta?.passIndex !== undefined ? { passIndex: meta.passIndex } : {}),
   };
+}
+
+function actorMeta(payload: Payload): AgentBusPayloadMeta | undefined {
+  return 'meta' in payload ? payload.meta : undefined;
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   shouldRunParallelDelegation,
   runParallelDelegationWorkflow,
 } from './parallelDelegationWorkflow';
+import type { BusEntryStep } from '../types';
 
 function makeStreamingModel(responses: Record<string, string>) {
   return {
@@ -156,17 +157,99 @@ describe('parallelDelegationWorkflow', () => {
     expect(result.steps).toBe(4);
     expect(result.text).toContain('Parallel delegation plan');
     expect(result.text).toContain('Subagent assignments');
-    expect(result.text).toContain('assignment-has-roles');
-    expect(result.text).toContain('Each track has an explicit role or owner with a stated handoff.');
+    expect(result.text).toContain('teacher-voter');
+    expect(result.text).toContain('Teacher approved the student candidate');
+    expect(result.text).not.toContain('assignment-has-roles');
     expect(onStepComplete).toHaveBeenCalledWith('coordinator', expect.stringContaining('Audit TODO coverage in src'));
-    expect(onStepStart).toHaveBeenCalledTimes(4);
+    expect(onStepStart.mock.calls.map(([stepId]) => stepId)).toEqual([
+      'chat-agent',
+      'planner',
+      'coordinator',
+      'breakdown-agent',
+      'assignment-agent',
+      'validation-agent',
+      'router-agent',
+      'orchestrator',
+      'tool-agent',
+    ]);
     expect(onStepToken).toHaveBeenCalled();
-    expect(onStepComplete).toHaveBeenCalledTimes(4);
+    expect(onStepComplete.mock.calls.map(([stepId]) => stepId)).toEqual([
+      'chat-agent',
+      'coordinator',
+      'breakdown-agent',
+      'assignment-agent',
+      'validation-agent',
+      'planner',
+      'router-agent',
+      'orchestrator',
+      'tool-agent',
+    ]);
     expect(onDone).toHaveBeenCalledWith(result.text);
     expect(runAgentLoop).toHaveBeenCalledTimes(2);
     expect(vi.mocked(runAgentLoop).mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({ completionChecker: expect.any(Object), maxIterations: 5 }),
     );
+  });
+
+  it('starts at chat-agent, emits handoffs, and includes the executor result in the AgentBus report', async () => {
+    const model = makeStreamingModel({
+      'delegation-worker:coordinator': 'Repair the process flow so execution produces outputs.',
+      'delegation-worker:sectioned-plan': [
+        '===PROBLEM===',
+        'Repair the process flow so execution produces outputs.',
+        '===BREAKDOWN===',
+        '- Inspect workflow start point.',
+        '- Wire execution output capture.',
+        '===ASSIGNMENT===',
+        '- Role: Planner specialist | Owns: Inspect workflow start point and classify the prompt | Handoff: Orchestrator specialist',
+        '- Role: Executor specialist | Owns: Wire execution output capture and report results | Handoff: final report',
+        '===VALIDATION===',
+        '- Check: AgentBus includes a Result entry.',
+        '- Confirm: handoffs are explicit.',
+      ].join('\n'),
+    });
+    const onStepStart = vi.fn();
+    const onAgentHandoff = vi.fn();
+    const busEntries: Array<{ payloadType: string; summary: string; actorId?: string }> = [];
+
+    const result = await runParallelDelegationWorkflow({
+      model: model as never,
+      prompt: 'fix the process flow and delegate the work to subagents',
+      workspaceName: 'Research',
+      capabilities: { provider: 'copilot', contextWindow: 2048, maxOutputTokens: 256 },
+    }, {
+      onStepStart,
+      onAgentHandoff,
+      onBusEntry: (entry: BusEntryStep) => busEntries.push({
+        payloadType: entry.payloadType,
+        summary: entry.summary,
+        ...(entry.actorId !== undefined ? { actorId: entry.actorId } : {}),
+      }),
+    } as never);
+
+    const startedStages = onStepStart.mock.calls.map(([stepId]) => stepId);
+    expect(startedStages[0]).toBe('chat-agent');
+    expect(startedStages).toContain('planner');
+    expect(startedStages).toContain('router-agent');
+    expect(startedStages).toContain('orchestrator');
+    expect(startedStages).toContain('tool-agent');
+    expect(onAgentHandoff).toHaveBeenCalledWith('chat-agent', 'planner', expect.stringContaining('classify'));
+    expect(onAgentHandoff).toHaveBeenCalledWith('planner', 'router-agent', expect.stringContaining('classify succinct tasks'));
+    expect(onAgentHandoff).toHaveBeenCalledWith('router-agent', 'orchestrator', expect.stringContaining('routed tasks'));
+    expect(onAgentHandoff).toHaveBeenCalledWith('orchestrator', 'tool-agent', expect.stringContaining('active workspace tools'));
+
+    const payloadTypes = busEntries.map((entry) => entry.payloadType);
+    expect(payloadTypes).toContain('Commit');
+    expect(payloadTypes.at(-1)).toBe('Result');
+    expect(new Set(busEntries.map((entry) => entry.actorId).filter(Boolean))).toEqual(new Set([
+      'student-driver',
+      'teacher-voter',
+      'judge-decider',
+      'adversary-driver',
+      'executor-agent',
+    ]));
+    expect(result.text).toContain('Result · delegation');
+    expect(result.text).toContain('Repair the process flow so execution produces outputs.');
   });
 
   it('rejects assignment bullets that do not cover the exact emitted breakdown tracks', async () => {
@@ -182,8 +265,39 @@ describe('parallelDelegationWorkflow', () => {
       capabilities: { provider: 'copilot', contextWindow: 2048, maxOutputTokens: 256 },
     });
 
-    expect(result.text).toContain('assignment-has-roles');
-    expect(result.text).toContain('did not map each emitted track to an explicit role or owner with a stated handoff');
+    expect(result.text).toContain('teacher-voter');
+    expect(result.text).toContain('Student did not map each emitted track to an explicit role or owner with a stated handoff');
+    expect(result.text).not.toContain('assignment-has-roles');
+  });
+
+  it('aborts the LogAct plan pipeline when a voter rejects instead of committing it', async () => {
+    const model = makeStreamingModel({
+      'delegation-worker:coordinator': 'Audit TODO coverage in src without broad scans.',
+      'delegation-worker:sectioned-plan': [
+        '===PROBLEM===',
+        'Audit TODO coverage in src without broad scans.',
+        '===BREAKDOWN===',
+        '- Inspect src TODO coverage.',
+        '- Inspect test TODO coverage.',
+        '===ASSIGNMENT===',
+        '- Role: Reader specialist | Owns: source inspection only | Handoff: Reporter specialist',
+        '- Role: Reporter specialist | Owns: summary synthesis only | Handoff: final report',
+        '===VALIDATION===',
+        '- Risk: drift',
+        '- Check: compare outputs',
+      ].join('\n'),
+    });
+
+    const result = await runParallelDelegationWorkflow({
+      model: model as never,
+      prompt: 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.',
+      workspaceName: 'Research',
+      capabilities: { provider: 'copilot', contextWindow: 2048, maxOutputTokens: 256 },
+    });
+
+    expect(result.text).toContain('Abort · delegation');
+    expect(result.text).not.toContain('Commit · delegation');
+    expect(result.text).toContain('Student did not map each emitted track to an explicit role or owner');
   });
 
   it('passes the coordinator-selected problem into each remote worker task', async () => {
@@ -337,10 +451,15 @@ describe('parallelDelegationWorkflow', () => {
     }, { onStepStart });
 
     expect(onStepStart.mock.calls.map(([stepId]) => stepId)).toEqual([
+      'chat-agent',
+      'planner',
       'coordinator',
       'breakdown-agent',
       'assignment-agent',
       'validation-agent',
+      'router-agent',
+      'orchestrator',
+      'tool-agent',
     ]);
   });
 
@@ -451,7 +570,7 @@ describe('parallelDelegationWorkflow', () => {
     runStagedToolPipelineMock.mockResolvedValue({ text: 'Implemented the change but skipped verification.', steps: 1 });
     const model = makeStreamingModel({
       'delegation-worker:coordinator': 'Repair the workflow so delegated tasks execute instead of returning a plan only.',
-      'delegation-worker:sectioned-plan': '===PROBLEM===\nRepair the workflow so delegated tasks execute instead of returning a plan only.\n===BREAKDOWN===\n- Execute the repair.\n===ASSIGNMENT===\n- Role: Executor specialist | Owns: Execute the repair and verify the focused tests pass | Handoff: final report\n===VALIDATION===\n- Confirm tests pass before completion.',
+      'delegation-worker:sectioned-plan': '===PROBLEM===\nRepair the workflow so delegated tasks execute instead of returning a plan only.\n===BREAKDOWN===\n- Execute the repair.\n- Verify the focused tests pass.\n===ASSIGNMENT===\n- Role: Executor specialist | Owns: Execute the repair and wire the workflow change | Handoff: Verification specialist\n- Role: Verification specialist | Owns: Verify the focused tests pass and report failures | Handoff: final report\n===VALIDATION===\n- Confirm tests pass before completion.',
       'delegation-worker:task-planner': JSON.stringify({
         goal: 'Execute the repair and verify it.',
         tasks: [
