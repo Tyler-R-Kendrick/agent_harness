@@ -1983,6 +1983,7 @@ function ChatPanel({
     return () => window.removeEventListener(USER_ELICITATION_EVENT, listener);
   }, [appendElicitationCard]);
 
+
   const handleToggleBrowserNotifications = useCallback(async () => {
     if (browserNotificationSettings.enabled) {
       setBrowserNotificationSettings({ enabled: false });
