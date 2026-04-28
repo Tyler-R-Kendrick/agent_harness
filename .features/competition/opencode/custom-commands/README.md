@@ -1,18 +1,18 @@
 # Custom Commands
 
 - Harness: OpenCode
-- Sourced: 2026-04-27
+- Sourced: 2026-04-28
 
 ## What it is
-OpenCode lets teams package repeatable workflows as slash commands stored in project or global markdown/config files.
+OpenCode lets teams package repeatable prompt workflows as slash commands backed by markdown files or config entries.
 
 ## Evidence
 - Official docs: [Commands](https://opencode.ai/docs/commands/)
 - First-party details:
-  - command files can live under `.opencode/commands/` or `~/.config/opencode/commands/`
-  - commands can specify description, prompt template, agent, and model
+  - custom commands are defined in a `commands/` directory or in `opencode.json`
+  - command definitions can set a description, target agent, and model
+  - commands support arguments like `$ARGUMENTS`, positional parameters such as `$1`, and shell-output injection
   - built-in commands include `/init`, `/undo`, `/redo`, `/share`, and `/help`
-  - project-local command files let teams check workflow prompts into the repo
 
 ## Product signal
-OpenCode is turning prompt recipes into durable, discoverable workflow primitives instead of leaving them in chat history.
+OpenCode packages workflow reuse as a native command system instead of relying on copy-pasted prompts.

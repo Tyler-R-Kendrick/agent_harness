@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   workspaceViewStateByWorkspace: 'agent-browser.workspace-view-state-by-workspace',
   chatMessagesBySession: 'agent-browser.chat-messages-by-session',
   chatHistoryBySession: 'agent-browser.chat-history-by-session',
+  browserNotificationSettings: 'agent-browser.browser-notification-settings',
   // sessionStorage — per-tab, refresh-only
   selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
   selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',

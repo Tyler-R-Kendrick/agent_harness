@@ -1,22 +1,19 @@
 # Session Share Links
 
 - Harness: OpenCode
-- Sourced: 2026-04-27
+- Sourced: 2026-04-28
 
 ## What it is
-OpenCode can publish a session as a public share link for collaboration, debugging, or review handoff.
+OpenCode can publish a conversation to a public link for collaboration, debugging, and async review.
 
 ## Evidence
-- Official product site: [OpenCode](https://dev.opencode.ai/)
+- Official site: [OpenCode](https://opencode.ai/)
 - Official docs: [Share](https://opencode.ai/docs/share/)
 - First-party details:
-  - the homepage highlights `Share links` as a headline capability
+  - the product page lists `Share links` as a headline capability
   - `/share` creates a public URL for a session
   - sharing modes include `manual`, `auto`, and `disabled`
-  - `/unshare` removes public access and deletes the shared session data
-
-## Visuals
-- Product hero/demo: [OpenCode homepage](https://dev.opencode.ai/)
+  - the docs explain that session history is synced to OpenCode servers when sharing is enabled
 
 ## Product signal
-This is a direct collaboration primitive for review and debugging, not just an export or transcript download.
+Shareable run artifacts are turning into a practical handoff layer between the agent, the author, and the reviewer.

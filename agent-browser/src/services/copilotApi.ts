@@ -1,4 +1,5 @@
 import type { ReasoningStep, ReasoningStepKind, SourceChip } from '../types';
+import { normalizeHostname } from '../utils/favicon';
 
 export type AgentProvider = 'copilot' | 'local';
 
@@ -54,23 +55,22 @@ type CopilotStreamEvent =
 
 function normalizeSourceChip(source: string | SourceChip): SourceChip {
   if (typeof source !== 'string') {
+    // Do not trust remote favicon urls from model/tool output. The UI renders
+    // source identity locally from the normalized domain instead.
     return {
       domain: source.domain,
       url: source.url,
-      faviconUrl: source.faviconUrl,
     };
   }
 
-  try {
-    const parsed = new URL(source.startsWith('http') ? source : `https://${source}`);
+  const hostname = normalizeHostname(source);
+  if (hostname) {
     return {
-      url: parsed.toString(),
-      domain: parsed.hostname,
-      faviconUrl: `https://www.google.com/s2/favicons?domain=${parsed.hostname}&sz=32`,
+      url: source.startsWith('http') ? source : `https://${source}`,
+      domain: hostname,
     };
-  } catch {
-    return { domain: source };
   }
+  return { domain: source };
 }
 
 function summarizeToolArgs(args?: Record<string, unknown>): string | undefined {

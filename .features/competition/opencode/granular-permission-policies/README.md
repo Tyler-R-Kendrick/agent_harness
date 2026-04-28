@@ -1,19 +1,18 @@
 # Granular Permission Policies
 
 - Harness: OpenCode
-- Sourced: 2026-04-27
+- Sourced: 2026-04-28
 
 ## What it is
-OpenCode exposes a policy layer where tool actions can be allowed, blocked, or routed through approval flows globally or per agent.
+OpenCode exposes a policy system that controls whether specific actions run automatically, require approval, or are blocked.
 
 ## Evidence
 - Official docs: [Permissions](https://opencode.ai/docs/permissions/)
-- Official docs: [Agents](https://opencode.ai/docs/agents/)
 - First-party details:
-  - permission outcomes are `allow`, `ask`, and `deny`
-  - rules can be applied globally and overridden for specific tools or path patterns
-  - command patterns like `git *`, `npm *`, and `rm *` can be treated differently
-  - agent-specific permissions override global policy, so a planning agent can stay more restricted than a build agent
+  - permission rules resolve to `allow`, `ask`, or `deny`
+  - policies can be set globally and overridden per tool, path, command, or agent
+  - available permission scopes include `bash`, `edit`, `read`, `task`, `skill`, `webfetch`, `external_directory`, and `doom_loop`
+  - the docs show per-agent overrides for different trust levels
 
 ## Product signal
-OpenCode turns safety and autonomy into a configurable product surface rather than a fixed global mode toggle.
+Competing harnesses are turning permissioning into a product surface instead of a hidden runtime safeguard.

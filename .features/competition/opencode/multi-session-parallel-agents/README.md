@@ -1,21 +1,16 @@
 # Multi-Session Parallel Agents
 
 - Harness: OpenCode
-- Sourced: 2026-04-27
+- Sourced: 2026-04-28
 
 ## What it is
-OpenCode treats parallel agent work as a first-class product surface, letting users start multiple sessions on the same project and navigate parent/child subagent trees.
+OpenCode positions parallel agent work as a core product feature by letting users run multiple sessions on the same project at once.
 
 ## Evidence
-- Official product site: [OpenCode](https://dev.opencode.ai/)
-- Official docs: [Agents](https://opencode.ai/docs/agents/)
+- Official site: [OpenCode](https://opencode.ai/)
 - First-party details:
-  - the homepage highlights `Multi-session` and says users can "Start multiple agents in parallel on the same project"
-  - the agents docs distinguish primary agents from subagents and document child-session navigation between parent and subagent runs
-  - the built-in `general` subagent is explicitly described as useful for running multiple units of work in parallel
-
-## Visuals
-- Product hero/demo: [OpenCode homepage](https://dev.opencode.ai/)
+  - the product page lists `Multi-session` and says users can "Start multiple agents in parallel on the same project"
+  - OpenCode presents this as a top-level capability alongside model access, sharing, and editor support
 
 ## Product signal
-OpenCode is not hiding concurrency behind one opaque planner; it exposes parallel execution and session topology directly in the product model.
+OpenCode treats concurrency as a default workflow surface, not a hidden power-user feature.
