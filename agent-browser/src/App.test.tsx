@@ -1557,6 +1557,167 @@ describe('App', () => {
     expect(screen.getByText('Message copied as plaintext')).toBeInTheDocument();
   });
 
+  it('enables browser notifications from the chat titlebar', async () => {
+    vi.useFakeTimers();
+    const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
+    const requestPermission = vi.fn(async () => {
+      MockNotification.permission = 'granted';
+      return MockNotification.permission;
+    });
+    class MockNotification {
+      static permission: NotificationPermission = 'default';
+      static requestPermission = requestPermission;
+      constructor(title: string, options?: NotificationOptions) {
+        notifications.push({ title, options });
+      }
+    }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
+    Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
+
+    try {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Enable browser notifications' }));
+
+      // Flush the async permission-request chain (requestPermission → requestBrowserNotificationPermission → handler continuation)
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      // Flush the debounced localStorage write (120 ms debounce)
+      await act(async () => { vi.advanceTimersByTime(200); await Promise.resolve(); });
+
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(window.localStorage.getItem('agent-browser.browser-notification-settings') ?? '{}')).toEqual({ enabled: true });
+      expect(screen.getByRole('button', { name: 'Disable browser notifications' })).toBeInTheDocument();
+      expect(notifications).toEqual([]);
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
+  });
+
+  it('shows a browser notification when session chat work completes', async () => {
+    const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
+    class MockNotification {
+      static permission: NotificationPermission = 'granted';
+      static requestPermission = vi.fn(async () => MockNotification.permission);
+      constructor(title: string, options?: NotificationOptions) {
+        notifications.push({ title, options });
+      }
+    }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
+    Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
+    window.localStorage.setItem('agent-browser.browser-notification-settings', JSON.stringify({ enabled: true }));
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onDone?.({ generated_text: 'Implementation finished and checks passed.' });
+      return undefined;
+    });
+
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await installLocalModel();
+      disableAllTools();
+
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Finish the task.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(notifications).toEqual([
+        {
+          title: 'Session work complete',
+          options: expect.objectContaining({
+            body: 'Research: Implementation finished and checks passed.',
+            tag: expect.stringMatching(/:complete$/),
+          }),
+        },
+      ]);
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
+  });
+
+  it('shows a browser notification when an assistant response needs user input', async () => {
+    const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
+    class MockNotification {
+      static permission: NotificationPermission = 'granted';
+      static requestPermission = vi.fn(async () => MockNotification.permission);
+      constructor(title: string, options?: NotificationOptions) {
+        notifications.push({ title, options });
+      }
+    }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
+    Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
+    window.localStorage.setItem('agent-browser.browser-notification-settings', JSON.stringify({ enabled: true }));
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onDone?.({ generated_text: 'Can I apply these changes?' });
+      return undefined;
+    });
+
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await installLocalModel();
+      disableAllTools();
+
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Prepare the patch.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(notifications.map((entry) => entry.title)).toEqual([
+        'Session work complete',
+        'Agent needs input',
+      ]);
+      expect(notifications[1]?.options).toEqual(expect.objectContaining({
+        body: 'Research: Can I apply these changes?',
+        tag: expect.stringMatching(/:elicitation$/),
+      }));
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
+  });
+
   it('routes research tasks through the first-class Researcher agent', async () => {
     vi.useFakeTimers();
     searchBrowserModelsMock.mockResolvedValue([{

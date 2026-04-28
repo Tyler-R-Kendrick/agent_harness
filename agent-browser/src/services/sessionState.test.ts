@@ -44,6 +44,7 @@ describe('STORAGE_KEYS', () => {
       workspaceViewStateByWorkspace: expect.any(String),
       chatMessagesBySession: expect.any(String),
       chatHistoryBySession: expect.any(String),
+      browserNotificationSettings: expect.any(String),
     });
   });
 });

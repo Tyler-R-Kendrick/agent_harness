@@ -15,6 +15,8 @@ import type { ToolSet } from 'ai';
 import {
   ArrowLeft,
   ArrowRight,
+  Bell,
+  BellOff,
   Bookmark,
   BookmarkMinus,
   ChevronDown,
@@ -144,6 +146,18 @@ import {
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import {
+  DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
+  buildChatCompletionNotification,
+  buildChatElicitationNotification,
+  createBrowserNotificationApi,
+  createBrowserNotificationDispatcher,
+  getBrowserNotificationPermission,
+  isBrowserNotificationSettings,
+  isLikelyUserElicitation,
+  requestBrowserNotificationPermission,
+  type BrowserNotificationPermission,
+} from './services/browserNotifications';
 import {
   STORAGE_KEYS,
   isChatMessagesBySession,
@@ -391,6 +405,8 @@ const TOOL_GROUP_ORDER = [
 const DEFAULT_COLLAPSED_TOOL_GROUPS = new Set<string>(['mcp', 'webmcp']);
 
 const icons = {
+  bell: Bell,
+  bellOff: BellOff,
   layers: Layers3,
   messageSquare: MessageSquare,
   clock: History,
@@ -1422,6 +1438,12 @@ function ChatPanel({
     isStringArrayRecord,
     {},
   );
+  const [browserNotificationSettings, setBrowserNotificationSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.browserNotificationSettings,
+    isBrowserNotificationSettings,
+    DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
+  );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
     STORAGE_KEYS.selectedCodiModelBySession,
@@ -1456,12 +1478,30 @@ function ChatPanel({
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
   const consumedPendingSearchRef = useRef<string | null>(null);
+  const browserNotificationApi = useMemo(
+    () => createBrowserNotificationApi(typeof window !== 'undefined' ? window.Notification : undefined),
+    [],
+  );
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState<BrowserNotificationPermission>(
+    () => getBrowserNotificationPermission(browserNotificationApi),
+  );
+  const browserNotificationSettingsRef = useRef(browserNotificationSettings);
   const activeGenerationRef = useRef<{
     assistantId: string;
     sessionId: string;
     cancel: () => void;
     finalizeCancelled: () => void;
   } | null>(null);
+  useEffect(() => {
+    browserNotificationSettingsRef.current = browserNotificationSettings;
+  }, [browserNotificationSettings]);
+  const browserNotificationDispatcher = useMemo(
+    () => createBrowserNotificationDispatcher({
+      api: browserNotificationApi,
+      getSettings: () => browserNotificationSettingsRef.current,
+    }),
+    [browserNotificationApi],
+  );
   const webMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
@@ -1749,6 +1789,46 @@ function ChatPanel({
     }));
   }
 
+  const handleToggleBrowserNotifications = useCallback(async () => {
+    if (browserNotificationSettings.enabled) {
+      setBrowserNotificationSettings({ enabled: false });
+      onToast({ msg: 'Browser notifications disabled', type: 'info' });
+      return;
+    }
+
+    const permission = await requestBrowserNotificationPermission(browserNotificationApi);
+    setBrowserNotificationPermission(permission);
+    if (permission === 'granted') {
+      setBrowserNotificationSettings({ enabled: true });
+      onToast({ msg: 'Browser notifications enabled', type: 'success' });
+      return;
+    }
+
+    onToast({
+      msg: permission === 'unsupported'
+        ? 'Browser notifications are not supported in this browser'
+        : 'Browser notification permission was not granted',
+      type: 'warning',
+    });
+  }, [browserNotificationApi, browserNotificationSettings.enabled, onToast, setBrowserNotificationSettings]);
+
+  const notifyAssistantComplete = useCallback((assistantId: string, content: string) => {
+    const notificationContent = content.trim();
+    browserNotificationDispatcher.notify(buildChatCompletionNotification({
+      eventId: `${activeChatSessionId}:${assistantId}:complete`,
+      sessionName: workspaceName,
+      content: notificationContent,
+    }));
+    if (!isLikelyUserElicitation(notificationContent)) {
+      return;
+    }
+    browserNotificationDispatcher.notify(buildChatElicitationNotification({
+      eventId: `${activeChatSessionId}:${assistantId}:elicitation`,
+      sessionName: workspaceName,
+      content: notificationContent,
+    }));
+  }, [activeChatSessionId, browserNotificationDispatcher, workspaceName]);
+
   const selectActivityMessage = useCallback((messageId: string) => {
     setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: { messageId } }));
   }, [activeChatSessionId]);
@@ -1809,6 +1889,9 @@ function ChatPanel({
           },
         }],
       });
+      if (result.status === 'succeeded') {
+        notifyAssistantComplete(assistantId, `Sandbox run ${summary.metadata.status}.`);
+      }
       await session.dispose();
     } catch (error) {
       updateMessage(assistantId, {
@@ -1819,7 +1902,7 @@ function ChatPanel({
       });
     }
     return true;
-  }, [activeSessionId, getSessionBash, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
+  }, [activeSessionId, getSessionBash, notifyAssistantComplete, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || activeGenerationRef.current) return;
@@ -2811,6 +2894,7 @@ function ChatPanel({
                 busEntries: delegationBusEntries.length ? delegationBusEntries : undefined,
                 processEntries: snapshotProcess(),
               });
+              notifyAssistantComplete(assistantId, finalText.trim() || 'Tool run completed.');
             },
             onError: (error: Error) => {
               clearLocalToolWatchdogs();
@@ -3554,9 +3638,16 @@ function ChatPanel({
                   ? 'Debugger returned an empty response.'
                 : runtimeProviderForRequest === 'ghcp'
                   ? 'GHCP returned an empty response.'
-                  : 'Codi returned an empty response.'
+                : 'Codi returned an empty response.'
             ),
           }));
+          notifyAssistantComplete(assistantId, resolvedContent || (
+            providerForRequest === 'researcher'
+              ? 'Researcher returned an empty response.'
+              : runtimeProviderForRequest === 'ghcp'
+                ? 'GHCP returned an empty response.'
+                : 'Codi returned an empty response.'
+          ));
         },
         onError: (error: Error) => {
           finalizePhaseStep();
@@ -3592,7 +3683,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, getSessionBash, hasAvailableCopilotModels, notifyAssistantComplete, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleChatInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isSkillAutocompleteOpen) {
@@ -3796,6 +3887,8 @@ function ChatPanel({
     }
   }, [onCopyToClipboard, onToast]);
 
+  const browserNotificationsEnabled = browserNotificationSettings.enabled && browserNotificationPermission === 'granted';
+
   return (
     <section className={`chat-panel shared-console ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
       <header className={`chat-header shared-console-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
@@ -3871,6 +3964,25 @@ function ChatPanel({
           </div>
         </div>
         <div className="panel-titlebar-actions">
+          {!showBash ? (
+            <button
+              type="button"
+              className={`icon-button${browserNotificationSettings.enabled ? ' is-active' : ''}`}
+              aria-label={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+              title={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+              data-tooltip={
+                browserNotificationSettings.enabled
+                  ? browserNotificationsEnabled
+                    ? 'Notifications on'
+                    : 'Notifications blocked in browser settings'
+                  : 'Notifications off'
+              }
+              onClick={() => void handleToggleBrowserNotifications()}
+              {...panelTitlebarControlProps}
+            >
+              <Icon name={browserNotificationSettings.enabled ? 'bell' : 'bellOff'} size={13} />
+            </button>
+          ) : null}
           <div className="chat-mode-controls">
             <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
               <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" title="Chat mode" data-tooltip="Chat" className={`mode-tab mode-tab-icon ${!showBash ? 'active' : ''}`} onClick={() => onSwitchMode('agent')} {...panelTitlebarControlProps}><Icon name="sparkles" size={14} /></button>
