@@ -166,6 +166,45 @@ test('validates a repository of well-formed eval manifests with repo-relative fi
   });
 });
 
+test('rejects ambiguous file references that exist in both the skill and repo roots', async () => {
+  const repoRoot = await makeTempDir();
+  await fs.mkdir(path.join(repoRoot, 'shared'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'shared', 'guide.md'), 'repo fixture');
+
+  const manifestPath = await writeSkillManifest(
+    repoRoot,
+    'alpha',
+    JSON.stringify({
+      skill_name: 'alpha',
+      evals: [{ id: 1, prompt: 'Do alpha.', expected_output: 'Alpha done.', files: ['shared/guide.md'] }],
+    }),
+    ['shared/guide.md'],
+  );
+
+  await assert.rejects(
+    validateEvalManifestFile(manifestPath, repoRoot),
+    /references ambiguous file `shared\/guide\.md`/,
+  );
+});
+
+test('allows explicit repo-root file references with the repo: prefix', async () => {
+  const repoRoot = await makeTempDir();
+  await fs.mkdir(path.join(repoRoot, 'shared'), { recursive: true });
+  await fs.writeFile(path.join(repoRoot, 'shared', 'guide.md'), 'repo fixture');
+
+  const manifestPath = await writeSkillManifest(
+    repoRoot,
+    'alpha',
+    JSON.stringify({
+      skill_name: 'alpha',
+      evals: [{ id: 1, prompt: 'Do alpha.', expected_output: 'Alpha done.', files: ['repo:shared/guide.md'] }],
+    }),
+    ['shared/guide.md'],
+  );
+
+  await assert.doesNotReject(validateEvalManifestFile(manifestPath, repoRoot));
+});
+
 test.after(async () => {
   await cleanupTempDirs();
 });
