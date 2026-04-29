@@ -3,6 +3,7 @@
 !.env.example
 
 .playwright-mcp/
+.agentv/cache.json
 node_modules/
 .npm-cache/
 lib/*/node_modules/
