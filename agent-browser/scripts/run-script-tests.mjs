@@ -74,6 +74,10 @@ async function main() {
     () => resolvePackageBin('missing-bin-package', fixtureRequire),
     /does not declare a runnable bin entry/,
   );
+  await assert.rejects(
+    () => resolvePackageBin('', fixtureRequire),
+    /requires a non-empty package name/,
+  );
 
   console.log('agent-browser script regression checks passed');
 }
