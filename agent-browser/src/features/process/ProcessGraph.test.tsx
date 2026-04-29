@@ -254,7 +254,9 @@ describe('ProcessGraph', () => {
       entry({ id: 'execute-plan', ts: 10000, position: 10, branchId: 'agent:executor', parentId: 'executor', actor: 'execute-plan' }),
       entry({ id: 'executor-result', ts: 11000, position: 11, branchId: 'agent:executor', parentId: 'execute-plan', actor: 'executor' }),
       entry({ id: 'execution-complete', ts: 12000, position: 12, branchId: 'agent:logact', parentId: 'executor-result', actor: 'execution-complete' }),
-      entry({ id: 'workflow-complete', ts: 13000, position: 13, branchId: 'main', parentId: 'execution-complete', actor: 'workflow-complete' }),
+      entry({ id: 'post-processor', ts: 13000, position: 13, branchId: 'agent:post-processor', parentId: 'execution-complete', actor: 'post-processor' }),
+      entry({ id: 'response-ready', ts: 14000, position: 14, branchId: 'agent:logact', parentId: 'post-processor', actor: 'response-ready' }),
+      entry({ id: 'workflow-complete', ts: 15000, position: 15, branchId: 'main', parentId: 'response-ready', actor: 'workflow-complete' }),
     ];
 
     expect(findOrphanBranches(entries)).toEqual([]);
@@ -266,6 +268,9 @@ describe('ProcessGraph', () => {
     const executePlanRow = container.querySelector('[data-actor="execute-plan"]');
     const executionCompleteRow = Array.from(container.querySelectorAll('[data-actor="execution-complete"][data-branch="agent:logact"]'))
       .find((row) => row.textContent?.includes('execution-complete'));
+    const postProcessorRow = container.querySelector('[data-actor="post-processor"]');
+    const responseReadyRow = Array.from(container.querySelectorAll('[data-actor="response-ready"][data-branch="agent:logact"]'))
+      .find((row) => row.textContent?.includes('response-ready'));
     const workflowCompleteRow = Array.from(container.querySelectorAll('[data-actor="workflow-complete"][data-branch="main"]'))
       .find((row) => row.textContent?.includes('workflow-complete'));
 
@@ -277,6 +282,8 @@ describe('ProcessGraph', () => {
     expect(executePlanRow).toHaveAttribute('data-branch', 'agent:executor');
     expect(executePlanRow?.querySelector('.pg-rail-lane[data-lane="agent:logact"]')).toHaveClass('pg-rail-lane-active');
     expect(executionCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:executor"]')).toBeInTheDocument();
+    expect(postProcessorRow?.querySelector('[data-connector="fork"][data-lane="agent:post-processor"]')).toBeInTheDocument();
+    expect(responseReadyRow?.querySelector('[data-connector="merge"][data-lane="agent:post-processor"]')).toBeInTheDocument();
     expect(workflowCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:logact"]')).toBeInTheDocument();
   });
 

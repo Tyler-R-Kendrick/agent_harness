@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolSet } from 'ai';
+import { PayloadType, type Payload } from 'logact';
 import { runConfiguredExecutorAgent } from './executorAgent';
 import type { LogActActorExecuteContext } from './logactActorWorkflow';
 import type { ToolDescriptor } from '../tools';
@@ -178,10 +179,10 @@ describe('runConfiguredExecutorAgent', () => {
           })),
         },
         'webmcp:elicit_user_input': {
-          execute: vi.fn(async () => ({
+          execute: vi.fn(async (args: { prompt: string }) => ({
             status: 'needs_user_input',
             requestId: 'elicitation-1',
-            prompt: 'What city or neighborhood should I use to list restaurants near you?',
+            prompt: args.prompt,
             fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
           })),
         },
@@ -229,7 +230,1960 @@ describe('runConfiguredExecutorAgent', () => {
     expect(result).toMatchObject({
       blocked: true,
       needsUserInput: true,
-      text: 'What city or neighborhood should I use to list restaurants near you?',
+      text: 'What city or neighborhood should I use for this restaurants search?',
+      steps: 3,
+    });
+    expect(result.failed).toBeUndefined();
+  });
+
+  it('fulfills restaurant near-me requests by resolving location and searching before answering', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final restaurant answer', steps: 1 });
+    const toolCalls: string[] = [];
+    const userContextDescriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:read_browser_location',
+        label: 'Read browser location',
+        description: 'Read browser geolocation before asking the user.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and restaurant results.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask the user for missing data before execution.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+    const userContextPlan: ToolPlan = {
+      version: 1,
+      goal: 'What is the best restaurant near me?',
+      selectedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: {
+        executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:read_browser_location': { execute: vi.fn() },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            if (query.includes('Bar Salotto')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Bar Salotto - Official Site',
+                  url: 'https://barsalotto.example',
+                  snippet: 'Cocktail bar and Italian restaurant in Arlington Heights.',
+                }],
+              };
+            }
+            if (query.includes("Francesca's Tavola")) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: "Francesca's Tavola - Yelp",
+                  url: 'https://example.com/yelp/francescas-tavola',
+                  snippet: 'Yelp listing for a long-running Italian restaurant in Arlington Heights.',
+                }],
+              };
+            }
+            if (query.includes('Kaido Sushi')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Kaido Sushi',
+                  url: 'https://kaidosushi.example',
+                  snippet: 'Sushi restaurant in Arlington Heights.',
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'THE 10 BEST Restaurants in Arlington Heights - Tripadvisor',
+                  url: 'https://example.com/tripadvisor/arlington-heights',
+                  snippet: 'Best Dining in Arlington Heights, Illinois: See 6,312 Tripadvisor traveler reviews of 214 Arlington Heights restaurants and search by cuisine, price, location, and more.',
+                },
+                {
+                  title: 'THE BEST 10 RESTAURANTS in ARLINGTON HEIGHTS, IL - Yelp',
+                  url: 'https://example.com/yelp/arlington-heights',
+                  snippet: "Best Restaurants in Arlington Heights, IL - Last Updated April 2026 - The Prospect, Nostimo, Bar Salotto, Passero, The Foxtail on the Lake, Hey Nonny, TTOWA, Scratchboard Kitchen, Big Ange's Eatery, Parea Greek Kitchen",
+                },
+                {
+                  title: 'THE 30 BEST Restaurants in Arlington Heights - With Menus, Reviews ...',
+                  url: 'https://example.com/menus/arlington-heights',
+                  snippet: "We've gathered up the best places to eat in Arlington Heights. Our current favorites are: 1: Bar Salotto, 2: Francesca's Tavola, 3: Kaido Sushi, 4: Kahala Koa Tiki Bar, 5: Osteria Trulli Cucina Pugliese",
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:elicit_user_input': { execute: vi.fn() },
+        cli: { execute: vi.fn() },
+      } as unknown as ToolSet,
+      descriptors: [
+        ...userContextDescriptors,
+        {
+          id: 'cli',
+          label: 'CLI',
+          description: 'Run shell commands.',
+          group: 'built-in',
+          groupLabel: 'Built-In',
+        },
+      ],
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'What is the best restaurant near me?' }],
+      runtime,
+    }, userContextPlan, userContextDescriptors, runtime.tools, {
+      onToolCall: (toolName) => toolCalls.push(toolName),
+    }, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the restaurant recommendation request after resolving location.',
+      toolPolicy: {
+        allowedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(toolCalls).toEqual([
+      'webmcp:recall_user_context',
+      'webmcp:search_web',
+      'webmcp:search_web',
+      'webmcp:search_web',
+      'webmcp:search_web',
+    ]);
+    expect(runtime.tools['webmcp:read_browser_location'].execute).not.toHaveBeenCalled();
+    expect(runtime.tools['webmcp:elicit_user_input'].execute).not.toHaveBeenCalled();
+    expect(runtime.tools.cli.execute).not.toHaveBeenCalled();
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(runtime.tools['webmcp:search_web'].execute).toHaveBeenCalledWith({
+      query: 'best restaurants Arlington Heights IL',
+      limit: 3,
+    });
+    expect(runtime.tools['webmcp:search_web'].execute).toHaveBeenNthCalledWith(2, {
+      query: '"Bar Salotto" Arlington Heights IL restaurants official reviews',
+      limit: 1,
+    });
+    expect(runtime.tools['webmcp:search_web'].execute).toHaveBeenNthCalledWith(3, {
+      query: '"Francesca\'s Tavola" Arlington Heights IL restaurants official reviews',
+      limit: 1,
+    });
+    expect(runtime.tools['webmcp:search_web'].execute).toHaveBeenNthCalledWith(4, {
+      query: '"Kaido Sushi" Arlington Heights IL restaurants official reviews',
+      limit: 1,
+    });
+    expect(result.text).toContain('[Bar Salotto](https://barsalotto.example)');
+    expect(result.text).toContain("[Francesca's Tavola](https://example.com/yelp/francescas-tavola)");
+    expect(result.text).toContain('[Kaido Sushi](https://kaidosushi.example)');
+    expect(result.text).toContain('Why:');
+    expect(result.text).toContain('Arlington Heights, IL');
+    expect(result.text).not.toContain('[THE 10 BEST Restaurants');
+    expect(result.text).not.toContain('[THE BEST 10 RESTAURANTS');
+    expect(result.text).not.toContain('AgentBus Result Write-back');
+    expect(result).toMatchObject({ steps: 5 });
+  });
+
+  it('uses the current user request subject instead of stale restaurant context for nearby searches', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const toolCalls: string[] = [];
+    const searchQueries: string[] = [];
+    const userContextDescriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask the user for missing data before execution.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: 'What is the best restaurant near me?',
+      selectedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: {
+        executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query.includes('AMC Randhurst')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'AMC Randhurst 12 - Official Site',
+                  url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+                  snippet: 'Official AMC page for a movie theater near Arlington Heights.',
+                }],
+              };
+            }
+            if (query.includes('CMX Arlington Heights')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'CMX Arlington Heights - Official Site',
+                  url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights',
+                  snippet: 'Official theater page with showtimes and amenities.',
+                }],
+              };
+            }
+            if (query.includes('Classic Cinemas Elk Grove')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Classic Cinemas Elk Grove Theatre',
+                  url: 'https://www.classiccinemas.com/elk-grove',
+                  snippet: 'Nearby cinema with recliners and current movie showtimes.',
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Best Movie Theaters near Arlington Heights, IL - Yelp',
+                  url: 'https://example.com/yelp/movie-theaters-arlington-heights',
+                  snippet: 'Best Movie Theaters near Arlington Heights, IL - AMC Randhurst 12, CMX Arlington Heights, Classic Cinemas Elk Grove Theatre, Wayfarer Theaters.',
+                },
+                {
+                  title: 'Movie Theaters around Arlington Heights - Showtimes',
+                  url: 'https://example.com/showtimes/arlington-heights',
+                  snippet: 'Find movie theaters around Arlington Heights with showtimes, amenities, and ticket links.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:elicit_user_input': { execute: vi.fn() },
+        cli: { execute: vi.fn() },
+      } as unknown as ToolSet,
+      descriptors: [
+        ...userContextDescriptors,
+        {
+          id: 'cli',
+          label: 'CLI',
+          description: 'Run shell commands.',
+          group: 'built-in',
+          groupLabel: 'Built-In',
+        },
+      ],
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: 'What is the best restaurant near me?' },
+        { role: 'assistant' as const, content: 'Here are restaurant options near Arlington Heights, IL.' },
+        { role: 'user' as const, content: "what're the best movie theaters near me?" },
+      ],
+      runtime,
+    }, movieTheaterPlan, userContextDescriptors, runtime.tools, {
+      onToolCall: (toolName) => toolCalls.push(toolName),
+    }, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the restaurant recommendation request after resolving location.',
+      toolPolicy: {
+        allowedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(toolCalls[0]).toBe('webmcp:recall_user_context');
+    expect(searchQueries).toEqual([
+      'best movie theaters Arlington Heights IL',
+      '"AMC Randhurst 12" Arlington Heights IL movie theaters official reviews',
+      '"CMX Arlington Heights" Arlington Heights IL movie theaters official reviews',
+      '"Classic Cinemas Elk Grove Theatre" Arlington Heights IL movie theaters official reviews',
+    ]);
+    expect(searchQueries.join('\n')).not.toMatch(/restaurant|Bar Salotto|Francesca|Kaido/i);
+    expect(runtime.tools['webmcp:elicit_user_input'].execute).not.toHaveBeenCalled();
+    expect(runtime.tools.cli.execute).not.toHaveBeenCalled();
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(result.text).toContain('movie theaters near Arlington Heights, IL');
+    expect(result.text).toContain('[AMC Randhurst 12]');
+    expect(result.text).toContain('[CMX Arlington Heights]');
+    expect(result.text).toContain('[Classic Cinemas Elk Grove Theatre]');
+    expect(result.text).not.toMatch(/restaurant|Bar Salotto|Francesca|Kaido|AgentBus Result Write-back/i);
+  });
+
+  it('extracts nearby search candidates as entity names instead of review fragments', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const userContextDescriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: "what're the best movie theaters near me?",
+      selectedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: {
+        executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query.includes('AMC Randhurst 12')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'AMC Randhurst 12 - Official Site',
+                  url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+                  snippet: 'Official AMC page with showtimes, tickets, and amenities.',
+                }],
+              };
+            }
+            if (query.includes('CMX Arlington Heights')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'CMX Arlington Heights - Official Site',
+                  url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights',
+                  snippet: 'Official theater page with showtimes and premium seating details.',
+                }],
+              };
+            }
+            if (query.includes('Classic Cinemas Elk Grove Theatre')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Classic Cinemas Elk Grove Theatre',
+                  url: 'https://www.classiccinemas.com/elk-grove',
+                  snippet: 'Nearby cinema with current showtimes and theater details.',
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'Best Movie Theaters near Arlington Heights, IL - Local Guide',
+                url: 'https://example.com/movie-theaters/arlington-heights',
+                snippet: 'Popular choices around Arlington Heights include AMC Randhurst 12, CMX Arlington Heights, Classic Cinemas Elk Grove Theatre. Recent reviews mention comfortable recliners, fresh popcorn, and friendly staff.',
+              }],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors: userContextDescriptors,
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, movieTheaterPlan, userContextDescriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries).toEqual([
+      'best movie theaters Arlington Heights IL',
+      '"AMC Randhurst 12" Arlington Heights IL movie theaters official reviews',
+      '"CMX Arlington Heights" Arlington Heights IL movie theaters official reviews',
+      '"Classic Cinemas Elk Grove Theatre" Arlington Heights IL movie theaters official reviews',
+    ]);
+    expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
+    expect(result.text).toContain('[CMX Arlington Heights](https://www.cmxcinemas.com/location/cmx-arlington-heights)');
+    expect(result.text).toContain('[Classic Cinemas Elk Grove Theatre](https://www.classiccinemas.com/elk-grove)');
+    expect(result.text).not.toContain('Popular choices around Arlington Heights include');
+    expect(result.text).not.toMatch(/comfortable recliners|fresh popcorn|friendly staff/i);
+  });
+
+  it('reads available search result pages before giving up on results without snippet candidates', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const readUrls: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read a web page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'Arlington Heights local dining source',
+                url: 'https://example.com/local-dining',
+                snippet: 'Local source page with neighborhood dining information.',
+              }],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => {
+            readUrls.push(url);
+            return {
+              status: 'read',
+              url,
+              title: 'Restaurants near Arlington Heights, IL',
+              text: 'Restaurants near Arlington Heights, IL. Maharaj Indian Grill is a restaurants with source-backed location evidence in Arlington Heights.',
+              links: [{
+                text: 'Maharaj Indian Grill',
+                url: 'https://maharajindiangrill.example',
+              }],
+              jsonLd: [],
+              observations: [],
+              entities: [{
+                name: 'Maharaj Indian Grill',
+                url: 'https://maharajindiangrill.example',
+                evidence: 'Maharaj Indian Grill is a restaurants with source-backed location evidence in Arlington Heights.',
+              }],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'What are the best restaurants near me?',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'What are the best restaurants near me?' }],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('best restaurants Arlington Heights IL');
+    expect(readUrls).toEqual(['https://example.com/local-dining']);
+    expect(result.text).toContain('[Maharaj Indian Grill](https://maharajindiangrill.example)');
+    expect(result.failed).not.toBe(true);
+  });
+
+  it('analyzes aggregate search results and reads source pages instead of treating review snippets as entity names', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const toolCalls: string[] = [];
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Movie Showtimes and Theaters near Arlington Heights, IL',
+                  url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                  snippet: 'Discover showtimes and movie theaters near you with Fandango! Find showtimes, tickets, and more for your favorite cinema experience in Arlington Heights, IL',
+                },
+                {
+                  title: 'The Best 10 Cinema near Arlington Heights, IL 60004 - Yelp',
+                  url: 'https://www.yelp.com/search?cflt=movietheaters&find_loc=Arlington+Heights,+IL+60004',
+                  snippet: 'Frequently Asked Questions and Answers What are people saying about cinema near Arlington Heights, IL? This is a review for cinema near Arlington Heights, IL: "This is one of my top 3 movie theaters - period. It&#x27;s a unique theater in that in addition to movies, they have a nice bar, bag toss, pool tables, and a fun ambiance."',
+                },
+                {
+                  title: 'Movie theaters and showtimes near 60004, Arlington Heights, IL',
+                  url: 'https://www.showtimes.com/movie-times/60004-arlington-heights-il/',
+                  snippet: 'Local Movie Times and Movie Theaters near 60004, Arlington Heights, IL.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => {
+            if (url.includes('fandango')) {
+              return {
+                status: 'read',
+                url,
+                title: 'Movie Theaters near Arlington Heights',
+                text: 'Theaters. TV Shows. FanStore. Movies. Supergirl Trailer. Skip to Main Content. AMC Randhurst 12 at 200 Randhurst Village Dr, Mount Prospect near Arlington Heights. CMX Arlington Heights at 53 S Evergreen Ave, Arlington Heights. Classic Cinemas Elk Grove Theatre near Arlington Heights.',
+                links: [
+                  { text: 'Theaters', url: 'https://www.fandango.com/theaters' },
+                  { text: 'TV Shows', url: 'https://www.fandango.com/tv' },
+                  { text: 'FanStore', url: 'https://www.fandango.com/fanstore' },
+                  { text: 'Movies', url: 'https://www.fandango.com/movies' },
+                  { text: "'Supergirl' Trailer", url: 'https://www.fandango.com/movie-news/supergirl-trailer' },
+                  { text: 'Skip to Main Content', url: 'https://www.fandango.com/arlington-heights_il_movietimes#main' },
+                  { text: 'AMC Randhurst 12', url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12' },
+                  { text: 'CMX Arlington Heights', url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights' },
+                ],
+                jsonLd: [],
+                entities: [
+                  { name: 'Theaters', url: 'https://www.fandango.com/theaters', evidence: 'site navigation category' },
+                  { name: 'TV Shows', url: 'https://www.fandango.com/tv', evidence: 'site navigation category' },
+                  { name: 'FanStore', url: 'https://www.fandango.com/fanstore', evidence: 'site merchandise section' },
+                  { name: 'Movies', url: 'https://www.fandango.com/movies', evidence: 'navigation link' },
+                  { name: "'Supergirl' Trailer", url: 'https://www.fandango.com/movie-news/supergirl-trailer', evidence: 'article link' },
+                  { name: 'Skip to Main Content', url: 'https://www.fandango.com/arlington-heights_il_movietimes#main', evidence: 'skip link' },
+                  { name: 'AMC Randhurst 12', url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12', evidence: 'Fandango theater listing near Arlington Heights at Randhurst Village' },
+                  { name: 'CMX Arlington Heights', url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights', evidence: 'Fandango theater listing in Arlington Heights, IL' },
+                ],
+              };
+            }
+            return {
+              status: 'read',
+              url,
+              title: 'Cinema near Arlington Heights',
+              text: 'Classic Cinemas Elk Grove Theatre is a nearby cinema option.',
+              links: [{ text: 'Classic Cinemas Elk Grove Theatre', url: 'https://www.classiccinemas.com/elk-grove' }],
+              jsonLd: [],
+              entities: [
+                { name: 'Classic Cinemas Elk Grove Theatre', url: 'https://www.classiccinemas.com/elk-grove', evidence: 'source page listing' },
+              ],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: "what're the best movie theaters near me?",
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, movieTheaterPlan, descriptors, runtime.tools, {
+      onToolCall: (toolName) => toolCalls.push(toolName),
+    }, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries).toEqual(['best movie theaters Arlington Heights IL']);
+    expect(searchQueries.join('\n')).not.toMatch(/period|unique theater|they have a nice bar|local movie times/i);
+    expect(toolCalls).toEqual([
+      'webmcp:recall_user_context',
+      'webmcp:search_web',
+      'webmcp:read_web_page',
+      'webmcp:read_web_page',
+    ]);
+    expect(busAppend.mock.calls.some(([payload]) => payload.meta?.actorId === 'search-analyzer')).toBe(true);
+    const toolValidationResults = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'validation-agent'
+        && String(payload.intentId).includes('validate-tool-call')
+      ));
+    expect(toolValidationResults).toHaveLength(toolCalls.length);
+    expect(toolValidationResults.map((payload) => payload.output).join('\n')).toContain('recursive-tool-call-validation');
+    expect(toolValidationResults.map((payload) => payload.output).join('\n')).toContain('webmcp:search_web');
+    expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
+    expect(result.text).toMatch(/AMC Randhurst 12[\s\S]*(?:Mount Prospect|Randhurst|Arlington Heights)/);
+    expect(result.text).toContain('[CMX Arlington Heights](https://www.cmxcinemas.com/location/cmx-arlington-heights)');
+    expect(result.text).toMatch(/CMX Arlington Heights[\s\S]*Arlington Heights/);
+    expect(result.text).toContain('[Classic Cinemas Elk Grove Theatre](https://www.classiccinemas.com/elk-grove)');
+    expect(result.text).not.toMatch(/period|unique theater|they have a nice bar|Movie Showtimes and Theaters|^\s*\d+\.\s+\[(?:Theaters|TV Shows|FanStore|Movies|'Supergirl' Trailer|Skip to Main Content)\]|AgentBus Result Write-back/im);
+  });
+
+  it('renders only structured accepted candidates when source pages mix entities with page chrome', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => ({
+            status: 'found',
+            query,
+            results: [
+              {
+                title: 'Movie Showtimes and Theaters near Arlington Heights, IL',
+                url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                snippet: 'Discover showtimes and movie theaters near you with Fandango in Arlington Heights, IL.',
+              },
+              {
+                title: 'Movie theaters and showtimes near 60004, Arlington Heights, IL',
+                url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                snippet: 'Local Movie Times and Movie Theaters near 60004, Arlington Heights, IL.',
+              },
+            ],
+          })),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => {
+            if (url.includes('fandango')) {
+              return {
+                status: 'read',
+                url,
+                title: 'Movie Theaters near Arlington Heights',
+                text: 'At Home. Streaming. Coming Soon. AMC Randhurst 12 movie theater at Randhurst Village in Mount Prospect near Arlington Heights. CMX Arlington Heights movie theater at 53 S Evergreen Ave in Arlington Heights.',
+                links: [
+                  { text: 'At Home', url: 'https://www.fandango.com/watch-at-home' },
+                  { text: 'Streaming', url: 'https://www.fandango.com/streaming' },
+                  { text: 'Coming Soon', url: 'https://www.fandango.com/coming-soon' },
+                  { text: 'AMC Randhurst 12', url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12' },
+                  { text: 'CMX Arlington Heights', url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights' },
+                ],
+                jsonLd: [],
+                entities: [
+                  { name: 'At Home', url: 'https://www.fandango.com/watch-at-home', evidence: 'page link' },
+                  { name: 'Streaming', url: 'https://www.fandango.com/streaming', evidence: 'page link' },
+                  { name: 'Coming Soon', url: 'https://www.fandango.com/coming-soon', evidence: 'page link' },
+                  { name: 'AMC Randhurst 12', url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12', evidence: 'movie theater listing at Randhurst Village in Mount Prospect near Arlington Heights' },
+                  { name: 'CMX Arlington Heights', url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights', evidence: 'movie theater listing at 53 S Evergreen Ave in Arlington Heights, IL' },
+                ],
+              };
+            }
+            return {
+              status: 'read',
+              url,
+              title: 'Cinema near Arlington Heights',
+              text: 'Classic Cinemas Elk Grove Theatre is a movie theater in Elk Grove Village near Arlington Heights.',
+              links: [{ text: 'Classic Cinemas Elk Grove Theatre', url: 'https://www.classiccinemas.com/elk-grove' }],
+              jsonLd: [],
+              entities: [
+                { name: 'Classic Cinemas Elk Grove Theatre', url: 'https://www.classiccinemas.com/elk-grove', evidence: 'movie theater listing in Elk Grove Village near Arlington Heights' },
+              ],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: "what're the best movie theaters near me?",
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, movieTheaterPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
+    expect(result.text).toContain('Mount Prospect');
+    expect(result.text).toContain('[CMX Arlington Heights](https://www.cmxcinemas.com/location/cmx-arlington-heights)');
+    expect(result.text).toContain('Arlington Heights');
+    expect(result.text).toContain('[Classic Cinemas Elk Grove Theatre](https://www.classiccinemas.com/elk-grove)');
+    expect(result.text).not.toMatch(/^\s*\d+\.\s+\[(?:At Home|Streaming|Coming Soon)\]/im);
+    const structuredCandidateResults = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'search-analyzer'
+        && String(payload.intentId).includes('validated-candidates')
+      ));
+    expect(structuredCandidateResults).toHaveLength(1);
+    const candidatePayload = JSON.parse(structuredCandidateResults[0].output) as {
+      candidates: Array<{ name: string; validationStatus: string; subjectMatch: boolean; locationEvidence: string[]; entityLink: string; sourceEvidence: string[] }>;
+      rejected: Array<{ name: string; validationStatus: string }>;
+    };
+    expect(candidatePayload.candidates.map((candidate) => candidate.name)).toEqual(expect.arrayContaining([
+      'AMC Randhurst 12',
+      'CMX Arlington Heights',
+      'Classic Cinemas Elk Grove Theatre',
+    ]));
+    expect(candidatePayload.candidates.every((candidate) => (
+      candidate.validationStatus === 'accepted'
+      && candidate.subjectMatch
+      && candidate.entityLink.startsWith('https://')
+      && candidate.locationEvidence.length > 0
+      && candidate.sourceEvidence.length > 0
+    ))).toBe(true);
+    expect(candidatePayload.rejected.map((candidate) => candidate.name)).toEqual(expect.arrayContaining([
+      'At Home',
+      'Streaming',
+      'Coming Soon',
+    ]));
+  });
+
+  it('extracts real entities from subject-specific nearby page text instead of returning insufficient evidence', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Recall app-owned memory.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (/amc dine-in rosemont 12/i.test(query)) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'AMC DINE-IN Rosemont 12 - AMC Theatres',
+                  url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-dine-in-rosemont-12',
+                  snippet: 'Movie theater in Rosemont near Arlington Heights, IL.',
+                }],
+              };
+            }
+            if (/amc hawthorn 12/i.test(query)) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'AMC Hawthorn 12 - AMC Theatres',
+                  url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-hawthorn-12',
+                  snippet: 'Movie theater in Vernon Hills near Arlington Heights, IL.',
+                }],
+              };
+            }
+            if (/amc randhurst 12/i.test(query)) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'AMC Randhurst 12 - AMC Theatres',
+                  url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+                  snippet: 'Movie theater at 200 Randhurst Village Dr, Mount Prospect near Arlington Heights, IL.',
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Movie Showtimes and Theaters near Arlington Heights, IL',
+                  url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                  snippet: 'Find movie times and theaters near Arlington Heights, IL.',
+                },
+                {
+                  title: 'Movie Showtimes Near Arlington Heights, IL 60004 | Moviefone',
+                  url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                  snippet: 'Find movie showtimes and movie theaters near Arlington Heights, IL.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: 'Movie Showtimes and Theaters near Arlington Heights, IL',
+            text: [
+              'Skip to Main Content Go Movies Theaters FanStore At Home Movie News Sign In/Join FanClub Offers',
+              'Movie times + Tickets near Fandango Ticketing Theaters My theaters',
+              'Nearby Theaters: Select Theater AMC DINE-IN Rosemont 12 AMC Hawthorn 12 AMC Loews Streets Of Woodfield 20 AMC Niles 12 AMC Randhurst 12 Cinemark Century Deer Park 16 Cinergy Wheeling Classic Cinemas Elk Grove XQ CMX Old Orchard Luxury Landmark At The Glen Pickwick Theatre Theater Chain Movie Times by Cities',
+            ].join(' '),
+            links: [
+              { text: 'Movies', url: 'https://www.fandango.com/movies-in-theaters' },
+              { text: 'Theaters', url: 'https://www.fandango.com/movietimes' },
+              { text: 'FanStore', url: 'https://store.fandango.com/' },
+              { text: 'At Home', url: 'https://athome.fandango.com/' },
+              { text: 'Movie News', url: 'https://www.fandango.com/movie-news' },
+              { text: 'Sign In/Join', url: 'https://www.fandango.com/accounts/join-now' },
+              { text: 'FanClub', url: 'https://www.fandango.com/fanclub/memberships' },
+            ],
+            jsonLd: [],
+            entities: [],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: "what're the best movie theaters near me?",
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, movieTheaterPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(result.failed).not.toBe(true);
+    expect(searchQueries).toEqual(expect.arrayContaining([
+      '"AMC DINE-IN Rosemont 12" Arlington Heights IL movie theaters official reviews',
+      '"AMC Hawthorn 12" Arlington Heights IL movie theaters official reviews',
+    ]));
+    expect(result.text).toContain('[AMC DINE-IN Rosemont 12](https://www.amctheatres.com/movie-theatres/chicago/amc-dine-in-rosemont-12)');
+    expect(result.text).toContain('[AMC Hawthorn 12](https://www.amctheatres.com/movie-theatres/chicago/amc-hawthorn-12)');
+    expect(result.text).toContain('AMC Loews Streets Of Woodfield 20');
+    expect(result.text).not.toMatch(/^\s*\d+\.\s+\[(?:Movies|Theaters|FanStore|At Home|Movie News|Sign In\/Join|FanClub|Movie Times by Cities)\]/im);
+  });
+
+  it('rejects live-style page chrome and address/location labels even when broad page text repeats subject and location words', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query === 'movie theaters names near Arlington Heights IL') {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Movie theaters near Arlington Heights, IL - CinemaClock',
+                  url: 'https://www.cinemaclock.com/arlington-heights-il/movie-theaters',
+                  snippet: 'Find movie theaters near you in the Arlington Heights area with over 100 cinema locations in the region, including Mount Prospect, Wheeling, Schaumburg, Deer Park, Elk Grove Village, and more.',
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Movie Showtimes and Theaters near Arlington Heights, IL',
+                  url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                  snippet: 'Discover showtimes and movie theaters near you with Fandango in Arlington Heights, IL.',
+                },
+                {
+                  title: 'Movie theaters and showtimes near 60004, Arlington Heights, IL',
+                  url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                  snippet: 'Local Movie Times and Movie Theaters near 60004, Arlington Heights, IL.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: url.includes('moviefone')
+              ? 'Movie theaters and showtimes near 60004, Arlington Heights, IL'
+              : 'Movie Theaters near Arlington Heights',
+            text: [
+              'Skip to Main Content Go Movies Theaters FanStore At Home Movie News Sign In/Join FanClub.',
+              'Moviefone TV is displayed in the global navigation for movie theaters near Arlington Heights, IL.',
+              'Sign In/Join appears in the account menu for movie theaters near Arlington Heights, IL.',
+              'FanClub appears in the community navigation for movie theaters near Arlington Heights, IL.',
+              'Movie Showtimes Near Arlington Heights, IL 60004 | Moviefone.',
+              'Movie Showimes is a misspelled showtimes heading on a movie theater listing page near Arlington Heights, IL.',
+              'IL 60004 Update Zipcode Monday is a schedule control on the showtimes page.',
+              '{"@context":"http://schema.org","@type":"TheaterEvent","location":{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Mt Prospect","addressRegion":"IL","postalCode":"60056","streetAddress":"200 Randhurst Village Dr"},"name":"arlington heights, il"},"name":"arlington heights, il"}',
+            ].join(' '),
+            links: [
+              { text: 'Moviefone TV', url: 'https://www.moviefone.com/tv/' },
+              { text: 'Sign In/Join', url: 'https://www.moviefone.com/login/' },
+              { text: 'FanClub', url: 'https://www.moviefone.com/fanclub/' },
+              { text: 'Movie Showimes', url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/' },
+              { text: 'IL 60004 Update Zipcode Monday', url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/' },
+              { text: 'Arlington Heights', url: 'https://www.fandango.com/arlington-heights_il_movietimes' },
+              { text: 'IL 60004', url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/' },
+              { text: 'Mt Prospect', url: 'https://www.fandango.com/arlington-heights_il_movietimes' },
+            ],
+            jsonLd: [],
+            entities: [
+              { name: 'Moviefone TV', url: 'https://www.moviefone.com/tv/', evidence: 'page link' },
+              { name: 'Sign In/Join', url: 'https://www.moviefone.com/login/', evidence: 'page link' },
+              { name: 'FanClub', url: 'https://www.moviefone.com/fanclub/', evidence: 'page link' },
+              {
+                name: 'Movie Showimes',
+                url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                evidence: 'Movie Showimes is a misspelled showtimes heading on a movie theater listing page near Arlington Heights, IL.',
+              },
+              {
+                name: 'IL 60004 Update Zipcode Monday',
+                url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                evidence: 'IL 60004 Update Zipcode Monday is a schedule control on the showtimes page.',
+              },
+              {
+                name: 'Arlington Heights',
+                url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                evidence: 'Movie Showtimes and Theaters near Arlington Heights, IL | Fandango {"@type":"TheaterEvent","location":{"@type":"Place","name":"arlington heights, il"}}',
+              },
+              {
+                name: 'IL 60004',
+                url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                evidence: 'Movie Showtimes Near Arlington Heights, IL 60004 | Moviefone',
+              },
+              {
+                name: 'Mt Prospect',
+                url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                evidence: '{"@type":"PostalAddress","addressLocality":"Mt Prospect","addressRegion":"IL","postalCode":"60056","streetAddress":"200 Randhurst Village Dr"}',
+              },
+            ],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: "what're the best movie theaters near me?",
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, movieTheaterPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('best movie theaters Arlington Heights IL');
+    expect(result.failed).toBe(true);
+    expect(result.text).toContain('I could not find enough validated movie theaters near Arlington Heights, IL');
+    expect(result.text).not.toMatch(/^\s*\d+\.\s+\[(?:Moviefone TV|Sign In\/Join|FanClub|Movie Showimes|IL 60004 Update Zipcode Monday|Arlington Heights|IL 60004|Mt Prospect)\]/im);
+    const structuredCandidateResults = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'search-analyzer'
+        && String(payload.intentId).includes('validated-candidates')
+      ));
+    const candidatePayload = JSON.parse(structuredCandidateResults.at(-1)?.output ?? '{}') as {
+      candidates?: Array<{ name: string }>;
+      rejected?: Array<{ name: string; validationFailures: string[] }>;
+    };
+    expect(candidatePayload.candidates ?? []).toHaveLength(0);
+    expect(candidatePayload.rejected?.map((candidate) => candidate.name)).toEqual(expect.arrayContaining([
+      'Moviefone TV',
+      'Sign In/Join',
+      'FanClub',
+      'Movie Showimes',
+      'IL 60004 Update Zipcode Monday',
+      'Arlington Heights',
+      'IL 60004',
+      'Mt Prospect',
+      'Mount Prospect',
+      'Wheeling',
+      'Schaumburg',
+    ]));
+    expect(candidatePayload.rejected?.flatMap((candidate) => candidate.validationFailures).join('\n')).toContain('source-backed entity-instance evidence');
+  });
+
+  it('rejects script, CSS, and ad artifacts even when they appear on relevant nearby listing pages', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved user facts.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read a web page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: query === 'movie theaters names near Arlington Heights IL' ? 'empty' : 'found',
+              query,
+              results: query === 'movie theaters names near Arlington Heights IL'
+                ? []
+                : [{
+                  title: 'Movie Showtimes and Theaters near Arlington Heights, IL',
+                  url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                  snippet: 'Discover showtimes and movie theaters near you with Fandango in Arlington Heights, IL.',
+                }, {
+                  title: 'Movie theaters and showtimes near 60004, Arlington Heights, IL',
+                  url: 'https://www.moviefone.com/showtimes/theaters/arlington-heights-il/60004/',
+                  snippet: 'Local Movie Times and Movie Theaters near 60004, Arlington Heights, IL.',
+                }],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: url.includes('moviefone')
+              ? 'Movie theaters and showtimes near 60004, Arlington Heights, IL'
+              : 'Movie Theaters near Arlington Heights',
+            text: [
+              'Movie theaters near Arlington Heights, IL.',
+              'Screen Reader Users: To optimize your experience with your screen reading software, please use our Flixster.com website.',
+              'Trending Supergirl Trailer Masters of the Universe Trailer Movies TV Shows Streaming In Theaters Coming Soon Movie Charts Showtimes Highlights News.',
+              'Movie Showtimes Near Arlington Heights, IL | Fandango Ticketing Theaters My.',
+              'Featured Movie Animal Farm appears in the Fandango movies content area for Arlington Heights showtimes.',
+              'Buy a Dolby Ticket to The Devil Wears Prada 2. SCREENX Offer. Use code RUNWAYREADY to redeem the special offer.',
+              'Tuscany (2026) Lee Cronin.',
+              'Watch New Trailers Movie Theaters Movie.',
+              'Made In Hollywood Apex Marty Supreme The Devil Wears Prada.',
+              'window.Fandango = { adConfig: { adUnits: ["Multi Logo", "Box Ad"] }, pageType: "theaterselectionpage" };',
+              'body { font-family: "Palatino Linotype", Palatino, Georgia, serif; }',
+            ].join(' '),
+            links: [],
+            jsonLd: [],
+            observations: [
+              {
+                kind: 'text-span',
+                label: 'Multi Logo',
+                evidence: 'page text',
+                localContext: 'window.Fandango = { adConfig: { adUnits: ["Multi Logo", "Box Ad"] }, pageType: "theaterselectionpage" };',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Box Ad',
+                evidence: 'page text',
+                localContext: 'window.Fandango = { adConfig: { adUnits: ["Multi Logo", "Box Ad"] }, pageType: "theaterselectionpage" };',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Palatino Linotype',
+                evidence: 'page text',
+                localContext: 'body { font-family: "Palatino Linotype", Palatino, Georgia, serif; }',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Screen Reader Users',
+                evidence: 'page text',
+                localContext: 'Screen Reader Users: To optimize your experience with your screen reading software, please use our Flixster.com website.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Streaming In Theaters Coming Soon Movie',
+                evidence: 'page text',
+                localContext: 'Trending Supergirl Trailer Masters of the Universe Trailer Movies TV Shows Streaming In Theaters Coming Soon Movie Charts Showtimes Highlights News.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Fandango Ticketing Theaters My',
+                evidence: 'page text',
+                localContext: 'Movie Showtimes Near Arlington Heights, IL | Fandango Ticketing Theaters My.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Featured Movie Animal Farm',
+                evidence: 'page text',
+                localContext: 'Featured Movie Animal Farm appears in the Fandango movies content area for Arlington Heights showtimes.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'SCREENX Offer',
+                evidence: 'page text',
+                localContext: 'Buy a Dolby Ticket to The Devil Wears Prada 2. SCREENX Offer. Use code RUNWAYREADY to redeem the special offer.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Lee Cronin',
+                evidence: 'page text',
+                localContext: 'Tuscany (2026) Lee Cronin.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Watch New Trailers Movie Theaters Movie',
+                evidence: 'page text',
+                localContext: 'Watch New Trailers Movie Theaters Movie.',
+                sourceUrl: url,
+              },
+              {
+                kind: 'text-span',
+                label: 'Hollywood Apex Marty Supreme The Devil',
+                evidence: 'page text',
+                localContext: 'Made In Hollywood Apex Marty Supreme The Devil Wears Prada.',
+                sourceUrl: url,
+              },
+            ],
+            entities: [
+              {
+                name: 'Multi Logo',
+                url,
+                evidence: 'window.Fandango = { adConfig: { adUnits: ["Multi Logo", "Box Ad"] }, pageType: "theaterselectionpage" };',
+              },
+              {
+                name: 'Box Ad',
+                url,
+                evidence: 'window.Fandango = { adConfig: { adUnits: ["Multi Logo", "Box Ad"] }, pageType: "theaterselectionpage" };',
+              },
+              {
+                name: 'Palatino Linotype',
+                url,
+                evidence: 'body { font-family: "Palatino Linotype", Palatino, Georgia, serif; }',
+              },
+              {
+                name: 'Screen Reader Users',
+                url,
+                evidence: 'Screen Reader Users: To optimize your experience with your screen reading software, please use our Flixster.com website.',
+              },
+              {
+                name: 'Streaming In Theaters Coming Soon Movie',
+                url,
+                evidence: 'Trending Supergirl Trailer Masters of the Universe Trailer Movies TV Shows Streaming In Theaters Coming Soon Movie Charts Showtimes Highlights News.',
+              },
+              {
+                name: 'Fandango Ticketing Theaters My',
+                url,
+                evidence: 'Movie Showtimes Near Arlington Heights, IL | Fandango Ticketing Theaters My.',
+              },
+              {
+                name: 'Featured Movie Animal Farm',
+                url,
+                evidence: 'Featured Movie Animal Farm appears in the Fandango movies content area for Arlington Heights showtimes.',
+              },
+              {
+                name: 'SCREENX Offer',
+                url,
+                evidence: 'Buy a Dolby Ticket to The Devil Wears Prada 2. SCREENX Offer. Use code RUNWAYREADY to redeem the special offer.',
+              },
+              {
+                name: 'Lee Cronin',
+                url,
+                evidence: 'Tuscany (2026) Lee Cronin.',
+              },
+              {
+                name: 'Watch New Trailers Movie Theaters Movie',
+                url,
+                evidence: 'Watch New Trailers Movie Theaters Movie.',
+              },
+              {
+                name: 'Hollywood Apex Marty Supreme The Devil',
+                url,
+                evidence: 'Made In Hollywood Apex Marty Supreme The Devil Wears Prada.',
+              },
+            ],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const movieTheaterPlan: ToolPlan = {
+      version: 1,
+      goal: "what're the best movie theaters near me?",
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, movieTheaterPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('best movie theaters Arlington Heights IL');
+    expect(result.failed).toBe(true);
+    expect(result.text).toContain('I could not find enough validated movie theaters near Arlington Heights, IL');
+    expect(result.text).not.toMatch(/^\s*\d+\.\s+\[(?:Multi Logo|Box Ad|Palatino Linotype|Screen Reader Users|Streaming In Theaters Coming Soon Movie|Fandango Ticketing Theaters My|Featured Movie Animal Farm|SCREENX Offer|Lee Cronin|Watch New Trailers Movie Theaters Movie|Hollywood Apex Marty Supreme The Devil)\]/im);
+    const structuredCandidateResults = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'search-analyzer'
+        && String(payload.intentId).includes('validated-candidates')
+      ));
+    const candidatePayload = JSON.parse(structuredCandidateResults.at(-1)?.output ?? '{}') as {
+      candidates?: Array<{ name: string }>;
+      rejected?: Array<{ name: string; validationFailures: string[] }>;
+    };
+    expect(candidatePayload.candidates ?? []).toHaveLength(0);
+    expect(candidatePayload.rejected?.map((candidate) => candidate.name)).toEqual(expect.arrayContaining([
+      'Multi Logo',
+      'Box Ad',
+      'Palatino Linotype',
+      'Screen Reader Users',
+      'Streaming In Theaters Coming Soon Movie',
+      'Fandango Ticketing Theaters My',
+      'Featured Movie Animal Farm',
+      'SCREENX Offer',
+      'Lee Cronin',
+      'Watch New Trailers Movie Theaters Movie',
+      'Hollywood Apex Marty Supreme The Devil',
+    ]));
+    expect(candidatePayload.rejected?.flatMap((candidate) => candidate.validationFailures).join('\n')).toContain('candidate label is a generic page, navigation, category, or content label');
+  });
+
+  it('fulfills generic external searches without adding location or vertical-specific terms', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [{
+      id: 'webmcp:search_web',
+      label: 'Search web',
+      description: 'Search the web for external facts and recommendations.',
+      group: 'built-in',
+      groupLabel: 'Built-In',
+      subGroup: 'web-search-mcp',
+      subGroupLabel: 'Search',
+    }];
+    const genericPlan: ToolPlan = {
+      version: 1,
+      goal: 'What are the best laptops for students?',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Best laptops for students in 2026 - Review Guide',
+                  url: 'https://example.com/student-laptops',
+                  snippet: 'Top student laptop picks include Lenovo IdeaPad Slim 5, MacBook Air, and Acer Aspire Go.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:recall_user_context': { execute: vi.fn() },
+        'webmcp:elicit_user_input': { execute: vi.fn() },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'What are the best laptops for students?' }],
+      runtime,
+    }, genericPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current product recommendation request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('best laptops for students');
+    expect(searchQueries.join('\n')).not.toMatch(/restaurant|movie theater|near Arlington Heights/i);
+    expect(runtime.tools['webmcp:recall_user_context'].execute).not.toHaveBeenCalled();
+    expect(runtime.tools['webmcp:elicit_user_input'].execute).not.toHaveBeenCalled();
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(result.text).toContain('laptops for students');
+    expect(result.text).not.toMatch(/restaurant|movie theater|near Arlington Heights/i);
+  });
+
+  it.each([
+    ['What are the worst bars near me?', 'worst bars Arlington Heights IL', 'bars', 'Beacon Tap'],
+    ['What are the closest parks near me?', 'closest parks Arlington Heights IL', 'parks', 'North School Park'],
+    ['What are the most popular coffee shops near me?', 'most popular coffee shops Arlington Heights IL', 'coffee shops', 'CoCo & Blu'],
+    ['What are the best restaurants near me?', 'best restaurants Arlington Heights IL', 'restaurants', 'Mitsuwa Marketplace'],
+  ])('builds generic ranking searches for %s', async (prompt, expectedQuery, answerSubject, candidateName) => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: `${candidateName} - Reviews and details`,
+                url: `https://example.com/${candidateName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+                snippet: `${candidateName} is a sourced result for ${answerSubject} near Arlington Heights, IL.`,
+              }],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const genericPlan: ToolPlan = {
+      version: 1,
+      goal: prompt,
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: prompt }],
+      runtime,
+    }, genericPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe(expectedQuery);
+    expect(result.text).toContain(candidateName);
+    expect(result.text).toContain(answerSubject);
+  });
+
+  it('uses compatible user memory preferences for the current subject without leaking them to unrelated searches', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            memories: [
+              {
+                id: 'location.city',
+                label: 'Saved city',
+                value: 'Arlington Heights, IL',
+                source: 'workspace-memory',
+                updatedAt: '2026-04-26T00:00:00.000Z',
+              },
+              {
+                id: 'preference.cuisine',
+                label: 'Food preference',
+                value: 'Indian food',
+                source: 'workspace-memory',
+                updatedAt: '2026-04-26T00:00:00.000Z',
+              },
+              {
+                id: 'preference.response.citations',
+                label: 'Response preference',
+                value: 'Prefers citations',
+                source: 'workspace-memory',
+                updatedAt: '2026-04-26T00:00:00.000Z',
+              },
+            ],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            const isRestaurant = query.includes('restaurants');
+            const name = isRestaurant ? 'Maharaj Indian Grill' : 'AMC Randhurst 12';
+            const subject = isRestaurant ? 'restaurants' : 'movie theaters';
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: `${name} - Official source`,
+                url: `https://example.com/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+                snippet: `${name} is a sourced result for ${subject} near Arlington Heights, IL.`,
+              }],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const genericPlan: ToolPlan = {
+      version: 1,
+      goal: 'nearby search',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const restaurantResult = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'What are the best restaurants near me?' }],
+      runtime,
+    }, genericPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+    const theaterResult = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: "what're the best movie theaters near me?" }],
+      runtime,
+    }, genericPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('best indian restaurants Arlington Heights IL');
+    expect(searchQueries[1]).toBe('best movie theaters Arlington Heights IL');
+    expect(restaurantResult.text).toContain('Maharaj Indian Grill');
+    expect(theaterResult.text).toContain('AMC Randhurst 12');
+    expect(theaterResult.text).not.toMatch(/indian|restaurant/i);
+  });
+
+  it('pauses for user input when location is known but web search is unavailable', async () => {
+    const toolCalls: string[] = [];
+    const userContextDescriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and restaurant results.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask the user for missing data before execution.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+    const userContextPlan: ToolPlan = {
+      version: 1,
+      goal: 'What is the best restaurant near me?',
+      selectedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: {
+        executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+      },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => ({
+            status: 'unavailable',
+            query,
+            reason: 'Search provider unavailable.',
+            results: [],
+          })),
+        },
+        'webmcp:elicit_user_input': {
+          execute: vi.fn(async (args: { prompt: string }) => ({
+            status: 'needs_user_input',
+            requestId: 'elicitation-search-source',
+            prompt: args.prompt,
+            fields: [{ id: 'search-source', label: 'Search source or candidates', required: true }],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors: userContextDescriptors,
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'What is the best restaurant near me?' }],
+      runtime,
+    }, userContextPlan, userContextDescriptors, runtime.tools, {
+      onToolCall: (toolName) => toolCalls.push(toolName),
+    }, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the restaurant recommendation request after resolving location.',
+      toolPolicy: {
+        allowedToolIds: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: userContextDescriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(toolCalls).toEqual([
+      'webmcp:recall_user_context',
+      'webmcp:search_web',
+      'webmcp:elicit_user_input',
+    ]);
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      blocked: true,
+      needsUserInput: true,
+      text: 'I found your location, but web search is unavailable. Please provide a search source or candidate results for restaurants.\nSearch issue: Search provider unavailable.',
       steps: 3,
     });
     expect(result.failed).toBeUndefined();

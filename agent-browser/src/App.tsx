@@ -4834,7 +4834,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
             </div>
             {copilotState.statusMessage ? <p className="muted">{copilotState.statusMessage}</p> : null}
             {copilotState.error ? <p className="file-editor-error">{copilotState.error}</p> : null}
-            {!copilotReady ? (
+            {!copilotReady && !copilotState.authenticated ? (
               <>
                 <div className="provider-actions">
                   <a className="secondary-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Copilot</a>
@@ -4845,6 +4845,10 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
                   <input aria-label="GitHub Copilot sign-in command" value={copilotState.signInCommand} readOnly />
                 </label>
               </>
+            ) : !copilotReady ? (
+              <div className="provider-actions">
+                <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
             ) : (
               <div className="provider-actions">
                 <span className="badge connected">GHCP available</span>
@@ -8731,6 +8735,8 @@ function AgentBrowserApp() {
           fields: input.fields,
         };
       },
+      onSearchWeb: searchWebFromApi,
+      onReadWebPage: readWebPageFromApi,
       sessionFsEntries: activeSessionFsEntries,
       worktreeItems: activeWorktreeItems,
       onOpenFile: openActiveWorkspaceFileFromMcp,
@@ -9174,6 +9180,85 @@ function AgentBrowserApp() {
       <Toast toast={toast} />
     </div>
   );
+}
+
+async function searchWebFromApi({ query, limit }: { query: string; limit: number }) {
+  try {
+    const response = await fetch('/api/web-search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, limit }),
+    });
+    if (!response.ok) {
+      return {
+        status: 'unavailable' as const,
+        query,
+        reason: `Web search returned ${response.status}.`,
+        results: [],
+      };
+    }
+    const result = await response.json();
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      return {
+        status: 'unavailable' as const,
+        query,
+        reason: 'Web search returned an invalid response.',
+        results: [],
+      };
+    }
+    return result;
+  } catch (error) {
+    return {
+      status: 'unavailable' as const,
+      query,
+      reason: error instanceof Error ? error.message : 'Web search is unavailable.',
+      results: [],
+    };
+  }
+}
+
+async function readWebPageFromApi({ url }: { url: string }) {
+  try {
+    const response = await fetch('/api/web-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) {
+      return {
+        status: 'unavailable' as const,
+        url,
+        reason: `Web page read returned ${response.status}.`,
+        links: [],
+        jsonLd: [],
+        entities: [],
+        observations: [],
+      };
+    }
+    const result = await response.json();
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      return {
+        status: 'unavailable' as const,
+        url,
+        reason: 'Web page read returned an invalid response.',
+        links: [],
+        jsonLd: [],
+        entities: [],
+        observations: [],
+      };
+    }
+    return result;
+  } catch (error) {
+    return {
+      status: 'unavailable' as const,
+      url,
+      reason: error instanceof Error ? error.message : 'Web page reading is unavailable.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    };
+  }
 }
 
 export default function App() {

@@ -3,13 +3,15 @@ import type { ModelMessage } from '@ai-sdk/provider-utils';
 import { buildDefaultToolInstructions, type ToolDescriptor } from '../tools';
 import { runToolAgent, type AgentRunResult } from './agentRunner';
 import { runLocalToolCallExecutor } from './localToolCallExecutor';
+import { resolveExecutionRequirements, taskFromMessages } from './executionRequirements';
+import type { IAgentBus } from 'logact';
 import type {
   RunToolPlanningAgentOptions,
   ToolAgentRuntime,
   ToolPlan,
   ToolPlanningCallbacks,
 } from '../tool-agents/tool-agent';
-import { callTool, callToolPlan } from '../tool-agents/tool-agent';
+import { callToolPlan } from '../tool-agents/tool-agent';
 import type { BusEntryStep } from '../types';
 
 export interface ExecutorInstructionContext {
@@ -19,23 +21,8 @@ export interface ExecutorInstructionContext {
     assignments: Record<string, string[]>;
   };
   busEntries: BusEntryStep[];
-}
-
-type UserContextPrelude =
-  | { status: 'continue'; context?: string; steps: number }
-  | { status: 'blocked'; result: AgentRunResult };
-
-const USER_CONTEXT_TOOL_IDS = {
-  recall: 'webmcp:recall_user_context',
-  location: 'webmcp:read_browser_location',
-  elicit: 'webmcp:elicit_user_input',
-} as const;
-
-function messageContentToText(content: ModelMessage['content']): string {
-  if (typeof content === 'string') return content;
-  return content
-    .map((part) => (part.type === 'text' ? part.text : `[${part.type}]`))
-    .join('\n');
+  validationCriteria?: string[];
+  bus?: IAgentBus;
 }
 
 export async function runConfiguredExecutorAgent(
@@ -57,16 +44,18 @@ export async function runConfiguredExecutorAgent(
     },
   };
 
-  const userContextPrelude = await runUserContextPreludeIfNeeded(
-    options.runtime,
+  const requirementResolution = await resolveExecutionRequirements({
+    runtime: options.runtime,
     plan,
-    options.messages,
+    messages: options.messages,
     executionContext,
-    executionCallbacks,
-  );
-  if (userContextPrelude.status === 'blocked') {
-    callbacks.onDone?.(userContextPrelude.result.text);
-    return withToolErrorState(userContextPrelude.result, toolErrors);
+    callbacks: executionCallbacks,
+  });
+  if (requirementResolution.status === 'blocked' || requirementResolution.status === 'fulfilled') {
+    if (requirementResolution.status === 'blocked' || !requirementResolution.result.failed) {
+      callbacks.onDone?.(requirementResolution.result.text);
+    }
+    return withToolErrorState(requirementResolution.result, toolErrors);
   }
 
   if (plan.steps.length > 0) {
@@ -130,95 +119,6 @@ export async function runConfiguredExecutorAgent(
   }, toolErrors);
 }
 
-async function runUserContextPreludeIfNeeded(
-  runtime: ToolAgentRuntime,
-  plan: ToolPlan,
-  messages: ModelMessage[],
-  executionContext: ExecutorInstructionContext | undefined,
-  callbacks: ToolPlanningCallbacks,
-): Promise<UserContextPrelude> {
-  const taskText = [
-    taskFromMessages(messages),
-    plan.goal,
-    executionContext?.action ?? '',
-  ].join('\n');
-  if (!isLocationDependentTask(taskText)) {
-    return { status: 'continue', steps: 0 };
-  }
-
-  const allowedToolIds = new Set([
-    ...plan.selectedToolIds,
-    ...(executionContext?.toolPolicy.allowedToolIds ?? []),
-  ]);
-  const hasRequiredTools = Object.values(USER_CONTEXT_TOOL_IDS).every((toolId) => (
-    allowedToolIds.has(toolId) && Boolean(runtime.tools[toolId])
-  ));
-  if (!hasRequiredTools) {
-    return { status: 'continue', steps: 0 };
-  }
-
-  let steps = 0;
-  const recall = await callObservedTool(runtime, USER_CONTEXT_TOOL_IDS.recall, { query: 'location', limit: 5 }, callbacks, ++steps);
-  if (hasRecalledLocation(recall)) {
-    return { status: 'continue', context: stringifyResult(recall), steps };
-  }
-
-  const location = await callObservedTool(runtime, USER_CONTEXT_TOOL_IDS.location, {}, callbacks, ++steps);
-  if (hasBrowserLocation(location)) {
-    return { status: 'continue', context: stringifyResult(location), steps };
-  }
-
-  const elicitation = await callObservedTool(runtime, USER_CONTEXT_TOOL_IDS.elicit, {
-    prompt: 'What city or neighborhood should I use to list restaurants near you?',
-    reason: 'A location is required before nearby restaurants can be listed.',
-    fields: [{
-      id: 'location',
-      label: 'City or neighborhood',
-      required: true,
-      placeholder: 'Chicago, IL',
-    }],
-  }, callbacks, ++steps);
-  const blocked = resultFromNeedsUserInput(elicitation, steps);
-  if (blocked) {
-    return { status: 'blocked', result: blocked };
-  }
-  return { status: 'continue', steps };
-}
-
-async function callObservedTool(
-  runtime: ToolAgentRuntime,
-  toolId: string,
-  args: unknown,
-  callbacks: ToolPlanningCallbacks,
-  step: number,
-): Promise<unknown> {
-  const toolCallId = `user-context-${step}`;
-  callbacks.onToolCall?.(toolId, args, toolCallId);
-  try {
-    const result = await callTool(runtime, toolId, args);
-    callbacks.onToolResult?.(toolId, args, result, false, toolCallId);
-    return result;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    callbacks.onToolResult?.(toolId, args, message, true, toolCallId);
-    return { status: 'unavailable', reason: message };
-  }
-}
-
-function isLocationDependentTask(text: string): boolean {
-  return /\b(near me|nearby|restaurants?|location|city|neighbou?rhood)\b/i.test(text);
-}
-
-function hasRecalledLocation(result: unknown): boolean {
-  if (!isRecord(result)) return false;
-  if (result.status !== 'found') return false;
-  return Array.isArray(result.memories) && result.memories.length > 0;
-}
-
-function hasBrowserLocation(result: unknown): boolean {
-  return isRecord(result) && result.status === 'available';
-}
-
 function resultFromNeedsUserInputOutputs(outputs: Record<string, { output?: unknown; error?: string }>): AgentRunResult | null {
   for (const output of Object.values(outputs)) {
     const result = resultFromNeedsUserInput(output.output, Object.keys(outputs).length);
@@ -239,11 +139,6 @@ function resultFromNeedsUserInput(result: unknown, steps: number): AgentRunResul
     needsUserInput: true,
     elicitation: result,
   };
-}
-
-export function taskFromMessages(messages: ModelMessage[]): string {
-  const last = messages.at(-1);
-  return last ? messageContentToText(last.content) : '';
 }
 
 function buildExecutorMessages(

@@ -11,6 +11,8 @@ export interface CopilotModelSummary {
   reasoning: boolean;
   vision: boolean;
   billingMultiplier?: number;
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 export interface CopilotStatusResponse {
@@ -119,9 +121,19 @@ export class CopilotBridge {
     try {
       const client = await this.getClient();
       const auth = await client.getAuthStatus();
-      const models = auth.isAuthenticated
-        ? (await client.listModels()).filter(isEnabledCopilotModel).map(toCopilotModelSummary)
-        : [];
+      let models: CopilotModelSummary[] = [];
+      let error: string | undefined;
+
+      if (auth.isAuthenticated) {
+        try {
+          models = (await client.listModels())
+            .filter(isEnabledCopilotModel)
+            .map(toCopilotModelSummary)
+            .filter((model): model is CopilotModelSummary => Boolean(model));
+        } catch (listError) {
+          error = `Failed to list GitHub Copilot models: ${listError instanceof Error ? listError.message : 'unknown error'}`;
+        }
+      }
 
       return {
         available: true,
@@ -130,6 +142,7 @@ export class CopilotBridge {
         host: auth.host,
         login: auth.login,
         statusMessage: auth.statusMessage,
+        error,
         models,
         signInCommand: SIGN_IN_COMMAND,
         signInDocsUrl: SIGN_IN_DOCS_URL,
@@ -207,18 +220,50 @@ export class CopilotBridge {
 
 const bridge = new CopilotBridge();
 
-function isEnabledCopilotModel(model: ModelInfo): boolean {
-  return !model.policy || model.policy.state === 'enabled';
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
 }
 
-function toCopilotModelSummary(model: ModelInfo): CopilotModelSummary {
+function getString(record: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = record?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function getPositiveNumber(record: Record<string, unknown> | undefined, key: string): number | undefined {
+  const value = record?.[key];
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function isEnabledCopilotModel(model: ModelInfo): boolean {
+  const record = asRecord(model);
+  const policy = asRecord(record?.policy);
+  return getString(policy, 'state') !== 'disabled';
+}
+
+function toCopilotModelSummary(model: ModelInfo): CopilotModelSummary | null {
+  const record = asRecord(model);
+  const id = getString(record, 'id');
+  const name = getString(record, 'name');
+  if (!id || !name) return null;
+
+  const capabilities = asRecord(record?.capabilities);
+  const supports = asRecord(capabilities?.supports);
+  const limits = asRecord(capabilities?.limits);
+  const visionLimits = asRecord(limits?.vision);
+  const policy = asRecord(record?.policy);
+  const billing = asRecord(record?.billing);
+  const supportedReasoningEfforts = record?.supportedReasoningEfforts;
+  const hasReasoningEfforts = Array.isArray(supportedReasoningEfforts) && supportedReasoningEfforts.length > 0;
+
   return {
-    id: model.id,
-    name: model.name,
-    policyState: model.policy?.state,
-    reasoning: Boolean(model.capabilities.supports.reasoningEffort),
-    vision: Boolean(model.capabilities.supports.vision),
-    billingMultiplier: model.billing?.multiplier,
+    id,
+    name,
+    policyState: getString(policy, 'state'),
+    reasoning: Boolean(supports?.reasoningEffort) || hasReasoningEfforts,
+    vision: Boolean(supports?.vision) || Boolean(visionLimits),
+    billingMultiplier: getPositiveNumber(billing, 'multiplier'),
+    contextWindow: getPositiveNumber(limits, 'max_context_window_tokens'),
+    maxOutputTokens: getPositiveNumber(limits, 'max_output_tokens'),
   };
 }
 

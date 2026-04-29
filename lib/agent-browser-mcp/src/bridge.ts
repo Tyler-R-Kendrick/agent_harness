@@ -67,6 +67,9 @@ const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGro
   recall_user_context: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
   read_browser_location: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
   elicit_user_input: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
+  // Search
+  search_web: { subGroup: 'web-search-mcp', subGroupLabel: 'Search' },
+  read_web_page: { subGroup: 'web-search-mcp', subGroupLabel: 'Search' },
   // Renderer viewport panes
   list_render_panes: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
   close_render_pane: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },

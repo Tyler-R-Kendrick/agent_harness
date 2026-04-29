@@ -6,7 +6,8 @@ export type WebMcpToolGroup =
   | 'sessions-worktree-mcp'
   | 'files-worktree-mcp'
   | 'clipboard-worktree-mcp'
-  | 'user-context-mcp';
+  | 'user-context-mcp'
+  | 'web-search-mcp';
 
 export interface WebMcpToolDescriptor {
   id: string;

@@ -1381,6 +1381,38 @@ describe('App', () => {
     expect(screen.getByLabelText('Chat input')).toHaveAttribute('placeholder', 'Ask GHCP…');
   });
 
+  it('shows normalized GHCP models in settings and provider controls', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: true,
+        contextWindow: 128000,
+        maxOutputTokens: 4096,
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp');
+    expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    expect(screen.getByText('1 GHCP · 0 Codi')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /GitHub Copilot models \(1\)/i }));
+
+    expect(screen.getAllByText('GPT-4.1').length).toBeGreaterThanOrEqual(2);
+  });
+
   it('defaults to Codi when a local model is installed even if GHCP is ready', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
@@ -1442,6 +1474,31 @@ describe('App', () => {
 
     expect(screen.getByRole('link', { name: 'Sign in to Copilot' })).toHaveAttribute('href', 'https://docs.github.com/copilot/how-tos/copilot-cli');
     expect(screen.getByLabelText('GitHub Copilot sign-in command')).toHaveValue('copilot login');
+  });
+
+  it('does not show the Copilot sign-in path when authenticated model listing fails', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      error: 'Failed to list GitHub Copilot models: models.list failed',
+      models: [],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Signed in')).toBeInTheDocument();
+    expect(screen.getByText('Failed to list GitHub Copilot models: models.list failed')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Sign in to Copilot' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('GitHub Copilot sign-in command')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeInTheDocument();
   });
 
   it('adds workspace capability files and persists them to local storage', async () => {
@@ -3604,6 +3661,30 @@ describe('App', () => {
         branchId: 'agent:logact',
       });
       callbacks.onBusEntry?.({
+        id: 'post-processor-result',
+        position: 11,
+        realtimeTs: Date.now(),
+        payloadType: 'Result',
+        summary: 'Post processed answer',
+        detail: 'Rendered user-facing answer from AgentBus.',
+        actorId: 'post-processor',
+        actorRole: 'post-processor',
+        parentActorId: 'execution-complete',
+        branchId: 'agent:post-processor',
+      });
+      callbacks.onBusEntry?.({
+        id: 'response-ready',
+        position: 12,
+        realtimeTs: Date.now(),
+        payloadType: 'Completion',
+        summary: 'Response ready',
+        detail: 'post-processor rendered the final response',
+        actorId: 'response-ready',
+        actorRole: 'operation',
+        parentActorId: 'post-processor',
+        branchId: 'agent:logact',
+      });
+      callbacks.onBusEntry?.({
         id: 'logact-complete',
         position: 11,
         realtimeTs: Date.now(),
@@ -3612,7 +3693,7 @@ describe('App', () => {
         detail: 'workflow merged back to main after execution',
         actorId: 'workflow-complete',
         actorRole: 'operation',
-        parentActorId: 'execution-complete',
+        parentActorId: 'response-ready',
         branchId: 'main',
       });
       callbacks.onStageComplete?.('executor', 'Tool run completed.', { agentId: 'executor', agentLabel: 'Executor Agent' });
@@ -3657,6 +3738,10 @@ describe('App', () => {
     const judgeRows = Array.from(container.querySelectorAll('.pg-row[data-actor="judge-decider"]'));
     const executionCompleteRow = Array.from(container.querySelectorAll('.pg-row[data-actor="execution-complete"][data-branch="agent:logact"]'))
       .find((row) => row.textContent?.includes('Execution complete'));
+    const postProcessorRow = Array.from(container.querySelectorAll('.pg-row[data-actor="post-processor"][data-branch="agent:post-processor"]'))
+      .find((row) => row.textContent?.includes('Post processed answer'));
+    const responseReadyRow = Array.from(container.querySelectorAll('.pg-row[data-actor="response-ready"][data-branch="agent:logact"]'))
+      .find((row) => row.textContent?.includes('Response ready'));
     const workflowCompleteRow = Array.from(container.querySelectorAll('.pg-row[data-actor="workflow-complete"][data-branch="main"]'))
       .find((row) => row.textContent?.includes('Workflow complete'));
 
@@ -3670,7 +3755,7 @@ describe('App', () => {
       expect(toolsSelectedRow?.querySelector(`.pg-rail-lane[data-lane="${lane}"]`)).not.toHaveClass('pg-rail-lane-active');
     });
 
-    const expectedMergedLanes = ['agent:orchestrator', 'agent:tool-agent', 'agent:executor', 'agent:logact'];
+    const expectedMergedLanes = ['agent:orchestrator', 'agent:tool-agent', 'agent:executor', 'agent:post-processor', 'agent:logact'];
     const missingMergedLanes = expectedMergedLanes.filter((lane) => (
       !container.querySelector(`[data-connector="merge"][data-lane="${lane}"]`)
     ));
@@ -3688,14 +3773,81 @@ describe('App', () => {
     expect(teacherRow).toHaveAttribute('data-branch', 'agent:judge-decider');
     expect(judgeRows.at(-1)).toHaveAttribute('data-branch', 'agent:judge-decider');
     expect(executorRow?.querySelector('[data-connector="fork"][data-lane="agent:executor"]')).toBeInTheDocument();
+    expect(executorRow?.querySelector('.pg-rail-lane[data-lane="agent:logact"]')).toHaveClass('pg-rail-lane-active');
     expect(executePlanRow).toHaveAttribute('data-branch', 'agent:executor');
     expect(executionCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:executor"]')).toBeInTheDocument();
+    expect(postProcessorRow?.querySelector('[data-connector="fork"][data-lane="agent:post-processor"]')).toBeInTheDocument();
+    expect(responseReadyRow?.querySelector('[data-connector="merge"][data-lane="agent:post-processor"]')).toBeInTheDocument();
     expect(workflowCompleteRow?.querySelector('[data-connector="merge"][data-lane="agent:logact"]')).toBeInTheDocument();
     expect(container.querySelector('.pg-row[data-actor="voter:planner-decomposition"]')).not.toBeInTheDocument();
     expect(container.querySelector('.pg-row[data-actor="agent-bus"]')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Result · intent-1/i })).toBeInTheDocument();
   });
 
+  it('renders task answers as chat output and neutralizes orchestration after workflow complete', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onStageStart?.('chat-agent', 'Receiving prompt.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onStageComplete?.('chat-agent', 'Delegated to orchestrator.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
+      callbacks.onStageStart?.('orchestrator', 'State machine running: task-1.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onBusEntry?.({
+        id: 'workflow-complete',
+        position: 0,
+        realtimeTs: Date.now(),
+        payloadType: 'Completion',
+        summary: 'Workflow complete',
+        detail: 'workflow merged back to main after execution',
+        actorId: 'workflow-complete',
+        actorRole: 'operation',
+        parentActorId: 'execution-complete',
+        branchId: 'main',
+      });
+      callbacks.onStageComplete?.('orchestrator', 'State machine completed: task-1.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onDone?.('Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.');
+      return {
+        text: 'Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.',
+        steps: 2,
+      };
+    });
+
+    const { container } = render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'What is the best restaurant near me?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await flushAsyncUpdates();
+
+    expect(screen.getByText(/Mitsuwa Marketplace/i)).toBeInTheDocument();
+    expect(screen.queryByText(/AgentBus Result Write-back/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Working/i)).not.toBeInTheDocument();
+    expect(document.querySelector('.stream-cursor')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Orchestrator|Process ·|Thought for|Planning tool run/i }));
+
+    const orchestratorRow = container.querySelector('.pg-row[data-actor="orchestrator"]');
+    expect(orchestratorRow).toBeInTheDocument();
+    expect(orchestratorRow).toHaveAttribute('data-status', 'done');
+    expect(orchestratorRow).not.toHaveClass('pg-row-active');
+    expect(container.querySelector('.pg-row[data-actor="workflow-complete"]')).toHaveAttribute('data-status', 'done');
+  });
   it('parents staged bus and model-turn graph rows to the open branch context', async () => {
     vi.useFakeTimers();
     searchBrowserModelsMock.mockResolvedValue([{

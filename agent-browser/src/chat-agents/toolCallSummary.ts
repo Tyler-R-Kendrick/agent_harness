@@ -180,6 +180,15 @@ function summarizeWebMcpCall(name: string, args: unknown): string {
   if (name === 'read_browser_location') return 'Read browser location';
   if (name === 'elicit_user_input') return 'Requested user input';
 
+  // Search
+  if (name === 'search_web') {
+    const query = at ? readString(args.query) : null;
+    return query ? `Searched web for "${query}"` : 'Searched web';
+  }
+  if (name === 'read_web_page') {
+    const url = at ? readString(args.url) : null;
+    return url ? `Read web page ${url}` : 'Read web page';
+  }
   // Workspace
   if (name === 'workspace_overview') return 'Read workspace overview';
   if (name === 'workspace_file') {

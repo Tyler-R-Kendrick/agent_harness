@@ -77,6 +77,22 @@ describe('stagedToolPipeline', () => {
     expect(sequential.tasks[1].prompt).toContain('Sequence dependency: use prior task results before starting this task.');
   });
 
+  it('adds runtime verification criteria to orchestrated tasks', () => {
+    const planned = planOrchestratorTasks([
+      { role: 'user', content: "what're the best movie theaters near me?" },
+    ], 'Research');
+    const task = planned.tasks[0] as (typeof planned.tasks)[number] & { verificationCriteria: string[] };
+
+    expect(task.verificationCriteria).toEqual(expect.arrayContaining([
+      expect.stringMatching(/actual named entities/i),
+      expect.stringMatching(/entity-specific/i),
+      expect.stringMatching(/requested subject/i),
+      expect.stringMatching(/geographic|near/i),
+      expect.stringMatching(/navigation labels/i),
+    ]));
+    expect(task.prompt).toContain('Verification criteria:');
+    expect(task.prompt).toContain('Generic page/navigation labels are forbidden');
+  });
   it('routes tool-enabled requests through chat, orchestrator, LogAct tool planning, and the executor', async () => {
     runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
     const model = makeStreamingModel();
@@ -87,6 +103,8 @@ describe('stagedToolPipeline', () => {
     ));
     const onAgentHandoff = vi.fn((from: string, to: string) => events.push(`handoff:${from}->${to}`));
     const onBusEntry = vi.fn();
+    const onStageComplete = vi.fn((stage: string) => events.push(`complete:${stage}`));
+    const onDone = vi.fn((text: string) => events.push(`done:${text}`));
 
     await runStagedToolPipeline({
       model: model as never,
@@ -96,7 +114,7 @@ describe('stagedToolPipeline', () => {
       messages: [{ role: 'user', content: 'Inspect AGENTS.md with the read session file tool.' }],
       workspaceName: 'Research',
       capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
-    }, { onStageStart, onToolAgentEvent, onAgentHandoff, onBusEntry });
+    }, { onStageStart, onToolAgentEvent, onAgentHandoff, onBusEntry, onStageComplete, onDone });
 
     expect(model.doStream).not.toHaveBeenCalled();
     expect(onToolAgentEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -145,6 +163,8 @@ describe('stagedToolPipeline', () => {
     expect(events.indexOf('handoff:logact->tool-agent')).toBeLessThan(events.indexOf('tool-agent:plan:tool-agent'));
     expect(events.indexOf('tool-agent:plan:tool-agent')).toBeLessThan(events.indexOf('handoff:logact->student-driver'));
     expect(events.indexOf('handoff:logact->executor')).toBeLessThan(events.indexOf('stage:executor'));
+    expect(events.indexOf('complete:executor')).toBeLessThan(events.indexOf('done:done'));
+    expect(events.at(-1)).toBe('done:done');
     expect(onAgentHandoff.mock.calls.map(([from, to]) => `${from}->${to}`)).not.toContain('judge-decider->executor-agent');
     const busActors = onBusEntry.mock.calls.map(([entry]) => entry.actorId ?? entry.actor);
     expect(busActors).toEqual(expect.arrayContaining(['tool-agent', 'student-driver', 'voter:teacher']));
@@ -185,11 +205,9 @@ describe('stagedToolPipeline', () => {
     const prompts = runToolAgentMock.mock.calls.map(([options]) => (
       options.messages.map((message: { content: string }) => message.content).join('\n')
     ));
-    expect(prompts[0]).toContain('Orchestrator task 1 of 2');
-    expect(prompts[0]).toContain('Enhanced task prompt');
-    expect(prompts[0]).toContain('Inspect AGENTS.md');
-    expect(prompts[1]).toContain('Orchestrator task 2 of 2');
-    expect(prompts[1]).toContain('summarize package scripts');
+    expect(prompts.some((prompt) => prompt.includes('Original user request: Inspect AGENTS.md'))).toBe(true);
+    expect(prompts.some((prompt) => prompt.includes('Original user request: summarize package scripts'))).toBe(true);
+    expect(prompts.join('\n')).not.toContain('Original user request: Orchestrator task');
     const toolPlanningGoals = onToolAgentEvent.mock.calls
       .map(([event]) => event)
       .filter((event) => event.kind === 'plan')

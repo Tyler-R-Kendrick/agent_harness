@@ -225,6 +225,60 @@ export interface WorkspaceMcpElicitationResult {
   fields: readonly WorkspaceMcpElicitationField[];
 }
 
+export interface WorkspaceMcpSearchWebRequest {
+  query: string;
+  limit: number;
+}
+
+export interface WorkspaceMcpSearchWebResultItem {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface WorkspaceMcpSearchWebResult {
+  status: 'found' | 'empty' | 'unavailable';
+  query: string;
+  results: readonly WorkspaceMcpSearchWebResultItem[];
+  reason?: string;
+}
+
+export interface WorkspaceMcpReadWebPageRequest {
+  url: string;
+}
+
+export interface WorkspaceMcpWebPageLink {
+  text: string;
+  url: string;
+}
+
+export interface WorkspaceMcpWebPageEntity {
+  name: string;
+  url?: string;
+  evidence: string;
+}
+
+export interface WorkspaceMcpWebPageObservation {
+  kind: 'json-ld' | 'page-link' | 'heading' | 'text-span';
+  label: string;
+  url?: string;
+  evidence: string;
+  localContext?: string;
+  sourceUrl: string;
+}
+
+export interface WorkspaceMcpReadWebPageResult {
+  status: 'read' | 'unavailable' | 'blocked';
+  url: string;
+  title?: string;
+  text?: string;
+  links: readonly WorkspaceMcpWebPageLink[];
+  jsonLd: readonly unknown[];
+  entities: readonly WorkspaceMcpWebPageEntity[];
+  observations: readonly WorkspaceMcpWebPageObservation[];
+  reason?: string;
+}
+
 export interface WorkspaceMcpWriteSessionInput {
   sessionId: string;
   name?: string;
@@ -255,6 +309,12 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   onElicitUserInput?: (
     input: WorkspaceMcpElicitationRequest
   ) => Promise<WorkspaceMcpElicitationResult> | WorkspaceMcpElicitationResult;
+  onSearchWeb?: (
+    input: WorkspaceMcpSearchWebRequest
+  ) => Promise<WorkspaceMcpSearchWebResult> | WorkspaceMcpSearchWebResult;
+  onReadWebPage?: (
+    input: WorkspaceMcpReadWebPageRequest
+  ) => Promise<WorkspaceMcpReadWebPageResult> | WorkspaceMcpReadWebPageResult;
   sessionFsEntries?: readonly WorkspaceMcpSessionFsEntry[];
   worktreeItems?: readonly WorkspaceMcpWorktreeItem[];
   onCreateBrowserPage?: (input: { url: string; title?: string }) => Promise<WorkspaceMcpBrowserPage | void> | WorkspaceMcpBrowserPage | void;

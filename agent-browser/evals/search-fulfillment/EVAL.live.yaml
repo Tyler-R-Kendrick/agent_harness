@@ -1,0 +1,99 @@
+name: generic-search-fulfillment-live
+version: "1.0"
+description: >
+  Real AgentV/AgentEvals live-provider smoke gate for generic local entity
+  search fulfillment. Live search results drift, so this suite checks semantic
+  entity quality instead of exact fixture entity names.
+metadata:
+  owner: agent-browser
+  tags: [search, logact, live, tool-trajectory, runtime-regression]
+execution:
+  target: agent-browser-search-fulfillment-live
+  timeout_seconds: 90
+assertions:
+  - name: tool-path
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: webmcp:recall_user_context
+      - tool: webmcp:search_web
+      - tool: search-analyzer
+      - tool: webmcp:read_web_page
+      - tool: validation-agent
+      - tool: post-processor
+      - tool: verification-agent
+
+  - name: bounded-work
+    type: execution-metrics
+    required: true
+    max_tool_calls: 40
+    max_tokens: 5000
+    max_duration_ms: 45000
+
+  - name: semantic-output-quality
+    type: code-grader
+    required: true
+    command: ["node", "./graders/search-quality-gate.mjs"]
+
+  - name: live-entity-rubric
+    type: rubric
+    required: true
+    rubrics:
+      - id: actual-entity-names
+        outcome: The answer lists actual named real-world entities of the requested subject, or honestly reports insufficient evidence without publishing entity-looking page chrome.
+        required: true
+        weight: 3
+      - id: requested-subject-match
+        outcome: Every listed item matches the current request subject and does not leak stale subjects from prior turns.
+        required: true
+        weight: 2
+      - id: geographic-evidence
+        outcome: Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity.
+        required: true
+        weight: 2
+      - id: source-backed-links
+        outcome: Entity names are linked to source-backed URLs when those URLs are available.
+        required: true
+        weight: 2
+      - id: page-chrome-rejection
+        outcome: Page chrome, navigation labels, account actions, content titles, schedule controls, and generic directory labels are rejected as entities.
+        required: true
+        weight: 3
+
+  - name: actual-entity-llm-judge
+    type: llm-grader
+    required: true
+    prompt: ./prompts/actual-entity-judge.md
+
+  - name: live-search-quality-composite
+    type: composite
+    required: true
+    aggregator:
+      type: threshold
+      threshold: 1
+    assertions:
+      - name: composite-tool-path
+        type: tool-trajectory
+        mode: in_order
+        expected:
+          - tool: webmcp:recall_user_context
+          - tool: webmcp:search_web
+          - tool: search-analyzer
+          - tool: webmcp:read_web_page
+          - tool: validation-agent
+          - tool: post-processor
+          - tool: verification-agent
+      - name: composite-output-quality
+        type: code-grader
+        command: ["node", "./graders/search-quality-gate.mjs"]
+      - name: composite-llm-judge
+        type: llm-grader
+        prompt: ./prompts/actual-entity-judge.md
+      - name: composite-bounded-work
+        type: execution-metrics
+        max_tool_calls: 40
+        max_tokens: 5000
+        max_duration_ms: 45000
+
+tests: ./cases.live.jsonl
