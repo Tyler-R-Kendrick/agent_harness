@@ -15,7 +15,7 @@ export async function resolvePackageBin(packageName, requireFromPackage = requir
   }
   const packageJsonPath = requireFromPackage.resolve(`${packageName}/package.json`);
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
-  const defaultBinName = packageName.split('/').pop();
+  const defaultBinName = packageName.split('/').filter(Boolean).at(-1);
   const packageBins = typeof packageJson.bin === 'object' ? packageJson.bin : undefined;
   const packageNameBin = packageBins?.[packageName];
   const defaultNameBin = defaultBinName ? packageBins?.[defaultBinName] : undefined;
