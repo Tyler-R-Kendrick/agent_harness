@@ -10,7 +10,7 @@ const requireFromApp = createRequire(path.join(repoRoot, 'agent-browser/package.
 const defaultRuntime = path.join(__dirname, 'search-eval-target-runtime.ts');
 
 export async function resolvePackageBin(packageName, requireFromPackage = requireFromApp) {
-  if (!packageName || !packageName.split('/').some(Boolean)) {
+  if (!packageName || packageName.trim().length === 0) {
     throw new Error('resolvePackageBin requires a non-empty package name.');
   }
   const packageJsonPath = requireFromPackage.resolve(`${packageName}/package.json`);
