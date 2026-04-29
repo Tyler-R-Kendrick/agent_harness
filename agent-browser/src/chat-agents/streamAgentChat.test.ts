@@ -5,6 +5,7 @@ vi.mock('@huggingface/transformers', () => ({
 }));
 
 import * as CodiModule from './Codi';
+import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
 import { streamAgentChat } from './index';
 
@@ -25,6 +26,7 @@ describe('streamAgentChat', () => {
         sizeMB: 1,
         status: 'installed',
       },
+      latestUserInput: 'hello from the composer',
       messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
       workspaceName: 'Research',
       workspacePromptContext: 'Use workspace files.',
@@ -32,6 +34,7 @@ describe('streamAgentChat', () => {
 
     expect(streamCodiChatSpy).toHaveBeenCalledWith(expect.objectContaining({
       workspaceName: 'Research',
+      latestUserInput: 'hello from the composer',
       messages: [{ id: 'user-1', role: 'user', content: 'hello' }],
     }), {}, undefined);
   });
@@ -53,6 +56,27 @@ describe('streamAgentChat', () => {
       modelId: 'gpt-4.1',
       sessionId: 'session-1',
       latestUserInput: 'hello',
+    }), {}, undefined);
+  });
+
+  it('routes Debugger sessions through the Debugger adapter', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'debugger',
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'debug the failing release',
+      messages: [{ id: 'user-1', role: 'user', content: 'debug the failing release' }],
+      workspaceName: 'Ops',
+      workspacePromptContext: 'Use workspace files.',
+    }, {});
+
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      latestUserInput: 'debug the failing release',
     }), {}, undefined);
   });
 

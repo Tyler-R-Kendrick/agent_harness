@@ -628,7 +628,6 @@ export async function runLogActActorWorkflow(
 function isInsufficientEvidenceAnswer(text: string): boolean {
   return /could not find enough validated|insufficient evidence|did not contain source-backed entity names|no validated/i.test(text);
 }
-
 async function runExecutorAttempt(
   options: RunLogActActorWorkflowOptions,
   context: LogActActorExecuteContext,
@@ -1331,7 +1330,6 @@ function normalizeMarkdownLinkLabels(text: string): string {
     return `[${label || rawLabel}](${url})`;
   });
 }
-
 async function runToolAgentDriver(
   bus: IAgentBus,
   task: string,

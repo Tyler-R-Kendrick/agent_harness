@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getModelContextRegistry, ModelContext } from '../../../webmcp/src/index';
+import { getModelContextRegistry, ModelContext } from '@agent-harness/webmcp';
 import { registerClipboardTools } from '../clipboardTools';
 import { createWebMcpTool } from '../tool';
 

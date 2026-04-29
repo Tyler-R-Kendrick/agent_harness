@@ -93,7 +93,6 @@ describe('stagedToolPipeline', () => {
     expect(task.prompt).toContain('Verification criteria:');
     expect(task.prompt).toContain('Generic page/navigation labels are forbidden');
   });
-
   it('routes tool-enabled requests through chat, orchestrator, LogAct tool planning, and the executor', async () => {
     runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
     const model = makeStreamingModel();

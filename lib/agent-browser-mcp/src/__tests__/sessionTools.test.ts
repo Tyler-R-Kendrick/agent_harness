@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getModelContextRegistry, ModelContext } from '../../../webmcp/src/index';
+import { getModelContextRegistry, ModelContext } from '@agent-harness/webmcp';
 
 import { createWebMcpTool } from '../tool';
 import { registerSessionTools } from '../workspaceTools';
@@ -269,5 +269,34 @@ describe('registerSessionTools', () => {
     });
 
     expect(getModelContextRegistry(modelContext).list().map(({ name }) => name)).toEqual(['read_session']);
+  });
+
+  it('omits change_session_tools when no session tool catalog is available', () => {
+    const modelContext = new ModelContext();
+
+    registerSessionTools(modelContext, {
+      workspaceName: 'Research',
+      session: {
+        id: 'session-1',
+        name: 'Session 1',
+        isOpen: true,
+        mode: 'agent',
+        provider: 'codi',
+        modelId: 'qwen3-0.6b',
+        agentId: null,
+        toolIds: [],
+        cwd: '/workspace',
+        messages: [],
+      },
+      onWriteSession: vi.fn(),
+    });
+
+    expect(getModelContextRegistry(modelContext).list().map(({ name }) => name)).toEqual([
+      'read_session',
+      'submit_session_message',
+      'change_session_agent',
+      'change_session_model',
+      'switch_session_mode',
+    ]);
   });
 });

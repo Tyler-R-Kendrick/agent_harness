@@ -59,7 +59,6 @@ async function appendAcceptedTheaterCandidate(context: LogActActorExecuteContext
     },
   });
 }
-
 describe('runLogActActorWorkflow', () => {
   it('writes dynamic LogAct actors to the AgentBus before executor action', async () => {
     const onBusEntry = vi.fn();
@@ -644,7 +643,6 @@ describe('runLogActActorWorkflow', () => {
     expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
     expect(postProcessorResult?.detail).toContain('Sources:');
   });
-
   it('runs student self-reflection and teacher/student revision loops before judge scoring', async () => {
     const onBusEntry = vi.fn();
     const onVoterStep = vi.fn();

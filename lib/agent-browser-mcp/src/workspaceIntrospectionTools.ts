@@ -1,4 +1,4 @@
-import type { ModelContext } from '../../webmcp/src/index';
+import type { ModelContext } from '@agent-harness/webmcp';
 
 export function registerWorkspaceIntrospectionTools(
   _modelContext: ModelContext,

@@ -47,15 +47,15 @@ export function createPromptBudget(
 }
 
 export function fitTextToTokenBudget(text: string, maxTokens: number): string {
+  const tokenLimit = clampTokens(maxTokens);
   if (!text) return '';
-  if (estimateTokenCount(text) <= maxTokens) return text;
+  if (tokenLimit <= 0) return '';
+  if (estimateTokenCount(text) <= tokenLimit) return text;
 
-  const maxChars = Math.max(8, maxTokens * CHARS_PER_TOKEN);
-  if (text.length <= maxChars) return text;
-
-  const head = Math.max(4, Math.floor((maxChars - 3) / 2));
-  const tail = Math.max(4, maxChars - head - 3);
-  return `${text.slice(0, head)}...${text.slice(-tail)}`;
+  const maxChars = tokenLimit * CHARS_PER_TOKEN;
+  const tail = Math.floor((maxChars - 3) / 2);
+  const head = maxChars - tail - 3;
+  return `${text.slice(0, head)}...${tail > 0 ? text.slice(-tail) : ''}`;
 }
 
 export function normalizeModelMessage(message: ModelMessage): BudgetedMessage {
@@ -111,8 +111,10 @@ export function fitMessagesToBudget(messages: BudgetedMessage[], budget: PromptB
     if (fittedContent) {
       reversed.push({ role: message.role, content: fittedContent });
       remaining = 0;
+      droppedMessages += index;
+    } else {
+      droppedMessages += index + 1;
     }
-    droppedMessages += index;
     break;
   }
 

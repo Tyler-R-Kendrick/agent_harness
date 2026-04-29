@@ -189,7 +189,6 @@ function summarizeWebMcpCall(name: string, args: unknown): string {
     const url = at ? readString(args.url) : null;
     return url ? `Read web page ${url}` : 'Read web page';
   }
-
   // Workspace
   if (name === 'workspace_overview') return 'Read workspace overview';
   if (name === 'workspace_file') {

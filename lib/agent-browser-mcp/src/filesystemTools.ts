@@ -1,4 +1,4 @@
-import { ModelContext } from '../../webmcp/src/index';
+import { ModelContext } from '@agent-harness/webmcp';
 
 import type {
   RegisterWorkspaceToolsOptions,
@@ -383,8 +383,19 @@ function listFilesystemEntries(options: NormalizedFilesystemOptions, input: File
   const workspaceEntries = deriveWorkspaceEntries(options.workspaceFiles);
   const driveEntries = options.sessionDrives.map(toSessionDriveEntry);
   const sessionEntries = options.sessionFsEntries.map(toSessionFsEntry);
+  const unmountedSessionIds = new Set(
+    options.sessionDrives
+      .filter((entry) => !entry.mounted)
+      .map((entry) => entry.sessionId),
+  );
 
   let entries = [...workspaceEntries, ...driveEntries, ...sessionEntries];
+
+  if (!input.includeUnmounted && unmountedSessionIds.size > 0) {
+    entries = entries.filter((entry) =>
+      entry.targetType !== 'session-fs-entry' || !unmountedSessionIds.has(entry.sessionId as string),
+    );
+  }
 
   if (input.targetType) {
     const targetType = normalizeTargetType(input.targetType);

@@ -166,7 +166,6 @@ function buildVerificationCriteria(task: string): string[] {
   }
   return criteria;
 }
-
 export function planOrchestratorTasks(
   messages: ModelMessage[],
   workspaceName = 'Workspace',
