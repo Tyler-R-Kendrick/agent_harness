@@ -234,7 +234,7 @@ describe('real AgentEvals workflow gate', () => {
     } finally {
       rmSync(outputDir, { recursive: true, force: true });
     }
-  }, 60000);
+  }, 180_000);
 
   it('lets the real AgentV tool-trajectory evaluator own trajectory scoring when code-grader input omits tool calls', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');

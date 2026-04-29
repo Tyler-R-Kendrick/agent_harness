@@ -1,43 +1,51 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-04-28
-Baseline: `.features/Summary.md` updated from the 2026-04-26 nine-harness corpus.
-Diff type: additive update after OpenCode research
+Updated: 2026-04-29
+Baseline: `.features/Summary.md` updated from the 2026-04-28 ten-harness corpus.
+Diff type: additive update after T3 Code research
 
 ## Net new normalized features
 
 ### Expanded: Parallel agent orchestration
-- Why now: OpenCode reinforces that multi-session parallel work is becoming table stakes across coding harnesses, not a niche expert feature.
+- Why now: T3 Code shows that even early GUI harnesses are making branch/worktree-aware thread spawning a visible primitive instead of burying isolation in backend implementation details.
 - Research delta:
-  - OpenCode lists `Multi-session` on the product page and frames parallel agents as a headline workflow.
-  - OpenCode also distinguishes between primary agents and subagents in current docs.
+  - T3 Code documents `chat.new` preserving branch/worktree state and `chat.newLocal` creating a new environment for the active project.
 
-### Added: Shareable sessions and debug handoff
-- Why now: OpenCode turns session sharing into an explicit product capability instead of leaving handoff to screenshots or copied logs.
-- Linear issue title:
-  - `Share review-safe browser agent runs`
-- Suggested problem statement:
-  - Browser-agent runs are hard to review asynchronously because evidence, decisions, and artifacts stay trapped in the original session.
-- One-shot instruction for an LLM:
-  - Design and implement a private-by-default session sharing feature that can publish a sanitized run artifact containing transcript excerpts, screenshots, DOM assertions, console/network evidence, and linked diffs; include retention controls, explicit redaction points, and a stable review URL.
+### Expanded: Skills and reusable browser workflows
+- Why now: T3 Code adds provider-level skill discovery, reinforcing that capability packaging is becoming part of the agent-selection and routing layer itself.
+- Research delta:
+  - the 2026-04-17 `v0.0.19` release notes include `Add provider skill discovery`
 
-### Added: Policy-driven permissions
-- Why now: OpenCode exposes approvals as a configurable product surface, including per-tool and per-agent rules, which makes autonomy safer without hiding the policy model.
-- Linear issue title:
-  - `Add policy-driven permission presets`
-- Suggested problem statement:
-  - Browser-capable agents need flexible approval controls, but the current permission model is too implicit for teams to tune confidently.
-- One-shot instruction for an LLM:
-  - Implement permission presets for browser agents with global and per-agent overrides, explicit allow/ask/deny behavior for tool classes, path and command pattern support, and a UI that shows which policy allowed or blocked each action.
+### Expanded: Multi-surface continuity
+- Why now: T3 Code makes remote-pairing and headless access explicit product features, which strengthens the case that browser-oriented harnesses should not assume a single local UI.
+- Research delta:
+  - `t3 serve` emits pairing tokens, pairing URLs, and QR codes for another device
+  - desktop settings can expose the local backend and generate a shareable pairing link
 
-### Added: Project command packs for repeatable workflows
-- Why now: OpenCode packages repeatable agent behavior as custom slash commands with agent and model bindings, reducing prompt duplication.
+### Added: Remote pairing and traceable long-running sessions
+- Why now: T3 Code pairs device-to-device access with a concrete observability model, which is a useful pattern for remote browser agents.
 - Linear issue title:
-  - `Ship project command packs for browser workflows`
+  - `Add remote pairing for browser-agent sessions`
 - Suggested problem statement:
-  - Repeated browser workflows such as smoke tests, bug repro, and verification runs are still encoded as ad hoc prompts instead of reusable project commands.
+  - Browser-agent runs are still anchored to one local UI, making handoff, phone access, and remote supervision harder than they need to be.
 - One-shot instruction for an LLM:
-  - Design a command-pack system for browser workflows where projects can define named commands with instructions, arguments, agent bindings, model preferences, and evidence requirements; surface them in task intake and make them easy to version and share.
+  - Design and implement remote pairing for browser-agent sessions with one-time pairing links or QR codes, device/session management, revoke flows, and safe auth boundaries so a user can supervise the same run from another trusted device.
+
+### Added: Structured local traces for agent operations
+- Linear issue title:
+  - `Record browser-agent traces for debugging`
+- Suggested problem statement:
+  - Long-running browser automations are difficult to debug because logs are transient and execution context is spread across UI state, console output, and ad hoc screenshots.
+- One-shot instruction for an LLM:
+  - Build a structured tracing pipeline for browser-agent operations that writes persisted local trace records with timing, parent-child spans, tool metadata, and embedded log events, plus optional OTLP export for deeper inspection in external observability backends.
+
+### Added: Command palette and shortcut-driven workflow packs
+- Linear issue title:
+  - `Expose browser workflows through commands and shortcuts`
+- Suggested problem statement:
+  - Reusable browser workflows are slower to invoke when they only exist as prompts or hidden scripts instead of first-class commands.
+- One-shot instruction for an LLM:
+  - Add a command palette, customizable keybindings, and script-backed command entries for browser workflows so users can launch common actions, switch projects, spawn fresh runs, and open preferred editors without retyping prompts.
 
 ## How to use this file
 
@@ -48,6 +56,6 @@ Diff type: additive update after OpenCode research
 
 ## Recommended next Linear batch
 
-1. `Share review-safe browser agent runs`
-2. `Add policy-driven permission presets`
-3. `Ship project command packs for browser workflows`
+1. `Add remote pairing for browser-agent sessions`
+2. `Record browser-agent traces for debugging`
+3. `Expose browser workflows through commands and shortcuts`
