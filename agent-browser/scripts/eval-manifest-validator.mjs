@@ -13,6 +13,23 @@ function toDisplayPath(filePath, repoRoot) {
   return path.relative(repoRoot, filePath).split(path.sep).join('/');
 }
 
+function parseFileReference(filePath) {
+  const normalizedFile = filePath.replace(/\\/g, '/');
+  if (normalizedFile.startsWith('repo:')) {
+    return {
+      normalizedFile,
+      relativePath: normalizedFile.slice('repo:'.length),
+      scope: 'repo',
+    };
+  }
+
+  return {
+    normalizedFile,
+    relativePath: normalizedFile,
+    scope: 'auto',
+  };
+}
+
 export async function findEvalManifestPaths(repoRoot) {
   const manifests = [];
 
@@ -102,8 +119,13 @@ export function validateEvalManifestContent(rawContent, manifestPath, repoRoot) 
             continue;
           }
 
-          const normalizedFile = filePath.replace(/\\/g, '/');
-          if (path.isAbsolute(normalizedFile) || normalizedFile.startsWith('../') || normalizedFile.includes('/../')) {
+          const { normalizedFile, relativePath } = parseFileReference(filePath);
+          if (
+            !isNonEmptyString(relativePath) ||
+            path.isAbsolute(relativePath) ||
+            relativePath.startsWith('../') ||
+            relativePath.includes('/../')
+          ) {
             errors.push(`${label}.files entry \`${normalizedFile}\` must stay within the skill root.`);
             continue;
           }
@@ -146,25 +168,29 @@ export async function validateEvalManifestFile(manifestPath, repoRoot) {
 
   for (const [index, evalCase] of manifest.evals.entries()) {
     for (const relativeFile of evalCase.files) {
-      const candidatePaths = [
-        path.resolve(skillRoot, relativeFile),
-        path.resolve(repoRoot, relativeFile),
-      ];
-      let foundFile = false;
+      const { normalizedFile, relativePath, scope } = parseFileReference(relativeFile);
+      const candidatePaths =
+        scope === 'repo'
+          ? [path.resolve(repoRoot, relativePath)]
+          : [path.resolve(skillRoot, relativePath), path.resolve(repoRoot, relativePath)];
+      const matchingPaths = [];
 
       for (const candidatePath of candidatePaths) {
         try {
           const stats = await fs.stat(candidatePath);
           if (stats.isFile()) {
-            foundFile = true;
-            break;
+            matchingPaths.push(candidatePath);
           }
         } catch {
           // Keep checking alternate roots.
         }
       }
 
-      if (!foundFile) {
+      if (scope === 'auto' && matchingPaths.length > 1) {
+        throw new Error(`Invalid eval manifest ${displayPath}:\n- evals[${index}].files references ambiguous file \`${normalizedFile}\`; use \`repo:${relativePath}\` for the repo-root file.`);
+      }
+
+      if (matchingPaths.length === 0) {
         throw new Error(`Invalid eval manifest ${displayPath}:\n- evals[${index}].files references missing file \`${relativeFile.replace(/\\/g, '/')}\`.`);
       }
     }
