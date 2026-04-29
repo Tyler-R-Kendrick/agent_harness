@@ -132,6 +132,8 @@ describe('real AgentEvals workflow gate', () => {
     expect(targetsYaml).toContain('name: agent-browser-llm-judge');
     expect(targetsYaml).toContain('search-eval-llm-judge.mjs');
     expect(targetsYaml).toContain('judge_target: agent-browser-llm-judge');
+    expect(targetsYaml).toContain('cwd: ../../..');
+    expect(targetsYaml).not.toContain('C:\\src\\agent-harness');
   });
 
   it('routes AgentV target execution through the production search runtime instead of expected fixture answers', () => {

@@ -5,7 +5,7 @@ targets:
     workers: 10
     timeout_ms: 30
     command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/search-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
-    cwd: C:\src\agent-harness
+    cwd: ../../..
 
   - name: agent-browser-search-fulfillment-live
     provider: cli
@@ -13,10 +13,10 @@ targets:
     workers: 5
     timeout_ms: 60
     command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/search-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE} --live
-    cwd: C:\src\agent-harness
+    cwd: ../../..
 
   - name: agent-browser-llm-judge
     provider: cli
     timeout_ms: 30
     command: node agent-browser/scripts/search-eval-llm-judge.mjs --prompt-file {PROMPT_FILE} --out {OUTPUT_FILE}
-    cwd: C:\src\agent-harness
+    cwd: ../../..
