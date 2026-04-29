@@ -19,12 +19,13 @@ describe('package metadata', () => {
     });
   });
 
-  it('limits published files to the public TypeScript source', () => {
+  it('publishes the README alongside the public TypeScript source', () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
       files?: string[];
     };
 
     expect(packageJson.files).toEqual([
+      'README.md',
       'src/index.ts',
       'src/heuristicCompletion.ts',
     ]);
