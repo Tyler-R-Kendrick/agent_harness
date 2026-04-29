@@ -1753,6 +1753,77 @@ describe('App', () => {
     }
   });
 
+  it('enables opt-in location context and adds approximate coordinates to the assistant prompt', async () => {
+    vi.useFakeTimers();
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 41.878113,
+          longitude: -87.629799,
+          accuracy: 24.6,
+        },
+        timestamp: Date.parse('2026-04-29T19:00:00.000Z'),
+      } as GeolocationPosition);
+    });
+    const originalGeolocationDescriptor = Object.getOwnPropertyDescriptor(navigator, 'geolocation');
+    Object.defineProperty(navigator, 'geolocation', {
+      value: { getCurrentPosition },
+      configurable: true,
+    });
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+      expect(getCurrentPosition).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Enable location context' }));
+      await flushAsyncUpdates();
+      await act(async () => { vi.advanceTimersByTime(200); await Promise.resolve(); });
+
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(window.localStorage.getItem('agent-browser.location-context') ?? '{}')).toEqual({
+        enabled: true,
+        latitude: 41.88,
+        longitude: -87.63,
+        accuracyMeters: 25,
+        capturedAt: '2026-04-29T19:00:00.000Z',
+      });
+      expect(screen.getByRole('button', { name: 'Disable location context' })).toBeInTheDocument();
+      expect(screen.getByText(/location on/i)).toBeInTheDocument();
+
+      await installLocalModel();
+      disableAllTools();
+
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Find dinner nearby.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await act(async () => { await Promise.resolve(); });
+
+      const prompt = generateMock.mock.calls[0][0].prompt as Array<{ role: string; content: string }>;
+      const promptText = prompt.map((entry) => entry.content).join('\n');
+      expect(promptText).toContain('Browser location context:');
+      expect(promptText).toContain('Approximate coordinates: 41.88, -87.63');
+      expect(promptText).toContain('Do not assume it is exact.');
+    } finally {
+      if (originalGeolocationDescriptor) {
+        Object.defineProperty(navigator, 'geolocation', originalGeolocationDescriptor);
+      } else {
+        Reflect.deleteProperty(navigator, 'geolocation');
+      }
+    }
+  });
+
   it('shows a browser notification when session chat work completes', async () => {
     const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
     class MockNotification {

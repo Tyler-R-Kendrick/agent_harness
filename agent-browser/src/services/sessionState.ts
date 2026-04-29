@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   chatMessagesBySession: 'agent-browser.chat-messages-by-session',
   chatHistoryBySession: 'agent-browser.chat-history-by-session',
   browserNotificationSettings: 'agent-browser.browser-notification-settings',
+  locationContext: 'agent-browser.location-context',
   // sessionStorage — per-tab, refresh-only
   selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
   selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',

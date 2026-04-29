@@ -35,6 +35,8 @@ import {
   Layers3,
   Link,
   LoaderCircle,
+  MapPin,
+  MapPinOff,
   LucideIcon,
   MessageSquare,
   MoreHorizontal,
@@ -159,6 +161,13 @@ import {
   requestBrowserNotificationPermission,
   type BrowserNotificationPermission,
 } from './services/browserNotifications';
+import {
+  DEFAULT_BROWSER_LOCATION_CONTEXT,
+  buildBrowserLocationPromptContext,
+  createBrowserLocationApi,
+  isBrowserLocationContext,
+  requestBrowserLocationContext,
+} from './services/browserLocation';
 import {
   STORAGE_KEYS,
   isChatMessagesBySession,
@@ -444,6 +453,8 @@ const icons = {
   x: X,
   send: SendHorizontal,
   loader: LoaderCircle,
+  mapPin: MapPin,
+  mapPinOff: MapPinOff,
   globe: Globe,
   arrowLeft: ArrowLeft,
   arrowRight: ArrowRight,
@@ -1587,6 +1598,12 @@ function ChatPanel({
     isBrowserNotificationSettings,
     DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
   );
+  const [browserLocationContext, setBrowserLocationContext] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.locationContext,
+    isBrowserLocationContext,
+    DEFAULT_BROWSER_LOCATION_CONTEXT,
+  );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
     STORAGE_KEYS.selectedCodiModelBySession,
@@ -1625,6 +1642,10 @@ function ChatPanel({
     () => createBrowserNotificationApi(typeof window !== 'undefined' ? window.Notification : undefined),
     [],
   );
+  const browserLocationApi = useMemo(
+    () => createBrowserLocationApi(typeof navigator !== 'undefined' ? navigator.geolocation : undefined),
+    [],
+  );
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState<BrowserNotificationPermission>(
     () => getBrowserNotificationPermission(browserNotificationApi),
   );
@@ -1653,9 +1674,16 @@ function ChatPanel({
   const selectedAgentId = selectedAgentIdState && availableAgentIds.includes(selectedAgentIdState)
     ? selectedAgentIdState
     : (availableAgentIds[0] ?? null);
+  const locationPromptContext = useMemo(
+    () => buildBrowserLocationPromptContext(browserLocationContext),
+    [browserLocationContext],
+  );
   const workspacePromptContext = useMemo(
-    () => buildWorkspacePromptContext(workspaceFiles, selectedAgentId),
-    [selectedAgentId, workspaceFiles],
+    () => [
+      buildWorkspacePromptContext(workspaceFiles, selectedAgentId),
+      locationPromptContext,
+    ].filter((section): section is string => Boolean(section)).join('\n\n'),
+    [locationPromptContext, selectedAgentId, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState });
@@ -1732,7 +1760,7 @@ function ChatPanel({
     ))
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -2006,6 +2034,30 @@ function ChatPanel({
       type: 'warning',
     });
   }, [browserNotificationApi, browserNotificationSettings.enabled, onToast, setBrowserNotificationSettings]);
+
+  const handleToggleLocationContext = useCallback(async () => {
+    if (browserLocationContext.enabled) {
+      setBrowserLocationContext((current) => ({ ...current, enabled: false }));
+      onToast({ msg: 'Location context disabled', type: 'info' });
+      return;
+    }
+
+    const result = await requestBrowserLocationContext(browserLocationApi);
+    if (result.status === 'granted') {
+      setBrowserLocationContext(result.context);
+      onToast({ msg: 'Location context enabled', type: 'success' });
+      return;
+    }
+
+    onToast({
+      msg: result.status === 'unsupported'
+        ? 'Location is not supported in this browser'
+        : result.status === 'denied'
+          ? 'Location permission was not granted'
+          : 'Location is unavailable right now',
+      type: 'warning',
+    });
+  }, [browserLocationApi, browserLocationContext.enabled, onToast, setBrowserLocationContext]);
 
   const notifyAssistantComplete = useCallback((assistantId: string, content: string) => {
     const notificationContent = content.trim();
@@ -4430,23 +4482,43 @@ function ChatPanel({
         </div>
         <div className="panel-titlebar-actions">
           {!showBash ? (
-            <button
-              type="button"
-              className={`icon-button${browserNotificationSettings.enabled ? ' is-active' : ''}`}
-              aria-label={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
-              title={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
-              data-tooltip={
-                browserNotificationSettings.enabled
-                  ? browserNotificationsEnabled
-                    ? 'Notifications on'
-                    : 'Notifications blocked in browser settings'
-                  : 'Notifications off'
-              }
-              onClick={() => void handleToggleBrowserNotifications()}
-              {...panelTitlebarControlProps}
-            >
-              <Icon name={browserNotificationSettings.enabled ? 'bell' : 'bellOff'} size={13} />
-            </button>
+            <>
+              <button
+                type="button"
+                className={`icon-button${browserLocationContext.enabled ? ' is-active' : ''}`}
+                aria-label={browserLocationContext.enabled ? 'Disable location context' : 'Enable location context'}
+                title={browserLocationContext.enabled ? 'Disable location context' : 'Enable location context'}
+                data-tooltip={
+                  browserLocationContext.enabled
+                    ? 'Location context on'
+                    : browserLocationApi
+                      ? 'Location context off'
+                      : 'Location unavailable'
+                }
+                onClick={() => void handleToggleLocationContext()}
+                disabled={!browserLocationApi && !browserLocationContext.enabled}
+                {...panelTitlebarControlProps}
+              >
+                <Icon name={browserLocationContext.enabled ? 'mapPin' : 'mapPinOff'} size={13} />
+              </button>
+              <button
+                type="button"
+                className={`icon-button${browserNotificationSettings.enabled ? ' is-active' : ''}`}
+                aria-label={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+                title={browserNotificationSettings.enabled ? 'Disable browser notifications' : 'Enable browser notifications'}
+                data-tooltip={
+                  browserNotificationSettings.enabled
+                    ? browserNotificationsEnabled
+                      ? 'Notifications on'
+                      : 'Notifications blocked in browser settings'
+                    : 'Notifications off'
+                }
+                onClick={() => void handleToggleBrowserNotifications()}
+                {...panelTitlebarControlProps}
+              >
+                <Icon name={browserNotificationSettings.enabled ? 'bell' : 'bellOff'} size={13} />
+              </button>
+            </>
           ) : null}
           <div className="chat-mode-controls">
             <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
