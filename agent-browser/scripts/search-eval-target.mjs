@@ -13,9 +13,13 @@ async function resolvePackageBin(packageName) {
   const packageJsonPath = requireFromApp.resolve(`${packageName}/package.json`);
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   const defaultBinName = packageName.split('/').pop();
+  const packageBins = typeof packageJson.bin === 'object' ? packageJson.bin : undefined;
+  const packageNameBin = packageBins?.[packageName];
+  const defaultNameBin = defaultBinName ? packageBins?.[defaultBinName] : undefined;
+  const firstDeclaredBin = packageBins ? Object.values(packageBins)[0] : undefined;
   const binRelativePath = typeof packageJson.bin === 'string'
     ? packageJson.bin
-    : packageJson.bin?.[packageName] ?? packageJson.bin?.[defaultBinName] ?? Object.values(packageJson.bin ?? {})[0];
+    : packageNameBin ?? defaultNameBin ?? firstDeclaredBin;
   if (!binRelativePath) throw new Error(`${packageName} does not declare a runnable bin entry.`);
   return path.resolve(path.dirname(packageJsonPath), binRelativePath);
 }
