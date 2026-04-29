@@ -103,7 +103,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   place-items: center;
   border-color: transparent;
 }
-.activity-button.active, .icon-button.active, .chip.active, .activity-inline-button.active {
+.activity-button.active, .icon-button.active, .icon-button.is-active, .chip.active, .activity-inline-button.active {
   background: rgba(255,255,255,.08);
   border-color: transparent;
   color: #ffffff;
