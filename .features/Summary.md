@@ -1,14 +1,14 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-04-28
-Scope: `Codex`, `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenClaw`, `OpenCode`
+Updated: 2026-04-29
+Scope: `Codex`, `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenClaw`, `OpenCode`, `T3 Code`
 Method: current-product research from first-party product pages, help centers, docs, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
@@ -22,7 +22,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -43,7 +43,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Copilot terminal + GitHub + mobile, DeerFlow IM channels, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Copilot terminal + GitHub + mobile, DeerFlow IM channels, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, T3 Code remote pairing plus headless serve.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
@@ -90,6 +90,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add review-safe run sharing that publishes a sanitized session artifact with transcript, artifacts, diff links, and verification evidence, plus retention controls and a clear private-by-default policy.
 
+### 13. Remote pairing and traceable operations
+- Common pattern: newer harnesses are exposing remote-access flows while also shipping stronger operational traces for debugging multi-device or long-running sessions.
+- Seen in: T3 Code remote pairing tokens, QR-code onboarding, session revocation, and local NDJSON tracing; Codex and ChatGPT are adjacent here through cloud-managed execution, but T3 Code makes the operational layer unusually explicit.
+- Why it matters: once agents run beyond one terminal window, connectivity and postmortem visibility become product requirements.
+- One-shot build instruction:
+  - Add secure remote session pairing for browser-agent workspaces, include device/session management and revocation, and back it with structured local traces plus optional OTLP export so operators can debug long-lived runs.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -99,7 +106,8 @@ Method: current-product research from first-party product pages, help centers, d
 5. Branch/diff/verification loops that join browser evidence with code changes.
 6. Share review-safe run links for async debugging and handoff.
 7. Add policy-driven permission presets for browser-capable agents.
+8. Remote pairing plus traceable long-running browser sessions.
 
 ## Notes
-- This pass extends the earlier nine-harness corpus with `OpenCode` as a tenth competitor.
+- This pass extends the earlier ten-harness corpus with `T3 Code` as an eleventh competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
