@@ -3801,7 +3801,6 @@ describe('App', () => {
       callbacks.onStageStart?.('chat-agent', 'Receiving prompt.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
       callbacks.onStageComplete?.('chat-agent', 'Delegated to orchestrator.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
       callbacks.onStageStart?.('orchestrator', 'State machine running: task-1.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
-      callbacks.onDone?.('Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.');
       callbacks.onBusEntry?.({
         id: 'workflow-complete',
         position: 0,
@@ -3815,6 +3814,7 @@ describe('App', () => {
         branchId: 'main',
       });
       callbacks.onStageComplete?.('orchestrator', 'State machine completed: task-1.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onDone?.('Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.');
       return {
         text: 'Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.',
         steps: 2,

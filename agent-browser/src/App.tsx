@@ -4834,7 +4834,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
             </div>
             {copilotState.statusMessage ? <p className="muted">{copilotState.statusMessage}</p> : null}
             {copilotState.error ? <p className="file-editor-error">{copilotState.error}</p> : null}
-            {!copilotReady ? (
+            {!copilotReady && !copilotState.authenticated ? (
               <>
                 <div className="provider-actions">
                   <a className="secondary-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Copilot</a>
@@ -4845,6 +4845,10 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
                   <input aria-label="GitHub Copilot sign-in command" value={copilotState.signInCommand} readOnly />
                 </label>
               </>
+            ) : !copilotReady ? (
+              <div className="provider-actions">
+                <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
             ) : (
               <div className="provider-actions">
                 <span className="badge connected">GHCP available</span>
