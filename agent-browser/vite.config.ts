@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import type { Plugin } from 'vite';
+import fs from 'node:fs';
 import path from 'node:path';
 import { createCopilotApiMiddleware } from './server/copilotMiddleware';
 import { createSearchApiMiddleware, createWebPageApiMiddleware } from './server/searchMiddleware';
@@ -41,6 +42,14 @@ const copilotApiPlugin: Plugin = {
   },
 };
 
+function resolveInstalledFile(packageRelativePath: string): string {
+  const candidates = [
+    path.resolve(__dirname, 'node_modules', packageRelativePath),
+    path.resolve(__dirname, '..', 'node_modules', packageRelativePath),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+}
+
 export default defineConfig({
   plugins: [stubNodeZlib, copilotApiPlugin, react()],
   server: {
@@ -50,11 +59,11 @@ export default defineConfig({
     alias: [
       {
         find: 'onnxruntime-web/webgpu',
-        replacement: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort.webgpu.js'),
+        replacement: resolveInstalledFile('onnxruntime-web/dist/ort.webgpu.js'),
       },
       {
         find: 'mermaid',
-        replacement: path.resolve(__dirname, 'node_modules/mermaid/dist/mermaid.js'),
+        replacement: resolveInstalledFile('mermaid/dist/mermaid.js'),
       },
       {
         find: 'inbrowser-use',

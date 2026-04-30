@@ -10,12 +10,6 @@ import {
   type WebResearchRunResult,
   type WebSearchResult as LocalWebSearchResult,
 } from '../chat-agents/LocalWebResearch';
-import {
-  RDF_WEB_SEARCH_AGENT_ID,
-  RDF_WEB_SEARCH_AGENT_LABEL,
-  type AgentAnswer as RdfAgentAnswer,
-  type SearchResult as RdfSearchResult,
-} from '../chat-agents/SemanticSearch';
 import type { AgentRunResult } from './agentRunner';
 import type { BusEntryStep, SearchTurnContext, ValidationContract } from '../types';
 import { compileValidationContract } from './constraintCompiler';
@@ -93,7 +87,6 @@ export interface ResolvedExecutionContext {
   searchQuery?: string;
   webSearchResult?: SearchWebResult;
   localWebResearchResult?: WebResearchRunResult;
-  semanticSearchResult?: RdfAgentAnswer;
   searchResult?: SearchWebResult;
   searchCandidates?: SearchCandidate[];
   conversationResolution?: ConversationSearchResolution;
@@ -173,7 +166,6 @@ const REQUIREMENT_TOOL_IDS = {
   elicit: 'webmcp:elicit_user_input',
   search: 'webmcp:search_web',
   localWebResearch: 'webmcp:local_web_research',
-  semanticSearch: 'webmcp:semantic_search',
   readPage: 'webmcp:read_web_page',
 } as const;
 
@@ -325,7 +317,6 @@ export async function resolveExecutionRequirements({
     if (
       !hasAvailableSearchPath(runtime, allowedToolIds)
       && !hasAvailableLocalWebResearchPath(runtime, allowedToolIds)
-      && !hasAvailableSemanticSearchPath(runtime, allowedToolIds)
     ) {
       const blocked = await blockForMissingSearch({
         allowedToolIds,
@@ -360,24 +351,15 @@ export async function resolveExecutionRequirements({
       limit: Math.max(3, intent.requestedCount ?? 3),
       call,
     });
-    const semanticSearchPromise = semanticSearchWithFallback({
-      runtime,
-      allowedToolIds,
-      question: intent.currentTaskText,
-      limit: Math.max(3, intent.requestedCount ?? 3),
-      call,
-    });
-    const [webSearchResult, localWebResearchResult, semanticSearchResult] = await Promise.all([
+    const [webSearchResult, localWebResearchResult] = await Promise.all([
       webSearchPromise,
       localWebResearchPromise,
-      semanticSearchPromise,
     ]);
     context.webSearchResult = webSearchResult;
     context.localWebResearchResult = localWebResearchResult;
-    context.semanticSearchResult = semanticSearchResult;
-    const mergedSearchResult = mergeSearchFanInResults(webSearchResult, localWebResearchResult, semanticSearchResult, intent);
+    const mergedSearchResult = mergeSearchFanInResults(webSearchResult, localWebResearchResult, intent);
     context.searchResult = mergedSearchResult;
-    await appendSearchFanIn(executionContext?.bus, webSearchResult, localWebResearchResult, semanticSearchResult, mergedSearchResult);
+    await appendSearchFanIn(executionContext?.bus, webSearchResult, localWebResearchResult, mergedSearchResult);
     if (mergedSearchResult.status === 'found' && mergedSearchResult.results.length > 0) {
       context.searchCandidates = await fulfillSearchCandidates({
         searchResult: mergedSearchResult,
@@ -677,9 +659,6 @@ function hasAvailableLocalWebResearchPath(runtime: ToolAgentRuntime, allowedTool
   return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.localWebResearch);
 }
 
-function hasAvailableSemanticSearchPath(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): boolean {
-  return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.semanticSearch);
-}
 
 function fallbackSearchToolIds(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): string[] {
   return selectWebSearchAgentTools(allRuntimeDescriptors(runtime), '')
@@ -853,127 +832,26 @@ function normalizeLocalEvidenceChunk(value: unknown): LocalEvidenceChunk | null 
   };
 }
 
-async function semanticSearchWithFallback({
-  runtime,
-  allowedToolIds,
-  question,
-  limit,
-  call,
-}: {
-  runtime: ToolAgentRuntime;
-  allowedToolIds: Set<string>;
-  question: string;
-  limit: number;
-  call: (toolId: string, args: unknown) => Promise<unknown>;
-}): Promise<RdfAgentAnswer | undefined> {
-  if (!isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.semanticSearch)) {
-    return undefined;
-  }
-  return normalizeRdfAgentAnswer(
-    await call(REQUIREMENT_TOOL_IDS.semanticSearch, { question, limit }),
-    question,
-  );
-}
-
-function normalizeRdfAgentAnswer(result: unknown, question: string): RdfAgentAnswer {
-  const parsed = parseStructuredToolOutput(result);
-  if (isRecord(parsed)) {
-    const intent = isRecord(parsed.intent)
-      && typeof parsed.intent.kind === 'string'
-      ? parsed.intent as RdfAgentAnswer['intent']
-      : { kind: 'entitySearch' as const, text: question, limit: 5 };
-    const errors = Array.isArray(parsed.errors)
-      ? parsed.errors
-        .map((error) => {
-          if (!isRecord(error)) return null;
-          const message = typeof error.message === 'string' ? error.message : '';
-          const source = typeof error.source === 'string' ? error.source : undefined;
-          return message ? { ...(source ? { source } : {}), message } : null;
-        })
-        .filter((error): error is RdfAgentAnswer['errors'][number] => Boolean(error))
-      : [];
-    const results = Array.isArray(parsed.results)
-      ? parsed.results
-        .map(normalizeRdfSearchResult)
-        .filter((item): item is RdfSearchResult => Boolean(item))
-      : [];
-    return {
-      query: typeof parsed.query === 'string' ? parsed.query : question,
-      intent,
-      endpointId: typeof parsed.endpointId === 'string' ? parsed.endpointId : undefined,
-      generatedQuery: typeof parsed.generatedQuery === 'string' ? parsed.generatedQuery : undefined,
-      results,
-      errors,
-      elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : 0,
-    };
-  }
-  return {
-    query: question,
-    intent: { kind: 'entitySearch', text: question, limit: 5 },
-    results: [],
-    errors: [{ source: 'semantic-search', message: 'Semantic search did not return a structured result.' }],
-    elapsedMs: 0,
-  };
-}
-
-function normalizeRdfSearchResult(value: unknown): RdfSearchResult | null {
-  if (!isRecord(value)) return null;
-  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined;
-  const title = typeof value.title === 'string' && value.title.trim() ? decodeHtmlEntities(value.title).trim() : undefined;
-  const url = typeof value.url === 'string' && value.url.trim() ? value.url.trim() : undefined;
-  if (!id || !title || !url) return null;
-  const description = typeof value.description === 'string' && value.description.trim()
-    ? decodeHtmlEntities(value.description).trim()
-    : undefined;
-  const source = value.source === 'wikidata' || value.source === 'dbpedia' || value.source === 'overpass'
-    ? value.source
-    : 'wikidata';
-  const sourceName = typeof value.sourceName === 'string' && value.sourceName.trim()
-    ? value.sourceName.trim()
-    : 'Wikidata';
-  const facts = Array.isArray(value.facts)
-    ? value.facts
-      .map((fact) => {
-        if (!isRecord(fact)) return null;
-        const label = typeof fact.label === 'string' ? fact.label.trim() : '';
-        const factValue = typeof fact.value === 'string' ? fact.value.trim() : '';
-        const factUrl = typeof fact.url === 'string' && fact.url.trim() ? fact.url.trim() : undefined;
-        return label && factValue ? { label, value: factValue, ...(factUrl ? { url: factUrl } : {}) } : null;
-      })
-      .filter((fact): fact is NonNullable<RdfSearchResult['facts']>[number] => Boolean(fact))
-    : undefined;
-  return {
-    id,
-    title,
-    url,
-    source,
-    sourceName,
-    ...(description ? { description } : {}),
-    score: typeof value.score === 'number' && Number.isFinite(value.score) ? Math.max(0, Math.min(1, value.score)) : 0.5,
-    ...(facts && facts.length > 0 ? { facts } : {}),
-    raw: value.raw,
-  };
-}
 
 function mergeSearchFanInResults(
   webResult: SearchWebResult,
   localResearch: WebResearchRunResult | undefined,
-  semanticAnswer: RdfAgentAnswer | undefined,
   intent: ExecutionIntent,
 ): SearchWebResult {
   const localItems = localResearch
     ? localResearchToSearchItems(localResearch, intent)
     : [];
-  const semanticItems = semanticAnswer
-    ? semanticResultsToSearchItems(semanticAnswer, intent)
-    : [];
-  if (localItems.length === 0 && semanticItems.length === 0) return webResult;
-  const mergedResults = dedupeSearchItems([...localItems, ...semanticItems, ...webResult.results]);
+  if (localItems.length === 0) return webResult;
+  const mergedResults = dedupeSearchItems([...localItems, ...webResult.results]);
+  const reasons = [
+    webResult.reason,
+    ...(localResearch?.errors.map((error) => error.message) ?? []),
+  ].filter((reason): reason is string => Boolean(reason));
   return {
     status: 'found',
-    query: webResult.query || localResearch?.question || semanticAnswer?.query || intent.currentTaskText,
+    query: webResult.query || localResearch?.question || intent.currentTaskText,
     results: mergedResults,
-    ...(webResult.reason ? { reason: webResult.reason } : {}),
+    ...(reasons.length ? { reason: uniqueStrings(reasons).join(' ') } : {}),
   };
 }
 
@@ -1006,31 +884,6 @@ function localResearchToSearchItems(
   return dedupeSearchItems([...evidenceItems, ...searchItems]);
 }
 
-function semanticResultsToSearchItems(
-  semanticAnswer: RdfAgentAnswer,
-  intent: ExecutionIntent,
-): SearchWebItem[] {
-  return semanticAnswer.results.map((result, index) => {
-    const factText = (result.facts ?? [])
-      .slice(0, 6)
-      .map((fact) => `${fact.label}: ${fact.value}`)
-      .join('; ');
-    const snippet = [
-      `${result.title} is a source-backed semantic RDF result from ${result.sourceName}.`,
-      result.description,
-      factText ? `Facts: ${factText}.` : null,
-      `Semantic source ${result.sourceName} supports this candidate for ${intent.answerSubject}.`,
-      result.url,
-    ].filter(Boolean).join(' ');
-    return {
-      title: result.title,
-      url: result.url,
-      snippet,
-      semanticScore: result.score,
-      semanticRank: index + 1,
-    } as SearchWebItem & { semanticScore: number; semanticRank: number };
-  });
-}
 
 function dedupeSearchItems(items: SearchWebItem[]): SearchWebItem[] {
   const seen = new Set<string>();
@@ -1144,7 +997,8 @@ function resolveAssignedToolOwner(
   if (!assignments) return undefined;
   return Object.entries(assignments)
     .find(([actorId, toolIds]) => (
-      (actorId === WEB_SEARCH_AGENT_ID || actorId === LOCAL_WEB_RESEARCH_AGENT_ID || actorId === RDF_WEB_SEARCH_AGENT_ID)
+      (actorId === WEB_SEARCH_AGENT_ID
+        || actorId === LOCAL_WEB_RESEARCH_AGENT_ID)
       && toolIds.includes(toolId)
     ))
     ?.[0];
@@ -1169,16 +1023,6 @@ function toolOwnerMeta(toolId: string, assignedOwner: string | undefined): Agent
       branchId: `agent:${LOCAL_WEB_RESEARCH_AGENT_ID}`,
       agentLabel: LOCAL_WEB_RESEARCH_AGENT_LABEL,
       modelProvider: 'deterministic-local-web',
-    };
-  }
-  if (assignedOwner === RDF_WEB_SEARCH_AGENT_ID) {
-    return {
-      actorId: RDF_WEB_SEARCH_AGENT_ID,
-      actorRole: 'search-agent',
-      parentActorId: 'execute-plan',
-      branchId: `agent:${RDF_WEB_SEARCH_AGENT_ID}`,
-      agentLabel: RDF_WEB_SEARCH_AGENT_LABEL,
-      modelProvider: 'deterministic-rdf',
     };
   }
   return {
@@ -1619,6 +1463,12 @@ function roundCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function formatJoinedList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
 function extractStatedLocation(text: string): string | undefined {
   const stateWithComma = text.match(/\b([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*,\s*[A-Z]{2})\b/);
   if (stateWithComma) return cleanDisplayLocation(stateWithComma[1]);
@@ -1922,7 +1772,6 @@ async function appendSearchFanIn(
   bus: IAgentBus | undefined,
   webResult: SearchWebResult,
   localResearch: WebResearchRunResult | undefined,
-  semanticAnswer: RdfAgentAnswer | undefined,
   mergedResult: SearchWebResult,
 ): Promise<void> {
   if (!bus || typeof bus.append !== 'function') return;
@@ -1930,22 +1779,22 @@ async function appendSearchFanIn(
   const localErrorText = localResearch?.errors.length
     ? ` Local research errors: ${localResearch.errors.map((error) => error.message).join('; ')}.`
     : '';
-  const semanticResultCount = semanticAnswer?.results.length ?? 0;
-  const semanticErrorText = semanticAnswer?.errors.length
-    ? ` RDF errors: ${semanticAnswer.errors.map((error) => error.message).join('; ')}.`
-    : '';
+  const activeBranches = [
+    'web search',
+    localResearch ? 'local web research' : null,
+  ].filter((branch): branch is string => Boolean(branch));
   const fanInSummaryLines = [
-    localResearch ? 'Fan-in merge combined web search and local web research evidence before candidate reranking.' : null,
-    semanticAnswer ? 'Fan-in merge combined web search and RDF semantic search evidence before candidate reranking.' : null,
-    !localResearch && !semanticAnswer ? 'Fan-in merge used web search evidence before candidate reranking.' : null,
-  ].filter((line): line is string => Boolean(line));
+    activeBranches.length > 1
+      ? `Fan-in merge combined ${formatJoinedList(activeBranches)} evidence before candidate reranking.`
+      : 'Fan-in merge used web search evidence before candidate reranking.',
+  ];
   await bus.append({
     type: PayloadType.InfOut,
     text: [
       ...fanInSummaryLines,
       `Web search status: ${webResult.status}; web results: ${webResult.results.length}.`,
       `Local web research evidence chunks: ${localResultCount}; local search results: ${localResearch?.searchResults.length ?? 0}.${localErrorText}`,
-      `RDF semantic search results: ${semanticResultCount}; merged results: ${mergedResult.results.length}.${semanticErrorText}`,
+      `Merged results: ${mergedResult.results.length}.`,
     ].join('\n'),
     meta: {
       actorId: 'search-fan-in-merger',
@@ -3199,9 +3048,6 @@ function buildSearchTurnContext(context: ResolvedExecutionContext): SearchTurnCo
     sourceQueries: [
       context.webSearchResult?.query ?? context.searchResult.query,
       ...(context.localWebResearchResult?.plannedQueries ?? []).map((query) => `local:${query}`),
-      ...(context.semanticSearchResult?.endpointId
-        ? [`semantic:${context.semanticSearchResult.endpointId}:${context.semanticSearchResult.query}`]
-        : []),
     ],
     requestedCount: intent.requestedCount,
     validationContract: intent.validationContract,

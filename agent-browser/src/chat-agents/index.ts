@@ -52,15 +52,6 @@ export {
   runLocalWebResearchAgent,
   selectLocalWebResearchAgentTools,
 } from './LocalWebResearch';
-export {
-  RDF_SEMANTIC_SEARCH_TOOL_ID,
-  RDF_WEB_SEARCH_AGENT_ID,
-  RDF_WEB_SEARCH_AGENT_LABEL,
-  buildRdfWebSearchAgentPrompt,
-  evaluateRdfWebSearchAgentPolicy,
-  runRdfWebSearchAgent,
-  selectRdfWebSearchAgentTools,
-} from './SemanticSearch';
 export type {
   WebResearchRunRequest,
   WebResearchRunResult,
@@ -69,12 +60,6 @@ export type {
   EvidenceChunk,
   AgentCitation,
 } from './LocalWebResearch';
-export type {
-  AgentAnswer as RdfAgentAnswer,
-  SearchIntent as RdfSearchIntent,
-  SearchResult as RdfSearchResult,
-  SearchSource as RdfSearchSource,
-} from './SemanticSearch';
 export { runAgentLoop, wrapVoterWithCallbacks, type AgentLoopOptions } from './agent-loop';
 export type { AgentProvider, AgentStreamCallbacks, ModelBackedAgentProvider } from './types';
 

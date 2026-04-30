@@ -2,7 +2,6 @@ import type { ToolSet } from 'ai';
 import { tool } from 'ai';
 import { z } from 'zod';
 import { LOCAL_WEB_RESEARCH_TOOL_ID, runLocalWebResearchAgent } from '../chat-agents/LocalWebResearch';
-import { RDF_SEMANTIC_SEARCH_TOOL_ID, runRdfWebSearchAgent } from '../chat-agents/SemanticSearch';
 import { buildToolInstructionsTemplate } from '../services/agentPromptTemplates';
 import { createCliTool } from './cli';
 import type { TerminalExecutorContext } from './types';
@@ -68,15 +67,6 @@ export const DEFAULT_TOOL_DESCRIPTORS: ToolDescriptor[] = [
     subGroup: 'web-search-mcp',
     subGroupLabel: 'Search',
   },
-  {
-    id: RDF_SEMANTIC_SEARCH_TOOL_ID,
-    label: 'Semantic search',
-    description: 'Query public RDF/SPARQL endpoints through checked templates and return normalized semantic evidence.',
-    group: 'web-search-mcp',
-    groupLabel: 'Web Search',
-    subGroup: 'web-search-mcp',
-    subGroupLabel: 'Search',
-  },
 ];
 
 export const DEFAULT_TOOL_IDS: string[] = DEFAULT_TOOL_DESCRIPTORS.map((descriptor) => descriptor.id);
@@ -107,18 +97,6 @@ export function createDefaultTools(context: TerminalExecutorContext): ToolSet {
         ...(maxEvidenceChunks !== undefined ? { maxEvidenceChunks } : {}),
         ...(synthesize !== undefined ? { synthesize } : {}),
         ...(searxngBaseUrl !== undefined ? { searxngBaseUrl } : {}),
-      }),
-    }),
-    [RDF_SEMANTIC_SEARCH_TOOL_ID]: tool({
-      description: 'Search public RDF/SPARQL endpoints with checked templates and normalized citations.',
-      inputSchema: z.object({
-        question: z.string().trim().min(1).max(500),
-        limit: z.number().int().positive().max(25).optional(),
-        endpointUrl: z.string().url().optional(),
-      }),
-      execute: async ({ question, limit, endpointUrl }) => runRdfWebSearchAgent(question, {
-        ...(limit !== undefined ? { defaultLimit: limit } : {}),
-        ...(endpointUrl !== undefined ? { endpointUrl } : {}),
       }),
     }),
   } as ToolSet;
