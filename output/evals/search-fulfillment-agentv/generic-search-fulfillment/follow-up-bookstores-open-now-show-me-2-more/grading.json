@@ -1,0 +1,1304 @@
+{
+  "assertions": [
+    {
+      "text": "Found webmcp:recall_user_context at position 1",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Found webmcp:search_web at position 3",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Found search-analyzer at position 5",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Found webmcp:read_web_page at position 6",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Found validation-agent at position 7",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Found post-processor at position 10",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Found verification-agent at position 19",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Tool calls 21 <= 40 max",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Total tokens 628 <= 5000 max",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "Duration 21ms <= 30000ms max",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "tool trajectory is scored by the AgentV tool-trajectory evaluator",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "answer renders at least 2 requested entities",
+      "passed": true,
+      "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+    },
+    {
+      "text": "answer contains expected entity Barnes & Noble Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer links expected entity Barnes & Noble Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer contains expected entity Half Price Books Palatine",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer links expected entity Half Price Books Palatine",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer contains expected entity The Book Stall",
+      "passed": false,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer links expected entity The Book Stall",
+      "passed": false,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer includes location evidence Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer includes location evidence Palatine near Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "answer includes location evidence Winnetka near Arlington Heights",
+      "passed": false,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome At Home is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Movie Charts is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Movie News is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Movies is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Theaters is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome TV Shows is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome FanStore is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Streaming is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Coming Soon is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Skip to Main Content is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Moviefone TV is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Sign In/Join is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome FanClub is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Fandango Ticketing Theaters My is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Featured Movie Animal Farm is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Movie Showimes is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome IL 60004 Update Zipcode Monday is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Showtimes is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Tickets is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Reviews is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Menu is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Directions is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Support Enable is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Join Now Enable is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Enable dark mode is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Shop Categories is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome About Us is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "forbidden page chrome Chicago Bound is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "excluded prior candidate Anderson's Bookshop is not rendered again",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "validation contract count:min-results",
+      "passed": true,
+      "evidence": "2/2 labels: Barnes & Noble Arlington Heights, Half Price Books Palatine"
+    },
+    {
+      "text": "validation contract subject:entity-type",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "validation contract link:entity-specific",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "validation contract source:evidence",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "validation contract chrome:no-page-labels",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "validation contract location:arlington-heights-il",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "validation contract exclude:prior-candidates",
+      "passed": true,
+      "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+    },
+    {
+      "text": "[actual-entity-names] The answer lists actual named real-world entities of the requested subject, not page chrome, navigation text, content titles, source categories, or generic listing titles. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, an honest insufficient-evidence answer with no fabricated entity list satisfies this criterion.",
+      "passed": true,
+      "evidence": "The candidate satisfies actual-entity-names for this deterministic AgentEvals case."
+    },
+    {
+      "text": "[requested-subject-match] Every listed item matches the current request subject and does not leak stale subjects from prior turns. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, there may be no listed items, but the insufficiency message must still name the current requested subject.",
+      "passed": true,
+      "evidence": "The candidate satisfies requested-subject-match for this deterministic AgentEvals case."
+    },
+    {
+      "text": "[geographic-evidence] Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, the answer must explain that location/proximity-backed evidence was insufficient rather than listing unsupported items.",
+      "passed": true,
+      "evidence": "The candidate satisfies geographic-evidence for this deterministic AgentEvals case."
+    },
+    {
+      "text": "[source-backed-links] Entity names are linked to source-backed entity-specific URLs when those URLs are available. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, the answer may omit entity links only because it is refusing to publish unsupported entities.",
+      "passed": true,
+      "evidence": "The candidate satisfies source-backed-links for this deterministic AgentEvals case."
+    },
+    {
+      "text": "[page-chrome-rejection] Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities. Honest insufficient-evidence answers pass this criterion only when none of those labels are rendered as entities.",
+      "passed": true,
+      "evidence": "The candidate satisfies page-chrome-rejection for this deterministic AgentEvals case."
+    },
+    {
+      "text": "[compiled-validation-contract] The answer satisfies every required constraint in the emitted validationContract, including arbitrary count, subject, location, exclusion, name-prefix/name-suffix, rhyme, source-evidence, and link constraints; partial or impossible cases pass only when unmet constraints are explicitly acknowledged.",
+      "passed": true,
+      "evidence": "The candidate satisfies compiled-validation-contract for this deterministic AgentEvals case."
+    },
+    {
+      "text": "Final answer contains source-backed requested entities or blocks the known bad answer.",
+      "passed": true,
+      "evidence": "Final answer contains linked entity names. Final answer does not render known page chrome labels as entities. Verifier behavior matches the case expectation. Final answer satisfies the emitted validation contract."
+    },
+    {
+      "text": "Final answer does not publish page chrome as requested entities.",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Pala"
+    },
+    {
+      "text": "4/4 evaluators passed (threshold: 1)",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found webmcp:recall_user_context at position 1",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found webmcp:search_web at position 3",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found search-analyzer at position 5",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found webmcp:read_web_page at position 6",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found validation-agent at position 7",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found post-processor at position 10",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-tool-path] Found verification-agent at position 19",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-output-quality] tool trajectory is scored by the AgentV tool-trajectory evaluator",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-output-quality] answer renders at least 2 requested entities",
+      "passed": true,
+      "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+    },
+    {
+      "text": "[composite-output-quality] answer contains expected entity Barnes & Noble Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer links expected entity Barnes & Noble Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer contains expected entity Half Price Books Palatine",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer links expected entity Half Price Books Palatine",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer contains expected entity The Book Stall",
+      "passed": false,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer links expected entity The Book Stall",
+      "passed": false,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer includes location evidence Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer includes location evidence Palatine near Arlington Heights",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] answer includes location evidence Winnetka near Arlington Heights",
+      "passed": false,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome At Home is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Movie Charts is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Movie News is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Movies is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Theaters is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome TV Shows is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome FanStore is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Streaming is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Coming Soon is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Skip to Main Content is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Moviefone TV is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Sign In/Join is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome FanClub is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Fandango Ticketing Theaters My is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Featured Movie Animal Farm is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Movie Showimes is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome IL 60004 Update Zipcode Monday is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Showtimes is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Tickets is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Reviews is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Menu is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Directions is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Support Enable is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Join Now Enable is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Enable dark mode is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Shop Categories is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome About Us is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] forbidden page chrome Chicago Bound is not rendered as an entity",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] excluded prior candidate Anderson's Bookshop is not rendered again",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] validation contract count:min-results",
+      "passed": true,
+      "evidence": "2/2 labels: Barnes & Noble Arlington Heights, Half Price Books Palatine"
+    },
+    {
+      "text": "[composite-output-quality] validation contract subject:entity-type",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] validation contract link:entity-specific",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] validation contract source:evidence",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] validation contract chrome:no-page-labels",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] validation contract location:arlington-heights-il",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+    },
+    {
+      "text": "[composite-output-quality] validation contract exclude:prior-candidates",
+      "passed": true,
+      "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+    },
+    {
+      "text": "[composite-llm-judge] Final answer contains source-backed requested entities or blocks the known bad answer.",
+      "passed": true,
+      "evidence": "Final answer contains linked entity names. Final answer does not render known page chrome labels as entities. Verifier behavior matches the case expectation. Final answer satisfies the emitted validation contract."
+    },
+    {
+      "text": "[composite-llm-judge] Final answer does not publish page chrome as requested entities.",
+      "passed": true,
+      "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Pala"
+    },
+    {
+      "text": "[composite-bounded-work] Tool calls 21 <= 40 max",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-bounded-work] Total tokens 628 <= 5000 max",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "[composite-bounded-work] Duration 21ms <= 30000ms max",
+      "passed": true,
+      "evidence": ""
+    }
+  ],
+  "summary": {
+    "passed": 119,
+    "failed": 6,
+    "total": 125,
+    "pass_rate": 0.952
+  },
+  "execution_metrics": {
+    "tool_calls": {},
+    "total_tool_calls": 0,
+    "errors_encountered": 0
+  },
+  "graders": [
+    {
+      "name": "tool-path",
+      "type": "tool-trajectory",
+      "score": 1,
+      "reasoning": "",
+      "weight": 1,
+      "verdict": "pass",
+      "assertions": [
+        {
+          "text": "Found webmcp:recall_user_context at position 1",
+          "passed": true
+        },
+        {
+          "text": "Found webmcp:search_web at position 3",
+          "passed": true
+        },
+        {
+          "text": "Found search-analyzer at position 5",
+          "passed": true
+        },
+        {
+          "text": "Found webmcp:read_web_page at position 6",
+          "passed": true
+        },
+        {
+          "text": "Found validation-agent at position 7",
+          "passed": true
+        },
+        {
+          "text": "Found post-processor at position 10",
+          "passed": true
+        },
+        {
+          "text": "Found verification-agent at position 19",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "bounded-work",
+      "type": "execution-metrics",
+      "score": 1,
+      "reasoning": "",
+      "weight": 1,
+      "verdict": "pass",
+      "assertions": [
+        {
+          "text": "Tool calls 21 <= 40 max",
+          "passed": true
+        },
+        {
+          "text": "Total tokens 628 <= 5000 max",
+          "passed": true
+        },
+        {
+          "text": "Duration 21ms <= 30000ms max",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "name": "output-quality",
+      "type": "code-grader",
+      "score": 0.9361702127659575,
+      "reasoning": "",
+      "weight": 1,
+      "verdict": "pass",
+      "assertions": [
+        {
+          "text": "tool trajectory is scored by the AgentV tool-trajectory evaluator",
+          "passed": true
+        },
+        {
+          "text": "answer renders at least 2 requested entities",
+          "passed": true,
+          "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+        },
+        {
+          "text": "answer contains expected entity Barnes & Noble Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer links expected entity Barnes & Noble Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer contains expected entity Half Price Books Palatine",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer links expected entity Half Price Books Palatine",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer contains expected entity The Book Stall",
+          "passed": false,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer links expected entity The Book Stall",
+          "passed": false,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer includes location evidence Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer includes location evidence Palatine near Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "answer includes location evidence Winnetka near Arlington Heights",
+          "passed": false,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome At Home is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Movie Charts is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Movie News is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Movies is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Theaters is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome TV Shows is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome FanStore is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Streaming is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Coming Soon is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Skip to Main Content is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Moviefone TV is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Sign In/Join is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome FanClub is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Fandango Ticketing Theaters My is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Featured Movie Animal Farm is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Movie Showimes is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome IL 60004 Update Zipcode Monday is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Showtimes is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Tickets is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Reviews is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Menu is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Directions is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Support Enable is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Join Now Enable is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Enable dark mode is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Shop Categories is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome About Us is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "forbidden page chrome Chicago Bound is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "excluded prior candidate Anderson's Bookshop is not rendered again",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "validation contract count:min-results",
+          "passed": true,
+          "evidence": "2/2 labels: Barnes & Noble Arlington Heights, Half Price Books Palatine"
+        },
+        {
+          "text": "validation contract subject:entity-type",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "validation contract link:entity-specific",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "validation contract source:evidence",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "validation contract chrome:no-page-labels",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "validation contract location:arlington-heights-il",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "validation contract exclude:prior-candidates",
+          "passed": true,
+          "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+        }
+      ]
+    },
+    {
+      "name": "actual-entity-rubric",
+      "type": "llm-grader",
+      "score": 1,
+      "reasoning": "",
+      "weight": 1,
+      "verdict": "pass",
+      "assertions": [
+        {
+          "text": "[actual-entity-names] The answer lists actual named real-world entities of the requested subject, not page chrome, navigation text, content titles, source categories, or generic listing titles. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, an honest insufficient-evidence answer with no fabricated entity list satisfies this criterion.",
+          "passed": true,
+          "evidence": "The candidate satisfies actual-entity-names for this deterministic AgentEvals case."
+        },
+        {
+          "text": "[requested-subject-match] Every listed item matches the current request subject and does not leak stale subjects from prior turns. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, there may be no listed items, but the insufficiency message must still name the current requested subject.",
+          "passed": true,
+          "evidence": "The candidate satisfies requested-subject-match for this deterministic AgentEvals case."
+        },
+        {
+          "text": "[geographic-evidence] Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, the answer must explain that location/proximity-backed evidence was insufficient rather than listing unsupported items.",
+          "passed": true,
+          "evidence": "The candidate satisfies geographic-evidence for this deterministic AgentEvals case."
+        },
+        {
+          "text": "[source-backed-links] Entity names are linked to source-backed entity-specific URLs when those URLs are available. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, the answer may omit entity links only because it is refusing to publish unsupported entities.",
+          "passed": true,
+          "evidence": "The candidate satisfies source-backed-links for this deterministic AgentEvals case."
+        },
+        {
+          "text": "[page-chrome-rejection] Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities. Honest insufficient-evidence answers pass this criterion only when none of those labels are rendered as entities.",
+          "passed": true,
+          "evidence": "The candidate satisfies page-chrome-rejection for this deterministic AgentEvals case."
+        },
+        {
+          "text": "[compiled-validation-contract] The answer satisfies every required constraint in the emitted validationContract, including arbitrary count, subject, location, exclusion, name-prefix/name-suffix, rhyme, source-evidence, and link constraints; partial or impossible cases pass only when unmet constraints are explicitly acknowledged.",
+          "passed": true,
+          "evidence": "The candidate satisfies compiled-validation-contract for this deterministic AgentEvals case."
+        }
+      ]
+    },
+    {
+      "name": "actual-entity-llm-judge",
+      "type": "llm-grader",
+      "score": 1,
+      "reasoning": "",
+      "weight": 1,
+      "verdict": "pass",
+      "assertions": [
+        {
+          "text": "Final answer contains source-backed requested entities or blocks the known bad answer.",
+          "passed": true,
+          "evidence": "Final answer contains linked entity names. Final answer does not render known page chrome labels as entities. Verifier behavior matches the case expectation. Final answer satisfies the emitted validation contract."
+        },
+        {
+          "text": "Final answer does not publish page chrome as requested entities.",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Pala"
+        }
+      ]
+    },
+    {
+      "name": "search-quality-composite",
+      "type": "composite",
+      "score": 1,
+      "reasoning": "",
+      "weight": 1,
+      "verdict": "pass",
+      "assertions": [
+        {
+          "text": "4/4 evaluators passed (threshold: 1)",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found webmcp:recall_user_context at position 1",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found webmcp:search_web at position 3",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found search-analyzer at position 5",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found webmcp:read_web_page at position 6",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found validation-agent at position 7",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found post-processor at position 10",
+          "passed": true
+        },
+        {
+          "text": "[composite-tool-path] Found verification-agent at position 19",
+          "passed": true
+        },
+        {
+          "text": "[composite-output-quality] tool trajectory is scored by the AgentV tool-trajectory evaluator",
+          "passed": true
+        },
+        {
+          "text": "[composite-output-quality] answer renders at least 2 requested entities",
+          "passed": true,
+          "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+        },
+        {
+          "text": "[composite-output-quality] answer contains expected entity Barnes & Noble Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer links expected entity Barnes & Noble Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer contains expected entity Half Price Books Palatine",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer links expected entity Half Price Books Palatine",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer contains expected entity The Book Stall",
+          "passed": false,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer links expected entity The Book Stall",
+          "passed": false,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer includes location evidence Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer includes location evidence Palatine near Arlington Heights",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] answer includes location evidence Winnetka near Arlington Heights",
+          "passed": false,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome At Home is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Movie Charts is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Movie News is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Movies is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Theaters is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome TV Shows is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome FanStore is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Streaming is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Coming Soon is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Skip to Main Content is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Moviefone TV is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Sign In/Join is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome FanClub is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Fandango Ticketing Theaters My is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Featured Movie Animal Farm is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Movie Showimes is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome IL 60004 Update Zipcode Monday is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Showtimes is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Tickets is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Reviews is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Menu is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Directions is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Support Enable is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Join Now Enable is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Enable dark mode is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Shop Categories is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome About Us is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] forbidden page chrome Chicago Bound is not rendered as an entity",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] excluded prior candidate Anderson's Bookshop is not rendered again",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] validation contract count:min-results",
+          "passed": true,
+          "evidence": "2/2 labels: Barnes & Noble Arlington Heights, Half Price Books Palatine"
+        },
+        {
+          "text": "[composite-output-quality] validation contract subject:entity-type",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] validation contract link:entity-specific",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] validation contract source:evidence",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] validation contract chrome:no-page-labels",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] validation contract location:arlington-heights-il",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Palatine near Arlington Heights."
+        },
+        {
+          "text": "[composite-output-quality] validation contract exclude:prior-candidates",
+          "passed": true,
+          "evidence": "Barnes & Noble Arlington Heights, Half Price Books Palatine"
+        },
+        {
+          "text": "[composite-llm-judge] Final answer contains source-backed requested entities or blocks the known bad answer.",
+          "passed": true,
+          "evidence": "Final answer contains linked entity names. Final answer does not render known page chrome labels as entities. Verifier behavior matches the case expectation. Final answer satisfies the emitted validation contract."
+        },
+        {
+          "text": "[composite-llm-judge] Final answer does not publish page chrome as requested entities.",
+          "passed": true,
+          "evidence": "Here are bookstores near Arlington Heights, IL:\n\n1. [Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089) - Why: Barnes & Noble Arlington Heights is a bookstores with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032) - Why: Half Price Books Palatine is a bookstores with source-backed location evidence in Pala"
+        },
+        {
+          "text": "[composite-bounded-work] Tool calls 21 <= 40 max",
+          "passed": true
+        },
+        {
+          "text": "[composite-bounded-work] Total tokens 628 <= 5000 max",
+          "passed": true
+        },
+        {
+          "text": "[composite-bounded-work] Duration 21ms <= 30000ms max",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

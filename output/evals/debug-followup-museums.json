@@ -1,0 +1,412 @@
+{
+  "output": [
+    {
+      "role": "assistant",
+      "content": "Here are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\n3. [Kohl Children's Museum](https://www.kohlchildrensmuseum.org/) - Why: Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights.",
+      "tool_calls": [
+        {
+          "id": "call-1-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Policy · validation-contract",
+            "payloadType": "Policy"
+          },
+          "timestamp": "1970-01-01T00:00:00.001Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-contract\",\"actorId\":\"validation-agent\",\"requiredLoops\":[{\"id\":\"recursive-tool-call-validation\",\"appliesTo\":\"every executor tool call result\",\"requiredBefore\":\"using the result for follow-up tool calls, candidate selection, or answer composition\"},{\"id\":\"post-processing-output-validation\",\"appliesTo\":\"every post-processor draft and final user-facing output\",\"requiredBefore\":\"response-ready\"}],\"criteria\":[\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"]}"
+        },
+        {
+          "id": "execution-requirement-1",
+          "tool": "webmcp:recall_user_context",
+          "input": {
+            "limit": 10
+          },
+          "timestamp": "1970-01-01T00:00:00.002Z",
+          "duration_ms": 1,
+          "output": {
+            "status": "found",
+            "query": "location",
+            "memories": [
+              {
+                "id": "location.city",
+                "label": "Saved city",
+                "value": "Arlington Heights, IL",
+                "source": "workspace-memory",
+                "updatedAt": "2026-04-26T00:00:00.000Z"
+              }
+            ]
+          }
+        },
+        {
+          "id": "call-3-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-tool-call-1-webmcp-recall_user_context",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.003Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"recursive-tool-call-validation\",\"scope\":\"tool-call\",\"toolId\":\"webmcp:recall_user_context\",\"step\":1,\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validate this tool result before any follow-up tool call consumes it.\",\"Tool result must be structured enough to support the next action.\",\"Tool result must not be an execution error unless the executor is returning failure to LogAct.\",\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"args\":{\"limit\":10},\"outputPreview\":\"{\\n  \\\"status\\\": \\\"found\\\",\\n  \\\"query\\\": \\\"location\\\",\\n  \\\"memories\\\": [\\n    {\\n      \\\"id\\\": \\\"location.city\\\",\\n      \\\"label\\\": \\\"Saved city\\\",\\n      \\\"value\\\": \\\"Arlington Heights, IL\\\",\\n      \\\"source\\\": \\\"workspace-memory\\\",\\n      \\\"updatedAt\\\": \\\"2026-04-26T00:00:00.000Z\\\"\\n    }\\n  ]\\n}\"}"
+        },
+        {
+          "id": "execution-requirement-2",
+          "tool": "webmcp:search_web",
+          "input": {
+            "query": "best museums Arlington Heights IL",
+            "limit": 3
+          },
+          "timestamp": "1970-01-01T00:00:00.004Z",
+          "duration_ms": 1,
+          "output": {
+            "status": "found",
+            "query": "best museums Arlington Heights IL",
+            "results": [
+              {
+                "title": "best museums near Arlington Heights, IL - Source Directory",
+                "url": "https://fixtures.agent-browser.test/museums/best/listing",
+                "snippet": "Source listing for museums near Arlington Heights, IL. Read the page to validate entity names and reject page chrome."
+              }
+            ]
+          }
+        },
+        {
+          "id": "call-5-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-tool-call-2-webmcp-search_web",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.005Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"recursive-tool-call-validation\",\"scope\":\"tool-call\",\"toolId\":\"webmcp:search_web\",\"step\":2,\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validate this tool result before any follow-up tool call consumes it.\",\"Tool result must be structured enough to support the next action.\",\"Tool result must not be an execution error unless the executor is returning failure to LogAct.\",\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"args\":{\"query\":\"best museums Arlington Heights IL\",\"limit\":3},\"outputPreview\":\"{\\n  \\\"status\\\": \\\"found\\\",\\n  \\\"query\\\": \\\"best museums Arlington Heights IL\\\",\\n  \\\"results\\\": [\\n    {\\n      \\\"title\\\": \\\"best museums near Arlington Heights, IL - Source Directory\\\",\\n      \\\"url\\\": \\\"https://fixtures.agent-browser.test/museums/best/listing\\\",\\n      \\\"snippet\\\": \\\"Source listing for museums near Arlington Heights, IL. Read the page to validate entity names and reject page chrome.\\\"\\n    }\\n  ]\\n}\"}"
+        },
+        {
+          "id": "call-6-search-analyzer",
+          "tool": "search-analyzer",
+          "input": {
+            "summary": "InfOut",
+            "payloadType": "InfOut"
+          },
+          "timestamp": "1970-01-01T00:00:00.006Z",
+          "duration_ms": 1,
+          "output": "Search analyzer reviewed best museums Arlington Heights IL.\nDecision: read-pages.\nRationale: Search returned aggregate/listing pages without reliable entity names; read source pages before selecting candidates.\nAccepted: none\nRejected fragments: none"
+        },
+        {
+          "id": "execution-requirement-3",
+          "tool": "webmcp:read_web_page",
+          "input": {
+            "url": "https://fixtures.agent-browser.test/museums/best/listing"
+          },
+          "timestamp": "1970-01-01T00:00:00.007Z",
+          "duration_ms": 1,
+          "output": {
+            "status": "read",
+            "url": "https://fixtures.agent-browser.test/museums/best/listing",
+            "title": "museums near Arlington Heights, IL",
+            "text": "At Home. Movie Charts. Movie News. Movies. Theaters. TV Shows. FanStore. Streaming. Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights.. Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.. Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights.",
+            "links": [
+              {
+                "text": "At Home",
+                "url": "https://fixtures.agent-browser.test/chrome/at-home"
+              },
+              {
+                "text": "Movie Charts",
+                "url": "https://fixtures.agent-browser.test/chrome/movie-charts"
+              },
+              {
+                "text": "Movie News",
+                "url": "https://fixtures.agent-browser.test/chrome/movie-news"
+              },
+              {
+                "text": "Movies",
+                "url": "https://fixtures.agent-browser.test/chrome/movies"
+              },
+              {
+                "text": "Theaters",
+                "url": "https://fixtures.agent-browser.test/chrome/theaters"
+              },
+              {
+                "text": "TV Shows",
+                "url": "https://fixtures.agent-browser.test/chrome/tv-shows"
+              },
+              {
+                "text": "FanStore",
+                "url": "https://fixtures.agent-browser.test/chrome/fanstore"
+              },
+              {
+                "text": "Streaming",
+                "url": "https://fixtures.agent-browser.test/chrome/streaming"
+              },
+              {
+                "text": "Coming Soon",
+                "url": "https://fixtures.agent-browser.test/chrome/coming-soon"
+              },
+              {
+                "text": "Skip to Main Content",
+                "url": "https://fixtures.agent-browser.test/chrome/skip-to-main-content"
+              },
+              {
+                "text": "Moviefone TV",
+                "url": "https://fixtures.agent-browser.test/chrome/moviefone-tv"
+              },
+              {
+                "text": "Sign In/Join",
+                "url": "https://fixtures.agent-browser.test/chrome/sign-in-join"
+              },
+              {
+                "text": "Arlington Heights Historical Museum",
+                "url": "https://www.ahmuseum.org/"
+              },
+              {
+                "text": "Illinois Holocaust Museum",
+                "url": "https://www.ilholocaustmuseum.org/"
+              },
+              {
+                "text": "Kohl Children's Museum",
+                "url": "https://www.kohlchildrensmuseum.org/"
+              }
+            ],
+            "jsonLd": [],
+            "entities": [
+              {
+                "name": "At Home",
+                "url": "https://fixtures.agent-browser.test/chrome/at-home",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Movie Charts",
+                "url": "https://fixtures.agent-browser.test/chrome/movie-charts",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Movie News",
+                "url": "https://fixtures.agent-browser.test/chrome/movie-news",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Movies",
+                "url": "https://fixtures.agent-browser.test/chrome/movies",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Theaters",
+                "url": "https://fixtures.agent-browser.test/chrome/theaters",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "TV Shows",
+                "url": "https://fixtures.agent-browser.test/chrome/tv-shows",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "FanStore",
+                "url": "https://fixtures.agent-browser.test/chrome/fanstore",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Streaming",
+                "url": "https://fixtures.agent-browser.test/chrome/streaming",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Coming Soon",
+                "url": "https://fixtures.agent-browser.test/chrome/coming-soon",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Skip to Main Content",
+                "url": "https://fixtures.agent-browser.test/chrome/skip-to-main-content",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Moviefone TV",
+                "url": "https://fixtures.agent-browser.test/chrome/moviefone-tv",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Sign In/Join",
+                "url": "https://fixtures.agent-browser.test/chrome/sign-in-join",
+                "evidence": "page navigation or content bucket link"
+              },
+              {
+                "name": "Arlington Heights Historical Museum",
+                "url": "https://www.ahmuseum.org/",
+                "evidence": "Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights."
+              },
+              {
+                "name": "Illinois Holocaust Museum",
+                "url": "https://www.ilholocaustmuseum.org/",
+                "evidence": "Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights."
+              },
+              {
+                "name": "Kohl Children's Museum",
+                "url": "https://www.kohlchildrensmuseum.org/",
+                "evidence": "Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights."
+              }
+            ]
+          }
+        },
+        {
+          "id": "call-8-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-tool-call-3-webmcp-read_web_page",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.008Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"recursive-tool-call-validation\",\"scope\":\"tool-call\",\"toolId\":\"webmcp:read_web_page\",\"step\":3,\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validate this tool result before any follow-up tool call consumes it.\",\"Tool result must be structured enough to support the next action.\",\"Tool result must not be an execution error unless the executor is returning failure to LogAct.\",\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"args\":{\"url\":\"https://fixtures.agent-browser.test/museums/best/listing\"},\"outputPreview\":\"{\\n  \\\"status\\\": \\\"read\\\",\\n  \\\"url\\\": \\\"https://fixtures.agent-browser.test/museums/best/listing\\\",\\n  \\\"title\\\": \\\"museums near Arlington Heights, IL\\\",\\n  \\\"text\\\": \\\"At Home. Movie Charts. Movie News. Movies. Theaters. TV Shows. FanStore. Streaming. Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights.. Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.. Kohl Children's Museum is a museums with s...\"}"
+        },
+        {
+          "id": "call-9-search-analyzer",
+          "tool": "search-analyzer",
+          "input": {
+            "summary": "InfOut",
+            "payloadType": "InfOut"
+          },
+          "timestamp": "1970-01-01T00:00:00.009Z",
+          "duration_ms": 1,
+          "output": "Search analyzer reviewed page-read evidence.\nDecision: read-pages.\nRationale: Search returned aggregate/listing pages with candidate names; read source pages before final candidate selection.\nAccepted: Arlington Heights Historical Museum, Illinois Holocaust Museum, Kohl Children's Museum\nRejected fragments: none"
+        },
+        {
+          "id": "call-10-search-analyzer",
+          "tool": "search-analyzer",
+          "input": {
+            "summary": "Result · validated-candidates-best-museums-Arlington-Heights-IL",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.010Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validated-search-candidates\",\"source\":\"best museums Arlington Heights IL\",\"requestedCount\":3,\"acceptedCount\":3,\"missingCount\":0,\"candidates\":[{\"name\":\"Arlington Heights Historical Museum\",\"validationStatus\":\"accepted\",\"subjectMatch\":true,\"locationEvidence\":[\"Found on the search result source page for Arlington Heights, IL.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights..\"],\"entityLink\":\"https://www.ahmuseum.org/\",\"sourceEvidence\":[\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights..\",\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights..\"],\"reasons\":[\"Found on the search result source page for Arlington Heights, IL.\"]},{\"name\":\"Illinois Holocaust Museum\",\"validationStatus\":\"accepted\",\"subjectMatch\":true,\"locationEvidence\":[\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights..\",\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights..\"],\"entityLink\":\"https://www.ilholocaustmuseum.org/\",\"sourceEvidence\":[\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights..\",\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights..\"],\"reasons\":[\"Found on the search result source page for Arlington Heights, IL.\"]},{\"name\":\"Kohl Children's Museum\",\"validationStatus\":\"accepted\",\"subjectMatch\":true,\"locationEvidence\":[\"Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights..\",\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights..\"],\"entityLink\":\"https://www.kohlchildrensmuseum.org/\",\"sourceEvidence\":[\"Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights.\",\"Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights..\",\"Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights..\"],\"reasons\":[\"Found on the search result source page for Arlington Heights, IL.\"]}],\"rejected\":[{\"name\":\"At Home\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"At Home.\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\"]},{\"name\":\"Movie Charts\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"Movie Charts.\",\"Movie News.\",\"Movies.\"]},{\"name\":\"Movie News\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"Movie Charts.\",\"Movie News.\",\"Movies.\"]},{\"name\":\"Movies\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"Movie Charts.\",\"Movie News.\",\"Movies.\"]},{\"name\":\"Theaters\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"Theaters.\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\"]},{\"name\":\"TV Shows\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"TV Shows.\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\"]},{\"name\":\"FanStore\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"FanStore.\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\"]},{\"name\":\"Streaming\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"Streaming.\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\"]},{\"name\":\"Coming Soon\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\",\"Source listing for museums near Arlington Heights, IL. Read the page to validate entity names and reject page chrome.\"]},{\"name\":\"Skip to Main Content\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\",\"Source listing for museums near Arlington Heights, IL. Read the page to validate entity names and reject page chrome.\"]},{\"name\":\"Moviefone TV\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\",\"Source listing for museums near Arlington Heights, IL. Read the page to validate entity names and reject page chrome.\"]},{\"name\":\"Sign In/Join\",\"validationStatus\":\"rejected\",\"validationFailures\":[\"candidate label is a generic page, navigation, category, or content label\"],\"evidence\":[\"page navigation or content bucket link\",\"museums near Arlington Heights, IL\",\"best museums near Arlington Heights, IL - Source Directory\",\"Source listing for museums near Arlington Heights, IL. Read the page to validate entity names and reject page chrome.\"]}]}"
+        },
+        {
+          "id": "call-11-post-processor",
+          "tool": "post-processor",
+          "input": {
+            "summary": "InfIn · 3 message(s)",
+            "payloadType": "InfIn"
+          },
+          "timestamp": "1970-01-01T00:00:00.011Z",
+          "duration_ms": 1,
+          "output": "system: Post-processing agent pass 1: inspect the entire AgentBus and render the final answer.\nChoose the best response surface available for the output: A2UI, AGUI, MCP-Apps, markdown, enriched text, or regular text.\nSelected render mode: markdown.\nUser memory preference: no citation preference detected.\nSelf-reflect exactly 3 times before publishing the response.\n\nsystem: AgentBus context:\n24. conversation-context InfOut: Conversation context resolved task: best museums near Arlington Heights IL.\nInherited subject: museums.\nInherited location: Arlington Heights IL.\nExcluded prior candidates: Des Plaines History Center.\nCurrent subject: museums.\n25. webmcp:recall_user_context Result · executor-tool-1-webmcp-recall_user_context: {\n  \"status\": \"found\",\n  \"query\": \"location\",\n  \"memories\": [\n    {\n      \"id\": \"location.city\",\n      \"label\": \"Saved city\",\n      \"value\": \"Arlington Heights, IL\",\n      \"source\": \"workspace-memory\",\n      \"updatedAt\": \"2026-04-26T00:0...\n26. validation-agent Result · validate-tool-call-1-webmcp-recall_user_context: {\"type\":\"validation-result\",\"loop\":\"recursive-tool-call-validation\",\"scope\":\"tool-call\",\"toolId\":\"webmcp:recall_user_context\",\"step\":1,\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validate this tool result before any follow...\n27. webmcp:search_web Result · executor-tool-2-webmcp-search_web: {\n  \"status\": \"found\",\n  \"query\": \"best museums Arlington Heights IL\",\n  \"results\": [\n    {\n      \"title\": \"best museums near Arlington Heights, IL - Source Directory\",\n      \"url\": \"https://fixtures.agent-browser.test/museums/best/listi...\n28. validation-agent Result · validate-tool-call-2-webmcp-search_web: {\"type\":\"validation-result\",\"loop\":\"recursive-tool-call-validation\",\"scope\":\"tool-call\",\"toolId\":\"webmcp:search_web\",\"step\":2,\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validate this tool result before any follow-up tool ...\n29. search-analyzer InfOut: Search analyzer reviewed best museums Arlington Heights IL.\nDecision: read-pages.\nRationale: Search returned aggregate/listing pages without reliable entity names; read source pages before selecting candidates.\nAccepted: none\nRejected fr...\n30. webmcp:read_web_page Result · executor-tool-3-webmcp-read_web_page: {\n  \"status\": \"read\",\n  \"url\": \"https://fixtures.agent-browser.test/museums/best/listing\",\n  \"title\": \"museums near Arlington Heights, IL\",\n  \"text\": \"At Home. Movie Charts. Movie News. Movies. Theaters. TV Shows. FanStore. Streaming. Ar...\n31. validation-agent Result · validate-tool-call-3-webmcp-read_web_page: {\"type\":\"validation-result\",\"loop\":\"recursive-tool-call-validation\",\"scope\":\"tool-call\",\"toolId\":\"webmcp:read_web_page\",\"step\":3,\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validate this tool result before any follow-up to...\n32. search-analyzer InfOut: Search analyzer reviewed page-read evidence.\nDecision: read-pages.\nRationale: Search returned aggregate/listing pages with candidate names; read source pages before final candidate selection.\nAccepted: Arlington Heights Historical Museum...\n33. search-analyzer Result · validated-candidates-best-museums-Arlington-Heights-IL: {\"type\":\"validated-search-candidates\",\"source\":\"best museums Arlington Heights IL\",\"requestedCount\":3,\"acceptedCount\":3,\"missingCount\":0,\"candidates\":[{\"name\":\"Arlington Heights Historical Museum\",\"validationStatus\":\"accepted\",\"subjectMa...\n34. executor Result · execute-plan-student-p1-revision-1-moism6t6: Here are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location...\n35. execution-complete Completion · execute-plan-student-p1-revision-1-moism6t6 ✓: Executor returned the action result to LogAct.\n\nuser: Original user request: show me 3 more\n\nExecutor output:\nHere are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\n3. [Kohl Children's Museum](https://www.kohlchildrensmuseum.org/) - Why: Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights."
+        },
+        {
+          "id": "call-12-post-processor",
+          "tool": "post-processor",
+          "input": {
+            "summary": "InfOut",
+            "payloadType": "InfOut"
+          },
+          "timestamp": "1970-01-01T00:00:00.012Z",
+          "duration_ms": 1,
+          "output": "Post-processor self-reflection round 1: remove internal process language and keep only user-facing substance.\n\nHere are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\n3. [Kohl Children's Museum](https://www.kohlchildrensmuseum.org/) - Why: Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights."
+        },
+        {
+          "id": "call-13-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-post-processor-round-1-execute-plan-student-p1-revision-1-moism6t6",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.013Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"post-processing-output-validation\",\"scope\":\"post-processor\",\"target\":\"post-processor self-reflection round 1\",\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"outputPreview\":\"Here are museums near Arlington Heights, IL:\\n\\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois ...\"}"
+        },
+        {
+          "id": "call-14-post-processor",
+          "tool": "post-processor",
+          "input": {
+            "summary": "InfOut",
+            "payloadType": "InfOut"
+          },
+          "timestamp": "1970-01-01T00:00:00.014Z",
+          "duration_ms": 1,
+          "output": "Post-processor self-reflection round 2: check that the response answers the original question instead of narrating AgentBus mechanics.\n\nHere are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\n3. [Kohl Children's Museum](https://www.kohlchildrensmuseum.org/) - Why: Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights."
+        },
+        {
+          "id": "call-15-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-post-processor-round-2-execute-plan-student-p1-revision-1-moism6t6",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.015Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"post-processing-output-validation\",\"scope\":\"post-processor\",\"target\":\"post-processor self-reflection round 2\",\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"outputPreview\":\"Here are museums near Arlington Heights, IL:\\n\\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois ...\"}"
+        },
+        {
+          "id": "call-16-post-processor",
+          "tool": "post-processor",
+          "input": {
+            "summary": "InfOut",
+            "payloadType": "InfOut"
+          },
+          "timestamp": "1970-01-01T00:00:00.016Z",
+          "duration_ms": 1,
+          "output": "Post-processor self-reflection round 3: verify linked labels are descriptive entity names and the final answer is concise.\n\nHere are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\n3. [Kohl Children's Museum](https://www.kohlchildrensmuseum.org/) - Why: Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights."
+        },
+        {
+          "id": "call-17-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-post-processor-round-3-execute-plan-student-p1-revision-1-moism6t6",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.017Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"post-processing-output-validation\",\"scope\":\"post-processor\",\"target\":\"post-processor self-reflection round 3\",\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"outputPreview\":\"Here are museums near Arlington Heights, IL:\\n\\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois ...\"}"
+        },
+        {
+          "id": "call-18-post-processor",
+          "tool": "post-processor",
+          "input": {
+            "summary": "Result · post-process-execute-plan-student-p1-revision-1-moism6t6",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.018Z",
+          "duration_ms": 1,
+          "output": "Here are museums near Arlington Heights, IL:\n\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois Holocaust Museum is a museums with source-backed location evidence in Skokie near Arlington Heights.\n3. [Kohl Children's Museum](https://www.kohlchildrensmuseum.org/) - Why: Kohl Children's Museum is a museums with source-backed location evidence in Glenview near Arlington Heights."
+        },
+        {
+          "id": "call-19-validation-agent",
+          "tool": "validation-agent",
+          "input": {
+            "summary": "Result · validate-post-processor-final-execute-plan-student-p1-revision-1-moism6t6",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.019Z",
+          "duration_ms": 1,
+          "output": "{\"type\":\"validation-result\",\"loop\":\"post-processing-output-validation\",\"scope\":\"post-processor\",\"target\":\"post-processor final output\",\"passed\":true,\"criteria\":[\"recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.\",\"recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.\",\"post-processing-output-validation: validation-agent must validate every post-processor draft and final user-facing output before response-ready can be written.\",\"post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.\",\"entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.\",\"nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.\",\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"],\"outputPreview\":\"Here are museums near Arlington Heights, IL:\\n\\n1. [Arlington Heights Historical Museum](https://www.ahmuseum.org/) - Why: Arlington Heights Historical Museum is a museums with source-backed location evidence in Arlington Heights. Location evidence: Found on the search result source page for Arlington Heights, IL.\\n2. [Illinois Holocaust Museum](https://www.ilholocaustmuseum.org/) - Why: Illinois ...\"}"
+        },
+        {
+          "id": "call-20-verification-agent",
+          "tool": "verification-agent",
+          "input": {
+            "summary": "InfIn · 1 message(s)",
+            "payloadType": "InfIn"
+          },
+          "timestamp": "1970-01-01T00:00:00.020Z",
+          "duration_ms": 1,
+          "output": "system: Verify the post-processed response before it can be published.\nOriginal task: show me 3 more\nCriteria: Resolve the follow-up \"show me 3 more\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure. | Final answer must render only accepted structured candidates. | Final answer must reject page chrome and navigation labels as entities."
+        },
+        {
+          "id": "call-21-verification-agent",
+          "tool": "verification-agent",
+          "input": {
+            "summary": "Result · verification-execute-plan-student-p1-revision-1-moism6t6",
+            "payloadType": "Result"
+          },
+          "timestamp": "1970-01-01T00:00:00.021Z",
+          "duration_ms": 1,
+          "output": "{\"passed\":true,\"failures\":[],\"criteria\":[\"Resolve the follow-up \\\"show me 3 more\\\" using prior context for best museums near Arlington Heights, IL. The tool query must inherit subject and location from the prior structured search context. The literal follow-up phrase must not be used as the web search query. Previously accepted candidates must be excluded from the final answer unless explicitly requested again. The final answer must list actual additional requested entities, not aggregate pages or page chrome. The final answer must contain at least 3 additional accepted entities, or return a verified insufficient-evidence result; fewer successful items is a failure.\",\"Final answer must render only accepted structured candidates.\",\"Final answer must reject page chrome and navigation labels as entities.\"]}"
+        }
+      ]
+    }
+  ],
+  "duration_ms": 21,
+  "token_usage": {
+    "input": 100,
+    "output": 679,
+    "cached": 0
+  }
+}

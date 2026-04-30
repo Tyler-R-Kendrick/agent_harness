@@ -4,6 +4,11 @@ name = "agent-harness"
 
 [setup]
 script = '''
-npm install
-npm run dev
+npm ci
+npm run dev:agent-browser
 '''
+
+[[actions]]
+name = "dev"
+icon = "tool"
+command = "npm run dev:agent-browser"
