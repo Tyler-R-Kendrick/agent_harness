@@ -17,7 +17,7 @@
     "preview:cucumber": "NODE_OPTIONS=--max-old-space-size=4096 npm run build && node ../scripts/run-package-bin.mjs vite preview --host 127.0.0.1 --port 4173",
     "proof:runtime-search": "node scripts/runtime-search-proof.mjs",
     "test": "node ../scripts/run-package-bin.mjs vitest run",
-    "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage",
+    "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage --coverage.processingConcurrency=1",
     "test:cucumber": "node ../scripts/run-package-bin.mjs start-server-and-test \"npm run dev:cucumber\" http://127.0.0.1:4173 \"npm run cucumber\"",
     "test:evals": "node scripts/eval-manifest-validator.test.mjs",
     "test:scripts": "node scripts/run-script-tests.mjs",
