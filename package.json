@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",
+    "check:generated-files": "node scripts/check-generated-files-clean.mjs",
     "verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",
     "test:agent-browser": "npm --workspace agent-browser run test",
     "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage",
