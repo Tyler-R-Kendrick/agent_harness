@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import { marked, type Renderer } from 'marked';
 import DOMPurify from 'dompurify';
 
+const SAFE_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+
 const renderer: Partial<Renderer> = {
   link({ href, title, text }) {
-    const safe = sanitizeHtmlAttribute(href);
+    const safe = sanitizeLinkHref(href);
     const titleAttr = title ? ` title="${sanitizeHtmlAttribute(title)}"` : '';
     return `<a href="${safe}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
   },
@@ -27,6 +29,34 @@ function sanitizeHtmlAttribute(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function sanitizeLinkHref(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) {
+    return '#';
+  }
+
+  if (
+    trimmed.startsWith('#')
+    || trimmed.startsWith('/')
+    || trimmed.startsWith('./')
+    || trimmed.startsWith('../')
+    || trimmed.startsWith('?')
+  ) {
+    return sanitizeHtmlAttribute(trimmed);
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (SAFE_LINK_PROTOCOLS.has(parsed.protocol)) {
+      return sanitizeHtmlAttribute(trimmed);
+    }
+  } catch {
+    // Fall through to the inert placeholder for malformed URLs.
+  }
+
+  return '#';
 }
 
 export function MarkdownContent({ content, className }: { content: string; className?: string }) {

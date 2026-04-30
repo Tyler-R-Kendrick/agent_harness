@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 const appRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(appRoot, '..');
+const requireFromApp = createRequire(path.join(appRoot, 'package.json'));
 
 function readText(relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -21,6 +23,21 @@ function readJsonl<T>(relativePath: string): T[] {
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line) as T);
+}
+
+function resolvePackageBin(packageName: string): string {
+  const packageJsonPath = requireFromApp.resolve(`${packageName}/package.json`);
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+    bin?: string | Record<string, string>;
+  };
+  const defaultBinName = packageName.split('/').pop();
+  const binRelativePath = typeof packageJson.bin === 'string'
+    ? packageJson.bin
+    : packageJson.bin?.[packageName] ?? packageJson.bin?.[defaultBinName ?? ''] ?? Object.values(packageJson.bin ?? {})[0];
+  if (!binRelativePath) {
+    throw new Error(`${packageName} does not declare a runnable bin entry.`);
+  }
+  return path.resolve(path.dirname(packageJsonPath), binRelativePath);
 }
 
 function runNode(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
@@ -211,7 +228,7 @@ describe('real AgentEvals workflow gate', () => {
   it('executes real AgentV scoring for the latest bad-only runtime response', async () => {
     const outputDir = mkdtempSync(path.join(tmpdir(), 'agentv-search-regression-'));
     try {
-      const agentvBin = path.join(repoRoot, 'node_modules/agentv/dist/cli.js');
+      const agentvBin = resolvePackageBin('agentv');
       const { stdout } = await runNode([
         agentvBin,
         'eval',

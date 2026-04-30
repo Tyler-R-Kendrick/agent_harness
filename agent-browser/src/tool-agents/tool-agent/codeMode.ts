@@ -25,6 +25,10 @@ type CloudflareExecutor = {
   execute: (code: string, providersOrFns: unknown) => Promise<{ result: unknown; error?: string; logs?: string[] }>;
 };
 
+const LOCAL_CODEMODE_RESULT_RE = /^\s*(?:async\s*)?\(\s*\)\s*=>\s*\(([\s\S]*)\)\s*;?\s*$/;
+const LOCAL_CODEMODE_UNSUPPORTED_ERROR =
+  'Local CodeMode only supports JSON-returning arrow functions. Configure a Cloudflare executor for broader code execution.';
+
 function toRunnableFunctions(bindings: readonly CodeModeToolBinding[]) {
   return bindings.map((binding) => ({
     name: binding.namespace,
@@ -43,66 +47,24 @@ function toRunnableFunctions(bindings: readonly CodeModeToolBinding[]) {
   }));
 }
 
-function createNamespaceProxy(binding: CodeModeToolBinding) {
-  return Object.fromEntries(Object.entries(binding.tools).map(([name, candidate]) => {
-    const runnable = candidate as { execute?: (args: unknown) => unknown | Promise<unknown> };
-    return [
-      name,
-      async (args: unknown) => {
-        if (typeof runnable.execute !== 'function') {
-          throw new TypeError(`Tool "${name}" is not executable.`);
-        }
-        return runnable.execute(args);
-      },
-    ];
-  }));
+function parseLocalCodeModeResult(code: string): unknown {
+  const match = LOCAL_CODEMODE_RESULT_RE.exec(code);
+  if (!match) {
+    throw new TypeError(LOCAL_CODEMODE_UNSUPPORTED_ERROR);
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    throw new TypeError(LOCAL_CODEMODE_UNSUPPORTED_ERROR);
+  }
 }
 
 export class LocalCodeModeExecutor implements CodeModeExecutor {
-  async executeCode({ code, bindings = [] }: CodeModeExecuteInput): Promise<CodeModeExecuteResult> {
+  async executeCode({ code }: CodeModeExecuteInput): Promise<CodeModeExecuteResult> {
     const logs: string[] = [];
-    const namespaces = Object.fromEntries(bindings.map((binding) => [
-      binding.namespace,
-      createNamespaceProxy(binding),
-    ]));
-    const codemode = namespaces.codemode ?? {};
-    const scopedConsole = {
-      log: (...values: unknown[]) => logs.push(values.map((value) => String(value)).join(' ')),
-      warn: (...values: unknown[]) => logs.push(values.map((value) => String(value)).join(' ')),
-      error: (...values: unknown[]) => logs.push(values.map((value) => String(value)).join(' ')),
-    };
 
     try {
-      const runner = new Function(
-        'codemode',
-        'tools',
-        'console',
-        'globalThis',
-        'window',
-        'document',
-        'fetch',
-        'XMLHttpRequest',
-        `"use strict"; return (${code})();`,
-      ) as (
-        codemodeNamespace: Record<string, unknown>,
-        tools: Record<string, unknown>,
-        consoleProxy: typeof scopedConsole,
-        globalObject: undefined,
-        windowObject: undefined,
-        documentObject: undefined,
-        fetchFunction: undefined,
-        xhrConstructor: undefined,
-      ) => unknown;
-      const result = await runner(
-        codemode,
-        namespaces,
-        scopedConsole,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-      );
+      const result = parseLocalCodeModeResult(code);
       return { code, result, logs };
     } catch (error) {
       return {

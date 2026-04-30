@@ -35,4 +35,19 @@ describe('MarkdownContent', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('replaces unsafe scriptable URI schemes with an inert link target', () => {
+    render(<MarkdownContent content="[poc](javascript:alert(1)) and [payload](data:text/html,boom)" />);
+
+    expect(screen.getByRole('link', { name: 'poc' })).toHaveAttribute('href', '#');
+    expect(screen.getByRole('link', { name: 'payload' })).toHaveAttribute('href', '#');
+  });
+
+  it('preserves safe relative and fragment links', () => {
+    render(<MarkdownContent content="[section](#security) [guide](./docs/security.md) [home](/docs)" />);
+
+    expect(screen.getByRole('link', { name: 'section' })).toHaveAttribute('href', '#security');
+    expect(screen.getByRole('link', { name: 'guide' })).toHaveAttribute('href', './docs/security.md');
+    expect(screen.getByRole('link', { name: 'home' })).toHaveAttribute('href', '/docs');
+  });
 });
