@@ -4,18 +4,14 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
-    "baseUrl": ".",
     "skipLibCheck": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "..",
-    "paths": {
-      "webmcp": ["../webmcp/src/index.ts"]
-    },
+    "rootDir": "./src",
     "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*.ts", "../webmcp/src/**/*.ts"],
-  "exclude": ["src/__tests__/**", "../webmcp/src/__tests__/**"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/__tests__/**"]
 }

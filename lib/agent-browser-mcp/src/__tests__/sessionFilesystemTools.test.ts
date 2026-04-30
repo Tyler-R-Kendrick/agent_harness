@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getModelContextRegistry, ModelContext } from '../../../webmcp/src/index';
+import { getModelContextRegistry, ModelContext } from '@agent-harness/webmcp';
 import { registerSessionFilesystemTools } from '../sessionFilesystemTools';
 import { createWebMcpTool } from '../tool';
 

@@ -1,4 +1,4 @@
-import type { ModelContextRegisterToolOptions } from '../../webmcp/src/index';
+import type { ModelContextRegisterToolOptions } from '@agent-harness/webmcp';
 
 export interface WorkspaceMcpFile {
   path: string;

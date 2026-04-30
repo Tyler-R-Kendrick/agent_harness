@@ -7,7 +7,7 @@ import {
   ModelContext,
   ModelContextClient,
   invokeModelContextTool,
-} from '../../../webmcp/src/index';
+} from '@agent-harness/webmcp';
 
 import { createWebMcpTool } from '../tool';
 import {
@@ -32,6 +32,38 @@ describe('workspaceTools', () => {
     expect(() => resolveWorkspaceFilePath({ path: '   ' })).toThrow('must not be empty');
     expect(() => resolveWorkspaceFilePath({ uri: 'https://example.com/AGENTS.md' })).toThrow('files://workspace/ scheme');
     expect(() => resolveWorkspaceFilePath({ uri: 'files://other-host/AGENTS.md' })).toThrow('files://workspace/ scheme');
+  });
+
+  it('registers only workspace session summaries when no session state reader is available', () => {
+    const modelContext = new ModelContext();
+
+    registerWorkspaceTools(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      sessions: [
+        {
+          id: 'session-1',
+          name: 'Session 1',
+          isOpen: true,
+        },
+      ],
+      sessionTools: [
+        {
+          id: 'cli',
+          label: 'CLI',
+          description: 'Run shell commands.',
+          group: 'local',
+          groupLabel: 'Local',
+        },
+      ],
+      onWriteSession: vi.fn(),
+    });
+
+    const toolNames = getModelContextRegistry(modelContext).list().map(({ name }) => name);
+    expect(toolNames).toContain('list_sessions');
+    expect(toolNames).not.toContain('read_session');
+    expect(toolNames).not.toContain('list_session_tools');
+    expect(toolNames).not.toContain('submit_session_message');
   });
 
   it('registers workspace file tools that a WebMCP client can invoke', async () => {

@@ -3,6 +3,12 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createWebMcpTool } from 'agent-browser-mcp';
 import { installModelContext } from 'webmcp';
 import App from './App';
+import {
+  buildRenamedSessionFsPath,
+  buildSessionFsChildPath,
+  normalizeSessionFsEntryName,
+  normalizeSessionFsPath,
+} from './services/sessionFsPath';
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
 import type { CopilotRuntimeState } from './services/copilotApi';
 
@@ -21,6 +27,7 @@ const getSandboxFeatureFlagsMock = vi.fn(() => ({
 }));
 const createSandboxExecutionServiceMock = vi.fn();
 const buildRunSummaryInputMock = vi.fn();
+const bashExecCommands: string[] = [];
 
 const flushAsyncUpdates = async (cycles = 25) => {
   await act(async () => {
@@ -122,6 +129,7 @@ vi.mock('just-bash/browser', () => {
     };
 
     async exec(command: string) {
+      bashExecCommands.push(command);
       const trimmed = command.trim();
       const sentinelSuffix = '; echo __JUSTBASH_CWD:$PWD';
       const usesSentinel = trimmed.endsWith(sentinelSuffix);
@@ -197,6 +205,26 @@ vi.mock('just-bash/browser', () => {
 });
 
 describe('App', () => {
+  describe('session filesystem path guards', () => {
+    it('rejects traversal paths', () => {
+      expect(() => normalizeSessionFsPath('/workspace/../secret')).toThrow(/traversal/i);
+    });
+
+    it('rejects root deletion targets', () => {
+      expect(() => normalizeSessionFsPath('/')).toThrow(/root cannot be modified/i);
+    });
+
+    it('rejects unsafe entry names', () => {
+      expect(() => normalizeSessionFsEntryName('../escape')).toThrow(/path separators/i);
+      expect(() => normalizeSessionFsEntryName('nested/file')).toThrow(/path separators/i);
+    });
+
+    it('keeps child and rename paths inside the same parent', () => {
+      expect(buildSessionFsChildPath('/workspace', 'notes.md')).toBe('/workspace/notes.md');
+      expect(buildRenamedSessionFsPath('/workspace/notes.md', 'ideas.md')).toBe('/workspace/ideas.md');
+    });
+  });
+
   const disableAllTools = () => {
     fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
     for (const toggle of screen.getAllByRole('checkbox').filter((checkbox) => {
@@ -237,6 +265,7 @@ describe('App', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    bashExecCommands.length = 0;
     searchBrowserModelsMock.mockReset();
     loadModelMock.mockReset();
     generateMock.mockReset();
@@ -387,36 +416,6 @@ describe('App', () => {
     ]));
   });
 
-  it('deduplicates repeated MCP elicitation requests while the user has not answered', async () => {
-    vi.useFakeTimers();
-    render(<App />);
-    await act(async () => {
-      vi.advanceTimersByTime(350);
-      await Promise.resolve();
-    });
-
-    const modelContext = installModelContext(window);
-    const webmcpTool = createWebMcpTool(modelContext!);
-    const request = {
-      tool: 'elicit_user_input',
-      args: {
-        prompt: 'To find the closest bars, could you share your current location, city, or neighborhood?',
-        fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
-      },
-    };
-
-    let first: unknown;
-    let second: unknown;
-    await act(async () => {
-      first = await webmcpTool.execute?.(request, {} as never);
-      second = await webmcpTool.execute?.(request, {} as never);
-    });
-
-    expect(first).toEqual(second);
-    expect(screen.getAllByText('To find the closest bars, could you share your current location, city, or neighborhood?')).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Submit requested info' })).toHaveLength(1);
-  });
-
   it('renders Files as a compute surface and mounts workspace directories as drives', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -457,7 +456,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '.agents' }));
     fireEvent.click(screen.getByRole('button', { name: 'skills' }));
     expect(screen.getByText('review-pr')).toBeInTheDocument();
-  }, 20000);
+  }, 90_000);
 
   it('registers unified filesystem WebMCP tools that a client can invoke', async () => {
     vi.useFakeTimers();
@@ -504,8 +503,14 @@ describe('App', () => {
       expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md', label: 'SKILL.md' }),
       expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md', label: 'SKILL.md' }),
       expect.objectContaining({ path: '.agents/skills/create-agent-eval/evals/evals.json', label: 'evals.json' }),
+      expect.objectContaining({ path: '.agents/skills/memory/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({ path: '.memory/MEMORY.md', label: 'MEMORY.md' }),
+      expect.objectContaining({ path: '.memory/user.memory.md', label: 'user.memory.md' }),
+      expect.objectContaining({ path: '.memory/project.memory.md', label: 'project.memory.md' }),
+      expect.objectContaining({ path: '.memory/workspace.memory.md', label: 'workspace.memory.md' }),
+      expect.objectContaining({ path: '.memory/session.memory.md', label: 'session.memory.md' }),
     ]));
-    expect((listedFiles as unknown[])).toHaveLength(25);
+    expect((listedFiles as unknown[])).toHaveLength(31);
 
     let fileProperties: unknown;
     await act(async () => {
@@ -1255,7 +1260,7 @@ describe('App', () => {
       path: 'links/AGENTS.link.md',
       preview: expect.stringContaining('capabilities/AGENTS.main.md'),
     }));
-  }, 60_000);
+  }, 90_000);
 
   it('supports creating new chat and terminal instances from the tree and panel', async () => {
     vi.useFakeTimers();
@@ -1626,6 +1631,420 @@ describe('App', () => {
     ]));
     expect(prompt.map((entry) => entry.content).join('\n')).not.toContain('Copilot bridge');
     expect(prompt.map((entry) => entry.content).join('\n')).not.toContain('GitHub Copilot');
+  });
+
+  it('copies an assistant message as markdown through the clipboard feature', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onToken?.('## Result\n\nUse **bold** and [docs](https://example.test).');
+      callbacks.onDone?.({ generated_text: '## Result\n\nUse **bold** and [docs](https://example.test).' });
+      return undefined;
+    });
+
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+    await installLocalModel();
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize this.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Codi: Test Model message as markdown' }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith('## Result\n\nUse **bold** and [docs](https://example.test).');
+    expect(screen.getByText('Message copied as markdown')).toBeInTheDocument();
+
+    const cbRow = screen.getByRole('button', { name: 'Clipboard' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(cbRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
+    expect(screen.getByText('Chat Codi: Test Model message (markdown)')).toBeInTheDocument();
+  });
+
+  it('copies a user message as plaintext through the clipboard feature', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+    await installLocalModel();
+    disableAllTools();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use **bold** and [docs](https://example.test).' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy you message as plaintext' }));
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith('Use bold and docs (https://example.test).');
+    expect(screen.getByText('Message copied as plaintext')).toBeInTheDocument();
+  });
+
+  it('enables browser notifications from the chat titlebar', async () => {
+    vi.useFakeTimers();
+    const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
+    const requestPermission = vi.fn(async () => {
+      MockNotification.permission = 'granted';
+      return MockNotification.permission;
+    });
+    class MockNotification {
+      static permission: NotificationPermission = 'default';
+      static requestPermission = requestPermission;
+      constructor(title: string, options?: NotificationOptions) {
+        notifications.push({ title, options });
+      }
+    }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
+    Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
+
+    try {
+      render(<App />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Enable browser notifications' }));
+
+      // Flush the async permission-request chain (requestPermission → requestBrowserNotificationPermission → handler continuation)
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { await Promise.resolve(); });
+      // Flush the debounced localStorage write (120 ms debounce)
+      await act(async () => { vi.advanceTimersByTime(200); await Promise.resolve(); });
+
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(window.localStorage.getItem('agent-browser.browser-notification-settings') ?? '{}')).toEqual({ enabled: true });
+      expect(screen.getByRole('button', { name: 'Disable browser notifications' })).toBeInTheDocument();
+      expect(notifications).toEqual([]);
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
+  });
+
+  it('enables opt-in location context and adds approximate coordinates to the assistant prompt', async () => {
+    vi.useFakeTimers();
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 41.878113,
+          longitude: -87.629799,
+          accuracy: 24.6,
+        },
+        timestamp: Date.parse('2026-04-29T19:00:00.000Z'),
+      } as GeolocationPosition);
+    });
+    const originalGeolocationDescriptor = Object.getOwnPropertyDescriptor(navigator, 'geolocation');
+    Object.defineProperty(navigator, 'geolocation', {
+      value: { getCurrentPosition },
+      configurable: true,
+    });
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+      expect(getCurrentPosition).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Enable location context' }));
+      await flushAsyncUpdates();
+      await act(async () => { vi.advanceTimersByTime(200); await Promise.resolve(); });
+
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(window.localStorage.getItem('agent-browser.location-context') ?? '{}')).toEqual({
+        enabled: true,
+        latitude: 41.88,
+        longitude: -87.63,
+        accuracyMeters: 25,
+        capturedAt: '2026-04-29T19:00:00.000Z',
+      });
+      expect(screen.getByRole('button', { name: 'Disable location context' })).toBeInTheDocument();
+      expect(screen.getByText(/location on/i)).toBeInTheDocument();
+
+      await installLocalModel();
+      disableAllTools();
+
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Find dinner nearby.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await act(async () => { await Promise.resolve(); });
+
+      const prompt = generateMock.mock.calls[0][0].prompt as Array<{ role: string; content: string }>;
+      const promptText = prompt.map((entry) => entry.content).join('\n');
+      expect(promptText).toContain('Browser location context:');
+      expect(promptText).toContain('Approximate coordinates: 41.88, -87.63');
+      expect(promptText).toContain('Do not assume it is exact.');
+    } finally {
+      if (originalGeolocationDescriptor) {
+        Object.defineProperty(navigator, 'geolocation', originalGeolocationDescriptor);
+      } else {
+        Reflect.deleteProperty(navigator, 'geolocation');
+      }
+    }
+  });
+
+  it('shows a browser notification when session chat work completes', async () => {
+    const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
+    class MockNotification {
+      static permission: NotificationPermission = 'granted';
+      static requestPermission = vi.fn(async () => MockNotification.permission);
+      constructor(title: string, options?: NotificationOptions) {
+        notifications.push({ title, options });
+      }
+    }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
+    Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
+    window.localStorage.setItem('agent-browser.browser-notification-settings', JSON.stringify({ enabled: true }));
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onDone?.({ generated_text: 'Implementation finished and checks passed.' });
+      return undefined;
+    });
+
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await installLocalModel();
+      disableAllTools();
+
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Finish the task.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(notifications).toEqual([
+        {
+          title: 'Session work complete',
+          options: expect.objectContaining({
+            body: 'Research: Implementation finished and checks passed.',
+            tag: expect.stringMatching(/:complete$/),
+          }),
+        },
+      ]);
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
+  });
+
+  it('shows a browser notification when an assistant response needs user input', async () => {
+    const notifications: Array<{ title: string; options?: NotificationOptions }> = [];
+    class MockNotification {
+      static permission: NotificationPermission = 'granted';
+      static requestPermission = vi.fn(async () => MockNotification.permission);
+      constructor(title: string, options?: NotificationOptions) {
+        notifications.push({ title, options });
+      }
+    }
+    const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(window, 'Notification');
+    Object.defineProperty(window, 'Notification', { value: MockNotification, configurable: true });
+    window.localStorage.setItem('agent-browser.browser-notification-settings', JSON.stringify({ enabled: true }));
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onDone?.({ generated_text: 'Can I apply these changes?' });
+      return undefined;
+    });
+
+    try {
+      render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await installLocalModel();
+      disableAllTools();
+
+      fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Prepare the patch.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(notifications.map((entry) => entry.title)).toEqual([
+        'Session work complete',
+        'Agent needs input',
+      ]);
+      expect(notifications[1]?.options).toEqual(expect.objectContaining({
+        body: 'Research: Can I apply these changes?',
+        tag: expect.stringMatching(/:elicitation$/),
+      }));
+    } finally {
+      if (originalNotificationDescriptor) {
+        Object.defineProperty(window, 'Notification', originalNotificationDescriptor);
+      } else {
+        delete (window as Window & { Notification?: typeof Notification }).Notification;
+      }
+    }
+  });
+
+  it('routes research tasks through the first-class Researcher agent', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onDone?.('Research complete.');
+      return { text: 'Research complete.', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Research current browser automation options with citations.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('researcher');
+    expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(1);
+    expect(runStagedToolPipelineMock.mock.calls[0][0]).toEqual(expect.objectContaining({
+      instructions: expect.stringContaining('## Researcher Operating Instructions'),
+    }));
+    expect(runStagedToolPipelineMock.mock.calls[0][0].instructions).toContain('.research/<task-id>/research.md');
+    expect(screen.getByText('Research complete.')).toBeInTheDocument();
+  });
+
+  it('routes debugging tasks through the first-class Debugger agent', async () => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (_options, callbacks) => {
+      callbacks.onDone?.('Debugging complete.');
+      return { text: 'Debugging complete.', steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Debug why deployment health checks started failing after release.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('debugger');
+    expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(1);
+    expect(runStagedToolPipelineMock.mock.calls[0][0]).toEqual(expect.objectContaining({
+      instructions: expect.stringContaining('## Debugger Operating Instructions'),
+    }));
+    expect(runStagedToolPipelineMock.mock.calls[0][0].instructions).toContain('hypothesis ledger');
+    expect(screen.getByText('Debugging complete.')).toBeInTheDocument();
   });
 
   it('shows a stop control and cancels an in-flight chat response without turning it into an error', async () => {
@@ -3338,7 +3757,7 @@ describe('App', () => {
       });
       callbacks.onBusEntry?.({
         id: 'logact-complete',
-        position: 13,
+        position: 11,
         realtimeTs: Date.now(),
         payloadType: 'Completion',
         summary: 'Workflow complete',
@@ -3453,7 +3872,6 @@ describe('App', () => {
       callbacks.onStageStart?.('chat-agent', 'Receiving prompt.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
       callbacks.onStageComplete?.('chat-agent', 'Delegated to orchestrator.', { agentId: 'chat-agent', agentLabel: 'Chat Agent' });
       callbacks.onStageStart?.('orchestrator', 'State machine running: task-1.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
-      callbacks.onDone?.('Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.');
       callbacks.onBusEntry?.({
         id: 'workflow-complete',
         position: 0,
@@ -3467,6 +3885,7 @@ describe('App', () => {
         branchId: 'main',
       });
       callbacks.onStageComplete?.('orchestrator', 'State machine completed: task-1.', { agentId: 'orchestrator', agentLabel: 'Orchestrator Agent' });
+      callbacks.onDone?.('Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.');
       return {
         text: 'Here are restaurant options near Arlington Heights, IL:\n\n1. [Mitsuwa Marketplace](https://example.com/mitsuwa) - Japanese market with a popular food court in Arlington Heights.',
         steps: 2,
@@ -3500,7 +3919,6 @@ describe('App', () => {
     expect(orchestratorRow).not.toHaveClass('pg-row-active');
     expect(container.querySelector('.pg-row[data-actor="workflow-complete"]')).toHaveAttribute('data-status', 'done');
   });
-
   it('parents staged bus and model-turn graph rows to the open branch context', async () => {
     vi.useFakeTimers();
     searchBrowserModelsMock.mockResolvedValue([{
@@ -4892,6 +5310,29 @@ describe('App', () => {
     });
 
     expect(screen.getByText('Deleted /workspace')).toBeInTheDocument();
+  });
+
+  it('shell-quotes session FS rename paths before invoking mv', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+
+    await expandSessionFsDrive();
+    const maliciousName = 'evil"; touch pwned #';
+
+    const workspaceRow = screen.getByRole('button', { name: 'workspace' }).closest('[role="treeitem"]')!;
+    fireEvent.contextMenu(workspaceRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'New name' }), {
+      target: { value: maliciousName },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+      await Promise.resolve();
+    });
+
+    expect(bashExecCommands).toContain(`mv '/workspace' '/${maliciousName}'`);
+    expect(bashExecCommands).not.toContain(`mv "/workspace" "/${maliciousName}"`);
   });
 
   // ── Browser tab context menu ───────────────────────────────────

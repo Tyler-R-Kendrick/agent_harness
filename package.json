@@ -7,7 +7,7 @@
   ],
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",
-    "verify:agent-browser": "node scripts/verify-agent-browser.mjs",
+    "verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",
     "test:agent-browser": "npm --workspace agent-browser run test",
     "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage",
     "visual:agent-browser": "npm --workspace agent-browser run visual:smoke"

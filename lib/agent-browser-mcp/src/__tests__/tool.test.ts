@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ModelContext } from 'webmcp';
+import { ModelContext } from '@agent-harness/webmcp';
 
 import { createWebMcpTool, WEBMCP_BUILTIN_DESCRIPTOR, WEBMCP_TOOL_ID } from '../tool';
 

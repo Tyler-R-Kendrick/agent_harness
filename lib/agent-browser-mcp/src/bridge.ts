@@ -5,7 +5,7 @@ import {
   ModelContext,
   ModelContextClient,
   type RegisteredToolDefinition,
-} from 'webmcp';
+} from '@agent-harness/webmcp';
 
 import type { WebMcpToolDescriptor, WebMcpToolGroup } from './types';
 

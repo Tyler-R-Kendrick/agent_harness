@@ -1,8 +1,21 @@
+.env
+.env.*
+!.env.example
+
 .playwright-mcp/
+.agentv/cache.json
 node_modules/
-lib/*/node_modules/
+.npm-cache/
 package-lock.json
+lib/*/node_modules/
+
+coverage/
 lib/*/coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+
 agent-browser-running.png
 agent-browser-chat-ui-validation.png
 agent-browser-after-continue.png
@@ -13,3 +26,4 @@ file-editor-edit-mode.png
 file-editor-label-mode.png
 output/playwright/
 .dev-server*.log
+.codex-tk26-objects/

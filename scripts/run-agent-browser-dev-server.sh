@@ -19,7 +19,7 @@ server_ready() {
 
 if ! dependencies_ready; then
   log "Dependencies are missing in $REPO_ROOT/node_modules"
-  log "Run 'npm ci' once from the repo root, or reopen the workspace after post-create finishes."
+  log "Run 'npm install' once from the repo root, or reopen the workspace after post-create finishes."
   exit 1
 fi
 

@@ -5,10 +5,12 @@ import '@radix-ui/themes/styles.css';
 import './index.css';
 import App from './App';
 import { COPILOT_RUNTIME_ENABLED, COPILOT_RUNTIME_URL } from './config';
+import { installChatMessageCopyControls } from './services/chatMessageCopyControls';
 import { CopilotRuntimeProvider } from './services/copilotRuntimeBridge';
 import { configureServiceWorker } from './serviceWorker';
 
 configureServiceWorker();
+installChatMessageCopyControls();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

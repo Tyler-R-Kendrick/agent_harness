@@ -9,10 +9,18 @@
 // crash the app on next mount.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { WorkspaceViewState } from './workspaceTree';
+import type { ChatMessage, NodeKind, NodeType, TreeNode } from '../types';
 
 export const STORAGE_KEYS = {
   // localStorage — durable
   installedModels: 'agent-browser.installed-models',
+  workspaceRoot: 'agent-browser.workspace-root',
+  workspaceViewStateByWorkspace: 'agent-browser.workspace-view-state-by-workspace',
+  chatMessagesBySession: 'agent-browser.chat-messages-by-session',
+  chatHistoryBySession: 'agent-browser.chat-history-by-session',
+  browserNotificationSettings: 'agent-browser.browser-notification-settings',
+  locationContext: 'agent-browser.location-context',
   // sessionStorage — per-tab, refresh-only
   selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
   selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',
@@ -66,6 +74,21 @@ export function saveJson<T>(
   } catch (error) {
     onError?.(error instanceof Error ? error : new Error(String(error)));
   }
+}
+
+export function removeStoredRecordEntry<T extends Record<string, unknown>>(
+  backend: StorageBackend | null | undefined,
+  key: string,
+  validate: Validator<T>,
+  entryId: string,
+  onError?: SaveErrorHandler,
+): void {
+  if (!backend) return;
+  const current = loadJson<T>(backend, key, validate, {} as T);
+  if (!Object.prototype.hasOwnProperty.call(current, entryId)) return;
+  const next = { ...current };
+  delete next[entryId];
+  saveJson(backend, key, next, onError);
 }
 
 export type UseStoredStateOptions = {
@@ -125,11 +148,111 @@ export function useStoredState<T>(
 
 export const isString = (value: unknown): value is string => typeof value === 'string';
 
+const NODE_TYPES: NodeType[] = ['root', 'workspace', 'folder', 'tab', 'file'];
+const NODE_KINDS: NodeKind[] = ['browser', 'terminal', 'agent', 'files', 'session', 'clipboard'];
+const MESSAGE_ROLES: ChatMessage['role'][] = ['user', 'assistant', 'system'];
+const MESSAGE_STATUSES: NonNullable<ChatMessage['status']>[] = ['thinking', 'streaming', 'complete', 'error'];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === 'boolean';
+}
+
+function isOptionalNumber(value: unknown): boolean {
+  return value === undefined || typeof value === 'number';
+}
+
 export function isStringRecord(value: unknown): value is Record<string, string> {
   return (
-    typeof value === 'object'
-    && value !== null
-    && !Array.isArray(value)
+    isRecord(value)
     && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'string')
   );
+}
+
+export function isStringArrayRecord(value: unknown): value is Record<string, string[]> {
+  return isRecord(value) && Object.values(value).every(isStringArray);
+}
+
+export function isTreeNode(value: unknown): value is TreeNode {
+  if (!isRecord(value)) return false;
+  const node = value as Partial<TreeNode>;
+  return (
+    typeof node.id === 'string'
+    && typeof node.name === 'string'
+    && typeof node.type === 'string'
+    && (NODE_TYPES as string[]).includes(node.type)
+    && (node.nodeKind === undefined || (
+      typeof node.nodeKind === 'string'
+      && (NODE_KINDS as string[]).includes(node.nodeKind)
+    ))
+    && isOptionalBoolean(node.isDrive)
+    && isOptionalBoolean(node.expanded)
+    && isOptionalBoolean(node.persisted)
+    && isOptionalBoolean(node.activeMemory)
+    && isOptionalNumber(node.memoryMB)
+    && isOptionalString(node.memoryTier)
+    && isOptionalString(node.url)
+    && isOptionalString(node.color)
+    && isOptionalString(node.filePath)
+    && isOptionalBoolean(node.isReference)
+    && isOptionalBoolean(node.muted)
+    && (node.children === undefined || (Array.isArray(node.children) && node.children.every(isTreeNode)))
+  );
+}
+
+function isWorkspaceViewState(value: unknown): value is WorkspaceViewState {
+  if (!isRecord(value)) return false;
+  return (
+    isStringArray(value.openTabIds)
+    && (value.editingFilePath === null || typeof value.editingFilePath === 'string')
+    && (value.activeMode === 'agent' || value.activeMode === 'terminal')
+    && isStringArray(value.activeSessionIds)
+    && isStringArray(value.mountedSessionFsIds)
+    && isStringArray(value.panelOrder)
+  );
+}
+
+export function isWorkspaceViewStateRecord(value: unknown): value is Record<string, WorkspaceViewState> {
+  return isRecord(value) && Object.values(value).every(isWorkspaceViewState);
+}
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string'
+    && typeof value.role === 'string'
+    && (MESSAGE_ROLES as string[]).includes(value.role)
+    && typeof value.content === 'string'
+    && isOptionalString(value.streamedContent)
+    && (value.status === undefined || (
+      typeof value.status === 'string'
+      && (MESSAGE_STATUSES as string[]).includes(value.status)
+    ))
+    && isOptionalBoolean(value.isLocal)
+    && isOptionalString(value.thinkingContent)
+    && isOptionalNumber(value.thinkingDuration)
+    && isOptionalBoolean(value.isThinking)
+    && isOptionalString(value.currentStepId)
+    && isOptionalNumber(value.reasoningStartedAt)
+    && (value.loadingStatus === undefined || value.loadingStatus === null || typeof value.loadingStatus === 'string')
+    && (value.statusText === undefined || value.statusText === null || typeof value.statusText === 'string')
+    && isOptionalBoolean(value.isError)
+    && isOptionalBoolean(value.isVoting)
+  );
+}
+
+export function isChatMessagesBySession(value: unknown): value is Record<string, ChatMessage[]> {
+  return isRecord(value)
+    && Object.values(value).every((entry) => Array.isArray(entry) && entry.every(isChatMessage));
 }

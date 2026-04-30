@@ -31,11 +31,13 @@ export function buildCodiPrompt({
   workspacePromptContext,
   messages,
   loopMessages,
+  systemPrompt,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   messages: ChatMessage[];
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  systemPrompt?: string;
 }): Array<{ role: string; content: string }> {
   const aiMessages = loopMessages
     ? loopMessages.map((message, index) => ({
@@ -50,7 +52,7 @@ export function buildCodiPrompt({
     || workspacePromptContext;
   const scenario = resolveAgentScenario(latestText);
   const systemPromptPrefix = [
-    buildAgentSystemPrompt({
+    systemPrompt ?? buildAgentSystemPrompt({
       workspaceName,
       goal: 'Help the user in the active workspace with concise, grounded collaboration.',
       scenario,
@@ -89,11 +91,12 @@ function createCodiInferenceClient(
   workspacePromptContext: string,
   messages: ChatMessage[],
   callbacks: AgentStreamCallbacks,
+  systemPrompt?: string,
   signal?: AbortSignal,
 ): IInferenceClient {
   return {
     async infer(busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
-      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages });
+      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages, systemPrompt });
       let tokenBuffer = '';
       let inReasoning = false;
       const reasoningSplitter = createReasoningStepSplitter({
@@ -173,24 +176,28 @@ export async function streamCodiChat(
     messages,
     workspaceName,
     workspacePromptContext,
+    latestUserInput,
     voters = [],
     completionChecker,
     maxIterations = 5,
+    systemPrompt,
   }: {
     model: HFModel;
     messages: ChatMessage[];
     workspaceName: string;
     workspacePromptContext: string;
+    latestUserInput?: string;
     /** Optional logact voters treated as external agents. Each voter's
      *  decision is surfaced via the onVoterStep* callbacks. */
     voters?: IVoter[];
     completionChecker?: ICompletionChecker;
     maxIterations?: number;
+    systemPrompt?: string;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const latestInput = messages.at(-1)?.streamedContent || messages.at(-1)?.content || '';
+  const latestInput = latestUserInput || messages.at(-1)?.streamedContent || messages.at(-1)?.content || '';
   const effectiveCompletionChecker = completionChecker
     ?? (isExecutionTask(latestInput) ? createHeuristicCompletionChecker(latestInput) : undefined);
   const deferred = effectiveCompletionChecker ? createDeferredAgentCallbacks(callbacks) : null;
@@ -200,6 +207,7 @@ export async function streamCodiChat(
     workspacePromptContext,
     messages,
     deferred?.callbacks ?? callbacks,
+    systemPrompt,
     signal,
   );
 
@@ -207,6 +215,7 @@ export async function streamCodiChat(
     inferenceClient,
     messages,
     voters,
+    input: latestInput,
     completionChecker: effectiveCompletionChecker
       ? {
         async check(context) {
