@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $steps = @(
+  @{ Label = 'source-hygiene'; Args = @('run', 'check:generated-files') }
   @{ Label = 'validate-evals'; Args = @('--workspace', 'agent-browser', 'run', 'validate:evals') }
   @{ Label = 'test-evals'; Args = @('--workspace', 'agent-browser', 'run', 'test:evals') }
   @{ Label = 'test-scripts'; Args = @('--workspace', 'agent-browser', 'run', 'test:scripts') }
