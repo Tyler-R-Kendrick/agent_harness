@@ -1,0 +1,37 @@
+name: web-search-agent-tool-use
+version: "1.0"
+description: >
+  Deterministic agent-eval suite for the web-search chat-agent prompt and
+  tool-selection policy. The agent must choose registered search tools first,
+  use page-read/source validation, fall back to curl/fetch-capable tools when
+  search fails, and avoid asking the user for search sources prematurely.
+metadata:
+  owner: agent-browser
+  tags: [web-search-agent, tool-use, fallback, prompt-eval]
+execution:
+  target: web-search-agent-static-policy
+  timeout_seconds: 10
+assertions:
+  - name: registered-search-first
+    type: tool-trajectory
+    required: true
+    expected:
+      - tool: webmcp:search_web
+      - tool: webmcp:read_web_page
+  - name: fallback-before-elicitation
+    type: rubric
+    required: true
+    rubrics:
+      - id: cli-or-http-fallback
+        outcome: If the registered search tool is unavailable, empty, malformed, or returns 4xx/5xx, the agent uses a registered CLI, curl, fetch, or HTTP-client-capable tool before eliciting user input.
+        required: true
+        weight: 3
+      - id: source-validation
+        outcome: The agent reads or validates source pages before promoting entities and rejects page chrome, navigation labels, article metadata, and generic listing/category titles.
+        required: true
+        weight: 3
+      - id: query-iteration
+        outcome: The agent refines weak searches with an additional query before answering or blocking.
+        required: true
+        weight: 2
+tests: ./cases.jsonl

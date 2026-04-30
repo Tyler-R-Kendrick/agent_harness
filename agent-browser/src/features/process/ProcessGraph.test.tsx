@@ -185,6 +185,49 @@ describe('ProcessGraph', () => {
     expect(findOrphanBranches(entries)).toEqual([]);
   });
 
+  it('uses AgentBus parentActorId metadata when mirrored rows have no parentId', () => {
+    const entries: ProcessEntry[] = [
+      entry({ id: 'chat', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent', actorId: 'chat-agent' }),
+      entry({
+        id: 'student-1',
+        ts: 2000,
+        position: 2,
+        branchId: 'agent:student-driver',
+        actor: 'student-driver',
+        actorId: 'student-driver',
+        parentActorId: 'chat-agent',
+      }),
+      entry({
+        id: 'teacher-1',
+        ts: 3000,
+        position: 3,
+        branchId: 'agent:judge-decider',
+        actor: 'voter:teacher',
+        actorId: 'voter:teacher',
+        parentActorId: 'student-driver',
+      }),
+      entry({
+        id: 'student-2',
+        ts: 4000,
+        position: 4,
+        branchId: 'agent:student-driver',
+        actor: 'student-driver',
+        actorId: 'student-driver',
+        parentActorId: 'voter:teacher',
+      }),
+    ];
+
+    expect(findOrphanBranches(entries)).toEqual([]);
+
+    const { container } = render(<ProcessGraph entries={entries} />);
+    const teacherRow = container.querySelector('[data-actor="voter:teacher"]');
+    const studentRevisionRow = Array.from(container.querySelectorAll('[data-actor="student-driver"]')).at(1);
+
+    expect(teacherRow?.querySelector('[data-connector="fork"][data-lane="agent:judge-decider"]')).toBeInTheDocument();
+    expect(teacherRow?.querySelector('.pg-rail-lane[data-lane="agent:student-driver"]')).toHaveClass('pg-rail-lane-active');
+    expect(studentRevisionRow?.querySelector('[data-connector="merge"][data-lane="agent:judge-decider"]')).toBeInTheDocument();
+  });
+
   it('keeps agent parent branches open until descendant handoff work returns', () => {
     const entries: ProcessEntry[] = [
       entry({ id: 'chat', ts: 1000, position: 1, branchId: 'main', actor: 'chat-agent' }),

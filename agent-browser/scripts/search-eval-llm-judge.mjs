@@ -30,6 +30,23 @@ function extractCandidateAnswer(prompt) {
     ?? prompt;
 }
 
+function extractExpectedContract(prompt) {
+  const raw = extractSection(prompt, 'expected_output')
+    ?? extractSection(prompt, 'Expected Contract');
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return {};
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return {};
+    }
+  }
+}
+
 function renderedEntityLabels(answer) {
   const markdownLabels = [...answer.matchAll(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g)]
     .map((match) => match[1].trim());
@@ -43,16 +60,81 @@ function hasBadEntityLabel(answer) {
   return renderedEntityLabels(answer).some((label) => badEntityLabelPattern.test(label));
 }
 
+function normalizeComparable(value) {
+  return String(value ?? '').replace(/^the\s+/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function rhymesWith(value, target) {
+  const word = String(value ?? '').toLowerCase().match(/[a-z0-9]+(?=[^a-z0-9]*$)/i)?.[0] ?? '';
+  const normalizedTarget = String(target ?? '').toLowerCase();
+  if (!word || !normalizedTarget) return false;
+  const tail = normalizedTarget.length <= 3 ? normalizedTarget.slice(-2) : normalizedTarget.slice(-3);
+  return word.endsWith(tail);
+}
+
+function answerAcknowledgesConstraintShortfall(answer, validationContract = {}) {
+  if (!/\b(?:could not|could only|unable to|insufficient|not enough|cannot verify|couldn't verify|unmet|shortfall)\b/i.test(answer)) {
+    return false;
+  }
+  return (validationContract.constraints ?? [])
+    .some((constraint) => {
+      if (constraint.value === undefined) return answer.toLowerCase().includes(String(constraint.type ?? '').replace('_', ' '));
+      if (Array.isArray(constraint.value)) {
+        return constraint.value.some((entry) => answer.toLowerCase().includes(String(entry).toLowerCase()));
+      }
+      return answer.toLowerCase().includes(String(constraint.value).toLowerCase());
+    });
+}
+
+function contractFailures(answer, expectedContract) {
+  const validationContract = expectedContract.validationContract;
+  if (!validationContract || !Array.isArray(validationContract.constraints)) return [];
+  const labels = renderedEntityLabels(answer);
+  const acknowledged = validationContract.successSemantics === 'allow-partial-with-acknowledgement'
+    && answerAcknowledgesConstraintShortfall(answer, validationContract);
+  if (acknowledged) return [];
+  const failures = [];
+  for (const constraint of validationContract.constraints.filter((item) => item.required !== false)) {
+    const value = constraint.value;
+    if (constraint.type === 'count' && labels.length < Number(value ?? 0)) {
+      failures.push(`${constraint.id}: expected ${value} labels, got ${labels.length}`);
+    }
+    if (constraint.type === 'name_prefix' && !labels.every((label) => label.toLowerCase().startsWith(String(value ?? '').toLowerCase()))) {
+      failures.push(`${constraint.id}: labels do not all start with ${value}`);
+    }
+    if (constraint.type === 'name_suffix' && !labels.every((label) => label.toLowerCase().endsWith(String(value ?? '').toLowerCase()))) {
+      failures.push(`${constraint.id}: labels do not all end with ${value}`);
+    }
+    if (constraint.type === 'rhyme' && !labels.every((label) => rhymesWith(label, value))) {
+      failures.push(`${constraint.id}: labels do not rhyme with ${value}`);
+    }
+    if (constraint.type === 'exclusion') {
+      const excluded = Array.isArray(value) ? value.map(String) : [];
+      if (labels.some((label) => excluded.some((excludedLabel) => normalizeComparable(label) === normalizeComparable(excludedLabel)))) {
+        failures.push(`${constraint.id}: excluded label was rendered`);
+      }
+    }
+    if (constraint.type === 'location' && value && !answer.toLowerCase().includes(String(value).toLowerCase())) {
+      failures.push(`${constraint.id}: answer does not mention ${value}`);
+    }
+  }
+  return failures;
+}
+
 function judgePrompt(prompt) {
   const answer = extractCandidateAnswer(prompt);
+  const expectedContract = extractExpectedContract(prompt);
   const markdownLinks = [...answer.matchAll(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g)];
-  const rejectsBadResponse = /verification failed|rejected labels|response-ready blocked|insufficient evidence|could not find enough validated|did not contain source-backed entity names/i.test(answer);
+  const rejectsBadResponse = /verification failed|rejected labels|response-ready blocked|insufficient evidence|could not verify|could not find enough validated|could only verify|asked for \d+|did not contain(?: enough)?(?: additional)? source-backed entity names|unavailable|no search results found|search issue|please provide a search source/i.test(answer);
   const hasActualLinkedEntities = markdownLinks.length >= 1 && !hasBadEntityLabel(answer);
   const semanticOnly = /"semanticOnly"\s*:\s*true/i.test(prompt);
-  const expectsBlockedOrInsufficient = /"expectedResult"\s*:\s*"(?:verification_fail|insufficient-evidence-no-publish|blocked-no-publish)"/i.test(prompt);
+  const expectsBlockedOrInsufficient = /"expectedResult"\s*:\s*"(?:verification_fail|insufficient-evidence-no-publish|insufficient-follow-up-count|blocked-no-publish)"/i.test(prompt);
+  const validationFailures = contractFailures(answer, expectedContract);
   const passed = semanticOnly
-    ? (hasActualLinkedEntities || rejectsBadResponse) && !hasBadEntityLabel(answer)
-    : (expectsBlockedOrInsufficient ? rejectsBadResponse && !hasBadEntityLabel(answer) : hasActualLinkedEntities);
+    ? (hasActualLinkedEntities || rejectsBadResponse) && !hasBadEntityLabel(answer) && validationFailures.length === 0
+    : (expectsBlockedOrInsufficient
+      ? rejectsBadResponse && !hasBadEntityLabel(answer) && validationFailures.length === 0
+      : hasActualLinkedEntities && validationFailures.length === 0);
   const hits = [];
   const misses = [];
 
@@ -64,6 +146,9 @@ function judgePrompt(prompt) {
 
   if (!expectsBlockedOrInsufficient || rejectsBadResponse) hits.push('Verifier behavior matches the case expectation.');
   else misses.push('Reported bad answer was not rejected.');
+
+  if (validationFailures.length === 0) hits.push('Final answer satisfies the emitted validation contract.');
+  else misses.push(`Validation contract failures: ${validationFailures.join('; ')}`);
 
   const freeform = {
     score: passed ? 1 : 0,

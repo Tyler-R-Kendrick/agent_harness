@@ -7,6 +7,7 @@ $steps = @(
   @{ Label = 'lint'; Args = @('--workspace', 'agent-browser', 'run', 'lint') }
   @{ Label = 'coverage'; Args = @('--workspace', 'agent-browser', 'run', 'test:coverage') }
   @{ Label = 'build'; Args = @('--workspace', 'agent-browser', 'run', 'build') }
+  @{ Label = 'audit-lockfile'; Args = @('install', '--package-lock-only', '--ignore-scripts') }
   @{ Label = 'audit'; Args = @('audit', '--audit-level=moderate') }
   @{ Label = 'visual-smoke'; Args = @('run', 'visual:agent-browser') }
 )

@@ -57,9 +57,13 @@ export interface ReadWebPageResult {
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 const SEARCH_PROVIDER_ATTEMPTS = 2;
+const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 
 export class WebSearchBridge {
-  constructor(private readonly fetchImpl: FetchLike = fetch) {}
+  constructor(
+    private readonly fetchImpl: FetchLike = fetch,
+    private readonly timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+  ) {}
 
   async search(request: SearchWebRequest): Promise<SearchWebResult> {
     const query = request.query.trim().replace(/\s+/g, ' ');
@@ -82,12 +86,12 @@ export class WebSearchBridge {
         for (let attempt = 1; attempt <= SEARCH_PROVIDER_ATTEMPTS; attempt += 1) {
           let response: Response;
           try {
-            response = await this.fetchImpl(provider.url, {
+            response = await fetchWithTimeout(this.fetchImpl, provider.url, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; agent-browser/0.1; +https://localhost)',
                 Accept: 'text/html,application/xhtml+xml',
               },
-            });
+            }, this.timeoutMs);
           } catch (error) {
             reasons.push(error instanceof Error ? error.message : String(error));
             await retryDelay(attempt);
@@ -108,7 +112,7 @@ export class WebSearchBridge {
       }
       const uniqueReasons = [...new Set(reasons)];
       return {
-        status: uniqueReasons.some((reason) => /provider returned|fetch failed|network|blocked/i.test(reason)) ? 'unavailable' : 'empty',
+        status: uniqueReasons.some((reason) => /provider returned|fetch failed|network|blocked|timed?\s*out|timeout/i.test(reason)) ? 'unavailable' : 'empty',
         query,
         results: [],
         reason: uniqueReasons.join(' '),
@@ -127,7 +131,10 @@ export class WebSearchBridge {
 const bridge = new WebSearchBridge();
 
 export class WebPageBridge {
-  constructor(private readonly fetchImpl: FetchLike = fetch) {}
+  constructor(
+    private readonly fetchImpl: FetchLike = fetch,
+    private readonly timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+  ) {}
 
   async read(request: ReadWebPageRequest): Promise<ReadWebPageResult> {
     const normalizedUrl = normalizeUrl(request.url.trim());
@@ -145,12 +152,12 @@ export class WebPageBridge {
     }
 
     try {
-      const response = await this.fetchImpl(url.toString(), {
+      const response = await fetchWithTimeout(this.fetchImpl, url.toString(), {
         headers: {
           'User-Agent': 'agent-browser/0.1 (+https://localhost)',
           Accept: 'text/html,application/xhtml+xml,text/plain',
         },
-      });
+      }, this.timeoutMs);
       if (!response.ok) {
         return {
           status: 'unavailable',
@@ -195,6 +202,29 @@ export class WebPageBridge {
 }
 
 const pageBridge = new WebPageBridge();
+
+async function fetchWithTimeout(
+  fetchImpl: FetchLike,
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      fetchImpl(input, { ...init, signal: controller.signal }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`Fetch timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 function parseDuckDuckGoHtml(html: string): SearchWebResultItem[] {
   const matches = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)];
@@ -323,12 +353,14 @@ function extractPageEntities({
   for (const item of jsonLd) {
     for (const node of flattenJsonLd(item)) {
       if (!isRecord(node)) continue;
+      if (!isPromotableJsonLdEntity(node)) continue;
       const name = typeof node.name === 'string' ? node.name : '';
       const entityUrl = typeof node.url === 'string' ? node.url : undefined;
       add(name, entityUrl, 'json-ld');
     }
   }
   for (const span of extractNamedTextSpans(text)) {
+    if (!isPromotableTextEntity(span.label, span.localContext)) continue;
     add(span.label, url, 'page text');
   }
   return [...entities.values()].slice(0, 30);
@@ -349,7 +381,7 @@ function extractPageObservations({
 }): WebPageObservation[] {
   const observations: WebPageObservation[] = [];
   const add = (observation: WebPageObservation) => {
-    const label = cleanEntityName(observation.label);
+    const label = cleanObservationLabel(observation.label);
     if (!label) return;
     observations.push({ ...observation, label });
   };
@@ -399,7 +431,7 @@ function extractPageObservations({
 
 function extractNamedTextSpans(text: string): Array<{ label: string; localContext: string }> {
   const spans: Array<{ label: string; localContext: string }> = [];
-  const namedSpanPattern = /\b([A-Z][A-Za-z0-9&'.-]+(?:\s+[A-Z0-9][A-Za-z0-9&'.-]+){1,5}(?:\s+(?:Theatre|Theater|Cinema|Cinemas|Restaurant|Bar|Cafe|Coffee|Park|Parks|Shop|Shops|Store|Market|Grill|Kitchen|Bistro|Tavern|Club|Lounge|Hotel|Museum|Center|Centre|Stadium|Arena))?)\b/g;
+  const namedSpanPattern = /\b([A-Z][A-Za-z0-9&'.-]+(?:\s+(?:&|And|Of|The|At|In|[A-Z0-9][A-Za-z0-9&'.-]+)){1,6}(?:\s+(?:Theatre|Theater|Cinema|Cinemas|Restaurant|Bar|Cafe|Coffee|Park|Parks|Shop|Shops|Store|Market|Grill|Kitchen|Bistro|Tavern|Club|Lounge|Hotel|Museum|Center|Centre|Stadium|Arena))?)\b/g;
   const sentences = text
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+/)
@@ -407,10 +439,78 @@ function extractNamedTextSpans(text: string): Array<{ label: string; localContex
     .filter(Boolean);
   for (const sentence of sentences) {
     for (const match of sentence.matchAll(namedSpanPattern)) {
-      spans.push({ label: match[1], localContext: sentence });
+      spans.push({ label: normalizeSpanLabel(match[1]), localContext: sentence });
     }
   }
   return spans;
+}
+
+function normalizeSpanLabel(label: string): string {
+  const entitySuffix = /^(?:Theatre|Theater|Cinema|Cinemas|Restaurant|Bar|Cafe|Coffee|Park|Parks|Shop|Shops|Store|Market|Grill|Kitchen|Bistro|Tavern|Club|Lounge|Hotel|Museum|Center|Centre|Stadium|Arena)$/i;
+  const tokens = label.split(/\s+/).filter(Boolean);
+  if (tokens.length > 6 && entitySuffix.test(tokens.at(-1) ?? '')) {
+    return tokens.slice(-5).join(' ');
+  }
+  return label;
+}
+
+function isPromotableJsonLdEntity(node: Record<string, unknown>): boolean {
+  const types = jsonLdTypes(node);
+  if (types.length === 0) return false;
+  if (types.some((type) => /^(?:article|newsarticle|blogposting|webpage|website|breadcrumblist|listitem|person|imageobject|videoobject)$/i.test(type))) {
+    return false;
+  }
+  if (types.some((type) => /(?:localbusiness|place|restaurant|barorpub|cafeorcoffeeshop|movietheater|park|museum|store|bookstore|healthclub|sportsactivitylocation|musicvenue|eventvenue|theater|theatre|performingartstheater)/i.test(type))) {
+    return true;
+  }
+  if (types.some((type) => /^organization$/i.test(type))) {
+    return Boolean(node.address || node.geo || node.telephone || node.openingHours || node.openingHoursSpecification);
+  }
+  return false;
+}
+
+function jsonLdTypes(node: Record<string, unknown>): string[] {
+  const raw = node['@type'];
+  if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === 'string');
+  return typeof raw === 'string' ? [raw] : [];
+}
+
+function isPromotableTextEntity(label: string, localContext: string): boolean {
+  const cleaned = cleanEntityName(label);
+  if (!cleaned) return false;
+  if (isUiChromeLabel(cleaned) || isLocationOnlyLabel(cleaned) || isContextualLocationOnlyLabel(cleaned, localContext)) return false;
+  const normalizedContext = localContext.replace(/\s+/g, ' ').trim();
+  if (isMetadataOrChromeContext(normalizedContext)) return false;
+  const namePattern = new RegExp(escapeRegExp(cleaned).replace(/\s+/g, '\\s+'), 'i');
+  if (!namePattern.test(normalizedContext)) return false;
+  return /\b(?:is|are|located|serves|offers|near|nearby|local|in|at|address|source-backed|option|venue|place)\b/i.test(normalizedContext);
+}
+
+function isUiChromeLabel(label: string): boolean {
+  return /^(?:support|support enable|join now|join now enable|enable dark mode|dark mode|shop categories|categories|about us|contact|home|sign in|log in|login|account|profile|subscribe|join|help|privacy|terms)$/i.test(label)
+    || /\b(?:support enable|join now enable|enable dark mode|shop categories|about us|sign in|log in|login|fanclub|fan club)\b/i.test(label);
+}
+
+function isLocationOnlyLabel(label: string): boolean {
+  return /^(?:[A-Z]{2}\s*)?\d{5}(?:-\d{4})?$/i.test(label)
+    || /^[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3},?\s+(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV|WY)$/i.test(label);
+}
+
+function isContextualLocationOnlyLabel(label: string, localContext: string): boolean {
+  const pattern = new RegExp(`\\b(?:in|near|nearby|around|at|for)\\s+${escapeRegExp(label).replace(/\s+/g, '\\s+')}\\b\\s*,?\\s*(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV|WY)?\\b`, 'i');
+  return pattern.test(localContext)
+    && !/\b(?:bar|pub|grill|restaurant|cafe|coffee|theat(?:er|re)|cinema|park|museum|book|shop|store|gym|fitness|venue|club|lounge|kitchen|bistro|market|center|centre)\b/i.test(label);
+}
+
+function isMetadataOrChromeContext(value: string): boolean {
+  if (!value) return true;
+  if (/[{}[\]":]/.test(value) && /\b(?:@context|@type|schema\.org|headline|author|publisher|datePublished)\b/i.test(value)) {
+    return true;
+  }
+  if (/\b(?:navigation|nav|header|footer|account|menu|shop categories|support enable|join now enable|enable dark mode|dark mode|about us)\b/i.test(value)) {
+    return true;
+  }
+  return false;
 }
 
 function flattenJsonLd(value: unknown): unknown[] {
@@ -430,8 +530,24 @@ function cleanEntityName(value: string): string {
   if (/\b(best|top|showtimes?|reviews?|near me|nearby|search|find|faq|frequently asked|movie times|local movie times|menus?|ratings?|hours?)\b/i.test(cleaned)) {
     return '';
   }
+  if (isUiChromeLabel(cleaned)) return '';
   if (/[.!?]/.test(cleaned)) return '';
   return cleaned;
+}
+
+function cleanObservationLabel(value: string): string {
+  const cleaned = decodeHtml(value)
+    .replace(/\s+-\s+.*$/g, '')
+    .replace(/\s*\|\s*.*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length < 2 || cleaned.length > 160) return '';
+  if (/[.!?]/.test(cleaned)) return '';
+  return cleaned;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -496,7 +612,14 @@ function decodeBingEncodedUrl(encoded: string): string | null {
 }
 
 function stripTags(value: string): string {
-  return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/<br\s*\/?>/gi, '. ')
+    .replace(/<\/(?:p|div|li|h[1-6]|article|section|main|nav|header|footer|tr)\s*>/gi, '. ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+\./g, '.')
+    .replace(/\.{2,}/g, '.')
+    .trim();
 }
 
 function decodeHtml(value: string): string {
@@ -525,31 +648,63 @@ function writeJson(res: ServerResponse, statusCode: number, body: unknown): void
 }
 
 function readLimit(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? Math.min(10, Math.floor(value))
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.min(10, Math.floor(parsed))
     : 5;
+}
+
+function requestUrl(rawUrl: string | undefined): URL {
+  return new URL(rawUrl || '/', 'http://localhost');
+}
+
+async function readSearchRequest(req: IncomingMessage): Promise<SearchWebRequest> {
+  const url = requestUrl(req.url);
+  if (req.method === 'GET') {
+    return {
+      query: (url.searchParams.get('query') ?? '').trim().replace(/\s+/g, ' '),
+      limit: readLimit(url.searchParams.get('limit')),
+    };
+  }
+  const body = await readJsonBody(req);
+  return {
+    query: typeof (body as { query?: unknown }).query === 'string'
+      ? (body as { query: string }).query.trim().replace(/\s+/g, ' ')
+      : '',
+    limit: readLimit((body as { limit?: unknown }).limit),
+  };
+}
+
+async function readPageRequest(req: IncomingMessage): Promise<ReadWebPageRequest> {
+  const parsedUrl = requestUrl(req.url);
+  if (req.method === 'GET') {
+    return { url: (parsedUrl.searchParams.get('url') ?? '').trim() };
+  }
+  const body = await readJsonBody(req);
+  return {
+    url: typeof (body as { url?: unknown }).url === 'string'
+      ? (body as { url: string }).url.trim()
+      : '',
+  };
 }
 
 export function createSearchApiMiddleware(searchBridge: WebSearchBridge = bridge) {
   return async (req: IncomingMessage, res: ServerResponse, next: (error?: Error) => void) => {
-    if ((req.url ?? '') !== '/api/web-search') {
+    if (requestUrl(req.url).pathname !== '/api/web-search') {
       next();
       return;
     }
     try {
-      if (req.method !== 'POST') {
+      if (req.method !== 'POST' && req.method !== 'GET') {
         writeJson(res, 405, { error: 'Method not allowed.' });
         return;
       }
-      const body = await readJsonBody(req);
-      const query = typeof (body as { query?: unknown }).query === 'string'
-        ? (body as { query: string }).query.trim().replace(/\s+/g, ' ')
-        : '';
-      if (!query) {
+      const searchRequest = await readSearchRequest(req);
+      if (!searchRequest.query) {
         writeJson(res, 400, { error: 'query is required.' });
         return;
       }
-      writeJson(res, 200, await searchBridge.search({ query, limit: readLimit((body as { limit?: unknown }).limit) }));
+      writeJson(res, 200, await searchBridge.search(searchRequest));
     } catch (error) {
       next(error instanceof Error ? error : new Error('Web search middleware failed.'));
     }
@@ -558,24 +713,21 @@ export function createSearchApiMiddleware(searchBridge: WebSearchBridge = bridge
 
 export function createWebPageApiMiddleware(webPageBridge: WebPageBridge = pageBridge) {
   return async (req: IncomingMessage, res: ServerResponse, next: (error?: Error) => void) => {
-    if ((req.url ?? '') !== '/api/web-page') {
+    if (requestUrl(req.url).pathname !== '/api/web-page') {
       next();
       return;
     }
     try {
-      if (req.method !== 'POST') {
+      if (req.method !== 'POST' && req.method !== 'GET') {
         writeJson(res, 405, { error: 'Method not allowed.' });
         return;
       }
-      const body = await readJsonBody(req);
-      const url = typeof (body as { url?: unknown }).url === 'string'
-        ? (body as { url: string }).url.trim()
-        : '';
-      if (!url) {
+      const pageRequest = await readPageRequest(req);
+      if (!pageRequest.url) {
         writeJson(res, 400, { error: 'url is required.' });
         return;
       }
-      writeJson(res, 200, await webPageBridge.read({ url }));
+      writeJson(res, 200, await webPageBridge.read(pageRequest));
     } catch (error) {
       next(error instanceof Error ? error : new Error('Web page middleware failed.'));
     }

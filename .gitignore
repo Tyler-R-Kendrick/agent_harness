@@ -6,6 +6,7 @@
 .agentv/cache.json
 node_modules/
 .npm-cache/
+package-lock.json
 lib/*/node_modules/
 
 coverage/

@@ -37,23 +37,67 @@ const BAD_LABELS = [
   'Skip to Main Content',
 ];
 
+const BAD_BAR_LABELS = [
+  'Yelp: Best Bars in Arlington Heights, IL',
+  "Chicago Bound: Arlington Heights' Best Bars",
+  'Yellow Pages: Bars in Arlington Heights',
+  'Restaurantji: Best Bars near Arlington Heights',
+  'Restaurant Guru: Top 7 pubs & bars',
+  'Best Bars',
+  'Restaurants',
+  'Reviews',
+  'Support Enable',
+  'Join Now Enable',
+  'Enable dark mode',
+  'Shop Categories',
+  'About Us',
+  'Chicago Bound',
+  "Arlington Heights' Best Bars Spots [2026 Guide]",
+];
+
 const EXPECTED_THEATERS = [
   'AMC Randhurst 12',
   'CMX Arlington Heights',
   'Classic Cinemas Elk Grove Theatre',
 ];
 
+const EXPECTED_BARS = [
+  "Peggy Kinnane's Irish Restaurant & Pub",
+  'Hey Nonny',
+  "Cortland's Garage",
+];
+
 function fixtureContract() {
-  const testCase = buildSearchEvalCases()
-    .find((candidate) => candidate.id === 'negative-movie-theaters-moviefone-page-chrome');
-  if (!testCase?.expected_output) {
+  const cases = buildSearchEvalCases();
+  const theaterCase = cases.find((candidate) => candidate.id === 'negative-movie-theaters-moviefone-page-chrome');
+  const barsSubjectSwitchCase = cases.find((candidate) => candidate.id === 'negative-follow-up-bars-article-page-chrome');
+  const barsCase = cases.find((candidate) => candidate.id === 'negative-bars-aggregate-source-pages');
+  const barsFollowUpCase = cases.find((candidate) => candidate.id === 'follow-up-bars-show-me-3-more');
+  if (!theaterCase?.expected_output || !barsSubjectSwitchCase?.expected_output || !barsCase?.expected_output || !barsFollowUpCase?.expected_output) {
     throw new Error('Missing movie theater bad-then-recover search fixture.');
   }
-  const parsed = JSON.parse(testCase.expected_output);
-  if (!parsed.fixtures) {
-    throw new Error('Movie theater search fixture does not include runtime fixtures.');
+  const theaterParsed = JSON.parse(theaterCase.expected_output);
+  const barsSubjectSwitchParsed = JSON.parse(barsSubjectSwitchCase.expected_output);
+  const barsParsed = JSON.parse(barsCase.expected_output);
+  const barsFollowUpParsed = JSON.parse(barsFollowUpCase.expected_output);
+  if (!theaterParsed.fixtures || !barsSubjectSwitchParsed.fixtures || !barsParsed.fixtures || !barsFollowUpParsed.fixtures) {
+    throw new Error('Runtime search fixtures do not include required theater and bar data.');
   }
-  return parsed.fixtures;
+  return {
+    memoryResult: theaterParsed.fixtures.memoryResult,
+    searchResults: {
+      ...theaterParsed.fixtures.searchResults,
+      ...barsSubjectSwitchParsed.fixtures.searchResults,
+      ...barsParsed.fixtures.searchResults,
+      ...barsFollowUpParsed.fixtures.searchResults,
+    },
+    pageResults: {
+      ...theaterParsed.fixtures.pageResults,
+      ...barsSubjectSwitchParsed.fixtures.pageResults,
+      ...barsParsed.fixtures.pageResults,
+      ...barsFollowUpParsed.fixtures.pageResults,
+    },
+  };
 }
 
 async function isPortOpen() {
@@ -121,7 +165,8 @@ function parsePostJson(route) {
   return JSON.parse(text);
 }
 
-async function installRoutes(page, fixtures) {
+async function installRoutes(page, fixtures, searchQueries) {
+  const queryCounts = new Map();
   await page.route('**/api/copilot/status', (route) => fulfillJson(route, {
     available: true,
     authenticated: true,
@@ -146,7 +191,21 @@ async function installRoutes(page, fixtures) {
   await page.route('**/api/web-search', (route) => {
     const request = parsePostJson(route);
     const query = String(request.query ?? '').trim().replace(/\s+/g, ' ');
-    const result = fixtures.searchResults[query] ?? fixtures.searchResults['*'] ?? {
+    const count = (queryCounts.get(query) ?? 0) + 1;
+    queryCounts.set(query, count);
+    searchQueries.push(query);
+    const firstClosestBarsResult = query === 'closest bars Arlington Heights IL' && count === 1
+      ? {
+        status: 'found',
+        query,
+        results: [{
+          title: 'Sports Page Bar & Grill Arlington Heights',
+          url: 'https://www.sportspagebarandgrill.com/',
+          snippet: 'Sports Page Bar & Grill Arlington Heights is a bar in Arlington Heights, IL.',
+        }],
+      }
+      : undefined;
+    const result = firstClosestBarsResult ?? fixtures.searchResults[query] ?? fixtures.searchResults['*'] ?? {
       status: 'empty',
       query,
       results: [],
@@ -196,15 +255,17 @@ async function runBrowserProof() {
   server?.stderr.on('data', (chunk) => serverOutput.push(String(chunk)));
 
   let browser;
+  let page;
   const pageOutput = [];
+  const searchQueries = [];
   try {
     await waitForServer(server);
     await mkdir(path.dirname(screenshotPath), { recursive: true });
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     page.on('console', (message) => pageOutput.push(`[console:${message.type()}] ${message.text()}`));
     page.on('pageerror', (error) => pageOutput.push(`[pageerror] ${error.message}`));
-    await installRoutes(page, fixtures);
+    await installRoutes(page, fixtures, searchQueries);
     await seedMemory(page);
     page.setDefaultTimeout(90_000);
 
@@ -234,10 +295,84 @@ async function runBrowserProof() {
     await expect(page.getByText(/Working/i)).toHaveCount(0);
     await expect(page.locator('.stream-cursor')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+
+    await page.getByLabel('Chat input').fill('what about bars?');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(assistantBubbles).toHaveCount(2, { timeout: 90_000 });
+    await expect(
+      assistantBubbles.last().locator('a', { hasText: "Peggy Kinnane's Irish Restaurant & Pub" }),
+    ).toBeVisible({ timeout: 90_000 });
+    const subjectSwitchBarsAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    const barLinkLabels = (await assistantBubbles.last().locator('a').allTextContents())
+      .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
+    for (const bar of EXPECTED_BARS) {
+      expect(subjectSwitchBarsAnswer).toContain(bar);
+    }
+    for (const label of BAD_BAR_LABELS) {
+      expect(barLinkLabels).not.toContain(label.toLocaleLowerCase());
+    }
+    expect(searchQueries).toContain('bars Arlington Heights IL');
+    await expect(page.getByText(/User input needed/i)).toHaveCount(0);
+    await expect(page.getByText(/Working/i)).toHaveCount(0);
+    await expect(page.locator('.stream-cursor')).toHaveCount(0);
+
+    await page.getByLabel('Chat input').fill('what about closest bars?');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(assistantBubbles).toHaveCount(3, { timeout: 90_000 });
+    await expect(
+      assistantBubbles.last().locator('a', { hasText: 'Sports Page Bar & Grill Arlington Heights' }),
+    ).toBeVisible({ timeout: 90_000 });
+    const barsAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    const closestBarLinkLabels = (await assistantBubbles.last().locator('a').allTextContents())
+      .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
+    expect(barsAnswer).toContain('Sports Page Bar & Grill Arlington Heights');
+    for (const label of BAD_BAR_LABELS) {
+      expect(closestBarLinkLabels).not.toContain(label.toLocaleLowerCase());
+    }
+    await expect(page.getByText(/User input needed/i)).toHaveCount(0);
+    await expect(page.getByText(/Working/i)).toHaveCount(0);
+    await expect(page.locator('.stream-cursor')).toHaveCount(0);
+
+    await page.getByLabel('Chat input').fill('show me 3 more');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(assistantBubbles).toHaveCount(4, { timeout: 90_000 });
+    await expect(
+      assistantBubbles.last().locator('a', { hasText: "Peggy Kinnane's Irish Restaurant & Pub" }),
+    ).toBeVisible({ timeout: 90_000 });
+    const followUpAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    const followUpLabels = (await assistantBubbles.last().locator('a').allTextContents())
+      .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
+    for (const bar of EXPECTED_BARS) {
+      expect(followUpAnswer).toContain(bar);
+    }
+    expect(followUpLabels).not.toContain('sports page bar & grill arlington heights');
+    for (const label of BAD_BAR_LABELS) {
+      expect(followUpLabels).not.toContain(label.toLocaleLowerCase());
+    }
+    expect(searchQueries).toContain('closest bars Arlington Heights IL');
+    expect(searchQueries).not.toContain('show me 3 more');
+    await expect(page.getByText(/User input needed/i)).toHaveCount(0);
+    await expect(page.getByText(/Working/i)).toHaveCount(0);
+    await expect(page.locator('.stream-cursor')).toHaveCount(0);
+
     await page.screenshot({ path: screenshotPath, fullPage: true });
     console.log(`agent-browser runtime search proof passed: ${screenshotPath}`);
+    console.log(`runtime search queries: ${JSON.stringify(searchQueries)}`);
     console.log(finalAnswer);
+    console.log(subjectSwitchBarsAnswer);
+    console.log(barsAnswer);
+    console.log(followUpAnswer);
   } catch (error) {
+    try {
+      await page?.screenshot({ path: screenshotPath, fullPage: true });
+      console.error(`agent-browser runtime search proof failed; screenshot: ${screenshotPath}`);
+      console.error(`runtime search queries before failure: ${JSON.stringify(searchQueries)}`);
+    } catch {
+      // Best-effort failure artifact only.
+    }
     const output = serverOutput.join('').trim();
     if (output) console.error(output);
     if (typeof pageOutput !== 'undefined' && pageOutput.length) console.error(pageOutput.join('\n'));

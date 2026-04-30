@@ -81,6 +81,28 @@ describe('LocalLanguageModel', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'plain answer' }]);
   });
 
+  it('accepts plain string turn content from the chat transcript', async () => {
+    generateMock.mockImplementation(async (_input, callbacks) => {
+      callbacks.onDone?.({ ok: true });
+      return undefined;
+    });
+
+    const model = new LocalLanguageModel('hf-test-model');
+    await model.doGenerate({
+      abortSignal: undefined,
+      prompt: [
+        { role: 'system', content: 'System prompt' },
+        { role: 'user', content: 'what are the best theaters near me?' },
+      ],
+      tools: [],
+    } as never);
+
+    expect(generateMock.mock.calls[0][0].prompt).toEqual([
+      { role: 'system', content: 'System prompt' },
+      { role: 'user', content: 'what are the best theaters near me?' },
+    ]);
+  });
+
   it('forwards browser inference phase updates through the optional model callback', async () => {
     generateMock.mockImplementation(async (_input, callbacks) => {
       callbacks.onPhase?.('thinking');

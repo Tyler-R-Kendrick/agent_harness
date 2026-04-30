@@ -8,6 +8,8 @@ const casesPath = path.join(appRoot, 'evals/search-fulfillment/cases.jsonl');
 const liveCasesPath = path.join(appRoot, 'evals/search-fulfillment/cases.live.jsonl');
 
 const LOCATION = 'Arlington Heights, IL';
+const LOCATION_QUERY = 'Arlington Heights IL';
+const SEARCH_TURN_CONTEXT_MARKER = 'Agent Browser search turn context:';
 
 const rankingGoals = [
   { id: 'best', prompt: 'best', queryPrefix: 'best' },
@@ -150,6 +152,40 @@ const forbiddenLabels = [
   'Reviews',
   'Menu',
   'Directions',
+  'Support Enable',
+  'Join Now Enable',
+  'Enable dark mode',
+  'Shop Categories',
+  'About Us',
+  'Chicago Bound',
+];
+
+const priorEntities = {
+  'movie-theaters': ['AMC South Barrington 24', 'https://www.amctheatres.com/movie-theatres/chicago/amc-south-barrington-24', 'South Barrington near Arlington Heights'],
+  plays: ['Oil Lamp Theater', 'https://oillamptheater.org/', 'Glenview near Arlington Heights'],
+  parks: ['Recreation Park', 'https://www.ahpd.org/parks/', 'Arlington Heights'],
+  cafes: ['Uptown Cafe', 'https://fixtures.agent-browser.test/prior/uptown-cafe', 'Arlington Heights'],
+  restaurants: ['Bar Salotto', 'https://www.barsalotto.com/', 'Arlington Heights'],
+  bars: ['Sports Page Bar & Grill Arlington Heights', 'https://www.sportspagebarandgrill.com/', 'Arlington Heights'],
+  museums: ['Des Plaines History Center', 'https://desplaineshistory.org/', 'Des Plaines near Arlington Heights'],
+  gyms: ['Anytime Fitness Arlington Heights', 'https://www.anytimefitness.com/', 'Arlington Heights'],
+  bookstores: ['Anderson\'s Bookshop', 'https://www.andersonsbookshop.com/', 'Naperville area'],
+  'music-venues': ['Big Shot Piano Lounge', 'https://bigshotpianolounge.com/', 'Arlington Heights'],
+};
+
+const followUpVariants = [
+  { id: 'show-me-3-more', text: () => 'show me 3 more', requestedCount: 3 },
+  { id: 'show-me-more', text: () => 'show me more', requestedCount: 3 },
+  { id: 'any-others', text: () => 'any others?', requestedCount: 3 },
+  { id: 'closer-ones', text: () => 'closer ones', queryPrefix: 'closest', requestedCount: 3 },
+  { id: 'open-now', text: () => 'show me more open now', queryPrefix: 'open now', requestedCount: 3 },
+  { id: 'not-prior', text: (prior) => `not ${prior[0].split(/\s+/).slice(0, 3).join(' ')}, show me more`, requestedCount: 3 },
+  { id: 'more-like-first', text: () => 'more like #1', requestedCount: 3 },
+  { id: 'show-me-2-more', text: () => 'show me 2 more', requestedCount: 2 },
+  { id: 'other-options', text: () => 'any other options?', requestedCount: 3 },
+  { id: 'highly-rated', text: () => 'show me more highly rated', queryPrefix: 'highest rated', requestedCount: 3 },
+  { id: 'budget-friendly', text: () => 'show me more budget-friendly', queryPrefix: 'budget-friendly', requestedCount: 3 },
+  { id: 'quiet', text: () => 'show me more quiet', queryPrefix: 'quiet', requestedCount: 3 },
 ];
 
 function slug(value) {
@@ -158,6 +194,56 @@ function slug(value) {
 
 function queryFor(domain, goal) {
   return `${goal.queryPrefix} ${domain.subject} Arlington Heights IL`;
+}
+
+function contextRankingGoal(goal) {
+  switch (goal.id) {
+    case 'best':
+      return 'best';
+    case 'nearest':
+    case 'closest':
+      return 'closest';
+    case 'worst':
+      return 'worst';
+    case 'most-popular':
+      return 'most-popular';
+    case 'open-now':
+      return 'open-now';
+    case 'highly-rated':
+      return 'highly-rated';
+    case 'family-friendly':
+      return 'family-friendly';
+    case 'budget-friendly':
+      return 'budget-friendly';
+    case 'quiet':
+      return 'quiet';
+    case 'near-me':
+      return 'nearby';
+    case 'recommended':
+      return 'recommended';
+    default:
+      return undefined;
+  }
+}
+
+function queryPrefixForContextGoal(goal) {
+  const mapped = contextRankingGoal(goal);
+  switch (mapped) {
+    case 'most-popular':
+      return 'most popular';
+    case 'open-now':
+      return 'open now';
+    case 'highly-rated':
+      return 'highest rated';
+    case 'family-friendly':
+      return 'family-friendly';
+    case 'budget-friendly':
+      return 'budget-friendly';
+    case 'nearby':
+      return 'nearby';
+    default:
+      return mapped ?? goal.queryPrefix;
+  }
 }
 
 function memoryFixture() {
@@ -171,6 +257,182 @@ function memoryFixture() {
       source: 'workspace-memory',
       updatedAt: '2026-04-26T00:00:00.000Z',
     }],
+  };
+}
+
+function validationConstraint(input) {
+  return {
+    required: true,
+    confidence: 0.9,
+    validationMethod: input.type === 'format' ? 'answer-text' : 'structured-candidate',
+    ...input,
+  };
+}
+
+function validationContractFor({
+  taskGoal,
+  subject,
+  location = LOCATION,
+  requestedCount,
+  excludedCandidates = [],
+  prefix,
+  suffix,
+  rhyme,
+  impossibleKind,
+  impossibleReason,
+}) {
+  const constraints = [];
+  if (requestedCount !== undefined) {
+    constraints.push(validationConstraint({
+      id: 'count:min-results',
+      sourceText: taskGoal,
+      type: 'count',
+      operator: 'at_least',
+      target: 'acceptedCandidates',
+      value: requestedCount,
+      failureMessage: `Expected at least ${requestedCount} accepted result(s).`,
+    }));
+  }
+  if (subject) {
+    constraints.push(validationConstraint({
+      id: 'subject:entity-type',
+      sourceText: taskGoal,
+      type: 'subject',
+      operator: 'matches',
+      target: 'acceptedCandidates.subject',
+      value: subject,
+      failureMessage: `Results must be instances of ${subject}.`,
+    }));
+    constraints.push(validationConstraint({
+      id: 'link:entity-specific',
+      sourceText: taskGoal,
+      type: 'entity_link',
+      operator: 'has_safe_entity_link',
+      target: 'acceptedCandidates.entityLink',
+      value: true,
+      failureMessage: 'Each rendered result needs a safe source-backed entity link.',
+    }));
+    constraints.push(validationConstraint({
+      id: 'source:evidence',
+      sourceText: taskGoal,
+      type: 'source_evidence',
+      operator: 'has_evidence',
+      target: 'acceptedCandidates.sourceEvidence',
+      value: true,
+      failureMessage: 'Each rendered result needs source evidence.',
+    }));
+    constraints.push(validationConstraint({
+      id: 'chrome:no-page-labels',
+      sourceText: taskGoal,
+      type: 'page_chrome',
+      operator: 'rejects_page_chrome',
+      target: 'finalAnswer.labels',
+      value: true,
+      failureMessage: 'Page chrome, navigation, source categories, and content buckets cannot be rendered as results.',
+    }));
+  }
+  if (location) {
+    constraints.push(validationConstraint({
+      id: /\bnear|closest|nearest/i.test(taskGoal) ? 'location:nearby' : `location:${slug(location)}`,
+      sourceText: taskGoal,
+      type: 'location',
+      operator: /\bnear|closest|nearest/i.test(taskGoal) ? 'near' : 'in',
+      target: 'acceptedCandidates.locationEvidence',
+      value: location,
+      failureMessage: `Results need location or proximity evidence for ${location}.`,
+    }));
+  }
+  if (prefix) {
+    constraints.push(validationConstraint({
+      id: 'name:prefix',
+      sourceText: taskGoal,
+      type: 'name_prefix',
+      operator: 'starts_with',
+      target: 'acceptedCandidates.name',
+      value: prefix,
+      failureMessage: `Result names must start with ${prefix}.`,
+    }));
+  }
+  if (suffix) {
+    constraints.push(validationConstraint({
+      id: 'name:suffix',
+      sourceText: taskGoal,
+      type: 'name_suffix',
+      operator: 'ends_with',
+      target: 'acceptedCandidates.name',
+      value: suffix,
+      failureMessage: `Result names must end with ${suffix}.`,
+    }));
+  }
+  if (rhyme) {
+    constraints.push(validationConstraint({
+      id: 'name:rhyme',
+      sourceText: taskGoal,
+      type: 'rhyme',
+      operator: 'rhymes_with',
+      target: 'acceptedCandidates.name',
+      value: rhyme,
+      failureMessage: `Result names must rhyme with ${rhyme}.`,
+    }));
+  }
+  if (excludedCandidates.length > 0) {
+    constraints.push(validationConstraint({
+      id: 'exclude:prior-candidates',
+      sourceText: taskGoal,
+      type: 'exclusion',
+      operator: 'excludes',
+      target: 'acceptedCandidates.name',
+      value: excludedCandidates,
+      failureMessage: `Results must exclude ${excludedCandidates.join(', ')}.`,
+    }));
+  }
+  const evidenceRequirements = [];
+  if (constraints.some((constraint) => constraint.type === 'subject')) {
+    evidenceRequirements.push({
+      id: 'evidence:subject-instance',
+      description: 'Evidence must show each result is an instance of the requested subject.',
+      required: true,
+      target: 'acceptedCandidates.subjectEvidence',
+    });
+  }
+  if (constraints.some((constraint) => constraint.type === 'location')) {
+    evidenceRequirements.push({
+      id: 'evidence:location',
+      description: 'Evidence must tie each result to the requested location or proximity.',
+      required: true,
+      target: 'acceptedCandidates.locationEvidence',
+    });
+  }
+  if (constraints.some((constraint) => constraint.type === 'entity_link')) {
+    evidenceRequirements.push({
+      id: 'evidence:entity-link',
+      description: 'Evidence must include a safe source-backed entity link.',
+      required: true,
+      target: 'acceptedCandidates.entityLink',
+    });
+  }
+  return {
+    type: 'validation-contract',
+    version: 1,
+    taskGoal,
+    constraints,
+    evidenceRequirements,
+    impossibilityPolicy: impossibleKind
+      ? {
+        kind: impossibleKind,
+        reason: impossibleReason ?? 'The requested constraint combination may be impossible or under-evidenced.',
+        askUserForHelp: true,
+      }
+      : { kind: 'none', askUserForHelp: false },
+    clarificationTriggers: [
+      'required constraint cannot be evaluated from available tool evidence',
+      'required constraints conflict or appear impossible',
+      'bounded recovery cannot find enough source-backed evidence',
+    ],
+    successSemantics: requestedCount !== undefined || impossibleKind
+      ? 'allow-partial-with-acknowledgement'
+      : 'all-required',
+    legacyCriteria: [],
   };
 }
 
@@ -247,6 +509,156 @@ function fixturesFor(domain, goal, overrides = {}) {
     searchResults: { ...fixture.searchResults, ...(overrides.searchResults ?? {}) },
     pageResults: { ...fixture.pageResults, ...(overrides.pageResults ?? {}) },
   };
+}
+
+function followUpExpectedQuery(domain, goal, variant) {
+  const prefix = variant.queryPrefix ?? queryPrefixForContextGoal(goal);
+  return `${prefix} ${domain.subject} ${LOCATION_QUERY}`.replace(/\s+/g, ' ').trim();
+}
+
+function fixturesForFollowUp(domain, goal, variant) {
+  const base = fixturesFor(domain, goal);
+  const expectedQuery = followUpExpectedQuery(domain, goal, variant);
+  const baseQuery = queryFor(domain, goal);
+  const baseResult = base.searchResults[baseQuery] ?? base.searchResults['*'];
+  return {
+    ...base,
+    searchResults: {
+      ...base.searchResults,
+      [expectedQuery]: {
+        ...baseResult,
+        query: expectedQuery,
+      },
+    },
+  };
+}
+
+function followUpShortfallFixtures() {
+  const domain = domains.find((candidate) => candidate.id === 'bars');
+  const goal = rankingGoals.find((candidate) => candidate.id === 'closest');
+  const expectedQuery = followUpExpectedQuery(domain, goal, followUpVariants[0]);
+  const onlyCandidate = domain.entities[0];
+  const onlyResult = {
+    status: 'found',
+    query: expectedQuery,
+    results: [{
+      title: `${onlyCandidate[0]} - Official Site`,
+      url: onlyCandidate[1],
+      snippet: `${onlyCandidate[0]} is a bar in ${onlyCandidate[2]}.`,
+    }],
+  };
+  const discoveryQuery = `${domain.subject} names near ${LOCATION_QUERY}`;
+  return {
+    memoryResult: memoryFixture(),
+    searchResults: {
+      [expectedQuery]: onlyResult,
+      [discoveryQuery]: {
+        ...onlyResult,
+        query: discoveryQuery,
+      },
+      [`"${onlyCandidate[0]}" ${LOCATION_QUERY} ${domain.subject} official reviews`]: {
+        ...onlyResult,
+        query: `"${onlyCandidate[0]}" ${LOCATION_QUERY} ${domain.subject} official reviews`,
+      },
+      '*': {
+        status: 'empty',
+        query: '*',
+        results: [],
+        reason: 'The deterministic shortfall fixture only has one additional accepted bar.',
+      },
+    },
+    pageResults: {},
+  };
+}
+
+function followUpMessages(domain, goal, variant, prior) {
+  const initialRequest = `what are the ${goal.prompt} ${domain.subject} near me?`;
+  const contextQuery = queryFor(domain, goal);
+  const contextContract = validationContractFor({
+    taskGoal: initialRequest,
+    subject: domain.subject,
+    location: LOCATION,
+    requestedCount: 1,
+  });
+  const context = {
+    taskText: initialRequest,
+    resolvedTaskText: `${queryPrefixForContextGoal(goal)} ${domain.subject} near ${LOCATION_QUERY}`,
+    subject: domain.subject,
+    answerSubject: domain.plural,
+    rankingGoal: contextRankingGoal(goal),
+    location: LOCATION,
+    acceptedCandidates: [{ name: prior[0], url: prior[1] }],
+    rejectedLabels: forbiddenLabels.slice(0, 3),
+    sourceQueries: [contextQuery],
+    requestedCount: 1,
+    validationContract: contextContract,
+    timestamp: 1,
+  };
+  return [
+    { role: 'user', content: initialRequest },
+    {
+      role: 'assistant',
+      content: [
+        `Here are ${domain.plural} near ${LOCATION_QUERY}:`,
+        '',
+        `1. [${prior[0]}](${prior[1]}) - Why: Source-backed ${domain.subject} result with location evidence in ${prior[2]}.`,
+      ].join('\n'),
+    },
+    { role: 'system', content: `${SEARCH_TURN_CONTEXT_MARKER}\n${JSON.stringify(context)}` },
+    { role: 'user', content: variant.text(prior) },
+  ];
+}
+
+function subjectSwitchMessages({ fromDomain, fromGoal, toText, prior }) {
+  const initialRequest = `what are the ${fromGoal.prompt} ${fromDomain.subject} near me?`;
+  const contextQuery = queryFor(fromDomain, fromGoal);
+  const contextContract = validationContractFor({
+    taskGoal: initialRequest,
+    subject: fromDomain.subject,
+    location: LOCATION,
+    requestedCount: 1,
+  });
+  const context = {
+    taskText: initialRequest,
+    resolvedTaskText: `${queryPrefixForContextGoal(fromGoal)} ${fromDomain.subject} near ${LOCATION_QUERY}`,
+    subject: fromDomain.subject,
+    answerSubject: fromDomain.plural,
+    rankingGoal: contextRankingGoal(fromGoal),
+    location: LOCATION,
+    acceptedCandidates: [{ name: prior[0], url: prior[1] }],
+    rejectedLabels: forbiddenLabels.slice(0, 6),
+    sourceQueries: [contextQuery],
+    requestedCount: 1,
+    validationContract: contextContract,
+    timestamp: 1,
+  };
+  return [
+    { role: 'user', content: initialRequest },
+    {
+      role: 'assistant',
+      content: [
+        `Here are ${fromDomain.plural} near ${LOCATION_QUERY}:`,
+        '',
+        `1. [${prior[0]}](${prior[1]}) - Why: Source-backed ${fromDomain.subject} result with location evidence in ${prior[2]}.`,
+      ].join('\n'),
+    },
+    { role: 'system', content: `${SEARCH_TURN_CONTEXT_MARKER}\n${JSON.stringify(context)}` },
+    { role: 'user', content: toText },
+  ];
+}
+
+function expectedOutputForFollowUp(domain, goal, variant, prior, overrides = {}) {
+  const expectedQuery = followUpExpectedQuery(domain, goal, variant);
+  return expectedOutputFor(domain, goal, {
+    expectedQuery,
+    expectedResult: 'follow-up-context-aware-entities',
+    requestedCount: variant.requestedCount,
+    minimumAcceptedEntities: variant.requestedCount,
+    excludedCandidates: [prior[0]],
+    messages: followUpMessages(domain, goal, variant, prior),
+    fixtures: fixturesForFollowUp(domain, goal, variant),
+    ...overrides,
+  });
 }
 
 function movieTheaterChromeOnlyFixtures() {
@@ -346,6 +758,292 @@ function movieTheaterChromeOnlyFixtures() {
   };
 }
 
+function barsAggregateRecoveryFixtures() {
+  const domain = domains.find((candidate) => candidate.id === 'bars');
+  const goal = rankingGoals.find((candidate) => candidate.id === 'closest');
+  const expectedQuery = queryFor(domain, goal);
+  const aggregateResults = [
+    {
+      title: 'Yelp: Best Bars in Arlington Heights, IL',
+      url: 'https://fixtures.agent-browser.test/bars/aggregate/yelp',
+      snippet: 'Best Bars in Arlington Heights, IL - directory and review search results.',
+    },
+    {
+      title: "Chicago Bound: Arlington Heights' Best Bars",
+      url: 'https://fixtures.agent-browser.test/bars/aggregate/chicago-bound',
+      snippet: 'Guide to Arlington Heights bars with editorial list snippets.',
+    },
+    {
+      title: 'Yellow Pages: Bars in Arlington Heights',
+      url: 'https://fixtures.agent-browser.test/bars/aggregate/yellow-pages',
+      snippet: 'Find bars in Arlington Heights, IL on Yellow Pages.',
+    },
+    {
+      title: 'Restaurantji: Best Bars near Arlington Heights',
+      url: 'https://fixtures.agent-browser.test/bars/aggregate/restaurantji',
+      snippet: 'Restaurantji page for best bars near Arlington Heights.',
+    },
+    {
+      title: 'Restaurant Guru: Top 7 pubs & bars',
+      url: 'https://fixtures.agent-browser.test/bars/aggregate/restaurant-guru',
+      snippet: 'Restaurant Guru aggregate ranking of pubs and bars.',
+    },
+  ];
+  return {
+    memoryResult: memoryFixture(),
+    searchResults: {
+      [expectedQuery]: {
+        status: 'found',
+        query: expectedQuery,
+        results: aggregateResults,
+      },
+      'bars names near Arlington Heights IL': {
+        status: 'found',
+        query: 'bars names near Arlington Heights IL',
+        results: domain.entities.map(([name, url, locationEvidence]) => ({
+          title: `${name} - source-backed bar`,
+          url,
+          snippet: `${name} is a bar with location evidence in ${locationEvidence}.`,
+        })),
+      },
+      '*': {
+        status: 'empty',
+        query: '*',
+        results: [],
+        reason: 'No unmatched fixture should be needed for the aggregate-bar recovery case.',
+      },
+    },
+    pageResults: Object.fromEntries(aggregateResults.map((result) => [result.url, {
+      status: 'read',
+      url: result.url,
+      title: result.title,
+      text: [
+        result.title,
+        'This page is an aggregate source page for bars near Arlington Heights, IL.',
+        'It contains directory headers, source names, advertising blocks, and navigation labels but no validated individual place rows in this recorded failure.',
+      ].join(' '),
+      links: [
+        { text: result.title, url: result.url },
+        { text: 'Best Bars', url: `${result.url}/best-bars` },
+        { text: 'Restaurants', url: `${result.url}/restaurants` },
+        { text: 'Reviews', url: `${result.url}/reviews` },
+      ],
+      jsonLd: [],
+      entities: [
+        { name: result.title, url: result.url, evidence: 'aggregate source title, not an individual bar entity' },
+        { name: 'Best Bars', url: `${result.url}/best-bars`, evidence: 'directory category heading' },
+        { name: 'Restaurants', url: `${result.url}/restaurants`, evidence: 'site navigation label' },
+        { name: 'Reviews', url: `${result.url}/reviews`, evidence: 'site navigation label' },
+      ],
+    }])),
+  };
+}
+
+function barsArticleChromeRecoveryFixtures() {
+  const domain = domains.find((candidate) => candidate.id === 'bars');
+  const expectedQuery = `bars ${LOCATION_QUERY}`;
+  const aggregateUrl = 'https://fixtures.agent-browser.test/bars/article/chicago-bound';
+  const yelpUrl = 'https://fixtures.agent-browser.test/bars/article/yelp';
+  const recoveryQuery = `bars names near ${LOCATION_QUERY}`;
+  const recoveryResults = domain.entities.map(([name, url, locationEvidence]) => ({
+    title: `${name} - source-backed bar`,
+    url,
+    snippet: `${name} is a bar with location evidence in ${locationEvidence}.`,
+  }));
+  return {
+    memoryResult: memoryFixture(),
+    searchResults: {
+      [expectedQuery]: {
+        status: 'found',
+        query: expectedQuery,
+        results: [
+          {
+            title: "Chicago Bound: Arlington Heights' Best Bars Spots [2026 Guide]",
+            url: aggregateUrl,
+            snippet: 'Whether you are in the mood for a cozy corner to sip a craft cocktail or a lively spot to catch the game with friends, Arlington Heights has something for everyone.',
+          },
+          {
+            title: 'Yelp: Best Bars in Arlington Heights, IL',
+            url: yelpUrl,
+            snippet: 'Directory search page for bars near Arlington Heights, IL.',
+          },
+        ],
+      },
+      [recoveryQuery]: {
+        status: 'found',
+        query: recoveryQuery,
+        results: recoveryResults,
+      },
+      ...Object.fromEntries(domain.entities.map(([name, url, locationEvidence]) => [
+        `"${name}" ${LOCATION_QUERY} ${domain.subject} official reviews`,
+        {
+          status: 'found',
+          query: `"${name}" ${LOCATION_QUERY} ${domain.subject} official reviews`,
+          results: [{
+            title: `${name} - Official source`,
+            url,
+            snippet: `${name} is a bar with location evidence in ${locationEvidence}.`,
+          }],
+        },
+      ])),
+      '*': {
+        status: 'empty',
+        query: '*',
+        results: [],
+        reason: 'The article-chrome regression fixture requires recovery from aggregate pages to named bar evidence.',
+      },
+    },
+    pageResults: {
+      [aggregateUrl]: {
+        status: 'read',
+        url: aggregateUrl,
+        title: "Arlington Heights' Best Bars Spots [2026 Guide]",
+        text: [
+          'Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode.',
+          '{"@context":"https://schema.org","@type":"Article","headline":"Arlington Heights\' Best Bars Spots [2026 Guide]","description":"Whether you are in the mood for a cozy corner to sip a craft cocktail or a lively spot to catch the game with friends, Arlington Heights has something for everyone.","author":{"@type":"Person","name":"Chicago Bound"}}',
+          "Bars Arlington Heights' Best Bars Spots [2026 Guide] A Alex Irvin Published: 2023-05-25 Updated: 2026-03-16.",
+        ].join(' '),
+        links: [
+          { text: 'Support Enable', url: `${aggregateUrl}#support` },
+          { text: 'Join Now Enable', url: `${aggregateUrl}#join` },
+          { text: 'Chicago Bound', url: 'https://fixtures.agent-browser.test/bars/article/publisher-home' },
+          { text: 'Shop Categories', url: `${aggregateUrl}#shop` },
+          { text: 'About Us', url: `${aggregateUrl}#about` },
+        ],
+        jsonLd: [{
+          '@context': 'https://schema.org',
+          '@type': 'Article',
+          headline: "Arlington Heights' Best Bars Spots [2026 Guide]",
+          description: 'Whether you are in the mood for a cozy corner to sip a craft cocktail or a lively spot to catch the game with friends, Arlington Heights has something for everyone.',
+          image: 'https://fixtures.agent-browser.test/bars/article.webp',
+          datePublished: '2026-03-16T00:00:00.000Z',
+          author: { '@type': 'Person', name: 'Chicago Bound', url: 'https://fixtures.agent-browser.test/bars/article/publisher-home' },
+        }],
+        entities: [
+          { name: 'Support Enable', url: `${aggregateUrl}#support`, evidence: 'site support/action navigation label in an article header' },
+          { name: 'Join Now Enable', url: `${aggregateUrl}#join`, evidence: 'account/action navigation label in an article header' },
+          { name: 'Chicago Bound', url: 'https://fixtures.agent-browser.test/bars/article/publisher-home', evidence: 'Article author and publisher metadata, not an individual bar' },
+          { name: "Arlington Heights' Best Bars Spots [2026 Guide]", url: aggregateUrl, evidence: 'Article headline and broad page title, not an individual bar' },
+        ],
+      },
+      [yelpUrl]: {
+        status: 'read',
+        url: yelpUrl,
+        title: 'Yelp: Best Bars in Arlington Heights, IL',
+        text: 'Yelp Best Bars in Arlington Heights, IL. Sign In. Search. Write a Review. This aggregate page has no validated individual place rows in the regression fixture.',
+        links: [
+          { text: 'Yelp: Best Bars in Arlington Heights, IL', url: yelpUrl },
+          { text: 'Sign In', url: `${yelpUrl}/login` },
+          { text: 'Write a Review', url: `${yelpUrl}/write-review` },
+        ],
+        jsonLd: [],
+        entities: [
+          { name: 'Yelp: Best Bars in Arlington Heights, IL', url: yelpUrl, evidence: 'aggregate source title, not an individual bar entity' },
+          { name: 'Sign In', url: `${yelpUrl}/login`, evidence: 'account action link' },
+          { name: 'Write a Review', url: `${yelpUrl}/write-review`, evidence: 'site action link' },
+        ],
+      },
+    },
+  };
+}
+
+function arbitraryPrefixFixtures() {
+  const expectedQuery = 'shops the Vatican starts with A';
+  const alternateQuery = 'shops Vatican starts with A';
+  const listingUrl = 'https://fixtures.agent-browser.test/arbitrary/vatican-shops-prefix-a';
+  const result = {
+    status: 'found',
+    query: expectedQuery,
+    results: [{
+      title: 'Shops in the Vatican starting with A',
+      url: listingUrl,
+      snippet: 'Alpha Gifts is a shop in the Vatican. Basilica Books is a shop in the Vatican but does not start with A.',
+    }],
+  };
+  return {
+    memoryResult: { status: 'empty', query: 'location', memories: [] },
+    searchResults: {
+      [expectedQuery]: result,
+      [alternateQuery]: { ...result, query: alternateQuery },
+      '*': {
+        status: 'empty',
+        query: '*',
+        results: [],
+        reason: 'The arbitrary prefix fixture only responds to the compiled constraint query.',
+      },
+    },
+    pageResults: {
+      [listingUrl]: {
+        status: 'read',
+        url: listingUrl,
+        title: 'Vatican shops beginning with A',
+        text: 'Alpha Gifts is a shop in the Vatican with verified source evidence. Basilica Books is a shop in the Vatican but fails the requested A-prefix constraint.',
+        links: [
+          { text: 'Alpha Gifts', url: 'https://fixtures.agent-browser.test/alpha-gifts' },
+          { text: 'Basilica Books', url: 'https://fixtures.agent-browser.test/basilica-books' },
+        ],
+        jsonLd: [],
+        entities: [
+          {
+            name: 'Alpha Gifts',
+            url: 'https://fixtures.agent-browser.test/alpha-gifts',
+            evidence: 'Alpha Gifts is a shop in the Vatican with verified source evidence.',
+          },
+          {
+            name: 'Basilica Books',
+            url: 'https://fixtures.agent-browser.test/basilica-books',
+            evidence: 'Basilica Books is a shop in the Vatican but fails the requested A-prefix constraint.',
+          },
+        ],
+      },
+    },
+  };
+}
+
+function arbitraryImpossibleFixtures() {
+  const expectedQuery = 'websites middle earth rhymes with cat';
+  const listingUrl = 'https://fixtures.agent-browser.test/arbitrary/middle-earth-rhyme-cat';
+  return {
+    memoryResult: { status: 'empty', query: 'location', memories: [] },
+    searchResults: {
+      [expectedQuery]: {
+        status: 'found',
+        query: expectedQuery,
+        results: [{
+          title: 'Middle Earth websites that rhyme with cat',
+          url: listingUrl,
+          snippet: 'A constraint stress fixture with no source-backed real websites located in Middle Earth and rhyming with cat.',
+        }],
+      },
+      '*': {
+        status: 'empty',
+        query: '*',
+        results: [],
+        reason: 'No fallback evidence exists for the impossible arbitrary-constraint fixture.',
+      },
+    },
+    pageResults: {
+      [listingUrl]: {
+        status: 'read',
+        url: listingUrl,
+        title: 'No verifiable Middle Earth websites',
+        text: 'This fixture intentionally contains no accepted website entity located in Middle Earth whose name rhymes with cat.',
+        links: [
+          { text: 'Map', url: 'https://fixtures.agent-browser.test/arbitrary/map' },
+          { text: 'Cat', url: 'https://fixtures.agent-browser.test/arbitrary/cat' },
+          { text: 'Middle Earth Directory', url: 'https://fixtures.agent-browser.test/arbitrary/directory' },
+        ],
+        jsonLd: [],
+        entities: [
+          { name: 'Map', url: 'https://fixtures.agent-browser.test/arbitrary/map', evidence: 'generic navigation label' },
+          { name: 'Cat', url: 'https://fixtures.agent-browser.test/arbitrary/cat', evidence: 'content keyword, not a website entity located in Middle Earth' },
+          { name: 'Middle Earth Directory', url: 'https://fixtures.agent-browser.test/arbitrary/directory', evidence: 'aggregate source label, not an entity satisfying the rhyme/count constraints' },
+        ],
+      },
+    },
+  };
+}
+
 function answerFor(domain, goal) {
   return [
     `Here are ${domain.plural} near ${LOCATION}:`,
@@ -357,6 +1055,16 @@ function answerFor(domain, goal) {
 }
 
 function expectedOutputFor(domain, goal, overrides = {}) {
+  const taskGoal = overrides.taskGoal
+    ?? overrides.messages?.at?.(-1)?.content
+    ?? `what are the ${goal.prompt} ${domain.subject} near me?`;
+  const validationContract = overrides.validationContract ?? validationContractFor({
+    taskGoal,
+    subject: domain.subject,
+    location: LOCATION,
+    requestedCount: overrides.requestedCount,
+    excludedCandidates: overrides.excludedCandidates ?? [],
+  });
   return JSON.stringify({
     expectedQuery: queryFor(domain, goal),
     expectedEntities: domain.entities.map(([name]) => name),
@@ -367,11 +1075,13 @@ function expectedOutputFor(domain, goal, overrides = {}) {
     rankingGoal: goal.id,
     location: LOCATION,
     fixtures: fixturesFor(domain, goal),
+    validationContract,
     ...overrides,
   });
 }
 
 function liveExpectedOutputFor(domain, goal) {
+  const taskGoal = `what are the ${goal.prompt} ${domain.subject} near me?`;
   return JSON.stringify({
     semanticOnly: true,
     expectedQuery: queryFor(domain, goal),
@@ -381,6 +1091,12 @@ function liveExpectedOutputFor(domain, goal) {
     location: LOCATION,
     forbiddenLabels,
     expectedResult: 'semantic-entities-or-insufficient-evidence',
+    validationContract: validationContractFor({
+      taskGoal,
+      subject: domain.subject,
+      location: LOCATION,
+      requestedCount: 1,
+    }),
   });
 }
 
@@ -565,9 +1281,270 @@ export function buildSearchEvalCases() {
       expectedEntities: domains[0].entities.map(([name]) => name),
       forbiddenLabels,
     },
+  }, {
+    id: 'negative-follow-up-bars-show-me-3-more-only-one-result',
+    criteria: [
+      'This is a count-contract regression case for follow-up search.',
+      'The previous answer already showed Sports Page Bar & Grill Arlington Heights.',
+      'The user asks for three more bars, but the fixture can verify only one additional bar.',
+      'The workflow must not publish a one-item answer as if it fully satisfied the request; if it can verify only one additional bar, it must render that verified bar and explicitly acknowledge the requested-count shortfall.',
+    ].join(' '),
+    input: 'show me 3 more',
+    expected_output: expectedOutputForFollowUp(
+      domains.find((domain) => domain.id === 'bars'),
+      rankingGoals.find((goal) => goal.id === 'closest'),
+      followUpVariants[0],
+      priorEntities.bars,
+      {
+        expectedResult: 'insufficient-follow-up-count',
+        fixtures: followUpShortfallFixtures(),
+      },
+    ),
+    metadata: {
+      followUp: true,
+      negative: true,
+      shortfall: true,
+      domain: 'bars',
+      subject: 'bars',
+      rankingGoal: 'closest',
+      location: LOCATION,
+      priorEntity: priorEntities.bars[0],
+      expectedQuery: followUpExpectedQuery(
+        domains.find((domain) => domain.id === 'bars'),
+        rankingGoals.find((goal) => goal.id === 'closest'),
+        followUpVariants[0],
+      ),
+      requestedCount: 3,
+      minimumAcceptedEntities: 3,
+      excludedCandidates: [priorEntities.bars[0]],
+      expectedEntities: domains.find((domain) => domain.id === 'bars').entities.map(([name]) => name),
+      forbiddenLabels,
+    },
+  }, {
+    id: 'negative-follow-up-bars-article-page-chrome',
+    criteria: [
+      'This is the latest runtime regression case for a subject switch follow-up.',
+      'A prior movie-theater answer provides only compatible location context; the current request switches the requested subject to bars.',
+      'The workflow must reject Article JSON-LD, publisher names, account/navigation labels, and broad article/listing titles as bar entities.',
+      'The workflow must recover to individual bar/place names before publishing, or explicitly report insufficient evidence.',
+    ].join(' '),
+    input: 'what about bars?',
+    expected_output: expectedOutputFor(domains.find((domain) => domain.id === 'bars'), rankingGoals.find((goal) => goal.id === 'closest'), {
+      negative: true,
+      expectedQuery: `bars ${LOCATION_QUERY}`,
+      expectedResult: 'recovered',
+      messages: subjectSwitchMessages({
+        fromDomain: domains.find((domain) => domain.id === 'movie-theaters'),
+        fromGoal: rankingGoals.find((goal) => goal.id === 'best'),
+        toText: 'what about bars?',
+        prior: domains.find((domain) => domain.id === 'movie-theaters').entities[0],
+      }),
+      fixtures: barsArticleChromeRecoveryFixtures(),
+      badAnswer: [
+        `Here are bars near ${LOCATION_QUERY}:`,
+        '',
+        '1. [Support Enable](https://fixtures.agent-browser.test/bars/article/chicago-bound#support) - Why: Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode {"@context":"https://schema.org","@type":"Article","headline":"Arlington Heights\' Best Bars Spots [2026 Guide]"}',
+        '2. [Join Now Enable](https://fixtures.agent-browser.test/bars/article/chicago-bound#join) - Why: Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode {"@context":"https://schema.org","@type":"Article"}',
+        '3. [Chicago Bound](https://fixtures.agent-browser.test/bars/article/publisher-home) - Why: Article publisher metadata and page title for Arlington Heights bars.',
+      ].join('\n'),
+      badLabels: [
+        'Support Enable',
+        'Join Now Enable',
+        'Chicago Bound',
+        "Arlington Heights' Best Bars Spots [2026 Guide]",
+        'Shop Categories',
+        'About Us',
+        'Enable dark mode',
+        'Yelp: Best Bars in Arlington Heights, IL',
+      ],
+    }),
+    metadata: {
+      followUp: true,
+      subjectSwitch: true,
+      negative: true,
+      domain: 'bars',
+      subject: 'bars',
+      previousSubject: 'movie theaters',
+      rankingGoal: undefined,
+      location: LOCATION,
+      expectedQuery: `bars ${LOCATION_QUERY}`,
+      badLabels: [
+        'Support Enable',
+        'Join Now Enable',
+        'Chicago Bound',
+        "Arlington Heights' Best Bars Spots [2026 Guide]",
+        'Shop Categories',
+        'About Us',
+        'Enable dark mode',
+        'Yelp: Best Bars in Arlington Heights, IL',
+      ],
+      expectedEntities: domains.find((domain) => domain.id === 'bars').entities.map(([name]) => name),
+      forbiddenLabels,
+    },
+  }, {
+    id: 'negative-bars-aggregate-source-pages',
+    criteria: [
+      'This is a runtime regression case for closest bars.',
+      'The workflow must reject aggregate/list-page titles as requested entities and recover to individual bar/place names before publishing.',
+      'The verifier must fail if Yelp, Yellow Pages, Restaurantji, Restaurant Guru, or other source/list titles are rendered as bars.',
+    ].join(' '),
+    input: 'what about closest bars?',
+    expected_output: expectedOutputFor(domains.find((domain) => domain.id === 'bars'), rankingGoals.find((goal) => goal.id === 'closest'), {
+      negative: true,
+      expectedResult: 'recovered',
+      fixtures: barsAggregateRecoveryFixtures(),
+      badAnswer: [
+        'Here are some of the closest bars in Arlington Heights, IL:',
+        '',
+        '- [Yelp: Best Bars in Arlington Heights, IL](https://fixtures.agent-browser.test/bars/aggregate/yelp)',
+        "- [Chicago Bound: Arlington Heights' Best Bars](https://fixtures.agent-browser.test/bars/aggregate/chicago-bound)",
+        '- [Yellow Pages: Bars in Arlington Heights](https://fixtures.agent-browser.test/bars/aggregate/yellow-pages)',
+        '- [Restaurantji: Best Bars near Arlington Heights](https://fixtures.agent-browser.test/bars/aggregate/restaurantji)',
+        '- [Restaurant Guru: Top 7 pubs & bars](https://fixtures.agent-browser.test/bars/aggregate/restaurant-guru)',
+      ].join('\n'),
+      badLabels: [
+        'Yelp: Best Bars in Arlington Heights, IL',
+        "Chicago Bound: Arlington Heights' Best Bars",
+        'Yellow Pages: Bars in Arlington Heights',
+        'Restaurantji: Best Bars near Arlington Heights',
+        'Restaurant Guru: Top 7 pubs & bars',
+      ],
+    }),
+    metadata: {
+      domain: 'bars',
+      subject: 'bars',
+      rankingGoal: 'closest',
+      location: LOCATION,
+      negative: true,
+      badLabels: [
+        'Yelp: Best Bars in Arlington Heights, IL',
+        "Chicago Bound: Arlington Heights' Best Bars",
+        'Yellow Pages: Bars in Arlington Heights',
+        'Restaurantji: Best Bars near Arlington Heights',
+        'Restaurant Guru: Top 7 pubs & bars',
+      ],
+      expectedEntities: domains.find((domain) => domain.id === 'bars').entities.map(([name]) => name),
+      forbiddenLabels,
+    },
   });
 
-  return cases.slice(0, 120).map((testCase, index) => ({
+  cases.push({
+    id: 'arbitrary-vatican-shops-prefix-a',
+    criteria: [
+      'Compile arbitrary query constraints before tool planning.',
+      'The answer must list shops in the Vatican whose names start with A.',
+      'The answer must reject otherwise valid shops that fail the generated name-prefix constraint.',
+    ].join(' '),
+    input: 'provide shops in the Vatican that start with the letter "A"',
+    expected_output: JSON.stringify({
+      expectedQuery: 'shops the Vatican starts with A',
+      expectedEntities: ['Alpha Gifts'],
+      expectedEntityLinks: {
+        'Alpha Gifts': 'https://fixtures.agent-browser.test/alpha-gifts',
+      },
+      expectedLocations: ['Vatican'],
+      forbiddenLabels: ['Basilica Books', ...forbiddenLabels],
+      subject: 'shops',
+      rankingGoal: undefined,
+      location: 'Vatican',
+      fixtures: arbitraryPrefixFixtures(),
+      validationContract: validationContractFor({
+        taskGoal: 'provide shops in the Vatican that start with the letter "A"',
+        subject: 'shops',
+        location: 'Vatican',
+        prefix: 'A',
+      }),
+    }),
+    metadata: {
+      arbitraryConstraints: true,
+      domain: 'arbitrary-shops',
+      subject: 'shops',
+      location: 'Vatican',
+      expectedEntities: ['Alpha Gifts'],
+      forbiddenLabels: ['Basilica Books', ...forbiddenLabels],
+      validationConstraintTypes: ['subject', 'location', 'name_prefix'],
+    },
+  }, {
+    id: 'arbitrary-websites-middle-earth-rhyme-cat-insufficient',
+    criteria: [
+      'Compile arbitrary count, rhyme, type, and fictional-location constraints.',
+      'The workflow must try bounded evidence gathering and then acknowledge the unmet constraints.',
+      'It must not fabricate websites located in Middle Earth or silently drop the rhyme/count constraints.',
+    ].join(' '),
+    input: 'show 10 websites that rhyme with "cat" located in middle earth',
+    expected_output: JSON.stringify({
+      expectedQuery: 'websites middle earth rhymes with cat',
+      expectedResult: 'insufficient-evidence-no-publish',
+      expectedEntities: [],
+      expectedLocations: ['middle earth'],
+      forbiddenLabels,
+      subject: 'websites',
+      location: 'middle earth',
+      requestedCount: 10,
+      minimumAcceptedEntities: 10,
+      fixtures: arbitraryImpossibleFixtures(),
+      validationContract: validationContractFor({
+        taskGoal: 'show 10 websites that rhyme with "cat" located in middle earth',
+        subject: 'websites',
+        location: 'middle earth',
+        requestedCount: 10,
+        rhyme: 'cat',
+        impossibleKind: 'likely-impossible',
+        impossibleReason: 'middle earth appears fictional or not directly verifiable by normal web/local search evidence.',
+      }),
+    }),
+    metadata: {
+      arbitraryConstraints: true,
+      negative: true,
+      domain: 'arbitrary-websites',
+      subject: 'websites',
+      location: 'middle earth',
+      requestedCount: 10,
+      minimumAcceptedEntities: 10,
+      validationConstraintTypes: ['count', 'subject', 'location', 'rhyme'],
+      forbiddenLabels,
+    },
+  });
+
+  for (const domain of domains) {
+    for (const [goalIndex, goal] of rankingGoals.entries()) {
+      const variant = domain.id === 'bars' && goal.id === 'closest'
+        ? followUpVariants[0]
+        : followUpVariants[goalIndex % followUpVariants.length];
+      const prior = priorEntities[domain.id];
+      const expectedQuery = followUpExpectedQuery(domain, goal, variant);
+      const exactBarsRegression = domain.id === 'bars' && goal.id === 'closest' && variant.id === 'show-me-3-more';
+      cases.push({
+        id: exactBarsRegression ? 'follow-up-bars-show-me-3-more' : `follow-up-${domain.id}-${goal.id}-${variant.id}`,
+        criteria: [
+          `Resolve the follow-up "${variant.text(prior)}" using prior context for ${goal.prompt} ${domain.subject} near ${LOCATION}.`,
+          'The tool query must inherit subject and location from the prior structured search context.',
+          'The literal follow-up phrase must not be used as the web search query.',
+          'Previously accepted candidates must be excluded from the final answer unless explicitly requested again.',
+          'The final answer must list actual additional requested entities, not aggregate pages or page chrome.',
+          `The final answer should contain at least ${variant.requestedCount} additional accepted entities; if bounded evidence yields fewer, it must explicitly acknowledge the shortfall instead of presenting the partial list as complete success.`,
+        ].join(' '),
+        input: variant.text(prior),
+        expected_output: expectedOutputForFollowUp(domain, goal, variant, prior),
+        metadata: {
+          followUp: true,
+          domain: domain.id,
+          subject: domain.subject,
+          rankingGoal: goal.id,
+          location: LOCATION,
+          priorEntity: prior[0],
+          expectedQuery,
+          requestedCount: variant.requestedCount,
+          minimumAcceptedEntities: variant.requestedCount,
+          excludedCandidates: [prior[0]],
+          expectedEntities: domain.entities.map(([name]) => name),
+          forbiddenLabels,
+        },
+      });
+    }
+  }
+
+  return cases.map((testCase, index) => ({
     ...testCase,
     id: testCase.id === 'movie-theaters-best' ? 'movie-theaters-arlington-heights' : testCase.id,
     metadata: {

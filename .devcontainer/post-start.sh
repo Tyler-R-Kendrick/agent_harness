@@ -3,7 +3,7 @@ set -euo pipefail
 
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly START_SCRIPT="$REPO_ROOT/scripts/run-agent-browser-dev-server.sh"
-readonly HEALTH_URL="http://127.0.0.1:5173/"
+readonly HEALTH_URL="http://127.0.0.1:5174/"
 readonly LOG_FILE="${TMPDIR:-/tmp}/agent-browser-dev-server.log"
 readonly CACHE_PREP_SCRIPT="$REPO_ROOT/.devcontainer/prepare-cache-storage.sh"
 
@@ -26,7 +26,7 @@ if [[ ! -x "$START_SCRIPT" ]]; then
 fi
 
 if server_ready; then
-  log 'agent-browser dev server is already responding on port 5173'
+  log 'agent-browser dev server is already responding on port 5174'
   exit 0
 fi
 

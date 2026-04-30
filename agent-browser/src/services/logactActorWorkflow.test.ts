@@ -59,6 +59,7 @@ async function appendAcceptedTheaterCandidate(context: LogActActorExecuteContext
     },
   });
 }
+
 describe('runLogActActorWorkflow', () => {
   it('writes dynamic LogAct actors to the AgentBus before executor action', async () => {
     const onBusEntry = vi.fn();
@@ -80,6 +81,10 @@ describe('runLogActActorWorkflow', () => {
     const firstExecuteContext = execute.mock.calls[0]?.[0];
     expect(firstExecuteContext).toBeDefined();
     expect(firstExecuteContext?.toolPolicy.allowedToolIds).toEqual(['read_session_file']);
+    expect(firstExecuteContext?.validationContract).toEqual(expect.objectContaining({
+      type: 'validation-contract',
+      constraints: expect.any(Array),
+    }));
 
     const actors = onBusEntry.mock.calls.map(([entry]) => entry.actorId ?? entry.actor);
     expect(actors).toEqual(expect.arrayContaining([
@@ -116,9 +121,17 @@ describe('runLogActActorWorkflow', () => {
     const teacherVote = entries.find((entry) => entry.actorId === 'voter:teacher');
     const judgeEntry = entries.find((entry) => entry.actorId === 'judge-decider');
     const resultEntry = entries.find((entry) => entry.payloadType === PayloadType.Result);
+    const validationContract = entries.find((entry) => (
+      entry.actorId === 'validation-agent'
+      && entry.payloadType === PayloadType.Policy
+      && entry.detail.includes('"type":"validation-contract"')
+    ));
     expect(toolAgentPolicy?.branchId).toBe('agent:tool-agent');
     expect(toolAgentPolicy?.parentActorId).toBe('logact');
+    expect(validationContract).toBeDefined();
+    expect(entries.indexOf(validationContract!)).toBeLessThan(actors.indexOf('student-driver'));
     expect(teacherVote?.branchId).toBe('agent:judge-decider');
+    expect(teacherVote?.parentActorId).toBe('student-driver');
     expect(judgeEntry?.branchId).toBe('agent:judge-decider');
     expect(resultEntry?.branchId).toBe('agent:executor');
   });
@@ -643,6 +656,7 @@ describe('runLogActActorWorkflow', () => {
     expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
     expect(postProcessorResult?.detail).toContain('Sources:');
   });
+
   it('runs student self-reflection and teacher/student revision loops before judge scoring', async () => {
     const onBusEntry = vi.fn();
     const onVoterStep = vi.fn();
@@ -696,6 +710,7 @@ describe('runLogActActorWorkflow', () => {
       expect.stringContaining('Teacher advice round'),
       expect.stringContaining('Teacher approved'),
     ]));
+    expect(teacherVotes.every((entry) => entry.parentActorId === 'student-driver')).toBe(true);
     expect(onVoterStep.mock.calls.map(([step]) => step.voterId)).toEqual(['voter:teacher', 'voter:teacher']);
     expect(teacherAdviceIndex).toBeGreaterThan(studentReflectionEntries.at(-1)!.position);
     expect(studentRevisionIndex).toBeGreaterThan(teacherAdviceIndex);

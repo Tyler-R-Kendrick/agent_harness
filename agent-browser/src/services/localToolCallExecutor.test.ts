@@ -30,6 +30,19 @@ function makeStreamingModel(turns: string[]) {
   return { model, calls, getTurnCount: () => turn };
 }
 
+function makeGenerateModel(turns: unknown[]) {
+  let turn = 0;
+  const model = {
+    provider: 'local' as const,
+    async doGenerate() {
+      const content = turns[turn] ?? '';
+      turn += 1;
+      return { content };
+    },
+  };
+  return { model, getTurnCount: () => turn };
+}
+
 type TestTool = { execute: ReturnType<typeof vi.fn> };
 
 function makeTool<TArgs>(execute: (args: TArgs) => unknown | Promise<unknown>): TestTool {
@@ -306,6 +319,65 @@ describe('runLocalToolCallExecutor', () => {
     expect(onModelTurnEnd.mock.calls[0][2]).toEqual({ toolName: 'cli', args: { command: 'ls' } });
     // Second turn: no tool call.
     expect(onModelTurnEnd.mock.calls[1][2]).toBeNull();
+  });
+
+  it('keeps model turn ids and display indices monotonic across LogAct completion retries', async () => {
+    const { model } = makeStreamingModel(['draft answer', 'final answer']);
+    const checker: ICompletionChecker = {
+      check: vi
+        .fn()
+        .mockResolvedValueOnce({
+          type: PayloadType.Completion as PayloadType.Completion,
+          intentId: 'first',
+          done: false,
+          score: 'low' as const,
+          feedback: 'Use the feedback and try again.',
+        })
+        .mockResolvedValueOnce({
+          type: PayloadType.Completion as PayloadType.Completion,
+          intentId: 'second',
+          done: true,
+          score: 'high' as const,
+          feedback: '',
+        }),
+    };
+    const onModelTurnStart = vi.fn();
+    const onModelTurnEnd = vi.fn();
+
+    await runLocalToolCallExecutor(
+      {
+        model: model as never,
+        tools: {} as never,
+        toolDescriptors: [],
+        instructions: 'sys',
+        messages: [{ role: 'user', content: 'answer with completion checking' }],
+        completionChecker: checker,
+        maxIterations: 2,
+      },
+      { onModelTurnStart, onModelTurnEnd },
+    );
+
+    expect(onModelTurnStart.mock.calls.map(([id]) => id)).toEqual(['local-turn-1', 'local-turn-2']);
+    expect(onModelTurnStart.mock.calls.map(([, stepIndex]) => stepIndex)).toEqual([0, 1]);
+    expect(onModelTurnEnd.mock.calls.map(([id]) => id)).toEqual(['local-turn-1', 'local-turn-2']);
+  });
+
+  it('reads text from doGenerate results that return string content instead of content parts', async () => {
+    const { model, getTurnCount } = makeGenerateModel(['Final from generate.']);
+
+    const result = await runLocalToolCallExecutor(
+      {
+        model: model as never,
+        tools: {} as never,
+        toolDescriptors: [],
+        instructions: 'sys',
+        messages: [{ role: 'user', content: 'hi' }],
+      },
+      {},
+    );
+
+    expect(getTurnCount()).toBe(1);
+    expect(result.text).toBe('Final from generate.');
   });
 
   it('mirrors LogAct bus appends to onBusEntry through the observed bus', async () => {

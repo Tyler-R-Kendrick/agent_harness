@@ -80,9 +80,9 @@ The forwarded URL pattern used for browser navigation and redirect URIs inside G
 Do not rebuild this formula ad hoc in conversation or code when the repo skill is available. Run the bundled helper instead:
 
 ```bash
-skills/agent-harness-context/scripts/codespaces-uri.sh 5173
-skills/agent-harness-context/scripts/codespaces-uri.sh 5173 /auth/callback
-skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5173 /auth/callback
+skills/agent-harness-context/scripts/codespaces-uri.sh 5174
+skills/agent-harness-context/scripts/codespaces-uri.sh 5174 /auth/callback
+skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5174 /auth/callback
 ```
 
 The script queries the necessary environment variables, constructs the URL, and can optionally make the port public and validate the base URL.

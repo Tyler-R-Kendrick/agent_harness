@@ -24,7 +24,7 @@
         },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "^\\[agent-browser dev\\] (Starting Vite dev server on port 5173|Reusing existing server on port 5173)$",
+          "beginsPattern": "^\\[agent-browser dev\\] (Starting Vite dev server on port 5174|Reusing existing server on port 5174)$",
           "endsPattern": "^\\[agent-browser dev\\] Ready$"
         }
       }

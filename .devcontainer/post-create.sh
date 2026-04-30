@@ -72,10 +72,10 @@ else
 fi
 
 # ── npm Workspaces -----------------------------------------------------------
-if [ ! -d "$REPO_ROOT/node_modules" ] || [ ! -f "$REPO_ROOT/node_modules/.package-lock.json" ] || [ "$REPO_ROOT/package-lock.json" -nt "$REPO_ROOT/node_modules/.package-lock.json" ]; then
+if [ ! -d "$REPO_ROOT/node_modules" ]; then
   prune_workspace_node_modules
   log "Installing shared npm workspace dependencies"
-  run_with_timeout 600 npm ci --prefix "$REPO_ROOT"
+  run_with_timeout 600 npm install --prefix "$REPO_ROOT"
 else
   log "Shared npm workspace dependencies are current"
 fi
