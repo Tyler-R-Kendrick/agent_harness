@@ -1,9 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const executeCliCommandMock = vi.fn();
+const runLocalWebResearchAgentMock = vi.fn();
+const runRdfWebSearchAgentMock = vi.fn();
 
 vi.mock('./cli/exec', () => ({
   executeCliCommand: (...args: unknown[]) => executeCliCommandMock(...args),
+}));
+
+vi.mock('../chat-agents/LocalWebResearch', () => ({
+  LOCAL_WEB_RESEARCH_AGENT_ID: 'local-web-research-agent',
+  LOCAL_WEB_RESEARCH_AGENT_LABEL: 'Local Web Research Agent',
+  LOCAL_WEB_RESEARCH_TOOL_ID: 'webmcp:local_web_research',
+  runLocalWebResearchAgent: (...args: unknown[]) => runLocalWebResearchAgentMock(...args),
+}));
+
+vi.mock('../chat-agents/SemanticSearch', () => ({
+  RDF_SEMANTIC_SEARCH_TOOL_ID: 'webmcp:semantic_search',
+  runRdfWebSearchAgent: (...args: unknown[]) => runRdfWebSearchAgentMock(...args),
 }));
 
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, buildToolGroupDescriptors, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds } from './index';
@@ -35,21 +49,53 @@ describe('default tools', () => {
     expect(instructions).toContain('Selected tool ids: cli');
   });
 
-  it('includes exactly one built-in tool descriptor: cli', () => {
-    expect(DEFAULT_TOOL_DESCRIPTORS).toHaveLength(1);
-    const [cli] = DEFAULT_TOOL_DESCRIPTORS;
-    expect(cli.id).toBe('cli');
-    expect(cli.group).toBe('built-in');
+  it('includes built-in CLI, local web research, and RDF semantic descriptors', () => {
+    expect(DEFAULT_TOOL_DESCRIPTORS.map((descriptor) => descriptor.id)).toEqual([
+      'cli',
+      'webmcp:local_web_research',
+      'webmcp:semantic_search',
+    ]);
+    expect(DEFAULT_TOOL_DESCRIPTORS[0]).toMatchObject({ id: 'cli', group: 'built-in' });
+    expect(DEFAULT_TOOL_DESCRIPTORS[1]).toMatchObject({
+      id: 'webmcp:local_web_research',
+      group: 'web-search-mcp',
+      subGroup: 'web-search-mcp',
+    });
+    expect(DEFAULT_TOOL_DESCRIPTORS[2]).toMatchObject({
+      id: 'webmcp:semantic_search',
+      group: 'web-search-mcp',
+      subGroup: 'web-search-mcp',
+    });
   });
 
-  it('creates a cli tool that delegates to the shared executor', async () => {
+  it('creates CLI, local web research, and RDF semantic tools that delegate to their runtimes', async () => {
     const context = createContext();
     const tools = createDefaultTools(context);
 
     executeCliCommandMock.mockResolvedValueOnce({ exitCode: 0 });
     await tools.cli.execute?.({ command: 'pwd' }, {} as never);
+    runLocalWebResearchAgentMock.mockResolvedValueOnce({ searchResults: [], evidence: [], citations: [], errors: [] });
+    await tools['webmcp:local_web_research'].execute?.({
+      question: 'local web search agents',
+      maxSearchResults: 6,
+      maxPagesToExtract: 2,
+      maxEvidenceChunks: 4,
+      synthesize: false,
+    }, {} as never);
+    runRdfWebSearchAgentMock.mockResolvedValueOnce({ results: [], errors: [] });
+    await tools['webmcp:semantic_search'].execute?.({
+      question: 'facts for Q42',
+      limit: 5,
+    }, {} as never);
 
     expect(executeCliCommandMock).toHaveBeenCalledWith(context, 'pwd', { emitMessages: false });
+    expect(runLocalWebResearchAgentMock).toHaveBeenCalledWith('local web search agents', {
+      maxSearchResults: 6,
+      maxPagesToExtract: 2,
+      maxEvidenceChunks: 4,
+      synthesize: false,
+    });
+    expect(runRdfWebSearchAgentMock).toHaveBeenCalledWith('facts for Q42', { defaultLimit: 5 });
   });
 
   it('filters tool sets and descriptors by selected ids', () => {
@@ -88,6 +134,7 @@ describe('default tools', () => {
     expect(groups).toEqual([
       expect.objectContaining({ id: 'built-in', label: 'Built-In', toolIds: ['cli'] }),
       expect.objectContaining({ id: 'files-worktree-mcp', label: 'Files', toolIds: ['read_session_file'] }),
+      expect.objectContaining({ id: 'web-search-mcp', label: 'Search', toolIds: ['webmcp:local_web_research', 'webmcp:semantic_search'] }),
     ]);
   });
 });

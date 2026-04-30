@@ -9,6 +9,8 @@ import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from '../..
 import { runLocalToolCallExecutor } from '../../services/localToolCallExecutor';
 import { runAgentLoop } from '../../chat-agents/agent-loop';
 import { WEB_SEARCH_AGENT_ID, selectWebSearchAgentTools } from '../../chat-agents/WebSearch';
+import { LOCAL_WEB_RESEARCH_AGENT_ID, selectLocalWebResearchAgentTools } from '../../chat-agents/LocalWebResearch';
+import { RDF_WEB_SEARCH_AGENT_ID, selectRdfWebSearchAgentTools } from '../../chat-agents/SemanticSearch';
 import { createObservedBus } from '../../services/observedAgentBus';
 import { createCodeModeExecutor, type CodeModeExecutor } from './codeMode';
 
@@ -106,6 +108,8 @@ const LOCATION_CONTEXT_TOOL_ORDER = [
   'webmcp:recall_user_context',
   'webmcp:read_browser_location',
   'webmcp:search_web',
+  'webmcp:local_web_research',
+  'webmcp:semantic_search',
   'webmcp:read_web_page',
   'cli',
   'webmcp:elicit_user_input',
@@ -180,6 +184,12 @@ export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, ma
   const webSearchToolIds = isWebSearchGoal(goal)
     ? selectWebSearchAgentTools(availableTools, goal)
     : [];
+  const localWebResearchToolIds = isWebSearchGoal(goal)
+    ? selectLocalWebResearchAgentTools(availableTools, goal)
+    : [];
+  const rdfWebSearchToolIds = isWebSearchGoal(goal)
+    ? selectRdfWebSearchAgentTools(availableTools, goal)
+    : [];
   const orderedLocationTools = isLocationDependentGoal(goal)
     ? LOCATION_CONTEXT_TOOL_ORDER
       .map((toolId) => availableTools.find((descriptor) => descriptor.id === toolId))
@@ -205,6 +215,8 @@ export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, ma
       'adversary-driver': [],
       'judge-decider': [],
       [WEB_SEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => webSearchToolIds.includes(toolId)),
+      [LOCAL_WEB_RESEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => localWebResearchToolIds.includes(toolId)),
+      [RDF_WEB_SEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => rdfWebSearchToolIds.includes(toolId)),
       executor: selectedToolIds,
     },
   };
@@ -260,7 +272,7 @@ function buildExecutionWorkflowIntent(
     'Execution workflow ready for LogAct.',
     'Classification: tool-enabled workspace task.',
     `Succinct tasks: ${plan.goal}`,
-    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, ${WEB_SEARCH_AGENT_ID}, voter agents, executor.`,
+    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, ${WEB_SEARCH_AGENT_ID}, ${LOCAL_WEB_RESEARCH_AGENT_ID}, ${RDF_WEB_SEARCH_AGENT_ID}, voter agents, executor.`,
     `Tool assignments: ${selectedToolIds.length ? selectedToolIds.join(', ') : '(none)'}.`,
     feedback ? `Completion feedback: ${feedback}` : null,
   ].filter(Boolean).join('\n');

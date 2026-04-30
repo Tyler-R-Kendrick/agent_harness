@@ -1,0 +1,26 @@
+name: local-web-research-agent
+version: "1.0"
+description: >
+  AgentEvals static and deterministic runtime suite for the local web research
+  chat-agent. The agent must use local SearXNG, extract pages, rank evidence,
+  cite normalized sources, handle recoverable failures, keep synthesis optional,
+  and fan into the existing web-search workflow for reranking.
+metadata:
+  owner: agent-browser
+  tags: [local-web-research, searxng, evidence-ranking, citations, tool-trajectory, fan-in]
+execution:
+  target: agent-browser-local-web-research-agent
+  timeout_seconds: 10
+assertions:
+  - name: local-research-tool-first
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: webmcp:local_web_research
+      - tool: search-fan-in-merger
+  - name: safety-and-evidence-rubric
+    type: code-grader
+    required: true
+    command: ["node", "./graders/local-search-quality-gate.mjs"]
+tests: ./cases.jsonl
