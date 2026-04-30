@@ -378,7 +378,7 @@ describe('real AgentEvals workflow gate', () => {
   it('executes real AgentV scoring for the latest bars subject-switch regression', async () => {
     const outputDir = mkdtempSync(path.join(tmpdir(), 'agentv-bars-subject-switch-'));
     try {
-      const agentvBin = path.join(repoRoot, 'node_modules/agentv/dist/cli.js');
+      const agentvBin = resolvePackageBin('agentv');
       const { stdout } = await runNode([
         agentvBin,
         'eval',
