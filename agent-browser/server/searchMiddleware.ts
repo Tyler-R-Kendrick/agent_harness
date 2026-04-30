@@ -491,6 +491,14 @@ function isUiChromeLabel(label: string): boolean {
     || /\b(?:support enable|join now enable|enable dark mode|shop categories|about us|sign in|log in|login|fanclub|fan club)\b/i.test(label);
 }
 
+function isMovieTimeDirectoryLabel(label: string): boolean {
+  const normalized = label.replace(/\s+/g, ' ').trim();
+  if (!normalized) return true;
+  return /^(?:(?:movie\s+times?|movies?)\s+by\s+(?:cities|city|states?|zip(?:\s+codes?)?)|(?:cities|city|states?|zip(?:\s+codes?)?)\s+movie\s+times?)$/i.test(normalized)
+    || /\b(?:movie\s+times?|movies?)\s+by\s+(?:cities|city|states?|zip(?:\s+codes?)?)\b/i.test(normalized)
+    || /\b(?:cities|city|states?|zip(?:\s+codes?)?)\s+movie\s+times?\b/i.test(normalized);
+}
+
 function isLocationOnlyLabel(label: string): boolean {
   return /^(?:[A-Z]{2}\s*)?\d{5}(?:-\d{4})?$/i.test(label)
     || /^[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3},?\s+(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|IA|ID|IL|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV|WY)$/i.test(label);
@@ -530,6 +538,7 @@ function cleanEntityName(value: string): string {
   if (/\b(best|top|showtimes?|reviews?|near me|nearby|search|find|faq|frequently asked|movie times|local movie times|menus?|ratings?|hours?)\b/i.test(cleaned)) {
     return '';
   }
+  if (isMovieTimeDirectoryLabel(cleaned)) return '';
   if (isUiChromeLabel(cleaned)) return '';
   if (/[.!?]/.test(cleaned)) return '';
   return cleaned;
@@ -542,6 +551,7 @@ function cleanObservationLabel(value: string): string {
     .replace(/\s+/g, ' ')
     .trim();
   if (cleaned.length < 2 || cleaned.length > 160) return '';
+  if (isMovieTimeDirectoryLabel(cleaned)) return '';
   if (/[.!?]/.test(cleaned)) return '';
   return cleaned;
 }

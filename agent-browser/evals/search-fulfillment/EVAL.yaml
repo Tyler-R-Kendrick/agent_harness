@@ -57,7 +57,7 @@ assertions:
         required: true
         weight: 2
       - id: page-chrome-rejection
-        outcome: Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities. Honest insufficient-evidence answers pass this criterion only when none of those labels are rendered as entities.
+        outcome: Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, Cities Movie Times, States Movie Times, Zip Codes Movie Times, Movie Times by Cities, Movie Times by States, Movie Times by Zip Codes, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities. Honest insufficient-evidence answers pass this criterion only when none of those labels are rendered as entities.
         required: true
         weight: 3
       - id: compiled-validation-contract

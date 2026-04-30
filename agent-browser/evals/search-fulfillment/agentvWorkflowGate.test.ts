@@ -120,12 +120,16 @@ describe('real AgentEvals workflow gate', () => {
     expect(proofSource).toContain('const port = Number(process.env.AGENT_BROWSER_RUNTIME_PROOF_PORT) || 5174');
     const stalePortFallback = ['|| 51', '73'].join('');
     expect(proofSource).not.toContain(stalePortFallback);
-    expect(proofSource).toContain("page.getByLabel('Chat input').fill(\"what're the best movie theaters near me?\")");
+    expect(proofSource).toContain("page.getByLabel('Chat input').fill('show me theaters near me')");
     expect(proofSource).toContain("page.getByLabel('Chat input').fill('what about bars?')");
     expect(proofSource).toContain("page.getByLabel('Chat input').fill('what about closest bars?')");
+    expect(proofSource).toContain("geolocation: { latitude: 42.11713258868569, longitude: -87.9912774939386 }");
+    expect(proofSource).toContain("expect(searchQueries[0]).toBe('city state for coordinates 42.12 -87.99')");
+    expect(proofSource).toContain("expect(searchQueries).toContain('nearby theaters Arlington Heights IL')");
     expect(proofSource).toContain('AMC Randhurst 12');
     expect(proofSource).toContain("Peggy Kinnane's Irish Restaurant & Pub");
     expect(proofSource).toContain('Moviefone TV');
+    expect(proofSource).toContain('Cities Movie Times');
     expect(proofSource).toContain('Support Enable');
     expect(proofSource).toContain('Yelp: Best Bars in Arlington Heights, IL');
     expect(proofSource).toContain('.stream-cursor');
@@ -185,7 +189,11 @@ describe('real AgentEvals workflow gate', () => {
         badLabels?: string[];
         expectedEntities?: string[];
         expectedQuery?: string;
+        expectedNormalizationQuery?: string;
+        recoveryQuery?: string;
         subjectSwitch?: boolean;
+        noMemory?: boolean;
+        browserCoordinateLocation?: boolean;
       };
     }>('agent-browser/evals/search-fulfillment/cases.jsonl');
 
@@ -214,6 +222,39 @@ describe('real AgentEvals workflow gate', () => {
       'CMX Arlington Heights',
       'Classic Cinemas Elk Grove Theatre',
     ]));
+
+    const coordinateNegative = cases.find((testCase) => testCase.id === 'negative-theaters-browser-coordinate-directory-labels');
+    expect(coordinateNegative).toBeDefined();
+    expect(coordinateNegative?.input).toBe('show me theaters near me');
+    expect(coordinateNegative?.metadata?.negative).toBe(true);
+    expect(coordinateNegative?.metadata?.noMemory).toBe(true);
+    expect(coordinateNegative?.metadata?.browserCoordinateLocation).toBe(true);
+    expect(coordinateNegative?.metadata?.expectedQuery).toBe('nearby theaters Arlington Heights IL');
+    expect(coordinateNegative?.metadata?.expectedNormalizationQuery).toBe('city state for coordinates 42.12 -87.99');
+    expect(coordinateNegative?.metadata?.recoveryQuery).toBe('theaters names near Arlington Heights IL');
+    expect(coordinateNegative?.metadata?.badLabels).toEqual(expect.arrayContaining([
+      'Cities Movie Times',
+      'States Movie Times',
+      'Zip Codes Movie Times',
+      'Movie Times by Cities',
+      'Movie Times by States',
+      'Movie Times by Zip Codes',
+    ]));
+    const coordinateContract = JSON.parse(coordinateNegative?.expected_output ?? '{}');
+    expect(coordinateContract.fixtures.memoryResult.status).toBe('empty');
+    expect(coordinateContract.fixtures.browserLocationResult).toMatchObject({
+      status: 'available',
+      latitude: 42.11713258868569,
+      longitude: -87.9912774939386,
+    });
+    expect(Object.keys(coordinateContract.fixtures.searchResults)).toEqual(expect.arrayContaining([
+      'city state for coordinates 42.12 -87.99',
+      'nearby theaters Arlington Heights IL',
+      'theaters names near Arlington Heights IL',
+    ]));
+    expect(JSON.stringify(coordinateContract.fixtures.searchResults)).not.toContain('42.11713258868569');
+    expect(coordinateContract.expectedQuery).toBe('nearby theaters Arlington Heights IL');
+    expect(coordinateContract.location).toBe('Arlington Heights, IL');
 
     const barsNegative = cases.find((testCase) => testCase.id === 'negative-bars-aggregate-source-pages');
     expect(barsNegative).toBeDefined();

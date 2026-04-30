@@ -21,6 +21,12 @@ const BAD_LABELS = [
   'Moviefone TV',
   'Sign In/Join',
   'FanClub',
+  'Cities Movie Times',
+  'States Movie Times',
+  'Zip Codes Movie Times',
+  'Movie Times by Cities',
+  'Movie Times by States',
+  'Movie Times by Zip Codes',
   'Fandango Ticketing Theaters My',
   'Featured Movie Animal Farm',
   'Movie Showimes',
@@ -69,7 +75,7 @@ const EXPECTED_BARS = [
 
 function fixtureContract() {
   const cases = buildSearchEvalCases();
-  const theaterCase = cases.find((candidate) => candidate.id === 'negative-movie-theaters-moviefone-page-chrome');
+  const theaterCase = cases.find((candidate) => candidate.id === 'negative-theaters-browser-coordinate-directory-labels');
   const barsSubjectSwitchCase = cases.find((candidate) => candidate.id === 'negative-follow-up-bars-article-page-chrome');
   const barsCase = cases.find((candidate) => candidate.id === 'negative-bars-aggregate-source-pages');
   const barsFollowUpCase = cases.find((candidate) => candidate.id === 'follow-up-bars-show-me-3-more');
@@ -234,15 +240,6 @@ async function seedMemory(page) {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
-    window.localStorage.setItem('agent-browser:user-context-memory:v1', JSON.stringify({
-      Research: [{
-        id: 'location.city',
-        label: 'Saved city',
-        value: 'Arlington Heights, IL',
-        source: 'workspace-memory',
-        updatedAt: '2026-04-26T00:00:00.000Z',
-      }],
-    }));
   });
 }
 
@@ -255,6 +252,7 @@ async function runBrowserProof() {
   server?.stderr.on('data', (chunk) => serverOutput.push(String(chunk)));
 
   let browser;
+  let context;
   let page;
   const pageOutput = [];
   const searchQueries = [];
@@ -262,7 +260,12 @@ async function runBrowserProof() {
     await waitForServer(server);
     await mkdir(path.dirname(screenshotPath), { recursive: true });
     browser = await chromium.launch({ headless: true });
-    page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      geolocation: { latitude: 42.11713258868569, longitude: -87.9912774939386 },
+      permissions: ['geolocation'],
+    });
+    page = await context.newPage();
     page.on('console', (message) => pageOutput.push(`[console:${message.type()}] ${message.text()}`));
     page.on('pageerror', (error) => pageOutput.push(`[pageerror] ${error.message}`));
     await installRoutes(page, fixtures, searchQueries);
@@ -274,7 +277,7 @@ async function runBrowserProof() {
     await expect(page.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp', { timeout: 90_000 });
     await expect(page.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1', { timeout: 90_000 });
 
-    await page.getByLabel('Chat input').fill("what're the best movie theaters near me?");
+    await page.getByLabel('Chat input').fill('show me theaters near me');
     await page.getByRole('button', { name: 'Send' }).click();
 
     const assistantBubbles = page.locator('.message.assistant .message-bubble-markdown');
@@ -292,6 +295,10 @@ async function runBrowserProof() {
     for (const label of BAD_LABELS) {
       expect(renderedLinkLabels).not.toContain(label.toLocaleLowerCase());
     }
+    expect(searchQueries[0]).toBe('city state for coordinates 42.12 -87.99');
+    expect(searchQueries).toContain('nearby theaters Arlington Heights IL');
+    expect(searchQueries).toContain('theaters names near Arlington Heights IL');
+    expect(searchQueries.join('\n')).not.toMatch(/42\.11713258868569|-87\.9912774939386/);
     await expect(page.getByText(/Working/i)).toHaveCount(0);
     await expect(page.locator('.stream-cursor')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
@@ -378,6 +385,7 @@ async function runBrowserProof() {
     if (typeof pageOutput !== 'undefined' && pageOutput.length) console.error(pageOutput.join('\n'));
     throw error;
   } finally {
+    await context?.close();
     await browser?.close();
     stopProcess(server);
   }

@@ -1800,6 +1800,15 @@ describe('App', () => {
         accuracyMeters: 25,
         capturedAt: '2026-04-29T19:00:00.000Z',
       });
+      const modelContext = installModelContext(window);
+      const webmcpTool = createWebMcpTool(modelContext!);
+      await expect(webmcpTool.execute?.({ tool: 'read_browser_location' }, {} as never)).resolves.toEqual({
+        status: 'available',
+        latitude: 41.88,
+        longitude: -87.63,
+        accuracy: 25,
+      });
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1);
       expect(screen.getByRole('button', { name: 'Disable location context' })).toBeInTheDocument();
       expect(screen.getByText(/location on/i)).toBeInTheDocument();
 

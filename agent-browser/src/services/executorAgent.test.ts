@@ -81,6 +81,9 @@ describe('runConfiguredExecutorAgent', () => {
 
   it('does not reject valid entity names that contain generic words as part of a brand name', () => {
     expect(isGenericNonEntityLabel('Half Price Books Palatine', 'bookstores')).toBe(false);
+    expect(isGenericNonEntityLabel('Cities Movie Times', 'theaters')).toBe(true);
+    expect(isGenericNonEntityLabel('States Movie Times', 'theaters')).toBe(true);
+    expect(isGenericNonEntityLabel('Zip Codes Movie Times', 'theaters')).toBe(true);
   });
 
   it('uses the committed AgentBus execution plan as the executor prompt', async () => {
@@ -3143,6 +3146,235 @@ describe('runConfiguredExecutorAgent', () => {
       acceptedCount: 3,
       missingCount: 0,
     });
+  });
+
+  it('normalizes browser coordinates and recovers from movie-time directory labels for theater searches', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final theater answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:read_browser_location',
+        label: 'Read browser location',
+        description: 'Read browser geolocation before asking the user.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for local theater results.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', query: 'location', memories: [] })),
+        },
+        'webmcp:read_browser_location': {
+          execute: vi.fn(async () => ({
+            status: 'available',
+            latitude: 42.11713258868569,
+            longitude: -87.9912774939386,
+            accuracy: 24,
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query === 'city state for coordinates 42.12 -87.99') {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Arlington Heights, Illinois - coordinate lookup',
+                  url: 'https://fixtures.agent-browser.test/geocode/arlington-heights',
+                  snippet: 'The coordinates 42.12, -87.99 resolve to Arlington Heights, Illinois, United States.',
+                }],
+              };
+            }
+            if (query === 'nearby theaters Arlington Heights IL') {
+              return {
+                status: 'found',
+                query,
+                results: [
+                  {
+                    title: 'Movie Times and Movie Theaters in Arlington Heights, IL - Fandango',
+                    url: 'https://www.fandango.com/arlington-heights_il_movietimes',
+                    snippet: 'Find movie times and movie theaters near Arlington Heights, IL.',
+                  },
+                  {
+                    title: 'Movie Times by Cities and States - Showtimes',
+                    url: 'https://www.showtimes.com/movie-times/',
+                    snippet: 'Browse movie times by cities, states, and zip codes.',
+                  },
+                ],
+              };
+            }
+            if (query === 'theaters names near Arlington Heights IL') {
+              return {
+                status: 'found',
+                query,
+                results: [
+                  {
+                    title: 'AMC Randhurst 12',
+                    url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+                    snippet: 'AMC Randhurst 12 is a movie theater in Mount Prospect near Arlington Heights, IL.',
+                  },
+                  {
+                    title: 'CMX Arlington Heights',
+                    url: 'https://www.cmxcinemas.com/location/cmx-arlington-heights',
+                    snippet: 'CMX Arlington Heights is a cinema in Arlington Heights, IL.',
+                  },
+                  {
+                    title: 'Classic Cinemas Elk Grove Theatre',
+                    url: 'https://www.classiccinemas.com/location/elk-grove-theatre',
+                    snippet: 'Classic Cinemas Elk Grove Theatre is a movie theater near Arlington Heights, IL.',
+                  },
+                ],
+              };
+            }
+            return { status: 'empty', query, results: [] };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: 'Movie theaters near Arlington Heights, IL',
+            text: [
+              'Movie Times by Cities',
+              'Cities Movie Times',
+              'Movie Times by States',
+              'States Movie Times',
+              'Movie Times by Zip Codes',
+              'Zip Codes Movie Times',
+            ].join(' '),
+            links: [
+              { text: 'Cities Movie Times', url: 'https://www.fandango.com/movies-by-city' },
+              { text: 'States Movie Times', url: 'https://www.fandango.com/movies-by-state' },
+              { text: 'Zip Codes Movie Times', url: 'https://www.fandango.com/movies-by-zip-code' },
+            ],
+            jsonLd: [],
+            entities: [
+              { name: 'Cities Movie Times', url: 'https://www.fandango.com/movies-by-city', evidence: 'Movie Times by Cities' },
+              { name: 'States Movie Times', url: 'https://www.fandango.com/movies-by-state', evidence: 'Movie Times by States' },
+              { name: 'Zip Codes Movie Times', url: 'https://www.fandango.com/movies-by-zip-code', evidence: 'Movie Times by Zip Codes' },
+            ],
+            observations: [
+              {
+                kind: 'page-link',
+                label: 'Cities Movie Times',
+                url: 'https://www.fandango.com/movies-by-city',
+                evidence: 'page link',
+                localContext: 'Movie Times by Cities',
+                sourceUrl: url,
+              },
+              {
+                kind: 'page-link',
+                label: 'States Movie Times',
+                url: 'https://www.fandango.com/movies-by-state',
+                evidence: 'page link',
+                localContext: 'Movie Times by States',
+                sourceUrl: url,
+              },
+              {
+                kind: 'page-link',
+                label: 'Zip Codes Movie Times',
+                url: 'https://www.fandango.com/movies-by-zip-code',
+                evidence: 'page link',
+                localContext: 'Movie Times by Zip Codes',
+                sourceUrl: url,
+              },
+            ],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'show me theaters near me',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'show me theaters near me' }],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby theater request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: {
+          executor: descriptors.map((toolDescriptor) => toolDescriptor.id),
+          'web-search-agent': descriptors.map((toolDescriptor) => toolDescriptor.id),
+        },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('city state for coordinates 42.12 -87.99');
+    expect(searchQueries).toContain('nearby theaters Arlington Heights IL');
+    expect(searchQueries).toContain('theaters names near Arlington Heights IL');
+    expect(searchQueries.join('\n')).not.toMatch(/42\.11713258868569|-87\.9912774939386|Cities Movie Times|States Movie Times|Zip Codes Movie Times/);
+    expect(result.failed).not.toBe(true);
+    expect(result.text).toContain('Here are theaters near Arlington Heights, IL');
+    expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
+    expect(result.text).toContain('[CMX Arlington Heights](https://www.cmxcinemas.com/location/cmx-arlington-heights)');
+    expect(result.text).toContain('[Classic Cinemas Elk Grove Theatre](https://www.classiccinemas.com/location/elk-grove-theatre)');
+    expect(result.text).not.toMatch(/42\.11713258868569|-87\.9912774939386|Cities Movie Times|States Movie Times|Zip Codes Movie Times/);
+    const candidatePayload = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'search-analyzer'
+        && String(payload.intentId).includes('validated-candidates')
+      ))
+      .at(-1);
+    const validation = JSON.parse(candidatePayload?.output ?? '{}') as {
+      candidates?: Array<{ name: string; validationStatus: string }>;
+      rejected?: Array<{ name: string; validationStatus: string }>;
+    };
+    expect(validation.candidates?.map((candidate) => candidate.name)).toEqual(expect.arrayContaining([
+      'AMC Randhurst 12',
+      'CMX Arlington Heights',
+      'Classic Cinemas Elk Grove Theatre',
+    ]));
+    expect(validation.candidates?.every((candidate) => candidate.validationStatus === 'accepted')).toBe(true);
+    expect(validation.rejected?.map((candidate) => candidate.name)).toEqual(expect.arrayContaining([
+      'Cities Movie Times',
+      'States Movie Times',
+      'Zip Codes Movie Times',
+    ]));
   });
 
   it('applies arbitrary compiled name-prefix constraints before composing search answers', async () => {
