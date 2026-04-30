@@ -59,9 +59,9 @@ Run this script whenever the task needs the forwarded Codespaces base URL or a f
 Examples:
 
 ```bash
-skills/agent-harness-context/scripts/codespaces-uri.sh 5173
-skills/agent-harness-context/scripts/codespaces-uri.sh 5173 /auth/callback
-skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5173 /auth/callback
+skills/agent-harness-context/scripts/codespaces-uri.sh 5174
+skills/agent-harness-context/scripts/codespaces-uri.sh 5174 /auth/callback
+skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5174 /auth/callback
 ```
 
 Behavior:

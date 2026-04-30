@@ -154,6 +154,74 @@ export interface BusEntryStep {
   passIndex?: number;
 }
 
+export interface SearchTurnContext {
+  taskText: string;
+  resolvedTaskText: string;
+  subject: string;
+  answerSubject: string;
+  rankingGoal?: 'best' | 'worst' | 'closest' | 'most-popular' | 'recommended' | 'current' | 'open-now' | 'highly-rated' | 'family-friendly' | 'budget-friendly' | 'quiet' | 'nearby';
+  location?: string;
+  acceptedCandidates: Array<{
+    name: string;
+    url?: string;
+  }>;
+  rejectedLabels: string[];
+  sourceQueries: string[];
+  requestedCount?: number;
+  validationContract?: ValidationContract;
+  timestamp: number;
+}
+
+export type ValidationConstraintType =
+  | 'count'
+  | 'subject'
+  | 'location'
+  | 'name_prefix'
+  | 'name_suffix'
+  | 'rhyme'
+  | 'exclusion'
+  | 'entity_link'
+  | 'source_evidence'
+  | 'page_chrome'
+  | 'format'
+  | 'unknown';
+
+export interface ValidationConstraint {
+  id: string;
+  sourceText: string;
+  type: ValidationConstraintType;
+  operator: string;
+  target: string;
+  value?: string | number | string[] | boolean;
+  required: boolean;
+  confidence: number;
+  validationMethod: 'structured-candidate' | 'answer-text' | 'tool-output' | 'agentbus' | 'manual-clarification';
+  failureMessage: string;
+}
+
+export interface ValidationEvidenceRequirement {
+  id: string;
+  description: string;
+  required: boolean;
+  target: string;
+}
+
+export interface ValidationContract {
+  type: 'validation-contract';
+  version: 1;
+  taskGoal: string;
+  constraints: ValidationConstraint[];
+  evidenceRequirements: ValidationEvidenceRequirement[];
+  impossibilityPolicy: {
+    kind: 'none' | 'likely-impossible' | 'contradictory';
+    reason?: string;
+    askUserForHelp: boolean;
+  };
+  clarificationTriggers: string[];
+  successSemantics: 'all-required' | 'allow-partial-with-acknowledgement';
+  legacyCriteria: string[];
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
@@ -186,6 +254,8 @@ export interface ChatMessage {
    * existing tests until removal.
    */
   processEntries?: ProcessEntry[];
+  /** Structured search context from this turn, used to resolve follow-up tool calls. */
+  searchTurnContext?: SearchTurnContext;
 }
 
 /** Re-exported ProcessLog entry type so consumers can import it from `types`. */

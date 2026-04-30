@@ -11,6 +11,7 @@ const appRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(appRoot, '..');
 
 export function buildAgentvSearchEvalCommand({ live = false } = {}) {
+  const workers = process.env.AGENT_BROWSER_AGENTV_WORKERS ?? '4';
   return {
     packageName: 'agentv',
     cwd: repoRoot,
@@ -27,12 +28,12 @@ export function buildAgentvSearchEvalCommand({ live = false } = {}) {
       '--threshold',
       '0.8',
       '--workers',
-      '1',
+      workers,
     ],
   };
 }
 
-function buildAgentvEnvironment() {
+function buildAgentvEnvironment({ live = false } = {}) {
   const listenerBudgetPreload = pathToFileURL(path.join(__dirname, 'agentv-listener-budget.mjs')).href;
   const nodeOptions = [
     process.env.NODE_OPTIONS,
@@ -41,6 +42,9 @@ function buildAgentvEnvironment() {
   return {
     ...process.env,
     NODE_OPTIONS: nodeOptions,
+    ...(live
+      ? { AGENT_BROWSER_LIVE_FETCH_TIMEOUT_MS: process.env.AGENT_BROWSER_LIVE_FETCH_TIMEOUT_MS ?? '750' }
+      : {}),
   };
 }
 
@@ -70,7 +74,7 @@ async function runAgentvSearchEval() {
   }
   const child = spawn(process.execPath, [binPath, ...command.args], {
     cwd: command.cwd,
-    env: buildAgentvEnvironment(),
+    env: buildAgentvEnvironment({ live }),
     stdio: 'inherit',
   });
 

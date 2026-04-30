@@ -5,7 +5,13 @@ import type { AgentBusPayloadMeta, IAgentBus } from 'logact';
 import type { AgentRunResult } from './agentRunner';
 import { createObservedBus } from './observedAgentBus';
 import { isGenericNonEntityLabel, taskFromMessages } from './executionRequirements';
-import type { BusEntryStep, VoterStep } from '../types';
+import {
+  compileValidationContract,
+  evaluateAnswerAgainstValidationContract,
+  validationContractToCriteria,
+  type ConstraintEvaluationCandidate,
+} from './constraintCompiler';
+import type { BusEntryStep, ValidationContract, VoterStep } from '../types';
 import type { ToolDescriptor } from '../tools';
 import type { ToolPlan } from '../tool-agents/tool-agent';
 
@@ -23,6 +29,7 @@ export interface LogActActorExecuteContext {
   bus: IAgentBus;
   busEntries: BusEntryStep[];
   validationCriteria?: string[];
+  validationContract?: ValidationContract;
   executionAttempt?: number;
   executePlanIntentId?: string;
 }
@@ -47,6 +54,7 @@ export interface RunLogActActorWorkflowOptions {
   maxPasses?: number;
   maxExecutionAttempts?: number;
   verificationCriteria?: string[];
+  validationContract?: ValidationContract;
   onExecutorStart?: (summary: string) => void;
   selectTools?: (context: {
     task: string;
@@ -94,6 +102,9 @@ export interface VerificationResult {
 }
 
 interface StructuredCandidateReport {
+  requestedCount?: number;
+  acceptedCount?: number;
+  missingCount?: number;
   candidates: Array<{
     name: string;
     validationStatus?: string;
@@ -143,7 +154,7 @@ const ACTOR_META: Record<string, AgentBusPayloadMeta> = {
   'voter:teacher': {
     actorId: 'voter:teacher',
     actorRole: 'voter',
-    parentActorId: 'judge-decider',
+    parentActorId: 'student-driver',
     branchId: 'agent:judge-decider',
     agentLabel: 'Teacher Voter',
     modelProvider: 'logact',
@@ -316,6 +327,10 @@ export async function runLogActActorWorkflow(
   const task = taskFromMessages(options.messages) || options.plan.goal;
   const negativeTechniques = [...(options.negativeRubricTechniques ?? [])];
   const maxPasses = Math.max(1, Math.floor(options.maxPasses ?? 3));
+  const validationContract = options.validationContract ?? compileValidationContract({
+    taskText: task,
+    legacyCriteria: options.verificationCriteria ?? [],
+  });
 
   await bus.append({
     type: PayloadType.Mail,
@@ -323,8 +338,8 @@ export async function runLogActActorWorkflow(
     content: task,
     meta: ACTOR_META.user,
   });
-  const validationCriteria = buildValidationCriteria(options.verificationCriteria ?? []);
-  await appendValidationContract(bus, validationCriteria);
+  const validationCriteria = buildValidationCriteria(options.verificationCriteria ?? [], validationContract);
+  await appendValidationContract(bus, validationContract, validationCriteria);
 
   const maxExecutionAttempts = Math.max(1, Math.floor(options.maxExecutionAttempts ?? 3));
   let nextPassIndex = 1;
@@ -437,6 +452,7 @@ export async function runLogActActorWorkflow(
       bus,
       busEntries: capturedBusEntries,
       validationCriteria,
+      validationContract,
       executionAttempt,
       executePlanIntentId,
     });
@@ -484,6 +500,7 @@ export async function runLogActActorWorkflow(
         executePlanIntentId,
         selected.passIndex,
         validationCriteria,
+        validationContract,
       );
       const verification = await runVerificationAgent(
         bus,
@@ -493,6 +510,7 @@ export async function runLogActActorWorkflow(
         executePlanIntentId,
         selected.passIndex,
         options.verificationCriteria ?? [],
+        validationContract,
       );
       if (!verification.passed) {
         lastFailureKind = 'verification';
@@ -574,17 +592,19 @@ export async function runLogActActorWorkflow(
         capturedBusEntries,
         executePlanIntentId,
         selected.passIndex,
-        validationCriteria,
-      );
-      const verification = await runVerificationAgent(
-        bus,
-        task,
-        finalResult,
-        capturedBusEntries,
-        executePlanIntentId,
-        selected.passIndex,
-        options.verificationCriteria ?? [],
-      );
+          validationCriteria,
+          validationContract,
+        );
+        const verification = await runVerificationAgent(
+          bus,
+          task,
+          finalResult,
+          capturedBusEntries,
+          executePlanIntentId,
+          selected.passIndex,
+          options.verificationCriteria ?? [],
+          validationContract,
+        );
       if (verification.passed) {
         await bus.append({
           type: PayloadType.Completion,
@@ -609,7 +629,7 @@ export async function runLogActActorWorkflow(
 
   const attemptLabel = maxExecutionAttempts === 1 ? 'attempt' : 'attempts';
   const text = lastFailureKind === 'verification'
-    ? `LogAct verification failed after ${maxExecutionAttempts} ${attemptLabel}: ${lastExecutionError ?? 'could not verify the final answer'}.`
+    ? verificationFailureUserText(validationContract, maxExecutionAttempts, attemptLabel, lastExecutionError)
     : lastExecutionText && !/^Executor failed:/i.test(lastExecutionText)
       ? lastExecutionText
       : `Execution aborted after ${maxExecutionAttempts} executor ${attemptLabel}: ${lastExecutionError ?? 'execution failed'}.`;
@@ -625,8 +645,38 @@ export async function runLogActActorWorkflow(
   return { text, steps: lastExecutionSteps, failed: true, error: lastExecutionError ?? text };
 }
 
+function verificationFailureUserText(
+  contract: ValidationContract,
+  attempts: number,
+  attemptLabel: string,
+  lastError?: string,
+): string {
+  const subject = contract.constraints.find((constraint) => constraint.type === 'subject')?.value;
+  const location = contract.constraints.find((constraint) => constraint.type === 'location')?.value;
+  const unmet = contract.constraints
+    .filter((constraint) => constraint.required)
+    .filter((constraint) => !['entity_link', 'source_evidence', 'page_chrome'].includes(constraint.type))
+    .map((constraint) => constraint.failureMessage.replace(/[.]+$/g, ''))
+    .slice(0, 6);
+  const context = [
+    typeof subject === 'string' && subject.trim() ? subject.trim() : undefined,
+    typeof location === 'string' && location.trim() ? `for ${location.trim()}` : undefined,
+  ].filter(Boolean).join(' ');
+  const opener = context
+    ? `I could not verify enough source-backed ${context} to answer confidently.`
+    : 'I could not verify enough source-backed results to answer confidently.';
+  const details = unmet.length > 0
+    ? `Unmet or under-evidenced constraints: ${unmet.join('; ')}.`
+    : `The final answer could not be verified after ${attempts} ${attemptLabel}.`;
+  const recovery = contract.impossibilityPolicy.kind === 'likely-impossible'
+    ? `This may be impossible or not directly verifiable with the available tools: ${contract.impossibilityPolicy.reason}`
+    : 'The available evidence was not strong enough, so I am not listing unsupported results.';
+  const verifierNote = lastError ? `Verifier note: ${lastError}` : undefined;
+  return [opener, details, recovery, verifierNote].filter(Boolean).join('\n\n');
+}
+
 function isInsufficientEvidenceAnswer(text: string): boolean {
-  return /could not find enough validated|insufficient evidence|did not contain source-backed entity names|no validated/i.test(text);
+  return /could not (?:find enough validated|verify enough source-backed)|could only verify|insufficient evidence|did not contain(?: enough)?(?: additional)? source-backed entity names|no validated|asked for \d+/i.test(text);
 }
 
 async function runExecutorAttempt(
@@ -661,6 +711,7 @@ async function runPostProcessor(
   executePlanIntentId: string,
   passIndex: number,
   validationCriteria: string[],
+  validationContract: ValidationContract,
 ): Promise<AgentRunResult> {
   const renderMode = chooseRenderMode(executorResult.text);
   const responsePreferences = {
@@ -715,6 +766,7 @@ async function runPostProcessor(
       target: `post-processor self-reflection round ${round}`,
       output: draft,
       criteria: validationCriteria,
+      validationContract,
       passIndex,
       parentActorId: 'post-processor',
     });
@@ -734,6 +786,7 @@ async function runPostProcessor(
     target: 'post-processor final output',
     output: draft,
     criteria: validationCriteria,
+    validationContract,
     passIndex,
     parentActorId: 'post-processor',
   });
@@ -744,7 +797,7 @@ async function runPostProcessor(
   };
 }
 
-function buildValidationCriteria(verificationCriteria: string[]): string[] {
+function buildValidationCriteria(verificationCriteria: string[], validationContract: ValidationContract): string[] {
   return [
     'recursive-tool-call-validation: validation-agent must validate every executor tool result before that result is used to drive a follow-up tool call or final answer.',
     'recursive-tool-call-validation: each validation pass must check tool success/error status, structured output shape, subject alignment, and whether follow-up queries are grounded in validated evidence.',
@@ -752,16 +805,21 @@ function buildValidationCriteria(verificationCriteria: string[]): string[] {
     'post-processing-output-validation: each post-processing validation pass must check original-question alignment, absence of internal AgentBus/process narration, entity/link validity, and user preference formatting.',
     'entity-instance-validation: validation-agent must reject linked labels that are generic categories, site sections, navigation labels, or content types instead of specific instances of the requested subject.',
     'nearby-entity-validation: for nearby tasks, validation-agent must require per-entity location, address, distance, or proximity evidence before response-ready.',
+    ...validationContractToCriteria(validationContract),
     ...verificationCriteria,
   ];
 }
 
-async function appendValidationContract(bus: IAgentBus, criteria: string[]): Promise<void> {
+async function appendValidationContract(
+  bus: IAgentBus,
+  validationContract: ValidationContract,
+  criteria: string[],
+): Promise<void> {
   await bus.append({
     type: PayloadType.Policy,
     target: 'validation-contract',
     value: {
-      type: 'validation-contract',
+      ...validationContract,
       actorId: 'validation-agent',
       requiredLoops: [
         {
@@ -793,6 +851,7 @@ async function appendValidationResult(
     target,
     output,
     criteria,
+    validationContract,
     passIndex,
     parentActorId,
   }: {
@@ -802,6 +861,7 @@ async function appendValidationResult(
     target: string;
     output: string;
     criteria: string[];
+    validationContract: ValidationContract;
     passIndex: number;
     parentActorId: string;
   },
@@ -816,6 +876,7 @@ async function appendValidationResult(
       target,
       passed: !/AgentBus Result Write-back/i.test(output),
       criteria,
+      validationContract,
       outputPreview: output.length > 400 ? `${output.slice(0, 397)}...` : output,
     }),
     meta: actorMeta('validation-agent', passIndex, {
@@ -833,6 +894,7 @@ async function runVerificationAgent(
   executePlanIntentId: string,
   passIndex: number,
   verificationCriteria: string[],
+  validationContract: ValidationContract,
 ): Promise<VerificationResult> {
   const criteria = verificationCriteria.length > 0
     ? verificationCriteria
@@ -845,11 +907,12 @@ async function runVerificationAgent(
         'Verify the post-processed response before it can be published.',
         `Original task: ${task}`,
         `Criteria: ${criteria.join(' | ')}`,
+        `ValidationContract: ${JSON.stringify(validationContract)}`,
       ].join('\n'),
     }],
     meta: actorMeta('verification-agent', passIndex),
   });
-  const result = evaluateFinalAnswerVerification(task, finalResult.text, criteria, busEntries);
+  const result = evaluateFinalAnswerVerification(task, finalResult.text, criteria, busEntries, validationContract);
   await bus.append({
     type: PayloadType.Result,
     intentId: `verification-${executePlanIntentId}`,
@@ -865,18 +928,25 @@ function evaluateFinalAnswerVerification(
   answer: string,
   criteria: string[],
   busEntries: BusEntryStep[],
+  validationContract?: ValidationContract,
 ): VerificationResult {
   const failures: VerificationFailure[] = [];
   const links = extractMarkdownLinks(answer);
   const subjectText = inferSubjectText(task);
   const entitySeekingTask = taskNeedsEntityResults(task);
   const criterionText = criteria.join('\n').toLocaleLowerCase();
-  const requiresEntities = entitySeekingTask || /actual named entities|named entities|entity/i.test(criterionText);
-  const requiresEntityLinks = entitySeekingTask || /entity-specific|links/i.test(criterionText);
-  const requiresSubject = entitySeekingTask || /specific instance|requested subject|current requested subject|subject/i.test(criterionText);
-  const requiresLocation = taskNeedsLocationEvidence(task) || /geographic|proximity|nearby|resolved location/i.test(criterionText);
+  const contractRequiresEntities = validationContract?.constraints.some((constraint) => (
+    constraint.required && ['count', 'subject', 'entity_link', 'source_evidence', 'page_chrome'].includes(constraint.type)
+  )) ?? false;
+  const contractRequiresLocation = validationContract?.constraints.some((constraint) => (
+    constraint.required && constraint.type === 'location'
+  )) ?? false;
+  const requiresEntities = entitySeekingTask || contractRequiresEntities || /actual named entities|named entities|entity/i.test(criterionText);
+  const requiresEntityLinks = entitySeekingTask || contractRequiresEntities || /entity-specific|links/i.test(criterionText);
+  const requiresSubject = entitySeekingTask || contractRequiresEntities || /specific instance|requested subject|current requested subject|subject/i.test(criterionText);
+  const requiresLocation = taskNeedsLocationEvidence(task) || contractRequiresLocation || /geographic|proximity|nearby|resolved location/i.test(criterionText);
   const candidateReport = latestStructuredCandidateReport(busEntries);
-  const requiresStructuredCandidates = entitySeekingTask
+  const requiresStructuredCandidates = requiresEntities
     || Boolean(candidateReport)
     || /accepted structured candidate|structured search candidate/i.test(criterionText);
   const acceptedStructuredCandidates = candidateReport?.candidates.filter((candidate) => (
@@ -888,9 +958,29 @@ function evaluateFinalAnswerVerification(
     && candidate.sourceEvidence.length > 0
     && (!requiresLocation || (Array.isArray(candidate.locationEvidence) && candidate.locationEvidence.length > 0))
   )) ?? [];
+  const contractEvaluation = validationContract
+    ? evaluateAnswerAgainstValidationContract({
+      contract: validationContract,
+      answer,
+      acceptedCandidates: acceptedStructuredCandidates.map((candidate): ConstraintEvaluationCandidate => ({
+        name: candidate.name,
+        entityLink: candidate.entityLink,
+        subjectMatch: candidate.subjectMatch,
+        locationEvidence: candidate.locationEvidence,
+        sourceEvidence: candidate.sourceEvidence,
+      })),
+    })
+    : undefined;
+  const requestedStructuredCount = candidateReport?.requestedCount;
+  const linkedLabelsAreAccepted = links.every((link) => (
+    acceptedStructuredCandidates.some((candidate) => normalizeComparable(candidate.name) === normalizeComparable(link.label))
+  ));
   const honestInsufficientEvidence = isInsufficientEvidenceAnswer(answer)
-    && acceptedStructuredCandidates.length === 0
-    && links.length === 0;
+    && (
+      acceptedStructuredCandidates.length === 0
+      || (requestedStructuredCount !== undefined && acceptedStructuredCandidates.length < requestedStructuredCount)
+    )
+    && (links.length === 0 || linkedLabelsAreAccepted);
 
   const invalidLabels = links
     .map((link) => link.label)
@@ -903,12 +993,37 @@ function evaluateFinalAnswerVerification(
     });
   }
 
+  for (const failure of contractEvaluation?.failures ?? []) {
+    failures.push({
+      criterion: `Compiled validation constraint: ${failure.constraintId}`,
+      reason: failure.reason,
+      evidence: failure.evidence,
+    });
+  }
+
   if (requiresStructuredCandidates && acceptedStructuredCandidates.length === 0 && !honestInsufficientEvidence) {
     const rejectedNames = candidateReport?.rejected.map((candidate) => candidate.name).filter(Boolean).join(', ');
     failures.push({
       criterion: 'Entity-seeking answers require accepted structured candidates.',
       reason: `The AgentBus did not contain an accepted structured candidate for this answer${rejectedNames ? `; rejected candidates: ${rejectedNames}` : ''}.`,
       evidence: rejectedNames,
+    });
+  }
+
+  if (
+    requiresStructuredCandidates
+    && requestedStructuredCount !== undefined
+    && acceptedStructuredCandidates.length < requestedStructuredCount
+    && !honestInsufficientEvidence
+  ) {
+    failures.push({
+      criterion: 'Answer must satisfy the requested entity count.',
+      reason: `The AgentBus accepted ${acceptedStructuredCandidates.length} structured candidate(s), but the user requested ${requestedStructuredCount}.`,
+      evidence: candidateReport ? JSON.stringify({
+        requestedCount: candidateReport.requestedCount,
+        acceptedCount: candidateReport.acceptedCount,
+        missingCount: candidateReport.missingCount,
+      }) : undefined,
     });
   }
 
@@ -1071,7 +1186,13 @@ function latestStructuredCandidateReport(busEntries: BusEntryStep[]): Structured
         }];
       })
       : [];
-    return { candidates, rejected };
+    return {
+      requestedCount: typeof parsed.requestedCount === 'number' ? parsed.requestedCount : undefined,
+      acceptedCount: typeof parsed.acceptedCount === 'number' ? parsed.acceptedCount : undefined,
+      missingCount: typeof parsed.missingCount === 'number' ? parsed.missingCount : undefined,
+      candidates,
+      rejected,
+    };
   }
   return undefined;
 }

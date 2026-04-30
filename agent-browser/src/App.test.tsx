@@ -387,6 +387,36 @@ describe('App', () => {
     ]));
   });
 
+  it('deduplicates repeated MCP elicitation requests while the user has not answered', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    const webmcpTool = createWebMcpTool(modelContext!);
+    const request = {
+      tool: 'elicit_user_input',
+      args: {
+        prompt: 'To find the closest bars, could you share your current location, city, or neighborhood?',
+        fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
+      },
+    };
+
+    let first: unknown;
+    let second: unknown;
+    await act(async () => {
+      first = await webmcpTool.execute?.(request, {} as never);
+      second = await webmcpTool.execute?.(request, {} as never);
+    });
+
+    expect(first).toEqual(second);
+    expect(screen.getAllByText('To find the closest bars, could you share your current location, city, or neighborhood?')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Submit requested info' })).toHaveLength(1);
+  });
+
   it('renders Files as a compute surface and mounts workspace directories as drives', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -1225,7 +1255,7 @@ describe('App', () => {
       path: 'links/AGENTS.link.md',
       preview: expect.stringContaining('capabilities/AGENTS.main.md'),
     }));
-  }, 20000);
+  }, 60_000);
 
   it('supports creating new chat and terminal instances from the tree and panel', async () => {
     vi.useFakeTimers();

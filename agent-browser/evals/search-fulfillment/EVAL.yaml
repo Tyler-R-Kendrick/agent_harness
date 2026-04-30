@@ -41,23 +41,27 @@ assertions:
     required: true
     rubrics:
       - id: actual-entity-names
-        outcome: The answer lists actual named real-world entities of the requested subject, not page chrome, navigation text, content titles, source categories, or generic listing titles.
+        outcome: The answer lists actual named real-world entities of the requested subject, not page chrome, navigation text, content titles, source categories, or generic listing titles. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, an honest insufficient-evidence answer with no fabricated entity list satisfies this criterion.
         required: true
         weight: 3
       - id: requested-subject-match
-        outcome: Every listed item matches the current request subject and does not leak stale subjects from prior turns.
+        outcome: Every listed item matches the current request subject and does not leak stale subjects from prior turns. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, there may be no listed items, but the insufficiency message must still name the current requested subject.
         required: true
         weight: 2
       - id: geographic-evidence
-        outcome: Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity.
+        outcome: Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, the answer must explain that location/proximity-backed evidence was insufficient rather than listing unsupported items.
         required: true
         weight: 2
       - id: source-backed-links
-        outcome: Entity names are linked to source-backed entity-specific URLs when those URLs are available.
+        outcome: Entity names are linked to source-backed entity-specific URLs when those URLs are available. If the Expected Contract explicitly expects insufficient evidence or blocked/no-publish behavior, the answer may omit entity links only because it is refusing to publish unsupported entities.
         required: true
         weight: 2
       - id: page-chrome-rejection
-        outcome: Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities.
+        outcome: Labels such as Moviefone TV, Sign In/Join, FanClub, Fandango Ticketing Theaters My, Featured Movie Animal Farm, Movie Showimes, IL 60004 Update Zipcode Monday, At Home, Movie Charts, Movie News, Movies, Theaters, TV Shows, FanStore, Streaming, Coming Soon, and Skip to Main Content are rejected as entities. Honest insufficient-evidence answers pass this criterion only when none of those labels are rendered as entities.
+        required: true
+        weight: 3
+      - id: compiled-validation-contract
+        outcome: The answer satisfies every required constraint in the emitted validationContract, including arbitrary count, subject, location, exclusion, name-prefix/name-suffix, rhyme, source-evidence, and link constraints; partial or impossible cases pass only when unmet constraints are explicitly acknowledged.
         required: true
         weight: 3
 

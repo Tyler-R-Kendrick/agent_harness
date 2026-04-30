@@ -22,6 +22,7 @@ import {
 import { runConfiguredExecutorAgent } from './executorAgent';
 import { runLogActActorWorkflow } from './logactActorWorkflow';
 import type { CustomEvaluationAgent } from './evaluationAgentRegistry';
+import { resolveConversationSearchContext } from './conversationSearchContext';
 
 const CHAT_OUTPUT_TOKENS = 512;
 
@@ -326,10 +327,14 @@ export async function runStagedToolPipeline(
     return runDirectChat(options, callbacks);
   }
 
+  const conversationResolution = resolveConversationSearchContext(options.messages);
+  const pipelineMessages = conversationResolution.needsClarification
+    ? options.messages
+    : conversationResolution.messages;
   const chatMeta = agentMeta(options.model, 'chat-agent', 'Chat Agent');
   const orchestratorMeta = agentMeta(options.model, 'orchestrator', 'Orchestrator Agent');
   const executorMeta = agentMeta(options.model, 'executor', 'Executor Agent');
-  const orchestrated = planOrchestratorTasks(options.messages, options.workspaceName);
+  const orchestrated = planOrchestratorTasks(pipelineMessages, options.workspaceName);
 
   emitToolAgentStages(callbacks, 'chat-agent', 'Receiving the user prompt and delegating planning.', chatMeta);
   callbacks.onAgentHandoff?.('chat-agent', 'orchestrator', 'Agent handoff: classify the prompt, decompose the task, and choose registered agents.');
@@ -384,7 +389,7 @@ export async function runStagedToolPipeline(
 
   try {
     const runTask = (task: OrchestratorTask) => {
-      const taskMessages = messagesForOrchestratorTask(options.messages, task);
+      const taskMessages = messagesForOrchestratorTask(pipelineMessages, task);
       const taskCallbacks = callbacksForOrchestratorTask(planningCallbacks, task, orchestrated.tasks.length > 1);
       const fallbackSelection = createFallbackToolSelection(runtime, task.source, options.maxTools);
       return runLogActActorWorkflow({
@@ -443,7 +448,7 @@ export async function runStagedToolPipeline(
         const taskResult = await runTask(task);
         taskResults.push(taskResult);
         callbacks.onStageToken?.('orchestrator', `State machine completed: ${task.id}.`, orchestratorMeta);
-        if (taskResult.failed) break;
+        if (taskResult.failed || taskResult.blocked || taskResult.needsUserInput) break;
       }
     } else {
       taskResults.push(...await Promise.all(orchestrated.tasks.map((task) => runTask(task))));
@@ -512,10 +517,18 @@ function callbacksForOrchestratorTask(
 }
 
 function combineTaskResults(results: AgentRunResult[]): AgentRunResult {
+  const blocked = results.find((result) => result.blocked || result.needsUserInput);
   const failed = results.find((result) => result.failed);
+  const searchTurnContext = [...results].reverse().find((result) => result.searchTurnContext)?.searchTurnContext;
   return {
     text: results.map((result) => result.text).join('\n\n'),
     steps: results.reduce((sum, result) => sum + result.steps, 0),
+    ...(searchTurnContext ? { searchTurnContext } : {}),
+    ...(blocked ? {
+      blocked: true,
+      needsUserInput: true,
+      elicitation: blocked.elicitation,
+    } : {}),
     ...(failed ? {
       failed: true,
       error: results

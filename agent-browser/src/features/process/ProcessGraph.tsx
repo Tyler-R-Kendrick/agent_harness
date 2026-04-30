@@ -70,25 +70,36 @@ export function findOrphanBranches(entries: ProcessEntry[]): string[] {
     return a.position - b.position;
   });
   const seenEntryIds = new Set<string>();
+  const seenActorIds = new Set<string>();
   const seenBranches = new Set<string>();
   const orphanBranches = new Set<string>();
 
   for (const entry of sorted) {
     const branch = entry.branchId ?? entry.actor ?? 'main';
     const isFirstOnBranch = !seenBranches.has(branch);
+    const hasParentEntry = Boolean(entry.parentId && seenEntryIds.has(entry.parentId));
+    const hasParentActor = Boolean(entry.parentActorId && seenActorIds.has(entry.parentActorId));
     if (
       isFirstOnBranch
       && branch !== 'main'
       && isStructuredChildBranch(branch)
-      && (!entry.parentId || !seenEntryIds.has(entry.parentId))
+      && !hasParentEntry
+      && !hasParentActor
     ) {
       orphanBranches.add(branch);
     }
     seenBranches.add(branch);
     seenEntryIds.add(entry.id);
+    for (const actorKey of actorKeys(entry)) {
+      seenActorIds.add(actorKey);
+    }
   }
 
   return [...orphanBranches];
+}
+
+function actorKeys(entry: ProcessEntry): string[] {
+  return [entry.actorId, entry.agentId, entry.actor].filter((value): value is string => Boolean(value));
 }
 
 function isStructuredChildBranch(branch: string): boolean {
@@ -156,9 +167,14 @@ export function ProcessGraph({
   // segment spanning the lane's lifetime, plus the parent branch each lane
   // forked from (for fork/merge connectors).
   const laneSpans = new Map<string, LaneSpan>();
+  const actorIdToLane = new Map<string, string>();
   sorted.forEach((entry, rowIndex) => {
     const lane = branchOf(entry);
-    const parentLane = entry.parentId ? idToLane.get(entry.parentId) : undefined;
+    const parentLane = entry.parentId
+      ? idToLane.get(entry.parentId)
+      : entry.parentActorId
+        ? actorIdToLane.get(entry.parentActorId)
+        : undefined;
     const parent = parentLane && parentLane !== lane ? parentLane : undefined;
     const existing = laneSpans.get(lane);
     if (!existing) {
@@ -179,6 +195,9 @@ export function ProcessGraph({
           parentSpan.last = Math.max(parentSpan.last, rowIndex);
         }
       }
+    }
+    for (const actorKey of actorKeys(entry)) {
+      actorIdToLane.set(actorKey, lane);
     }
   });
 

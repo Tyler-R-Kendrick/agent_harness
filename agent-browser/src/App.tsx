@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import type { ModelMessage } from '@ai-sdk/provider-utils';
 import {
   DndContext,
   DragOverlay,
@@ -93,6 +94,7 @@ import { getModelCapabilities, resolveLanguageModel } from './services/agentProv
 import { LocalLanguageModel } from './services/localLanguageModel';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
+import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
 import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
 import { InlineProcess, ProcessPanel } from './features/process';
 import {
@@ -182,7 +184,7 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
-import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, SearchTurnContext, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 import type { CliHistoryEntry } from './tools/types';
 import { installModelContext, ModelContext } from 'webmcp';
 
@@ -220,6 +222,43 @@ type UserElicitationEventDetail = {
   reason?: string;
   fields: WorkspaceMcpElicitationField[];
 };
+
+function isSearchTurnContext(value: unknown): value is SearchTurnContext {
+  return !!value
+    && typeof value === 'object'
+    && 'taskText' in value
+    && 'resolvedTaskText' in value
+    && 'subject' in value
+    && 'answerSubject' in value
+    && 'acceptedCandidates' in value
+    && Array.isArray((value as SearchTurnContext).acceptedCandidates);
+}
+
+function buildElicitationRequestKey({
+  sessionId,
+  assistantId,
+  prompt,
+  fields,
+}: {
+  sessionId: string;
+  assistantId: string;
+  prompt: string;
+  fields: readonly WorkspaceMcpElicitationField[];
+}): string {
+  return JSON.stringify({
+    sessionId,
+    assistantId,
+    prompt: prompt.trim().replace(/\s+/g, ' '),
+    fields: fields.map((field) => ({
+      id: field.id,
+      label: field.label,
+      required: Boolean(field.required),
+      placeholder: field.placeholder ?? '',
+    })),
+  });
+}
+
+const pendingElicitationRequests = new Map<string, UserElicitationEventDetail>();
 
 const DEFAULT_IDENTITIES: Identity[] = [
   { id: 'user-1', name: 'You', type: 'user' },
@@ -3179,9 +3218,18 @@ function ChatPanel({
         } as ToolSet, selectedToolIds);
         const selectedDescriptors = selectToolDescriptorsByIds(toolDescriptors, selectedToolIds);
         const toolInstructions = buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
-        const inputMessages = nextMessages
+        const inputMessages: ModelMessage[] = nextMessages
           .filter((message) => message.id !== assistantId)
-          .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
+          .flatMap((message) => {
+            const baseMessage: ModelMessage = {
+              role: message.role,
+              content: message.streamedContent || message.content,
+            };
+            if (message.role === 'assistant' && message.searchTurnContext) {
+              return [baseMessage, createSearchTurnContextSystemMessage(message.searchTurnContext)];
+            }
+            return [baseMessage];
+          });
 
         try {
           const sharedCallbacks = {
@@ -3441,6 +3489,10 @@ function ChatPanel({
               ...sharedCallbacks,
             });
             sharedCallbacks.onDone?.(result.text);
+            const searchTurnContext = 'searchTurnContext' in result ? result.searchTurnContext : undefined;
+            if (isSearchTurnContext(searchTurnContext)) {
+              updateMessage(assistantId, { searchTurnContext });
+            }
           } else {
             const result = await runStagedToolPipeline({
               model,
@@ -3618,6 +3670,10 @@ function ChatPanel({
               ...sharedCallbacks,
             });
             sharedCallbacks.onDone?.(result.text);
+            const searchTurnContext = 'searchTurnContext' in result ? result.searchTurnContext : undefined;
+            if (isSearchTurnContext(searchTurnContext)) {
+              updateMessage(assistantId, { searchTurnContext });
+            }
           }
         } finally {
           clearLocalToolWatchdogs();
@@ -3998,6 +4054,11 @@ function ChatPanel({
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
     if (!locationValue) return;
+    for (const [key, detail] of pendingElicitationRequests.entries()) {
+      if (detail.requestId === requestId) {
+        pendingElicitationRequests.delete(key);
+      }
+    }
     upsertUserContextMemory(workspaceName, {
       id: 'location',
       label: 'Location',
@@ -8527,6 +8588,21 @@ function AgentBrowserApp() {
       onSearchWeb: searchWebFromApi,
       onReadWebPage: readWebPageFromApi,
       onElicitUserInput: (input) => {
+        const requestKey = buildElicitationRequestKey({
+          sessionId: activeWorkspaceId,
+          assistantId: 'workspace-mcp',
+          prompt: input.prompt,
+          fields: input.fields,
+        });
+        const pending = pendingElicitationRequests.get(requestKey);
+        if (pending) {
+          return {
+            status: 'needs_user_input',
+            requestId: pending.requestId,
+            prompt: pending.prompt,
+            fields: pending.fields,
+          };
+        }
         const requestId = `elicitation-${createUniqueId()}`;
         const detail: UserElicitationEventDetail = {
           requestId,
@@ -8534,6 +8610,7 @@ function AgentBrowserApp() {
           reason: input.reason,
           fields: [...input.fields],
         };
+        pendingElicitationRequests.set(requestKey, detail);
         window.dispatchEvent(new CustomEvent<UserElicitationEventDetail>(USER_ELICITATION_EVENT, { detail }));
         return {
           status: 'needs_user_input',
@@ -8584,6 +8661,7 @@ function AgentBrowserApp() {
     activeBrowserPages,
     activeSessionFsEntries,
     activeWorkspace,
+    activeWorkspaceId,
     activeWorkspaceFiles,
     activeWorkspaceSessions,
     activeWorktreeItems,

@@ -35,7 +35,7 @@ test('resolveTargetUrl falls back to localhost outside Codespaces', async () => 
     environment: {},
   });
 
-  assert.equal(url, 'http://localhost:5173');
+  assert.equal(url, 'http://localhost:5174');
 });
 
 test('resolveTargetUrl shells out to the helper script inside Codespaces', async () => {
@@ -49,15 +49,15 @@ test('resolveTargetUrl shells out to the helper script inside Codespaces', async
     },
     execFileImpl: async (filePath, args) => {
       calls.push({ filePath, args });
-      return { stdout: 'https://example-5173.app.github.dev\n' };
+      return { stdout: 'https://example-5174.app.github.dev\n' };
     },
   });
 
   assert.deepEqual(calls, [{
     filePath: '/workspaces/agent_harness/skills/agent-harness-context/scripts/codespaces-uri.sh',
-    args: ['--check', '5173'],
+    args: ['--check', '5174'],
   }]);
-  assert.equal(url, 'https://example-5173.app.github.dev');
+  assert.equal(url, 'https://example-5174.app.github.dev');
 });
 
 test('resolveTargetUrl promotes the port when the checked URL is not yet browser-accessible', async () => {
@@ -76,21 +76,21 @@ test('resolveTargetUrl promotes the port when the checked URL is not yet browser
         throw new Error('Forwarded URL check failed');
       }
 
-      return { stdout: 'https://example-5173.app.github.dev\n' };
+      return { stdout: 'https://example-5174.app.github.dev\n' };
     },
   });
 
   assert.deepEqual(calls, [
     {
       filePath: '/workspaces/agent_harness/skills/agent-harness-context/scripts/codespaces-uri.sh',
-      args: ['--check', '5173'],
+      args: ['--check', '5174'],
     },
     {
       filePath: '/workspaces/agent_harness/skills/agent-harness-context/scripts/codespaces-uri.sh',
-      args: ['--public', '--check', '5173'],
+      args: ['--public', '--check', '5174'],
     },
   ]);
-  assert.equal(url, 'https://example-5173.app.github.dev');
+  assert.equal(url, 'https://example-5174.app.github.dev');
 });
 
 test('resolveTargetUrl requires a workspace root', async () => {

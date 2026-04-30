@@ -99,6 +99,10 @@ type StreamableModel = {
   doStream?: (options: unknown) => Promise<{ stream: ReadableStream<LanguageModelV3StreamPart> }>;
 };
 
+type ModelTurnState = {
+  nextTurn: number;
+};
+
 const DEFAULT_MAX_STEPS = 6;
 
 const TOOL_CALL_BLOCK_RE = /<tool_call>([\s\S]*?)<\/tool_call>/i;
@@ -170,14 +174,27 @@ async function streamModelText(
   }
   if (typeof streamable.doGenerate === 'function') {
     const result = await streamable.doGenerate(callOptions);
-    const text = result.content
-      .filter((part): part is Extract<(typeof result.content)[number], { type: 'text' }> => part.type === 'text')
-      .map((part) => part.text)
-      .join('');
+    const text = generateResultToText(result);
     if (text) onToken?.(text);
     return text;
   }
   throw new Error('Local tool-call executor: model does not support doStream or doGenerate.');
+}
+
+function generateResultToText(result: LanguageModelV3GenerateResult): string {
+  const maybeText = (result as { text?: unknown }).text;
+  if (typeof maybeText === 'string') return maybeText;
+  const content = (result as { content?: unknown }).content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((part): part is { type: 'text'; text: string } => (
+      part && typeof part === 'object'
+      && (part as { type?: unknown }).type === 'text'
+      && typeof (part as { text?: unknown }).text === 'string'
+    ))
+    .map((part) => part.text)
+    .join('');
 }
 
 function messageToString(message: ModelMessage): string {
@@ -190,6 +207,7 @@ function messageToString(message: ModelMessage): string {
 async function runOneInferencePass(
   options: LocalToolCallExecutorOptions,
   callbacks: LocalToolCallExecutorCallbacks,
+  turnState: ModelTurnState,
 ): Promise<AgentRunResult> {
   const { model, tools, toolDescriptors, instructions, messages, signal } = options;
   const maxSteps = Math.max(1, options.maxSteps ?? DEFAULT_MAX_STEPS);
@@ -207,13 +225,13 @@ async function runOneInferencePass(
   let toolCallCounter = 0;
   let toolUseRetries = 0;
   let toolCallsExecuted = 0;
-  let turnCounter = 0;
 
   for (let step = 0; step < maxSteps; step += 1) {
     steps += 1;
-    turnCounter += 1;
-    const turnId = `local-turn-${turnCounter}`;
-    callbacks.onModelTurnStart?.(turnId, step);
+    const turnOrdinal = turnState.nextTurn;
+    turnState.nextTurn += 1;
+    const turnId = `local-turn-${turnOrdinal}`;
+    callbacks.onModelTurnStart?.(turnId, turnOrdinal - 1);
     const turnText = await streamModelText(model, conversation, signal, callbacks.onToken);
     lastText = turnText;
     const parsed = parseLocalToolCall(turnText);
@@ -302,6 +320,7 @@ export async function runLocalToolCallExecutor(
   let captured: AgentRunResult = { text: '', steps: 0 };
   let lastError: Error | null = null;
   let feedback: string | null = null;
+  const turnState: ModelTurnState = { nextTurn: 1 };
 
   // Build an observed bus so every LogAct payload (Mail/InfIn/InfOut/Intent/
   // Vote/Commit/Abort/Result/Completion/Policy) is mirrored to onBusEntry.
@@ -323,7 +342,7 @@ export async function runLocalToolCallExecutor(
           }
           : options;
         try {
-          captured = await runOneInferencePass(passOptions, callbacks);
+          captured = await runOneInferencePass(passOptions, callbacks, turnState);
           return captured.text;
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));

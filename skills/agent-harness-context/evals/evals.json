@@ -45,9 +45,9 @@ Usage: codespaces-uri.sh [--public] [--check] PORT [PATH]
 Build the forwarded GitHub Codespaces URL for a port and optional callback path.
 
 Examples:
-  codespaces-uri.sh 5173
-  codespaces-uri.sh 5173 /auth/callback
-  codespaces-uri.sh --public --check 5173 /auth/callback
+  codespaces-uri.sh 5174
+  codespaces-uri.sh 5174 /auth/callback
+  codespaces-uri.sh --public --check 5174 /auth/callback
 EOF
 }
 

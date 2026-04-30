@@ -369,6 +369,83 @@ describe('stagedToolPipeline', () => {
     expect(executorPrompt).toContain('AgentBus context');
   });
 
+  it('propagates elicitation as a paused pipeline result instead of a normal completed run', async () => {
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:read_browser_location',
+        label: 'Read browser location',
+        description: 'Read browser geolocation before asking the user.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask the user for missing data before execution.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+    const toolCalls: string[] = [];
+    const onDone = vi.fn();
+    const onStageComplete = vi.fn();
+
+    const result = await runStagedToolPipeline({
+      model: makeStreamingModel() as never,
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', query: 'location', memories: [] })),
+        },
+        'webmcp:read_browser_location': {
+          execute: vi.fn(async () => ({ status: 'denied', reason: 'Browser location denied.' })),
+        },
+        'webmcp:elicit_user_input': {
+          execute: vi.fn(async (args: { prompt: string }) => ({
+            status: 'needs_user_input',
+            requestId: 'location-request',
+            prompt: args.prompt,
+            fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
+          })),
+        },
+      } as unknown as ToolSet,
+      toolDescriptors: descriptors,
+      instructions: 'You are a workspace agent.',
+      messages: [{ role: 'user', content: 'list restaurants near me' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, {
+      onToolCall: (toolName) => toolCalls.push(toolName),
+      onDone,
+      onStageComplete,
+    });
+
+    expect(toolCalls).toEqual([
+      'webmcp:recall_user_context',
+      'webmcp:read_browser_location',
+      'webmcp:elicit_user_input',
+    ]);
+    expect(result).toMatchObject({
+      blocked: true,
+      needsUserInput: true,
+      text: 'What city or neighborhood should I use for this restaurants search?',
+    });
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onStageComplete.mock.calls.some(([stage]) => stage === 'orchestrator')).toBe(true);
+  });
+
   it('selectStageDescriptors preserves descriptor ordering for selected ids', () => {
     expect(selectStageDescriptors(toolDescriptors, ['read_session_file'])).toEqual([toolDescriptors[1]]);
   });

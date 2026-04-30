@@ -8,6 +8,7 @@ import { buildDefaultToolInstructions, selectToolDescriptorsByIds, type ToolDesc
 import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from '../../services/agentRunner';
 import { runLocalToolCallExecutor } from '../../services/localToolCallExecutor';
 import { runAgentLoop } from '../../chat-agents/agent-loop';
+import { WEB_SEARCH_AGENT_ID, selectWebSearchAgentTools } from '../../chat-agents/WebSearch';
 import { createObservedBus } from '../../services/observedAgentBus';
 import { createCodeModeExecutor, type CodeModeExecutor } from './codeMode';
 
@@ -106,6 +107,7 @@ const LOCATION_CONTEXT_TOOL_ORDER = [
   'webmcp:read_browser_location',
   'webmcp:search_web',
   'webmcp:read_web_page',
+  'cli',
   'webmcp:elicit_user_input',
 ] as const;
 
@@ -175,6 +177,9 @@ export function findTool(runtime: ToolAgentRuntime, query: string, limit = 5): T
 export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, maxTools = 4): ToolPlan {
   const ranked = findTool(runtime, goal, maxTools);
   const availableTools = listTools(runtime);
+  const webSearchToolIds = isWebSearchGoal(goal)
+    ? selectWebSearchAgentTools(availableTools, goal)
+    : [];
   const orderedLocationTools = isLocationDependentGoal(goal)
     ? LOCATION_CONTEXT_TOOL_ORDER
       .map((toolId) => availableTools.find((descriptor) => descriptor.id === toolId))
@@ -199,13 +204,19 @@ export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, ma
       'voter:teacher': [],
       'adversary-driver': [],
       'judge-decider': [],
+      [WEB_SEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => webSearchToolIds.includes(toolId)),
       executor: selectedToolIds,
     },
   };
 }
 
 function isLocationDependentGoal(goal: string): boolean {
-  return /\b(near me|nearby|restaurants?|location|city|neighbou?rhood)\b/i.test(goal);
+  return /\b(near me|nearby|restaurants?|theat(?:er|re)s?|bars?|cafes?|parks?|location|city|neighbou?rhood)\b/i.test(goal);
+}
+
+function isWebSearchGoal(goal: string): boolean {
+  return isLocationDependentGoal(goal)
+    || /\b(current|latest|recent|today|web|search|source|sources|cite|citations?|best|top|recommended|reviews?)\b/i.test(goal);
 }
 
 function createExecutionWorkflowVoters(selectedDescriptors: ToolDescriptor[]): IVoter[] {
@@ -249,7 +260,7 @@ function buildExecutionWorkflowIntent(
     'Execution workflow ready for LogAct.',
     'Classification: tool-enabled workspace task.',
     `Succinct tasks: ${plan.goal}`,
-    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, voter agents, executor.`,
+    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, ${WEB_SEARCH_AGENT_ID}, voter agents, executor.`,
     `Tool assignments: ${selectedToolIds.length ? selectedToolIds.join(', ') : '(none)'}.`,
     feedback ? `Completion feedback: ${feedback}` : null,
   ].filter(Boolean).join('\n');
