@@ -1,12 +1,14 @@
 $ErrorActionPreference = 'Stop'
 
 $steps = @(
+  @{ Label = 'source-hygiene'; Args = @('run', 'check:generated-files') }
   @{ Label = 'validate-evals'; Args = @('--workspace', 'agent-browser', 'run', 'validate:evals') }
   @{ Label = 'test-evals'; Args = @('--workspace', 'agent-browser', 'run', 'test:evals') }
   @{ Label = 'test-scripts'; Args = @('--workspace', 'agent-browser', 'run', 'test:scripts') }
   @{ Label = 'lint'; Args = @('--workspace', 'agent-browser', 'run', 'lint') }
   @{ Label = 'coverage'; Args = @('--workspace', 'agent-browser', 'run', 'test:coverage') }
   @{ Label = 'build'; Args = @('--workspace', 'agent-browser', 'run', 'build') }
+  @{ Label = 'audit-lockfile'; Args = @('install', '--package-lock-only', '--ignore-scripts') }
   @{ Label = 'audit'; Args = @('audit', '--audit-level=moderate') }
   @{ Label = 'visual-smoke'; Args = @('run', 'visual:agent-browser') }
 )

@@ -4,10 +4,20 @@ const http = require('node:http');
 const path = require('node:path');
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_PORT = 5173;
+const DEFAULT_PORT = 5174;
 const DEFAULT_LOCALHOST_URL = `http://localhost:${DEFAULT_PORT}`;
 
 function getCodespacesUriScriptPath(workspaceRoot) {
+  if (workspaceRoot.includes('/') && !workspaceRoot.includes('\\')) {
+    return [
+      workspaceRoot.replace(/\/+$/, ''),
+      'skills',
+      'agent-harness-context',
+      'scripts',
+      'codespaces-uri.sh',
+    ].join('/');
+  }
+
   return path.join(workspaceRoot, 'skills', 'agent-harness-context', 'scripts', 'codespaces-uri.sh');
 }
 

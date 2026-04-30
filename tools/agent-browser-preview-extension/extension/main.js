@@ -31,7 +31,7 @@ async function openAgentBrowserPreview({ force = false } = {}) {
   });
 
   if (!serverReady) {
-    void vscode.window.showWarningMessage('Agent Browser preview was not opened because the dev server on port 5173 never became ready.');
+    void vscode.window.showWarningMessage('Agent Browser preview was not opened because the dev server on port 5174 never became ready.');
     return;
   }
 

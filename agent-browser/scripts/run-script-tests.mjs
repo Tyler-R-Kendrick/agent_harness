@@ -5,6 +5,10 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
+import {
+  findTrackedGeneratedArtifacts,
+  formatTrackedGeneratedArtifactsError,
+} from '../../scripts/check-generated-files-clean.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
@@ -35,14 +39,20 @@ async function main() {
 
   const packageJson = await readScript('package.json');
   assert.match(packageJson, /"verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
+  assert.match(packageJson, /"check:generated-files": "node scripts\/check-generated-files-clean\.mjs"/);
 
   const verifyScript = await readScript('scripts/verify-agent-browser.ps1');
+  const sourceHygieneIndex = verifyScript.indexOf("Label = 'source-hygiene'");
+  const validateEvalsIndex = verifyScript.indexOf("Label = 'validate-evals'");
   const testScriptsIndex = verifyScript.indexOf("Label = 'test-scripts'");
   const lintIndex = verifyScript.indexOf("Label = 'lint'");
   const buildIndex = verifyScript.indexOf("Label = 'build'");
+  assert.notEqual(sourceHygieneIndex, -1);
+  assert.notEqual(validateEvalsIndex, -1);
   assert.notEqual(testScriptsIndex, -1);
   assert.notEqual(lintIndex, -1);
   assert.notEqual(buildIndex, -1);
+  assert.ok(sourceHygieneIndex < validateEvalsIndex);
   assert.ok(testScriptsIndex < lintIndex);
   assert.ok(lintIndex < buildIndex);
   assert.match(verifyScript, /npm warn/i);
@@ -78,6 +88,37 @@ async function main() {
     () => resolvePackageBin('', fixtureRequire),
     /requires a non-empty package name/,
   );
+
+  const trackedArtifacts = findTrackedGeneratedArtifacts([
+    '.agentv/targets.yaml',
+    'agent-browser/evals/search-fulfillment/EVAL.yaml',
+    'skills/agent-harness-context/evals/evals.json',
+    'package-lock.json',
+    'output/evals/search-fulfillment-agentv/timing.json',
+    'output/dev-server/agent-browser-5174.out.log',
+    '.agentv/cache.json',
+    '.codex/environments/environment.toml',
+    '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
+    '.codex-tk26-index-main/index.json',
+  ]);
+  assert.deepEqual(
+    trackedArtifacts.map((artifact) => artifact.path),
+    [
+      'package-lock.json',
+      'output/evals/search-fulfillment-agentv/timing.json',
+      'output/dev-server/agent-browser-5174.out.log',
+      '.agentv/cache.json',
+      '.codex/environments/environment.toml',
+      '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
+      '.codex-tk26-index-main/index.json',
+    ],
+  );
+  assert.match(
+    formatTrackedGeneratedArtifactsError(trackedArtifacts),
+    /Generated or local-only artifacts are tracked by git/,
+  );
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /output\/evals/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
 
   console.log('agent-browser script regression checks passed');
 }

@@ -92,6 +92,19 @@ function buildGenerationOptions(
   return generationOptions;
 }
 
+function promptContentToText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((part): part is { type: 'text'; text: string } => (
+      part && typeof part === 'object'
+      && (part as { type?: unknown }).type === 'text'
+      && typeof (part as { text?: unknown }).text === 'string'
+    ))
+    .map((part) => part.text)
+    .join('');
+}
+
 function buildPromptString(options: LanguageModelV3CallOptions): unknown {
   // HF pipelines accept messages array for chat or string for completion
   const messages: Array<{ role: string; content: string }> = [];
@@ -110,10 +123,7 @@ function buildPromptString(options: LanguageModelV3CallOptions): unknown {
         content: trimTextForLocalInference(content, MAX_LOCAL_SYSTEM_MESSAGE_CHARS),
       });
     } else {
-      const text = message.content
-        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-        .map((p) => p.text)
-        .join('');
+      const text = promptContentToText(message.content);
       messages.push({
         role: message.role === 'user' ? 'user' : 'assistant',
         content: trimTextForLocalInference(text, MAX_LOCAL_TURN_MESSAGE_CHARS),

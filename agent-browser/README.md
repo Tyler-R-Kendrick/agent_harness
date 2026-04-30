@@ -16,7 +16,7 @@ Use the app-local bundle when documenting what appears in a fresh browser worksp
 
 From `agent-browser/`:
 
-- `npm run dev` starts the hot-reload server on port `5173`.
+- `npm run dev` starts the hot-reload server on port `5174`.
 - `npm run dev:cucumber` starts the dedicated browser test server on port `4173`.
 - `npm run build` produces the production bundle.
 - `npm run lint` runs TypeScript in no-emit mode.
@@ -35,14 +35,14 @@ Prefer the repo-root wrapper scripts for contributor onboarding, CI parity, and 
 
 ## Hot reload in Codespaces
 
-Opening the repository in VS Code should start the Vite dev server automatically through `.vscode/tasks.json`. In Codespaces, the workspace also installs a small local helper extension that opens VS Code Simple Browser to the forwarded URL for port `5173`.
+Opening the repository in VS Code should start the Vite dev server automatically through `.vscode/tasks.json`. In Codespaces, the workspace also installs a small local helper extension that opens VS Code Simple Browser to the forwarded URL for port `5174`.
 
-The browser-facing URL should always come from `../skills/agent-harness-context/scripts/codespaces-uri.sh 5173`. The preview helper first validates that forwarded URL, and if it is not yet browser-accessible it retries with `--public --check` before opening Simple Browser. Use `http://localhost:5173` only for tooling that runs inside the container, such as `curl`, Playwright, or local health checks.
+The browser-facing URL should always come from `../skills/agent-harness-context/scripts/codespaces-uri.sh 5174`. The preview helper first validates that forwarded URL, and if it is not yet browser-accessible it retries with `--public --check` before opening Simple Browser. Use `http://localhost:5174` only for tooling that runs inside the container, such as `curl`, Playwright, or local health checks.
 
 If the helper extension was installed during the current session, reload the VS Code window once so the startup activation runs.
 
 ## Troubleshooting
 
 - If the preview did not open automatically, run the `Agent Harness: Open Agent Browser Preview` command.
-- If the forwarded preview URL fails in Codespaces, run `../skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5173` and retry the preview.
+- If the forwarded preview URL fails in Codespaces, run `../skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5174` and retry the preview.
 - If you want to start or debug the dev server manually, use `.vscode/launch.json`.

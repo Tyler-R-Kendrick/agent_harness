@@ -2,8 +2,14 @@ import type { ModelMessage } from '@ai-sdk/provider-utils';
 import { PayloadType, type IAgentBus } from 'logact';
 import type { ToolPlanningCallbacks, ToolAgentRuntime, ToolPlan } from '../tool-agents/tool-agent';
 import { callTool } from '../tool-agents/tool-agent';
+import { selectWebSearchAgentTools } from '../chat-agents/WebSearch';
 import type { AgentRunResult } from './agentRunner';
-import type { BusEntryStep } from '../types';
+import type { BusEntryStep, SearchTurnContext, ValidationContract } from '../types';
+import { compileValidationContract } from './constraintCompiler';
+import {
+  resolveConversationSearchContext,
+  type ConversationSearchResolution,
+} from './conversationSearchContext';
 
 export interface ExecutionRequirement {
   kind: 'location' | 'web-search';
@@ -15,11 +21,14 @@ export interface ExecutionIntent {
   subject: string;
   answerSubject: string;
   rankingModifier?: string;
-  rankingGoal?: 'best' | 'worst' | 'closest' | 'most-popular' | 'recommended' | 'current';
+  rankingGoal?: 'best' | 'worst' | 'closest' | 'most-popular' | 'recommended' | 'current' | 'open-now' | 'highly-rated' | 'family-friendly' | 'budget-friendly' | 'quiet' | 'nearby';
   locationRequired: boolean;
   externalSearchRequired: boolean;
   topicPreferences: string[];
   prefersCitations: boolean;
+  requestedCount?: number;
+  excludedCandidateNames: string[];
+  validationContract: ValidationContract;
 }
 
 export interface SearchCandidate {
@@ -70,6 +79,7 @@ export interface ResolvedExecutionContext {
   searchQuery?: string;
   searchResult?: SearchWebResult;
   searchCandidates?: SearchCandidate[];
+  conversationResolution?: ConversationSearchResolution;
 }
 
 export type RequirementResolutionResult =
@@ -85,6 +95,7 @@ export interface ExecutionInstructionContext {
   };
   busEntries?: BusEntryStep[];
   validationCriteria?: string[];
+  validationContract?: ValidationContract;
   bus?: IAgentBus;
 }
 
@@ -150,12 +161,12 @@ const REQUIREMENT_TOOL_IDS = {
 const MAX_PAGES_TO_READ = 2;
 const MAX_DISCOVERY_SEARCH_RESULTS = 5;
 const MAX_CANDIDATES_TO_ENRICH = 4;
-const FORBIDDEN_ENTITY_LABEL_PATTERN = /^(?:movies?|theaters?|theatres?|cinemas?|trailers?|teasers?|videos?|clips?|tv shows?|showtimes?|tickets?|reviews?|menus?|directions?|hours?|locations?|search|find|home|main content|skip to main content|skip navigation|privacy|terms|sign in|log in|subscribe|load more|see all|view all|read more|learn more)$/i;
-const FORBIDDEN_ENTITY_LABEL_WORD_PATTERN = /\b(?:trailers?|teasers?|showt?imes?|tickets?|ticketing|tv shows?|streaming|coming\s+soon|movie\s+charts?|movie\s+news|skip to main content|main content|screen\s+reader|accessibility|promo(?:tion)?s?|offers?|coupon|redeem)\b/i;
-const SITE_SECTION_LABEL_PATTERN = /^(?:at\s+home|coming\s+soon|streaming|fan\s*store|store|shop|merchandise|gear|gift cards?|rewards?|offers?|deals?|coupons?|promos?|promotions?|charts?|news|articles?|blog|photos?|videos?|clips?|trailers?|tv shows?|events?|calendar|account|profile|help|support|contact|about|screen\s+reader\s+users?|accessibility|ticketing)$/i;
+const FORBIDDEN_ENTITY_LABEL_PATTERN = /^(?:movies?|theaters?|theatres?|cinemas?|trailers?|teasers?|videos?|clips?|tv shows?|showtimes?|tickets?|reviews?|menus?|directions?|hours?|locations?|search|find|home|main content|skip to main content|skip navigation|privacy|terms|sign in|log in|login|join|join now|subscribe|load more|see all|view all|read more|learn more)$/i;
+const FORBIDDEN_ENTITY_LABEL_WORD_PATTERN = /\b(?:trailers?|teasers?|showt?imes?|tickets?|ticketing|tv shows?|streaming|coming\s+soon|movie\s+charts?|movie\s+news|skip to main content|main content|screen\s+reader|accessibility|promo(?:tion)?s?|offers?|coupon|redeem|support\s+enable|join\s+now\s+enable|enable\s+dark\s+mode|shop\s+categories|about\s+us)\b/i;
+const SITE_SECTION_LABEL_PATTERN = /^(?:at\s+home|coming\s+soon|streaming|fan\s*store|store|shop|shop\s+categories|merchandise|gear|gift cards?|rewards?|offers?|deals?|coupons?|promos?|promotions?|charts?|news|articles?|blog|photos?|videos?|clips?|trailers?|tv shows?|events?|calendar|account|profile|help|support|support\s+enable|contact|about|about\s+us|join\s+now(?:\s+enable)?|enable\s+dark\s+mode|screen\s+reader\s+users?|accessibility|ticketing)$/i;
 const TECHNICAL_ARTIFACT_LABEL_PATTERN = /^(?:(?:multi|single|top|bottom|side|leaderboard|banner|box|native|display|sponsor(?:ed)?)\s+)?(?:ad|ads|adunit|adunits|advertisement|banner|logo|multi\s+logo|box\s+ad|tracking|analytics|pixel|beacon|script|style|stylesheet|css|font|font\s+family|serif|sans\s+serif|arial|helvetica|georgia|palatino|palatino\s+linotype|times\s+new\s+roman)$/i;
 const TECHNICAL_ARTIFACT_WORD_PATTERN = /\b(?:adconfig|adunit|adunits|advertis(?:e|ing|ement)|doubleclick|googletag|analytics|tracking|pixel|font-family|stylesheet|css|script|window\.[a-z0-9_$]+|pageType|theaterselectionpage)\b/i;
-const CONTENT_NAVIGATION_ARTIFACT_WORD_PATTERN = /\b(?:featured|ticketing|what\s+to\s+watch|watch\s+new|new\s+trailers?|made\s+in\s+hollywood|showt?imes?\s+highlights?|trending|content\s+(?:area|bucket|section)|screenx|fan\s*club|sign\s*in\/?join)\b/i;
+const CONTENT_NAVIGATION_ARTIFACT_WORD_PATTERN = /\b(?:featured|ticketing|what\s+to\s+watch|watch\s+new|new\s+trailers?|made\s+in\s+hollywood|showt?imes?\s+highlights?|trending|content\s+(?:area|bucket|section)|screenx|fan\s*club|sign\s*in\/?join|support\s+enable|join\s+now\s+enable|enable\s+dark\s+mode|shop\s+categories|about\s+us)\b/i;
 
 export async function resolveExecutionRequirements({
   runtime,
@@ -164,8 +175,19 @@ export async function resolveExecutionRequirements({
   executionContext,
   callbacks,
 }: ResolveExecutionRequirementsOptions): Promise<RequirementResolutionResult> {
-  const intent = inferExecutionIntent(messages);
-  const requirements = detectRequirements(intent);
+  const conversationResolution = resolveConversationSearchContext(messages);
+  const effectiveMessages = conversationResolution.needsClarification
+    ? messages
+    : conversationResolution.messages;
+  const intent = inferExecutionIntent(
+    effectiveMessages,
+    conversationResolution,
+    executionContext?.validationContract,
+    executionContext?.validationCriteria,
+  );
+  const requirements = conversationResolution.needsClarification
+    ? [{ kind: 'web-search' as const, reason: 'The follow-up request needs a prior searchable context before tools can run.' }]
+    : detectRequirements(intent);
   if (requirements.length === 0) {
     return { status: 'continue', steps: 0 };
   }
@@ -175,7 +197,7 @@ export async function resolveExecutionRequirements({
     ...(executionContext?.toolPolicy?.allowedToolIds ?? []),
   ]);
   let steps = 0;
-  const context: ResolvedExecutionContext = { requirements, intent };
+  const context: ResolvedExecutionContext = { requirements, intent, conversationResolution };
   const call = async (toolId: string, args: unknown) => {
     steps += 1;
     return callObservedTool(
@@ -186,14 +208,30 @@ export async function resolveExecutionRequirements({
       steps,
       executionContext?.bus,
       executionContext?.validationCriteria ?? [],
+      intent.validationContract,
     );
   };
+
+  await appendConversationContext(executionContext?.bus, conversationResolution, intent);
+
+  if (conversationResolution.needsClarification) {
+    const blocked = await blockForClarification({
+      allowedToolIds,
+      runtime,
+      call,
+      steps,
+      clarificationPrompt: conversationResolution.clarificationPrompt ?? 'What should I show more of?',
+    });
+    return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
+  }
 
   if (intent.locationRequired) {
     const resolved = await resolveLocation({
       runtime,
       allowedToolIds,
       taskText: intent.currentTaskText,
+      messages: effectiveMessages,
+      contractLocation: requestedContractLocation(intent.validationContract),
       call,
     });
     context.location = resolved.location;
@@ -209,7 +247,7 @@ export async function resolveExecutionRequirements({
   }
 
   if (intent.externalSearchRequired) {
-    if (!isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.search)) {
+    if (!hasAvailableSearchPath(runtime, allowedToolIds)) {
       const blocked = await blockForMissingSearch({
         allowedToolIds,
         runtime,
@@ -221,8 +259,13 @@ export async function resolveExecutionRequirements({
       return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
     }
     context.searchQuery = buildSearchQuery(intent, context.location);
-    const searchResult = await call(REQUIREMENT_TOOL_IDS.search, { query: context.searchQuery, limit: 3 });
-    context.searchResult = normalizeSearchResult(searchResult, context.searchQuery);
+    context.searchResult = await searchWebWithFallback({
+      runtime,
+      allowedToolIds,
+      query: context.searchQuery,
+      limit: 3,
+      call,
+    });
     if (context.searchResult.status === 'found' && context.searchResult.results.length > 0) {
       context.searchCandidates = await fulfillSearchCandidates({
         searchResult: context.searchResult,
@@ -234,15 +277,22 @@ export async function resolveExecutionRequirements({
         call,
       });
       const text = composeSearchAnswer(context);
-      if ((context.searchCandidates ?? []).length === 0) {
+      const acceptedCount = acceptedSearchCandidateCount(context);
+      const requiredCount = requiredAcceptedCandidateCount(intent);
+      if (acceptedCount < requiredCount) {
         return {
           status: 'fulfilled',
           steps,
           result: {
             text,
             steps,
-            failed: true,
-            error: `No validated ${intent.answerSubject} candidates were found in the search evidence.`,
+            ...(acceptedCount === 0
+              ? {
+                failed: true,
+                error: `No validated ${intent.answerSubject} candidates were found in the search evidence.`,
+              }
+              : {}),
+            searchTurnContext: buildSearchTurnContext(context),
           },
           context,
         };
@@ -250,7 +300,7 @@ export async function resolveExecutionRequirements({
       return {
         status: 'fulfilled',
         steps,
-        result: { text, steps },
+        result: { text, steps, searchTurnContext: buildSearchTurnContext(context) },
         context,
       };
     }
@@ -273,11 +323,15 @@ async function resolveLocation({
   runtime,
   allowedToolIds,
   taskText,
+  messages,
+  contractLocation,
   call,
 }: {
   runtime: ToolAgentRuntime;
   allowedToolIds: Set<string>;
   taskText: string;
+  messages: ModelMessage[];
+  contractLocation?: string;
   call: (toolId: string, args: unknown) => Promise<unknown>;
 }): Promise<{ location?: string; memoryResult?: unknown }> {
   let memoryResult: unknown;
@@ -287,13 +341,61 @@ async function resolveLocation({
     if (recalled) return { location: recalled, memoryResult };
   }
 
+  const sessionLocation = extractSessionLocation(messages);
+  if (sessionLocation) return { location: sessionLocation, memoryResult };
+
   if (isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.location)) {
     const location = await call(REQUIREMENT_TOOL_IDS.location, {});
     const browserLocation = extractBrowserLocation(location);
     if (browserLocation) return { location: browserLocation, memoryResult };
   }
 
-  return { location: extractStatedLocation(taskText), memoryResult };
+  return { location: extractStatedLocation(taskText) ?? contractLocation, memoryResult };
+}
+
+async function blockForClarification({
+  allowedToolIds,
+  runtime,
+  call,
+  steps,
+  clarificationPrompt,
+}: {
+  allowedToolIds: Set<string>;
+  runtime: ToolAgentRuntime;
+  call: (toolId: string, args: unknown) => Promise<unknown>;
+  steps: number;
+  clarificationPrompt: string;
+}): Promise<{ steps: number; result: AgentRunResult }> {
+  if (isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.elicit)) {
+    const elicitation = await call(REQUIREMENT_TOOL_IDS.elicit, {
+      prompt: clarificationPrompt,
+      reason: 'A follow-up request needs the prior search subject before tools can run.',
+      fields: [{
+        id: 'search-context',
+        label: 'What should I show more of?',
+        required: true,
+        placeholder: 'bars near Arlington Heights, IL',
+      }],
+    });
+    return {
+      steps: steps + 1,
+      result: resultFromNeedsUserInput(elicitation, steps + 1) ?? {
+        text: clarificationPrompt,
+        steps: steps + 1,
+        blocked: true,
+        needsUserInput: true,
+      },
+    };
+  }
+  return {
+    steps,
+    result: {
+      text: clarificationPrompt,
+      steps,
+      blocked: true,
+      needsUserInput: true,
+    },
+  };
 }
 
 async function blockForMissingLocation({
@@ -397,6 +499,138 @@ async function blockForMissingSearch({
   };
 }
 
+async function searchWebWithFallback({
+  runtime,
+  allowedToolIds,
+  query,
+  limit,
+  call,
+}: {
+  runtime: ToolAgentRuntime;
+  allowedToolIds: Set<string>;
+  query: string;
+  limit: number;
+  call: (toolId: string, args: unknown) => Promise<unknown>;
+}): Promise<SearchWebResult> {
+  const attempts: SearchWebResult[] = [];
+  const attemptedToolIds = new Set<string>();
+
+  if (isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.search)) {
+    attemptedToolIds.add(REQUIREMENT_TOOL_IDS.search);
+    const result = normalizeSearchToolResult(
+      await call(REQUIREMENT_TOOL_IDS.search, { query, limit }),
+      query,
+    );
+    if (result.status === 'found' && result.results.length > 0) return result;
+    attempts.push(result);
+  }
+
+  for (const toolId of fallbackSearchToolIds(runtime, allowedToolIds)) {
+    if (attemptedToolIds.has(toolId)) continue;
+    attemptedToolIds.add(toolId);
+    const args = toolId === 'cli'
+      ? { command: buildCliWebSearchCommand(query, limit) }
+      : { query, limit };
+    const result = normalizeSearchToolResult(await call(toolId, args), query);
+    if (result.status === 'found' && result.results.length > 0) return result;
+    attempts.push(result);
+  }
+
+  const reasons = attempts.map((attempt) => attempt.reason).filter((reason): reason is string => Boolean(reason));
+  return {
+    status: attempts.some((attempt) => attempt.status === 'empty') ? 'empty' : 'unavailable',
+    query,
+    results: [],
+    ...(reasons.length ? { reason: uniqueStrings(reasons).join(' ') } : { reason: 'No web search tool returned results.' }),
+  };
+}
+
+function hasAvailableSearchPath(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): boolean {
+  return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.search)
+    || fallbackSearchToolIds(runtime, allowedToolIds).length > 0;
+}
+
+function fallbackSearchToolIds(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): string[] {
+  return selectWebSearchAgentTools(allRuntimeDescriptors(runtime), '')
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.search)
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.readPage)
+    .filter((toolId) => isToolAllowedAndAvailable(runtime, allowedToolIds, toolId));
+}
+
+function allRuntimeDescriptors(runtime: ToolAgentRuntime): ToolDescriptorLike[] {
+  return [...runtime.descriptors, ...(runtime.generatedDescriptors ?? [])];
+}
+
+type ToolDescriptorLike = Parameters<typeof selectWebSearchAgentTools>[0][number];
+
+function normalizeSearchToolResult(result: unknown, query: string): SearchWebResult {
+  return normalizeSearchResult(parseStructuredToolOutput(result), query);
+}
+
+function parseStructuredToolOutput(result: unknown): unknown {
+  if (typeof result === 'string') return parseJsonFromString(result) ?? result;
+  if (isRecord(result)) {
+    for (const key of ['stdout', 'output', 'text']) {
+      const value = result[key];
+      if (typeof value === 'string') {
+        const parsed = parseJsonFromString(value);
+        if (parsed) return parsed;
+      }
+    }
+  }
+  return result;
+}
+
+function parseJsonFromString(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const jsonBlock = trimmed.match(/\{[\s\S]*\}/)?.[0];
+    if (!jsonBlock) return null;
+    try {
+      return JSON.parse(jsonBlock);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildCliWebSearchCommand(query: string, limit: number): string {
+  const script = [
+    'const query = process.argv[1] || "";',
+    'const limit = Math.max(1, Math.min(10, Number(process.argv[2] || 5)));',
+    'const providers = [`https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`, `https://www.bing.com/search?q=${encodeURIComponent(query)}`];',
+    'const strip = (value) => value.replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim();',
+    'const decode = (value) => strip(value).replace(/&amp;/g, "&").replace(/&quot;/g, "\\"").replace(/&#39;/g, "\'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");',
+    'const parse = (html) => {',
+    '  const out = [];',
+    '  for (const match of html.matchAll(/<a[^>]*class=["\'][^"\']*result__a[^"\']*["\'][^>]*href=["\']([^"\']+)["\'][^>]*>([\\s\\S]*?)<\\/a>[\\s\\S]*?<a[^>]*class=["\'][^"\']*result__snippet[^"\']*["\'][^>]*>([\\s\\S]*?)<\\/a>/gi)) out.push({ url: match[1], title: decode(match[2]), snippet: decode(match[3]) });',
+    '  for (const match of html.matchAll(/<li\\b[^>]*class=["\'][^"\']*\\bb_algo\\b[^"\']*["\'][^>]*>([\\s\\S]*?)<\\/li>/gi)) { const link = match[1].match(/<h2\\b[^>]*>\\s*<a\\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h2>/i); const snip = match[1].match(/<p\\b[^>]*>([\\s\\S]*?)<\\/p>/i); if (link) out.push({ url: link[1], title: decode(link[2]), snippet: decode(snip?.[1] || "") }); }',
+    '  return out.filter((item) => item.title && item.url).slice(0, limit);',
+    '};',
+    '(async () => {',
+    '  const reasons = [];',
+    '  for (const url of providers) {',
+    '    try {',
+    '      const response = await fetch(url, { headers: { "User-Agent": "agent-browser-cli-search/0.1", "Accept": "text/html" } });',
+    '      if (!response.ok) { reasons.push(`provider returned ${response.status}`); continue; }',
+    '      const results = parse(await response.text());',
+    '      if (results.length) { console.log(JSON.stringify({ status: "found", query, results })); return; }',
+    '      reasons.push("no results");',
+    '    } catch (error) { reasons.push(error && error.message ? error.message : String(error)); }',
+    '  }',
+    '  console.log(JSON.stringify({ status: "unavailable", query, reason: reasons.join(" "), results: [] }));',
+    '})();',
+  ].join('\n');
+  return `node -e ${shellQuote(script)} ${shellQuote(query)} ${Math.max(1, Math.min(10, Math.floor(limit)))}`;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 async function callObservedTool(
   runtime: ToolAgentRuntime,
   toolId: string,
@@ -405,6 +639,7 @@ async function callObservedTool(
   step: number,
   bus?: IAgentBus,
   validationCriteria: string[] = [],
+  validationContract?: ValidationContract,
 ): Promise<unknown> {
   const toolCallId = `execution-requirement-${step}`;
   callbacks.onToolCall?.(toolId, args, toolCallId);
@@ -412,13 +647,13 @@ async function callObservedTool(
     const result = await callTool(runtime, toolId, args);
     callbacks.onToolResult?.(toolId, args, result, false, toolCallId);
     await appendToolResult(bus, toolId, result, step);
-    await appendToolValidation(bus, toolId, args, result, step, false, validationCriteria);
+    await appendToolValidation(bus, toolId, args, result, step, false, validationCriteria, validationContract);
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     callbacks.onToolResult?.(toolId, args, message, true, toolCallId);
     await appendToolResult(bus, toolId, message, step, true);
-    await appendToolValidation(bus, toolId, args, message, step, true, validationCriteria);
+    await appendToolValidation(bus, toolId, args, message, step, true, validationCriteria, validationContract);
     return { status: 'unavailable', reason: message };
   }
 }
@@ -456,6 +691,7 @@ async function appendToolValidation(
   step: number,
   isError: boolean,
   criteria: string[],
+  validationContract?: ValidationContract,
 ): Promise<void> {
   if (!bus || typeof bus.append !== 'function') return;
   const resultText = stringifyForBus(result);
@@ -478,6 +714,7 @@ async function appendToolValidation(
         'Tool result must not be an execution error unless the executor is returning failure to LogAct.',
         ...criteria,
       ],
+      validationContract,
       args,
       outputPreview: resultText.length > 500 ? `${resultText.slice(0, 497)}...` : resultText,
     }),
@@ -513,13 +750,43 @@ function detectRequirements(intent: ExecutionIntent): ExecutionRequirement[] {
   return requirements;
 }
 
-function inferExecutionIntent(messages: ModelMessage[]): ExecutionIntent {
+function inferExecutionIntent(
+  messages: ModelMessage[],
+  conversationResolution?: ConversationSearchResolution,
+  inheritedValidationContract?: ValidationContract,
+  legacyCriteria: string[] = [],
+): ExecutionIntent {
   const currentTaskText = taskFromMessages(messages);
-  const locationRequired = isLocationDependentTask(currentTaskText);
-  const externalSearchRequired = requiresExternalSearch(currentTaskText);
-  const subject = inferSubject(currentTaskText);
+  const subject = conversationResolution?.resolvedSubject ?? inferSubject(currentTaskText);
   const answerSubject = normalizeAnswerSubject(subject);
   const rankingGoal = inferRankingGoal(currentTaskText);
+  const requestedCount = conversationResolution?.requestedCount;
+  const excludedCandidateNames = conversationResolution?.excludedCandidateNames ?? [];
+  const validationContract = compileValidationContract({
+    taskText: currentTaskText,
+    resolvedTaskText: conversationResolution?.resolvedTaskText,
+    context: conversationResolution?.context,
+    subject: answerSubject,
+    location: conversationResolution?.inheritedLocation ?? extractStatedLocation(currentTaskText),
+    requestedCount,
+    excludedCandidateNames,
+    legacyCriteria: [
+      ...(inheritedValidationContract?.legacyCriteria ?? []),
+      ...legacyCriteria,
+    ],
+  });
+  const locationRequired = isLocationDependentTask(currentTaskText)
+    || Boolean(conversationResolution?.inheritedLocation)
+    || validationContract.constraints.some((constraint) => constraint.type === 'location' && constraint.required);
+  const externalSearchRequired = requiresExternalSearch(currentTaskText)
+    || validationContract.constraints.some((constraint) => [
+      'count',
+      'location',
+      'name_prefix',
+      'name_suffix',
+      'rhyme',
+      'exclusion',
+    ].includes(constraint.type));
   return {
     currentTaskText,
     subject,
@@ -530,34 +797,78 @@ function inferExecutionIntent(messages: ModelMessage[]): ExecutionIntent {
     externalSearchRequired,
     topicPreferences: [],
     prefersCitations: false,
+    requestedCount,
+    excludedCandidateNames,
+    validationContract,
   };
 }
 
 function isLocationDependentTask(text: string): boolean {
-  return /\b(near me|nearby|around me|close to me|in my area|local|near us|around us)\b/i.test(text);
+  return /\b(near me|nearby|around me|close to me|in my area|local|near us|around us|closest|nearest)\b/i.test(text)
+    || Boolean(extractStatedLocation(text));
 }
 
 function requiresExternalSearch(text: string): boolean {
-  return /\b(best|top|recommend|recommendations?|search|find|list|nearby|near me|around me|current|latest|today|showtimes?|reviews?|options?)\b/i.test(text);
+  return /\b(best|top|worst|closest|nearest|popular|highest rated|open now|family-friendly|budget-friendly|quiet|recommend|recommendations?|search|find|list|show|give|provide|look\s+up|lookup|nearby|near me|around me|current|latest|today|showtimes?|reviews?|options?)\b/i.test(text);
 }
 
 function buildSearchQuery(intent: ExecutionIntent, location?: string): string {
   const normalizedLocation = location ? cleanDisplayLocation(location).replace(/,/g, '') : '';
   const preferencePart = compatibleTopicPreferences(intent).join(' ');
-  return [intent.rankingModifier, preferencePart, intent.subject, normalizedLocation]
+  const constraintPart = searchQueryConstraintTerms(intent.validationContract).join(' ');
+  return [intent.rankingModifier, preferencePart, intent.subject, normalizedLocation, constraintPart]
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim() || intent.subject;
 }
 
+function requestedContractLocation(contract: ValidationContract): string | undefined {
+  const locationConstraint = contract.constraints.find((constraint) => (
+    constraint.type === 'location'
+    && constraint.required
+    && constraint.operator !== 'outside'
+    && typeof constraint.value === 'string'
+  ));
+  if (typeof locationConstraint?.value !== 'string') return undefined;
+  const location = cleanDisplayLocation(locationConstraint.value);
+  return isConcreteLocation(location) ? location : undefined;
+}
+
+function isConcreteLocation(value: string): boolean {
+  return value.trim().length > 0
+    && !/^(?:me|us|my area|our area|here|nearby)$/i.test(value.trim());
+}
+
+function searchQueryConstraintTerms(contract: ValidationContract): string[] {
+  return contract.constraints.flatMap((constraint) => {
+    if (!constraint.required || constraint.value === undefined) return [];
+    switch (constraint.type) {
+      case 'name_prefix':
+        return [`starts with ${constraint.value}`];
+      case 'name_suffix':
+        return [`ends with ${constraint.value}`];
+      case 'rhyme':
+        return [`rhymes with ${constraint.value}`];
+      default:
+        return [];
+    }
+  });
+}
+
 function inferRankingGoal(text: string): ExecutionIntent['rankingGoal'] {
   if (/\b(worst|lowest rated|most disliked)\b/i.test(text)) return 'worst';
   if (/\b(closest|nearest)\b/i.test(text)) return 'closest';
   if (/\b(most popular|popular)\b/i.test(text)) return 'most-popular';
+  if (/\b(open now)\b/i.test(text)) return 'open-now';
+  if (/\b(highest rated|highly rated)\b/i.test(text)) return 'highly-rated';
+  if (/\b(family-friendly|family friendly)\b/i.test(text)) return 'family-friendly';
+  if (/\b(budget-friendly|budget friendly|cheap|affordable)\b/i.test(text)) return 'budget-friendly';
+  if (/\b(quiet)\b/i.test(text)) return 'quiet';
   if (/\b(latest|current|today)\b/i.test(text)) return 'current';
   if (/\b(best|top)\b/i.test(text)) return 'best';
   if (/\b(recommend|recommendations?)\b/i.test(text)) return 'recommended';
+  if (/\b(near me|nearby|around me)\b/i.test(text)) return 'nearby';
   return undefined;
 }
 
@@ -569,12 +880,24 @@ function rankingGoalToQueryPrefix(goal: ExecutionIntent['rankingGoal']): string 
       return 'closest';
     case 'most-popular':
       return 'most popular';
+    case 'open-now':
+      return 'open now';
+    case 'highly-rated':
+      return 'highest rated';
+    case 'family-friendly':
+      return 'family-friendly';
+    case 'budget-friendly':
+      return 'budget-friendly';
+    case 'quiet':
+      return 'quiet';
     case 'current':
       return 'current';
     case 'best':
       return 'best';
     case 'recommended':
       return 'recommended';
+    case 'nearby':
+      return 'nearby';
     default:
       return undefined;
   }
@@ -590,11 +913,14 @@ function inferSubject(text: string): string {
     .replace(/\bsequence dependency:.*$/ig, ' ');
   const cleaned = normalized
     .replace(/\b(?:what|which|where)\s+(?:are|is|were|was|would be|do you think are|do you think is)\b/ig, ' ')
-    .replace(/\b(?:can you|could you|please|i need|show me|give me|tell me|help me|look up|search for|find|list|recommend)\b/ig, ' ')
+    .replace(/\b(?:what about|how about|what else about|also what about)\b/ig, ' ')
+    .replace(/\b(?:can you|could you|please|i need|show me|show|give me|give|provide|suggest|tell me|help me|look up|search for|find|list|recommend)\b/ig, ' ')
     .replace(/\b(?:the|a|an)\b/ig, ' ')
     .replace(/\b(?:best|top|worst|closest|nearest|popular|most popular|recommended|recommendations?|options?|results?)\b/ig, ' ')
     .replace(/\b(?:near me|nearby|around me|close to me|in my area|local|near us|around us)\b/ig, ' ')
     .replace(/\b(?:current|latest|today)\b/ig, ' ')
+    .replace(/^\s*\d+\s+/g, ' ')
+    .replace(/\b(?:near|in|around|located in|outside|that|which|who|with|where)\b.*$/ig, ' ')
     .replace(/\?+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -694,6 +1020,45 @@ function extractStatedLocation(text: string): string | undefined {
   return near?.[1] ? cleanDisplayLocation(near[1]) : undefined;
 }
 
+function extractSessionLocation(messages: ModelMessage[]): string | undefined {
+  const currentTask = taskFromMessages(messages);
+  const currentStated = extractStatedLocation(currentTask);
+  if (currentStated) return currentStated;
+
+  for (const message of messages.slice(0, -1).reverse().slice(0, 8)) {
+    const text = messageContentToText(message.content);
+    const explicit = text.match(/\b(?:location|current location|city|neighbou?rhood|nearby context)\s*[:=-]\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,4}(?:,?\s+[A-Z]{2})?)\b/i);
+    if (explicit?.[1]) return cleanDisplayLocation(explicit[1]);
+    const stated = extractStatedLocation(text);
+    if (stated && /\b(?:location|near me|nearby|around me|closest|nearest|current location)\b/i.test(text)) {
+      return stated;
+    }
+  }
+  return undefined;
+}
+
+function decodeHtmlEntities(value: string): string {
+  let decoded = value;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const next = decoded
+      .replace(/&amp;/gi, '&')
+      .replace(/&quot;/gi, '"')
+      .replace(/&apos;/gi, "'")
+      .replace(/&#x([0-9a-f]+);?/gi, (_match, hex: string) => {
+        const codePoint = Number.parseInt(hex, 16);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : _match;
+      })
+      .replace(/&#(\d+);?/g, (_match, decimal: string) => {
+        const codePoint = Number.parseInt(decimal, 10);
+        return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : _match;
+      })
+      .replace(/&nbsp;/gi, ' ');
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
+}
+
 function normalizeSearchResult(result: unknown, query: string): SearchWebResult {
   if (!isRecord(result)) {
     return { status: 'unavailable', query, reason: 'Search did not return a structured result.', results: [] };
@@ -705,18 +1070,18 @@ function normalizeSearchResult(result: unknown, query: string): SearchWebResult 
     ? result.results
       .map((item) => {
         if (!isRecord(item)) return null;
-        const title = typeof item.title === 'string' ? item.title.trim() : '';
+        const title = typeof item.title === 'string' ? decodeHtmlEntities(item.title).trim() : '';
         const url = typeof item.url === 'string' ? item.url.trim() : '';
-        const snippet = typeof item.snippet === 'string' ? item.snippet.trim() : '';
+        const snippet = typeof item.snippet === 'string' ? decodeHtmlEntities(item.snippet).trim() : '';
         return title && url ? { title, url, snippet } : null;
       })
       .filter((item): item is { title: string; url: string; snippet: string } => Boolean(item))
     : [];
   return {
     status: results.length > 0 && status === 'found' ? 'found' : status,
-    query: typeof result.query === 'string' && result.query.trim() ? result.query.trim() : query,
+    query: typeof result.query === 'string' && result.query.trim() ? decodeHtmlEntities(result.query).trim() : query,
     results,
-    ...(typeof result.reason === 'string' && result.reason.trim() ? { reason: result.reason.trim() } : {}),
+    ...(typeof result.reason === 'string' && result.reason.trim() ? { reason: decodeHtmlEntities(result.reason).trim() } : {}),
   };
 }
 
@@ -738,6 +1103,7 @@ async function fulfillSearchCandidates({
   call: (toolId: string, args: unknown) => Promise<unknown>;
 }): Promise<SearchCandidate[]> {
   const rejectedCandidates: RejectedSearchCandidate[] = [];
+  const requiredCount = requiredAcceptedCandidateCount(intent);
   let candidates = extractSearchCandidates(searchResult.results, intent, location);
   let decision = analyzeSearchEvidence(searchResult, candidates, intent);
   let didReadPages = false;
@@ -761,7 +1127,8 @@ async function fulfillSearchCandidates({
     await appendSearchAnalysis(bus, decision, 'page-read evidence');
   }
 
-  let prevalidated = finalizeValidatedCandidates(candidates, intent, location, rejectedCandidates, false, MAX_CANDIDATES_TO_ENRICH);
+  const validationLimit = candidateLimitForIntent(intent);
+  let prevalidated = finalizeValidatedCandidates(candidates, intent, location, rejectedCandidates, false, validationLimit);
   if (
     prevalidated.accepted.length === 0
     && !didReadPages
@@ -776,7 +1143,7 @@ async function fulfillSearchCandidates({
     candidates = mergeCandidates([...candidates, ...pageCandidates]);
     decision = analyzeSearchEvidence(searchResult, candidates, intent);
     await appendSearchAnalysis(bus, decision, 'page-read evidence');
-    prevalidated = finalizeValidatedCandidates(candidates, intent, location, rejectedCandidates, false, MAX_CANDIDATES_TO_ENRICH);
+    prevalidated = finalizeValidatedCandidates(candidates, intent, location, rejectedCandidates, false, validationLimit);
   }
   rememberRejectedCandidates(rejectedCandidates, prevalidated.rejected);
   const enrichedCandidates = await enrichSearchCandidates({
@@ -786,7 +1153,7 @@ async function fulfillSearchCandidates({
     call,
   });
   let validated = finalizeValidatedCandidates(enrichedCandidates, intent, location, rejectedCandidates, true);
-  if (validated.accepted.length === 0 && isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.search)) {
+  if (validated.accepted.length < requiredCount && isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.search)) {
     const discoveryQuery = buildEntityDiscoveryQuery(intent, location);
     const discoveryResult = normalizeSearchResult(
       await call(REQUIREMENT_TOOL_IDS.search, { query: discoveryQuery, limit: MAX_DISCOVERY_SEARCH_RESULTS }),
@@ -823,7 +1190,7 @@ async function fulfillSearchCandidates({
       location,
       rejectedCandidates,
       false,
-      MAX_CANDIDATES_TO_ENRICH,
+      validationLimit,
     );
     rememberRejectedCandidates(rejectedCandidates, prevalidatedDiscovery.rejected);
     const enrichedDiscoveryCandidates = await enrichSearchCandidates({
@@ -834,7 +1201,14 @@ async function fulfillSearchCandidates({
     });
     validated = finalizeValidatedCandidates(enrichedDiscoveryCandidates, intent, location, rejectedCandidates, true);
   }
-  await appendValidatedCandidates(bus, validated.accepted, validated.rejected, searchResult.query);
+  await appendValidatedCandidates(
+    bus,
+    validated.accepted,
+    validated.rejected,
+    searchResult.query,
+    requiredCount,
+    intent.validationContract,
+  );
   return validated.accepted;
 }
 
@@ -873,6 +1247,43 @@ function analyzeSearchEvidence(
   };
 }
 
+function candidateLimitForIntent(intent: ExecutionIntent): number {
+  return Math.max(MAX_CANDIDATES_TO_ENRICH, intent.requestedCount ?? 3);
+}
+
+function requiredAcceptedCandidateCount(intent: ExecutionIntent): number {
+  return intent.requestedCount && intent.requestedCount > 0 ? intent.requestedCount : 1;
+}
+
+async function appendConversationContext(
+  bus: IAgentBus | undefined,
+  resolution: ConversationSearchResolution,
+  intent: ExecutionIntent,
+): Promise<void> {
+  if (!bus || typeof bus.append !== 'function') return;
+  if (!resolution.context && resolution.excludedCandidateNames.length === 0 && !resolution.inheritedLocation) return;
+  await bus.append({
+    type: PayloadType.InfOut,
+    text: [
+      `Conversation context resolved task: ${resolution.resolvedTaskText}.`,
+      resolution.inheritedSubject ? `Inherited subject: ${resolution.inheritedSubject}.` : null,
+      resolution.inheritedLocation ? `Inherited location: ${resolution.inheritedLocation}.` : null,
+      resolution.excludedCandidateNames.length
+        ? `Excluded prior candidates: ${resolution.excludedCandidateNames.join(', ')}.`
+        : 'Excluded prior candidates: none.',
+      `Current subject: ${intent.answerSubject}.`,
+    ].filter(Boolean).join('\n'),
+    meta: {
+      actorId: 'conversation-context',
+      actorRole: 'executor',
+      parentActorId: 'execute-plan',
+      branchId: 'agent:executor',
+      agentLabel: 'Conversation Context',
+      modelProvider: 'logact',
+    },
+  });
+}
+
 async function appendSearchAnalysis(
   bus: IAgentBus | undefined,
   decision: SearchAnalysisDecision,
@@ -909,13 +1320,13 @@ function normalizeWebPageResult(result: unknown, url: string): ReadWebPageResult
   return {
     status,
     url: typeof result.url === 'string' && result.url.trim() ? result.url.trim() : url,
-    ...(typeof result.title === 'string' && result.title.trim() ? { title: result.title.trim() } : {}),
-    ...(typeof result.text === 'string' && result.text.trim() ? { text: result.text.trim() } : {}),
+    ...(typeof result.title === 'string' && result.title.trim() ? { title: decodeHtmlEntities(result.title).trim() } : {}),
+    ...(typeof result.text === 'string' && result.text.trim() ? { text: decodeHtmlEntities(result.text).trim() } : {}),
     links: Array.isArray(result.links)
       ? result.links
         .map((link) => {
           if (!isRecord(link)) return null;
-          const text = typeof link.text === 'string' ? link.text.trim() : '';
+          const text = typeof link.text === 'string' ? decodeHtmlEntities(link.text).trim() : '';
           const linkUrl = typeof link.url === 'string' ? link.url.trim() : '';
           return text && linkUrl ? { text, url: linkUrl } : null;
         })
@@ -926,9 +1337,9 @@ function normalizeWebPageResult(result: unknown, url: string): ReadWebPageResult
       ? result.entities
         .map((entity) => {
           if (!isRecord(entity)) return null;
-          const name = typeof entity.name === 'string' ? entity.name.trim() : '';
+          const name = typeof entity.name === 'string' ? decodeHtmlEntities(entity.name).trim() : '';
           const entityUrl = typeof entity.url === 'string' && entity.url.trim() ? entity.url.trim() : undefined;
-          const evidence = typeof entity.evidence === 'string' && entity.evidence.trim() ? entity.evidence.trim() : 'page evidence';
+          const evidence = typeof entity.evidence === 'string' && entity.evidence.trim() ? decodeHtmlEntities(entity.evidence).trim() : 'page evidence';
           return name ? { name, ...(entityUrl ? { url: entityUrl } : {}), evidence } : null;
         })
         .filter((entity): entity is { name: string; url?: string; evidence: string } => Boolean(entity))
@@ -943,15 +1354,15 @@ function normalizeWebPageResult(result: unknown, url: string): ReadWebPageResult
             || observation.kind === 'text-span'
             ? observation.kind
             : undefined;
-          const label = typeof observation.label === 'string' ? observation.label.trim() : '';
+          const label = typeof observation.label === 'string' ? decodeHtmlEntities(observation.label).trim() : '';
           const observationUrl = typeof observation.url === 'string' && observation.url.trim()
             ? observation.url.trim()
             : undefined;
           const evidence = typeof observation.evidence === 'string' && observation.evidence.trim()
-            ? observation.evidence.trim()
+            ? decodeHtmlEntities(observation.evidence).trim()
             : 'page observation';
           const localContext = typeof observation.localContext === 'string' && observation.localContext.trim()
-            ? observation.localContext.trim()
+            ? decodeHtmlEntities(observation.localContext).trim()
             : undefined;
           const sourceUrl = typeof observation.sourceUrl === 'string' && observation.sourceUrl.trim()
             ? observation.sourceUrl.trim()
@@ -967,7 +1378,7 @@ function normalizeWebPageResult(result: unknown, url: string): ReadWebPageResult
         })
         .filter((observation): observation is ReadWebPageResult['observations'][number] => Boolean(observation))
       : [],
-    ...(typeof result.reason === 'string' && result.reason.trim() ? { reason: result.reason.trim() } : {}),
+    ...(typeof result.reason === 'string' && result.reason.trim() ? { reason: decodeHtmlEntities(result.reason).trim() } : {}),
   };
 }
 
@@ -1052,10 +1463,8 @@ function createSearchCandidate({
 }
 
 function rejectedCandidateDisplayName(value: string): string {
-  return value
+  return decodeHtmlEntities(value)
     .replace(/^\s*\d+[\).:]?\s*/, '')
-    .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 96);
@@ -1125,7 +1534,8 @@ export function isGenericNonEntityLabel(label: string, subject?: string): boolea
 
 function isForbiddenEntityLabel(name: string, intent?: ExecutionIntent): boolean {
   const normalized = name.replace(/^['"]|['"]$/g, '').trim();
-  return isGenericNonEntityLabel(normalized, intent?.answerSubject);
+  return isGenericNonEntityLabel(normalized, intent?.answerSubject)
+    || (intent ? isAggregateSourceTitleLabel(normalized, intent) : false);
 }
 
 function isTechnicalPageArtifactLabel(label: string): boolean {
@@ -1274,6 +1684,16 @@ function isWeakCandidateObservation(value: string, name: string): boolean {
   if (/^(?:page link|page text|source page|source result|page evidence|page navigation link|account action link|site community section link|page content bucket link|page store section link)$/i.test(normalized)) {
     return true;
   }
+  if (isMetadataOrPublisherEvidence(normalized)) {
+    return true;
+  }
+  const prefixPublisherPattern = new RegExp(
+    `^${escapedFlexiblePhrase(name)}\\s*[:|-]\\s*[^.!?]{0,160}\\b(?:best|top|guide|spots?|near|nearby|list|listing|directory|source)\\b`,
+    'i',
+  );
+  if (prefixPublisherPattern.test(normalized)) {
+    return true;
+  }
   if (/\b(?:global\s+navigation|site\s+navigation|page\s+navigation|navigation\s+link|account\s+(?:menu|action)|community\s+navigation|community\s+section|content\s+bucket|store\s+section|header|footer|menu|sign\s*in|login|fan\s*club)\b/i.test(normalized)) {
     return true;
   }
@@ -1284,6 +1704,17 @@ function isWeakCandidateObservation(value: string, name: string): boolean {
   if (isTechnicalPageArtifactLabel(name) || isTechnicalPageArtifactEvidence(normalized)) return true;
   if (isGeographicListObservation(normalized, name)) return true;
   if (/^https?:\/\//i.test(normalized)) return true;
+  return false;
+}
+
+function isMetadataOrPublisherEvidence(value: string): boolean {
+  if (/[{}[\]":]/.test(value) && /\b(?:@context|@type|schema\.org|article|headline|author|publisher|datePublished|dateModified|description|image)\b/i.test(value)) {
+    return true;
+  }
+  if (/\b(?:article|publisher|author|published|updated|headline|site owner|site name)\b/i.test(value)
+    && /\b(?:guide|post|story|page|source|directory|listing)\b/i.test(value)) {
+    return true;
+  }
   return false;
 }
 
@@ -1409,6 +1840,16 @@ function classifyLinkEvidence(
   if (compactName.length >= 6 && compactLinkHaystack.includes(compactName)) return 'entity-specific';
   const distinctiveTokens = distinctiveLinkTokens(name);
   const haystackTokens = tokenSet(linkHaystack);
+  const compactDistinctiveTokenPairs = adjacentTokenPhrases(distinctiveTokens)
+    .map(compactEntityKey)
+    .filter((token) => token.length >= 6);
+  if (compactDistinctiveTokenPairs.some((token) => compactLinkHaystack.includes(token))) {
+    return 'entity-specific';
+  }
+  const compactDistinctiveMatches = distinctiveTokens
+    .filter((token) => token.length >= 4)
+    .filter((token) => compactLinkHaystack.includes(compactEntityKey(token)));
+  if (compactDistinctiveMatches.length >= 2) return 'entity-specific';
   if (distinctiveTokens.length >= 2 && distinctiveTokens.filter((token) => haystackTokens.has(token)).length >= 2) {
     return 'entity-specific';
   }
@@ -1420,6 +1861,14 @@ function classifyLinkEvidence(
     return 'entity-specific';
   }
   return 'unknown';
+}
+
+function adjacentTokenPhrases(tokens: string[]): string[] {
+  const phrases: string[] = [];
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    phrases.push(`${tokens[index]} ${tokens[index + 1]}`);
+  }
+  return phrases;
 }
 
 function distinctiveLinkTokens(name: string): string[] {
@@ -1537,6 +1986,7 @@ function candidateTextSegments(text: string | undefined, name: string): string[]
   if (!text) return [];
   return splitEvidenceSegments(text)
     .filter((segment) => segmentMentionsCandidate(segment, name))
+    .filter((segment) => !isWeakCandidateObservation(segment, name))
     .slice(0, 3);
 }
 
@@ -1811,6 +2261,20 @@ function finalizeValidatedCandidates(
   const seenRejected = new Set<string>();
 
   for (const candidate of candidates) {
+    const excludedByPriorTurn = priorCandidateExclusionMatch(candidate.name, intent.excludedCandidateNames);
+    if (excludedByPriorTurn) {
+      const key = candidate.name.toLocaleLowerCase();
+      if (!seenRejected.has(key)) {
+        seenRejected.add(key);
+        rejected.push({
+          name: candidate.name,
+          validationStatus: 'rejected',
+          validationFailures: [`candidate was already shown or explicitly excluded in prior context: ${excludedByPriorTurn}`],
+          evidence: [candidate.url, candidate.snippet].filter(Boolean).slice(0, 2),
+        });
+      }
+      continue;
+    }
     const evidenceContext = [
       ...candidate.reasons,
       candidate.snippet,
@@ -1820,6 +2284,10 @@ function finalizeValidatedCandidates(
       candidate.url,
     ];
     const validation = validateCandidateEvidence(candidate.name, candidate.url, intent, location, evidenceContext, candidate.evidenceKind);
+    validation.validationFailures.push(...compiledConstraintFailuresForCandidate(
+      candidate,
+      intent.validationContract,
+    ));
     if (
       requireEntitySpecificLink
       && validation.linkEvidence !== 'entity-specific'
@@ -1862,10 +2330,93 @@ function finalizeValidatedCandidates(
   };
 }
 
+function compiledConstraintFailuresForCandidate(
+  candidate: SearchCandidate,
+  contract: ValidationContract,
+): string[] {
+  const failures: string[] = [];
+  for (const constraint of contract.constraints) {
+    if (!constraint.required) continue;
+    switch (constraint.type) {
+      case 'name_prefix': {
+        const prefix = String(constraint.value ?? '').trim().toLocaleLowerCase();
+        if (prefix && !candidate.name.trim().toLocaleLowerCase().startsWith(prefix)) {
+          failures.push(constraint.failureMessage);
+        }
+        break;
+      }
+      case 'name_suffix': {
+        const suffix = String(constraint.value ?? '').trim().toLocaleLowerCase();
+        if (suffix && !candidate.name.trim().toLocaleLowerCase().endsWith(suffix)) {
+          failures.push(constraint.failureMessage);
+        }
+        break;
+      }
+      case 'rhyme': {
+        const target = String(constraint.value ?? '').trim();
+        if (target && !candidateNameRhymesWith(candidate.name, target)) {
+          failures.push(constraint.failureMessage);
+        }
+        break;
+      }
+      case 'exclusion': {
+        const excluded = Array.isArray(constraint.value) ? constraint.value.map(String) : [];
+        if (excluded.some((name) => priorCandidateExclusionMatch(candidate.name, [name]))) {
+          failures.push(constraint.failureMessage);
+        }
+        break;
+      }
+      case 'location': {
+        if (constraint.operator === 'outside' && typeof constraint.value === 'string') {
+          const forbiddenLocation = constraint.value.toLocaleLowerCase();
+          const evidence = [
+            candidate.name,
+            candidate.snippet,
+            ...(candidate.locationEvidence ?? []),
+            ...(candidate.sourceEvidence ?? []),
+            ...(candidate.reasons ?? []),
+          ].join(' ').toLocaleLowerCase();
+          if (evidence.includes(forbiddenLocation)) failures.push(constraint.failureMessage);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return failures;
+}
+
+function candidateNameRhymesWith(name: string, target: string): boolean {
+  const lastWord = name.toLocaleLowerCase().match(/[a-z0-9]+(?=[^a-z0-9]*$)/i)?.[0] ?? '';
+  const normalizedTarget = target.toLocaleLowerCase();
+  if (!lastWord || !normalizedTarget) return false;
+  const tail = normalizedTarget.length <= 3 ? normalizedTarget.slice(-2) : normalizedTarget.slice(-3);
+  return lastWord.endsWith(tail);
+}
+
+function priorCandidateExclusionMatch(name: string, exclusions: string[]): string | undefined {
+  const candidateKey = compactEntityKey(name);
+  if (!candidateKey) return undefined;
+  return exclusions.find((exclusion) => {
+    const exclusionKey = compactEntityKey(exclusion);
+    if (!exclusionKey) return false;
+    return candidateKey === exclusionKey
+      || candidateKey.includes(exclusionKey)
+      || exclusionKey.includes(candidateKey);
+  });
+}
+
 function allowsSourceBackedAggregateLink(
   candidate: SearchCandidate,
   validation: CandidateValidation,
 ): boolean {
+  const sourceBacked = validation.subjectEvidence.length > 0
+    && validation.locationEvidence.length > 0
+    && validation.sourceEvidence.length > 0
+    && !isForbiddenEntityLabel(candidate.name)
+    && !isSearchResultOnlyUrl(candidate.url);
+  if (candidate.evidenceKind === 'page-entity') return sourceBacked;
   return candidate.evidenceKind === 'page-text-list'
     && validation.subjectEvidence.length > 0
     && validation.locationEvidence.length > 0
@@ -1908,14 +2459,22 @@ async function appendValidatedCandidates(
   accepted: ValidatedSearchCandidate[],
   rejected: RejectedSearchCandidate[],
   source: string,
+  requestedCount: number,
+  validationContract?: ValidationContract,
 ): Promise<void> {
   if (!bus || typeof bus.append !== 'function') return;
+  const acceptedCount = accepted.length;
+  const missingCount = Math.max(0, requestedCount - acceptedCount);
   await bus.append({
     type: PayloadType.Result,
     intentId: `validated-candidates-${source.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80) || 'search'}`,
     output: JSON.stringify({
       type: 'validated-search-candidates',
       source,
+      requestedCount,
+      acceptedCount,
+      missingCount,
+      validationContract,
       candidates: accepted.map((candidate) => ({
         name: candidate.name,
         validationStatus: candidate.validationStatus,
@@ -1932,7 +2491,7 @@ async function appendValidatedCandidates(
         evidence: candidate.evidence ?? [],
       })),
     }),
-    ...(accepted.length === 0 ? { error: 'No accepted structured candidates.' } : {}),
+    ...(missingCount > 0 ? { error: `Requested ${requestedCount} accepted candidates but found ${acceptedCount}.` } : {}),
     meta: {
       actorId: 'search-analyzer',
       actorRole: 'executor',
@@ -1950,27 +2509,83 @@ function rejectedSnippetFragments(item: SearchWebItem, intent: ExecutionIntent):
     .slice(0, 3);
 }
 
+function buildSearchTurnContext(context: ResolvedExecutionContext): SearchTurnContext | undefined {
+  const intent = context.intent;
+  if (!intent || !context.searchResult) return undefined;
+  const acceptedCandidates = (context.searchCandidates ?? [])
+    .filter((candidate) => candidate.validationStatus === 'accepted')
+    .map((candidate) => ({
+      name: candidate.name,
+      url: candidate.entityLink ?? candidate.url,
+    }));
+  return {
+    taskText: context.conversationResolution?.context?.taskText ?? intent.currentTaskText,
+    resolvedTaskText: intent.currentTaskText,
+    subject: intent.subject,
+    answerSubject: intent.answerSubject,
+    rankingGoal: intent.rankingGoal,
+    location: context.location,
+    acceptedCandidates,
+    rejectedLabels: [],
+    sourceQueries: [context.searchResult.query],
+    requestedCount: intent.requestedCount,
+    validationContract: intent.validationContract,
+    timestamp: Date.now(),
+  };
+}
+
+function acceptedSearchCandidateCount(context: ResolvedExecutionContext): number {
+  return (context.searchCandidates ?? [])
+    .filter((candidate) => candidate.validationStatus === 'accepted')
+    .length;
+}
+
 function composeSearchAnswer(context: ResolvedExecutionContext): string {
   const intent = context.intent;
   const result = context.searchResult;
   if (!result || !intent) return 'I could not find search results for that request.';
   const location = context.location ? ` near ${cleanDisplayLocation(context.location)}` : '';
   const heading = `Here are ${intent.answerSubject}${location}:`;
-  const candidates = (context.searchCandidates ?? extractSearchCandidates(result.results, intent, context.location))
-    .filter((candidate) => candidate.validationStatus === undefined || candidate.validationStatus === 'accepted');
+  const candidates = (context.searchCandidates ?? [])
+    .filter((candidate): candidate is ValidatedSearchCandidate => candidate.validationStatus === 'accepted');
+  const requiredCount = requiredAcceptedCandidateCount(intent);
+  if (candidates.length > 0 && candidates.length < requiredCount) {
+    const noun = candidates.length === 1 ? 'result' : 'results';
+    return [
+      `I could only verify ${candidates.length} additional ${noun} for ${intent.answerSubject}${location}, but you asked for ${requiredCount}.`,
+      insufficientEvidenceExplanation(intent),
+      '',
+      ...candidates.map((item, index) => (
+        `${index + 1}. [${item.name}](${item.entityLink ?? item.url}) - Why: ${formatCandidateReason(item)}`
+      )),
+    ].join('\n');
+  }
   if (candidates.length > 0) {
+    const visibleCount = Math.max(1, Math.min(intent.requestedCount ?? 3, candidates.length));
     return [
       heading,
       '',
-      ...candidates.slice(0, 3).map((item, index) => (
+      ...candidates.slice(0, visibleCount).map((item, index) => (
         `${index + 1}. [${item.name}](${item.entityLink ?? item.url}) - Why: ${formatCandidateReason(item)}`
       )),
     ].join('\n');
   }
   return [
     `I could not find enough validated ${intent.answerSubject}${location} to answer confidently.`,
-    'The available search evidence did not contain source-backed entity names with the required subject and location signals.',
+    insufficientEvidenceExplanation(intent),
   ].join('\n');
+}
+
+function insufficientEvidenceExplanation(intent: ExecutionIntent): string {
+  const unmet = intent.validationContract.constraints
+    .filter((constraint) => constraint.required)
+    .filter((constraint) => !['entity_link', 'source_evidence', 'page_chrome'].includes(constraint.type))
+    .map((constraint) => constraint.failureMessage.replace(/[.]+$/g, ''))
+    .slice(0, 5);
+  const base = 'The available search evidence did not contain enough source-backed entity names with all required signals.';
+  return unmet.length > 0
+    ? `${base} Unmet or under-evidenced constraints: ${unmet.join('; ')}.`
+    : base;
 }
 
 function extractSearchCandidates(
@@ -2156,11 +2771,9 @@ function nameToCandidate(
 
 function cleanCandidateName(value: string, intent?: ExecutionIntent): string {
   const subjectPattern = intent ? new RegExp(`\\b${escapeRegExp(intent.answerSubject)}\\b`, 'i') : null;
-  const cleaned = value
+  const cleaned = decodeHtmlEntities(value)
     .replace(/^\s*\d+[\).:]?\s*/, '')
     .replace(/\s+-\s+.*$/, '')
-    .replace(/&#x27;/g, "'")
-    .replace(/&amp;/g, '&')
     .replace(/[.!?]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -2170,7 +2783,10 @@ function cleanCandidateName(value: string, intent?: ExecutionIntent): string {
   if (/^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{4}$/i.test(cleaned)) {
     return '';
   }
-  if (/\b(best|top|see|last updated|current|near me|nearby|search|find|reviews?|ratings?|menus?|showt?imes?|options?|results?|traveler|travelers|gathered|location|price|hours?)\b/i.test(cleaned)) {
+  if (/^(?:price|prices|pricing|price range|hours?)$/i.test(cleaned)) {
+    return '';
+  }
+  if (/\b(best|top|see|last updated|current|near me|nearby|search|find|reviews?|ratings?|menus?|showt?imes?|options?|results?|traveler|travelers|gathered|location)\b/i.test(cleaned)) {
     return '';
   }
   if (/\b(?:this|that|they|there|people|answer|question|discover|find|tickets?|favorite|experience)\b/i.test(cleaned)) {
@@ -2260,6 +2876,27 @@ function isSubjectIncompatibleSiteSectionLabel(label: string, subject: string): 
   ));
 }
 
+function isAggregateSourceTitleLabel(label: string, intent: ExecutionIntent): boolean {
+  const normalized = label.replace(/\s+/g, ' ').trim();
+  if (!normalized) return true;
+  const subjectTokens = expandedTokenSet(intent.answerSubject);
+  const labelTokens = expandedTokenSet(normalized);
+  const hasSubject = overlapScore(labelTokens, subjectTokens) > 0;
+  if (!hasSubject) return false;
+  if (/\b(?:best|top|nearest|closest|nearby|near|local|recommended|popular|reviews?|ratings?|directory|guide|search results?|listings?|yellow pages|tripadvisor|yelp|restaurantji|restaurant guru|with menus)\b/i.test(normalized)) {
+    return true;
+  }
+  if (/\b(?:in|near|around)\s+[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3}(?:,?\s+[A-Z]{2})?\b/.test(normalized)) {
+    return true;
+  }
+  const colonParts = normalized.split(':');
+  if (colonParts.length > 1) {
+    const suffixTokens = expandedTokenSet(colonParts.slice(1).join(':'));
+    return overlapScore(suffixTokens, subjectTokens) > 0;
+  }
+  return false;
+}
+
 function isAggregateResult(title: string, intent: ExecutionIntent): boolean {
   const lowered = title.toLocaleLowerCase();
   const subjectTokens = tokenSet(intent.answerSubject);
@@ -2322,14 +2959,15 @@ async function enrichSearchCandidates({
   location?: string;
   call: (toolId: string, args: unknown) => Promise<unknown>;
 }): Promise<SearchCandidate[]> {
-  const topCandidates = candidates.slice(0, MAX_CANDIDATES_TO_ENRICH);
+  const targetEntityLinks = Math.max(3, intent.requestedCount ?? 3);
+  const topCandidates = candidates.slice(0, candidateLimitForIntent(intent));
   const enriched: SearchCandidate[] = [];
   let entitySpecificLinks = 0;
   for (const candidate of topCandidates) {
     if (!candidate.needsLinkEnrichment) {
       enriched.push(candidate);
       if (hasEntitySpecificLink(candidate)) entitySpecificLinks += 1;
-      if (entitySpecificLinks >= 3) break;
+      if (entitySpecificLinks >= targetEntityLinks) break;
       continue;
     }
     const query = buildCandidateLinkQuery(candidate.name, intent, location);
@@ -2352,7 +2990,7 @@ async function enrichSearchCandidates({
       : candidate;
     enriched.push(enrichedCandidate);
     if (hasEntitySpecificLink(enrichedCandidate)) entitySpecificLinks += 1;
-    if (entitySpecificLinks >= 3) break;
+    if (entitySpecificLinks >= targetEntityLinks) break;
   }
   return [...enriched, ...candidates.slice(topCandidates.length)];
 }
@@ -2363,7 +3001,7 @@ function hasEntitySpecificLink(candidate: SearchCandidate): boolean {
 
 function buildCandidateLinkQuery(name: string, intent: ExecutionIntent, location?: string): string {
   const locationPart = location ? cleanDisplayLocation(location).replace(/,/g, '') : '';
-  return [`"${name}"`, locationPart, intent.answerSubject, 'official reviews']
+  return [`"${decodeHtmlEntities(name)}"`, locationPart, intent.answerSubject, 'official reviews']
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')
@@ -2372,7 +3010,8 @@ function buildCandidateLinkQuery(name: string, intent: ExecutionIntent, location
 
 function buildEntityDiscoveryQuery(intent: ExecutionIntent, location?: string): string {
   const locationPart = location ? cleanDisplayLocation(location).replace(/,/g, '') : '';
-  return [intent.answerSubject, 'names', locationPart ? 'near' : '', locationPart]
+  const constraintPart = searchQueryConstraintTerms(intent.validationContract).join(' ');
+  return [intent.answerSubject, 'names', locationPart ? 'near' : '', locationPart, constraintPart]
     .filter(Boolean)
     .join(' ')
     .replace(/\s+/g, ' ')
@@ -2457,7 +3096,7 @@ function resultFromNeedsUserInput(result: unknown, steps: number): AgentRunResul
 }
 
 function isToolAllowedAndAvailable(runtime: ToolAgentRuntime, allowedToolIds: Set<string>, toolId: string): boolean {
-  return allowedToolIds.has(toolId) && Boolean(runtime.tools[toolId]);
+  return allowedToolIds.has(toolId) && Boolean(runtime.tools[toolId] || runtime.generatedTools?.[toolId]);
 }
 
 function messageContentToText(content: ModelMessage['content']): string {
@@ -2498,7 +3137,7 @@ function tokenSet(value: string): Set<string> {
 }
 
 function compactEntityKey(value: string): string {
-  return value
+  return decodeHtmlEntities(value)
     .toLocaleLowerCase()
     .replace(/&/g, 'and')
     .replace(/[^a-z0-9]+/g, '');

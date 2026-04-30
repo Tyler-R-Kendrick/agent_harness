@@ -4,7 +4,7 @@ import { registerRendererViewportTools } from '../rendererViewportTools';
 import { createWebMcpTool } from '../tool';
 
 const RENDER_PANES = [
-  { id: 'pane-1', title: 'Preview', url: 'https://localhost:5173' },
+  { id: 'pane-1', title: 'Preview', url: 'https://localhost:5174' },
   { id: 'pane-2', title: 'Docs', url: 'https://example.com/docs' },
 ];
 

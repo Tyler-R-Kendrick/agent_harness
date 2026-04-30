@@ -1,5 +1,41 @@
 import { describe, expect, it, vi } from 'vitest';
-import { WebPageBridge, WebSearchBridge } from './searchMiddleware';
+import { createSearchApiMiddleware, createWebPageApiMiddleware, WebPageBridge, WebSearchBridge } from './searchMiddleware';
+
+function jsonRequest({
+  method = 'POST',
+  url,
+  body,
+}: {
+  method?: string;
+  url: string;
+  body?: unknown;
+}) {
+  const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
+  return {
+    method,
+    url,
+    async *[Symbol.asyncIterator]() {
+      for (const chunk of chunks) yield chunk;
+    },
+  };
+}
+
+function jsonResponse() {
+  const headers = new Map<string, string>();
+  return {
+    statusCode: 0,
+    body: '',
+    setHeader(name: string, value: string) {
+      headers.set(name, value);
+    },
+    end(value: string) {
+      this.body = value;
+    },
+    json() {
+      return JSON.parse(this.body);
+    },
+  };
+}
 
 describe('WebSearchBridge', () => {
   it('normalizes public search results from the provider HTML', async () => {
@@ -41,6 +77,22 @@ describe('WebSearchBridge', () => {
       reason: 'network blocked',
       results: [],
     });
+  });
+
+  it('returns unavailable instead of hanging when search providers do not respond', async () => {
+    const fetchImpl = vi.fn(() => new Promise<Response>(() => {}));
+    const bridge = new WebSearchBridge(fetchImpl, 1);
+
+    await expect(bridge.search({ query: 'best parks Arlington Heights IL', limit: 3 })).resolves.toMatchObject({
+      status: 'unavailable',
+      query: 'best parks Arlington Heights IL',
+      results: [],
+      reason: expect.stringContaining('Fetch timed out after 1ms.'),
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://duckduckgo.com/html/?q=best%20parks%20Arlington%20Heights%20IL',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('falls back to another public search provider when the first provider blocks the request', async () => {
@@ -128,6 +180,50 @@ describe('WebSearchBridge', () => {
         snippet: 'Best Cafes in Arlington Heights, IL - Two Libras Cafe, Jelly Cafe, Altea Viet Coffee & Boba.',
       }],
     });
+  });
+});
+
+describe('createSearchApiMiddleware', () => {
+  it('handles the web-search route when the request URL includes search params', async () => {
+    const search = vi.fn(async () => ({
+      status: 'found' as const,
+      query: 'best theaters Arlington Heights IL',
+      results: [{ title: 'AMC Randhurst 12', url: 'https://example.com/amc', snippet: 'Theater near Arlington Heights.' }],
+    }));
+    const middleware = createSearchApiMiddleware({ search } as unknown as WebSearchBridge);
+    const req = jsonRequest({
+      url: '/api/web-search?source=google.com',
+      body: { query: 'best theaters Arlington Heights IL', limit: 3 },
+    });
+    const res = jsonResponse();
+    const next = vi.fn();
+
+    await middleware(req as never, res as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(search).toHaveBeenCalledWith({ query: 'best theaters Arlington Heights IL', limit: 3 });
+    expect(res.json()).toMatchObject({ status: 'found' });
+  });
+
+  it('supports GET queries so curl and HTTP-client fallbacks can search the same bridge', async () => {
+    const search = vi.fn(async () => ({
+      status: 'found' as const,
+      query: 'best theaters Arlington Heights IL',
+      results: [{ title: 'CMX Arlington Heights', url: 'https://example.com/cmx', snippet: 'Theater in Arlington Heights.' }],
+    }));
+    const middleware = createSearchApiMiddleware({ search } as unknown as WebSearchBridge);
+    const req = jsonRequest({
+      method: 'GET',
+      url: '/api/web-search?query=best%20theaters%20Arlington%20Heights%20IL&limit=2',
+    });
+    const res = jsonResponse();
+
+    await middleware(req as never, res as never, vi.fn());
+
+    expect(res.statusCode).toBe(200);
+    expect(search).toHaveBeenCalledWith({ query: 'best theaters Arlington Heights IL', limit: 2 });
+    expect(res.json()).toMatchObject({ status: 'found' });
   });
 });
 
@@ -251,6 +347,57 @@ describe('WebPageBridge', () => {
     ]));
   });
 
+  it('keeps article metadata and chrome text as observations instead of requested entities', async () => {
+    const fetchImpl = vi.fn(async () => new Response(`
+      <html>
+        <head>
+          <title>Arlington Heights' Best Bars Spots [2026 Guide]</title>
+          <script type="application/ld+json">
+            {
+              "@context": "https://schema.org",
+              "@type": "Article",
+              "headline": "Arlington Heights' Best Bars Spots [2026 Guide]",
+              "author": { "@type": "Person", "name": "Chicago Bound" },
+              "publisher": { "@type": "Organization", "name": "Chicago Bound" }
+            }
+          </script>
+        </head>
+        <body>
+          <nav>
+            <a href="/support">Support Enable</a>
+            <a href="/join">Join Now Enable</a>
+            <a href="/">Chicago Bound</a>
+          </nav>
+          <main>
+            <p>Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode.</p>
+            <p>Sports Page Bar & Grill is a bar in Arlington Heights, IL.</p>
+          </main>
+        </body>
+      </html>
+    `, { status: 200 }));
+    const bridge = new WebPageBridge(fetchImpl);
+
+    const result = await bridge.read({ url: 'https://chicagobound.com/best-bars-in-arlington-heights-il' });
+
+    expect(result.observations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'page-link', label: 'Support Enable' }),
+      expect.objectContaining({ kind: 'page-link', label: 'Join Now Enable' }),
+    ]));
+    expect(result.entities).toEqual(expect.arrayContaining([
+      {
+        name: 'Sports Page Bar & Grill',
+        url: 'https://chicagobound.com/best-bars-in-arlington-heights-il',
+        evidence: 'page text',
+      },
+    ]));
+    expect(result.entities).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Support Enable' }),
+      expect.objectContaining({ name: 'Join Now Enable' }),
+      expect.objectContaining({ name: 'Chicago Bound' }),
+      expect.objectContaining({ name: "Arlington Heights' Best Bars Spots [2026 Guide]" }),
+    ]));
+  });
+
   it('does not extract script, style, or advertising text as page entities', async () => {
     const fetchImpl = vi.fn(async () => new Response(`
       <html>
@@ -307,5 +454,50 @@ describe('WebPageBridge', () => {
       observations: [],
     });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('returns unavailable instead of hanging when a page read does not respond', async () => {
+    const fetchImpl = vi.fn(() => new Promise<Response>(() => {}));
+    const bridge = new WebPageBridge(fetchImpl, 1);
+
+    await expect(bridge.read({ url: 'https://example.com/slow' })).resolves.toMatchObject({
+      status: 'unavailable',
+      url: 'https://example.com/slow',
+      reason: 'Fetch timed out after 1ms.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://example.com/slow',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+});
+
+describe('createWebPageApiMiddleware', () => {
+  it('supports GET URL reads so curl and HTTP-client fallbacks can read result pages', async () => {
+    const read = vi.fn(async () => ({
+      status: 'read' as const,
+      url: 'https://example.com/theaters',
+      title: 'Theaters',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    }));
+    const middleware = createWebPageApiMiddleware({ read } as unknown as WebPageBridge);
+    const req = jsonRequest({
+      method: 'GET',
+      url: '/api/web-page?url=https%3A%2F%2Fexample.com%2Ftheaters',
+    });
+    const res = jsonResponse();
+
+    await middleware(req as never, res as never, vi.fn());
+
+    expect(res.statusCode).toBe(200);
+    expect(read).toHaveBeenCalledWith({ url: 'https://example.com/theaters' });
+    expect(res.json()).toMatchObject({ status: 'read' });
   });
 });

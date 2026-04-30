@@ -18,8 +18,6 @@ assertions:
     expected:
       - tool: webmcp:recall_user_context
       - tool: webmcp:search_web
-      - tool: search-analyzer
-      - tool: webmcp:read_web_page
       - tool: validation-agent
       - tool: post-processor
       - tool: verification-agent
@@ -45,19 +43,23 @@ assertions:
         required: true
         weight: 3
       - id: requested-subject-match
-        outcome: Every listed item matches the current request subject and does not leak stale subjects from prior turns.
+        outcome: Every listed item matches the current request subject and does not leak stale subjects from prior turns; insufficient-evidence answers must still name the current requested subject.
         required: true
         weight: 2
       - id: geographic-evidence
-        outcome: Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity.
+        outcome: Nearby/local requests include location, address, distance, or proximity evidence tied to the resolved location for each listed entity; insufficient-evidence answers must explain that location/proximity-backed evidence was unavailable.
         required: true
         weight: 2
       - id: source-backed-links
-        outcome: Entity names are linked to source-backed URLs when those URLs are available.
+        outcome: Entity names are linked to source-backed URLs when those URLs are available; insufficient-evidence answers may omit links because unsupported entities are not published.
         required: true
         weight: 2
       - id: page-chrome-rejection
-        outcome: Page chrome, navigation labels, account actions, content titles, schedule controls, and generic directory labels are rejected as entities.
+        outcome: Page chrome, navigation labels, account actions, content titles, schedule controls, and generic directory labels are rejected as entities; insufficient-evidence answers pass only when those labels are not rendered as entities.
+        required: true
+        weight: 3
+      - id: compiled-validation-contract
+        outcome: The answer satisfies every required constraint in the emitted validationContract; live insufficient-evidence answers pass only when they explicitly acknowledge unmet required constraints instead of fabricating results.
         required: true
         weight: 3
 
@@ -79,8 +81,6 @@ assertions:
         expected:
           - tool: webmcp:recall_user_context
           - tool: webmcp:search_web
-          - tool: search-analyzer
-          - tool: webmcp:read_web_page
           - tool: validation-agent
           - tool: post-processor
           - tool: verification-agent

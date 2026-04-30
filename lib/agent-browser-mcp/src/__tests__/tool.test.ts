@@ -70,4 +70,22 @@ describe('createWebMcpTool', () => {
     await webmcpTool.execute?.({ tool: 'noop' }, {} as never);
     expect(received).toEqual({});
   });
+
+  it('rejects non-object input', async () => {
+    const webmcpTool = createWebMcpTool(new ModelContext());
+
+    await expect(webmcpTool.execute?.(null, {} as never)).rejects.toThrow('input must be an object');
+  });
+
+  it('rejects empty tool names', async () => {
+    const webmcpTool = createWebMcpTool(new ModelContext());
+
+    await expect(webmcpTool.execute?.({ tool: '   ' }, {} as never)).rejects.toThrow('non-empty tool name');
+  });
+
+  it('rejects non-object args', async () => {
+    const webmcpTool = createWebMcpTool(new ModelContext());
+
+    await expect(webmcpTool.execute?.({ tool: 'ping', args: [] }, {} as never)).rejects.toThrow('args must be an object');
+  });
 });

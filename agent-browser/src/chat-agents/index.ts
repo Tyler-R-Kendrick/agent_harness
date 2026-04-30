@@ -35,6 +35,13 @@ export {
   scoreResearchSource,
   streamResearcherChat,
 } from './Researcher';
+export {
+  WEB_SEARCH_AGENT_ID,
+  WEB_SEARCH_AGENT_LABEL,
+  buildWebSearchAgentPrompt,
+  evaluateWebSearchAgentPrompt,
+  selectWebSearchAgentTools,
+} from './WebSearch';
 export { runAgentLoop, wrapVoterWithCallbacks, type AgentLoopOptions } from './agent-loop';
 export type { AgentProvider, AgentStreamCallbacks, ModelBackedAgentProvider } from './types';
 

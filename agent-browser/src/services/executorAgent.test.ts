@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolSet } from 'ai';
 import { PayloadType, type Payload } from 'logact';
 import { runConfiguredExecutorAgent } from './executorAgent';
+import { isGenericNonEntityLabel } from './executionRequirements';
 import type { LogActActorExecuteContext } from './logactActorWorkflow';
 import type { ToolDescriptor } from '../tools';
 import type { ToolAgentRuntime, ToolPlan } from '../tool-agents/tool-agent';
@@ -76,6 +77,10 @@ describe('runConfiguredExecutorAgent', () => {
   beforeEach(() => {
     runToolAgentMock.mockReset();
     runLocalToolCallExecutorMock.mockReset();
+  });
+
+  it('does not reject valid entity names that contain generic words as part of a brand name', () => {
+    expect(isGenericNonEntityLabel('Half Price Books Palatine', 'bookstores')).toBe(false);
   });
 
   it('uses the committed AgentBus execution plan as the executor prompt', async () => {
@@ -790,13 +795,13 @@ describe('runConfiguredExecutorAgent', () => {
               text: 'Restaurants near Arlington Heights, IL. Maharaj Indian Grill is a restaurants with source-backed location evidence in Arlington Heights.',
               links: [{
                 text: 'Maharaj Indian Grill',
-                url: 'https://maharajindiangrill.example',
+                url: 'https://www.maharajgrill.com/',
               }],
               jsonLd: [],
               observations: [],
               entities: [{
                 name: 'Maharaj Indian Grill',
-                url: 'https://maharajindiangrill.example',
+                url: 'https://www.maharajgrill.com/',
                 evidence: 'Maharaj Indian Grill is a restaurants with source-backed location evidence in Arlington Heights.',
               }],
             };
@@ -829,7 +834,7 @@ describe('runConfiguredExecutorAgent', () => {
 
     expect(searchQueries[0]).toBe('best restaurants Arlington Heights IL');
     expect(readUrls).toEqual(['https://example.com/local-dining']);
-    expect(result.text).toContain('[Maharaj Indian Grill](https://maharajindiangrill.example)');
+    expect(result.text).toContain('[Maharaj Indian Grill](https://www.maharajgrill.com/)');
     expect(result.failed).not.toBe(true);
   });
 
@@ -2187,5 +2192,1067 @@ describe('runConfiguredExecutorAgent', () => {
       steps: 3,
     });
     expect(result.failed).toBeUndefined();
+  });
+
+  it('reuses an explicit prior chat location for a closest-bars follow-up instead of eliciting again', async () => {
+    const toolCalls: string[] = [];
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:read_browser_location',
+        label: 'Read browser location',
+        description: 'Read browser geolocation before asking the user.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask the user for missing data before execution.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+    const barPlan: ToolPlan = {
+      version: 1,
+      goal: 'closest bars follow-up',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', query: 'location', memories: [] })),
+        },
+        'webmcp:read_browser_location': {
+          execute: vi.fn(async () => ({ status: 'denied', reason: 'Browser location denied.' })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: "Peggy Kinnane's Irish Restaurant & Pub - Official Site",
+                url: 'https://www.peggykinnanes.com/',
+                snippet: "Peggy Kinnane's Irish Restaurant & Pub is a bar in Arlington Heights, IL.",
+              }],
+            };
+          }),
+        },
+        'webmcp:elicit_user_input': { execute: vi.fn() },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: "what're the best movie theaters near me?" },
+        { role: 'assistant' as const, content: 'Location: Arlington Heights IL. Here are verified movie theaters nearby.' },
+        { role: 'user' as const, content: 'what about closest bars?' },
+      ],
+      runtime,
+    }, barPlan, descriptors, runtime.tools, {
+      onToolCall: (toolName) => toolCalls.push(toolName),
+    }, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('closest bars Arlington Heights IL');
+    expect(toolCalls).not.toContain('webmcp:elicit_user_input');
+    expect(runtime.tools['webmcp:elicit_user_input'].execute).not.toHaveBeenCalled();
+    expect(result.text).toContain("[Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/)");
+  });
+
+  it('recovers closest-bars searches from aggregate directory results before composing the answer', async () => {
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web for external facts and local recommendations.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const barPlan: ToolPlan = {
+      version: 1,
+      goal: 'closest bars near me',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query === 'bars names near Arlington Heights IL') {
+              return {
+                status: 'found',
+                query,
+                results: [
+                  {
+                    title: "Peggy Kinnane's Irish Restaurant & Pub - Official Site",
+                    url: 'https://www.peggykinnanes.com/',
+                    snippet: "Peggy Kinnane's Irish Restaurant & Pub is a bar in downtown Arlington Heights, IL.",
+                  },
+                  {
+                    title: 'Hey Nonny - Official Site',
+                    url: 'https://www.heynonny.com/',
+                    snippet: 'Hey Nonny is a bar and music venue in Arlington Heights, IL.',
+                  },
+                  {
+                    title: "Cortland's Garage Arlington Heights",
+                    url: 'https://www.cortlandsgarage.com/',
+                    snippet: "Cortland's Garage is a bar and grill in Arlington Heights, IL.",
+                  },
+                ],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Yelp: Best Bars in Arlington Heights, IL',
+                  url: 'https://example.com/yelp-bars',
+                  snippet: 'Best bars in Arlington Heights, IL. Browse reviews, directions, menus, and ratings.',
+                },
+                {
+                  title: "Chicago Bound: Arlington Heights' Best Bars",
+                  url: 'https://example.com/chicago-bound-bars',
+                  snippet: 'A guide to bars around Arlington Heights with neighborhood nightlife picks.',
+                },
+                {
+                  title: 'Yellow Pages: Bars in Arlington Heights',
+                  url: 'https://example.com/yellow-pages-bars',
+                  snippet: 'Find bars in Arlington Heights, IL with addresses and phone numbers.',
+                },
+                {
+                  title: 'Restaurantji: Best Bars near Arlington Heights',
+                  url: 'https://example.com/restaurantji-bars',
+                  snippet: 'Best bars near Arlington Heights with ratings and reviews.',
+                },
+                {
+                  title: 'Restaurant Guru: Top 7 pubs & bars',
+                  url: 'https://example.com/restaurant-guru-bars',
+                  snippet: 'Top pubs and bars in the Arlington Heights area.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: 'Directory page',
+            text: 'Yelp: Best Bars in Arlington Heights, IL. Chicago Bound: Arlington Heights Best Bars. Yellow Pages: Bars in Arlington Heights. Restaurantji: Best Bars near Arlington Heights. Restaurant Guru: Top 7 pubs & bars.',
+            links: [
+              { text: 'Yelp: Best Bars in Arlington Heights, IL', url: 'https://example.com/yelp-bars' },
+              { text: "Chicago Bound: Arlington Heights' Best Bars", url: 'https://example.com/chicago-bound-bars' },
+              { text: 'Yellow Pages: Bars in Arlington Heights', url: 'https://example.com/yellow-pages-bars' },
+            ],
+            jsonLd: [],
+            entities: [],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'what about closest bars near me?' }],
+      runtime,
+    }, barPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries).toEqual([
+      'closest bars Arlington Heights IL',
+      'bars names near Arlington Heights IL',
+    ]);
+    expect(result.text).toContain("[Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/)");
+    expect(result.text).toContain('[Hey Nonny](https://www.heynonny.com/)');
+    expect(result.text).toContain("[Cortland's Garage Arlington Heights](https://www.cortlandsgarage.com/)");
+    expect(result.text).not.toMatch(/^\s*[-*]?\s*\[?(?:Yelp: Best Bars|Chicago Bound: Arlington Heights' Best Bars|Yellow Pages: Bars in Arlington Heights|Restaurantji: Best Bars near Arlington Heights|Restaurant Guru: Top 7 pubs & bars)/im);
+  });
+
+  it('uses prior search context for show-me-more follow-ups instead of searching the literal phrase', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Request user input',
+        description: 'Ask the user for missing information.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', memories: [] })),
+        },
+        'webmcp:elicit_user_input': {
+          execute: vi.fn(async () => ({ status: 'needs_user_input', prompt: 'missing context' })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query.includes("Peggy Kinnane's")) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: "Peggy Kinnane's Irish Restaurant & Pub",
+                  url: 'https://www.peggykinnanes.com/',
+                  snippet: "Official page for Peggy Kinnane's Irish Restaurant & Pub, a bar in Arlington Heights.",
+                }],
+              };
+            }
+            if (query.includes('Hey Nonny')) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: 'Hey Nonny',
+                  url: 'https://www.heynonny.com/',
+                  snippet: 'Official page for Hey Nonny, a bar and music venue in Arlington Heights.',
+                }],
+              };
+            }
+            if (query.includes("Cortland's Garage")) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: "Cortland's Garage",
+                  url: 'https://www.cortlandsgarage.com/',
+                  snippet: "Official page for Cortland's Garage, a bar in Arlington Heights.",
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'Bars near Arlington Heights - Source Listing',
+                url: 'https://example.com/bars',
+                snippet: "Local bars near Arlington Heights include Sports Page Bar & Grill Arlington Heights, Peggy Kinnane's Irish Restaurant & Pub, Hey Nonny, Cortland's Garage.",
+              }],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'show me 3 more',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: 'what about closest bars?' },
+        { role: 'assistant' as const, content: 'Here are bars near Arlington Heights IL:\n\n1. [Sports Page Bar & Grill Arlington Heights](https://www.sportspagebarandgrill.com/) - Why: listed by source evidence.' },
+        { role: 'user' as const, content: 'show me 3 more' },
+      ],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('closest bars Arlington Heights IL');
+    expect(searchQueries).not.toContain('show me 3 more');
+    expect(result.text).toContain("[Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/)");
+    expect(result.text).toContain('[Hey Nonny](https://www.heynonny.com/)');
+    expect(result.text).toContain("[Cortland's Garage](https://www.cortlandsgarage.com/)");
+    expect(result.text).not.toContain('[Sports Page Bar & Grill Arlington Heights]');
+    expect(result.needsUserInput).not.toBe(true);
+  });
+
+  it('returns an acknowledged partial follow-up answer when only one of three requested entities can be verified', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Request user input',
+        description: 'Ask the user for missing information.',
+        group: 'built-in',
+        groupLabel: 'User Context',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', memories: [] })),
+        },
+        'webmcp:elicit_user_input': {
+          execute: vi.fn(async () => ({ status: 'needs_user_input', prompt: 'missing context' })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'Jimmy D&amp;#x27;s District',
+                url: 'https://www.jimmydsdistrict.com/',
+                snippet: 'Official page for Jimmy D&amp;#x27;s District, a bar in Arlington Heights, IL.',
+              }],
+            };
+          }),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'show me 3 more',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: 'what about closest bars?' },
+        { role: 'assistant' as const, content: 'Here are bars near Arlington Heights IL:\n\n1. [Sports Page Bar & Grill Arlington Heights](https://www.sportspagebarandgrill.com/) - Why: listed by source evidence.' },
+        { role: 'user' as const, content: 'show me 3 more' },
+      ],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries).toContain('closest bars Arlington Heights IL');
+    expect(searchQueries).not.toContain('show me 3 more');
+    expect(result.failed).not.toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.text).toContain('I could only verify 1 additional result for bars');
+    expect(result.text).toContain("[Jimmy D's District](https://www.jimmydsdistrict.com/)");
+    expect(result.text).not.toContain('&#x27;');
+    expect(result.text).not.toContain('&amp;#x27;');
+    expect(result.text).not.toContain('[Sports Page Bar & Grill Arlington Heights]');
+    const candidatePayloads = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'search-analyzer'
+        && String(payload.intentId).includes('validated-candidates')
+      ));
+    expect(candidatePayloads).toHaveLength(1);
+    expect(candidatePayloads[0].error).toContain('Requested 3 accepted candidates but found 1');
+    expect(JSON.parse(candidatePayloads[0].output)).toMatchObject({
+      requestedCount: 3,
+      acceptedCount: 1,
+      missingCount: 2,
+    });
+  });
+
+  it('decodes HTML entities before using candidate names in follow-up enrichment searches', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', memories: [] })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (query.includes("Jimmy D's District")) {
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: "Jimmy D's District - Official Site",
+                  url: 'https://www.jimmydsdistrict.com/',
+                  snippet: "Official site for Jimmy D's District, a bar in Arlington Heights, IL.",
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'Yelp: Best Bars in Arlington Heights, IL',
+                url: 'https://example.com/bars',
+                snippet: 'Bars near Arlington Heights, IL.',
+              }],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: 'Bars near Arlington Heights, IL',
+            text: 'Jimmy D&#x27;s District is a bar in Arlington Heights, IL.',
+            links: [],
+            jsonLd: [],
+            entities: [{
+              name: 'Jimmy D&amp;#x27;s District',
+              evidence: 'Jimmy D&#x27;s District is a bar in Arlington Heights, IL.',
+            }],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'show me 3 more',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: 'what about closest bars?' },
+        { role: 'assistant' as const, content: 'Here are bars near Arlington Heights IL:\n\n1. [Sports Page Bar & Grill Arlington Heights](https://www.sportspagebarandgrill.com/) - Why: listed by source evidence.' },
+        { role: 'user' as const, content: 'show me 3 more' },
+      ],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries).toContain('closest bars Arlington Heights IL');
+    expect(searchQueries).toContain('"Jimmy D\'s District" Arlington Heights IL bars official reviews');
+    expect(searchQueries.some((query) => query.includes('&#x27;') || query.includes('&amp;#x27;'))).toBe(false);
+    expect(result.text).toContain("[Jimmy D's District](https://www.jimmydsdistrict.com/)");
+  });
+
+  it('rejects article metadata and page chrome when a follow-up switches from movie theaters to bars', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', memories: [] })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            if (/bars names near Arlington Heights IL/i.test(query)) {
+              return {
+                status: 'found',
+                query,
+                results: [
+                  {
+                    title: 'Sports Page Bar & Grill Arlington Heights - Official Site',
+                    url: 'https://www.sportspagebarandgrill.com/',
+                    snippet: 'Sports Page Bar & Grill is a bar in Arlington Heights, IL.',
+                  },
+                  {
+                    title: 'Bar Salotto - Official Site',
+                    url: 'https://www.barsalotto.com/',
+                    snippet: 'Bar Salotto is a cocktail bar in Arlington Heights, IL.',
+                  },
+                  {
+                    title: "Jimmy D's District - Official Site",
+                    url: 'https://www.jimmydsdistrict.com/',
+                    snippet: "Jimmy D's District is a bar in Arlington Heights, IL.",
+                  },
+                ],
+              };
+            }
+            if (/Sports Page Bar & Grill|Bar Salotto|Jimmy D's District/i.test(query)) {
+              const name = query.match(/"([^"]+)"/)?.[1] ?? 'Bar';
+              const url = name.includes('Sports Page')
+                ? 'https://www.sportspagebarandgrill.com/'
+                : name.includes('Bar Salotto')
+                  ? 'https://www.barsalotto.com/'
+                  : 'https://www.jimmydsdistrict.com/';
+              return {
+                status: 'found',
+                query,
+                results: [{
+                  title: `${name} - Official Site`,
+                  url,
+                  snippet: `${name} is a bar in Arlington Heights, IL.`,
+                }],
+              };
+            }
+            return {
+              status: 'found',
+              query,
+              results: [
+                {
+                  title: 'Yelp: Best Bars in Arlington Heights, IL',
+                  url: 'https://www.yelp.com/search?cflt=bars&find_loc=Arlington+Heights,+IL',
+                  snippet: 'Best bars in Arlington Heights, IL.',
+                },
+                {
+                  title: "Chicago Bound: Arlington Heights' Best Bars",
+                  url: 'https://chicagobound.com/best-bars-in-arlington-heights-il',
+                  snippet: 'Guide to bars in Arlington Heights, IL.',
+                },
+              ],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: "Arlington Heights' Best Bars Spots [2026 Guide]",
+            text: [
+              'Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode.',
+              '{"@context":"https://schema.org","@type":"Article","headline":"Arlington Heights Best Bars Spots [2026 Guide]","author":{"@type":"Person","name":"Chicago Bound"}}',
+              'Bars Arlington Heights Best Bars Spots 2026 Guide A Alex Irvin Published 2023-05-25.',
+            ].join(' '),
+            links: [
+              { text: 'Support Enable', url: 'https://chicagobound.com/support' },
+              { text: 'Join Now Enable', url: 'https://chicagobound.com/join' },
+              { text: 'Chicago Bound', url: 'https://chicagobound.com/' },
+            ],
+            jsonLd: [{
+              '@context': 'https://schema.org',
+              '@type': 'Article',
+              headline: "Arlington Heights' Best Bars Spots [2026 Guide]",
+              author: { '@type': 'Person', name: 'Chicago Bound', url: 'https://chicagobound.com' },
+              publisher: { '@type': 'Organization', name: 'Chicago Bound', url: 'https://chicagobound.com' },
+            }],
+            entities: [
+              {
+                name: 'Support Enable',
+                url: 'https://chicagobound.com/support',
+                evidence: 'Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode.',
+              },
+              {
+                name: 'Join Now Enable',
+                url: 'https://chicagobound.com/join',
+                evidence: 'Chicago Bound Shop Categories About Us Support Enable dark mode Join Now Enable dark mode.',
+              },
+              {
+                name: 'Chicago Bound',
+                url: 'https://chicagobound.com/',
+                evidence: '{"@context":"https://schema.org","@type":"Article","headline":"Arlington Heights Best Bars Spots [2026 Guide]","author":{"@type":"Person","name":"Chicago Bound"}}',
+              },
+            ],
+            observations: [],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'what about bars?',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: "what're the best movie theaters near me?" },
+        { role: 'assistant' as const, content: 'Here are movie theaters near Arlington Heights IL:\n\n1. [AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12) - Why: listed by source evidence.' },
+        {
+          role: 'system' as const,
+          content: 'Agent Browser search turn context:\n{"taskText":"what are the best movie theaters near me?","resolvedTaskText":"best movie theaters Arlington Heights IL","subject":"movie theaters","answerSubject":"movie theaters","rankingGoal":"best","location":"Arlington Heights, IL","acceptedCandidates":[{"name":"AMC Randhurst 12","url":"https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12"}],"rejectedLabels":[],"sourceQueries":["best movie theaters Arlington Heights IL"],"requestedCount":1,"timestamp":1}',
+        },
+        { role: 'user' as const, content: 'what about bars?' },
+      ],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries.some((query) => /^bars Arlington Heights IL$/i.test(query))).toBe(true);
+    expect(searchQueries).toContain('bars names near Arlington Heights IL');
+    expect(searchQueries.join('\n')).not.toMatch(/movie theaters|Support Enable|Join Now Enable|Chicago Bound Shop/i);
+    expect(result.failed).not.toBe(true);
+    expect(result.text).toContain('[Sports Page Bar & Grill Arlington Heights](https://www.sportspagebarandgrill.com/)');
+    expect(result.text).toContain('[Bar Salotto](https://www.barsalotto.com/)');
+    expect(result.text).toContain("[Jimmy D's District](https://www.jimmydsdistrict.com/)");
+    expect(result.text).not.toMatch(/Support Enable|Join Now Enable|Chicago Bound Shop|Chicago Bound - Why|Best Bars Spots|movie theaters/i);
+  });
+
+  it('counts three additional source-backed follow-up entities even when a brand contains a generic word', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const busAppend = vi.fn(async (_payload: Payload) => ({ id: 'entry' }));
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({
+            status: 'found',
+            query: 'location',
+            memories: [{
+              id: 'location.city',
+              label: 'Saved city',
+              value: 'Arlington Heights, IL',
+              source: 'workspace-memory',
+              updatedAt: '2026-04-26T00:00:00.000Z',
+            }],
+          })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'best bookstores near Arlington Heights, IL - Source Directory',
+                url: 'https://fixtures.agent-browser.test/bookstores/best/listing',
+                snippet: 'Source listing for bookstores near Arlington Heights, IL. Read the page to validate entity names.',
+              }],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: 'bookstores near Arlington Heights, IL',
+            text: [
+              'Bookstores near Arlington Heights, IL.',
+              'Barnes & Noble Arlington Heights is a bookstore with source-backed location evidence in Arlington Heights.',
+              'Half Price Books Palatine is a bookstore with source-backed location evidence in Palatine near Arlington Heights.',
+              'The Book Stall is a bookstore with source-backed location evidence in Winnetka near Arlington Heights.',
+            ].join(' '),
+            links: [
+              {
+                text: 'At Home',
+                url: 'https://fixtures.agent-browser.test/chrome/at-home',
+              },
+              {
+                text: 'Barnes & Noble Arlington Heights',
+                url: 'https://stores.barnesandnoble.com/store/2089',
+              },
+              {
+                text: 'Half Price Books Palatine',
+                url: 'https://www.hpb.com/store?storeid=HPB-032',
+              },
+              {
+                text: 'The Book Stall',
+                url: 'https://www.thebookstall.com/',
+              },
+            ],
+            jsonLd: [],
+            entities: [
+              {
+                name: 'At Home',
+                url: 'https://fixtures.agent-browser.test/chrome/at-home',
+                evidence: 'page navigation or content bucket link',
+              },
+              {
+                name: 'Barnes & Noble Arlington Heights',
+                url: 'https://stores.barnesandnoble.com/store/2089',
+                evidence: 'bookstore with source-backed location evidence in Arlington Heights',
+              },
+              {
+                name: 'Half Price Books Palatine',
+                url: 'https://www.hpb.com/store?storeid=HPB-032',
+                evidence: 'bookstore with source-backed location evidence in Palatine near Arlington Heights',
+              },
+              {
+                name: 'The Book Stall',
+                url: 'https://www.thebookstall.com/',
+                evidence: 'bookstore with source-backed location evidence in Winnetka near Arlington Heights',
+              },
+            ],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'show me 3 more',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [
+        { role: 'user' as const, content: 'what are the best bookstores near me?' },
+        { role: 'assistant' as const, content: 'Here are bookstores near Arlington Heights IL:\n\n1. [Anderson Bookshop Arlington Heights](https://example.com/anderson) - Why: listed by source evidence.' },
+        { role: 'user' as const, content: 'show me 3 more' },
+      ],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      bus: { append: busAppend } as unknown as LogActActorExecuteContext['bus'],
+      action: 'Use AgentBus instructions to answer the current nearby search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toBe('best bookstores Arlington Heights IL');
+    expect(searchQueries).not.toContain('show me 3 more');
+    expect(result.failed).not.toBe(true);
+    expect(result.text).toContain('[Barnes & Noble Arlington Heights](https://stores.barnesandnoble.com/store/2089)');
+    expect(result.text).toContain('[Half Price Books Palatine](https://www.hpb.com/store?storeid=HPB-032)');
+    expect(result.text).toContain('[The Book Stall](https://www.thebookstall.com/)');
+    expect(result.text).not.toContain('[Anderson Bookshop Arlington Heights]');
+    const candidatePayload = busAppend.mock.calls
+      .map(([payload]) => payload)
+      .filter((payload): payload is Extract<Payload, { type: PayloadType.Result }> => (
+        payload.type === PayloadType.Result
+        && payload.meta?.actorId === 'search-analyzer'
+        && String(payload.intentId).includes('validated-candidates')
+      ))
+      .at(-1);
+    expect(JSON.parse(candidatePayload?.output ?? '{}')).toMatchObject({
+      requestedCount: 3,
+      acceptedCount: 3,
+      missingCount: 0,
+    });
+  });
+
+  it('applies arbitrary compiled name-prefix constraints before composing search answers', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'model should not write the final search answer', steps: 1 });
+    const searchQueries: string[] = [];
+    const descriptors: ToolDescriptor[] = [
+      {
+        id: 'webmcp:recall_user_context',
+        label: 'Recall user context',
+        description: 'Search app memory for saved city, neighborhood, or location.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'user-context-mcp',
+        subGroupLabel: 'User Context',
+      },
+      {
+        id: 'webmcp:search_web',
+        label: 'Search web',
+        description: 'Search the web.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read and extract evidence from a search result page.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
+    const runtime: ToolAgentRuntime = {
+      tools: {
+        'webmcp:recall_user_context': {
+          execute: vi.fn(async () => ({ status: 'empty', memories: [] })),
+        },
+        'webmcp:search_web': {
+          execute: vi.fn(async ({ query }: { query: string }) => {
+            searchQueries.push(query);
+            return {
+              status: 'found',
+              query,
+              results: [{
+                title: 'Shops in the Vatican starting with A',
+                url: 'https://fixtures.agent-browser.test/vatican-shops',
+                snippet: 'Vatican shops include Alpha Gifts and Basilica Books.',
+              }],
+            };
+          }),
+        },
+        'webmcp:read_web_page': {
+          execute: vi.fn(async ({ url }: { url: string }) => ({
+            status: 'read',
+            url,
+            title: 'Shops in the Vatican',
+            text: [
+              'Alpha Gifts is a shop in the Vatican with source-backed visitor information.',
+              'Basilica Books is a shop in the Vatican with source-backed visitor information.',
+            ].join(' '),
+            links: [
+              { text: 'Alpha Gifts', url: 'https://fixtures.agent-browser.test/alpha-gifts' },
+              { text: 'Basilica Books', url: 'https://fixtures.agent-browser.test/basilica-books' },
+            ],
+            jsonLd: [],
+            entities: [
+              {
+                name: 'Alpha Gifts',
+                url: 'https://fixtures.agent-browser.test/alpha-gifts',
+                evidence: 'Alpha Gifts is a shop in the Vatican with source-backed visitor information.',
+              },
+              {
+                name: 'Basilica Books',
+                url: 'https://fixtures.agent-browser.test/basilica-books',
+                evidence: 'Basilica Books is a shop in the Vatican with source-backed visitor information.',
+              },
+            ],
+          })),
+        },
+      } as unknown as ToolSet,
+      descriptors,
+    };
+    const searchPlan: ToolPlan = {
+      version: 1,
+      goal: 'provide shops in the Vatican that start with the letter A',
+      selectedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+      steps: [],
+      createdToolFiles: [],
+      actorToolAssignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+    };
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      messages: [{ role: 'user' as const, content: 'provide shops in the Vatican that start with the letter A' }],
+      runtime,
+    }, searchPlan, descriptors, runtime.tools, {}, {
+      ...executeContext,
+      action: 'Use AgentBus instructions to answer the current constrained search request.',
+      toolPolicy: {
+        allowedToolIds: descriptors.map((toolDescriptor) => toolDescriptor.id),
+        assignments: { executor: descriptors.map((toolDescriptor) => toolDescriptor.id) },
+      },
+    });
+
+    expect(searchQueries[0]).toContain('shops');
+    expect(searchQueries[0]).toContain('Vatican');
+    expect(searchQueries[0]).toContain('starts with A');
+    expect(result.text).toContain('[Alpha Gifts](https://fixtures.agent-browser.test/alpha-gifts)');
+    expect(result.text).not.toContain('Basilica Books');
   });
 });

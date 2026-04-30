@@ -6,7 +6,7 @@ import type { Payload } from 'logact';
 import { runConfiguredExecutorAgent } from '../src/services/executorAgent';
 import { runLogActActorWorkflow, type LogActActorExecuteContext } from '../src/services/logactActorWorkflow';
 import type { AgentRunResult } from '../src/services/agentRunner';
-import type { BusEntryStep } from '../src/types';
+import type { BusEntryStep, ValidationContract } from '../src/types';
 import type { ToolDescriptor } from '../src/tools';
 import type { ToolAgentRuntime, ToolPlan } from '../src/tool-agents/tool-agent';
 import { WebPageBridge, WebSearchBridge } from '../server/searchMiddleware';
@@ -16,8 +16,9 @@ const appRoot = path.resolve(__dirname, '..');
 const casesPath = path.join(appRoot, 'evals/search-fulfillment/cases.jsonl');
 const liveCasesPath = path.join(appRoot, 'evals/search-fulfillment/cases.live.jsonl');
 const ADVERSARY_HARDENING = 'negative-rubric-technique: keyword-stuffing without task grounding';
-const liveSearchBridge = new WebSearchBridge();
-const livePageBridge = new WebPageBridge();
+const LIVE_FETCH_TIMEOUT_MS = Number(process.env.AGENT_BROWSER_LIVE_FETCH_TIMEOUT_MS ?? '') || 3_000;
+const liveSearchBridge = new WebSearchBridge(fetch, LIVE_FETCH_TIMEOUT_MS);
+const livePageBridge = new WebPageBridge(fetch, LIVE_FETCH_TIMEOUT_MS);
 
 type EvalCase = {
   id: string;
@@ -55,6 +56,8 @@ type EvalContract = {
   expectedQuery?: string;
   semanticOnly?: boolean;
   fixtures?: RuntimeFixtures;
+  messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  validationContract?: ValidationContract;
 };
 
 type EvalToolCall = {
@@ -262,9 +265,10 @@ async function runCase(testCase: EvalCase, contract: EvalContract, live: boolean
   const { runtime, descriptors: toolDescriptors } = createRuntime(fixtures, live);
   const plan = createPlan(testCase, toolDescriptors);
   const recorder = createEventRecorder();
+  const messages = contract.messages ?? [{ role: 'user' as const, content: testCase.input }];
 
   const result = await runLogActActorWorkflow({
-    messages: [{ role: 'user', content: testCase.input }],
+    messages,
     instructions: 'Run the production Agent Browser search fulfillment workflow for AgentEvals scoring.',
     workspaceName: 'Research',
     plan,
@@ -276,13 +280,14 @@ async function runCase(testCase: EvalCase, contract: EvalContract, live: boolean
       'Final answer must render only accepted structured candidates.',
       'Final answer must reject page chrome and navigation labels as entities.',
     ].filter(Boolean),
+    validationContract: contract.validationContract,
     maxExecutionAttempts: 1,
     execute: (context: LogActActorExecuteContext) => runConfiguredExecutorAgent({
       model: { provider: 'ghcp', modelId: 'gpt-4.1' } as never,
       tools: context.selectedTools,
       toolDescriptors: context.selectedDescriptors,
       instructions: 'Execute the committed LogAct plan against deterministic WebMCP fixtures.',
-      messages: [{ role: 'user', content: testCase.input }],
+      messages,
       workspaceName: 'Research',
       capabilities: { contextWindow: 4096, maxOutputTokens: 512 },
       runtime,
@@ -306,12 +311,16 @@ if (!testCase) {
   throw new Error(`No search eval case found for ${evalId}.`);
 }
 
-const result = await runCase(testCase, parseContract(testCase), live);
+const contract = parseContract(testCase);
+const result = await runCase(testCase, contract, live);
 await writeFile(outputFile, JSON.stringify({
   output: [{
     role: 'assistant',
     content: result.text,
     tool_calls: result.toolCalls,
+    metadata: {
+      validationContract: contract.validationContract,
+    },
   }],
   duration_ms: result.toolCalls.length,
   token_usage: { input: 100, output: Math.max(1, result.text.length), cached: 0 },

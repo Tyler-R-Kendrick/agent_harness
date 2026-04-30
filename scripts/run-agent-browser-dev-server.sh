@@ -3,7 +3,7 @@ set -euo pipefail
 
 readonly REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly APP_DIR="$REPO_ROOT/agent-browser"
-readonly HEALTH_URL="http://127.0.0.1:5173/"
+readonly HEALTH_URL="http://127.0.0.1:5174/"
 
 log() {
   printf '[agent-browser dev] %s\n' "$*"
@@ -19,17 +19,17 @@ server_ready() {
 
 if ! dependencies_ready; then
   log "Dependencies are missing in $REPO_ROOT/node_modules"
-  log "Run 'npm ci' once from the repo root, or reopen the workspace after post-create finishes."
+  log "Run 'npm install' once from the repo root, or reopen the workspace after post-create finishes."
   exit 1
 fi
 
 if server_ready; then
-  log 'Reusing existing server on port 5173'
+  log 'Reusing existing server on port 5174'
   log 'Ready'
   exit 0
 fi
 
-log 'Starting Vite dev server on port 5173'
+log 'Starting Vite dev server on port 5174'
 cd "$APP_DIR"
 npm run dev &
 child_pid=$!

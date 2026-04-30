@@ -5,10 +5,20 @@ Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', { value: (
 
 const NativeAbortController = globalThis.AbortController;
 
+function setAbortSignalListenerBudget(signal: AbortSignal) {
+  try {
+    setMaxListeners(256, signal);
+  } catch (error) {
+    if (!(error instanceof TypeError)) {
+      throw error;
+    }
+  }
+}
+
 globalThis.AbortController = class AbortControllerWithListenerBudget extends NativeAbortController {
   constructor() {
     super();
-    setMaxListeners(256, this.signal);
+    setAbortSignalListenerBudget(this.signal);
   }
 };
 

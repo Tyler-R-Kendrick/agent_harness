@@ -4,8 +4,10 @@
 
 .playwright-mcp/
 .agentv/cache.json
+.codex/environments/
 node_modules/
 .npm-cache/
+package-lock.json
 lib/*/node_modules/
 
 coverage/
@@ -23,6 +25,7 @@ agent-browser-delegation-thoughts.png
 chat-pane-close-buttons.png
 file-editor-edit-mode.png
 file-editor-label-mode.png
-output/playwright/
+output/
 .dev-server*.log
 .codex-tk26-objects/
+.codex-tk26-index-*

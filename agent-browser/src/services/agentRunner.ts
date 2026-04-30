@@ -19,6 +19,7 @@
 
 import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import type { SearchTurnContext } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export type AgentRunResult = {
   blocked?: boolean;
   needsUserInput?: boolean;
   elicitation?: unknown;
+  searchTurnContext?: SearchTurnContext;
 };
 
 // ── Runner ────────────────────────────────────────────────────────────────────

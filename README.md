@@ -61,10 +61,10 @@ The visual smoke script writes a screenshot to `output/playwright/agent-browser-
 
 When working in GitHub Codespaces, use the forwarded Codespaces URL for browser navigation. Keep `http://localhost:<port>` for tools running inside the container, such as `curl`, Playwright, or local health checks.
 
-To print the forwarded preview URL for port `5173`:
+To print the forwarded preview URL for port `5174`:
 
 ```bash
-./skills/agent-harness-context/scripts/codespaces-uri.sh 5173
+./skills/agent-harness-context/scripts/codespaces-uri.sh 5174
 ```
 
 ## Where To Go Next

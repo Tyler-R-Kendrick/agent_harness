@@ -73,7 +73,7 @@ describe('Tool Agent', () => {
     });
   });
 
-  it('prefers user-context tools over cli for restaurant near-me prompts', () => {
+  it('routes near-me web search through search tools and CLI fallback before eliciting the user', () => {
     const userContextDescriptors: ToolDescriptor[] = [
       descriptors[0],
       {
@@ -112,6 +112,15 @@ describe('Tool Agent', () => {
         subGroup: 'web-search-mcp',
         subGroupLabel: 'Search',
       },
+      {
+        id: 'webmcp:read_web_page',
+        label: 'Read web page',
+        description: 'Read result pages and extract entity evidence.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
     ];
 
     const plan = createStaticToolPlan({
@@ -119,19 +128,27 @@ describe('Tool Agent', () => {
       descriptors: userContextDescriptors,
     }, 'list restaurants near me');
 
-    expect(plan.selectedToolIds.slice(0, 4)).toEqual([
+    expect(plan.selectedToolIds).toEqual([
       'webmcp:recall_user_context',
       'webmcp:read_browser_location',
       'webmcp:search_web',
+      'webmcp:read_web_page',
+      'cli',
       'webmcp:elicit_user_input',
     ]);
     expect(plan.actorToolAssignments?.executor).toEqual(expect.arrayContaining([
       'webmcp:recall_user_context',
       'webmcp:read_browser_location',
       'webmcp:search_web',
+      'webmcp:read_web_page',
+      'cli',
       'webmcp:elicit_user_input',
     ]));
-    expect(plan.actorToolAssignments?.executor).not.toContain('cli');
+    expect(plan.actorToolAssignments?.['web-search-agent']).toEqual([
+      'webmcp:search_web',
+      'webmcp:read_web_page',
+      'cli',
+    ]);
   });
 
   it('exposes planning-only tools to the tool agent', () => {

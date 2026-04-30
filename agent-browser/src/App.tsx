@@ -12,6 +12,7 @@ import {
 import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { ToolSet } from 'ai';
+import type { ModelMessage } from '@ai-sdk/provider-utils';
 import {
   ArrowLeft,
   ArrowRight,
@@ -102,6 +103,7 @@ import { getModelCapabilities, resolveLanguageModel } from './services/agentProv
 import { LocalLanguageModel } from './services/localLanguageModel';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
+import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
 import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
 import { InlineProcess, ProcessPanel } from './features/process';
 import {
@@ -230,7 +232,7 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
-import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, SearchTurnContext, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
 import type { CliHistoryEntry } from './tools/types';
 import { installModelContext, ModelContext } from 'webmcp';
 
@@ -268,6 +270,17 @@ type UserElicitationEventDetail = {
   reason?: string;
   fields: WorkspaceMcpElicitationField[];
 };
+
+function isSearchTurnContext(value: unknown): value is SearchTurnContext {
+  return !!value
+    && typeof value === 'object'
+    && 'taskText' in value
+    && 'resolvedTaskText' in value
+    && 'subject' in value
+    && 'answerSubject' in value
+    && 'acceptedCandidates' in value
+    && Array.isArray((value as SearchTurnContext).acceptedCandidates);
+}
 
 const DEFAULT_IDENTITIES: Identity[] = [
   { id: 'user-1', name: 'You', type: 'user' },
@@ -3341,9 +3354,18 @@ function ChatPanel({
               selectedToolIds,
             })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
-        const inputMessages = nextMessages
+        const inputMessages: ModelMessage[] = nextMessages
           .filter((message) => message.id !== assistantId)
-          .map((message) => ({ role: message.role, content: message.streamedContent || message.content }));
+          .flatMap((message) => {
+            const baseMessage: ModelMessage = {
+              role: message.role,
+              content: message.streamedContent || message.content,
+            };
+            if (message.role === 'assistant' && message.searchTurnContext) {
+              return [baseMessage, createSearchTurnContextSystemMessage(message.searchTurnContext)];
+            }
+            return [baseMessage];
+          });
 
         try {
           const sharedCallbacks = {
@@ -3402,7 +3424,7 @@ function ChatPanel({
           };
 
           if (shouldRunParallelDelegation(text, capabilities)) {
-            await runParallelDelegationWorkflow({
+            const result = await runParallelDelegationWorkflow({
               model,
               prompt: text,
               workspaceName,
@@ -3601,8 +3623,12 @@ function ChatPanel({
               },
               ...sharedCallbacks,
             });
+            const searchTurnContext = 'searchTurnContext' in result ? result.searchTurnContext : undefined;
+            if (isSearchTurnContext(searchTurnContext)) {
+              updateMessage(assistantId, { searchTurnContext });
+            }
           } else {
-            await runStagedToolPipeline({
+            const result = await runStagedToolPipeline({
               model,
               tools,
               toolDescriptors: selectedDescriptors,
@@ -3777,6 +3803,10 @@ function ChatPanel({
               },
               ...sharedCallbacks,
             });
+            const searchTurnContext = 'searchTurnContext' in result ? result.searchTurnContext : undefined;
+            if (isSearchTurnContext(searchTurnContext)) {
+              updateMessage(assistantId, { searchTurnContext });
+            }
           }
         } finally {
           clearLocalToolWatchdogs();

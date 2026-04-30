@@ -49,8 +49,8 @@ When this repo is running inside a GitHub Codespace, do not use `http://localhos
 ### agent-browser hot reload
 
 - Opening the workspace should auto-start the agent-browser Vite server through the workspace task in `.vscode/tasks.json`.
-- Opening the workspace in Codespaces should also auto-open VS Code Simple Browser to the forwarded URL for port `5173`.
-- If the forwarded URL is not yet browser-accessible, the preview helper promotes port `5173` and retries before opening Simple Browser.
+- Opening the workspace in Codespaces should also auto-open VS Code Simple Browser to the forwarded URL for port `5174`.
+- If the forwarded URL is not yet browser-accessible, the preview helper promotes port `5174` and retries before opening Simple Browser.
 - If the preview helper extension was just installed during post-create, reload the VS Code window once so startup activation can run.
 - Manual fallback: run the `Agent Harness: Open Agent Browser Preview` command or use `.vscode/launch.json` if the preview did not open automatically.
 

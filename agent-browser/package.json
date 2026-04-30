@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node ../scripts/run-package-bin.mjs typescript -b && node ../scripts/run-package-bin.mjs vite build",
     "cucumber": "node ../scripts/run-package-bin.mjs @cucumber/cucumber --config cucumber.mjs",
-    "dev": "node ../scripts/run-package-bin.mjs vite --host 0.0.0.0 --port 5173 --strictPort",
+    "dev": "node ../scripts/run-package-bin.mjs vite --host 0.0.0.0 --port 5174 --strictPort",
     "dev:cucumber": "node ../scripts/run-package-bin.mjs vite --host 127.0.0.1 --port 4173 --strictPort",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
@@ -31,7 +31,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@github/copilot-sdk": "^0.2.2",
-    "@huggingface/transformers": "^4.0.1",
+    "@huggingface/transformers": "4.0.1",
     "@radix-ui/themes": "^3.3.0",
     "@webcontainer/api": "^1.6.4",
     "ai": "^6.0.153",
