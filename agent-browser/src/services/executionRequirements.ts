@@ -3,6 +3,19 @@ import { PayloadType, type AgentBusPayloadMeta, type IAgentBus } from 'logact';
 import type { ToolPlanningCallbacks, ToolAgentRuntime, ToolPlan } from '../tool-agents/tool-agent';
 import { callTool } from '../tool-agents/tool-agent';
 import { WEB_SEARCH_AGENT_ID, WEB_SEARCH_AGENT_LABEL, selectWebSearchAgentTools } from '../chat-agents/WebSearch';
+import {
+  LOCAL_WEB_RESEARCH_AGENT_ID,
+  LOCAL_WEB_RESEARCH_AGENT_LABEL,
+  type EvidenceChunk as LocalEvidenceChunk,
+  type WebResearchRunResult,
+  type WebSearchResult as LocalWebSearchResult,
+} from '../chat-agents/LocalWebResearch';
+import {
+  RDF_WEB_SEARCH_AGENT_ID,
+  RDF_WEB_SEARCH_AGENT_LABEL,
+  type AgentAnswer as RdfAgentAnswer,
+  type SearchResult as RdfSearchResult,
+} from '../chat-agents/SemanticSearch';
 import type { AgentRunResult } from './agentRunner';
 import type { BusEntryStep, SearchTurnContext, ValidationContract } from '../types';
 import { compileValidationContract } from './constraintCompiler';
@@ -78,6 +91,9 @@ export interface ResolvedExecutionContext {
   location?: string;
   memoryResult?: unknown;
   searchQuery?: string;
+  webSearchResult?: SearchWebResult;
+  localWebResearchResult?: WebResearchRunResult;
+  semanticSearchResult?: RdfAgentAnswer;
   searchResult?: SearchWebResult;
   searchCandidates?: SearchCandidate[];
   conversationResolution?: ConversationSearchResolution;
@@ -156,6 +172,8 @@ const REQUIREMENT_TOOL_IDS = {
   location: 'webmcp:read_browser_location',
   elicit: 'webmcp:elicit_user_input',
   search: 'webmcp:search_web',
+  localWebResearch: 'webmcp:local_web_research',
+  semanticSearch: 'webmcp:semantic_search',
   readPage: 'webmcp:read_web_page',
 } as const;
 
@@ -163,7 +181,7 @@ const MAX_PAGES_TO_READ = 2;
 const MAX_DISCOVERY_SEARCH_RESULTS = 5;
 const MAX_CANDIDATES_TO_ENRICH = 4;
 const FORBIDDEN_ENTITY_LABEL_PATTERN = /^(?:movies?|theaters?|theatres?|cinemas?|trailers?|teasers?|videos?|clips?|tv shows?|showtimes?|tickets?|reviews?|menus?|directions?|hours?|locations?|search|find|home|main content|skip to main content|skip navigation|privacy|terms|sign in|log in|login|join|join now|subscribe|load more|see all|view all|read more|learn more)$/i;
-const FORBIDDEN_ENTITY_LABEL_WORD_PATTERN = /\b(?:trailers?|teasers?|showt?imes?|movie\s+times?|tickets?|ticketing|tv shows?|streaming|coming\s+soon|movie\s+charts?|movie\s+news|skip to main content|main content|screen\s+reader|accessibility|promo(?:tion)?s?|offers?|coupon|redeem|support\s+enable|join\s+now\s+enable|enable\s+dark\s+mode|shop\s+categories|about\s+us)\b/i;
+const FORBIDDEN_ENTITY_LABEL_WORD_PATTERN = /\b(?:overview|trailers?|teasers?|showt?imes?|movie\s+times?|tickets?|ticketing|tv shows?|streaming|coming\s+soon|movie\s+charts?|movie\s+news|skip to main content|main content|screen\s+reader|accessibility|promo(?:tion)?s?|offers?|coupon|redeem|support\s+enable|join\s+now\s+enable|enable\s+dark\s+mode|shop\s+categories|about\s+us)\b/i;
 const SITE_SECTION_LABEL_PATTERN = /^(?:at\s+home|coming\s+soon|streaming|fan\s*store|store|shop|shop\s+categories|merchandise|gear|gift cards?|rewards?|offers?|deals?|coupons?|promos?|promotions?|charts?|news|articles?|blog|photos?|videos?|clips?|trailers?|tv shows?|events?|calendar|account|profile|help|support|support\s+enable|contact|about|about\s+us|join\s+now(?:\s+enable)?|enable\s+dark\s+mode|screen\s+reader\s+users?|accessibility|ticketing)$/i;
 const TECHNICAL_ARTIFACT_LABEL_PATTERN = /^(?:(?:multi|single|top|bottom|side|leaderboard|banner|box|native|display|sponsor(?:ed)?)\s+)?(?:ad|ads|adunit|adunits|advertisement|banner|logo|multi\s+logo|box\s+ad|tracking|analytics|pixel|beacon|script|style|stylesheet|css|font|font\s+family|serif|sans\s+serif|arial|helvetica|georgia|palatino|palatino\s+linotype|times\s+new\s+roman)$/i;
 const TECHNICAL_ARTIFACT_WORD_PATTERN = /\b(?:adconfig|adunit|adunits|advertis(?:e|ing|ement)|doubleclick|googletag|analytics|tracking|pixel|font-family|stylesheet|css|script|window\.[a-z0-9_$]+|pageType|theaterselectionpage)\b/i;
@@ -304,7 +322,11 @@ export async function resolveExecutionRequirements({
   }
 
   if (intent.externalSearchRequired) {
-    if (!hasAvailableSearchPath(runtime, allowedToolIds)) {
+    if (
+      !hasAvailableSearchPath(runtime, allowedToolIds)
+      && !hasAvailableLocalWebResearchPath(runtime, allowedToolIds)
+      && !hasAvailableSemanticSearchPath(runtime, allowedToolIds)
+    ) {
       const blocked = await blockForMissingSearch({
         allowedToolIds,
         runtime,
@@ -316,16 +338,49 @@ export async function resolveExecutionRequirements({
       return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
     }
     context.searchQuery = buildSearchQuery(intent, context.location);
-    context.searchResult = await searchWebWithFallback({
+    const webSearchPromise = hasAvailableSearchPath(runtime, allowedToolIds)
+      ? searchWebWithFallback({
+        runtime,
+        allowedToolIds,
+        query: context.searchQuery,
+        limit: 3,
+        call,
+      })
+      : Promise.resolve({
+        status: 'unavailable' as const,
+        query: context.searchQuery,
+        results: [],
+        reason: 'No web search tool is available.',
+      });
+    const localWebResearchPromise = localWebResearchWithFallback({
       runtime,
       allowedToolIds,
+      question: intent.currentTaskText,
       query: context.searchQuery,
-      limit: 3,
+      limit: Math.max(3, intent.requestedCount ?? 3),
       call,
     });
-    if (context.searchResult.status === 'found' && context.searchResult.results.length > 0) {
+    const semanticSearchPromise = semanticSearchWithFallback({
+      runtime,
+      allowedToolIds,
+      question: intent.currentTaskText,
+      limit: Math.max(3, intent.requestedCount ?? 3),
+      call,
+    });
+    const [webSearchResult, localWebResearchResult, semanticSearchResult] = await Promise.all([
+      webSearchPromise,
+      localWebResearchPromise,
+      semanticSearchPromise,
+    ]);
+    context.webSearchResult = webSearchResult;
+    context.localWebResearchResult = localWebResearchResult;
+    context.semanticSearchResult = semanticSearchResult;
+    const mergedSearchResult = mergeSearchFanInResults(webSearchResult, localWebResearchResult, semanticSearchResult, intent);
+    context.searchResult = mergedSearchResult;
+    await appendSearchFanIn(executionContext?.bus, webSearchResult, localWebResearchResult, semanticSearchResult, mergedSearchResult);
+    if (mergedSearchResult.status === 'found' && mergedSearchResult.results.length > 0) {
       context.searchCandidates = await fulfillSearchCandidates({
-        searchResult: context.searchResult,
+        searchResult: mergedSearchResult,
         intent,
         location: context.location,
         allowedToolIds,
@@ -368,7 +423,7 @@ export async function resolveExecutionRequirements({
       steps,
       location: context.location,
       intent,
-      reason: context.searchResult.reason,
+      reason: mergedSearchResult.reason,
     });
     return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
   }
@@ -618,6 +673,14 @@ function hasAvailableSearchPath(runtime: ToolAgentRuntime, allowedToolIds: Set<s
     || fallbackSearchToolIds(runtime, allowedToolIds).length > 0;
 }
 
+function hasAvailableLocalWebResearchPath(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): boolean {
+  return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.localWebResearch);
+}
+
+function hasAvailableSemanticSearchPath(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): boolean {
+  return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.semanticSearch);
+}
+
 function fallbackSearchToolIds(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): string[] {
   return selectWebSearchAgentTools(allRuntimeDescriptors(runtime), '')
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.search)
@@ -633,6 +696,352 @@ type ToolDescriptorLike = Parameters<typeof selectWebSearchAgentTools>[0][number
 
 function normalizeSearchToolResult(result: unknown, query: string): SearchWebResult {
   return normalizeSearchResult(parseStructuredToolOutput(result), query);
+}
+
+async function localWebResearchWithFallback({
+  runtime,
+  allowedToolIds,
+  question,
+  query,
+  limit,
+  call,
+}: {
+  runtime: ToolAgentRuntime;
+  allowedToolIds: Set<string>;
+  question: string;
+  query: string;
+  limit: number;
+  call: (toolId: string, args: unknown) => Promise<unknown>;
+}): Promise<WebResearchRunResult | undefined> {
+  if (!isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.localWebResearch)) {
+    return undefined;
+  }
+  return normalizeLocalWebResearchResult(
+    await call(REQUIREMENT_TOOL_IDS.localWebResearch, {
+      question,
+      queries: [query],
+      maxSearchResults: Math.max(3, limit),
+      maxPagesToExtract: Math.max(2, Math.min(5, limit)),
+      maxEvidenceChunks: Math.max(3, limit),
+      synthesize: false,
+    }),
+    question,
+  );
+}
+
+function normalizeLocalWebResearchResult(result: unknown, question: string): WebResearchRunResult {
+  const parsed = parseStructuredToolOutput(result);
+  if (!isRecord(parsed)) {
+    return emptyLocalWebResearchResult(question, [{
+      stage: 'error',
+      message: 'Local web research did not return a structured result.',
+      recoverable: true,
+    }]);
+  }
+  const searchResults = Array.isArray(parsed.searchResults)
+    ? parsed.searchResults
+      .map(normalizeLocalWebSearchResult)
+      .filter((item): item is LocalWebSearchResult => Boolean(item))
+    : [];
+  const evidence = Array.isArray(parsed.evidence)
+    ? parsed.evidence
+      .map(normalizeLocalEvidenceChunk)
+      .filter((item): item is LocalEvidenceChunk => Boolean(item))
+    : [];
+  const errors = Array.isArray(parsed.errors)
+    ? parsed.errors
+      .map((error) => {
+        if (!isRecord(error)) return null;
+        const stage = typeof error.stage === 'string' && isLocalAgentWorkflowStep(error.stage) ? error.stage : 'error';
+        const message = typeof error.message === 'string' ? error.message : '';
+        const url = typeof error.url === 'string' ? error.url : undefined;
+        const recoverable = typeof error.recoverable === 'boolean' ? error.recoverable : true;
+        return message ? { stage, message, ...(url ? { url } : {}), recoverable } : null;
+      })
+      .filter((error): error is WebResearchRunResult['errors'][number] => Boolean(error))
+    : [];
+  return {
+    id: typeof parsed.id === 'string' ? parsed.id : `local-web-research-${Date.now()}`,
+    question: typeof parsed.question === 'string' ? parsed.question : question,
+    plannedQueries: Array.isArray(parsed.plannedQueries)
+      ? parsed.plannedQueries.filter((item): item is string => typeof item === 'string')
+      : [question],
+    searchResults,
+    extractedPages: [],
+    evidence,
+    citations: [],
+    ...(typeof parsed.answer === 'string' ? { answer: parsed.answer } : {}),
+    errors,
+    timings: {},
+    elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : 0,
+    createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : new Date(0).toISOString(),
+  };
+}
+
+function isLocalAgentWorkflowStep(value: string): value is WebResearchRunResult['errors'][number]['stage'] {
+  return [
+    'planning',
+    'searching',
+    'extracting',
+    'ranking',
+    'synthesizing',
+    'complete',
+    'error',
+  ].includes(value);
+}
+
+function emptyLocalWebResearchResult(
+  question: string,
+  errors: WebResearchRunResult['errors'],
+): WebResearchRunResult {
+  return {
+    id: `local-web-research-${Date.now()}`,
+    question,
+    plannedQueries: [question],
+    searchResults: [],
+    extractedPages: [],
+    evidence: [],
+    citations: [],
+    errors,
+    timings: {},
+    elapsedMs: 0,
+    createdAt: new Date(0).toISOString(),
+  };
+}
+
+function normalizeLocalWebSearchResult(value: unknown): LocalWebSearchResult | null {
+  if (!isRecord(value)) return null;
+  const title = typeof value.title === 'string' && value.title.trim() ? decodeHtmlEntities(value.title).trim() : undefined;
+  const url = typeof value.url === 'string' && value.url.trim() ? value.url.trim() : undefined;
+  const normalizedUrl = typeof value.normalizedUrl === 'string' && value.normalizedUrl.trim()
+    ? value.normalizedUrl.trim()
+    : url;
+  if (!title || !url || !normalizedUrl) return null;
+  return {
+    id: typeof value.id === 'string' && value.id.trim() ? value.id.trim() : `local-${title}`,
+    title,
+    url,
+    normalizedUrl,
+    ...(typeof value.snippet === 'string' && value.snippet.trim() ? { snippet: decodeHtmlEntities(value.snippet).trim() } : {}),
+    provider: value.provider === 'searxng' ? 'searxng' : 'custom',
+    ...(typeof value.engine === 'string' ? { engine: value.engine } : {}),
+    ...(typeof value.score === 'number' ? { score: value.score } : {}),
+    rank: typeof value.rank === 'number' ? value.rank : 1,
+    ...(typeof value.publishedDate === 'string' ? { publishedDate: value.publishedDate } : {}),
+  };
+}
+
+function normalizeLocalEvidenceChunk(value: unknown): LocalEvidenceChunk | null {
+  if (!isRecord(value)) return null;
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined;
+  const url = typeof value.url === 'string' && value.url.trim() ? value.url.trim() : undefined;
+  const normalizedUrl = typeof value.normalizedUrl === 'string' && value.normalizedUrl.trim()
+    ? value.normalizedUrl.trim()
+    : url;
+  const text = typeof value.text === 'string' && value.text.trim() ? decodeHtmlEntities(value.text).trim() : undefined;
+  if (!id || !url || !normalizedUrl || !text) return null;
+  return {
+    id,
+    url,
+    normalizedUrl,
+    ...(typeof value.title === 'string' && value.title.trim() ? { title: decodeHtmlEntities(value.title).trim() } : {}),
+    text,
+    score: typeof value.score === 'number' ? value.score : 0,
+    ...(typeof value.sourceResultId === 'string' ? { sourceResultId: value.sourceResultId } : {}),
+    ...(typeof value.pageId === 'string' ? { pageId: value.pageId } : {}),
+    ...(typeof value.citationId === 'number' ? { citationId: value.citationId } : {}),
+  };
+}
+
+async function semanticSearchWithFallback({
+  runtime,
+  allowedToolIds,
+  question,
+  limit,
+  call,
+}: {
+  runtime: ToolAgentRuntime;
+  allowedToolIds: Set<string>;
+  question: string;
+  limit: number;
+  call: (toolId: string, args: unknown) => Promise<unknown>;
+}): Promise<RdfAgentAnswer | undefined> {
+  if (!isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.semanticSearch)) {
+    return undefined;
+  }
+  return normalizeRdfAgentAnswer(
+    await call(REQUIREMENT_TOOL_IDS.semanticSearch, { question, limit }),
+    question,
+  );
+}
+
+function normalizeRdfAgentAnswer(result: unknown, question: string): RdfAgentAnswer {
+  const parsed = parseStructuredToolOutput(result);
+  if (isRecord(parsed)) {
+    const intent = isRecord(parsed.intent)
+      && typeof parsed.intent.kind === 'string'
+      ? parsed.intent as RdfAgentAnswer['intent']
+      : { kind: 'entitySearch' as const, text: question, limit: 5 };
+    const errors = Array.isArray(parsed.errors)
+      ? parsed.errors
+        .map((error) => {
+          if (!isRecord(error)) return null;
+          const message = typeof error.message === 'string' ? error.message : '';
+          const source = typeof error.source === 'string' ? error.source : undefined;
+          return message ? { ...(source ? { source } : {}), message } : null;
+        })
+        .filter((error): error is RdfAgentAnswer['errors'][number] => Boolean(error))
+      : [];
+    const results = Array.isArray(parsed.results)
+      ? parsed.results
+        .map(normalizeRdfSearchResult)
+        .filter((item): item is RdfSearchResult => Boolean(item))
+      : [];
+    return {
+      query: typeof parsed.query === 'string' ? parsed.query : question,
+      intent,
+      endpointId: typeof parsed.endpointId === 'string' ? parsed.endpointId : undefined,
+      generatedQuery: typeof parsed.generatedQuery === 'string' ? parsed.generatedQuery : undefined,
+      results,
+      errors,
+      elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : 0,
+    };
+  }
+  return {
+    query: question,
+    intent: { kind: 'entitySearch', text: question, limit: 5 },
+    results: [],
+    errors: [{ source: 'semantic-search', message: 'Semantic search did not return a structured result.' }],
+    elapsedMs: 0,
+  };
+}
+
+function normalizeRdfSearchResult(value: unknown): RdfSearchResult | null {
+  if (!isRecord(value)) return null;
+  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined;
+  const title = typeof value.title === 'string' && value.title.trim() ? decodeHtmlEntities(value.title).trim() : undefined;
+  const url = typeof value.url === 'string' && value.url.trim() ? value.url.trim() : undefined;
+  if (!id || !title || !url) return null;
+  const description = typeof value.description === 'string' && value.description.trim()
+    ? decodeHtmlEntities(value.description).trim()
+    : undefined;
+  const source = value.source === 'wikidata' || value.source === 'dbpedia' || value.source === 'overpass'
+    ? value.source
+    : 'wikidata';
+  const sourceName = typeof value.sourceName === 'string' && value.sourceName.trim()
+    ? value.sourceName.trim()
+    : 'Wikidata';
+  const facts = Array.isArray(value.facts)
+    ? value.facts
+      .map((fact) => {
+        if (!isRecord(fact)) return null;
+        const label = typeof fact.label === 'string' ? fact.label.trim() : '';
+        const factValue = typeof fact.value === 'string' ? fact.value.trim() : '';
+        const factUrl = typeof fact.url === 'string' && fact.url.trim() ? fact.url.trim() : undefined;
+        return label && factValue ? { label, value: factValue, ...(factUrl ? { url: factUrl } : {}) } : null;
+      })
+      .filter((fact): fact is NonNullable<RdfSearchResult['facts']>[number] => Boolean(fact))
+    : undefined;
+  return {
+    id,
+    title,
+    url,
+    source,
+    sourceName,
+    ...(description ? { description } : {}),
+    score: typeof value.score === 'number' && Number.isFinite(value.score) ? Math.max(0, Math.min(1, value.score)) : 0.5,
+    ...(facts && facts.length > 0 ? { facts } : {}),
+    raw: value.raw,
+  };
+}
+
+function mergeSearchFanInResults(
+  webResult: SearchWebResult,
+  localResearch: WebResearchRunResult | undefined,
+  semanticAnswer: RdfAgentAnswer | undefined,
+  intent: ExecutionIntent,
+): SearchWebResult {
+  const localItems = localResearch
+    ? localResearchToSearchItems(localResearch, intent)
+    : [];
+  const semanticItems = semanticAnswer
+    ? semanticResultsToSearchItems(semanticAnswer, intent)
+    : [];
+  if (localItems.length === 0 && semanticItems.length === 0) return webResult;
+  const mergedResults = dedupeSearchItems([...localItems, ...semanticItems, ...webResult.results]);
+  return {
+    status: 'found',
+    query: webResult.query || localResearch?.question || semanticAnswer?.query || intent.currentTaskText,
+    results: mergedResults,
+    ...(webResult.reason ? { reason: webResult.reason } : {}),
+  };
+}
+
+function localResearchToSearchItems(
+  localResearch: WebResearchRunResult,
+  intent: ExecutionIntent,
+): SearchWebItem[] {
+  const evidenceItems = localResearch.evidence.map((chunk, index) => ({
+    title: chunk.title ?? sourceNameFromUrl(chunk.url) ?? `Local research source ${index + 1}`,
+    url: chunk.url,
+    snippet: [
+      `${chunk.title ?? sourceNameFromUrl(chunk.url) ?? 'This source'} is a source-backed local web research result.`,
+      chunk.text,
+      `Local web research source supports this candidate for ${intent.answerSubject}.`,
+      chunk.url,
+    ].filter(Boolean).join(' '),
+    localResearchScore: chunk.score,
+    localResearchRank: index + 1,
+  } as SearchWebItem & { localResearchScore: number; localResearchRank: number }));
+  const searchItems = localResearch.searchResults.map((result) => ({
+    title: result.title,
+    url: result.url,
+    snippet: [
+      result.snippet,
+      `Local SearXNG result supports this candidate for ${intent.answerSubject}.`,
+      result.url,
+    ].filter(Boolean).join(' '),
+    localSearchRank: result.rank,
+  } as SearchWebItem & { localSearchRank: number }));
+  return dedupeSearchItems([...evidenceItems, ...searchItems]);
+}
+
+function semanticResultsToSearchItems(
+  semanticAnswer: RdfAgentAnswer,
+  intent: ExecutionIntent,
+): SearchWebItem[] {
+  return semanticAnswer.results.map((result, index) => {
+    const factText = (result.facts ?? [])
+      .slice(0, 6)
+      .map((fact) => `${fact.label}: ${fact.value}`)
+      .join('; ');
+    const snippet = [
+      `${result.title} is a source-backed semantic RDF result from ${result.sourceName}.`,
+      result.description,
+      factText ? `Facts: ${factText}.` : null,
+      `Semantic source ${result.sourceName} supports this candidate for ${intent.answerSubject}.`,
+      result.url,
+    ].filter(Boolean).join(' ');
+    return {
+      title: result.title,
+      url: result.url,
+      snippet,
+      semanticScore: result.score,
+      semanticRank: index + 1,
+    } as SearchWebItem & { semanticScore: number; semanticRank: number };
+  });
+}
+
+function dedupeSearchItems(items: SearchWebItem[]): SearchWebItem[] {
+  const seen = new Set<string>();
+  const deduped: SearchWebItem[] = [];
+  for (const item of items) {
+    const key = `${item.title.toLocaleLowerCase()}\u0000${item.url.toLocaleLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(item);
+  }
+  return deduped;
 }
 
 function parseStructuredToolOutput(result: unknown): unknown {
@@ -734,7 +1143,10 @@ function resolveAssignedToolOwner(
 ): string | undefined {
   if (!assignments) return undefined;
   return Object.entries(assignments)
-    .find(([actorId, toolIds]) => actorId === WEB_SEARCH_AGENT_ID && toolIds.includes(toolId))
+    .find(([actorId, toolIds]) => (
+      (actorId === WEB_SEARCH_AGENT_ID || actorId === LOCAL_WEB_RESEARCH_AGENT_ID || actorId === RDF_WEB_SEARCH_AGENT_ID)
+      && toolIds.includes(toolId)
+    ))
     ?.[0];
 }
 
@@ -747,6 +1159,26 @@ function toolOwnerMeta(toolId: string, assignedOwner: string | undefined): Agent
       branchId: `agent:${WEB_SEARCH_AGENT_ID}`,
       agentLabel: WEB_SEARCH_AGENT_LABEL,
       modelProvider: 'logact',
+    };
+  }
+  if (assignedOwner === LOCAL_WEB_RESEARCH_AGENT_ID) {
+    return {
+      actorId: LOCAL_WEB_RESEARCH_AGENT_ID,
+      actorRole: 'search-agent',
+      parentActorId: 'execute-plan',
+      branchId: `agent:${LOCAL_WEB_RESEARCH_AGENT_ID}`,
+      agentLabel: LOCAL_WEB_RESEARCH_AGENT_LABEL,
+      modelProvider: 'deterministic-local-web',
+    };
+  }
+  if (assignedOwner === RDF_WEB_SEARCH_AGENT_ID) {
+    return {
+      actorId: RDF_WEB_SEARCH_AGENT_ID,
+      actorRole: 'search-agent',
+      parentActorId: 'execute-plan',
+      branchId: `agent:${RDF_WEB_SEARCH_AGENT_ID}`,
+      agentLabel: RDF_WEB_SEARCH_AGENT_LABEL,
+      modelProvider: 'deterministic-rdf',
     };
   }
   return {
@@ -900,7 +1332,8 @@ function inferExecutionIntent(
 }
 
 function isLocationDependentTask(text: string): boolean {
-  return /\b(near me|nearby|around me|close to me|in my area|local|near us|around us|closest|nearest)\b/i.test(text)
+  return /\b(near me|nearby|around me|close to me|in my area|near us|around us|closest|nearest)\b/i.test(text)
+    || /\blocal\s+(?:restaurants?|bars?|cafes?|coffee|theat(?:er|re)s?|parks?|shops?|stores?|venues?|events?)\b/i.test(text)
     || Boolean(extractStatedLocation(text));
 }
 
@@ -1013,7 +1446,7 @@ function inferSubject(text: string): string {
     .replace(/\b(?:can you|could you|please|i need|show me|show|give me|give|provide|suggest|tell me|help me|look up|search for|find|list|recommend)\b/ig, ' ')
     .replace(/\b(?:the|a|an)\b/ig, ' ')
     .replace(/\b(?:best|top|worst|closest|nearest|popular|most popular|recommended|recommendations?|options?|results?)\b/ig, ' ')
-    .replace(/\b(?:near me|nearby|around me|close to me|in my area|local|near us|around us)\b/ig, ' ')
+    .replace(/\b(?:near me|nearby|around me|close to me|in my area|near us|around us)\b/ig, ' ')
     .replace(/\b(?:current|latest|today)\b/ig, ' ')
     .replace(/^\s*\d+\s+/g, ' ')
     .replace(/\b(?:near|in|around|located in|outside|that|which|who|with|where)\b.*$/ig, ' ')
@@ -1480,6 +1913,46 @@ async function appendSearchAnalysis(
       parentActorId: 'execute-plan',
       branchId: 'agent:executor',
       agentLabel: 'Search Analyzer',
+      modelProvider: 'logact',
+    },
+  });
+}
+
+async function appendSearchFanIn(
+  bus: IAgentBus | undefined,
+  webResult: SearchWebResult,
+  localResearch: WebResearchRunResult | undefined,
+  semanticAnswer: RdfAgentAnswer | undefined,
+  mergedResult: SearchWebResult,
+): Promise<void> {
+  if (!bus || typeof bus.append !== 'function') return;
+  const localResultCount = localResearch?.evidence.length ?? 0;
+  const localErrorText = localResearch?.errors.length
+    ? ` Local research errors: ${localResearch.errors.map((error) => error.message).join('; ')}.`
+    : '';
+  const semanticResultCount = semanticAnswer?.results.length ?? 0;
+  const semanticErrorText = semanticAnswer?.errors.length
+    ? ` RDF errors: ${semanticAnswer.errors.map((error) => error.message).join('; ')}.`
+    : '';
+  const fanInSummaryLines = [
+    localResearch ? 'Fan-in merge combined web search and local web research evidence before candidate reranking.' : null,
+    semanticAnswer ? 'Fan-in merge combined web search and RDF semantic search evidence before candidate reranking.' : null,
+    !localResearch && !semanticAnswer ? 'Fan-in merge used web search evidence before candidate reranking.' : null,
+  ].filter((line): line is string => Boolean(line));
+  await bus.append({
+    type: PayloadType.InfOut,
+    text: [
+      ...fanInSummaryLines,
+      `Web search status: ${webResult.status}; web results: ${webResult.results.length}.`,
+      `Local web research evidence chunks: ${localResultCount}; local search results: ${localResearch?.searchResults.length ?? 0}.${localErrorText}`,
+      `RDF semantic search results: ${semanticResultCount}; merged results: ${mergedResult.results.length}.${semanticErrorText}`,
+    ].join('\n'),
+    meta: {
+      actorId: 'search-fan-in-merger',
+      actorRole: 'executor',
+      parentActorId: 'execute-plan',
+      branchId: 'agent:search-fan-in-merger',
+      agentLabel: 'Search Fan-In Merger',
       modelProvider: 'logact',
     },
   });
@@ -2019,6 +2492,9 @@ function classifyLinkEvidence(
     return 'invalid';
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'invalid';
+  if (/^www\.wikidata\.org$/i.test(parsed.hostname) && /^\/(?:wiki|entity)\/Q[1-9][0-9]*$/i.test(parsed.pathname)) {
+    return 'entity-specific';
+  }
   const compactName = compactEntityKey(name);
   const directLinkEvidence = evidenceContext
     .filter((item) => /^Entity-specific source result:/i.test(item));
@@ -2720,7 +3196,13 @@ function buildSearchTurnContext(context: ResolvedExecutionContext): SearchTurnCo
     location: context.location,
     acceptedCandidates,
     rejectedLabels: [],
-    sourceQueries: [context.searchResult.query],
+    sourceQueries: [
+      context.webSearchResult?.query ?? context.searchResult.query,
+      ...(context.localWebResearchResult?.plannedQueries ?? []).map((query) => `local:${query}`),
+      ...(context.semanticSearchResult?.endpointId
+        ? [`semantic:${context.semanticSearchResult.endpointId}:${context.semanticSearchResult.query}`]
+        : []),
+    ],
     requestedCount: intent.requestedCount,
     validationContract: intent.validationContract,
     timestamp: Date.now(),
@@ -3008,8 +3490,50 @@ function isGenericSubjectCategoryLabel(label: string, subject: string): boolean 
   const labelTokens = expandedTokenSet(label);
   const subjectTokens = expandedTokenSet(subject);
   if (labelTokens.size === 0 || subjectTokens.size === 0) return false;
+  if (hasDistinctiveEntityTokensInsideCommand(labelTokens, subjectTokens)) return false;
   const overlap = overlapScore(labelTokens, subjectTokens);
   return overlap === labelTokens.size && labelTokens.size <= Math.max(2, subjectTokens.size);
+}
+
+function hasDistinctiveEntityTokensInsideCommand(labelTokens: Set<string>, subjectTokens: Set<string>): boolean {
+  const commandTokens = new Set([
+    'search',
+    'find',
+    'lookup',
+    'look',
+    'show',
+    'list',
+    'cite',
+  ]);
+  if (![...commandTokens].some((token) => subjectTokens.has(token))) return false;
+  const genericEntityTokens = new Set([
+    'movie',
+    'movies',
+    'theater',
+    'theaters',
+    'theatre',
+    'theatres',
+    'cinema',
+    'cinemas',
+    'restaurant',
+    'restaurants',
+    'bar',
+    'bars',
+    'cafe',
+    'cafes',
+    'service',
+    'services',
+    'company',
+    'companies',
+    'product',
+    'products',
+    'overview',
+    'page',
+  ]);
+  const distinctive = [...labelTokens]
+    .filter((token) => !genericEntityTokens.has(token))
+    .filter((token) => subjectTokens.has(token));
+  return distinctive.length >= 2;
 }
 
 function isGenericSubjectSectionLabel(label: string, subject: string): boolean {
@@ -3115,6 +3639,14 @@ function sourceNameFromTitle(title: string): string {
   if (/menus|reviews/i.test(title)) return 'a review source';
   if (/showtimes|fandango|atom/i.test(title)) return 'a showtimes source';
   return 'the search result';
+}
+
+function sourceNameFromUrl(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./i, '');
+  } catch {
+    return undefined;
+  }
 }
 
 function formatCandidateReason(candidate: SearchCandidate): string {

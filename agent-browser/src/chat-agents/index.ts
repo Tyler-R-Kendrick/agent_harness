@@ -42,6 +42,39 @@ export {
   evaluateWebSearchAgentPrompt,
   selectWebSearchAgentTools,
 } from './WebSearch';
+export {
+  LOCAL_WEB_RESEARCH_AGENT_ID,
+  LOCAL_WEB_RESEARCH_AGENT_LABEL,
+  LOCAL_WEB_RESEARCH_TOOL_ID,
+  LocalWebResearchAgent,
+  buildLocalWebResearchAgentPrompt,
+  evaluateLocalWebResearchAgentPolicy,
+  runLocalWebResearchAgent,
+  selectLocalWebResearchAgentTools,
+} from './LocalWebResearch';
+export {
+  RDF_SEMANTIC_SEARCH_TOOL_ID,
+  RDF_WEB_SEARCH_AGENT_ID,
+  RDF_WEB_SEARCH_AGENT_LABEL,
+  buildRdfWebSearchAgentPrompt,
+  evaluateRdfWebSearchAgentPolicy,
+  runRdfWebSearchAgent,
+  selectRdfWebSearchAgentTools,
+} from './SemanticSearch';
+export type {
+  WebResearchRunRequest,
+  WebResearchRunResult,
+  WebSearchResult,
+  ExtractedPage,
+  EvidenceChunk,
+  AgentCitation,
+} from './LocalWebResearch';
+export type {
+  AgentAnswer as RdfAgentAnswer,
+  SearchIntent as RdfSearchIntent,
+  SearchResult as RdfSearchResult,
+  SearchSource as RdfSearchSource,
+} from './SemanticSearch';
 export { runAgentLoop, wrapVoterWithCallbacks, type AgentLoopOptions } from './agent-loop';
 export type { AgentProvider, AgentStreamCallbacks, ModelBackedAgentProvider } from './types';
 

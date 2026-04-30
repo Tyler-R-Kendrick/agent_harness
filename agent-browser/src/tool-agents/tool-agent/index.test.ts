@@ -113,6 +113,24 @@ describe('Tool Agent', () => {
         subGroupLabel: 'Search',
       },
       {
+        id: 'webmcp:local_web_research',
+        label: 'Local web research',
+        description: 'Search local SearXNG for source-backed restaurant results.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
+        id: 'webmcp:semantic_search',
+        label: 'Semantic search',
+        description: 'Search RDF/SPARQL endpoints for normalized entity evidence.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+      {
         id: 'webmcp:read_web_page',
         label: 'Read web page',
         description: 'Read result pages and extract entity evidence.',
@@ -132,6 +150,8 @@ describe('Tool Agent', () => {
       'webmcp:recall_user_context',
       'webmcp:read_browser_location',
       'webmcp:search_web',
+      'webmcp:local_web_research',
+      'webmcp:semantic_search',
       'webmcp:read_web_page',
       'cli',
       'webmcp:elicit_user_input',
@@ -140,6 +160,8 @@ describe('Tool Agent', () => {
       'webmcp:recall_user_context',
       'webmcp:read_browser_location',
       'webmcp:search_web',
+      'webmcp:local_web_research',
+      'webmcp:semantic_search',
       'webmcp:read_web_page',
       'cli',
       'webmcp:elicit_user_input',
@@ -148,6 +170,12 @@ describe('Tool Agent', () => {
       'webmcp:search_web',
       'webmcp:read_web_page',
       'cli',
+    ]);
+    expect(plan.actorToolAssignments?.['local-web-research-agent']).toEqual([
+      'webmcp:local_web_research',
+    ]);
+    expect(plan.actorToolAssignments?.['rdf-web-search-agent']).toEqual([
+      'webmcp:semantic_search',
     ]);
   });
 

@@ -1,0 +1,21 @@
+export { RecursiveResearchAgent } from './agent';
+export type {
+  RecursiveResearchAgentConfig,
+  RecursiveResearchRequest,
+  RecursiveResearchResult,
+  ResearchTask,
+  ResearchObjective,
+  ResearchBudget,
+  CrawlTarget,
+  CrawlTargetKind,
+  VisitedResource,
+  EvidenceItem,
+  ResearchGap,
+  ResearchClaim,
+  CrawlDecision,
+  CrawlDecisionLog,
+  ResearchGraph,
+  ResearchToolset,
+  GapAnalyzer,
+  RecursiveResearchEvent,
+} from './types';
