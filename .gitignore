@@ -1,6 +1,7 @@
 .playwright-mcp/
 node_modules/
 lib/*/node_modules/
+package-lock.json
 lib/*/coverage/
 agent-browser-running.png
 agent-browser-chat-ui-validation.png
