@@ -51,7 +51,7 @@ function isValidIsoDate(value: unknown): value is string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value));
 }
 
-function roundCoordinate(value: number): number {
+export function roundCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
 }
 

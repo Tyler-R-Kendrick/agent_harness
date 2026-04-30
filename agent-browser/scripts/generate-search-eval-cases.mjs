@@ -148,6 +148,12 @@ const forbiddenLabels = [
   'Movie Showimes',
   'IL 60004 Update Zipcode Monday',
   'Showtimes',
+  'Cities Movie Times',
+  'States Movie Times',
+  'Zip Codes Movie Times',
+  'Movie Times by Cities',
+  'Movie Times by States',
+  'Movie Times by Zip Codes',
   'Tickets',
   'Reviews',
   'Menu',
@@ -758,6 +764,87 @@ function movieTheaterChromeOnlyFixtures() {
   };
 }
 
+function coordinateTheaterDirectoryFixtures() {
+  const theaterDomain = { ...domains[0], subject: 'theaters', plural: 'theaters' };
+  const expectedQuery = `nearby ${theaterDomain.subject} ${LOCATION_QUERY}`;
+  const directoryUrl = 'https://fixtures.agent-browser.test/theaters/coordinate-directory/fandango';
+  const recoveryQuery = `${theaterDomain.subject} names near ${LOCATION_QUERY}`;
+  const directoryLabels = [
+    'Cities Movie Times',
+    'States Movie Times',
+    'Zip Codes Movie Times',
+  ];
+  return {
+    memoryResult: { status: 'empty', query: 'location', memories: [] },
+    browserLocationResult: {
+      status: 'available',
+      latitude: 42.11713258868569,
+      longitude: -87.9912774939386,
+      accuracy: 24,
+    },
+    searchResults: {
+      'city state for coordinates 42.12 -87.99': {
+        status: 'found',
+        query: 'city state for coordinates 42.12 -87.99',
+        results: [{
+          title: '42.12, -87.99 - Arlington Heights, Illinois',
+          url: 'https://fixtures.agent-browser.test/geocode/arlington-heights',
+          snippet: 'Coordinates 42.12, -87.99 are in Arlington Heights, Illinois, United States.',
+        }],
+      },
+      [expectedQuery]: {
+        status: 'found',
+        query: expectedQuery,
+        results: [{
+          title: 'Movie Times and Movie Theaters in Arlington Heights, IL - Fandango',
+          url: directoryUrl,
+          snippet: 'Find movie times and movie theaters near Arlington Heights, IL.',
+        }],
+      },
+      [recoveryQuery]: {
+        status: 'found',
+        query: recoveryQuery,
+        results: domains[0].entities.map(([name, url, locationEvidence]) => ({
+          title: `${name} - source-backed theater`,
+          url,
+          snippet: `${name} is a theater with location evidence in ${locationEvidence}.`,
+        })),
+      },
+      '*': {
+        status: 'empty',
+        query: '*',
+        results: [],
+        reason: 'The coordinate theater regression requires geocoding, directory-label rejection, and targeted named-theater recovery.',
+      },
+    },
+    pageResults: {
+      [directoryUrl]: {
+        status: 'read',
+        url: directoryUrl,
+        title: 'Movie theaters near Arlington Heights, IL',
+        text: [
+          'Movie Times by Cities',
+          'Cities Movie Times',
+          'Movie Times by States',
+          'States Movie Times',
+          'Movie Times by Zip Codes',
+          'Zip Codes Movie Times',
+        ].join(' '),
+        links: directoryLabels.map((text) => ({
+          text,
+          url: `https://fixtures.agent-browser.test/theaters/coordinate-directory/${slug(text)}`,
+        })),
+        jsonLd: [],
+        entities: directoryLabels.map((name) => ({
+          name,
+          url: `https://fixtures.agent-browser.test/theaters/coordinate-directory/${slug(name)}`,
+          evidence: `${name} is a geography/movie-times directory label, not an individual theater.`,
+        })),
+      },
+    },
+  };
+}
+
 function barsAggregateRecoveryFixtures() {
   const domain = domains.find((candidate) => candidate.id === 'bars');
   const goal = rankingGoals.find((candidate) => candidate.id === 'closest');
@@ -1175,6 +1262,62 @@ export function buildSearchEvalCases() {
         'Featured Movie Animal Farm',
         'Movie Showimes',
         'IL 60004 Update Zipcode Monday',
+      ],
+      expectedEntities: domains[0].entities.map(([name]) => name),
+      forbiddenLabels,
+    },
+  }, {
+    id: 'negative-theaters-browser-coordinate-directory-labels',
+    criteria: [
+      'This is the no-memory browser-coordinate regression case for "show me theaters near me".',
+      'The workflow must read browser geolocation, normalize rounded coordinates 42.12 -87.99 to Arlington Heights, IL through web search, and never use raw latitude/longitude in local search queries or final answers.',
+      'The workflow must reject Cities Movie Times, States Movie Times, Zip Codes Movie Times, and related movie-times geography directory labels before publishing.',
+      'After rejecting directory labels, the workflow must recover with theaters names near Arlington Heights IL and publish actual named theater entities only.',
+    ].join(' '),
+    input: 'show me theaters near me',
+    expected_output: expectedOutputFor(
+      { ...domains[0], subject: 'theaters', plural: 'theaters' },
+      rankingGoals.find((goal) => goal.id === 'near-me'),
+      {
+        taskGoal: 'show me theaters near me',
+        negative: true,
+        expectedResult: 'recovered',
+        fixtures: coordinateTheaterDirectoryFixtures(),
+        badAnswer: [
+          'Here are theaters near 42.11713258868569,-87.9912774939386:',
+          '',
+          '1. [Cities Movie Times](https://www.cinemaclock.com/) - Why: Cities Movie Times appears in a source section for theaters near 42.11713258868569,-87.9912774939386.',
+          '2. [States Movie Times](https://www.cinemark.com/) - Why: States Movie Times appears in a source section for theaters near 42.11713258868569,-87.9912774939386.',
+          '3. [Zip Codes Movie Times](https://www.showtimes.com/movie-times/movies-by-zip-code/) - Why: Zip Codes Movie Times appears in a source section for theaters near 42.11713258868569,-87.9912774939386.',
+        ].join('\n'),
+        badLabels: [
+          'Cities Movie Times',
+          'States Movie Times',
+          'Zip Codes Movie Times',
+          'Movie Times by Cities',
+          'Movie Times by States',
+          'Movie Times by Zip Codes',
+        ],
+      },
+    ),
+    metadata: {
+      domain: 'theaters',
+      subject: 'theaters',
+      rankingGoal: 'near-me',
+      location: LOCATION,
+      negative: true,
+      noMemory: true,
+      browserCoordinateLocation: true,
+      expectedQuery: `nearby theaters ${LOCATION_QUERY}`,
+      expectedNormalizationQuery: 'city state for coordinates 42.12 -87.99',
+      recoveryQuery: `theaters names near ${LOCATION_QUERY}`,
+      badLabels: [
+        'Cities Movie Times',
+        'States Movie Times',
+        'Zip Codes Movie Times',
+        'Movie Times by Cities',
+        'Movie Times by States',
+        'Movie Times by Zip Codes',
       ],
       expectedEntities: domains[0].entities.map(([name]) => name),
       forbiddenLabels,

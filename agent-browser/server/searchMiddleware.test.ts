@@ -347,6 +347,53 @@ describe('WebPageBridge', () => {
     ]));
   });
 
+  it('filters movie-time geography directory labels from page entities and observations', async () => {
+    const fetchImpl = vi.fn(async () => new Response(`
+      <html>
+        <head><title>Movie theaters near Arlington Heights, IL</title></head>
+        <script type="application/ld+json">
+          { "@type": "MovieTheater", "name": "AMC Randhurst 12", "url": "https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12" }
+        </script>
+        <body>
+          <main>
+            <h2>Movie Times by Cities</h2>
+            <a href="/movies-by-city">Cities Movie Times</a>
+            <h2>Movie Times by States</h2>
+            <a href="/movies-by-state">States Movie Times</a>
+            <h2>Movie Times by Zip Codes</h2>
+            <a href="/movie-times/movies-by-zip-code">Zip Codes Movie Times</a>
+            <p>AMC Randhurst 12 is a movie theater in Mount Prospect near Arlington Heights.</p>
+          </main>
+        </body>
+      </html>
+    `, { status: 200 }));
+    const bridge = new WebPageBridge(fetchImpl);
+
+    const result = await bridge.read({ url: 'https://www.fandango.com/arlington-heights_il_movietimes' });
+
+    expect(result.entities).toEqual(expect.arrayContaining([
+      {
+        name: 'AMC Randhurst 12',
+        url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+        evidence: 'json-ld',
+      },
+    ]));
+    expect(result.entities).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Cities Movie Times' }),
+      expect.objectContaining({ name: 'States Movie Times' }),
+      expect.objectContaining({ name: 'Zip Codes Movie Times' }),
+      expect.objectContaining({ name: 'Movie Times by Cities' }),
+      expect.objectContaining({ name: 'Movie Times by States' }),
+    ]));
+    expect(result.observations).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Cities Movie Times' }),
+      expect.objectContaining({ label: 'States Movie Times' }),
+      expect.objectContaining({ label: 'Zip Codes Movie Times' }),
+      expect.objectContaining({ label: 'Movie Times by Cities' }),
+      expect.objectContaining({ label: 'Movie Times by States' }),
+    ]));
+  });
+
   it('keeps article metadata and chrome text as observations instead of requested entities', async () => {
     const fetchImpl = vi.fn(async () => new Response(`
       <html>

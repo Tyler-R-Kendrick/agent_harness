@@ -47,6 +47,7 @@ type PageFixture = {
 
 type RuntimeFixtures = {
   memoryResult: unknown;
+  browserLocationResult?: unknown;
   searchResults: Record<string, SearchFixture>;
   pageResults: Record<string, PageFixture>;
 };
@@ -102,6 +103,15 @@ function descriptors(): ToolDescriptor[] {
       subGroupLabel: 'User Context',
     },
     {
+      id: 'webmcp:read_browser_location',
+      label: 'Read browser location',
+      description: 'Read browser geolocation before asking the user.',
+      group: 'built-in',
+      groupLabel: 'Built-In',
+      subGroup: 'user-context-mcp',
+      subGroupLabel: 'User Context',
+    },
+    {
       id: 'webmcp:search_web',
       label: 'Search web',
       description: 'Search the web for external facts and local entity evidence.',
@@ -127,6 +137,12 @@ function createRuntime(fixtures: RuntimeFixtures, live: boolean): { runtime: Too
   const tools: ToolSet = {
     'webmcp:recall_user_context': {
       execute: async () => fixtures.memoryResult,
+    },
+    'webmcp:read_browser_location': {
+      execute: async () => fixtures.browserLocationResult ?? {
+        status: 'unavailable',
+        reason: 'No deterministic browser location fixture is configured.',
+      },
     },
     'webmcp:search_web': {
       execute: async ({ query, limit }: { query: string; limit?: number }) => {

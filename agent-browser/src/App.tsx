@@ -168,7 +168,9 @@ import {
   buildBrowserLocationPromptContext,
   createBrowserLocationApi,
   isBrowserLocationContext,
+  roundCoordinate,
   requestBrowserLocationContext,
+  type BrowserLocationContext,
 } from './services/browserLocation';
 import {
   STORAGE_KEYS,
@@ -554,10 +556,28 @@ function quoteShellArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function readBrowserLocationFromNavigator(): Promise<
+type BrowserLocationToolResult =
   | { status: 'available'; latitude: number; longitude: number; accuracy?: number | null }
-  | { status: 'denied' | 'unavailable'; reason: string }
-> {
+  | { status: 'denied' | 'unavailable'; reason: string };
+
+function browserLocationResultFromContext(context: BrowserLocationContext): BrowserLocationToolResult | null {
+  if (
+    !context.enabled
+    || !isBrowserLocationContext(context)
+    || typeof context.latitude !== 'number'
+    || typeof context.longitude !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    status: 'available',
+    latitude: context.latitude,
+    longitude: context.longitude,
+    accuracy: context.accuracyMeters ?? null,
+  };
+}
+
+function readBrowserLocationFromNavigator(): Promise<BrowserLocationToolResult> {
   if (!navigator.geolocation) {
     return Promise.resolve({
       status: 'unavailable',
@@ -568,9 +588,9 @@ function readBrowserLocationFromNavigator(): Promise<
     navigator.geolocation.getCurrentPosition(
       (position) => resolve({
         status: 'available',
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy,
+        latitude: roundCoordinate(position.coords.latitude),
+        longitude: roundCoordinate(position.coords.longitude),
+        accuracy: Math.round(position.coords.accuracy),
       }),
       (error) => resolve({
         status: error.code === error.PERMISSION_DENIED ? 'denied' : 'unavailable',
@@ -1564,6 +1584,8 @@ function ChatPanel({
   onCopyToClipboard,
   bashBySessionRef,
   webMcpModelContext,
+  browserLocationContext,
+  setBrowserLocationContext,
   onSessionMcpControllerChange,
   dragHandleProps,
 }: {
@@ -1589,6 +1611,8 @@ function ChatPanel({
   onCopyToClipboard: (text: string, label: string) => Promise<void>;
   bashBySessionRef: React.MutableRefObject<Record<string, Bash>>;
   webMcpModelContext: ModelContext;
+  browserLocationContext: BrowserLocationContext;
+  setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
@@ -1610,12 +1634,6 @@ function ChatPanel({
     STORAGE_KEYS.browserNotificationSettings,
     isBrowserNotificationSettings,
     DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
-  );
-  const [browserLocationContext, setBrowserLocationContext] = useStoredState(
-    localStorageBackend,
-    STORAGE_KEYS.locationContext,
-    isBrowserLocationContext,
-    DEFAULT_BROWSER_LOCATION_CONTEXT,
   );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
@@ -6318,6 +6336,12 @@ function AgentBrowserApp() {
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useStoredState<HFModel[]>(localStorageBackend, STORAGE_KEYS.installedModels, isHFModelArray, []);
+  const [browserLocationContext, setBrowserLocationContext] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.locationContext,
+    isBrowserLocationContext,
+    DEFAULT_BROWSER_LOCATION_CONTEXT,
+  );
   const evaluationAgentRegistry = useMemo(
     () => createEvaluationAgentRegistry(localStorageBackend, activeWorkspaceId),
     [activeWorkspaceId],
@@ -8820,7 +8844,8 @@ function AgentBrowserApp() {
       getSessionState: getSessionStateFromMcp,
       getBrowserPageHistory: getBrowserPageHistoryFromMcp,
       getUserContextMemory: ({ query, limit }) => searchUserContextMemory(activeWorkspace.name, query, limit),
-      getBrowserLocation: readBrowserLocationFromNavigator,
+      getBrowserLocation: () => browserLocationResultFromContext(browserLocationContext)
+        ?? readBrowserLocationFromNavigator(),
       onElicitUserInput: (input) => {
         const requestId = `elicitation-${createUniqueId()}`;
         const detail: UserElicitationEventDetail = {
@@ -8884,6 +8909,7 @@ function AgentBrowserApp() {
     activeWorkspaceFiles,
     activeWorkspaceSessions,
     activeWorktreeItems,
+    browserLocationContext,
     activeClipboardEntries,
     activeRenderPanes,
     activeSessionDrives,
@@ -9138,6 +9164,8 @@ function AgentBrowserApp() {
                 onCopyToClipboard={writeToClipboard}
                 bashBySessionRef={bashBySessionRef}
                 webMcpModelContext={webMcpModelContext}
+                browserLocationContext={browserLocationContext}
+                setBrowserLocationContext={setBrowserLocationContext}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 dragHandleProps={dragHandleProps}
               />
