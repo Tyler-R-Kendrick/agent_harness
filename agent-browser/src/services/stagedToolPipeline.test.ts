@@ -246,6 +246,51 @@ describe('stagedToolPipeline', () => {
     expect(model.doStream).toHaveBeenCalledTimes(1);
   });
 
+  it('answers self-reflection requests from registered tools and workspace instructions without tool orchestration', async () => {
+    const model = makeStreamingModel('Model should not be called.');
+    const onDone = vi.fn();
+    const onStageStart = vi.fn();
+
+    const result = await runStagedToolPipeline({
+      model: model as never,
+      tools: { cli: { execute: vi.fn() }, read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors,
+      instructions: [
+        'Workspace capability files loaded from browser storage:',
+        'Active AGENTS.md:',
+        '- AGENTS.md',
+        '# Workspace rules',
+        'Use TDD and verify changes.',
+        '',
+        'Skills:',
+        '- create-agent-eval (.agents/skills/create-agent-eval/SKILL.md): Create AgentEvals suites.',
+        '',
+        'Plugins:',
+        '- review-tools (.agents/plugins/review-tools/plugin.yaml)',
+        '',
+        'Hooks:',
+        '- pre-task.sh (.agents/hooks/pre-task.sh)',
+      ].join('\n'),
+      messages: [{ role: 'user', content: 'Which tools, hooks, and skills do you have registered?' }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, { onDone, onStageStart });
+
+    expect(result.text).toContain('cli (CLI)');
+    expect(result.text).toContain('read_session_file (Read session file)');
+    expect(result.text).toContain('create-agent-eval (.agents/skills/create-agent-eval/SKILL.md)');
+    expect(result.text).toContain('review-tools (.agents/plugins/review-tools/plugin.yaml)');
+    expect(result.text).toContain('pre-task.sh (.agents/hooks/pre-task.sh)');
+    expect(result.steps).toBe(1);
+    expect(onDone).toHaveBeenCalledWith(result.text);
+    expect(onStageStart).toHaveBeenCalledWith('chat', 'Answering self-reflection from workspace inventory.', expect.objectContaining({
+      agentId: 'chat-agent',
+    }));
+    expect(runToolAgentMock).not.toHaveBeenCalled();
+    expect(runLocalToolCallExecutorMock).not.toHaveBeenCalled();
+    expect(model.doStream).not.toHaveBeenCalled();
+  });
+
   it('does not emit CodeMode as a planning branch from the tool agent', async () => {
     runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
     const onStageStart = vi.fn();
