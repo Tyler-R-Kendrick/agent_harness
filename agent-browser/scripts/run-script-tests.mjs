@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -53,18 +53,25 @@ async function main() {
   assert.equal(vercelInstall.usesShellForPlatform('win32'), true);
   assert.equal(vercelInstall.usesShellForPlatform('linux'), false);
   assert.deepEqual(vercelInstall.buildInstallSteps('npm'), [
-    ['npm', ['install', '--package-lock-only', '--ignore-scripts']],
-    ['npm', ['ci']],
+    ['npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--loglevel=error']],
+    ['npm', ['ci', '--no-audit', '--loglevel=error']],
+    ['npm', ['audit', '--audit-level=moderate']],
   ]);
   const lockfileFixture = await mkdtemp(path.join(tmpdir(), 'vercel-install-lockfile-'));
   const rootLockfile = path.join(lockfileFixture, 'package-lock.json');
   const workspaceLockfile = path.join(lockfileFixture, 'agent-browser', 'package-lock.json');
+  const rootNodeModules = path.join(lockfileFixture, 'node_modules');
+  const workspaceNodeModules = path.join(lockfileFixture, 'agent-browser', 'node_modules');
   await mkdir(path.dirname(workspaceLockfile), { recursive: true });
+  await mkdir(rootNodeModules);
+  await mkdir(workspaceNodeModules);
   await writeFile(rootLockfile, '{}');
   await writeFile(workspaceLockfile, '{}');
   await vercelInstall.removeCachedLockfiles(lockfileFixture);
   await assert.rejects(() => readFile(rootLockfile), { code: 'ENOENT' });
   await assert.rejects(() => readFile(workspaceLockfile), { code: 'ENOENT' });
+  await assert.rejects(() => stat(rootNodeModules), { code: 'ENOENT' });
+  await assert.rejects(() => stat(workspaceNodeModules), { code: 'ENOENT' });
   await vercelInstall.removeCachedLockfiles(lockfileFixture);
 
   const coverageRunner = await import(

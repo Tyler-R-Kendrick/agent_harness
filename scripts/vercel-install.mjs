@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { rm } from 'node:fs/promises';
+import { readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -9,8 +9,9 @@ export function getNpmExecutable(platform = process.platform) {
 
 export function buildInstallSteps(npmExecutable = getNpmExecutable()) {
   return [
-    [npmExecutable, ['install', '--package-lock-only', '--ignore-scripts']],
-    [npmExecutable, ['ci']],
+    [npmExecutable, ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--loglevel=error']],
+    [npmExecutable, ['ci', '--no-audit', '--loglevel=error']],
+    [npmExecutable, ['audit', '--audit-level=moderate']],
   ];
 }
 
@@ -18,11 +19,37 @@ export function usesShellForPlatform(platform = process.platform) {
   return platform === 'win32';
 }
 
+export async function getCachedInstallArtifactPaths(rootDir = process.cwd()) {
+  const paths = [
+    path.join(rootDir, 'package-lock.json'),
+    path.join(rootDir, 'node_modules'),
+    path.join(rootDir, 'agent-browser', 'package-lock.json'),
+    path.join(rootDir, 'agent-browser', 'node_modules'),
+  ];
+
+  try {
+    const libEntries = await readdir(path.join(rootDir, 'lib'), { withFileTypes: true });
+    for (const entry of libEntries) {
+      if (entry.isDirectory()) {
+        paths.push(path.join(rootDir, 'lib', entry.name, 'node_modules'));
+      }
+    }
+  } catch (error) {
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+      throw error;
+    }
+  }
+
+  return paths;
+}
+
+export async function removeCachedInstallArtifacts(rootDir = process.cwd()) {
+  const paths = await getCachedInstallArtifactPaths(rootDir);
+  await Promise.all(paths.map((artifactPath) => rm(artifactPath, { force: true, recursive: true })));
+}
+
 export async function removeCachedLockfiles(rootDir = process.cwd()) {
-  await Promise.all([
-    rm(path.join(rootDir, 'package-lock.json'), { force: true }),
-    rm(path.join(rootDir, 'agent-browser', 'package-lock.json'), { force: true }),
-  ]);
+  await removeCachedInstallArtifacts(rootDir);
 }
 
 function runStep(command, args, cwd = process.cwd()) {
@@ -52,7 +79,7 @@ function runStep(command, args, cwd = process.cwd()) {
 }
 
 export async function runVercelInstall(rootDir = process.cwd()) {
-  await removeCachedLockfiles(rootDir);
+  await removeCachedInstallArtifacts(rootDir);
 
   for (const [command, args] of buildInstallSteps()) {
     await runStep(command, args, rootDir);
