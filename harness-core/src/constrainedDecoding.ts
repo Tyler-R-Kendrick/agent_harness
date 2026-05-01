@@ -1,8 +1,5 @@
 import { toJSONSchema as zodToJsonSchema } from 'zod';
-import {
-  buildToonLlGuidanceGrammar,
-  decodeToonDocument,
-} from './toonGrammar.js';
+import type { HookRegistry, HarnessHookRunOptions } from './hooks.js';
 
 export type CoreMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -11,6 +8,7 @@ export type CoreMessage = {
 
 export interface CoreInferenceOptions {
   constrainedDecoding?: ConstrainedDecoding;
+  hooks?: HookRegistry;
   maxTokens?: number;
 }
 
@@ -30,6 +28,25 @@ export interface GuidanceTsGrammar {
 }
 
 export type GuidanceGrammarInput = ConstrainedDecoding | GuidanceTsGrammar | GuidanceSerializedGrammar;
+
+export interface GuidanceGrammarResolutionOptions {
+  hooks?: HookRegistry;
+  hookOptions?: HarnessHookRunOptions;
+}
+
+export const CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT = 'produce-output:constrained-grammar';
+export const CONSTRAINED_DECODING_DECODE_HOOK_POINT = 'produce-output:decode-constrained-text';
+
+export interface ConstrainedOutputGrammarHookPayload {
+  decoding: ConstrainedDecoding;
+  grammar?: GuidanceGrammarInput;
+}
+
+export interface ConstrainedOutputDecodeHookPayload<TDecoded = unknown> {
+  text: string;
+  decoding: ConstrainedDecoding<TDecoded>;
+  decoded?: TDecoded | unknown;
+}
 
 export interface JsonSchemaConstrainedDecoding {
   kind: 'json_schema';
@@ -81,6 +98,7 @@ export interface GuidanceServerSettings {
 export interface GuidanceTsInferenceClientOptions {
   settings: GuidanceServerSettings;
   fallback: CoreInferenceClient;
+  hooks?: HookRegistry;
   maxTokens?: number;
 }
 
@@ -129,7 +147,9 @@ export function constrainToZod<TSchema, TDecoded>(
   return { kind: 'zod', schema, ...options };
 }
 
-export function toGuidanceTsGrammar(decoding: GuidanceGrammarInput): GuidanceTsGrammar {
+export function toGuidanceTsGrammar(
+  decoding: GuidanceGrammarInput,
+): GuidanceTsGrammar {
   if (isGuidanceTsGrammar(decoding)) {
     return decoding;
   }
@@ -153,7 +173,7 @@ export function toGuidanceTsGrammar(decoding: GuidanceGrammarInput): GuidanceTsG
     if (decoding.grammar) {
       return toGuidanceTsGrammar(decoding.grammar);
     }
-    return grammarFromSerialized(buildToonLlGuidanceGrammar(decoding.maxTokens));
+    throw new Error('No constrained decoding hook resolved toon.');
   }
 
   if (decoding.grammar) {
@@ -161,10 +181,42 @@ export function toGuidanceTsGrammar(decoding: GuidanceGrammarInput): GuidanceTsG
   }
 
   if (decoding.format === 'toon') {
-    return grammarFromSerialized(buildToonLlGuidanceGrammar(decoding.maxTokens));
+    throw new Error('No constrained decoding hook resolved toon.');
   }
 
   return grammarFromSerialized(jsonSchemaGrammar(resolveZodJsonSchema(decoding), decoding.maxTokens));
+}
+
+export async function resolveGuidanceTsGrammar(
+  decoding: GuidanceGrammarInput,
+  options: GuidanceGrammarResolutionOptions = {},
+): Promise<GuidanceTsGrammar> {
+  if (isConstrainedDecoding(decoding) && decoding.kind === 'json_schema' && decoding.grammar) {
+    return resolveGuidanceTsGrammar(decoding.grammar, options);
+  }
+
+  if (isConstrainedDecoding(decoding) && decoding.kind === 'toon' && decoding.grammar) {
+    return resolveGuidanceTsGrammar(decoding.grammar, options);
+  }
+
+  if (isConstrainedDecoding(decoding) && decoding.kind === 'zod' && decoding.grammar) {
+    return resolveGuidanceTsGrammar(decoding.grammar, options);
+  }
+
+  if (isConstrainedDecoding(decoding) && decoding.kind === 'toon' && !decoding.grammar) {
+    return resolveGuidanceTsGrammarFromHooks(decoding, options);
+  }
+
+  if (
+    isConstrainedDecoding(decoding)
+    && decoding.kind === 'zod'
+    && decoding.format === 'toon'
+    && !decoding.grammar
+  ) {
+    return resolveGuidanceTsGrammarFromHooks(constrainToToon({ maxTokens: decoding.maxTokens }), options);
+  }
+
+  return toGuidanceTsGrammar(decoding);
 }
 
 export function createGuidanceTsInferenceClient(
@@ -179,7 +231,9 @@ export function createGuidanceTsInferenceClient(
 
       const guidance = await loadGuidanceTsRuntime();
       const session = new guidance.Session(guidanceConnectionString(options.settings));
-      const grammar = toGuidanceTsGrammar(constrainedDecoding);
+      const grammar = await resolveGuidanceTsGrammar(constrainedDecoding, {
+        hooks: requestOptions?.hooks ?? options.hooks,
+      });
       const maxTokens = requestOptions?.maxTokens ?? constrainedDecoding.maxTokens ?? options.maxTokens;
       const generation = session.generation({
         messages: messages.map((message) => ({ role: message.role, content: message.content })),
@@ -226,10 +280,27 @@ export function decodeConstrainedOutput<TDecoded>(
   }
 
   const value = decoding.format === 'toon'
-    ? decodeToonOutput(text, { decode: decoding.decodeToon })
+    ? decodeToonOutput(text, { kind: 'toon', maxTokens: decoding.maxTokens, decode: decoding.decodeToon })
     : JSON.parse(text);
 
   return (decoding.schema as ZodLikeSchema<TDecoded>).parse(value);
+}
+
+export async function decodeConstrainedOutputWithHooks<TDecoded>(
+  text: string,
+  decoding: ConstrainedDecoding<TDecoded>,
+  options: GuidanceGrammarResolutionOptions = {},
+): Promise<TDecoded | unknown> {
+  if (decoding.kind === 'toon' && !decoding.decode) {
+    return decodeConstrainedOutputFromHooks(text, decoding, options);
+  }
+
+  if (decoding.kind === 'zod' && decoding.format === 'toon' && !decoding.decodeToon) {
+    const decoded = await decodeConstrainedOutputFromHooks(text, constrainToToon({ maxTokens: decoding.maxTokens }), options);
+    return (decoding.schema as ZodLikeSchema<TDecoded>).parse(decoded);
+  }
+
+  return decodeConstrainedOutput(text, decoding);
 }
 
 function grammarFromSerialized(grammar: GuidanceSerializedGrammar | unknown): GuidanceTsGrammar {
@@ -265,6 +336,10 @@ function isSerializedGrammar(value: unknown): value is GuidanceSerializedGrammar
   return isRecord(value) && Array.isArray(value.grammars);
 }
 
+function isConstrainedDecoding(value: GuidanceGrammarInput): value is ConstrainedDecoding {
+  return isRecord(value) && typeof value.kind === 'string';
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -287,6 +362,21 @@ function resolveZodJsonSchema<TSchema>(
   }
 }
 
+async function resolveGuidanceTsGrammarFromHooks(
+  decoding: ConstrainedDecoding,
+  options: GuidanceGrammarResolutionOptions,
+): Promise<GuidanceTsGrammar> {
+  const result = await options.hooks?.runPipes<ConstrainedOutputGrammarHookPayload>(
+    CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT,
+    { decoding },
+    options.hookOptions,
+  );
+  if (result?.payload.grammar) {
+    return toGuidanceTsGrammar(result.payload.grammar);
+  }
+  throw new Error(`No constrained decoding hook resolved ${decoding.kind}.`);
+}
+
 async function loadGuidanceTsRuntime(): Promise<GuidanceTsRuntime> {
   guidanceTsRuntimePromise ??= import(GUIDANCE_TS_MODULE_SPECIFIER) as Promise<unknown> as Promise<GuidanceTsRuntime>;
   return guidanceTsRuntimePromise;
@@ -294,11 +384,27 @@ async function loadGuidanceTsRuntime(): Promise<GuidanceTsRuntime> {
 
 function decodeToonOutput<TDecoded>(
   text: string,
-  decoding: Pick<ToonConstrainedDecoding<TDecoded>, 'decode'>,
+  decoding: ToonConstrainedDecoding<TDecoded>,
 ): TDecoded | unknown {
   if (decoding.decode) {
     return decoding.decode(text);
   }
 
-  return decodeToonDocument(text);
+  throw new Error('No constrained decoding hook resolved toon output.');
+}
+
+async function decodeConstrainedOutputFromHooks<TDecoded>(
+  text: string,
+  decoding: ToonConstrainedDecoding<TDecoded>,
+  options: GuidanceGrammarResolutionOptions,
+): Promise<TDecoded | unknown> {
+  const result = await options.hooks?.runPipes<ConstrainedOutputDecodeHookPayload<TDecoded>>(
+    CONSTRAINED_DECODING_DECODE_HOOK_POINT,
+    { text, decoding },
+    options.hookOptions,
+  );
+  if (result && Object.prototype.hasOwnProperty.call(result.payload, 'decoded')) {
+    return result.payload.decoded;
+  }
+  throw new Error('No constrained decoding hook resolved toon output.');
 }

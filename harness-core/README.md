@@ -133,10 +133,33 @@ await inferenceClient.infer(messages, {
 
 Constraints can target JSON Schema, Lark grammars, TOON, or Zod schemas. Zod
 constraints default to JSON Schema conversion and can override the grammar with
-Lark, TOON, or a serialized guidance grammar. TOON support is built by
-`buildToonGrammar()`/`buildToonLlGuidanceGrammar()`, which load the
-`@toon-format/toon` package surface and expose a reusable Lark grammar
-representation for llguidance.
+Lark, TOON, or a serialized guidance grammar. TOON support is provided by the
+`createToonGrammarPlugin()` extension plugin. The plugin registers deterministic
+pipe hooks on the constrained output-production path: one hook resolves the
+llguidance grammar before generation, and another decodes TOON text after
+generation.
+
+```ts
+import {
+  constrainToToon,
+  createGuidanceTsInferenceClient,
+  createHarnessExtensionContext,
+  createToonGrammarPlugin,
+} from 'harness-core';
+
+const context = createHarnessExtensionContext();
+await context.plugins.load(createToonGrammarPlugin());
+
+const inferenceClient = createGuidanceTsInferenceClient({
+  settings,
+  fallback: unconstrainedInferenceClient,
+  hooks: context.hooks,
+});
+
+await inferenceClient.infer(messages, {
+  constrainedDecoding: constrainToToon(),
+});
+```
 
 ## Config-backed model providers
 
