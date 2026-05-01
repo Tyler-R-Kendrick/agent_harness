@@ -232,6 +232,10 @@ describe('Local Web Research Agent', () => {
     expect(LOCAL_WEB_RESEARCH_TOOL_ID).toBe('webmcp:local_web_research');
     expect(selectedToolIds).toEqual(['webmcp:local_web_research']);
     expect(prompt).toContain('SearXNG');
+    expect(prompt).toContain('Perplexity SDK');
+    expect(prompt).toContain('Tavily SDK');
+    expect(prompt).toContain('DuckDuckGo Instant');
+    expect(prompt).toContain('secretRefs');
     expect(prompt).toContain('parallel to web-search-agent');
     expect(prompt).toContain('fan-in merge');
     expect(evaluateLocalWebResearchAgentPolicy({ prompt, selectedToolIds })).toEqual({
@@ -240,6 +244,8 @@ describe('Local Web Research Agent', () => {
       checks: {
         usesLocalResearchTool: true,
         usesSearxngAndExtraction: true,
+        supportsConfiguredProviders: true,
+        resolvesSdkCredentialsWithSecretRefs: true,
         ranksEvidenceWithCitations: true,
         handlesRecoverableFailures: true,
         participatesInFanIn: true,

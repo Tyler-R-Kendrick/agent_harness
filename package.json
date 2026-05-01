@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",
+    "postinstall": "patch-package",
     "check:generated-files": "node scripts/check-generated-files-clean.mjs",
     "verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",
     "test:agent-browser": "npm --workspace agent-browser run test",
@@ -23,6 +24,7 @@
     "protobufjs": "^7.5.5"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "0.91.1"
+    "@anthropic-ai/sdk": "0.91.1",
+    "patch-package": "^8.0.1"
   }
 }

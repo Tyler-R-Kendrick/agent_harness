@@ -6,6 +6,8 @@ import { buildToolInstructionsTemplate } from '../services/agentPromptTemplates'
 import { createCliTool } from './cli';
 import type { TerminalExecutorContext } from './types';
 
+const WEB_SEARCH_PROVIDER_NAMES = ['searxng', 'perplexity', 'tavily', 'duckduckgo-instant'] as const;
+
 export type ToolGroup =
   | 'built-in'
   | 'mcp'
@@ -61,7 +63,7 @@ export const DEFAULT_TOOL_DESCRIPTORS: ToolDescriptor[] = [
   {
     id: LOCAL_WEB_RESEARCH_TOOL_ID,
     label: 'Local web research',
-    description: 'Search local SearXNG, extract pages, rank evidence, and return citations for agent workflow fan-in.',
+    description: 'Search SearXNG or a configured web search provider, extract pages, rank evidence, and return citations for agent workflow fan-in.',
     group: 'web-search-mcp',
     groupLabel: 'Web Search',
     subGroup: 'web-search-mcp',
@@ -75,28 +77,37 @@ export function createDefaultTools(context: TerminalExecutorContext): ToolSet {
   return {
     cli: createCliTool(context),
     [LOCAL_WEB_RESEARCH_TOOL_ID]: tool({
-      description: 'Search local SearXNG, extract source pages, rank evidence chunks, and return citations.',
+      description: 'Search SearXNG, Perplexity SDK, Tavily SDK, or DuckDuckGo Instant, extract source pages, rank evidence chunks, and return citations.',
       inputSchema: z.object({
         question: z.string().trim().min(1).max(500),
+        searchProviderName: z.enum(WEB_SEARCH_PROVIDER_NAMES).optional(),
         maxSearchResults: z.number().int().positive().max(25).optional(),
         maxPagesToExtract: z.number().int().positive().max(10).optional(),
         maxEvidenceChunks: z.number().int().positive().max(20).optional(),
         synthesize: z.boolean().optional(),
         searxngBaseUrl: z.string().url().optional(),
+        perplexityApiKey: z.string().trim().min(1).optional(),
+        tavilyApiKey: z.string().trim().min(1).optional(),
       }),
       execute: async ({
         question,
+        searchProviderName,
         maxSearchResults,
         maxPagesToExtract,
         maxEvidenceChunks,
         synthesize,
         searxngBaseUrl,
+        perplexityApiKey,
+        tavilyApiKey,
       }) => runLocalWebResearchAgent(question, {
+        ...(searchProviderName !== undefined ? { searchProviderName } : {}),
         ...(maxSearchResults !== undefined ? { maxSearchResults } : {}),
         ...(maxPagesToExtract !== undefined ? { maxPagesToExtract } : {}),
         ...(maxEvidenceChunks !== undefined ? { maxEvidenceChunks } : {}),
         ...(synthesize !== undefined ? { synthesize } : {}),
         ...(searxngBaseUrl !== undefined ? { searxngBaseUrl } : {}),
+        ...(perplexityApiKey !== undefined ? { perplexityApiKey } : {}),
+        ...(tavilyApiKey !== undefined ? { tavilyApiKey } : {}),
       }),
     }),
   } as ToolSet;

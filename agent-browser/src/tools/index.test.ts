@@ -70,6 +70,8 @@ describe('default tools', () => {
       maxPagesToExtract: 2,
       maxEvidenceChunks: 4,
       synthesize: false,
+      searchProviderName: 'perplexity',
+      perplexityApiKey: 'secret-ref://local/perplexity-key',
     }, {} as never);
 
     expect(executeCliCommandMock).toHaveBeenCalledWith(context, 'pwd', { emitMessages: false });
@@ -78,6 +80,8 @@ describe('default tools', () => {
       maxPagesToExtract: 2,
       maxEvidenceChunks: 4,
       synthesize: false,
+      searchProviderName: 'perplexity',
+      perplexityApiKey: 'secret-ref://local/perplexity-key',
     });
   });
 
