@@ -8,8 +8,10 @@ export function extractCandidateLinks(args: {
 }): CandidateLink[] {
   const source = args.html ?? args.text ?? '';
   const links = [...source.matchAll(/href=["']([^"']+)["'][^>]*>([^<]*)/gi)];
-  return links.map((match) => {
-    const url = new URL(match[1], args.pageUrl).toString();
+  return links.flatMap((match) => {
+    const url = resolveFetchableUrl(match[1], args.pageUrl);
+    if (!url) return [];
+
     return {
       url,
       normalizedUrl: normalizeUrl(url),
@@ -19,4 +21,16 @@ export function extractCandidateLinks(args: {
       reason: 'Unscored candidate link.',
     };
   });
+}
+
+function resolveFetchableUrl(value: string, pageUrl: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('#')) return undefined;
+
+  try {
+    const url = new URL(trimmed, pageUrl);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }

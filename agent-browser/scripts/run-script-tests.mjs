@@ -9,6 +9,7 @@ import {
   buildGitLsFilesInvocation,
   findTrackedGeneratedArtifacts,
   formatTrackedGeneratedArtifactsError,
+  readTrackedFilesFromGitIndex,
   readTrackedFilesFromLineInput,
 } from '../../scripts/check-generated-files-clean.mjs';
 
@@ -30,6 +31,26 @@ async function createPackageFixture(rootDir, packageName, packageJson) {
   await mkdir(packageDir, { recursive: true });
   await writeJson(path.join(packageDir, 'package.json'), { name: packageName, version: '1.0.0', ...packageJson });
   return packageDir;
+}
+
+function createGitIndex(paths) {
+  const header = Buffer.alloc(12);
+  header.write('DIRC', 0, 'ascii');
+  header.writeUInt32BE(2, 4);
+  header.writeUInt32BE(paths.length, 8);
+
+  const entries = paths.map((filePath) => {
+    const filePathBytes = Buffer.from(filePath);
+    const fixedFields = Buffer.alloc(62);
+    fixedFields.writeUInt16BE(Math.min(filePathBytes.length, 0x0fff), 60);
+
+    const unpaddedLength = fixedFields.length + filePathBytes.length + 1;
+    const paddedLength = Math.ceil(unpaddedLength / 8) * 8;
+    const padding = Buffer.alloc(paddedLength - unpaddedLength + 1);
+    return Buffer.concat([fixedFields, filePathBytes, padding]);
+  });
+
+  return Buffer.concat([header, ...entries, Buffer.alloc(20)]);
 }
 
 async function main() {
@@ -238,6 +259,21 @@ async function main() {
     readTrackedFilesFromLineInput("src/index.ts\r\n\r\noutput/generated.json\n"),
     ['src/index.ts', 'output/generated.json'],
   );
+
+  const gitIndexFixture = await mkdtemp(path.join(tmpdir(), 'generated-files-git-index-'));
+  const gitDir = path.join(gitIndexFixture, '.git-worktree');
+  await mkdir(gitDir);
+  await writeFile(path.join(gitIndexFixture, '.git'), 'gitdir: .git-worktree\n');
+  await writeFile(path.join(gitDir, 'index'), createGitIndex([
+    'src/index.ts',
+    'output/dev-server/log.txt',
+    'lib/example/src/index.ts',
+  ]));
+  assert.deepEqual(readTrackedFilesFromGitIndex(gitIndexFixture), [
+    'src/index.ts',
+    'output/dev-server/log.txt',
+    'lib/example/src/index.ts',
+  ]);
 
   console.log('agent-browser script regression checks passed');
 }
