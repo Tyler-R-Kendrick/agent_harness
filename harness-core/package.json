@@ -11,12 +11,14 @@
     "!src/__tests__/**"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./ext/agent-skills": "./src/ext/agent-skills.ts",
+    "./ext/agents-md": "./src/ext/agents-md.ts"
   },
   "scripts": {
-    "test": "node ../../scripts/run-package-bin.mjs vitest run",
-    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
-    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+    "test": "node ../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage"
   },
   "dependencies": {
     "@toon-format/toon": "^2.1.0",

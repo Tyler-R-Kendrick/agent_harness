@@ -70,6 +70,18 @@ createAgentRuntime({
 - `/version` for the current `harness-core` version.
 - `tool:<tool-name>(<param>=<value>, ...)` for direct invocation of registered tools.
 
+## Extension adapters
+
+The core package stays generic: workspace capability discovery recognizes
+tools, hooks, plugins, and memory files. Product-specific instruction formats
+live under `harness-core/ext`.
+
+- `harness-core/ext/agent-skills` maps `.agents/skills/*/SKILL.md` files into
+  executable tools plus a `/skill <name> [input]` command backed by a supplied
+  agent-skills client.
+- `harness-core/ext/agents-md` maps `AGENTS.md` files into a hook plugin that
+  prepends the active workspace instructions before model inference.
+
 ## Optional constrained decoding
 
 `harness-core` can pass optional constrained-decoding requests through the

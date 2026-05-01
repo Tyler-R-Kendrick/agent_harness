@@ -1,4 +1,3 @@
-import { buildAgentsPromptContext, type WorkspaceFile } from './agents.js';
 import { ArtifactRegistry } from './artifacts.js';
 import { CommandRegistry } from './commands.js';
 import { createDefaultCommandRegistry } from './defaultCommands.js';
@@ -91,39 +90,3 @@ export function createHarnessExtensionContext<
 export type InferenceMessagesPayload<TMessage extends MemoryMessage = MemoryMessage> = {
   messages: TMessage[];
 };
-
-export interface AgentsMdHookPluginOptions {
-  point?: string;
-  activeAgentPath?: string;
-  priority?: number;
-  role?: string;
-}
-
-export function createAgentsMdHookPlugin<TMessage extends MemoryMessage = MemoryMessage>(
-  files: readonly WorkspaceFile[],
-  options: AgentsMdHookPluginOptions = {},
-): HarnessPlugin<TMessage, InferenceMessagesPayload<TMessage>> {
-  return {
-    id: 'agents-md',
-    register({ hooks }) {
-      hooks.registerPipe({
-        id: 'agents-md',
-        point: options.point ?? 'before-llm-messages',
-        kind: 'deterministic',
-        priority: options.priority ?? -10_000,
-        run: ({ payload }) => ({
-          payload: {
-            ...payload,
-            messages: [
-              {
-                role: options.role ?? 'system',
-                content: buildAgentsPromptContext(files, { activeAgentPath: options.activeAgentPath }),
-              } as unknown as TMessage,
-              ...payload.messages,
-            ],
-          },
-        }),
-      });
-    },
-  };
-}

@@ -82,19 +82,16 @@ export {
 } from './toonGrammar.js';
 export { PendingMessageQueue, type QueueMode } from './queue.js';
 export {
-  buildAgentsPromptContext,
   buildWorkspacePromptContext,
   detectWorkspaceFileKind,
   discoverWorkspaceCapabilities,
   validateWorkspaceFile,
-  WORKSPACE_SKILL_DIRECTORIES,
-  type BuildAgentsPromptContextOptions,
   type WorkspaceCapabilities,
   type WorkspaceFile,
   type WorkspaceFileKind,
   type WorkspaceHook,
   type WorkspacePlugin,
-  type WorkspaceSkill,
+  type WorkspaceTool,
 } from './agents.js';
 export {
   appendAgentEvent,
@@ -211,9 +208,7 @@ export {
 } from './defaultCommands.js';
 export {
   PluginRegistry,
-  createAgentsMdHookPlugin,
   createHarnessExtensionContext,
-  type AgentsMdHookPluginOptions,
   type CreateHarnessExtensionContextOptions,
   type HarnessExtensionContext,
   type HarnessPlugin,

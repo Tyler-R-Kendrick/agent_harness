@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "agent-browser",
+    "harness-core",
     "lib/*"
   ],
   "scripts": {

@@ -11,7 +11,7 @@ export type HarnessJsonSchema =
       [key: string]: unknown;
     };
 
-export type HarnessToolKind = 'function' | 'prompt' | 'prompt-template' | 'agent-skill';
+export type HarnessToolKind = 'function' | 'prompt' | 'prompt-template';
 
 export interface HarnessToolContext {
   signal?: AbortSignal;
