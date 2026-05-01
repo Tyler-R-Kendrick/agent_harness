@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -86,6 +86,10 @@ export function readTrackedFiles(cwd) {
   });
 
   if (result.error) {
+    if (result.error.code === 'EPERM') {
+      return readTrackedFilesFromGitIndex(cwd);
+    }
+
     throw result.error;
   }
 
@@ -98,6 +102,66 @@ export function readTrackedFiles(cwd) {
     .toString('utf8')
     .split('\0')
     .filter(Boolean);
+}
+
+export function readTrackedFilesFromGitIndex(cwd) {
+  const index = readFileSync(resolveGitIndexPath(cwd));
+  if (index.toString('ascii', 0, 4) !== 'DIRC') {
+    throw new Error('Git index has an unexpected signature.');
+  }
+
+  const version = index.readUInt32BE(4);
+  if (version !== 2 && version !== 3) {
+    throw new Error(`Unsupported git index version ${version}.`);
+  }
+
+  const entryCount = index.readUInt32BE(8);
+  let offset = 12;
+  const files = [];
+
+  for (let entry = 0; entry < entryCount; entry += 1) {
+    const entryStart = offset;
+    if (entryStart + 62 > index.length) {
+      throw new Error('Git index ended before all entries could be read.');
+    }
+
+    const flags = index.readUInt16BE(entryStart + 60);
+    const hasExtendedFlags = (flags & 0x4000) !== 0;
+    let pathStart = entryStart + 62;
+    if (hasExtendedFlags) pathStart += 2;
+
+    let pathEnd = pathStart;
+    while (pathEnd < index.length && index[pathEnd] !== 0) {
+      pathEnd += 1;
+    }
+    if (pathEnd >= index.length) {
+      throw new Error('Git index entry is missing a path terminator.');
+    }
+
+    files.push(index.toString('utf8', pathStart, pathEnd));
+    offset = entryStart + Math.ceil((pathEnd + 1 - entryStart) / 8) * 8;
+  }
+
+  return files;
+}
+
+function resolveGitIndexPath(cwd) {
+  const gitPath = path.join(cwd, '.git');
+  if (!existsSync(gitPath)) {
+    throw new Error(`No .git path found at ${gitPath}.`);
+  }
+
+  if (statSync(gitPath).isDirectory()) {
+    return path.join(gitPath, 'index');
+  }
+
+  const gitFile = readFileSync(gitPath, 'utf8');
+  if (gitFile.startsWith('gitdir:')) {
+    const gitDir = gitFile.trim().replace(/^gitdir:\s*/u, '');
+    return path.join(path.resolve(cwd, gitDir), 'index');
+  }
+
+  throw new Error(`Unsupported .git file format at ${gitPath}.`);
 }
 
 export function checkGeneratedFilesClean(cwd) {
