@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PayloadType } from 'logact';
+import { PayloadType, type PolicyPayload } from 'logact';
 import {
   CommandRegistry,
   HookRegistry,
@@ -22,7 +22,7 @@ describe('runtime extension contracts', () => {
     tools.register({
       id: 'lookup',
       description: 'Look up a topic.',
-      execute: ({ topic }) => ({ topic }),
+      execute: (args) => ({ topic: (args as { topic: string }).topic }),
     });
     const commands = new CommandRegistry({ tools });
 
@@ -369,8 +369,8 @@ describe('runtime extension contracts', () => {
 
     const entries = await readAgentBusEntries(bus);
     const policyEvents = entries
-      .filter((entry) => entry.payload.type === PayloadType.Policy)
-      .map((entry) => entry.payload);
+      .map((entry) => entry.payload)
+      .filter((payload): payload is PolicyPayload => payload.type === PayloadType.Policy);
 
     expect(policyEvents.map((event) => event.target)).toEqual(expect.arrayContaining([
       'harness.actor.workflow.started',

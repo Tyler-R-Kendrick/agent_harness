@@ -120,6 +120,15 @@ export {
   type CommandTarget,
 } from './commands.js';
 export {
+  HARNESS_CORE_VERSION,
+  createDefaultCommandRegistry,
+  registerDefaultCommands,
+  type DefaultCommandId,
+  type DefaultCommandInfo,
+  type DefaultCommandOptions,
+  type HarnessUpdateHandler,
+} from './defaultCommands.js';
+export {
   PluginRegistry,
   createAgentsMdHookPlugin,
   createHarnessExtensionContext,

@@ -41,6 +41,7 @@ describe('harness-core platform contracts', () => {
     registry.register({
       id: 'late',
       point: 'before-inference',
+      kind: 'deterministic',
       priority: 20,
       run: ({ payload }) => {
         calls.push('late');
@@ -50,6 +51,7 @@ describe('harness-core platform contracts', () => {
     registry.register({
       id: 'skipped',
       point: 'before-inference',
+      kind: 'deterministic',
       priority: 30,
       run: () => {
         calls.push('skipped');
@@ -83,7 +85,7 @@ describe('harness-core platform contracts', () => {
         output: 'observed',
       }),
     });
-    registry.register(createInferenceHook({
+    registry.register(createInferenceHook<string>({
       id: 'noop-inference',
       point: 'after-tool',
       infer: () => undefined,
@@ -134,7 +136,7 @@ describe('harness-core platform contracts', () => {
     registry.register(createPromptTemplateTool({
       id: 'review-pr',
       description: 'Create review instructions.',
-      template: ({ target }) => `Review ${String(target)} with tests first.`,
+      template: (args) => `Review ${String((args as { target: string }).target)} with tests first.`,
     }));
 
     await expect(registry.execute('sum', { left: 2, right: 3 })).resolves.toEqual({ total: 5 });
