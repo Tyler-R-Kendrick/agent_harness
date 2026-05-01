@@ -6,42 +6,53 @@ Diff type: additive update after Mastra research
 
 ## Net new normalized features
 
-### Added: Durable suspend resume state and approval gates
-- Why now: Mastra treats pause, approval, and resume as persisted runtime states instead of forcing the user to restart a long-running flow.
+### Added: Reusable harness cores for agent-powered apps
+- Why now: Mastra just productized the harness plumbing itself inside `@mastra/core`, which makes the runtime layer feel like a reusable platform surface instead of a one-off app implementation detail.
 - Research delta:
-  - the current Mastra docs say workflows can suspend, persist state, and resume later through `.resume()` and related stream APIs
-  - the `suspend()` reference says the workflow state is persisted and can be continued later
-  - the Playground suspend/resume blog says `resumeStream` can close a stream on suspend and later continue from the same point instead of replaying the run
+  - the February 19, 2026 Mastra changelog introduces a generic Core Harness that bundles modes, state management, built-in tools, subagent support, memory integration, model discovery, tool approval, and thread lifecycle handling
+  - Mastra says this exists to replace the "agent app plumbing" teams usually rebuild themselves
+  - MastraCode was migrated onto the same reusable Harness, which suggests the runtime is product-grade and not just a docs abstraction
 
-### Expanded: Parallel agent orchestration
-- Why now: Mastra's current network and supervisor direction shows a more workflow-native way to coordinate delegating agents than the current summary captured.
+### Added: Evaluation-native observability and live scoring
+- Why now: Mastra is making runtime quality measurement part of the same surface as tracing and operator debugging instead of keeping evals isolated in offline tooling.
 - Research delta:
-  - the Mastra agents surface explicitly supports agent networks
-  - the AgentNetwork evolution post says `.network()` became the main routing primitive on `Agent`
-  - the February 26, 2026 release notes added a supervisor pattern with delegation hooks, completion scoring, memory isolation, and approval propagation
+  - Mastra Observability logs prompts, completions, token usage, latency, decision paths, tool calls, and memory operations for every run
+  - Mastra Scorers can run live against agents and workflow steps, run in CI/CD, and be managed in Studio
+  - the February 13, 2026 release added first-class Datasets and Experiments, which turns quality tracking into a maintained runtime asset
 
-### Expanded: Persistent memory plus project instructions
-- Why now: Mastra's Observational Memory work pushes memory beyond simple conversation recall into a stable long-horizon runtime architecture.
+### Expanded: Browser use and computer control
+- Why now: Mastra's browser support shows a cleaner pattern for browser tooling as a provider-backed primitive with live supervision rather than a hardcoded tool bundle.
 - Research delta:
-  - the Mastra memory surface spans working memory, conversation history, semantic recall, and memory processors
-  - the February 9, 2026 Observational Memory research post describes background Observer and Reflector agents that maintain a dense observation log
-  - the March 25, 2026 releases added model-by-input-size routing for observational memory workloads
+  - the April 24, 2026 browser announcement says attached agents can navigate, click, fill forms, and extract structured data
+  - Studio streams each browser interaction live and lets the operator step in or stop the run at any point
+  - Mastra supports both local browser providers and managed services like Browserbase, starting with Stagehand and AgentBrowser
 
-### Expanded: Operator-facing orchestration telemetry
-- Why now: Mastra is broadening telemetry into a combined deploy, trace, score, memory, and experiment control plane.
-- Research delta:
-  - the Mastra Cloud docs say deployments expose agents, tools, and workflows with a dashboard for status, logs, and configuration
-  - the public cloud page adds traces, logs, metrics, scorers, experiments, agent versioning, and memory inspection
-  - the April 2026 releases say CloudExporter now ships logs, metrics, scores, and feedback in addition to spans
-
-### Added: Add durable suspend and resume checkpoints for browser-agent runs
-- Why now: `agent-browser` still handles many waits and approvals as thread-level interruption instead of a persisted run state that can be resumed safely.
+### Added: Extract a reusable browser-agent harness core
+- Why now: `agent-browser` still couples too much runtime logic to the app shell, while Mastra shows that the harness itself can be a reusable product primitive.
 - Linear issue title:
-  - `Add durable suspend/resume checkpoints for browser-agent runs`
+  - `Extract a reusable browser-agent harness core`
 - Suggested problem statement:
-  - `agent-browser` cannot yet persist a live browser task at the moment it needs approval, credentials, or delayed human input, which forces users to re-drive the run or trust fragile transcript-only continuity.
+  - `agent-browser` still mixes orchestration concerns directly into the product surface, which makes it harder to reuse the same modes, approvals, memory hooks, and subagent lifecycle across desktop UI, automations, and future embedded surfaces.
 - One-shot instruction for an LLM:
-  - Design and implement persisted suspend/resume checkpoints for `agent-browser` so browser-capable runs can pause on human approval or missing input, save execution state plus artifacts, close and later restore streaming surfaces, and resume from the same browser-task boundary with clear audit history, timeout policy, and operator controls.
+  - Extract a reusable `agent-browser` harness core that owns mode and state management, thread lifecycle, plan and approval tools, memory integration, subagent orchestration, and event streaming, then have the current app shell consume that core instead of implementing orchestration ad hoc.
+
+### Added: Add evaluation-native observability and live scorers
+- Why now: `agent-browser` needs quality measurement that lives beside runtime traces, not only post hoc bug reports and manual transcript review.
+- Linear issue title:
+  - `Add evaluation-native observability and live scorers`
+- Suggested problem statement:
+  - `agent-browser` can show activity and logs, but it still lacks a first-class way to score runs, compare quality over time, and inspect agent performance using the same operational surface that already holds runtime evidence.
+- One-shot instruction for an LLM:
+  - Implement evaluation-native observability for `agent-browser` with structured traces, live scorer hooks on browser and chat runs, dataset and experiment support for regressions, and dashboards that connect quality scores to run artifacts, transcripts, and tool trajectories.
+
+### Added: Add versioned workspace skills and least-privilege policies
+- Why now: Mastra is treating skills and workspace permissions like durable governed assets, while `agent-browser` still has coarse-grained policy seams and weak lifecycle management for reusable workflow assets.
+- Linear issue title:
+  - `Add versioned workspace skills and least-privilege policies`
+- Suggested problem statement:
+  - `agent-browser` skills and workspace access rules are not yet managed as versioned, inspectable, publishable assets with clear least-privilege boundaries, which makes reuse and governance harder than it should be.
+- One-shot instruction for an LLM:
+  - Design and implement versioned workspace skill packages and least-privilege workspace policies for `agent-browser`, including skill discovery metadata, draft-to-publish lifecycle, per-skill tool and path scopes, explicit allowlisted external paths, and searchable workspace helpers such as regex grep that respect those boundaries.
 
 ## How to use this file
 
@@ -52,4 +63,6 @@ Diff type: additive update after Mastra research
 
 ## Recommended next Linear batch
 
-1. `Add durable suspend/resume checkpoints for browser-agent runs`
+1. `Extract a reusable browser-agent harness core`
+2. `Add evaluation-native observability and live scorers`
+3. `Add versioned workspace skills and least-privilege policies`
