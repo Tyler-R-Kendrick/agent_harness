@@ -8,6 +8,7 @@ import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debug
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
+import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
 
 export { CODI_LABEL, buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
@@ -118,6 +119,19 @@ export async function streamAgentChat(
   const latestUserInput = options.latestUserInput === undefined
     ? undefined
     : (await secrets.sanitizeText(options.latestUserInput)).text;
+  const latestRequest = latestUserInput ?? messages.at(-1)?.content ?? '';
+
+  if (isSelfReflectionTaskText(latestRequest)) {
+    const answer = buildWorkspaceSelfReflectionAnswer({
+      task: latestRequest,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      toolDescriptors: [],
+    });
+    callbacks.onToken?.(answer);
+    callbacks.onDone?.(answer);
+    return;
+  }
 
   if (options.provider === 'ghcp') {
     if (!options.modelId || !options.sessionId) {

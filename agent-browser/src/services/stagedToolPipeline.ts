@@ -23,6 +23,7 @@ import { runConfiguredExecutorAgent } from './executorAgent';
 import { runLogActActorWorkflow } from './logactActorWorkflow';
 import type { CustomEvaluationAgent } from './evaluationAgentRegistry';
 import { resolveConversationSearchContext } from './conversationSearchContext';
+import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from './selfReflection';
 
 const CHAT_OUTPUT_TOKENS = 512;
 
@@ -323,6 +324,23 @@ export async function runStagedToolPipeline(
   options: StagedToolPipelineOptions,
   callbacks: StagedToolPipelineCallbacks,
 ): Promise<AgentRunResult> {
+  const rawLatestTask = messageContentToText(options.messages.at(-1)?.content ?? '');
+  if (isSelfReflectionTaskText(rawLatestTask)) {
+    const chatMeta = agentMeta(options.model, 'chat-agent', 'Chat Agent');
+    const answer = buildWorkspaceSelfReflectionAnswer({
+      task: rawLatestTask,
+      workspaceName: options.workspaceName,
+      workspacePromptContext: options.instructions,
+      toolDescriptors: options.toolDescriptors,
+    });
+    callbacks.onStageStart?.('chat', 'Answering self-reflection from workspace inventory.', chatMeta);
+    callbacks.onStageToken?.('chat', answer, chatMeta);
+    callbacks.onStageComplete?.('chat', answer, chatMeta);
+    callbacks.onToken?.(answer);
+    callbacks.onDone?.(answer);
+    return { text: answer, steps: 1 };
+  }
+
   if (options.toolDescriptors.length === 0 || Object.keys(options.tools).length === 0) {
     return runDirectChat(options, callbacks);
   }
