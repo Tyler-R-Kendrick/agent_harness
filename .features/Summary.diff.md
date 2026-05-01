@@ -1,58 +1,58 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-04-30
-Baseline: `.features/Summary.md` updated from the 2026-04-30 fourteen-harness corpus.
-Diff type: additive update after Warp research
+Baseline: `.features/Summary.md` updated from the 2026-04-30 fifteen-harness corpus.
+Diff type: additive update after Space Agent research
 
 ## Net new normalized features
 
-### Added: Agent-ready remote environments and trigger wiring
-- Why now: Warp makes hosted execution environments a first-class product object, then wires them into schedules and trigger surfaces such as Linear, Slack, and GitHub Actions instead of assuming a human-open terminal.
+### Added: Mutable agent-built workspace surfaces
+- Why now: Space Agent makes the strongest current case that the agent should build the workspace itself, not only fill a fixed chat transcript with answers.
 - Research delta:
-  - Warp documents reusable Cloud Agent setup rather than only local terminal sessions
-  - integrations include GitHub, Linear, and Slack from the main Cloud Agent surface
-  - GitHub Actions and scheduled runs are documented as native launch paths for hosted agents
+  - the README says the agent reshapes the interface and can build a page, tool, widget, or workflow into the running workspace
+  - the product site says Space Agent builds your space right in the browser
+  - recent browser-surface work makes popup and inline browser panes part of one live runtime model instead of separate UI concepts
 
-### Expanded: Shareable sessions and debug handoff
-- Why now: Warp pushes the run-sharing model toward live collaboration by letting people inspect and steer remote sessions while the agent is still working.
+### Expanded: Shared team agents and governance
+- Why now: Space Agent adds a sharper model for user-specific layers, group-shared behavior, and admin rollback than the current summary captured.
 - Research delta:
-  - Cloud Agent docs include both session sharing and live remote sessions
-  - the product allows observation during execution, not only a final artifact after execution
-  - collaborative intervention is part of the story, which is stronger than plain transcript export
+  - the README describes users building in their own layer while groups share tools and workflows across teams
+  - the self-hosted surface is explicitly positioned for multi-user setups with group management
+  - admin mode plus Git-backed history frames governance as a control-plane and rollback problem, not only a chat-history problem
 
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Warp Drive continues the shift from ad hoc prompts to team-discoverable workflows and notebooks that mix runnable blocks with explanatory operational context.
+### Expanded: Browser use and computer control
+- Why now: Space Agent tightens the relationship between browser automation and the harness UI by unifying popup and inline browser surfaces.
 - Research delta:
-  - Workflows package reusable command sequences with variables
-  - Notebooks combine runnable terminal blocks and explanatory text
-  - Drive assets form a searchable team knowledge layer the agent can work within
+  - the `v0.64` release moves web browsing to registered browser surfaces with one API and lifecycle
+  - prompt-time runtime state now reasons about currently open and last interacted browser surfaces
+  - the agent can operate against browser surfaces that are part of the workspace it is also shaping
 
-### Added: Build reusable remote execution environments for `agent-browser`
-- Why now: Browser-agent automations still depend too much on the operator's current machine state, which makes scheduling, chat-triggered runs, and CI-driven work harder than they should be.
+### Added: Let browser agents build persistent in-app workspace surfaces
+- Why now: `agent-browser` still treats the app shell mostly as a fixed surface, while Space Agent shows the harness itself can become a task-specific artifact the agent assembles.
 - Linear issue title:
-  - `Build remote execution environments for agent-browser`
+  - `Let browser agents build persistent workspace surfaces`
 - Suggested problem statement:
-  - `agent-browser` lacks a reusable hosted environment model, so every long-running or remotely triggered automation has to rediscover repo setup, dependencies, and secrets at run time.
+  - `agent-browser` can drive tools and browsers, but it cannot yet persistently add dashboards, widgets, guided flows, or review panels into the app as first-class outputs of the run.
 - One-shot instruction for an LLM:
-  - Design and implement remote execution environments for `agent-browser` that capture repo bootstrap, dependency install, browser setup, secrets injection, and validation commands once, then let later runs launch against that environment predictably with audit logs, replayable parameters, and environment health checks.
+  - Design and implement a mutable workspace-surface system for `agent-browser` where an agent can create task-specific pages, widgets, browser panes, and review panels inside the app, persist them as named artifacts, and expose ownership, permissions, and rollback for every agent-authored surface.
 
-### Added: Trigger browser agents from Linear Slack and CI
-- Why now: Warp shows that hosted agents become more valuable when real project events can launch them directly instead of waiting for a human to open the product first.
+### Added: Add layered team customware with rollback
+- Why now: Space Agent shows a strong pattern for combining personal layers, shared group layers, and admin-safe rollback in one system.
 - Linear issue title:
-  - `Add event triggers for browser-agent runs`
+  - `Add layered workspace customware and rollback`
 - Suggested problem statement:
-  - `agent-browser` runs are still launched mostly by hand, which limits recurring maintenance, issue-driven execution, and repo-event automation.
+  - `agent-browser` lacks a clean way for individuals and teams to publish reusable workspace behavior without risking cross-user breakage or manual cleanup when an experiment goes wrong.
 - One-shot instruction for an LLM:
-  - Implement an event-trigger layer for `agent-browser` that can start runs from issue-tracker events, chat commands, schedules, and CI webhooks, route each launch into an isolated browser-agent session, preserve launch context in the run timeline, and enforce per-trigger permission and environment policies.
+  - Implement layered customware for `agent-browser` with user, team, and admin scopes; let agents publish reusable tools and workflow surfaces into those scopes; and back every change with versioned history, diff inspection, and one-click rollback to the last known good state.
 
-### Added: Add live collaborative steering for remote agent runs
-- Why now: Warp demonstrates that remote runs become easier to trust when humans can watch, intervene, and fork while the work is still in progress.
+### Added: Unify popup and inline browser surfaces
+- Why now: Space Agent's browser-surface model is a concrete reminder that browser automation becomes more composable when embedded panes and separate windows share the same runtime contract.
 - Linear issue title:
-  - `Add live steering and handoff for remote agent runs`
+  - `Unify browser panes and popup windows`
 - Suggested problem statement:
-  - Remote browser-agent executions are still too opaque once launched, which makes debugging, teammate handoff, and mid-run correction slower than necessary.
+  - `agent-browser` still risks fragmented UX and duplicated logic between embedded browser views and detached windows, which makes task-specific workspace composition harder to build.
 - One-shot instruction for an LLM:
-  - Build a live remote-session surface for `agent-browser` that streams current step state, browser evidence, tool output, and validation progress to observers, allows authorized humans to pause, steer, or fork the run, and preserves those interventions as first-class timeline events.
+  - Refactor `agent-browser` so embedded browser panes and popup windows register through one browser-surface abstraction with shared lifecycle, focus semantics, state reporting, and prompt exposure, then migrate existing browser actions and UI controls onto that contract.
 
 ## How to use this file
 
@@ -63,6 +63,6 @@ Diff type: additive update after Warp research
 
 ## Recommended next Linear batch
 
-1. `Build remote execution environments for agent-browser`
-2. `Add event triggers for browser-agent runs`
-3. `Add live steering and handoff for remote agent runs`
+1. `Let browser agents build persistent workspace surfaces`
+2. `Add layered workspace customware and rollback`
+3. `Unify browser panes and popup windows`
