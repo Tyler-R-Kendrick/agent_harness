@@ -1,8 +1,10 @@
 import { buildAgentsPromptContext, type WorkspaceFile } from './agents.js';
+import { ArtifactRegistry } from './artifacts.js';
 import { CommandRegistry } from './commands.js';
 import { createDefaultCommandRegistry } from './defaultCommands.js';
 import { HookRegistry } from './hooks.js';
 import { MemoryRegistry, type MemoryMessage } from './memory.js';
+import { type HarnessStorage, type HarnessStorageSource, resolveHarnessStorage } from './storage.js';
 import { ToolRegistry } from './tools.js';
 
 export interface HarnessExtensionContext<
@@ -13,6 +15,8 @@ export interface HarnessExtensionContext<
   commands: CommandRegistry;
   tools: ToolRegistry;
   memory: MemoryRegistry<TMessage>;
+  storage: HarnessStorage;
+  artifacts: ArtifactRegistry;
   plugins: PluginRegistry<TMessage, THookPayload>;
 }
 
@@ -55,16 +59,28 @@ export class PluginRegistry<
   }
 }
 
+export interface CreateHarnessExtensionContextOptions {
+  storage?: HarnessStorageSource;
+  artifacts?: ArtifactRegistry;
+}
+
 export function createHarnessExtensionContext<
   TMessage extends MemoryMessage = MemoryMessage,
   THookPayload = unknown,
->(): HarnessExtensionContext<TMessage, THookPayload> {
+>(
+  options: CreateHarnessExtensionContextOptions = {},
+): HarnessExtensionContext<TMessage, THookPayload> {
   const tools = new ToolRegistry();
+  const storage = options.storage === undefined
+    ? options.artifacts?.storage ?? resolveHarnessStorage()
+    : resolveHarnessStorage(options.storage);
   const context = {
     hooks: new HookRegistry<THookPayload>(),
     commands: createDefaultCommandRegistry({ tools }),
     tools,
     memory: new MemoryRegistry<TMessage>(),
+    storage,
+    artifacts: options.artifacts ?? new ArtifactRegistry({ storage }),
   } as Omit<HarnessExtensionContext<TMessage, THookPayload>, 'plugins'> & {
     plugins?: PluginRegistry<TMessage, THookPayload>;
   };

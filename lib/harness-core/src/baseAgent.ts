@@ -1,10 +1,12 @@
 import type { IAgentBus } from 'logact';
 import { appendAgentEvent, resolveAgentBus } from './agentBus.js';
 import { runActorWorkflow } from './actorWorkflow.js';
+import { ArtifactRegistry } from './artifacts.js';
 import { CommandRegistry } from './commands.js';
 import { createDefaultCommandRegistry } from './defaultCommands.js';
 import { HookRegistry } from './hooks.js';
 import { MemoryRegistry, type MemoryMessage } from './memory.js';
+import { type HarnessStorage, type HarnessStorageSource, resolveHarnessStorage } from './storage.js';
 import { ToolRegistry } from './tools.js';
 
 export interface BaseAgentDefinition<
@@ -27,6 +29,8 @@ export interface BaseAgentComponents<
   memory: MemoryRegistry<TMessage>;
   tools: ToolRegistry;
   commands: CommandRegistry;
+  storage: HarnessStorage;
+  artifacts: ArtifactRegistry;
 }
 
 export interface BaseAgentContext<
@@ -48,8 +52,9 @@ export interface CreateAgentRuntimeOptions<
   TOutput,
   TMessage extends MemoryMessage = MemoryMessage,
   THookPayload = unknown,
-> extends Partial<BaseAgentComponents<TMessage, THookPayload>> {
+> extends Omit<Partial<BaseAgentComponents<TMessage, THookPayload>>, 'storage'> {
   agent: BaseAgentDefinition<TInput, TOutput, TMessage, THookPayload>;
+  storage?: HarnessStorageSource;
 }
 
 export interface AgentRuntime<
@@ -80,14 +85,22 @@ export function createAgentRuntime<
   memory,
   tools,
   commands,
+  storage,
+  artifacts,
 }: CreateAgentRuntimeOptions<TInput, TOutput, TMessage, THookPayload>): AgentRuntime<TInput, TOutput, TMessage, THookPayload> {
   const resolvedTools = tools ?? new ToolRegistry();
+  const resolvedStorage = storage === undefined
+    ? artifacts?.storage ?? resolveHarnessStorage()
+    : resolveHarnessStorage(storage);
+  const resolvedArtifacts = artifacts ?? new ArtifactRegistry({ storage: resolvedStorage });
   const components: BaseAgentComponents<TMessage, THookPayload> = {
     bus: resolveAgentBus(bus),
     hooks: hooks ?? new HookRegistry<THookPayload>(),
     memory: memory ?? new MemoryRegistry<TMessage>(),
     tools: resolvedTools,
     commands: commands ?? createDefaultCommandRegistry({ tools: resolvedTools }),
+    storage: resolvedStorage,
+    artifacts: resolvedArtifacts,
   };
 
   const run = async (
