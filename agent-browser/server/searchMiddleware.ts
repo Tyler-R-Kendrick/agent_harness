@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { JSDOM } from 'jsdom';
 
 export interface SearchWebRequest {
   query: string;
@@ -169,13 +170,14 @@ export class WebPageBridge {
           observations: [],
         };
       }
-      const html = await response.text();
-      const visibleHtml = extractBodyHtml(removeNonContentBlocks(html));
-      const title = extractTitle(html);
-      const links = extractLinks(visibleHtml, url);
-      const headings = extractHeadings(visibleHtml);
-      const jsonLd = extractJsonLd(html);
-      const text = stripTags(visibleHtml).slice(0, 5000);
+      const document = parseHtmlDocument(await response.text(), url.toString());
+      const jsonLd = extractJsonLd(document);
+      removeNonContentBlocks(document);
+      const root = document.body ?? document.documentElement;
+      const title = extractTitle(document);
+      const links = extractLinks(root, url);
+      const headings = extractHeadings(root);
+      const text = readableText(root).slice(0, 5000);
       const observations = extractPageObservations({ url: url.toString(), text, links, headings, jsonLd });
       return {
         status: 'read',
@@ -226,26 +228,74 @@ async function fetchWithTimeout(
   }
 }
 
+const htmlDecoder = new JSDOM('').window.document.createElement('textarea');
+
+function parseHtmlDocument(html: string, url: string): Document {
+  return new JSDOM(html, { url, contentType: 'text/html' }).window.document;
+}
+
+function textFromNode(node: Node | null | undefined): string {
+  return normalizeText(node?.textContent ?? '');
+}
+
+function readableText(root: ParentNode): string {
+  const blocks = [...root.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, article, section, main')]
+    .map((node) => textFromNode(node))
+    .filter(Boolean);
+  const source = blocks.length > 0 ? blocks.join('. ') : root.textContent ?? '';
+  return normalizeText(source)
+    .replace(/\s+\./g, '.')
+    .replace(/\.{2,}/g, '.');
+}
+
+function nextElementWithClass(element: Element, className: string): Element | null {
+  let current = element.nextElementSibling;
+  while (current) {
+    if (current.classList.contains(className)) return current;
+    current = current.nextElementSibling;
+  }
+  return null;
+}
+
+function resolveProviderUrl(value: string, baseUrl: string): string {
+  try {
+    const url = new URL(value, baseUrl);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : value;
+  } catch {
+    return value;
+  }
+}
+
 function parseDuckDuckGoHtml(html: string): SearchWebResultItem[] {
-  const matches = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)];
-  return matches.map((match) => ({
-    url: normalizeUrl(decodeHtml(match[1])),
-    title: decodeHtml(stripTags(match[2])),
-    snippet: decodeHtml(stripTags(match[3])),
-  })).filter((item) => item.title && item.url);
+  const document = parseHtmlDocument(html, 'https://duckduckgo.com/html/');
+  return [...document.querySelectorAll<HTMLAnchorElement>('a.result__a')]
+    .map((anchor) => {
+      const href = anchor.getAttribute('href') ?? anchor.href;
+      const container = anchor.closest('.result, .web-result, .result__body, .results_links')
+        ?? anchor.parentElement
+        ?? document.body;
+      const snippet = container.querySelector('.result__snippet')
+        ?? nextElementWithClass(anchor, 'result__snippet');
+      return {
+        url: normalizeUrl(resolveProviderUrl(href, 'https://duckduckgo.com')),
+        title: textFromNode(anchor),
+        snippet: textFromNode(snippet),
+      };
+    })
+    .filter((item) => item.title && item.url);
 }
 
 function parseBingHtml(html: string): SearchWebResultItem[] {
-  return [...html.matchAll(/<li\b[^>]*class=["'][^"']*\bb_algo\b[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi)]
-    .map((blockMatch) => {
-      const block = blockMatch[1];
-      const linkMatch = block.match(/<h2\b[^>]*>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/h2>/i);
-      if (!linkMatch) return null;
-      const snippetMatch = block.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+  const document = parseHtmlDocument(html, 'https://www.bing.com/search');
+  return [...document.querySelectorAll<HTMLElement>('li.b_algo')]
+    .map((block) => {
+      const link = block.querySelector<HTMLAnchorElement>('h2 a[href], a[href]');
+      if (!link) return null;
+      const snippet = block.querySelector('p') ?? block.querySelector('.b_caption');
       return {
-        url: normalizeUrl(decodeHtml(linkMatch[1])),
-        title: decodeHtml(stripTags(linkMatch[2])),
-        snippet: decodeHtml(stripTags(snippetMatch?.[1] ?? '')),
+        url: normalizeUrl(resolveProviderUrl(link.getAttribute('href') ?? link.href, 'https://www.bing.com')),
+        title: textFromNode(link),
+        snippet: textFromNode(snippet),
       };
     })
     .filter((item): item is SearchWebResultItem => Boolean(item?.title && item.url));
@@ -260,29 +310,22 @@ function safeHttpUrl(value: string): URL | null {
   }
 }
 
-function extractTitle(html: string): string | undefined {
-  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
-  return title ? decodeHtml(stripTags(title)) : undefined;
+function extractTitle(document: Document): string | undefined {
+  const title = textFromNode(document.querySelector('title'));
+  return title || undefined;
 }
 
-function removeNonContentBlocks(html: string): string {
-  return html
-    .replace(/<script\b(?![^>]*type=["']application\/ld\+json["'])[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ')
-    .replace(/<svg\b[\s\S]*?<\/svg>/gi, ' ');
+function removeNonContentBlocks(document: Document): void {
+  document.querySelectorAll('script:not([type="application/ld+json"]), style, noscript, svg')
+    .forEach((node) => node.remove());
 }
 
-function extractBodyHtml(html: string): string {
-  return html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html;
-}
-
-function extractLinks(html: string, baseUrl: URL): WebPageLink[] {
+function extractLinks(root: ParentNode, baseUrl: URL): WebPageLink[] {
   const seen = new Set<string>();
-  return [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
-    .map((match) => {
-      const text = decodeHtml(stripTags(match[2]));
-      const url = resolveUrl(decodeHtml(match[1]), baseUrl);
+  return [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
+    .map((anchor) => {
+      const text = textFromNode(anchor);
+      const url = resolveUrl(anchor.getAttribute('href') ?? anchor.href, baseUrl);
       return text && url ? { text, url } : null;
     })
     .filter((item): item is WebPageLink => {
@@ -293,10 +336,10 @@ function extractLinks(html: string, baseUrl: URL): WebPageLink[] {
     .slice(0, 80);
 }
 
-function extractHeadings(html: string): string[] {
+function extractHeadings(root: ParentNode): string[] {
   const seen = new Set<string>();
-  return [...html.matchAll(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi)]
-    .map((match) => decodeHtml(stripTags(match[1])))
+  return [...root.querySelectorAll('h1, h2, h3, h4, h5, h6')]
+    .map((heading) => textFromNode(heading))
     .filter((heading) => {
       if (!heading || seen.has(heading)) return false;
       seen.add(heading);
@@ -314,16 +357,26 @@ function resolveUrl(value: string, baseUrl: URL): string | null {
   }
 }
 
-function extractJsonLd(html: string): unknown[] {
-  return [...html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)]
+function extractJsonLd(document: Document): unknown[] {
+  return [...document.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')]
     .flatMap((match) => {
       try {
-        const parsed = JSON.parse(decodeHtml(match[1]));
-        return Array.isArray(parsed) ? parsed : [parsed];
+        const parsed = JSON.parse(match.textContent ?? '');
+        const decoded = decodeJsonLdValue(parsed);
+        return Array.isArray(decoded) ? decoded : [decoded];
       } catch {
         return [];
       }
     });
+}
+
+function decodeJsonLdValue(value: unknown): unknown {
+  if (typeof value === 'string') return decodeHtml(value);
+  if (Array.isArray(value)) return value.map(decodeJsonLdValue);
+  if (isRecord(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, decodeJsonLdValue(entry)]));
+  }
+  return value;
 }
 
 function extractPageEntities({
@@ -621,24 +674,14 @@ function decodeBingEncodedUrl(encoded: string): string | null {
   }
 }
 
-function stripTags(value: string): string {
-  return value
-    .replace(/<br\s*\/?>/gi, '. ')
-    .replace(/<\/(?:p|div|li|h[1-6]|article|section|main|nav|header|footer|tr)\s*>/gi, '. ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+\./g, '.')
-    .replace(/\.{2,}/g, '.')
-    .trim();
+function decodeHtml(value: string): string {
+  htmlDecoder.innerHTML = value;
+  return normalizeText(htmlDecoder.value);
 }
 
-function decodeHtml(value: string): string {
+function normalizeText(value: string): string {
   return value
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 

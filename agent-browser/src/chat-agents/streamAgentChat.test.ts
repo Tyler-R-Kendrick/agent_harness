@@ -7,7 +7,9 @@ vi.mock('@huggingface/transformers', () => ({
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
+import * as TourGuideModule from './TourGuide';
 import { streamAgentChat } from './index';
+import { MemorySecretStore, createSecretsManagerAgent } from './Secrets';
 
 describe('streamAgentChat', () => {
   it('routes Codi sessions through the Codi adapter', async () => {
@@ -59,6 +61,38 @@ describe('streamAgentChat', () => {
     }), {}, undefined);
   });
 
+  it('strips detected secrets before routing messages to cloud-backed chat agents', async () => {
+    const streamGhcpChatSpy = vi.spyOn(GhcpModule, 'streamGhcpChat').mockResolvedValueOnce();
+    const secret = 'ghp_abcdefghijklmnopqrstuvwxyz123456';
+    const secrets = createSecretsManagerAgent({
+      store: new MemorySecretStore(),
+      idFactory: () => 'github-token',
+      now: () => '2026-04-30T00:00:00.000Z',
+    });
+
+    await streamAgentChat({
+      provider: 'ghcp',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: `call the API with ${secret}`,
+      messages: [{ id: 'user-1', role: 'user', content: `token=${secret}` }],
+      workspaceName: 'Research',
+      workspacePromptContext: `GITHUB_TOKEN=${secret}`,
+      secrets,
+    }, {});
+
+    const routedOptions = streamGhcpChatSpy.mock.calls.at(-1)?.[0] as {
+      latestUserInput: string;
+      messages: Array<{ content: string }>;
+      workspacePromptContext: string;
+    };
+    const routedPayload = JSON.stringify(routedOptions);
+    expect(routedPayload).not.toContain(secret);
+    expect(routedOptions.latestUserInput).toContain('secret-ref://local/github-token');
+    expect(routedOptions.messages[0]?.content).toContain('secret-ref://local/github-token');
+    expect(routedOptions.workspacePromptContext).toContain('secret-ref://local/github-token');
+  });
+
   it('routes Debugger sessions through the Debugger adapter', async () => {
     const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
 
@@ -77,6 +111,24 @@ describe('streamAgentChat', () => {
       runtimeProvider: 'ghcp',
       modelId: 'gpt-4.1',
       latestUserInput: 'debug the failing release',
+    }), {}, undefined);
+  });
+
+  it('routes Tour Guide sessions through the TourGuide adapter', async () => {
+    const streamTourGuideChatSpy = vi.spyOn(TourGuideModule, 'streamTourGuideChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'tour-guide',
+      latestUserInput: 'Show me how to configure tools.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Show me how to configure tools.' }],
+      workspaceName: 'Ops',
+      workspacePromptContext: 'Use workspace files.',
+    }, {});
+
+    expect(streamTourGuideChatSpy).toHaveBeenCalledWith(expect.objectContaining({
+      latestUserInput: 'Show me how to configure tools.',
+      workspaceName: 'Ops',
+      workspacePromptContext: 'Use workspace files.',
     }), {}, undefined);
   });
 

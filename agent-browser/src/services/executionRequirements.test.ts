@@ -45,23 +45,44 @@ function plan(selectedToolIds = descriptors.map((descriptor) => descriptor.id)):
   };
 }
 
-describe('resolveExecutionRequirements web search fallback', () => {
-  it('uses a curl-capable CLI fallback before blocking when the registered search tool is unavailable', async () => {
+describe('resolveExecutionRequirements composite search provider fallback', () => {
+  it('continues through registered providers instead of generating a shell HTML parser when web search is unavailable', async () => {
     const search = vi.fn(async ({ query }) => ({
       status: 'unavailable',
       query,
       reason: 'Web search returned 404.',
       results: [],
     }));
-    const cli = vi.fn(async () => JSON.stringify({
-      status: 'found',
-      query: 'movie theaters names near Arlington Heights IL',
-      results: [{
+    const localWebResearch = vi.fn(async ({ maxPagesToExtract }) => ({
+      id: 'research-theaters',
+      question: 'what are the best movie theaters in Arlington Heights IL?',
+      plannedQueries: ['best movie theaters Arlington Heights IL'],
+      searchResults: [{
+        id: 'local-amc',
         title: 'AMC Randhurst 12',
         url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
-        snippet: 'Movie theater in Mount Prospect near Arlington Heights, IL.',
+        normalizedUrl: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+        snippet: `AMC Randhurst 12 is a movie theater in Mount Prospect near Arlington Heights, IL. extracted:${maxPagesToExtract}`,
+        provider: 'custom',
+        rank: 1,
+        score: 0.9,
       }],
+      evidence: [{
+        id: 'evidence-amc',
+        title: 'AMC Randhurst 12',
+        url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+        normalizedUrl: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+        text: 'AMC Randhurst 12 is a source-backed movie theater in Mount Prospect near Arlington Heights, IL.',
+        score: 0.95,
+      }],
+      extractedPages: [],
+      citations: [],
+      errors: [],
+      timings: {},
+      elapsedMs: 1,
+      createdAt: '2026-04-30T00:00:00.000Z',
     }));
+    const cli = vi.fn();
     const readPage = vi.fn(async ({ url }) => ({
       status: 'read',
       url,
@@ -72,11 +93,24 @@ describe('resolveExecutionRequirements web search fallback', () => {
       entities: [{ name: 'AMC Randhurst 12', url, evidence: 'json-ld' }],
       observations: [],
     }));
+    const compositeDescriptors = [
+      ...descriptors,
+      {
+        id: 'webmcp:local_web_research',
+        label: 'Local web research',
+        description: 'Search local SearXNG, crawl pages, and return cited evidence.',
+        group: 'built-in' as const,
+        groupLabel: 'Built-In',
+        subGroup: 'web-search-mcp',
+        subGroupLabel: 'Search',
+      },
+    ];
     const runtime: ToolAgentRuntime = {
-      descriptors,
+      descriptors: compositeDescriptors,
       tools: {
         'webmcp:search_web': { execute: search },
         'webmcp:read_web_page': { execute: readPage },
+        'webmcp:local_web_research': { execute: localWebResearch },
         cli: { execute: cli },
       } as unknown as ToolSet,
     };
@@ -96,11 +130,11 @@ describe('resolveExecutionRequirements web search fallback', () => {
         busEntries.push(entry as (typeof busEntries)[number]);
       }),
     };
-    const assignedToolIds = descriptors.map((descriptor) => descriptor.id);
+    const assignedToolIds = compositeDescriptors.map((descriptor) => descriptor.id);
 
     const result = await resolveExecutionRequirements({
       runtime,
-      plan: plan(),
+      plan: plan(assignedToolIds),
       messages: [{ role: 'user', content: 'what are the best movie theaters in Arlington Heights IL?' }],
       executionContext: {
         bus: bus as never,
@@ -120,21 +154,22 @@ describe('resolveExecutionRequirements web search fallback', () => {
       throw new Error(`Expected fulfilled search fallback, got ${result.status}.`);
     }
     expect(search).toHaveBeenCalled();
-    expect(cli).toHaveBeenCalledWith(
-      expect.objectContaining({ command: expect.stringMatching(/\b(?:curl|fetch)\b/i) }),
-    );
+    expect(localWebResearch).toHaveBeenCalledWith(expect.objectContaining({
+      maxPagesToExtract: 3,
+    }));
+    expect(cli).not.toHaveBeenCalled();
     expect(result.result.text).toContain('AMC Randhurst 12');
     expect(result.result.needsUserInput).not.toBe(true);
     const searchResultEntry = busEntries.find((entry) => (
       entry.intentId === 'executor-tool-1-webmcp-search_web'
     ));
     expect(searchResultEntry?.meta).toMatchObject({
-      actorId: 'web-search-agent',
+      actorId: 'search-agent',
       actorRole: 'search-agent',
       parentActorId: 'execute-plan',
-      branchId: 'agent:web-search-agent',
-      agentLabel: 'Web Search Agent',
-      modelProvider: 'logact',
+      branchId: 'agent:search-agent',
+      agentLabel: 'Search Agent',
+      modelProvider: 'composite-search',
     });
     expect(searchResultEntry?.meta).not.toMatchObject({
       actorId: 'webmcp:search_web',
@@ -145,8 +180,8 @@ describe('resolveExecutionRequirements web search fallback', () => {
     ));
     expect(searchValidationEntry?.meta).toMatchObject({
       actorId: 'validation-agent',
-      parentActorId: 'web-search-agent',
-      branchId: 'agent:web-search-agent',
+      parentActorId: 'search-agent',
+      branchId: 'agent:search-agent',
     });
   });
 

@@ -32,6 +32,7 @@ import { buildReActToolsSection } from './reactToolCalling';
 import type { ToolDescriptor } from '../tools';
 import { createObservedBus } from './observedAgentBus';
 import type { BusEntryStep } from '../types';
+import { getDefaultSecretsManagerAgent, type SecretsManagerAgent } from '../chat-agents/Secrets';
 
 export type LocalToolCallExecutorOptions = {
   model: LanguageModel;
@@ -58,6 +59,8 @@ export type LocalToolCallExecutorOptions = {
    * up. Defaults to 2 so a single failed turn becomes a forced retry.
    */
   maxToolUseRetries?: number;
+  /** Local secret guard used to keep model prompts on refs and resolve refs only inside tool execution. */
+  secrets?: SecretsManagerAgent;
 };
 
 export type LocalToolCallExecutorCallbacks = AgentRunCallbacks
@@ -209,7 +212,11 @@ async function runOneInferencePass(
   callbacks: LocalToolCallExecutorCallbacks,
   turnState: ModelTurnState,
 ): Promise<AgentRunResult> {
-  const { model, tools, toolDescriptors, instructions, messages, signal } = options;
+  const { model, toolDescriptors, signal } = options;
+  const secrets = options.secrets ?? getDefaultSecretsManagerAgent();
+  const tools = secrets.wrapTools(options.tools);
+  const instructions = (await secrets.sanitizeText(options.instructions)).text;
+  const messages = await secrets.sanitizeModelMessages(options.messages);
   const maxSteps = Math.max(1, options.maxSteps ?? DEFAULT_MAX_STEPS);
   const hasTools = toolDescriptors.length > 0;
   const requireToolUse = options.requireToolUse ?? hasTools;
@@ -279,6 +286,7 @@ async function runOneInferencePass(
         isError = true;
       }
     }
+    resultPayload = (await secrets.sanitizeData(resultPayload)).value;
     callbacks.onToolResult?.(parsed.toolName, parsed.args, resultPayload, isError, toolCallId);
 
     const serialized = typeof resultPayload === 'string' ? resultPayload : safeStringify(resultPayload);
@@ -315,7 +323,16 @@ export async function runLocalToolCallExecutor(
   options: LocalToolCallExecutorOptions,
   callbacks: LocalToolCallExecutorCallbacks,
 ): Promise<AgentRunResult> {
-  const { messages, voters = [], completionChecker, maxIterations } = options;
+  const secrets = options.secrets ?? getDefaultSecretsManagerAgent();
+  const messages = await secrets.sanitizeModelMessages(options.messages);
+  const sanitizedOptions: LocalToolCallExecutorOptions = {
+    ...options,
+    instructions: (await secrets.sanitizeText(options.instructions)).text,
+    messages,
+    tools: secrets.wrapTools(options.tools),
+    secrets,
+  };
+  const { voters = [], completionChecker, maxIterations } = sanitizedOptions;
 
   let captured: AgentRunResult = { text: '', steps: 0 };
   let lastError: Error | null = null;
@@ -334,13 +351,13 @@ export async function runLocalToolCallExecutor(
       async infer() {
         const passOptions: LocalToolCallExecutorOptions = feedback
           ? {
-            ...options,
+            ...sanitizedOptions,
             messages: [
               ...messages,
-              { role: 'system', content: feedback },
+              { role: 'system', content: (await secrets.sanitizeText(feedback)).text },
             ],
           }
-          : options;
+          : sanitizedOptions;
         try {
           captured = await runOneInferencePass(passOptions, callbacks, turnState);
           return captured.text;

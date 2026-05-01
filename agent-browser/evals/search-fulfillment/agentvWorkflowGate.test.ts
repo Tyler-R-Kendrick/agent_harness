@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 const appRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(appRoot, '..');
 const requireFromApp = createRequire(path.join(appRoot, 'package.json'));
+const AGENTV_WORKFLOW_TIMEOUT_MS = 300_000;
 
 function readText(relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), 'utf8');
@@ -40,9 +41,15 @@ function resolvePackageBin(packageName: string): string {
   return path.resolve(path.dirname(packageJsonPath), binRelativePath);
 }
 
+function subprocessEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.NODE_V8_COVERAGE;
+  return env;
+}
+
 function runNode(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, args, { cwd, env: subprocessEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => {
@@ -414,7 +421,7 @@ describe('real AgentEvals workflow gate', () => {
     } finally {
       rmSync(outputDir, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, AGENTV_WORKFLOW_TIMEOUT_MS);
 
   it('executes real AgentV scoring for the latest bars subject-switch regression', async () => {
     const outputDir = mkdtempSync(path.join(tmpdir(), 'agentv-bars-subject-switch-'));
@@ -442,7 +449,7 @@ describe('real AgentEvals workflow gate', () => {
     } finally {
       rmSync(outputDir, { recursive: true, force: true });
     }
-  }, 120_000);
+  }, AGENTV_WORKFLOW_TIMEOUT_MS);
 
   it('lets the real AgentV tool-trajectory evaluator own trajectory scoring when code-grader input omits tool calls', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
@@ -462,6 +469,7 @@ describe('real AgentEvals workflow gate', () => {
       cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
       input: JSON.stringify(input),
       encoding: 'utf8',
+      env: subprocessEnv(),
     });
 
     expect(result.status).toBe(0);
@@ -503,6 +511,7 @@ describe('real AgentEvals workflow gate', () => {
       cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
       input: JSON.stringify(input),
       encoding: 'utf8',
+      env: subprocessEnv(),
     });
 
     expect(result.status).toBe(0);
@@ -543,6 +552,7 @@ describe('real AgentEvals workflow gate', () => {
       ], {
         cwd: repoRoot,
         encoding: 'utf8',
+        env: subprocessEnv(),
       });
 
       expect(result.status).toBe(0);
@@ -594,6 +604,7 @@ describe('real AgentEvals workflow gate', () => {
         cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
         input: JSON.stringify(input),
         encoding: 'utf8',
+        env: subprocessEnv(),
       });
 
       expect(result.status).toBe(0);
@@ -640,6 +651,7 @@ describe('real AgentEvals workflow gate', () => {
       cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
       input: JSON.stringify(input),
       encoding: 'utf8',
+      env: subprocessEnv(),
     });
 
     expect(result.status).toBe(0);
@@ -682,6 +694,7 @@ describe('real AgentEvals workflow gate', () => {
       cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
       input: JSON.stringify(input),
       encoding: 'utf8',
+      env: subprocessEnv(),
     });
 
     expect(result.status).toBe(0);
@@ -744,6 +757,7 @@ describe('real AgentEvals workflow gate', () => {
       cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
       input: JSON.stringify(input),
       encoding: 'utf8',
+      env: subprocessEnv(),
     });
 
     expect(result.status).toBe(0);
@@ -807,6 +821,7 @@ describe('real AgentEvals workflow gate', () => {
       ], {
         cwd: repoRoot,
         encoding: 'utf8',
+        env: subprocessEnv(),
       });
 
       expect(result.status).toBe(0);

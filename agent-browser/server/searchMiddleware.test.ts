@@ -66,6 +66,57 @@ describe('WebSearchBridge', () => {
     );
   });
 
+  it('parses search result HTML with DOM semantics instead of brittle tag-order matching', async () => {
+    const fetchImpl = vi.fn(async () => new Response(`
+      <html>
+        <body>
+          <div class="result">
+            <a href="/l/?kh=-1&amp;uddg=https%3A%2F%2Fexample.com%2Famc-randhurst" class="result__a">
+              <span>AMC <b>Randhurst</b> 12</span>
+            </a>
+            <div class="result__snippet">
+              Movie theater near Arlington Heights &amp; Mount Prospect.
+            </div>
+          </div>
+        </body>
+      </html>
+    `, { status: 200 }));
+    const bridge = new WebSearchBridge(fetchImpl);
+
+    await expect(bridge.search({ query: 'movie theaters near Arlington Heights IL', limit: 3 })).resolves.toEqual({
+      status: 'found',
+      query: 'movie theaters near Arlington Heights IL',
+      results: [{
+        title: 'AMC Randhurst 12',
+        url: 'https://example.com/amc-randhurst',
+        snippet: 'Movie theater near Arlington Heights & Mount Prospect.',
+      }],
+    });
+  });
+
+  it('decodes browser-native HTML entities while parsing provider result text', async () => {
+    const fetchImpl = vi.fn(async () => new Response(`
+      <html>
+        <body>
+          <li class="b_algo">
+            <h2><a href="https://example.com/bobs-theater">Bob&#x27;s Theater</a></h2>
+            <div class="b_caption"><p>Bob&#x27;s Theater is near Arlington Heights.</p></div>
+          </li>
+        </body>
+      </html>
+    `, { status: 200 }));
+    const bridge = new WebSearchBridge(fetchImpl);
+
+    await expect(bridge.search({ query: 'Bob theater Arlington Heights', limit: 3 })).resolves.toMatchObject({
+      status: 'found',
+      results: [{
+        title: "Bob's Theater",
+        url: 'https://example.com/bobs-theater',
+        snippet: "Bob's Theater is near Arlington Heights.",
+      }],
+    });
+  });
+
   it('returns unavailable when the provider request fails', async () => {
     const bridge = new WebSearchBridge(vi.fn(async () => {
       throw new Error('network blocked');
@@ -267,6 +318,40 @@ describe('WebPageBridge', () => {
         { name: 'Classic Cinemas Elk Grove Theatre', url: 'https://example.com/theaters', evidence: 'page text' },
       ]),
     });
+  });
+
+  it('reads HTML pages through a DOM parser so entities and links survive mixed attribute order', async () => {
+    const fetchImpl = vi.fn(async () => new Response(`
+      <html>
+        <head>
+          <title>Bob&#x27;s Theater near Arlington Heights</title>
+          <script data-source="schema" type="application/ld+json">
+            { "@type": "MovieTheater", "name": "Bob&#x27;s Theater", "url": "https://example.com/bobs-theater" }
+          </script>
+        </head>
+        <body>
+          <main>
+            <a data-kind="entity" href="/bobs-theater">Bob&#x27;s Theater</a>
+            <p>Bob&#x27;s Theater is a movie theater near Arlington Heights, IL.</p>
+          </main>
+        </body>
+      </html>
+    `, { status: 200 }));
+    const bridge = new WebPageBridge(fetchImpl);
+
+    const result = await bridge.read({ url: 'https://example.com/theaters' });
+
+    expect(result).toMatchObject({
+      status: 'read',
+      url: 'https://example.com/theaters',
+      title: "Bob's Theater near Arlington Heights",
+      links: [{ text: "Bob's Theater", url: 'https://example.com/bobs-theater' }],
+      jsonLd: [{ '@type': 'MovieTheater', name: "Bob's Theater", url: 'https://example.com/bobs-theater' }],
+    });
+    expect(result.text).toContain("Bob's Theater is a movie theater near Arlington Heights, IL.");
+    expect(result.entities).toEqual(expect.arrayContaining([
+      { name: "Bob's Theater", url: 'https://example.com/bobs-theater', evidence: 'json-ld' },
+    ]));
   });
 
   it('reads the decoded Bing redirect destination instead of the redirect shell page', async () => {

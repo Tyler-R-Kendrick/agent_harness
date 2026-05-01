@@ -2,7 +2,17 @@ import type { ModelMessage } from '@ai-sdk/provider-utils';
 import { PayloadType, type AgentBusPayloadMeta, type IAgentBus } from 'logact';
 import type { ToolPlanningCallbacks, ToolAgentRuntime, ToolPlan } from '../tool-agents/tool-agent';
 import { callTool } from '../tool-agents/tool-agent';
-import { WEB_SEARCH_AGENT_ID, WEB_SEARCH_AGENT_LABEL, selectWebSearchAgentTools } from '../chat-agents/WebSearch';
+import {
+  COMPOSITE_SEARCH_AGENT_ID,
+  COMPOSITE_SEARCH_AGENT_LABEL,
+  CompositeSearchAgent,
+  compositeSearchResultToWebSearchResult,
+  createDefaultSearchReranker,
+  createSearchProviderAdapter,
+  selectCompositeSearchAgentTools,
+  type CompositeSearchResult,
+  type SearchProviderAdapter,
+} from '../chat-agents/Search';
 import {
   LOCAL_WEB_RESEARCH_AGENT_ID,
   LOCAL_WEB_RESEARCH_AGENT_LABEL,
@@ -177,6 +187,13 @@ const REQUIREMENT_TOOL_IDS = {
   readPage: 'webmcp:read_web_page',
 } as const;
 
+const SEARCH_AGENT_OWNER_IDS = new Set<string>([
+  COMPOSITE_SEARCH_AGENT_ID,
+  'web-search-agent',
+  'local-web-research-agent',
+  'rdf-web-search-agent',
+]);
+
 const MAX_PAGES_TO_READ = 2;
 const MAX_DISCOVERY_SEARCH_RESULTS = 5;
 const MAX_CANDIDATES_TO_ENRICH = 4;
@@ -338,46 +355,29 @@ export async function resolveExecutionRequirements({
       return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
     }
     context.searchQuery = buildSearchQuery(intent, context.location);
-    const webSearchPromise = hasAvailableSearchPath(runtime, allowedToolIds)
-      ? searchWebWithFallback({
-        runtime,
-        allowedToolIds,
-        query: context.searchQuery,
-        limit: 3,
-        call,
-      })
-      : Promise.resolve({
-        status: 'unavailable' as const,
-        query: context.searchQuery,
-        results: [],
-        reason: 'No web search tool is available.',
-      });
-    const localWebResearchPromise = localWebResearchWithFallback({
+    const compositeSearch = await runCompositeSearchProviders({
       runtime,
       allowedToolIds,
       question: intent.currentTaskText,
       query: context.searchQuery,
+      intent,
+      location: context.location,
       limit: Math.max(3, intent.requestedCount ?? 3),
       call,
     });
-    const semanticSearchPromise = semanticSearchWithFallback({
-      runtime,
-      allowedToolIds,
-      question: intent.currentTaskText,
-      limit: Math.max(3, intent.requestedCount ?? 3),
-      call,
-    });
-    const [webSearchResult, localWebResearchResult, semanticSearchResult] = await Promise.all([
-      webSearchPromise,
-      localWebResearchPromise,
-      semanticSearchPromise,
-    ]);
-    context.webSearchResult = webSearchResult;
-    context.localWebResearchResult = localWebResearchResult;
-    context.semanticSearchResult = semanticSearchResult;
-    const mergedSearchResult = mergeSearchFanInResults(webSearchResult, localWebResearchResult, semanticSearchResult, intent);
+    context.webSearchResult = compositeSearch.webSearchResult;
+    context.localWebResearchResult = compositeSearch.localWebResearchResult;
+    context.semanticSearchResult = compositeSearch.semanticSearchResult;
+    const mergedSearchResult = compositeSearch.searchResult;
     context.searchResult = mergedSearchResult;
-    await appendSearchFanIn(executionContext?.bus, webSearchResult, localWebResearchResult, semanticSearchResult, mergedSearchResult);
+    await appendSearchFanIn(
+      executionContext?.bus,
+      compositeSearch.webSearchResult,
+      compositeSearch.localWebResearchResult,
+      compositeSearch.semanticSearchResult,
+      mergedSearchResult,
+      compositeSearch.compositeResult,
+    );
     if (mergedSearchResult.status === 'found' && mergedSearchResult.results.length > 0) {
       context.searchCandidates = await fulfillSearchCandidates({
         searchResult: mergedSearchResult,
@@ -622,6 +622,177 @@ async function blockForMissingSearch({
   };
 }
 
+async function runCompositeSearchProviders({
+  runtime,
+  allowedToolIds,
+  question,
+  query,
+  intent,
+  location,
+  limit,
+  call,
+}: {
+  runtime: ToolAgentRuntime;
+  allowedToolIds: Set<string>;
+  question: string;
+  query: string;
+  intent: ExecutionIntent;
+  location?: string;
+  limit: number;
+  call: (toolId: string, args: unknown) => Promise<unknown>;
+}): Promise<{
+  compositeResult: CompositeSearchResult;
+  webSearchResult: SearchWebResult;
+  localWebResearchResult?: WebResearchRunResult;
+  semanticSearchResult?: RdfAgentAnswer;
+  searchResult: SearchWebResult;
+}> {
+  let webSearchResult: SearchWebResult = {
+    status: 'unavailable',
+    query,
+    results: [],
+    reason: 'No web search tool is available.',
+  };
+  let localWebResearchResult: WebResearchRunResult | undefined;
+  let semanticSearchResult: RdfAgentAnswer | undefined;
+  const providers: SearchProviderAdapter[] = [];
+
+  if (hasAvailableSearchPath(runtime, allowedToolIds)) {
+    providers.push(createSearchProviderAdapter({
+      id: 'web-search',
+      label: 'Web search',
+      kinds: ['web'],
+      search: async (request) => {
+        webSearchResult = await searchWebWithFallback({
+          runtime,
+          allowedToolIds,
+          query: request.query,
+          limit: request.limit,
+          call,
+        });
+        return {
+          status: webSearchResult.status,
+          query: webSearchResult.query,
+          results: webSearchResult.results.map((item, index) => ({
+            ...item,
+            rank: index + 1,
+            score: scoreWebSearchItem(item, intent),
+          })),
+          ...(webSearchResult.reason ? { reason: webSearchResult.reason } : {}),
+        };
+      },
+    }));
+  }
+
+  if (hasAvailableLocalWebResearchPath(runtime, allowedToolIds)) {
+    providers.push(createSearchProviderAdapter({
+      id: 'local-web-research',
+      label: 'Local web research',
+      kinds: ['local-web-research', 'crawler'],
+      search: async (request) => {
+        localWebResearchResult = await localWebResearchWithFallback({
+          runtime,
+          allowedToolIds,
+          question,
+          query: request.query,
+          limit: request.limit,
+          maxPagesToExtract: request.contentPlan.maxPagesToExtract,
+          call,
+        });
+        const items = localWebResearchResult
+          ? localResearchToSearchItems(localWebResearchResult, intent)
+          : [];
+        return {
+          status: items.length > 0
+            ? 'found'
+            : localWebResearchResult?.errors.length
+              ? 'unavailable'
+              : 'empty',
+          query: localWebResearchResult?.plannedQueries[0] ?? request.query,
+          results: items.map((item, index) => ({
+            title: item.title,
+            url: item.url,
+            snippet: item.snippet,
+            rank: index + 1,
+            score: localItemScore(item),
+            metadata: { evidenceKind: 'crawled-page' },
+          })),
+          errors: (localWebResearchResult?.errors ?? []).map((error) => ({
+            providerId: 'local-web-research',
+            message: error.message,
+            recoverable: error.recoverable,
+          })),
+        };
+      },
+    }));
+  }
+
+  if (hasAvailableSemanticSearchPath(runtime, allowedToolIds)) {
+    providers.push(createSearchProviderAdapter({
+      id: 'rdf-semantic',
+      label: 'RDF semantic search',
+      kinds: ['rdf'],
+      search: async (request) => {
+        semanticSearchResult = await semanticSearchWithFallback({
+          runtime,
+          allowedToolIds,
+          question,
+          limit: request.limit,
+          call,
+        });
+        const items = semanticSearchResult
+          ? semanticResultsToSearchItems(semanticSearchResult, intent)
+          : [];
+        return {
+          status: items.length > 0
+            ? 'found'
+            : semanticSearchResult?.errors.length
+              ? 'unavailable'
+              : 'empty',
+          query: semanticSearchResult?.query ?? request.query,
+          results: items.map((item, index) => ({
+            title: item.title,
+            url: item.url,
+            snippet: item.snippet,
+            rank: index + 1,
+            score: semanticItemScore(item),
+          })),
+          errors: (semanticSearchResult?.errors ?? []).map((error) => ({
+            providerId: 'rdf-semantic',
+            message: error.message,
+            recoverable: true,
+          })),
+        };
+      },
+    }));
+  }
+
+  const compositeResult = await new CompositeSearchAgent({
+    providers,
+    reranker: createDefaultSearchReranker({
+      providerWeights: {
+        'local-web-research': 0.2,
+        'rdf-semantic': 0.08,
+        'web-search': 0,
+      },
+    }),
+  }).search({
+    question,
+    query,
+    subject: intent.answerSubject,
+    ...(location ? { location } : {}),
+    ...(intent.rankingGoal ? { rankingGoal: intent.rankingGoal } : {}),
+    limit,
+  });
+  return {
+    compositeResult,
+    webSearchResult,
+    localWebResearchResult,
+    semanticSearchResult,
+    searchResult: compositeSearchResultToWebSearchResult(compositeResult),
+  };
+}
+
 async function searchWebWithFallback({
   runtime,
   allowedToolIds,
@@ -651,10 +822,7 @@ async function searchWebWithFallback({
   for (const toolId of fallbackSearchToolIds(runtime, allowedToolIds)) {
     if (attemptedToolIds.has(toolId)) continue;
     attemptedToolIds.add(toolId);
-    const args = toolId === 'cli'
-      ? { command: buildCliWebSearchCommand(query, limit) }
-      : { query, limit };
-    const result = normalizeSearchToolResult(await call(toolId, args), query);
+    const result = normalizeSearchToolResult(await call(toolId, { query, limit }), query);
     if (result.status === 'found' && result.results.length > 0) return result;
     attempts.push(result);
   }
@@ -682,9 +850,15 @@ function hasAvailableSemanticSearchPath(runtime: ToolAgentRuntime, allowedToolId
 }
 
 function fallbackSearchToolIds(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): string[] {
-  return selectWebSearchAgentTools(allRuntimeDescriptors(runtime), '')
+  return selectCompositeSearchAgentTools(allRuntimeDescriptors(runtime), '')
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.search)
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.readPage)
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.localWebResearch)
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.semanticSearch)
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.recall)
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.location)
+    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.elicit)
+    .filter((toolId) => toolId !== 'cli')
     .filter((toolId) => isToolAllowedAndAvailable(runtime, allowedToolIds, toolId));
 }
 
@@ -692,7 +866,7 @@ function allRuntimeDescriptors(runtime: ToolAgentRuntime): ToolDescriptorLike[] 
   return [...runtime.descriptors, ...(runtime.generatedDescriptors ?? [])];
 }
 
-type ToolDescriptorLike = Parameters<typeof selectWebSearchAgentTools>[0][number];
+type ToolDescriptorLike = Parameters<typeof selectCompositeSearchAgentTools>[0][number];
 
 function normalizeSearchToolResult(result: unknown, query: string): SearchWebResult {
   return normalizeSearchResult(parseStructuredToolOutput(result), query);
@@ -704,6 +878,7 @@ async function localWebResearchWithFallback({
   question,
   query,
   limit,
+  maxPagesToExtract,
   call,
 }: {
   runtime: ToolAgentRuntime;
@@ -711,6 +886,7 @@ async function localWebResearchWithFallback({
   question: string;
   query: string;
   limit: number;
+  maxPagesToExtract?: number;
   call: (toolId: string, args: unknown) => Promise<unknown>;
 }): Promise<WebResearchRunResult | undefined> {
   if (!isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.localWebResearch)) {
@@ -721,7 +897,7 @@ async function localWebResearchWithFallback({
       question,
       queries: [query],
       maxSearchResults: Math.max(3, limit),
-      maxPagesToExtract: Math.max(2, Math.min(5, limit)),
+      maxPagesToExtract: Math.max(0, maxPagesToExtract ?? Math.max(2, Math.min(5, limit))),
       maxEvidenceChunks: Math.max(3, limit),
       synthesize: false,
     }),
@@ -955,26 +1131,40 @@ function normalizeRdfSearchResult(value: unknown): RdfSearchResult | null {
   };
 }
 
-function mergeSearchFanInResults(
-  webResult: SearchWebResult,
-  localResearch: WebResearchRunResult | undefined,
-  semanticAnswer: RdfAgentAnswer | undefined,
-  intent: ExecutionIntent,
-): SearchWebResult {
-  const localItems = localResearch
-    ? localResearchToSearchItems(localResearch, intent)
-    : [];
-  const semanticItems = semanticAnswer
-    ? semanticResultsToSearchItems(semanticAnswer, intent)
-    : [];
-  if (localItems.length === 0 && semanticItems.length === 0) return webResult;
-  const mergedResults = dedupeSearchItems([...localItems, ...semanticItems, ...webResult.results]);
-  return {
-    status: 'found',
-    query: webResult.query || localResearch?.question || semanticAnswer?.query || intent.currentTaskText,
-    results: mergedResults,
-    ...(webResult.reason ? { reason: webResult.reason } : {}),
+function scoreWebSearchItem(item: SearchWebItem, intent: ExecutionIntent): number {
+  const text = `${item.title} ${item.snippet} ${item.url}`;
+  const itemTokens = expandedTokenSet(text);
+  const subjectTokens = expandedTokenSet(intent.answerSubject);
+  const subjectOverlap = subjectTokens.size > 0
+    ? overlapScore(itemTokens, subjectTokens) / subjectTokens.size
+    : 0;
+  const aggregatePenalty = isAggregateResult(item.title, intent) ? -0.18 : 0.08;
+  return boundedScore(0.55 + subjectOverlap * 0.25 + aggregatePenalty);
+}
+
+function localItemScore(item: SearchWebItem): number {
+  const scored = item as SearchWebItem & {
+    localResearchScore?: number;
+    localSearchRank?: number;
+    localResearchRank?: number;
   };
+  const evidenceScore = typeof scored.localResearchScore === 'number' ? scored.localResearchScore : 0.65;
+  const rank = scored.localResearchRank ?? scored.localSearchRank ?? 5;
+  return boundedScore(evidenceScore + Math.max(0, 0.18 - rank * 0.025));
+}
+
+function semanticItemScore(item: SearchWebItem): number {
+  const scored = item as SearchWebItem & {
+    semanticScore?: number;
+    semanticRank?: number;
+  };
+  const semanticScore = typeof scored.semanticScore === 'number' ? scored.semanticScore : 0.55;
+  const rank = scored.semanticRank ?? 5;
+  return boundedScore(semanticScore + Math.max(0, 0.12 - rank * 0.02));
+}
+
+function boundedScore(score: number): number {
+  return Math.max(0, Math.min(1, score));
 }
 
 function localResearchToSearchItems(
@@ -1074,40 +1264,6 @@ function parseJsonFromString(value: string): unknown | null {
   }
 }
 
-function buildCliWebSearchCommand(query: string, limit: number): string {
-  const script = [
-    'const query = process.argv[1] || "";',
-    'const limit = Math.max(1, Math.min(10, Number(process.argv[2] || 5)));',
-    'const providers = [`https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`, `https://www.bing.com/search?q=${encodeURIComponent(query)}`];',
-    'const strip = (value) => value.replace(/<[^>]+>/g, " ").replace(/\\s+/g, " ").trim();',
-    'const decode = (value) => strip(value).replace(/&amp;/g, "&").replace(/&quot;/g, "\\"").replace(/&#39;/g, "\'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");',
-    'const parse = (html) => {',
-    '  const out = [];',
-    '  for (const match of html.matchAll(/<a[^>]*class=["\'][^"\']*result__a[^"\']*["\'][^>]*href=["\']([^"\']+)["\'][^>]*>([\\s\\S]*?)<\\/a>[\\s\\S]*?<a[^>]*class=["\'][^"\']*result__snippet[^"\']*["\'][^>]*>([\\s\\S]*?)<\\/a>/gi)) out.push({ url: match[1], title: decode(match[2]), snippet: decode(match[3]) });',
-    '  for (const match of html.matchAll(/<li\\b[^>]*class=["\'][^"\']*\\bb_algo\\b[^"\']*["\'][^>]*>([\\s\\S]*?)<\\/li>/gi)) { const link = match[1].match(/<h2\\b[^>]*>\\s*<a\\b[^>]*href=["\']([^"\']+)["\'][^>]*>([\\s\\S]*?)<\\/a>\\s*<\\/h2>/i); const snip = match[1].match(/<p\\b[^>]*>([\\s\\S]*?)<\\/p>/i); if (link) out.push({ url: link[1], title: decode(link[2]), snippet: decode(snip?.[1] || "") }); }',
-    '  return out.filter((item) => item.title && item.url).slice(0, limit);',
-    '};',
-    '(async () => {',
-    '  const reasons = [];',
-    '  for (const url of providers) {',
-    '    try {',
-    '      const response = await fetch(url, { headers: { "User-Agent": "agent-browser-cli-search/0.1", "Accept": "text/html" } });',
-    '      if (!response.ok) { reasons.push(`provider returned ${response.status}`); continue; }',
-    '      const results = parse(await response.text());',
-    '      if (results.length) { console.log(JSON.stringify({ status: "found", query, results })); return; }',
-    '      reasons.push("no results");',
-    '    } catch (error) { reasons.push(error && error.message ? error.message : String(error)); }',
-    '  }',
-    '  console.log(JSON.stringify({ status: "unavailable", query, reason: reasons.join(" "), results: [] }));',
-    '})();',
-  ].join('\n');
-  return `node -e ${shellQuote(script)} ${shellQuote(query)} ${Math.max(1, Math.min(10, Math.floor(limit)))}`;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 async function callObservedTool(
   runtime: ToolAgentRuntime,
   toolId: string,
@@ -1143,43 +1299,19 @@ function resolveAssignedToolOwner(
 ): string | undefined {
   if (!assignments) return undefined;
   return Object.entries(assignments)
-    .find(([actorId, toolIds]) => (
-      (actorId === WEB_SEARCH_AGENT_ID || actorId === LOCAL_WEB_RESEARCH_AGENT_ID || actorId === RDF_WEB_SEARCH_AGENT_ID)
-      && toolIds.includes(toolId)
-    ))
+    .find(([actorId, toolIds]) => SEARCH_AGENT_OWNER_IDS.has(actorId) && toolIds.includes(toolId))
     ?.[0];
 }
 
 function toolOwnerMeta(toolId: string, assignedOwner: string | undefined): AgentBusPayloadMeta {
-  if (assignedOwner === WEB_SEARCH_AGENT_ID) {
-    return {
-      actorId: WEB_SEARCH_AGENT_ID,
-      actorRole: 'search-agent',
-      parentActorId: 'execute-plan',
-      branchId: `agent:${WEB_SEARCH_AGENT_ID}`,
-      agentLabel: WEB_SEARCH_AGENT_LABEL,
-      modelProvider: 'logact',
-    };
+  if (assignedOwner && SEARCH_AGENT_OWNER_IDS.has(assignedOwner)) {
+    return searchAgentOwnerMeta(assignedOwner);
   }
-  if (assignedOwner === LOCAL_WEB_RESEARCH_AGENT_ID) {
-    return {
-      actorId: LOCAL_WEB_RESEARCH_AGENT_ID,
-      actorRole: 'search-agent',
-      parentActorId: 'execute-plan',
-      branchId: `agent:${LOCAL_WEB_RESEARCH_AGENT_ID}`,
-      agentLabel: LOCAL_WEB_RESEARCH_AGENT_LABEL,
-      modelProvider: 'deterministic-local-web',
-    };
+  if (toolId === REQUIREMENT_TOOL_IDS.localWebResearch) {
+    return searchAgentOwnerMeta(LOCAL_WEB_RESEARCH_AGENT_ID);
   }
-  if (assignedOwner === RDF_WEB_SEARCH_AGENT_ID) {
-    return {
-      actorId: RDF_WEB_SEARCH_AGENT_ID,
-      actorRole: 'search-agent',
-      parentActorId: 'execute-plan',
-      branchId: `agent:${RDF_WEB_SEARCH_AGENT_ID}`,
-      agentLabel: RDF_WEB_SEARCH_AGENT_LABEL,
-      modelProvider: 'deterministic-rdf',
-    };
+  if (toolId === REQUIREMENT_TOOL_IDS.semanticSearch) {
+    return searchAgentOwnerMeta(RDF_WEB_SEARCH_AGENT_ID);
   }
   return {
     actorId: toolId,
@@ -1188,6 +1320,24 @@ function toolOwnerMeta(toolId: string, assignedOwner: string | undefined): Agent
     branchId: 'agent:executor',
     agentLabel: toolId,
     modelProvider: 'tool',
+  };
+}
+
+function searchAgentOwnerMeta(ownerId: string): AgentBusPayloadMeta {
+  const effectiveOwnerId = ownerId === 'web-search-agent' ? COMPOSITE_SEARCH_AGENT_ID : ownerId;
+  const ownerLabels: Record<string, { label: string; provider: string }> = {
+    [COMPOSITE_SEARCH_AGENT_ID]: { label: COMPOSITE_SEARCH_AGENT_LABEL, provider: 'composite-search' },
+    [LOCAL_WEB_RESEARCH_AGENT_ID]: { label: LOCAL_WEB_RESEARCH_AGENT_LABEL, provider: 'deterministic-local-web' },
+    [RDF_WEB_SEARCH_AGENT_ID]: { label: RDF_WEB_SEARCH_AGENT_LABEL, provider: 'deterministic-rdf' },
+  };
+  const owner = ownerLabels[effectiveOwnerId] ?? { label: effectiveOwnerId, provider: 'search-agent' };
+  return {
+    actorId: effectiveOwnerId,
+    actorRole: 'search-agent',
+    parentActorId: 'execute-plan',
+    branchId: `agent:${effectiveOwnerId}`,
+    agentLabel: owner.label,
+    modelProvider: owner.provider,
   };
 }
 
@@ -1924,6 +2074,7 @@ async function appendSearchFanIn(
   localResearch: WebResearchRunResult | undefined,
   semanticAnswer: RdfAgentAnswer | undefined,
   mergedResult: SearchWebResult,
+  compositeResult?: CompositeSearchResult,
 ): Promise<void> {
   if (!bus || typeof bus.append !== 'function') return;
   const localResultCount = localResearch?.evidence.length ?? 0;
@@ -1944,9 +2095,10 @@ async function appendSearchFanIn(
     text: [
       ...fanInSummaryLines,
       `Web search status: ${webResult.status}; web results: ${webResult.results.length}.`,
+      compositeResult ? `Composite search content depth: ${compositeResult.contentPlan.depth}; pages to extract: ${compositeResult.contentPlan.maxPagesToExtract}.` : null,
       `Local web research evidence chunks: ${localResultCount}; local search results: ${localResearch?.searchResults.length ?? 0}.${localErrorText}`,
       `RDF semantic search results: ${semanticResultCount}; merged results: ${mergedResult.results.length}.${semanticErrorText}`,
-    ].join('\n'),
+    ].filter((line): line is string => Boolean(line)).join('\n'),
     meta: {
       actorId: 'search-fan-in-merger',
       actorRole: 'executor',

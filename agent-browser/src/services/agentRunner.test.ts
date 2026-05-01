@@ -13,6 +13,7 @@ vi.mock('ai', async (importOriginal) => {
 
 import { generateText } from 'ai';
 import { runToolAgent, type AgentRunOptions } from './agentRunner';
+import { MemorySecretStore, createSecretsManagerAgent } from '../chat-agents/Secrets';
 
 const mockGenerateText = generateText as ReturnType<typeof vi.fn>;
 
@@ -63,7 +64,7 @@ describe('runToolAgent', () => {
     expect(mockGenerateText).toHaveBeenCalledWith(
       expect.objectContaining({
         model: model,
-        tools: { echo: echoTool },
+        tools: expect.objectContaining({ echo: expect.objectContaining({ execute: expect.any(Function) }) }),
         system: 'You are a helpful agent.',
         messages: options.messages,
         stopWhen: expect.any(Function),
@@ -211,5 +212,63 @@ describe('runToolAgent', () => {
 
     expect(onToolCall).toHaveBeenCalledWith('cli', { command: 'echo hello' }, 'call-1');
     expect(onToolResult).toHaveBeenCalledWith('cli', { command: 'echo hello' }, { stdout: 'hello', stderr: '', exitCode: 0 }, false, 'call-1');
+  });
+
+  it('sanitizes model inputs and wraps tools so only tool execution receives resolved secrets', async () => {
+    const secret = 'ghp_abcdefghijklmnopqrstuvwxyz123456';
+    const secretRef = 'secret-ref://local/github-token';
+    const store = new MemorySecretStore();
+    await store.set({
+      id: 'github-token',
+      value: secret,
+      label: 'github-token',
+      source: 'manual',
+      createdAt: '2026-04-30T00:00:00.000Z',
+      updatedAt: '2026-04-30T00:00:00.000Z',
+    });
+    const secrets = createSecretsManagerAgent({
+      store,
+      idFactory: () => 'detected-token',
+      now: () => '2026-04-30T00:00:00.000Z',
+    });
+    const authToolExecute = vi.fn(async ({ token }: { token: string }) => ({ echoed: token }));
+    const authTool = tool({
+      description: 'Calls a protected API',
+      inputSchema: z.object({ token: z.string() }),
+      execute: authToolExecute,
+    });
+    mockGenerateText.mockImplementationOnce(async ({ tools }) => {
+      const output = await (tools.auth as { execute: (input: unknown, options?: unknown) => Promise<unknown> })
+        .execute({ token: secretRef }, { toolCallId: 'call-1' });
+      expect(output).toEqual({ echoed: secretRef });
+      return {
+        text: 'done',
+        toolCalls: [],
+        toolResults: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
+    });
+
+    const model = makeModel();
+    await runToolAgent(
+      {
+        model: model as never,
+        tools: { auth: authTool },
+        instructions: `Use token ${secret}.`,
+        messages: [{ role: 'user', content: `token=${secret}` }],
+        secrets,
+      },
+      {},
+    );
+
+    const generateOptions = mockGenerateText.mock.calls[0][0] as {
+      system: string;
+      messages: Array<{ content: string }>;
+    };
+    expect(generateOptions.system).not.toContain(secret);
+    expect(JSON.stringify(generateOptions.messages)).not.toContain(secret);
+    expect(generateOptions.system).toContain(secretRef);
+    expect(authToolExecute).toHaveBeenCalledWith({ token: secret }, { toolCallId: 'call-1' });
   });
 });
