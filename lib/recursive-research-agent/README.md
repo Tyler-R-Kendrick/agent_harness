@@ -26,8 +26,7 @@ This package is the generic recursive research controller. The Agent Browser int
 
 - `WebSearch` owns normal web search.
 - `LocalWebResearch` owns local SearXNG plus extraction and citation ranking.
-- `SemanticSearch` owns RDF/SPARQL semantic search.
-- `executionRequirements.ts` runs available branches in parallel and appends a `search-fan-in-merger` AgentBus entry before reranking.
+- Recursive research can be wired above those tools as a bounded planner when the caller wants multi-iteration research.
 
 ## Usage
 
@@ -107,7 +106,7 @@ Results include the task, optional final answer, evidence, citations, claims, ga
 
 ## Extension Points
 
-- Semantic RDF/SPARQL search via `semanticSearchAgent`.
+- Structured data expansion via injected caller-owned tools.
 - Local-index search via `localIndexSearchAgent`.
 - Scored link-following through `links/`.
 - Optional LLM gap analysis with JSON validation and deterministic fallback.

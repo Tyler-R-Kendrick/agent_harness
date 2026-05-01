@@ -20,12 +20,6 @@ import {
   type WebResearchRunResult,
   type WebSearchResult as LocalWebSearchResult,
 } from '../chat-agents/LocalWebResearch';
-import {
-  RDF_WEB_SEARCH_AGENT_ID,
-  RDF_WEB_SEARCH_AGENT_LABEL,
-  type AgentAnswer as RdfAgentAnswer,
-  type SearchResult as RdfSearchResult,
-} from '../chat-agents/SemanticSearch';
 import type { AgentRunResult } from './agentRunner';
 import type { BusEntryStep, SearchTurnContext, ValidationContract } from '../types';
 import { compileValidationContract } from './constraintCompiler';
@@ -103,7 +97,6 @@ export interface ResolvedExecutionContext {
   searchQuery?: string;
   webSearchResult?: SearchWebResult;
   localWebResearchResult?: WebResearchRunResult;
-  semanticSearchResult?: RdfAgentAnswer;
   searchResult?: SearchWebResult;
   searchCandidates?: SearchCandidate[];
   conversationResolution?: ConversationSearchResolution;
@@ -183,15 +176,13 @@ const REQUIREMENT_TOOL_IDS = {
   elicit: 'webmcp:elicit_user_input',
   search: 'webmcp:search_web',
   localWebResearch: 'webmcp:local_web_research',
-  semanticSearch: 'webmcp:semantic_search',
   readPage: 'webmcp:read_web_page',
 } as const;
 
 const SEARCH_AGENT_OWNER_IDS = new Set<string>([
   COMPOSITE_SEARCH_AGENT_ID,
   'web-search-agent',
-  'local-web-research-agent',
-  'rdf-web-search-agent',
+  LOCAL_WEB_RESEARCH_AGENT_ID,
 ]);
 
 const MAX_PAGES_TO_READ = 2;
@@ -342,7 +333,6 @@ export async function resolveExecutionRequirements({
     if (
       !hasAvailableSearchPath(runtime, allowedToolIds)
       && !hasAvailableLocalWebResearchPath(runtime, allowedToolIds)
-      && !hasAvailableSemanticSearchPath(runtime, allowedToolIds)
     ) {
       const blocked = await blockForMissingSearch({
         allowedToolIds,
@@ -367,14 +357,12 @@ export async function resolveExecutionRequirements({
     });
     context.webSearchResult = compositeSearch.webSearchResult;
     context.localWebResearchResult = compositeSearch.localWebResearchResult;
-    context.semanticSearchResult = compositeSearch.semanticSearchResult;
     const mergedSearchResult = compositeSearch.searchResult;
     context.searchResult = mergedSearchResult;
     await appendSearchFanIn(
       executionContext?.bus,
       compositeSearch.webSearchResult,
       compositeSearch.localWebResearchResult,
-      compositeSearch.semanticSearchResult,
       mergedSearchResult,
       compositeSearch.compositeResult,
     );
@@ -644,7 +632,6 @@ async function runCompositeSearchProviders({
   compositeResult: CompositeSearchResult;
   webSearchResult: SearchWebResult;
   localWebResearchResult?: WebResearchRunResult;
-  semanticSearchResult?: RdfAgentAnswer;
   searchResult: SearchWebResult;
 }> {
   let webSearchResult: SearchWebResult = {
@@ -654,7 +641,6 @@ async function runCompositeSearchProviders({
     reason: 'No web search tool is available.',
   };
   let localWebResearchResult: WebResearchRunResult | undefined;
-  let semanticSearchResult: RdfAgentAnswer | undefined;
   const providers: SearchProviderAdapter[] = [];
 
   if (hasAvailableSearchPath(runtime, allowedToolIds)) {
@@ -727,52 +713,11 @@ async function runCompositeSearchProviders({
     }));
   }
 
-  if (hasAvailableSemanticSearchPath(runtime, allowedToolIds)) {
-    providers.push(createSearchProviderAdapter({
-      id: 'rdf-semantic',
-      label: 'RDF semantic search',
-      kinds: ['rdf'],
-      search: async (request) => {
-        semanticSearchResult = await semanticSearchWithFallback({
-          runtime,
-          allowedToolIds,
-          question,
-          limit: request.limit,
-          call,
-        });
-        const items = semanticSearchResult
-          ? semanticResultsToSearchItems(semanticSearchResult, intent)
-          : [];
-        return {
-          status: items.length > 0
-            ? 'found'
-            : semanticSearchResult?.errors.length
-              ? 'unavailable'
-              : 'empty',
-          query: semanticSearchResult?.query ?? request.query,
-          results: items.map((item, index) => ({
-            title: item.title,
-            url: item.url,
-            snippet: item.snippet,
-            rank: index + 1,
-            score: semanticItemScore(item),
-          })),
-          errors: (semanticSearchResult?.errors ?? []).map((error) => ({
-            providerId: 'rdf-semantic',
-            message: error.message,
-            recoverable: true,
-          })),
-        };
-      },
-    }));
-  }
-
   const compositeResult = await new CompositeSearchAgent({
     providers,
     reranker: createDefaultSearchReranker({
       providerWeights: {
         'local-web-research': 0.2,
-        'rdf-semantic': 0.08,
         'web-search': 0,
       },
     }),
@@ -788,7 +733,6 @@ async function runCompositeSearchProviders({
     compositeResult,
     webSearchResult,
     localWebResearchResult,
-    semanticSearchResult,
     searchResult: compositeSearchResultToWebSearchResult(compositeResult),
   };
 }
@@ -845,16 +789,12 @@ function hasAvailableLocalWebResearchPath(runtime: ToolAgentRuntime, allowedTool
   return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.localWebResearch);
 }
 
-function hasAvailableSemanticSearchPath(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): boolean {
-  return isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.semanticSearch);
-}
 
 function fallbackSearchToolIds(runtime: ToolAgentRuntime, allowedToolIds: Set<string>): string[] {
   return selectCompositeSearchAgentTools(allRuntimeDescriptors(runtime), '')
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.search)
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.readPage)
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.localWebResearch)
-    .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.semanticSearch)
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.recall)
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.location)
     .filter((toolId) => toolId !== REQUIREMENT_TOOL_IDS.elicit)
@@ -1029,108 +969,6 @@ function normalizeLocalEvidenceChunk(value: unknown): LocalEvidenceChunk | null 
   };
 }
 
-async function semanticSearchWithFallback({
-  runtime,
-  allowedToolIds,
-  question,
-  limit,
-  call,
-}: {
-  runtime: ToolAgentRuntime;
-  allowedToolIds: Set<string>;
-  question: string;
-  limit: number;
-  call: (toolId: string, args: unknown) => Promise<unknown>;
-}): Promise<RdfAgentAnswer | undefined> {
-  if (!isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.semanticSearch)) {
-    return undefined;
-  }
-  return normalizeRdfAgentAnswer(
-    await call(REQUIREMENT_TOOL_IDS.semanticSearch, { question, limit }),
-    question,
-  );
-}
-
-function normalizeRdfAgentAnswer(result: unknown, question: string): RdfAgentAnswer {
-  const parsed = parseStructuredToolOutput(result);
-  if (isRecord(parsed)) {
-    const intent = isRecord(parsed.intent)
-      && typeof parsed.intent.kind === 'string'
-      ? parsed.intent as RdfAgentAnswer['intent']
-      : { kind: 'entitySearch' as const, text: question, limit: 5 };
-    const errors = Array.isArray(parsed.errors)
-      ? parsed.errors
-        .map((error) => {
-          if (!isRecord(error)) return null;
-          const message = typeof error.message === 'string' ? error.message : '';
-          const source = typeof error.source === 'string' ? error.source : undefined;
-          return message ? { ...(source ? { source } : {}), message } : null;
-        })
-        .filter((error): error is RdfAgentAnswer['errors'][number] => Boolean(error))
-      : [];
-    const results = Array.isArray(parsed.results)
-      ? parsed.results
-        .map(normalizeRdfSearchResult)
-        .filter((item): item is RdfSearchResult => Boolean(item))
-      : [];
-    return {
-      query: typeof parsed.query === 'string' ? parsed.query : question,
-      intent,
-      endpointId: typeof parsed.endpointId === 'string' ? parsed.endpointId : undefined,
-      generatedQuery: typeof parsed.generatedQuery === 'string' ? parsed.generatedQuery : undefined,
-      results,
-      errors,
-      elapsedMs: typeof parsed.elapsedMs === 'number' ? parsed.elapsedMs : 0,
-    };
-  }
-  return {
-    query: question,
-    intent: { kind: 'entitySearch', text: question, limit: 5 },
-    results: [],
-    errors: [{ source: 'semantic-search', message: 'Semantic search did not return a structured result.' }],
-    elapsedMs: 0,
-  };
-}
-
-function normalizeRdfSearchResult(value: unknown): RdfSearchResult | null {
-  if (!isRecord(value)) return null;
-  const id = typeof value.id === 'string' && value.id.trim() ? value.id.trim() : undefined;
-  const title = typeof value.title === 'string' && value.title.trim() ? decodeHtmlEntities(value.title).trim() : undefined;
-  const url = typeof value.url === 'string' && value.url.trim() ? value.url.trim() : undefined;
-  if (!id || !title || !url) return null;
-  const description = typeof value.description === 'string' && value.description.trim()
-    ? decodeHtmlEntities(value.description).trim()
-    : undefined;
-  const source = value.source === 'wikidata' || value.source === 'dbpedia' || value.source === 'overpass'
-    ? value.source
-    : 'wikidata';
-  const sourceName = typeof value.sourceName === 'string' && value.sourceName.trim()
-    ? value.sourceName.trim()
-    : 'Wikidata';
-  const facts = Array.isArray(value.facts)
-    ? value.facts
-      .map((fact) => {
-        if (!isRecord(fact)) return null;
-        const label = typeof fact.label === 'string' ? fact.label.trim() : '';
-        const factValue = typeof fact.value === 'string' ? fact.value.trim() : '';
-        const factUrl = typeof fact.url === 'string' && fact.url.trim() ? fact.url.trim() : undefined;
-        return label && factValue ? { label, value: factValue, ...(factUrl ? { url: factUrl } : {}) } : null;
-      })
-      .filter((fact): fact is NonNullable<RdfSearchResult['facts']>[number] => Boolean(fact))
-    : undefined;
-  return {
-    id,
-    title,
-    url,
-    source,
-    sourceName,
-    ...(description ? { description } : {}),
-    score: typeof value.score === 'number' && Number.isFinite(value.score) ? Math.max(0, Math.min(1, value.score)) : 0.5,
-    ...(facts && facts.length > 0 ? { facts } : {}),
-    raw: value.raw,
-  };
-}
-
 function scoreWebSearchItem(item: SearchWebItem, intent: ExecutionIntent): number {
   const text = `${item.title} ${item.snippet} ${item.url}`;
   const itemTokens = expandedTokenSet(text);
@@ -1151,16 +989,6 @@ function localItemScore(item: SearchWebItem): number {
   const evidenceScore = typeof scored.localResearchScore === 'number' ? scored.localResearchScore : 0.65;
   const rank = scored.localResearchRank ?? scored.localSearchRank ?? 5;
   return boundedScore(evidenceScore + Math.max(0, 0.18 - rank * 0.025));
-}
-
-function semanticItemScore(item: SearchWebItem): number {
-  const scored = item as SearchWebItem & {
-    semanticScore?: number;
-    semanticRank?: number;
-  };
-  const semanticScore = typeof scored.semanticScore === 'number' ? scored.semanticScore : 0.55;
-  const rank = scored.semanticRank ?? 5;
-  return boundedScore(semanticScore + Math.max(0, 0.12 - rank * 0.02));
 }
 
 function boundedScore(score: number): number {
@@ -1196,31 +1024,6 @@ function localResearchToSearchItems(
   return dedupeSearchItems([...evidenceItems, ...searchItems]);
 }
 
-function semanticResultsToSearchItems(
-  semanticAnswer: RdfAgentAnswer,
-  intent: ExecutionIntent,
-): SearchWebItem[] {
-  return semanticAnswer.results.map((result, index) => {
-    const factText = (result.facts ?? [])
-      .slice(0, 6)
-      .map((fact) => `${fact.label}: ${fact.value}`)
-      .join('; ');
-    const snippet = [
-      `${result.title} is a source-backed semantic RDF result from ${result.sourceName}.`,
-      result.description,
-      factText ? `Facts: ${factText}.` : null,
-      `Semantic source ${result.sourceName} supports this candidate for ${intent.answerSubject}.`,
-      result.url,
-    ].filter(Boolean).join(' ');
-    return {
-      title: result.title,
-      url: result.url,
-      snippet,
-      semanticScore: result.score,
-      semanticRank: index + 1,
-    } as SearchWebItem & { semanticScore: number; semanticRank: number };
-  });
-}
 
 function dedupeSearchItems(items: SearchWebItem[]): SearchWebItem[] {
   const seen = new Set<string>();
@@ -1310,9 +1113,6 @@ function toolOwnerMeta(toolId: string, assignedOwner: string | undefined): Agent
   if (toolId === REQUIREMENT_TOOL_IDS.localWebResearch) {
     return searchAgentOwnerMeta(LOCAL_WEB_RESEARCH_AGENT_ID);
   }
-  if (toolId === REQUIREMENT_TOOL_IDS.semanticSearch) {
-    return searchAgentOwnerMeta(RDF_WEB_SEARCH_AGENT_ID);
-  }
   return {
     actorId: toolId,
     actorRole: 'tool',
@@ -1328,7 +1128,6 @@ function searchAgentOwnerMeta(ownerId: string): AgentBusPayloadMeta {
   const ownerLabels: Record<string, { label: string; provider: string }> = {
     [COMPOSITE_SEARCH_AGENT_ID]: { label: COMPOSITE_SEARCH_AGENT_LABEL, provider: 'composite-search' },
     [LOCAL_WEB_RESEARCH_AGENT_ID]: { label: LOCAL_WEB_RESEARCH_AGENT_LABEL, provider: 'deterministic-local-web' },
-    [RDF_WEB_SEARCH_AGENT_ID]: { label: RDF_WEB_SEARCH_AGENT_LABEL, provider: 'deterministic-rdf' },
   };
   const owner = ownerLabels[effectiveOwnerId] ?? { label: effectiveOwnerId, provider: 'search-agent' };
   return {
@@ -1769,6 +1568,12 @@ function roundCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function formatJoinedList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
 function extractStatedLocation(text: string): string | undefined {
   const stateWithComma = text.match(/\b([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*,\s*[A-Z]{2})\b/);
   if (stateWithComma) return cleanDisplayLocation(stateWithComma[1]);
@@ -2072,7 +1877,6 @@ async function appendSearchFanIn(
   bus: IAgentBus | undefined,
   webResult: SearchWebResult,
   localResearch: WebResearchRunResult | undefined,
-  semanticAnswer: RdfAgentAnswer | undefined,
   mergedResult: SearchWebResult,
   compositeResult?: CompositeSearchResult,
 ): Promise<void> {
@@ -2081,15 +1885,15 @@ async function appendSearchFanIn(
   const localErrorText = localResearch?.errors.length
     ? ` Local research errors: ${localResearch.errors.map((error) => error.message).join('; ')}.`
     : '';
-  const semanticResultCount = semanticAnswer?.results.length ?? 0;
-  const semanticErrorText = semanticAnswer?.errors.length
-    ? ` RDF errors: ${semanticAnswer.errors.map((error) => error.message).join('; ')}.`
-    : '';
+  const activeBranches = [
+    'web search',
+    localResearch ? 'local web research' : null,
+  ].filter((branch): branch is string => Boolean(branch));
   const fanInSummaryLines = [
-    localResearch ? 'Fan-in merge combined web search and local web research evidence before candidate reranking.' : null,
-    semanticAnswer ? 'Fan-in merge combined web search and RDF semantic search evidence before candidate reranking.' : null,
-    !localResearch && !semanticAnswer ? 'Fan-in merge used web search evidence before candidate reranking.' : null,
-  ].filter((line): line is string => Boolean(line));
+    activeBranches.length > 1
+      ? `Fan-in merge combined ${formatJoinedList(activeBranches)} evidence before candidate reranking.`
+      : 'Fan-in merge used web search evidence before candidate reranking.',
+  ];
   await bus.append({
     type: PayloadType.InfOut,
     text: [
@@ -2097,7 +1901,7 @@ async function appendSearchFanIn(
       `Web search status: ${webResult.status}; web results: ${webResult.results.length}.`,
       compositeResult ? `Composite search content depth: ${compositeResult.contentPlan.depth}; pages to extract: ${compositeResult.contentPlan.maxPagesToExtract}.` : null,
       `Local web research evidence chunks: ${localResultCount}; local search results: ${localResearch?.searchResults.length ?? 0}.${localErrorText}`,
-      `RDF semantic search results: ${semanticResultCount}; merged results: ${mergedResult.results.length}.${semanticErrorText}`,
+      `Merged results: ${mergedResult.results.length}.`,
     ].filter((line): line is string => Boolean(line)).join('\n'),
     meta: {
       actorId: 'search-fan-in-merger',
@@ -3351,9 +3155,6 @@ function buildSearchTurnContext(context: ResolvedExecutionContext): SearchTurnCo
     sourceQueries: [
       context.webSearchResult?.query ?? context.searchResult.query,
       ...(context.localWebResearchResult?.plannedQueries ?? []).map((query) => `local:${query}`),
-      ...(context.semanticSearchResult?.endpointId
-        ? [`semantic:${context.semanticSearchResult.endpointId}:${context.semanticSearchResult.query}`]
-        : []),
     ],
     requestedCount: intent.requestedCount,
     validationContract: intent.validationContract,

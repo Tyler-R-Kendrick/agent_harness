@@ -2,7 +2,7 @@ name: composite-search-agent
 version: "1.0"
 description: >
   AgentEvals static and deterministic runtime suite for the composite search
-  chat-agent. The agent must register web, local research, RDF, and page-read
+  chat-agent. The agent must register web, local research, and page-read
   providers, determine crawler depth, dynamically rerank evidence, avoid ad hoc
   shell HTML parsers, and preserve structured provider errors.
 metadata:

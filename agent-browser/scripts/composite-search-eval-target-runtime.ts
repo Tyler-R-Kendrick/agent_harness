@@ -62,15 +62,6 @@ function descriptors(): ToolDescriptor[] {
       subGroupLabel: 'Search',
     },
     {
-      id: 'webmcp:semantic_search',
-      label: 'Semantic search',
-      description: 'Search RDF/SPARQL endpoints with checked templates and normalized semantic evidence.',
-      group: 'web-search-mcp',
-      groupLabel: 'Web Search',
-      subGroup: 'web-search-mcp',
-      subGroupLabel: 'Search',
-    },
-    {
       id: 'webmcp:read_web_page',
       label: 'Read web page',
       description: 'Read and extract source pages for entity evidence.',

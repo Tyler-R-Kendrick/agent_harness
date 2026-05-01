@@ -3,7 +3,7 @@ import type { ToolDescriptor } from '../../tools';
 export const COMPOSITE_SEARCH_AGENT_ID = 'search-agent';
 export const COMPOSITE_SEARCH_AGENT_LABEL = 'Search Agent';
 
-export type SearchProviderKind = 'web' | 'local-web-research' | 'rdf' | 'crawler' | 'custom';
+export type SearchProviderKind = 'web' | 'local-web-research' | 'crawler' | 'custom';
 
 export type SearchContentPlan = {
   depth: 0 | 1 | 2;
@@ -114,7 +114,6 @@ export interface CompositeSearchAgentEvalResult {
     usesProviderRegistry: boolean;
     includesWebProvider: boolean;
     includesLocalResearchProvider: boolean;
-    includesRdfProvider: boolean;
     usesCrawlerDepth: boolean;
     usesDynamicReranking: boolean;
     avoidsGenericCliParsing: boolean;
@@ -245,7 +244,6 @@ export function selectCompositeSearchAgentTools(descriptors: ToolDescriptor[], _
   const desiredIds = [
     'webmcp:search_web',
     'webmcp:local_web_research',
-    'webmcp:semantic_search',
     'webmcp:read_web_page',
   ];
   const seen = new Set<string>();
@@ -259,7 +257,7 @@ export function selectCompositeSearchAgentTools(descriptors: ToolDescriptor[], _
   }
   for (const descriptor of descriptors) {
     if (seen.has(descriptor.id) || descriptor.id === 'cli' || isElicitationTool(descriptor)) continue;
-    if (/\b(search|rdf|sparql|crawl|crawler|research)\b/i.test(descriptorText(descriptor))) {
+    if (/\b(search|crawl|crawler|research)\b/i.test(descriptorText(descriptor))) {
       selected.push(descriptor.id);
       seen.add(descriptor.id);
     }
@@ -293,7 +291,6 @@ export function buildCompositeSearchAgentPrompt({
     'Provider adapters:',
     '- webmcp:search_web is the public web provider.',
     '- webmcp:local_web_research is the local web research and crawler provider.',
-    '- webmcp:semantic_search is the RDF semantic provider.',
     '- webmcp:read_web_page is the default content extraction reader for source pages.',
     '',
     'Operating policy:',
@@ -306,7 +303,7 @@ export function buildCompositeSearchAgentPrompt({
     '7. Reject page chrome, article metadata, generic categories, navigation labels, and non entity-specific links before answering.',
     '8. Return citations and concise source-backed answers from the reranked composite evidence.',
     '',
-    'Quality bar: provider adapters, crawler depth, dynamic reranking, recoverable provider error handling, RDF fan-in, local web research fan-in, citations, and source-backed entity validation must all be visible in the trajectory.',
+    'Quality bar: provider adapters, crawler depth, dynamic reranking, recoverable provider error handling, local web research fan-in, citations, and source-backed entity validation must all be visible in the trajectory.',
   ].filter((line): line is string => line !== null).join('\n');
 }
 
@@ -321,7 +318,6 @@ export function evaluateCompositeSearchAgentPolicy({
     usesProviderRegistry: /provider registry/i.test(prompt) && /Provider adapters/i.test(prompt),
     includesWebProvider: selectedToolIds.includes('webmcp:search_web') && /webmcp:search_web/.test(prompt),
     includesLocalResearchProvider: selectedToolIds.includes('webmcp:local_web_research') && /local web research/i.test(prompt),
-    includesRdfProvider: selectedToolIds.includes('webmcp:semantic_search') && /\bRDF\b|semantic provider/i.test(prompt),
     usesCrawlerDepth: /crawler depth/i.test(prompt) && /content extraction/i.test(prompt),
     usesDynamicReranking: /dynamic reranking/i.test(prompt) && /provider weights/i.test(prompt),
     avoidsGenericCliParsing: /HTML parsing belongs in registered providers/i.test(prompt)

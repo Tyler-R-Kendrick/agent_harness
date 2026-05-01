@@ -10,7 +10,6 @@
     "dev:cucumber": "node ../scripts/run-package-bin.mjs vite --host 127.0.0.1 --port 4173 --strictPort",
     "eval:local-web-research": "node scripts/run-agentv-local-web-research-eval.mjs",
     "eval:composite-search": "node scripts/run-agentv-composite-search-eval.mjs",
-    "eval:rdf-search": "node scripts/run-agentv-rdf-search-eval.mjs",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
     "eval:tour-guide": "node scripts/run-agentv-tour-guide-eval.mjs",

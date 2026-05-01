@@ -32,15 +32,6 @@ const descriptors: ToolDescriptor[] = [
     subGroupLabel: 'Search',
   },
   {
-    id: 'webmcp:semantic_search',
-    label: 'Semantic search',
-    description: 'Search RDF/SPARQL endpoints with normalized semantic evidence.',
-    group: 'web-search-mcp',
-    groupLabel: 'Web Search',
-    subGroup: 'web-search-mcp',
-    subGroupLabel: 'Search',
-  },
-  {
     id: 'webmcp:read_web_page',
     label: 'Read web page',
     description: 'Read source pages and extract entity evidence.',
@@ -104,33 +95,11 @@ describe('CompositeSearchAgent', () => {
         };
       },
     });
-    const rdfProvider = createSearchProviderAdapter({
-      id: 'rdf',
-      label: 'RDF semantic search',
-      kinds: ['rdf'],
-      search: async (request) => {
-        providerInputs.push({ providerId: 'rdf', maxPagesToExtract: request.contentPlan.maxPagesToExtract });
-        return {
-          status: 'found',
-          query: request.query,
-          results: [
-            {
-              title: 'AMC Randhurst 12',
-              url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
-              snippet: 'Wikidata source-backed movie theater entity.',
-              rank: 1,
-              score: 0.72,
-            },
-          ],
-        };
-      },
-    });
-
     const agent = new CompositeSearchAgent({
-      providers: [webProvider, localProvider, rdfProvider],
+      providers: [webProvider, localProvider],
       crawler: new DefaultSearchCrawler(),
       reranker: createDefaultSearchReranker({
-        providerWeights: { 'local-web': 0.25, rdf: 0.1, web: 0 },
+        providerWeights: { 'local-web': 0.25, web: 0 },
       }),
     });
 
@@ -152,13 +121,12 @@ describe('CompositeSearchAgent', () => {
     expect(providerInputs).toEqual([
       { providerId: 'web', maxPagesToExtract: 3 },
       { providerId: 'local-web', maxPagesToExtract: 3 },
-      { providerId: 'rdf', maxPagesToExtract: 3 },
     ]);
     expect(result.results.map((item) => item.title)).toEqual([
       'AMC Randhurst 12',
       'Best Movie Theaters near Arlington Heights - Directory',
     ]);
-    expect(result.results[0].providerIds).toEqual(['local-web', 'rdf']);
+    expect(result.results[0].providerIds).toEqual(['local-web']);
   });
 
   it('surfaces unavailable providers while preserving successful provider evidence', async () => {
@@ -173,24 +141,24 @@ describe('CompositeSearchAgent', () => {
         errors: [{ providerId: 'web', message: 'Web search returned 404.', recoverable: true }],
       }),
     });
-    const semantic = createSearchProviderAdapter({
-      id: 'rdf',
-      label: 'RDF semantic search',
-      kinds: ['rdf'],
+    const local = createSearchProviderAdapter({
+      id: 'local-web',
+      label: 'Local web research',
+      kinds: ['local-web-research'],
       search: async (request) => ({
         status: 'found',
         query: request.query,
         results: [{
           title: 'Douglas Adams',
-          url: 'https://www.wikidata.org/wiki/Q42',
-          snippet: 'Wikidata entity result.',
+          url: 'https://example.com/douglas-adams',
+          snippet: 'Source-backed local research result.',
           rank: 1,
           score: 0.9,
         }],
       }),
     });
 
-    const result = await new CompositeSearchAgent({ providers: [unavailable, semantic] }).search({
+    const result = await new CompositeSearchAgent({ providers: [unavailable, local] }).search({
       question: 'facts about Douglas Adams',
       query: 'Douglas Adams Q42',
       subject: 'facts',
@@ -199,7 +167,7 @@ describe('CompositeSearchAgent', () => {
 
     expect(result.status).toBe('found');
     expect(result.errors).toEqual([{ providerId: 'web', message: 'Web search returned 404.', recoverable: true }]);
-    expect(result.results[0]).toMatchObject({ title: 'Douglas Adams', providerIds: ['rdf'] });
+    expect(result.results[0]).toMatchObject({ title: 'Douglas Adams', providerIds: ['local-web'] });
   });
 
   it('returns an unavailable composite result when no registered provider can run', async () => {
@@ -266,7 +234,6 @@ describe('Composite search-agent policy', () => {
     expect(selectCompositeSearchAgentTools(descriptors, 'movie theaters near me')).toEqual([
       'webmcp:search_web',
       'webmcp:local_web_research',
-      'webmcp:semantic_search',
       'webmcp:read_web_page',
     ]);
   });
@@ -283,7 +250,6 @@ describe('Composite search-agent policy', () => {
     expect(prompt).toContain('provider registry');
     expect(prompt).toContain('webmcp:search_web');
     expect(prompt).toContain('webmcp:local_web_research');
-    expect(prompt).toContain('webmcp:semantic_search');
     expect(prompt).toContain('crawler depth');
     expect(prompt).toContain('reranking');
     expect(evaluateCompositeSearchAgentPolicy({ prompt, selectedToolIds })).toEqual({
@@ -293,7 +259,6 @@ describe('Composite search-agent policy', () => {
         usesProviderRegistry: true,
         includesWebProvider: true,
         includesLocalResearchProvider: true,
-        includesRdfProvider: true,
         usesCrawlerDepth: true,
         usesDynamicReranking: true,
         avoidsGenericCliParsing: true,

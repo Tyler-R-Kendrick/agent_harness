@@ -109,7 +109,6 @@ const LOCATION_CONTEXT_TOOL_ORDER = [
   'webmcp:read_browser_location',
   'webmcp:search_web',
   'webmcp:local_web_research',
-  'webmcp:semantic_search',
   'webmcp:read_web_page',
   'webmcp:elicit_user_input',
 ] as const;

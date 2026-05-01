@@ -87,7 +87,6 @@ export function evaluateWebSearchAgentPrompt({
 
 function isRegisteredSearchTool(descriptor: ToolDescriptor): boolean {
   if (descriptor.id === 'webmcp:local_web_research') return false;
-  if (descriptor.id === 'webmcp:semantic_search') return false;
   const haystack = descriptorText(descriptor);
   return /\bsearch\b/i.test(haystack) && /\bweb\b/i.test(haystack) && !isElicitationTool(descriptor);
 }
@@ -98,7 +97,6 @@ function isWebPageReader(descriptor: ToolDescriptor): boolean {
 
 function isHttpFallbackTool(descriptor: ToolDescriptor): boolean {
   if (descriptor.id === 'webmcp:local_web_research') return false;
-  if (descriptor.id === 'webmcp:semantic_search') return false;
   const haystack = descriptorText(descriptor);
   return descriptor.id === 'cli' || /\b(?:curl|http client|fetch|shell command|command)\b/i.test(haystack);
 }
