@@ -20,6 +20,7 @@
 import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
 import type { SearchTurnContext } from '../types';
+import { getDefaultSecretsManagerAgent, type SecretsManagerAgent } from '../chat-agents/Secrets';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ export type AgentRunOptions = {
   maxSteps?: number;
   /** Optional abort signal for cancellation. */
   signal?: AbortSignal;
+  /** Local secret guard used to keep model prompts on refs and resolve refs only inside tool execution. */
+  secrets?: SecretsManagerAgent;
 };
 
 export type AgentRunCallbacks = {
@@ -79,7 +82,11 @@ export async function runToolAgent(
   options: AgentRunOptions,
   callbacks: AgentRunCallbacks,
 ): Promise<AgentRunResult> {
-  const { model, tools, instructions, messages, maxSteps = 20, signal } = options;
+  const { model, maxSteps = 20, signal } = options;
+  const secrets = options.secrets ?? getDefaultSecretsManagerAgent();
+  const instructions = (await secrets.sanitizeText(options.instructions)).text;
+  const messages = await secrets.sanitizeModelMessages(options.messages);
+  const tools = secrets.wrapTools(options.tools);
 
   try {
     const result = await generateText({

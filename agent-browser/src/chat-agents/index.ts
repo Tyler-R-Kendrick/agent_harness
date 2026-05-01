@@ -2,10 +2,12 @@ import type { IVoter } from 'logact';
 import type { CopilotRuntimeState } from '../services/copilotApi';
 import type { ChatMessage, HFModel } from '../types';
 import type { AgentStreamCallbacks } from './types';
+import { getDefaultSecretsManagerAgent, type SecretsManagerAgent } from './Secrets';
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
+import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
 
 export { CODI_LABEL, buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
@@ -18,6 +20,14 @@ export {
   streamDebuggerChat,
 } from './Debugger';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
+export {
+  TOUR_GUIDE_AGENT_ID,
+  TOUR_GUIDE_LABEL,
+  buildTourGuideAgentPrompt,
+  evaluateTourGuideAgentPolicy,
+  isTourGuideTaskText,
+  streamTourGuideChat,
+} from './TourGuide';
 export {
   buildResearcherOperatingInstructions,
   buildResearcherSystemPrompt,
@@ -35,6 +45,26 @@ export {
   scoreResearchSource,
   streamResearcherChat,
 } from './Researcher';
+export {
+  COMPOSITE_SEARCH_AGENT_ID,
+  COMPOSITE_SEARCH_AGENT_LABEL,
+  CompositeSearchAgent,
+  DefaultSearchCrawler,
+  buildCompositeSearchAgentPrompt,
+  compositeSearchResultToWebSearchResult,
+  createDefaultSearchReranker,
+  createSearchProviderAdapter,
+  evaluateCompositeSearchAgentPolicy,
+  selectCompositeSearchAgentTools,
+} from './Search';
+export type {
+  CompositeSearchRequest,
+  CompositeSearchResult,
+  CompositeSearchResultItem,
+  SearchContentPlan,
+  SearchProviderAdapter,
+  SearchProviderResult,
+} from './Search';
 export {
   WEB_SEARCH_AGENT_ID,
   WEB_SEARCH_AGENT_LABEL,
@@ -74,6 +104,7 @@ export type StreamAgentChatOptions = {
   modelId?: string;
   sessionId?: string;
   latestUserInput?: string;
+  secrets?: SecretsManagerAgent;
 };
 
 export async function streamAgentChat(
@@ -81,6 +112,13 @@ export async function streamAgentChat(
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
+  const secrets = options.secrets ?? getDefaultSecretsManagerAgent();
+  const messages = await secrets.sanitizeChatMessages(options.messages);
+  const workspacePromptContext = (await secrets.sanitizeText(options.workspacePromptContext)).text;
+  const latestUserInput = options.latestUserInput === undefined
+    ? undefined
+    : (await secrets.sanitizeText(options.latestUserInput)).text;
+
   if (options.provider === 'ghcp') {
     if (!options.modelId || !options.sessionId) {
       throw new Error('GHCP chat requires a modelId and sessionId.');
@@ -90,9 +128,9 @@ export async function streamAgentChat(
       modelId: options.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
-      workspacePromptContext: options.workspacePromptContext,
-      messages: options.messages,
-      latestUserInput: options.latestUserInput ?? options.messages.at(-1)?.content ?? '',
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
       voters: options.voters,
     }, callbacks, signal);
     return;
@@ -105,9 +143,9 @@ export async function streamAgentChat(
       modelId: options.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
-      workspacePromptContext: options.workspacePromptContext,
-      messages: options.messages,
-      latestUserInput: options.latestUserInput ?? options.messages.at(-1)?.content ?? '',
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
       voters: options.voters,
     }, callbacks, signal);
     return;
@@ -120,10 +158,20 @@ export async function streamAgentChat(
       modelId: options.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
-      workspacePromptContext: options.workspacePromptContext,
-      messages: options.messages,
-      latestUserInput: options.latestUserInput ?? options.messages.at(-1)?.content ?? '',
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
       voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
+  if (options.provider === 'tour-guide') {
+    await streamTourGuideChat({
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
     }, callbacks, signal);
     return;
   }
@@ -134,10 +182,10 @@ export async function streamAgentChat(
 
   await streamCodiChat({
     model: options.model,
-    messages: options.messages,
+    messages,
     workspaceName: options.workspaceName,
-    workspacePromptContext: options.workspacePromptContext,
-    latestUserInput: options.latestUserInput,
+    workspacePromptContext,
+    latestUserInput,
     voters: options.voters,
   }, callbacks, signal);
 }
@@ -170,6 +218,7 @@ export function getAgentDisplayName({
       : (activeCodiModelName ?? 'Codi');
     return `${provider === 'researcher' ? RESEARCHER_LABEL : DEBUGGER_LABEL}: ${modelName}`;
   }
+  if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
   return provider === 'ghcp'
     ? `${GHCP_LABEL}: ${activeGhcpModelName ?? 'Copilot'}`
     : `${CODI_LABEL}: ${activeCodiModelName ?? 'Codi'}`;
@@ -196,6 +245,9 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCodiModelsReady)
       ? 'Ask Debugger…'
       : 'Sign in to GHCP or install a Codi model to debug';
+  }
+  if (provider === 'tour-guide') {
+    return 'Ask Tour Guide…';
   }
   return hasCodiModelsReady ? 'Ask Codi…' : 'Install a Codi model to start chatting';
 }
@@ -230,6 +282,9 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Debugger models`
       : 'Debugger needs GHCP or Codi';
   }
+  if (provider === 'tour-guide') {
+    return 'Creates guided product tours';
+  }
   return `${installedModels.length} Codi models ready`;
 }
 
@@ -241,7 +296,8 @@ export function resolveAgentProviderForTask({
   latestUserInput: string;
 }): AgentProvider {
   if (isResearchTaskText(latestUserInput)) return 'researcher';
-  return isDebuggingTaskText(latestUserInput) ? 'debugger' : selectedProvider;
+  if (isDebuggingTaskText(latestUserInput)) return 'debugger';
+  return isTourGuideTaskText(latestUserInput) ? 'tour-guide' : selectedProvider;
 }
 
 export function resolveRuntimeAgentProvider({
@@ -253,7 +309,7 @@ export function resolveRuntimeAgentProvider({
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   return hasCodiModelsReady ? 'codi' : 'ghcp';
 }

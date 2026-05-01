@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PayloadType, type ICompletionChecker, type IVoter } from 'logact';
 import { runLocalToolCallExecutor } from './localToolCallExecutor';
+import { MemorySecretStore, createSecretsManagerAgent } from '../chat-agents/Secrets';
 
 type StreamPart =
   | { type: 'text-delta'; delta: string }
@@ -319,6 +320,64 @@ describe('runLocalToolCallExecutor', () => {
     expect(onModelTurnEnd.mock.calls[0][2]).toEqual({ toolName: 'cli', args: { command: 'ls' } });
     // Second turn: no tool call.
     expect(onModelTurnEnd.mock.calls[1][2]).toBeNull();
+  });
+
+  it('resolves secret refs only for tool execution and keeps refs in model-visible state', async () => {
+    const secret = 'ghp_abcdefghijklmnopqrstuvwxyz123456';
+    const secretRef = 'secret-ref://local/github-token';
+    const store = new MemorySecretStore();
+    await store.set({
+      id: 'github-token',
+      value: secret,
+      label: 'github-token',
+      source: 'manual',
+      createdAt: '2026-04-30T00:00:00.000Z',
+      updatedAt: '2026-04-30T00:00:00.000Z',
+    });
+    const secrets = createSecretsManagerAgent({ store });
+    const { model, calls } = makeStreamingModel([
+      `<tool_call>{"tool":"http","args":{"headers":{"Authorization":"Bearer ${secretRef}"}}}</tool_call>`,
+      'done',
+    ]);
+    const http = makeTool(({ headers }: { headers: { Authorization: string } }) => ({
+      echoedAuthorization: headers.Authorization,
+    }));
+    const onToolCall = vi.fn();
+    const onToolResult = vi.fn();
+
+    await runLocalToolCallExecutor(
+      {
+        model: model as never,
+        tools: { http } as never,
+        toolDescriptors: [{ id: 'http', label: 'HTTP', description: '', group: 'built-in', groupLabel: 'Built-in' }],
+        instructions: `Use ${secret} only through refs.`,
+        messages: [{ role: 'user', content: `Use ${secret} for Authorization.` }],
+        secrets,
+      },
+      { onToolCall, onToolResult },
+    );
+
+    expect(http.execute).toHaveBeenCalledWith(
+      { headers: { Authorization: `Bearer ${secret}` } },
+      expect.anything(),
+    );
+    expect(onToolCall).toHaveBeenCalledWith(
+      'http',
+      { headers: { Authorization: `Bearer ${secretRef}` } },
+      expect.any(String),
+    );
+    expect(onToolResult).toHaveBeenCalledWith(
+      'http',
+      { headers: { Authorization: `Bearer ${secretRef}` } },
+      { echoedAuthorization: `Bearer ${secretRef}` },
+      false,
+      expect.any(String),
+    );
+    const firstPrompt = JSON.stringify(calls[0]?.prompt);
+    const secondPrompt = JSON.stringify(calls[1]?.prompt);
+    expect(firstPrompt).not.toContain(secret);
+    expect(secondPrompt).not.toContain(secret);
+    expect(secondPrompt).toContain(secretRef);
   });
 
   it('keeps model turn ids and display indices monotonic across LogAct completion retries', async () => {

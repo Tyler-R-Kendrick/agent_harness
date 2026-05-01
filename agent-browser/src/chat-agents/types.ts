@@ -1,7 +1,7 @@
 export type ModelBackedAgentProvider = 'codi' | 'ghcp';
-export type AgentProvider = ModelBackedAgentProvider | 'researcher' | 'debugger';
+export type AgentProvider = ModelBackedAgentProvider | 'researcher' | 'debugger' | 'tour-guide';
 
-import type { IterationStep, ReasoningStep, VoterStep } from '../types';
+import type { BusEntryStep, GuidedTourPlan, IterationStep, ReasoningStep, VoterStep } from '../types';
 
 export interface AgentStreamCallbacks {
   onPhase?: (phase: string) => void;
@@ -24,4 +24,8 @@ export interface AgentStreamCallbacks {
   onIterationStepUpdate?: (id: string, patch: Partial<IterationStep>) => void;
   /** Fired when a Ralph-loop iteration is complete. */
   onIterationStepEnd?: (id: string) => void;
+  /** Fired when an AgentBus entry is appended during the turn. */
+  onBusEntry?: (entry: BusEntryStep) => void;
+  /** Fired when a chat agent creates a guided product tour for Driver.js. */
+  onTourPlan?: (plan: GuidedTourPlan) => void;
 }

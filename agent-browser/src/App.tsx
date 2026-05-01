@@ -188,6 +188,7 @@ import {
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
 } from './services/evaluationAgentRegistry';
+import { startDriverTour } from './features/tours/driverTour';
 import { collectWorkspaceDirectories } from './services/workspaceDirectories';
 import {
   searchUserContextMemory,
@@ -1783,6 +1784,8 @@ function ChatPanel({
   const isSkillAutocompleteOpen = skillSuggestions.length > 0;
   const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
     Boolean(parseSandboxPrompt(input))
+    || selectedProvider === 'tour-guide'
+    || resolveAgentProviderForTask({ selectedProvider, latestUserInput: input.trim() }) === 'tour-guide'
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || ((selectedProvider === 'researcher' || selectedProvider === 'debugger') && (
@@ -2214,7 +2217,7 @@ function ChatPanel({
       return;
     }
 
-    if (runtimeProviderForRequest === 'ghcp' && (!effectiveSelectedCopilotModelId || !hasAvailableCopilotModels)) {
+    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'ghcp' && (!effectiveSelectedCopilotModelId || !hasAvailableCopilotModels)) {
       updateMessage(assistantId, {
         status: 'error',
         content: copilotState.authenticated
@@ -2224,12 +2227,12 @@ function ChatPanel({
       return;
     }
 
-    if (runtimeProviderForRequest === 'codi' && !activeLocalModel) {
+    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !activeLocalModel) {
       updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
-    if (toolsEnabled) {
+    if (toolsEnabled && providerForRequest !== 'tour-guide') {
       if (!activeSessionId) {
         updateMessage(assistantId, { status: 'error', content: 'Open or create a session before enabling tools.' });
         return;
@@ -3865,6 +3868,7 @@ function ChatPanel({
     const processLog = new ProcessLog();
     const processIdByReasoningStepId = new Map<string, string>();
     const processIdByVoterStepId = new Map<string, string>();
+    let busEntries: BusEntryStep[] = [];
     const rawThinkingProcessId = `reasoning:${assistantId}:thinking`;
     const controller = new AbortController();
     const codiVoters: IVoter[] = [];
@@ -3975,6 +3979,40 @@ function ChatPanel({
         });
       };
 
+      const syncDirectBusProcessEntry = (entry: BusEntryStep) => {
+        const kindMap: Record<string, ProcessEntryKind> = {
+          Mail: 'mail',
+          InfIn: 'inf-in',
+          InfOut: 'inf-out',
+          Intent: 'intent',
+          Vote: 'vote',
+          Commit: 'commit',
+          Abort: 'abort',
+          Result: 'result',
+          Completion: 'completion',
+          Policy: 'policy',
+        };
+        if (processLog.has(entry.id)) return;
+        processLog.append({
+          id: entry.id,
+          kind: kindMap[entry.payloadType] ?? 'reasoning',
+          actor: entry.actorId ?? entry.actor ?? providerForRequest,
+          ...(entry.actorId ? { actorId: entry.actorId } : {}),
+          ...(entry.actorRole ? { actorRole: entry.actorRole } : {}),
+          ...(entry.parentActorId ? { parentActorId: entry.parentActorId } : {}),
+          summary: entry.summary,
+          transcript: entry.detail,
+          payload: entry,
+          branchId: entry.branchId ?? `agent:${providerForRequest}`,
+          agentId: entry.actorId ?? providerForRequest,
+          agentLabel: entry.agentLabel ?? getAgentDisplayName({ provider: providerForRequest }),
+          modelId: entry.modelId ?? (runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId),
+          modelProvider: entry.modelProvider ?? providerForRequest,
+          status: 'done',
+          ts: entry.realtimeTs,
+        });
+      };
+
       const syncRawThinkingProcessEntry = (status: 'active' | 'done') => {
         const transcript = thinkingBuffer.trim();
         if (!transcript) return;
@@ -4054,6 +4092,7 @@ function ChatPanel({
       thinkingDuration: thinkingStart ? Math.max(1, Math.round((Date.now() - thinkingStart) / 1000)) : undefined,
       isThinking: Boolean(getActiveReasoningStepId(reasoningSteps)) || (!hasStructuredReasoning && Boolean(thinkingBuffer) && !tokenBuffer),
       isVoting: voterSteps.some((step) => step.status === 'active'),
+      busEntries: busEntries.length ? busEntries : undefined,
       processEntries: processLog.snapshot(),
       ...patch,
     });
@@ -4143,6 +4182,23 @@ function ChatPanel({
           syncVoterProcessEntry(voterSteps.find((step) => step.id === id));
           updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
         },
+        onBusEntry: (entry: BusEntryStep) => {
+          busEntries = [...busEntries, entry];
+          syncDirectBusProcessEntry(entry);
+          updateMessage(assistantId, buildActivityPatch({ status: 'streaming', loadingStatus: null }));
+        },
+        onTourPlan: (plan: ChatMessage['tourPlan']) => {
+          if (!plan) return;
+          const result = startDriverTour(plan);
+          if (!result.started) {
+            onToast({ msg: result.error ?? 'Unable to start guided tour', type: 'error' });
+          }
+          updateMessage(assistantId, buildActivityPatch({
+            status: 'streaming',
+            loadingStatus: null,
+            tourPlan: plan,
+          }));
+        },
         onToken: (content: string) => {
           finalizePhaseStep();
           finalizeRawThinkingProcessEntry();
@@ -4172,6 +4228,8 @@ function ChatPanel({
                 ? 'Researcher returned an empty response.'
                 : providerForRequest === 'debugger'
                   ? 'Debugger returned an empty response.'
+                : providerForRequest === 'tour-guide'
+                  ? 'Tour Guide returned an empty response.'
                 : runtimeProviderForRequest === 'ghcp'
                   ? 'GHCP returned an empty response.'
                 : 'Codi returned an empty response.'
@@ -4180,6 +4238,8 @@ function ChatPanel({
           notifyAssistantComplete(assistantId, resolvedContent || (
             providerForRequest === 'researcher'
               ? 'Researcher returned an empty response.'
+              : providerForRequest === 'tour-guide'
+                ? 'Tour Guide returned an empty response.'
               : runtimeProviderForRequest === 'ghcp'
                 ? 'GHCP returned an empty response.'
                 : 'Codi returned an empty response.'
@@ -4219,7 +4279,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -4474,9 +4534,12 @@ function ChatPanel({
                     <option value="ghcp">GHCP</option>
                     <option value="researcher">Researcher</option>
                     <option value="debugger">Debugger</option>
+                    <option value="tour-guide">Tour Guide</option>
                   </select>
                 </label>
-                {selectedRuntimeProvider === 'ghcp'
+                {selectedProvider === 'tour-guide'
+                  ? null
+                  : selectedRuntimeProvider === 'ghcp'
                   ? (hasAvailableCopilotModels
                       ? (
                         <label className="header-model-selector" {...panelTitlebarControlProps}>
@@ -4659,7 +4722,9 @@ function ChatPanel({
                 ? (!hasAvailableCopilotModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
-                : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                : selectedProvider === 'tour-guide'
+                  ? null
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -6303,7 +6368,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher', 'debugger'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher', 'debugger', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (

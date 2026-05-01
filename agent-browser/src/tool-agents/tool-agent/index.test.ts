@@ -143,7 +143,6 @@ describe('Tool Agent', () => {
       'webmcp:search_web',
       'webmcp:local_web_research',
       'webmcp:read_web_page',
-      'cli',
       'webmcp:elicit_user_input',
     ]);
     expect(plan.actorToolAssignments?.executor).toEqual(expect.arrayContaining([
@@ -152,16 +151,12 @@ describe('Tool Agent', () => {
       'webmcp:search_web',
       'webmcp:local_web_research',
       'webmcp:read_web_page',
-      'cli',
       'webmcp:elicit_user_input',
     ]));
-    expect(plan.actorToolAssignments?.['web-search-agent']).toEqual([
+    expect(plan.actorToolAssignments?.['search-agent']).toEqual([
       'webmcp:search_web',
-      'webmcp:read_web_page',
-      'cli',
-    ]);
-    expect(plan.actorToolAssignments?.['local-web-research-agent']).toEqual([
       'webmcp:local_web_research',
+      'webmcp:read_web_page',
     ]);
     expect(plan.actorToolAssignments).not.toHaveProperty('rdf-web-search-agent');
   });

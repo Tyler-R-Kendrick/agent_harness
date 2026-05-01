@@ -1,0 +1,26 @@
+name: tour-guide-agent
+version: "1.0"
+description: >
+  AgentEvals static and deterministic runtime suite for the Tour Guide
+  chat-agent. The agent must create Driver.js-compatible guided tours from a
+  known target registry, sanitize generated selectors, emit structured tour
+  plans, and mirror lifecycle decisions through AgentBus telemetry.
+metadata:
+  owner: agent-browser
+  tags: [tour-guide, driver-js, product-tours, agent-bus]
+execution:
+  target: agent-browser-tour-guide-agent
+  timeout_seconds: 10
+assertions:
+  - name: tour-guide-tool-trajectory
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: tour-feature-registry
+      - tool: driverjs-tour-plan
+  - name: tour-guide-quality-rubric
+    type: code-grader
+    required: true
+    command: ["node", "./graders/tour-guide-quality-gate.mjs"]
+tests: ./cases.jsonl

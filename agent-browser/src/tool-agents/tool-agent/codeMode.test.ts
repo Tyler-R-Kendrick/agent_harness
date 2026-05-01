@@ -40,9 +40,9 @@ describe('codeMode', () => {
   });
 
   it('falls back to the raw Cloudflare executor when the wrapper import is unavailable', async () => {
-    globalThis.Function = vi.fn(() => {
+    globalThis.Function = function unavailableFunctionConstructor() {
       throw new Error('wrapper unavailable');
-    }) as unknown as FunctionConstructor;
+    } as unknown as FunctionConstructor;
 
     const toolExecute = vi.fn(async (args: unknown) => ({ echoed: args }));
     const executor = {

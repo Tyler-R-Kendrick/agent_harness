@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 import {
   findTrackedGeneratedArtifacts,
@@ -40,6 +40,56 @@ async function main() {
   const packageJson = await readScript('package.json');
   assert.match(packageJson, /"verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
   assert.match(packageJson, /"check:generated-files": "node scripts\/check-generated-files-clean\.mjs"/);
+  const agentBrowserPackageJson = await readScript('agent-browser/package.json');
+  assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
+
+  const coverageRunner = await import(
+    pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href
+  );
+  assert.deepEqual(
+    coverageRunner.buildVitestCoverageArgs(['--reporter=dot'], '../output/coverage/agent-browser-test'),
+    [
+      'run',
+      '--coverage',
+      '--coverage.processingConcurrency=1',
+      '--coverage.reportsDirectory=../output/coverage/agent-browser-test',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      '--exclude',
+      'src/App.test.tsx',
+      '--exclude',
+      'src/App.persistence.test.tsx',
+      '--reporter=dot',
+    ],
+  );
+  assert.deepEqual(
+    coverageRunner.buildAppTestArgs(),
+    [
+      'run',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      '--reporter=dot',
+      'src/App.test.tsx',
+      'src/App.persistence.test.tsx',
+    ],
+  );
+  assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
+    exitCode: 1,
+    output: [
+      ' Test Files  93 passed (93)',
+      '      Tests  965 passed (965)',
+      '=============================== Coverage summary ===============================',
+      "Error: ENOENT: no such file or directory, lstat 'C:\\src\\agent-harness\\output\\coverage\\agent-browser-123\\.tmp'",
+    ].join('\n'),
+  }), true);
+  assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
+    exitCode: 1,
+    output: [
+      ' Test Files  92 passed | 1 failed (93)',
+      '      Tests  964 passed | 1 failed (965)',
+      "Error: ENOENT: no such file or directory, lstat 'C:\\src\\agent-harness\\output\\coverage\\agent-browser-123\\.tmp'",
+    ].join('\n'),
+  }), false);
 
   const verifyScript = await readScript('scripts/verify-agent-browser.ps1');
   const sourceHygieneIndex = verifyScript.indexOf("Label = 'source-hygiene'");

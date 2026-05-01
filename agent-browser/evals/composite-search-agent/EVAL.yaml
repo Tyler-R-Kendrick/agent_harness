@@ -1,0 +1,26 @@
+name: composite-search-agent
+version: "1.0"
+description: >
+  AgentEvals static and deterministic runtime suite for the composite search
+  chat-agent. The agent must register web, local research, and page-read
+  providers, determine crawler depth, dynamically rerank evidence, avoid ad hoc
+  shell HTML parsers, and preserve structured provider errors.
+metadata:
+  owner: agent-browser
+  tags: [composite-search, provider-registry, crawler-depth, reranking, fan-in]
+execution:
+  target: agent-browser-composite-search-agent
+  timeout_seconds: 10
+assertions:
+  - name: composite-search-tool-trajectory
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: search-provider-registry
+      - tool: search-fan-in-merger
+  - name: composite-search-quality-rubric
+    type: code-grader
+    required: true
+    command: ["node", "./graders/composite-search-quality-gate.mjs"]
+tests: ./cases.jsonl

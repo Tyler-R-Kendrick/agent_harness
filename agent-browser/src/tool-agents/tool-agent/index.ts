@@ -8,10 +8,10 @@ import { buildDefaultToolInstructions, selectToolDescriptorsByIds, type ToolDesc
 import { runToolAgent, type AgentRunCallbacks, type AgentRunResult } from '../../services/agentRunner';
 import { runLocalToolCallExecutor } from '../../services/localToolCallExecutor';
 import { runAgentLoop } from '../../chat-agents/agent-loop';
-import { WEB_SEARCH_AGENT_ID, selectWebSearchAgentTools } from '../../chat-agents/WebSearch';
-import { LOCAL_WEB_RESEARCH_AGENT_ID, selectLocalWebResearchAgentTools } from '../../chat-agents/LocalWebResearch';
+import { COMPOSITE_SEARCH_AGENT_ID, selectCompositeSearchAgentTools } from '../../chat-agents/Search';
 import { createObservedBus } from '../../services/observedAgentBus';
 import { createCodeModeExecutor, type CodeModeExecutor } from './codeMode';
+import { getDefaultSecretsManagerAgent, type SecretsManagerAgent } from '../../chat-agents/Secrets';
 
 export const TOOL_AGENT_ID = 'tool-agent';
 export const TOOL_AGENT_LABEL = 'Tool Agent';
@@ -60,6 +60,7 @@ export interface ToolAgentRuntime {
   generatedDescriptors?: ToolDescriptor[];
   workspace?: ToolAgentWorkspaceIO;
   codeMode?: CodeModeExecutor;
+  secretManager?: SecretsManagerAgent;
 }
 
 export interface ToolAgentEvent {
@@ -109,7 +110,6 @@ const LOCATION_CONTEXT_TOOL_ORDER = [
   'webmcp:search_web',
   'webmcp:local_web_research',
   'webmcp:read_web_page',
-  'cli',
   'webmcp:elicit_user_input',
 ] as const;
 
@@ -179,11 +179,8 @@ export function findTool(runtime: ToolAgentRuntime, query: string, limit = 5): T
 export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, maxTools = 4): ToolPlan {
   const ranked = findTool(runtime, goal, maxTools);
   const availableTools = listTools(runtime);
-  const webSearchToolIds = isWebSearchGoal(goal)
-    ? selectWebSearchAgentTools(availableTools, goal)
-    : [];
-  const localWebResearchToolIds = isWebSearchGoal(goal)
-    ? selectLocalWebResearchAgentTools(availableTools, goal)
+  const searchToolIds = isWebSearchGoal(goal)
+    ? selectCompositeSearchAgentTools(availableTools, goal)
     : [];
   const orderedLocationTools = isLocationDependentGoal(goal)
     ? LOCATION_CONTEXT_TOOL_ORDER
@@ -209,8 +206,7 @@ export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, ma
       'voter:teacher': [],
       'adversary-driver': [],
       'judge-decider': [],
-      [WEB_SEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => webSearchToolIds.includes(toolId)),
-      [LOCAL_WEB_RESEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => localWebResearchToolIds.includes(toolId)),
+      [COMPOSITE_SEARCH_AGENT_ID]: selectedToolIds.filter((toolId) => searchToolIds.includes(toolId)),
       executor: selectedToolIds,
     },
   };
@@ -266,7 +262,7 @@ function buildExecutionWorkflowIntent(
     'Execution workflow ready for LogAct.',
     'Classification: tool-enabled workspace task.',
     `Succinct tasks: ${plan.goal}`,
-    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, ${WEB_SEARCH_AGENT_ID}, ${LOCAL_WEB_RESEARCH_AGENT_ID}, voter agents, executor.`,
+    `Registered agents: chat-agent, planner, router-agent, orchestrator, tool-agent, ${COMPOSITE_SEARCH_AGENT_ID}, voter agents, executor.`,
     `Tool assignments: ${selectedToolIds.length ? selectedToolIds.join(', ') : '(none)'}.`,
     feedback ? `Completion feedback: ${feedback}` : null,
   ].filter(Boolean).join('\n');
@@ -299,7 +295,10 @@ export async function callTool(runtime: ToolAgentRuntime, toolId: string, input:
   if (!candidate || typeof candidate.execute !== 'function') {
     throw new TypeError(`Tool "${toolId}" is not available.`);
   }
-  return candidate.execute(input ?? {});
+  const secrets = runtime.secretManager ?? getDefaultSecretsManagerAgent();
+  const resolvedInput = await secrets.resolveSecretRefs(input ?? {});
+  const output = await candidate.execute(resolvedInput);
+  return (await secrets.sanitizeData(output)).value;
 }
 
 export async function callToolPlan(
