@@ -7,6 +7,9 @@
 .codex/environments/
 node_modules/
 .npm-cache/
+_cacache/
+_logs/
+_update-notifier-last-checked
 package-lock.json
 lib/*/node_modules/
 

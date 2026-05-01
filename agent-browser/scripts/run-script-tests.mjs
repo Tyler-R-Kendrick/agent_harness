@@ -6,8 +6,10 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 import {
+  buildGitLsFilesInvocation,
   findTrackedGeneratedArtifacts,
   formatTrackedGeneratedArtifactsError,
+  readTrackedFilesFromLineInput,
 } from '../../scripts/check-generated-files-clean.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -39,9 +41,19 @@ async function main() {
 
   const packageJson = await readScript('package.json');
   assert.match(packageJson, /"verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
-  assert.match(packageJson, /"check:generated-files": "node scripts\/check-generated-files-clean\.mjs"/);
+  assert.match(packageJson, /"check:generated-files": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
+  const generatedFilesWrapper = await readScript('scripts/check-generated-files-clean.ps1');
+  assert.match(generatedFilesWrapper, /codex-git\.ps1'\) ls-files/);
+  assert.match(generatedFilesWrapper, /check-generated-files-clean\.mjs'\) --stdin-lines/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
+  const previewExtensionPackageJson = JSON.parse(
+    await readScript('tools/agent-browser-preview-extension/extension/package.json'),
+  );
+  assert.deepEqual(previewExtensionPackageJson.files, [
+    'main.js',
+    'logic.js',
+  ]);
   const vercelConfig = JSON.parse(await readScript('vercel.json'));
   assert.equal(vercelConfig.installCommand, 'node scripts/vercel-install.mjs');
   assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
@@ -200,6 +212,32 @@ async function main() {
   );
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /output\/evals/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
+  assert.deepEqual(
+    buildGitLsFilesInvocation(repoRoot, 'win32'),
+    {
+      command: 'powershell',
+      args: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        path.join(repoRoot, 'scripts', 'codex-git.ps1'),
+        'ls-files',
+        '-z',
+      ],
+    },
+  );
+  assert.deepEqual(
+    buildGitLsFilesInvocation(repoRoot, 'linux'),
+    {
+      command: 'git',
+      args: ['ls-files', '-z'],
+    },
+  );
+  assert.deepEqual(
+    readTrackedFilesFromLineInput("src/index.ts\r\n\r\noutput/generated.json\n"),
+    ['src/index.ts', 'output/generated.json'],
+  );
 
   console.log('agent-browser script regression checks passed');
 }

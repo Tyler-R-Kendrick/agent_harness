@@ -10,6 +10,10 @@
   "categories": [
     "Other"
   ],
+  "files": [
+    "main.js",
+    "logic.js"
+  ],
   "activationEvents": [
     "onStartupFinished",
     "onCommand:agentHarness.openAgentBrowserPreview"

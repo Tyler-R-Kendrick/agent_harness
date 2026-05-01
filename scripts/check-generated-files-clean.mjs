@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,8 +55,32 @@ export function formatTrackedGeneratedArtifactsError(artifacts) {
   return lines.join('\n');
 }
 
+export function buildGitLsFilesInvocation(cwd, platform = process.platform) {
+  const wrapperPath = path.join(cwd, 'scripts', 'codex-git.ps1');
+  if (platform === 'win32') {
+    return {
+      command: 'powershell',
+      args: [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        wrapperPath,
+        'ls-files',
+        '-z',
+      ],
+    };
+  }
+
+  return {
+    command: 'git',
+    args: ['ls-files', '-z'],
+  };
+}
+
 export function readTrackedFiles(cwd) {
-  const result = spawnSync('git', ['ls-files', '-z'], {
+  const invocation = buildGitLsFilesInvocation(cwd);
+  const result = spawnSync(invocation.command, invocation.args, {
     cwd,
     encoding: 'buffer',
   });
@@ -79,13 +104,23 @@ export function checkGeneratedFilesClean(cwd) {
   return findTrackedGeneratedArtifacts(readTrackedFiles(cwd));
 }
 
+export function readTrackedFilesFromLineInput(input) {
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function defaultRepoRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const artifacts = checkGeneratedFilesClean(defaultRepoRoot());
+    const trackedFiles = process.argv.includes('--stdin-lines')
+      ? readTrackedFilesFromLineInput(readFileSync(0, 'utf8'))
+      : readTrackedFiles(defaultRepoRoot());
+    const artifacts = findTrackedGeneratedArtifacts(trackedFiles);
     if (artifacts.length > 0) {
       process.stderr.write(`${formatTrackedGeneratedArtifactsError(artifacts)}\n`);
       process.exit(1);
