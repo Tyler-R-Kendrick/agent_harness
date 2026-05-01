@@ -7,6 +7,41 @@ export interface HarnessMessage {
   [key: string]: unknown;
 }
 
+export type AgentSessionMode = 'local' | 'shared' | 'remote' | string;
+
+export interface AgentSessionRef {
+  id: string;
+  mode?: AgentSessionMode;
+  metadata?: Record<string, unknown>;
+}
+
+export type ActorRole = 'user' | 'agent' | 'device' | 'system' | string;
+
+export interface ActorRef {
+  id: string;
+  role: ActorRole;
+  sessionId: string;
+  deviceId?: string;
+  displayName?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type ActorMessageEventType = 'actor.message' | 'message_start' | 'message_end';
+
+export interface ActorMessageEvent<
+  TMessage,
+  TType extends ActorMessageEventType = ActorMessageEventType,
+> {
+  type: TType;
+  eventId: string;
+  sessionId: string;
+  session: AgentSessionRef;
+  actor: ActorRef;
+  message: TMessage;
+  timestamp: number;
+  source?: Record<string, unknown>;
+}
+
 export interface HarnessContext<TMessage> {
   messages: TMessage[];
 }
@@ -26,6 +61,8 @@ export interface HarnessLoopConfig<TMessage> {
   transformContext?: (messages: TMessage[], signal?: AbortSignal) => Promise<TMessage[]>;
   getSteeringMessages?: () => Promise<TMessage[]>;
   getFollowUpMessages?: () => Promise<TMessage[]>;
+  session?: AgentSessionRef;
+  resolveMessageActor?: (message: TMessage, session: AgentSessionRef) => ActorRef;
 }
 
 export type HarnessEvent<TMessage> =
@@ -33,13 +70,14 @@ export type HarnessEvent<TMessage> =
   | { type: 'agent_end'; messages: TMessage[] }
   | { type: 'turn_start' }
   | { type: 'turn_end'; message: TMessage }
-  | { type: 'message_start'; message: TMessage }
-  | { type: 'message_end'; message: TMessage };
+  | ActorMessageEvent<TMessage, 'message_start'>
+  | ActorMessageEvent<TMessage, 'message_end'>;
 
 export type HarnessEventSink<TMessage> = (event: HarnessEvent<TMessage>) => Promise<void> | void;
 
 export interface HarnessAgentState<TMessage> {
   messages: TMessage[];
+  session: AgentSessionRef;
   isStreaming: boolean;
   streamingMessage?: TMessage;
   pendingOperations: ReadonlySet<string>;
@@ -66,6 +104,9 @@ export async function runHarnessLoop<TMessage>(
   signal?: AbortSignal,
 ): Promise<TMessage[]> {
   const newMessages: TMessage[] = [];
+  const session = normalizeSession(config.session);
+  const resolveActor = config.resolveMessageActor ?? resolveDefaultMessageActor;
+  let eventIndex = 0;
   let pendingMessages = [
     ...prompts,
     ...await drainMessages(config.getSteeringMessages),
@@ -78,8 +119,8 @@ export async function runHarnessLoop<TMessage>(
     for (const message of pendingMessages) {
       context.messages.push(message);
       newMessages.push(message);
-      await emit({ type: 'message_start', message });
-      await emit({ type: 'message_end', message });
+      await emit(createActorMessageEvent('message_start', message, session, resolveActor, eventIndex++));
+      await emit(createActorMessageEvent('message_end', message, session, resolveActor, eventIndex++));
     }
 
     const sourceMessages = context.messages;
@@ -89,8 +130,8 @@ export async function runHarnessLoop<TMessage>(
     const assistantMessage = await config.runTurn({ messages, sourceMessages }, signal);
     context.messages.push(assistantMessage);
     newMessages.push(assistantMessage);
-    await emit({ type: 'message_start', message: assistantMessage });
-    await emit({ type: 'message_end', message: assistantMessage });
+    await emit(createActorMessageEvent('message_start', assistantMessage, session, resolveActor, eventIndex++));
+    await emit(createActorMessageEvent('message_end', assistantMessage, session, resolveActor, eventIndex++));
     await emit({ type: 'turn_end', message: assistantMessage });
 
     const steeringMessages = await drainMessages(config.getSteeringMessages);
@@ -125,6 +166,7 @@ export class HarnessAgent<TMessage extends { role: string; content: string }> {
   constructor(private readonly options: HarnessAgentOptions<TMessage>) {
     this.stateValue = {
       messages: [...(options.initialState?.messages ?? [])],
+      session: normalizeSession(options.session),
       isStreaming: false,
       pendingOperations: new Set<string>(),
     };
@@ -254,6 +296,8 @@ export class HarnessAgent<TMessage extends { role: string; content: string }> {
         transformContext: this.transformContext,
         getSteeringMessages: async () => this.steeringQueue.drain(),
         getFollowUpMessages: async () => this.followUpQueue.drain(),
+        session: this.stateValue.session,
+        resolveMessageActor: this.options.resolveMessageActor,
       },
       (event) => this.processEvent(event, abortController.signal),
       abortController.signal,
@@ -293,4 +337,59 @@ export class HarnessAgent<TMessage extends { role: string; content: string }> {
 
 async function drainMessages<TMessage>(drain?: () => Promise<TMessage[]>): Promise<TMessage[]> {
   return drain ? drain() : [];
+}
+
+export function normalizeSession(session?: AgentSessionRef): AgentSessionRef {
+  return {
+    id: session?.id ?? 'local',
+    mode: session?.mode ?? 'local',
+    ...(session?.metadata !== undefined ? { metadata: session.metadata } : {}),
+  };
+}
+
+export function resolveDefaultMessageActor<TMessage>(
+  message: TMessage,
+  session: AgentSessionRef,
+): ActorRef {
+  const role = getMessageRole(message);
+  if (role === 'assistant') {
+    return { id: 'agent', role: 'agent', sessionId: session.id };
+  }
+  if (role === 'system') {
+    return { id: 'system', role: 'system', sessionId: session.id };
+  }
+  return { id: 'user', role: 'user', sessionId: session.id };
+}
+
+export function createActorMessageEvent<TMessage, TType extends ActorMessageEventType>(
+  type: TType,
+  message: TMessage,
+  session: AgentSessionRef,
+  resolveActor: (message: TMessage, session: AgentSessionRef) => ActorRef,
+  eventIndex: number,
+  source?: Record<string, unknown>,
+): ActorMessageEvent<TMessage, TType> {
+  return {
+    type,
+    eventId: `${session.id}:${type}:${eventIndex}`,
+    sessionId: session.id,
+    session,
+    actor: resolveActor(message, session),
+    message,
+    timestamp: getMessageTimestamp(message),
+    ...(source !== undefined ? { source } : {}),
+  };
+}
+
+function getMessageRole(message: unknown): string | undefined {
+  return typeof message === 'object' && message !== null && 'role' in message
+    ? String((message as { role?: unknown }).role)
+    : undefined;
+}
+
+function getMessageTimestamp(message: unknown): number {
+  const timestamp = typeof message === 'object' && message !== null && 'timestamp' in message
+    ? (message as { timestamp?: unknown }).timestamp
+    : undefined;
+  return typeof timestamp === 'number' ? timestamp : Date.now();
 }

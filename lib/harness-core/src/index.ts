@@ -3,6 +3,12 @@ export {
   runHarnessLoop,
   type HarnessAgentOptions,
   type HarnessAgentState,
+  type ActorMessageEvent,
+  type ActorMessageEventType,
+  type ActorRef,
+  type ActorRole,
+  type AgentSessionMode,
+  type AgentSessionRef,
   type HarnessContext,
   type HarnessEvent,
   type HarnessEventSink,
@@ -114,6 +120,8 @@ export {
   type HarnessHookRunner,
 } from './hooks.js';
 export {
+  WorkflowAgentBus,
+  createLogActWorkflowDefinition,
   runLogActAgentLoop,
   wrapCompletionCheckerWithCallbacks,
   wrapVoterWithCallbacks,
@@ -121,8 +129,13 @@ export {
   type CoreIterationStep,
   type CoreStepStatus,
   type CoreVoterStep,
+  type LogActWorkflowDefinition,
+  type LogActWorkflowDefinitionOptions,
   type LogActAgentLoopOptions,
-} from './logactLoop.js';
+  type WorkflowEvent,
+  type WorkflowAgentBusOptions,
+  type WorkflowMessage,
+} from './workflow.js';
 export {
   DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   SECRET_REF_PREFIX,
