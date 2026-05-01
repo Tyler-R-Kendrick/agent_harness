@@ -132,6 +132,38 @@ describe('streamAgentChat', () => {
     }), {}, undefined);
   });
 
+  it('answers workspace self-reflection directly from the current capability context', async () => {
+    const onToken = vi.fn();
+    const onDone = vi.fn();
+
+    await streamAgentChat({
+      provider: 'codi',
+      latestUserInput: 'What are you best at and what skills do you have registered?',
+      messages: [{ id: 'user-1', role: 'user', content: 'What are you best at?' }],
+      workspaceName: 'Research',
+      workspacePromptContext: [
+        'Workspace capability files loaded from browser storage:',
+        'Active AGENTS.md:',
+        '- AGENTS.md',
+        '# Workspace rules',
+        'Use TDD and verify changes.',
+        '',
+        'Skills:',
+        '- memory (.agents/skills/memory/SKILL.md): Recall and store durable workspace memory.',
+        '',
+        'Plugins: none',
+        '',
+        'Hooks:',
+        '- pre-task.sh (.agents/hooks/pre-task.sh)',
+      ].join('\n'),
+    }, { onToken, onDone });
+
+    expect(onToken).toHaveBeenCalledWith(expect.stringContaining('active workspace agent for Research'));
+    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('memory (.agents/skills/memory/SKILL.md)'));
+    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('Limitations:'));
+    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('Best for a human:'));
+  });
+
   it('rejects missing provider requirements', async () => {
     await expect(streamAgentChat({
       provider: 'codi',

@@ -12,6 +12,7 @@
     "eval:composite-search": "node scripts/run-agentv-composite-search-eval.mjs",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
+    "eval:self-reflection": "node scripts/run-agentv-self-reflection-eval.mjs",
     "eval:tour-guide": "node scripts/run-agentv-tour-guide-eval.mjs",
     "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit",
     "preview": "node ../scripts/run-package-bin.mjs vite preview",

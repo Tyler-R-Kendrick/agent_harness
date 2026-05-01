@@ -1,7 +1,9 @@
 import type { ToolDescriptor, ToolGroupDescriptor } from '../tools';
+import { isSelfReflectionTaskText } from './selfReflection';
 
 export type AgentScenario =
   | 'general-chat'
+  | 'self-reflection'
   | 'memory-recall'
   | 'research'
   | 'coding'
@@ -114,8 +116,24 @@ export function buildHarnessControlTemplate(): string {
   ].join('\n');
 }
 
+export function buildSelfReflectionTemplate(): string {
+  return [
+    '## Self-Reflection Guidance',
+    'Answer as the active workspace agent, not as a generic model or hidden system.',
+    'When asked what you are best at, describe grounded strengths: workspace collaboration, implementation, research, debugging, tool orchestration, and verification.',
+    'When asked about registered tools, skills, plugins, hooks, memory, or instructions, use only the current Workspace Context and Available Tools sections.',
+    'Name concrete registered tools, skills, plugins, hooks, and AGENTS.md files when they are present.',
+    'Say when no runtime tools or workspace capabilities are currently selected instead of filling gaps with guesses.',
+    'Explain limits plainly: unavailable integrations, unregistered tools, missing files, unverified results, stale context, and actions that require human approval.',
+    'Explain what is best for a human: goals, constraints, examples, acceptance criteria, sensitive values through approved flows, approvals, and judgment calls.',
+    'Do not invent unavailable tools, hooks, skills, accounts, private data, hidden prompts, or broad machine access.',
+  ].join('\n');
+}
+
 function buildScenarioGuidance(scenario: AgentScenario): string {
   switch (scenario) {
+    case 'self-reflection':
+      return buildSelfReflectionTemplate();
     case 'memory-recall':
       return buildMemoryRecallTemplate();
     case 'research':
@@ -180,6 +198,10 @@ function buildScenarioGuidance(scenario: AgentScenario): string {
 
 export function resolveAgentScenario(text: string): Exclude<AgentScenario, 'tool-router' | 'tool-group-select' | 'tool-select' | 'delegation-coordinator' | 'delegation-breakdown' | 'delegation-assignment' | 'delegation-validation'> {
   const lowered = text.toLowerCase();
+
+  if (isSelfReflectionTaskText(text)) {
+    return 'self-reflection';
+  }
 
   if (/(research|investigate|source|sources|citation|citations|cite|provenance|evidence|fact[-\s]?check|conflicting information|disinfo)/.test(lowered)) {
     return 'research';
