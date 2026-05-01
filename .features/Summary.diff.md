@@ -1,58 +1,47 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-05-01
-Baseline: `.features/Summary.md` updated from the 2026-05-01 sixteen-harness corpus.
-Diff type: additive update after Cursor research
+Baseline: `.features/Summary.md` updated from the 2026-05-01 seventeen-harness corpus.
+Diff type: additive update after Mastra research
 
 ## Net new normalized features
 
-### Added: Durable interactive agent artifacts
-- Why now: Cursor's canvases make interactive agent output part of the working surface, not only part of the transcript.
+### Added: Durable suspend resume state and approval gates
+- Why now: Mastra treats pause, approval, and resume as persisted runtime states instead of forcing the user to restart a long-running flow.
 - Research delta:
-  - the April 15, 2026 Cursor changelog says agents can create interactive canvases containing dashboards, custom interfaces, charts, diagrams, diffs, and to-do lists
-  - those canvases live as durable side-panel artifacts alongside terminal, browser, and source control
-  - Cursor's MCP Apps release reinforces the same direction by rendering richer interactive app UIs inside the agent surface
-
-### Expanded: Embeddable agent runtimes and protocol surfaces
-- Why now: Cursor just made its internal harness available as a public SDK with a more explicit run lifecycle API.
-- Research delta:
-  - the April 29, 2026 SDK launch exposes the same runtime used by Cursor desktop, CLI, and web
-  - the updated Cloud Agents API is run-scoped, supports SSE streaming and reconnect, and adds archive and delete lifecycle controls
-  - Cursor explicitly positions this for CI, automations, internal platforms, and embedded product experiences
+  - the current Mastra docs say workflows can suspend, persist state, and resume later through `.resume()` and related stream APIs
+  - the `suspend()` reference says the workflow state is persisted and can be continued later
+  - the Playground suspend/resume blog says `resumeStream` can close a stream on suspend and later continue from the same point instead of replaying the run
 
 ### Expanded: Parallel agent orchestration
-- Why now: Cursor's April 24, 2026 multitask release makes async subagents, worktrees, and multi-root workspaces a cleaner supervisor workflow than the current summary captured.
+- Why now: Mastra's current network and supervisor direction shows a more workflow-native way to coordinate delegating agents than the current summary captured.
 - Research delta:
-  - `/multitask` now breaks larger tasks into async subagents instead of merely queueing them
-  - worktrees in the Agents Window support isolated background runs across branches with one-click foreground handoff
-  - multi-root workspaces let one agent session span frontend, backend, and shared libraries across folders or repos
+  - the Mastra agents surface explicitly supports agent networks
+  - the AgentNetwork evolution post says `.network()` became the main routing primitive on `Agent`
+  - the February 26, 2026 release notes added a supervisor pattern with delegation hooks, completion scoring, memory isolation, and approval propagation
 
-### Added: Expose browser-agent via SDK and durable run API
-- Why now: `agent-browser` still behaves mostly like an app-local UI surface, while Cursor is now exposing its harness as a programmable platform.
-- Linear issue title:
-  - `Expose browser-agent runs through a typed SDK`
-- Suggested problem statement:
-  - `agent-browser` has no clean public runtime for other tools, automations, or products to launch durable runs, stream status, reconnect later, and manage lifecycle state without driving the UI indirectly.
-- One-shot instruction for an LLM:
-  - Design and implement a typed `agent-browser` SDK and durable run API that can launch local or remote browser-agent sessions, stream structured events, support reconnect and cancellation, expose explicit run lifecycle controls, and let other internal tools embed the harness without screen-scraping the app.
+### Expanded: Persistent memory plus project instructions
+- Why now: Mastra's Observational Memory work pushes memory beyond simple conversation recall into a stable long-horizon runtime architecture.
+- Research delta:
+  - the Mastra memory surface spans working memory, conversation history, semantic recall, and memory processors
+  - the February 9, 2026 Observational Memory research post describes background Observer and Reflector agents that maintain a dense observation log
+  - the March 25, 2026 releases added model-by-input-size routing for observational memory workloads
 
-### Added: Add multitask subagents with worktree-aware branch isolation
-- Why now: Cursor shows a concrete path for parallel subagents that can each work in their own isolated branch context and then be compared or foregrounded deliberately.
-- Linear issue title:
-  - `Add multitask subagents and branch isolation`
-- Suggested problem statement:
-  - `agent-browser` still centers one active run at a time, which makes larger tasks slow to supervise and makes parallel branch-safe experimentation awkward.
-- One-shot instruction for an LLM:
-  - Implement a multitask mode for `agent-browser` that decomposes larger work into async subagents, launches each subagent in an isolated branch or worktree context, shows side-by-side status and output comparison, and allows one-click promotion of a chosen branch back into the primary foreground workflow.
+### Expanded: Operator-facing orchestration telemetry
+- Why now: Mastra is broadening telemetry into a combined deploy, trace, score, memory, and experiment control plane.
+- Research delta:
+  - the Mastra Cloud docs say deployments expose agents, tools, and workflows with a dashboard for status, logs, and configuration
+  - the public cloud page adds traces, logs, metrics, scorers, experiments, agent versioning, and memory inspection
+  - the April 2026 releases say CloudExporter now ships logs, metrics, scores, and feedback in addition to spans
 
-### Added: Add durable interactive canvases for agent runs
-- Why now: Cursor canvases suggest that planning, review, and debugging benefit from interactive artifacts that outlive the chat turn.
+### Added: Add durable suspend and resume checkpoints for browser-agent runs
+- Why now: `agent-browser` still handles many waits and approvals as thread-level interruption instead of a persisted run state that can be resumed safely.
 - Linear issue title:
-  - `Add durable agent canvases`
+  - `Add durable suspend/resume checkpoints for browser-agent runs`
 - Suggested problem statement:
-  - `agent-browser` can show transcript, browser, and code state, but it cannot yet preserve agent-authored dashboards, diagrams, checklists, or review panels as durable workspace artifacts.
+  - `agent-browser` cannot yet persist a live browser task at the moment it needs approval, credentials, or delayed human input, which forces users to re-drive the run or trust fragile transcript-only continuity.
 - One-shot instruction for an LLM:
-  - Implement a canvas artifact system for `agent-browser` where agents can create and update persistent dashboards, diagrams, checklists, and review panels that live beside transcript, terminal, browser, and diff views, with explicit artifact IDs, revision history, and safe follow-up updates.
+  - Design and implement persisted suspend/resume checkpoints for `agent-browser` so browser-capable runs can pause on human approval or missing input, save execution state plus artifacts, close and later restore streaming surfaces, and resume from the same browser-task boundary with clear audit history, timeout policy, and operator controls.
 
 ## How to use this file
 
@@ -63,6 +52,4 @@ Diff type: additive update after Cursor research
 
 ## Recommended next Linear batch
 
-1. `Expose browser-agent runs through a typed SDK`
-2. `Add multitask subagents and branch isolation`
-3. `Add durable agent canvases`
+1. `Add durable suspend/resume checkpoints for browser-agent runs`

@@ -1,21 +1,21 @@
 # Agent Harness Competition Summary
 
 Updated: 2026-05-01
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, Mastra agent networks and supervisor pattern, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
 
 ### 2. Persistent memory plus project instructions
 - Common pattern: harnesses retain repo, workflow, and user preferences across runs.
-- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Hermes persistent memory, Codex skills/team config, Cursor project rules plus memories plus `AGENTS.md` and commands, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
+- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Hermes persistent memory, Codex skills/team config, Cursor project rules plus memories plus `AGENTS.md` and commands, Mastra working memory plus semantic recall plus Observational Memory, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
 - Why it matters: repeated steering is turning into the main productivity tax.
 - One-shot build instruction:
   - Add layered memory with explicit scopes (`workspace`, `project`, `user`, `agent`) and clear precedence, plus a memory inspector/editor so users can see, edit, import, disable, and diff what the harness has learned.
@@ -57,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, Mastra MCP clients, toolsets, and MCP server authoring, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -120,7 +120,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 17. Operator-facing orchestration telemetry
 - Common pattern: long-running agent systems increasingly expose runtime state through structured logs, dashboards, and debug APIs rather than expecting operators to infer health from terminal noise.
-- Seen in: OpenAI Symphony structured logs, optional status surface, Phoenix dashboard, and `/api/v1/*` observability endpoints.
+- Seen in: Mastra Cloud traces plus logs plus metrics plus scores plus memory inspection, OpenAI Symphony structured logs, optional status surface, Phoenix dashboard, and `/api/v1/*` observability endpoints.
 - Why it matters: once a harness runs continuously across many issues, operator trust depends on inspectable health, queue, retry, and session state.
 - One-shot build instruction:
   - Build an operator telemetry surface for browser-agent orchestration with structured logs, queue and session views, issue-specific debug pages, and a read-mostly JSON API that supports refresh triggers and postmortem inspection.
@@ -153,6 +153,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add durable agent-authored artifacts such as canvases, dashboards, diagrams, and review panels that live alongside transcript, terminal, browser, and diff views; make them addressable, persistable, and safe to update incrementally across follow-up turns.
 
+### 22. Durable suspend resume state and approval gates
+- Common pattern: some harnesses now persist live execution so an agent can wait on human approval, outside input, or delayed events without losing the run.
+- Seen in: Mastra workflow suspend and resume with persisted state and resumable streams; OpenAI Symphony blocker-aware continuations are adjacent but issue-centric rather than step-centric; Warp run-until-complete permissions are adjacent but less explicit about persisted workflow checkpoints.
+- Why it matters: browser and operations tasks often stall on logins, approvals, captchas, and business decisions, so agents need a first-class waiting state instead of forcing the user to restart the workflow from scratch.
+- One-shot build instruction:
+  - Add durable run checkpoints for browser agents so a task can suspend on approval or missing input, persist state and artifacts, notify the user what is needed, and resume from the same point later with clear audit history and timeout or retry policy.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -171,7 +178,8 @@ Method: current-product research from first-party product pages, help centers, d
 14. Ship operator-visible orchestration telemetry for long-running agent queues.
 15. Build reusable remote execution environments plus trigger wiring for browser-agent automations.
 16. Let browser agents build persistent in-app workspace surfaces.
+17. Add suspend and resume checkpoints for long-running browser tasks.
 
 ## Notes
-- This pass extends the earlier sixteen-harness corpus with `Cursor` as a seventeenth competitor.
+- This pass extends the earlier seventeen-harness corpus with `Mastra` as an eighteenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
