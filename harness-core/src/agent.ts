@@ -1,4 +1,11 @@
 import { PendingMessageQueue, type QueueMode } from './queue.js';
+import {
+  AGENT_LOOP_HOOK_EVENTS,
+  LLM_HOOK_EVENTS,
+  type HarnessHookEventDescriptor,
+  type HarnessHookRunOptions,
+  HookRegistry,
+} from './hooks.js';
 
 export interface HarnessMessage {
   role: string;
@@ -63,6 +70,7 @@ export interface HarnessLoopConfig<TMessage> {
   getFollowUpMessages?: () => Promise<TMessage[]>;
   session?: AgentSessionRef;
   resolveMessageActor?: (message: TMessage, session: AgentSessionRef) => ActorRef;
+  hooks?: HookRegistry;
 }
 
 export type HarnessEvent<TMessage> =
@@ -106,49 +114,120 @@ export async function runHarnessLoop<TMessage>(
   const newMessages: TMessage[] = [];
   const session = normalizeSession(config.session);
   const resolveActor = config.resolveMessageActor ?? resolveDefaultMessageActor;
+  const hooks = config.hooks;
   let eventIndex = 0;
   let pendingMessages = [
     ...prompts,
     ...await drainMessages(config.getSteeringMessages),
   ];
 
+  if (hooks) {
+    await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.loopStart, { prompts: pendingMessages, session }, signal);
+  }
   await emit({ type: 'agent_start' });
 
   while (true) {
+    if (hooks) {
+      await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.turnStart, { pendingMessages, session }, signal);
+    }
     await emit({ type: 'turn_start' });
     for (const message of pendingMessages) {
       context.messages.push(message);
       newMessages.push(message);
-      await emit(createActorMessageEvent('message_start', message, session, resolveActor, eventIndex++));
-      await emit(createActorMessageEvent('message_end', message, session, resolveActor, eventIndex++));
+      const startEvent = createActorMessageEvent('message_start', message, session, resolveActor, eventIndex++);
+      if (hooks) {
+        await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.messageStart, startEvent, signal);
+      }
+      await emit(startEvent);
+      const endEvent = createActorMessageEvent('message_end', message, session, resolveActor, eventIndex++);
+      if (hooks) {
+        await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.messageEnd, endEvent, signal);
+      }
+      await emit(endEvent);
     }
 
     const sourceMessages = context.messages;
-    const messages = config.transformContext
-      ? await config.transformContext([...sourceMessages], signal)
-      : sourceMessages;
-    const assistantMessage = await config.runTurn({ messages, sourceMessages }, signal);
+    const rawContextInput = {
+      messages: [...sourceMessages],
+      sourceMessages,
+    };
+    const contextInput = hooks
+      ? await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.contextInput, rawContextInput, signal)
+      : rawContextInput;
+    const transformedMessages = config.transformContext
+      ? await config.transformContext(contextInput.messages, signal)
+      : contextInput.messages;
+    const rawContextOutput = {
+      messages: transformedMessages,
+      sourceMessages,
+    };
+    const contextOutput = hooks
+      ? await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.contextOutput, rawContextOutput, signal)
+      : rawContextOutput;
+    const rawLlmInput = {
+      messages: contextOutput.messages,
+      sourceMessages,
+    };
+    const llmInput = hooks
+      ? await runHarnessHook(hooks, LLM_HOOK_EVENTS.input, rawLlmInput, signal)
+      : rawLlmInput;
+    const rawAssistantMessage = await config.runTurn(llmInput, signal);
+    const rawLlmOutput = {
+      message: rawAssistantMessage,
+      messages: llmInput.messages,
+      sourceMessages,
+    };
+    const llmOutput = hooks
+      ? await runHarnessHook(hooks, LLM_HOOK_EVENTS.output, rawLlmOutput, signal)
+      : rawLlmOutput;
+    const assistantMessage = llmOutput.message;
     context.messages.push(assistantMessage);
     newMessages.push(assistantMessage);
-    await emit(createActorMessageEvent('message_start', assistantMessage, session, resolveActor, eventIndex++));
-    await emit(createActorMessageEvent('message_end', assistantMessage, session, resolveActor, eventIndex++));
+    const assistantStartEvent = createActorMessageEvent('message_start', assistantMessage, session, resolveActor, eventIndex++);
+    if (hooks) {
+      await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.messageStart, assistantStartEvent, signal);
+    }
+    await emit(assistantStartEvent);
+    const assistantEndEvent = createActorMessageEvent('message_end', assistantMessage, session, resolveActor, eventIndex++);
+    if (hooks) {
+      await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.messageEnd, assistantEndEvent, signal);
+    }
+    await emit(assistantEndEvent);
+    if (hooks) {
+      await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.turnEnd, { message: assistantMessage, session }, signal);
+    }
     await emit({ type: 'turn_end', message: assistantMessage });
 
-    const steeringMessages = await drainMessages(config.getSteeringMessages);
-    if (steeringMessages.length > 0) {
-      pendingMessages = steeringMessages;
+    const rawSteeringMessages = {
+      messages: await drainMessages(config.getSteeringMessages),
+      session,
+    };
+    const steeringMessages = hooks
+      ? await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.steeringMessages, rawSteeringMessages, signal)
+      : rawSteeringMessages;
+    if (steeringMessages.messages.length > 0) {
+      pendingMessages = steeringMessages.messages;
       continue;
     }
 
-    const followUpMessages = await drainMessages(config.getFollowUpMessages);
-    if (followUpMessages.length > 0) {
-      pendingMessages = followUpMessages;
+    const rawFollowUpMessages = {
+      messages: await drainMessages(config.getFollowUpMessages),
+      session,
+    };
+    const followUpMessages = hooks
+      ? await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.followUpMessages, rawFollowUpMessages, signal)
+      : rawFollowUpMessages;
+    if (followUpMessages.messages.length > 0) {
+      pendingMessages = followUpMessages.messages;
       continue;
     }
 
     break;
   }
 
+  if (hooks) {
+    await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.loopEnd, { messages: newMessages, session }, signal);
+  }
   await emit({ type: 'agent_end', messages: newMessages });
   return newMessages;
 }
@@ -298,6 +377,7 @@ export class HarnessAgent<TMessage extends { role: string; content: string }> {
         getFollowUpMessages: async () => this.followUpQueue.drain(),
         session: this.stateValue.session,
         resolveMessageActor: this.options.resolveMessageActor,
+        hooks: this.options.hooks,
       },
       (event) => this.processEvent(event, abortController.signal),
       abortController.signal,
@@ -333,6 +413,18 @@ export class HarnessAgent<TMessage extends { role: string; content: string }> {
       this.stateValue.errorMessage = 'aborted';
     }
   }
+}
+
+async function runHarnessHook<TPayload>(
+  hooks: HookRegistry,
+  event: HarnessHookEventDescriptor,
+  payload: TPayload,
+  signal?: AbortSignal,
+): Promise<TPayload> {
+  const options: HarnessHookRunOptions = {
+    ...(signal !== undefined ? { signal } : {}),
+  };
+  return (await hooks.runEvent(event, payload, options)).payload;
 }
 
 async function drainMessages<TMessage>(drain?: () => Promise<TMessage[]>): Promise<TMessage[]> {

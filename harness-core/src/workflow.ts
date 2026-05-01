@@ -21,9 +21,16 @@ import {
   type ActorRef,
   type AgentSessionRef,
 } from './agent.js';
+import { withAgentBusHooks } from './agentBus.js';
 import { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 import { wrapVoterWithCallbacks } from './chat-agents/voter.js';
 import type { CoreInferenceClient } from './constrainedDecoding.js';
+import {
+  LLM_HOOK_EVENTS,
+  LOGACT_AGENT_LOOP_HOOK_EVENTS,
+  type HarnessHookEventDescriptor,
+  HookRegistry,
+} from './hooks.js';
 import type { CoreAgentLoopCallbacks, LogActAgentLoopOptions } from './logactLoopTypes.js';
 
 export { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
@@ -43,6 +50,7 @@ export type WorkflowEvent =
 export interface WorkflowAgentBusOptions {
   session?: AgentSessionRef;
   bus?: IAgentBus;
+  hooks?: HookRegistry;
 }
 
 export class WorkflowAgentBus implements IAgentBus {
@@ -52,7 +60,8 @@ export class WorkflowAgentBus implements IAgentBus {
   private readonly workflowEvents: WorkflowEvent[] = [];
 
   constructor(options: WorkflowAgentBusOptions = {}) {
-    this.bus = options.bus ?? new InMemoryAgentBus();
+    const bus = options.bus ?? new InMemoryAgentBus();
+    this.bus = options.hooks ? withAgentBusHooks(bus, options.hooks) : bus;
     this.sessionRef = normalizeSession(options.session);
   }
 
@@ -233,10 +242,17 @@ export async function runLogActAgentLoop(
     executor,
     session,
     constrainedDecoding,
+    hooks,
   }: LogActAgentLoopOptions,
   callbacks: CoreAgentLoopCallbacks,
 ): Promise<void> {
-  const workflowBus = bus ?? new WorkflowAgentBus({ session });
+  const workflowBus = bus
+    ? hooks ? withAgentBusHooks(bus, hooks) : bus
+    : new WorkflowAgentBus({ session, hooks });
+  await runLogActHook(hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.loopStart, {
+    input: input ?? messages.at(-1)?.content ?? '',
+    messages,
+  });
   const driverInferenceClient: CoreInferenceClient = constrainedDecoding
     ? {
         infer: (inferenceMessages, inferenceOptions) =>
@@ -253,6 +269,7 @@ export async function runLogActAgentLoop(
       : undefined,
     executor,
     maxTurns: maxIterations ?? maxTurns,
+    hooks,
   });
   const workflowSession = workflowBus instanceof WorkflowAgentBus
     ? workflowBus.session
@@ -274,6 +291,10 @@ export async function runLogActAgentLoop(
     await runWorkflowMachine(definition, runtime, workflowBus);
   } catch {
     // Provider adapters are responsible for forwarding user-visible errors.
+  } finally {
+    await runLogActHook(hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.loopEnd, {
+      input: input ?? messages.at(-1)?.content ?? '',
+    });
   }
 }
 
@@ -285,6 +306,7 @@ interface WorkflowRuntime {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   maxTurns: number;
+  hooks?: HookRegistry;
   cursor: number;
   turnCount: number;
   intentIndex: number;
@@ -301,6 +323,7 @@ function createRuntime(options: {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   maxTurns: number;
+  hooks?: HookRegistry;
 }): WorkflowRuntime {
   return {
     ...options,
@@ -332,6 +355,7 @@ async function runWorkflowMachine(
   if (bus instanceof WorkflowAgentBus) {
     bus.sendWorkflowEvent({ type: 'START', workflowId: definition.id });
   }
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.workflowStart, { definition });
   actor.start();
   await done;
 }
@@ -367,17 +391,28 @@ function createLogActWorkflowMachine(
 }
 
 async function waitForTrigger(runtime: WorkflowRuntime): Promise<Entry[]> {
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.triggerInput, {
+    cursor: runtime.cursor,
+  });
   const triggerEntries = await runtime.bus.poll(runtime.cursor, [
     PayloadType.Mail,
     PayloadType.Result,
     PayloadType.Abort,
   ]);
   runtime.cursor = Math.max(...triggerEntries.map((entry) => entry.position)) + 1;
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.triggerOutput, {
+    entries: triggerEntries,
+    cursor: runtime.cursor,
+  });
   return triggerEntries;
 }
 
 async function runDriverAgent(runtime: WorkflowRuntime): Promise<{ terminal: boolean; intent?: IntentPayload }> {
-  const messages = buildMessages(await readAllEntries(runtime.bus));
+  const inputPayload = await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.driverInput, {
+    messages: buildMessages(await readAllEntries(runtime.bus)),
+  });
+  const llmInputPayload = await runLogActHook(runtime.hooks, LLM_HOOK_EVENTS.input, inputPayload);
+  const messages = llmInputPayload.messages;
   await runtime.bus.append({
     type: PayloadType.InfIn,
     messages,
@@ -385,20 +420,26 @@ async function runDriverAgent(runtime: WorkflowRuntime): Promise<{ terminal: boo
   });
 
   const rawText = await runtime.inferenceClient.infer(messages);
-  if (!rawText.trim()) {
+  const outputPayload = await runLogActHook(runtime.hooks, LLM_HOOK_EVENTS.output, {
+    text: rawText,
+    actorId: 'driver',
+  });
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.driverOutput, outputPayload);
+  const outputText = outputPayload.text;
+  if (!outputText.trim()) {
     return { terminal: true };
   }
 
   await runtime.bus.append({
     type: PayloadType.InfOut,
-    text: rawText,
+    text: outputText,
     meta: { actorId: 'driver', actorRole: 'agent' },
   });
   runtime.intentIndex += 1;
   const intent: IntentPayload = {
     type: PayloadType.Intent,
     intentId: `intent-${runtime.intentIndex}`,
-    action: rawText.trim(),
+    action: outputText.trim(),
     meta: { actorId: 'driver', actorRole: 'agent' },
   };
   await runtime.bus.append(intent);
@@ -409,6 +450,10 @@ async function runDriverAgent(runtime: WorkflowRuntime): Promise<{ terminal: boo
 
 async function runVoterAgents(runtime: WorkflowRuntime): Promise<VotePayload[]> {
   const intent = requireCurrentIntent(runtime);
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.voterInput, {
+    intent,
+    voterIds: runtime.voters.map((voter) => voter.id),
+  });
   const votes = await Promise.all(runtime.voters.map(async (voter) => {
     const vote = await voter.vote(intent, runtime.bus);
     const normalizedVote: VotePayload = {
@@ -423,6 +468,7 @@ async function runVoterAgents(runtime: WorkflowRuntime): Promise<VotePayload[]> 
     await runtime.bus.append(vote);
   }
   runtime.currentVotes = votes;
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.voterOutput, { votes });
   return votes;
 }
 
@@ -430,6 +476,10 @@ async function runDeciderAgent(
   runtime: WorkflowRuntime,
 ): Promise<{ decision: 'abort' | 'commit'; shouldContinue: boolean }> {
   const intent = requireCurrentIntent(runtime);
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.deciderInput, {
+    intent,
+    votes: runtime.currentVotes,
+  });
   const decision = evaluateQuorum(runtime.currentVotes, runtime.voters.length, runtime.quorumPolicy);
   if (decision === 'abort') {
     await runtime.bus.append({
@@ -439,7 +489,9 @@ async function runDeciderAgent(
       meta: { actorId: 'decider', actorRole: 'agent' },
     });
     runtime.turnCount += 1;
-    return { decision: 'abort', shouldContinue: shouldContinue(runtime) };
+    const result = { decision: 'abort' as const, shouldContinue: shouldContinue(runtime) };
+    await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.deciderOutput, result);
+    return result;
   }
 
   await runtime.bus.append({
@@ -447,17 +499,23 @@ async function runDeciderAgent(
     intentId: intent.intentId,
     meta: { actorId: 'decider', actorRole: 'agent' },
   });
-  return { decision: 'commit', shouldContinue: true };
+  const result = { decision: 'commit' as const, shouldContinue: true };
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.deciderOutput, result);
+  return result;
 }
 
 async function runExecutorAgent(runtime: WorkflowRuntime): Promise<ResultPayload> {
   const intent = requireCurrentIntent(runtime);
+  const executorInput = await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.executorInput, {
+    action: intent.action,
+    intent,
+  });
   let output = '';
   let error: string | undefined;
   try {
     output = runtime.executor
-      ? await runtime.executor.execute(intent.action)
-      : intent.action;
+      ? await runtime.executor.execute(executorInput.action)
+      : executorInput.action;
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught);
   }
@@ -472,6 +530,7 @@ async function runExecutorAgent(runtime: WorkflowRuntime): Promise<ResultPayload
   await runtime.bus.append(result);
   runtime.lastResult = result;
   runtime.turnCount += 1;
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.executorOutput, { result });
   return result;
 }
 
@@ -479,8 +538,11 @@ async function runCompletionCheckerAgent(
   runtime: WorkflowRuntime,
 ): Promise<{ done: boolean; completion?: CompletionPayload }> {
   const result = requireLastResult(runtime);
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.completionInput, { result });
   if (!runtime.completionChecker) {
-    return { done: !shouldContinue(runtime) };
+    const completionResult = { done: !shouldContinue(runtime) };
+    await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.completionOutput, completionResult);
+    return completionResult;
   }
 
   const history = await readAllEntries(runtime.bus);
@@ -501,10 +563,12 @@ async function runCompletionCheckerAgent(
     await appendMail(runtime.bus, normalizedCompletion.feedback, 'completion-checker', 'agent');
   }
 
-  return {
+  const completionResult = {
     done: normalizedCompletion.done || !shouldContinue(runtime),
     completion: normalizedCompletion,
   };
+  await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.completionOutput, completionResult);
+  return completionResult;
 }
 
 async function appendMail(
@@ -567,6 +631,17 @@ function buildMessages(entries: Entry[]): Array<{ role: 'user' | 'assistant' | '
 function getTaskFromHistory(entries: Entry[]): string | undefined {
   const firstMail = entries.find((entry) => entry.payload.type === PayloadType.Mail) as Entry & { payload: MailPayload };
   return firstMail.payload.content;
+}
+
+async function runLogActHook<TPayload>(
+  hooks: HookRegistry | undefined,
+  event: HarnessHookEventDescriptor,
+  payload: TPayload,
+): Promise<TPayload> {
+  if (!hooks) {
+    return payload;
+  }
+  return (await hooks.runEvent(event, payload)).payload;
 }
 
 function workflowMessageFromPayload(payload: Payload, timestamp: number): WorkflowMessage | undefined {

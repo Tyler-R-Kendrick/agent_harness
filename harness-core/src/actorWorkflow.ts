@@ -1,6 +1,12 @@
 import { assign, createActor, fromPromise, setup } from 'xstate';
 import type { IAgentBus } from 'logact';
 import { appendAgentEvent, resolveAgentBus } from './agentBus.js';
+import {
+  ACTOR_WORKFLOW_HOOK_EVENTS,
+  type HarnessHookEventDescriptor,
+  type HarnessHookRunOptions,
+  HookRegistry,
+} from './hooks.js';
 
 export interface ActorWorkflowRunContext<TInput> {
   actorId: string;
@@ -16,6 +22,7 @@ export interface ActorWorkflowOptions<TInput, TOutput> {
   input: TInput;
   bus?: IAgentBus;
   signal?: AbortSignal;
+  hooks?: HookRegistry;
   run: (context: ActorWorkflowRunContext<TInput>) => Promise<TOutput> | TOutput;
 }
 
@@ -30,19 +37,31 @@ export async function runActorWorkflow<TInput, TOutput>({
   input,
   bus,
   signal,
+  hooks,
   run,
 }: ActorWorkflowOptions<TInput, TOutput>): Promise<TOutput> {
-  const eventBus = resolveAgentBus(bus);
+  const eventBus = resolveAgentBus(bus, { hooks, hookOptions: hookOptions(signal) });
+  await runActorHook(hooks, ACTOR_WORKFLOW_HOOK_EVENTS.started, {
+    actorId,
+    parentActorId,
+    input,
+  }, signal);
   await appendAgentEvent(eventBus, {
     eventType: 'actor.workflow.started',
     actorId,
     parentActorId,
     data: { input },
   });
+  const inputPayload = await runActorHook(hooks, ACTOR_WORKFLOW_HOOK_EVENTS.input, {
+    input,
+    actorId,
+    parentActorId,
+  }, signal);
+  const workflowInput = inputPayload.input;
 
   const machine = setup({
     actors: {
-      runTask: fromPromise(async () => run({ actorId, parentActorId, input, bus: eventBus, signal })),
+      runTask: fromPromise(async () => run({ actorId, parentActorId, input: workflowInput, bus: eventBus, signal })),
     },
     actions: {
       assignOutput: assign({
@@ -80,6 +99,11 @@ export async function runActorWorkflow<TInput, TOutput>({
   });
 
   if (finalSnapshot.value === 'failed') {
+    await runActorHook(hooks, ACTOR_WORKFLOW_HOOK_EVENTS.failed, {
+      actorId,
+      parentActorId,
+      error: finalSnapshot.context.error,
+    }, signal);
     await appendAgentEvent(eventBus, {
       eventType: 'actor.workflow.failed',
       actorId,
@@ -89,11 +113,37 @@ export async function runActorWorkflow<TInput, TOutput>({
     throw finalSnapshot.context.error;
   }
 
+  const outputPayload = await runActorHook(hooks, ACTOR_WORKFLOW_HOOK_EVENTS.output, {
+    actorId,
+    parentActorId,
+    output: finalSnapshot.context.output as TOutput,
+  }, signal);
   await appendAgentEvent(eventBus, {
     eventType: 'actor.workflow.completed',
     actorId,
     parentActorId,
-    data: { output: finalSnapshot.context.output },
+    data: { output: outputPayload.output },
   });
-  return finalSnapshot.context.output as TOutput;
+  await runActorHook(hooks, ACTOR_WORKFLOW_HOOK_EVENTS.completed, {
+    actorId,
+    parentActorId,
+    output: outputPayload.output,
+  }, signal);
+  return outputPayload.output;
+}
+
+async function runActorHook<TPayload>(
+  hooks: HookRegistry | undefined,
+  event: HarnessHookEventDescriptor,
+  payload: TPayload,
+  signal?: AbortSignal,
+): Promise<TPayload> {
+  if (!hooks) {
+    return payload;
+  }
+  return (await hooks.runEvent(event, payload, hookOptions(signal))).payload;
+}
+
+function hookOptions(signal?: AbortSignal): HarnessHookRunOptions {
+  return signal === undefined ? {} : { signal };
 }
