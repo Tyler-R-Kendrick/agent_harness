@@ -43,6 +43,7 @@ export type CommandTarget =
 
 export interface Command {
   id: string;
+  usage?: string;
   description: string;
   pattern: RegExp;
   target: CommandTarget;

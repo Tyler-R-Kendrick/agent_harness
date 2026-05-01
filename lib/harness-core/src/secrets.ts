@@ -2,7 +2,8 @@ export const SECRET_REF_PREFIX = 'secret-ref://local/';
 
 const SECRET_REF_PATTERN = /secret-ref:\/\/local\/[A-Za-z0-9._~-]+/g;
 const AUTH_HEADER_PATTERN = /(\bAuthorization\s*[:=]\s*(?:Bearer|Basic)\s+)([A-Za-z0-9._~+:/-]{12,}=*)/gi;
-const GENERIC_SECRET_ASSIGNMENT_PATTERN = /(\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|secret|client[_-]?secret)\b\s*[:=]\s*)(['"]?)([^'"\s,;]{8,})\2/gi;
+const GENERIC_SECRET_ASSIGNMENT_PATTERN = /(\b[A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|token|password|secret|secret[_-]?key|client[_-]?secret|service[_-]?role[_-]?key|aws[_-]?secret[_-]?access[_-]?key|private[_-]?key|database[_-]?url|connection[_-]?string)[A-Za-z0-9_-]*\b\s*[:=]\s*)(['"]?)([^'"\s,;]{8,})\2/gi;
+const HIGH_ENTROPY_CONTEXT_PATTERN = /(\b(?:api[_\s-]?key|access[_\s-]?token|auth[_\s-]?token|bearer\s+token|credential|integration\s+token|password|secret|token)\b\s*(?:is|=|:)\s*)(['"]?)([A-Za-z0-9._~+/=-]{24,})(['"]?)/gi;
 
 type SecretSource = 'detected' | 'manual';
 
@@ -32,6 +33,22 @@ export interface SanitizeDataResult<T> {
   refs: string[];
 }
 
+export interface SecretManagementSettings {
+  enabled: boolean;
+  replaceStoredSecrets: boolean;
+  detectKnownSecrets: boolean;
+  detectGenericSecrets: boolean;
+  detectHighEntropySecrets: boolean;
+}
+
+export const DEFAULT_SECRET_MANAGEMENT_SETTINGS: SecretManagementSettings = {
+  enabled: true,
+  replaceStoredSecrets: true,
+  detectKnownSecrets: true,
+  detectGenericSecrets: true,
+  detectHighEntropySecrets: true,
+};
+
 export interface InferenceMessageLike {
   content: string;
   streamedContent?: string;
@@ -56,10 +73,20 @@ const SECRET_PATTERNS: Array<{ label: string; regex: RegExp }> = [
   { label: 'anthropic-api-key', regex: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g },
   { label: 'github-token', regex: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b/g },
   { label: 'github-token', regex: /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g },
+  { label: 'stripe-secret-key', regex: /\bsk_(?:live|test)_[A-Za-z0-9]{20,}\b/g },
   { label: 'openai-api-key', regex: /\bsk-(?!ant-)[A-Za-z0-9]{32,}\b/g },
+  { label: 'google-api-key', regex: /\bAIza[A-Za-z0-9_-]{30,}\b/g },
+  { label: 'sendgrid-api-key', regex: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b/g },
+  { label: 'resend-api-key', regex: /\bre_[A-Za-z0-9_]{20,}\b/g },
+  { label: 'hugging-face-token', regex: /\bhf_[A-Za-z0-9]{20,}\b/g },
+  { label: 'linear-api-key', regex: /\blin_api_[A-Za-z0-9]{20,}\b/g },
+  { label: 'vercel-token', regex: /\bvercel_[A-Za-z0-9]{20,}\b/g },
   { label: 'slack-token', regex: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
   { label: 'aws-access-key-id', regex: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g },
   { label: 'jwt', regex: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  { label: 'database-url', regex: /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?)?:\/\/[^\s'"]+:[^\s'"]+@[^\s'"]+/gi },
+  { label: 'url-basic-auth', regex: /\bhttps?:\/\/[^/\s:'"]+:[^@\s'"]+@[^\s'"]+/gi },
+  { label: 'private-key', regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g },
 ];
 
 export function isSecretRef(value: string): boolean {
@@ -72,6 +99,22 @@ export function containsSecretRef(value: string): boolean {
 
 export function secretRefForId(id: string): string {
   return `${SECRET_REF_PREFIX}${normalizeSecretId(id)}`;
+}
+
+export function isSecretManagementSettings(value: unknown): value is SecretManagementSettings {
+  if (!isPlainRecord(value)) return false;
+  return Object.keys(DEFAULT_SECRET_MANAGEMENT_SETTINGS).every((key) => (
+    typeof value[key] === 'boolean'
+  ));
+}
+
+export function normalizeSecretManagementSettings(
+  settings?: Partial<SecretManagementSettings>,
+): SecretManagementSettings {
+  return {
+    ...DEFAULT_SECRET_MANAGEMENT_SETTINGS,
+    ...(settings ?? {}),
+  };
 }
 
 export class MemorySecretStore implements SecretStore {
@@ -106,27 +149,79 @@ export class SecretsManagerAgent {
     this.now = options.now ?? (() => new Date().toISOString());
   }
 
-  async sanitizeText(text: string): Promise<SanitizeTextResult> {
+  async storeSecret({ name, value }: { name: string; value: string }): Promise<string> {
+    const label = name.trim() || 'Secret';
+    const id = normalizeSecretId(label);
+    const existing = await this.store.get(id);
+    const now = this.now();
+    if (existing && existing.value !== value) {
+      this.refBySecret.delete(existing.value);
+    }
+    const record: SecretRecord = {
+      id,
+      value,
+      label,
+      source: 'manual',
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await this.store.set(record);
+    const ref = secretRefForId(id);
+    this.refBySecret.set(value, ref);
+    return ref;
+  }
+
+  async listSecrets(): Promise<SecretRecord[]> {
+    if (!this.store.list) return [];
+    const records = await this.store.list();
+    return [...records].sort((left, right) => left.label.localeCompare(right.label));
+  }
+
+  async deleteSecret(idOrRef: string): Promise<void> {
+    const id = normalizeSecretId(idOrRef.startsWith(SECRET_REF_PREFIX)
+      ? idOrRef.slice(SECRET_REF_PREFIX.length)
+      : idOrRef);
+    const existing = await this.store.get(id);
+    if (existing) {
+      this.refBySecret.delete(existing.value);
+    }
+    await this.store.delete?.(id);
+  }
+
+  async sanitizeText(
+    text: string,
+    settings?: Partial<SecretManagementSettings>,
+  ): Promise<SanitizeTextResult> {
+    const policy = normalizeSecretManagementSettings(settings);
+    if (!policy.enabled) return { text, refs: [] };
     const refs = new Set<string>();
-    const sanitized = await this.sanitizeTextInternal(text, refs);
+    const sanitized = await this.sanitizeTextInternal(text, refs, policy);
     return { text: sanitized, refs: [...refs] };
   }
 
-  async sanitizeData<T>(value: T): Promise<SanitizeDataResult<T>> {
+  async sanitizeData<T>(
+    value: T,
+    settings?: Partial<SecretManagementSettings>,
+  ): Promise<SanitizeDataResult<T>> {
+    const policy = normalizeSecretManagementSettings(settings);
+    if (!policy.enabled) return { value, refs: [] };
     const refs = new Set<string>();
-    const sanitized = await this.sanitizeUnknown(value, refs);
+    const sanitized = await this.sanitizeUnknown(value, refs, policy);
     return { value: sanitized as T, refs: [...refs] };
   }
 
   async prepareMessagesForInference<TMessage extends InferenceMessageLike>(
     messages: TMessage[],
+    settings?: Partial<SecretManagementSettings>,
   ): Promise<PreparedInferenceMessages<TMessage>> {
+    const policy = normalizeSecretManagementSettings(settings);
+    if (!policy.enabled) return { messages, refs: [] };
     const refs = new Set<string>();
     const sanitized = await Promise.all(messages.map(async (message) => {
-      const content = await this.sanitizeTextInternal(message.content, refs);
+      const content = await this.sanitizeTextInternal(message.content, refs, policy);
       const streamedContent = message.streamedContent === undefined
         ? undefined
-        : await this.sanitizeTextInternal(message.streamedContent, refs);
+        : await this.sanitizeTextInternal(message.streamedContent, refs, policy);
       return {
         ...message,
         content,
@@ -136,12 +231,18 @@ export class SecretsManagerAgent {
     return { messages: sanitized, refs: [...refs] };
   }
 
-  async sanitizeChatMessages<TMessage extends InferenceMessageLike>(messages: TMessage[]): Promise<TMessage[]> {
-    return (await this.prepareMessagesForInference(messages)).messages;
+  async sanitizeChatMessages<TMessage extends InferenceMessageLike>(
+    messages: TMessage[],
+    settings?: Partial<SecretManagementSettings>,
+  ): Promise<TMessage[]> {
+    return (await this.prepareMessagesForInference(messages, settings)).messages;
   }
 
-  async sanitizeModelMessages<T>(messages: T): Promise<T> {
-    return (await this.sanitizeData(messages)).value;
+  async sanitizeModelMessages<T>(
+    messages: T,
+    settings?: Partial<SecretManagementSettings>,
+  ): Promise<T> {
+    return (await this.sanitizeData(messages, settings)).value;
   }
 
   async renderResponseToUser(response: string): Promise<string> {
@@ -187,51 +288,84 @@ export class SecretsManagerAgent {
     };
   }
 
-  private async sanitizeTextInternal(text: string, refs: Set<string>): Promise<string> {
-    let sanitized = await this.replaceKnownStoredSecrets(text, refs);
-    sanitized = await replaceAsync(sanitized, AUTH_HEADER_PATTERN, async (match) => {
-      const prefix = match[1];
-      const secret = match[2];
-      if (isSecretRef(secret)) return match[0];
-      const ref = await this.getOrCreateSecretRef(secret, 'authorization-header', 'detected');
-      refs.add(ref);
-      return `${prefix}${ref}`;
-    });
+  private async sanitizeTextInternal(
+    text: string,
+    refs: Set<string>,
+    settings: SecretManagementSettings,
+  ): Promise<string> {
+    let sanitized = settings.replaceStoredSecrets
+      ? await this.replaceKnownStoredSecrets(text, refs)
+      : text;
 
-    for (const pattern of SECRET_PATTERNS) {
-      sanitized = await replaceAsync(sanitized, pattern.regex, async (match) => {
-        const secret = match[0];
-        const ref = await this.getOrCreateSecretRef(secret, pattern.label, 'detected');
+    if (settings.detectKnownSecrets) {
+      sanitized = await replaceAsync(sanitized, AUTH_HEADER_PATTERN, async (match) => {
+        const prefix = match[1];
+        const secret = match[2];
+        if (isSecretRef(secret)) return match[0];
+        const ref = await this.getOrCreateSecretRef(secret, 'authorization-header', 'detected');
         refs.add(ref);
-        return ref;
+        return `${prefix}${ref}`;
+      });
+
+      for (const pattern of SECRET_PATTERNS) {
+        sanitized = await replaceAsync(sanitized, pattern.regex, async (match) => {
+          const secret = match[0];
+          const ref = await this.getOrCreateSecretRef(secret, pattern.label, 'detected');
+          refs.add(ref);
+          return ref;
+        });
+      }
+    }
+
+    if (settings.detectGenericSecrets) {
+      sanitized = await replaceAsync(sanitized, GENERIC_SECRET_ASSIGNMENT_PATTERN, async (match) => {
+        const prefix = match[1];
+        const quote = match[2];
+        const secret = match[3];
+        if (match[0].includes(SECRET_REF_PREFIX) || normalizeSecretLabel(prefix) === 'secret-ref') {
+          return match[0];
+        }
+        const ref = await this.getOrCreateSecretRef(secret, normalizeSecretLabel(prefix), 'detected');
+        refs.add(ref);
+        return `${prefix}${quote}${ref}${quote}`;
       });
     }
 
-    return replaceAsync(sanitized, GENERIC_SECRET_ASSIGNMENT_PATTERN, async (match) => {
+    if (!settings.detectHighEntropySecrets) return sanitized;
+    return replaceAsync(sanitized, HIGH_ENTROPY_CONTEXT_PATTERN, async (match) => {
       const prefix = match[1];
       const quote = match[2];
-      const secret = match[3];
-      if (isSecretRef(secret)) return match[0];
-      const ref = await this.getOrCreateSecretRef(secret, normalizeSecretLabel(prefix), 'detected');
+      const rawSecret = match[3];
+      const closingQuote = match[4];
+      const { candidate, suffix } = splitTrailingSecretPunctuation(rawSecret);
+      if (isSecretRef(candidate) || !looksLikeHighEntropySecret(candidate)) {
+        return match[0];
+      }
+      const ref = await this.getOrCreateSecretRef(candidate, normalizeSecretLabel(prefix), 'detected');
       refs.add(ref);
-      return `${prefix}${quote}${ref}${quote}`;
+      return `${prefix}${quote}${ref}${closingQuote}${suffix}`;
     });
   }
 
-  private async sanitizeUnknown(value: unknown, refs: Set<string>, keyHint?: string): Promise<unknown> {
+  private async sanitizeUnknown(
+    value: unknown,
+    refs: Set<string>,
+    settings: SecretManagementSettings,
+    keyHint?: string,
+  ): Promise<unknown> {
     if (typeof value === 'string') {
-      if (keyHint && isSensitiveKey(keyHint) && !containsSecretRef(value)) {
+      if (settings.detectGenericSecrets && keyHint && isSensitiveKey(keyHint) && !containsSecretRef(value)) {
         const sanitized = await this.sanitizeSensitiveField(keyHint, value, refs);
-        return this.sanitizeTextInternal(sanitized, refs);
+        return this.sanitizeTextInternal(sanitized, refs, settings);
       }
-      return this.sanitizeTextInternal(value, refs);
+      return this.sanitizeTextInternal(value, refs, settings);
     }
     if (Array.isArray(value)) {
-      return Promise.all(value.map((item) => this.sanitizeUnknown(item, refs)));
+      return Promise.all(value.map((item) => this.sanitizeUnknown(item, refs, settings)));
     }
     if (isPlainRecord(value)) {
       const entries = await Promise.all(
-        Object.entries(value).map(async ([key, entry]) => [key, await this.sanitizeUnknown(entry, refs, key)] as const),
+        Object.entries(value).map(async ([key, entry]) => [key, await this.sanitizeUnknown(entry, refs, settings, key)] as const),
       );
       return Object.fromEntries(entries);
     }
@@ -311,6 +445,10 @@ export function getDefaultSecretsManagerAgent(): SecretsManagerAgent {
   return defaultSecretsManager;
 }
 
+export function resetDefaultSecretsManagerAgentForTests(): void {
+  defaultSecretsManager = null;
+}
+
 export function wrapToolsForSecretResolution<T extends Record<string, unknown>>(
   tools: T,
   secrets: SecretsManagerAgent,
@@ -343,7 +481,7 @@ function defaultSecretIdFactory({ label }: { label: string; value: string }): st
 }
 
 function isSensitiveKey(key: string): boolean {
-  return /^(?:authorization|proxy-authorization|api[_-]?key|access[_-]?token|auth[_-]?token|token|password|secret|client[_-]?secret)$/i.test(key);
+  return /^(?:authorization|proxy-authorization|api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|token|password|secret|secret[_-]?key|client[_-]?secret|service[_-]?role[_-]?key|aws[_-]?secret[_-]?access[_-]?key|private[_-]?key|database[_-]?url|connection[_-]?string)$/i.test(key);
 }
 
 function isAuthorizationKey(key: string): boolean {
@@ -371,4 +509,32 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function splitTrailingSecretPunctuation(value: string): { candidate: string; suffix: string } {
+  const suffix = /[.,;:)\]}]+$/.exec(value)?.[0] ?? '';
+  return {
+    candidate: suffix ? value.slice(0, -suffix.length) : value,
+    suffix,
+  };
+}
+
+function looksLikeHighEntropySecret(value: string): boolean {
+  if (/^[a-f0-9]{32,}$/i.test(value)) return false;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) return false;
+  if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/[0-9]/.test(value)) return false;
+  return shannonEntropy(value) >= 3.5;
+}
+
+function shannonEntropy(value: string): number {
+  const counts = new Map<string, number>();
+  for (const char of value) {
+    counts.set(char, (counts.get(char) ?? 0) + 1);
+  }
+  let entropy = 0;
+  for (const count of counts.values()) {
+    const probability = count / value.length;
+    entropy -= probability * Math.log2(probability);
+  }
+  return entropy;
 }

@@ -7,6 +7,7 @@ export type WebMcpToolGroup =
   | 'files-worktree-mcp'
   | 'clipboard-worktree-mcp'
   | 'user-context-mcp'
+  | 'secrets-mcp'
   | 'web-search-mcp';
 
 export interface WebMcpToolDescriptor {

@@ -37,9 +37,12 @@ export interface TreeNode {
 export interface McpCard {
   app: string;
   args: Record<string, unknown>;
-  kind?: 'elicitation';
+  kind?: 'elicitation' | 'secret';
   requestId?: string;
   prompt?: string;
+  reason?: string;
+  secretName?: string;
+  secretRef?: string;
   fields?: Array<{
     id: string;
     label: string;
