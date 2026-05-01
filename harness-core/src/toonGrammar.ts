@@ -5,8 +5,18 @@ import {
   encode,
   type JsonValue,
 } from '@toon-format/toon';
+import {
+  CONSTRAINED_DECODING_DECODE_HOOK_POINT,
+  CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT,
+  type ConstrainedOutputDecodeHookPayload,
+  type ConstrainedOutputGrammarHookPayload,
+} from './constrainedDecoding.js';
+import type { HarnessPlugin } from './plugins.js';
 
 export const TOON_GRAMMAR_SOURCE_PACKAGE = '@toon-format/toon';
+export const TOON_GRAMMAR_PLUGIN_ID = 'toon-grammar';
+export const TOON_GRAMMAR_HOOK_ID = 'toon-grammar:grammar';
+export const TOON_DECODE_HOOK_ID = 'toon-grammar:decode';
 
 export const TOON_LARK_GRAMMAR = String.raw`%llguidance {}
 start: document?
@@ -109,4 +119,48 @@ export function buildToonLlGuidanceGrammar(maxTokens?: number): ToonGrammarBuild
 
 export function decodeToonDocument(text: string): JsonValue {
   return decode(text);
+}
+
+export function createToonGrammarPlugin(): HarnessPlugin {
+  return {
+    id: TOON_GRAMMAR_PLUGIN_ID,
+    register({ hooks }) {
+      hooks.registerPipe<ConstrainedOutputGrammarHookPayload>({
+        id: TOON_GRAMMAR_HOOK_ID,
+        point: CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT,
+        kind: 'deterministic',
+        run: ({ payload }) => {
+          if (payload.decoding.kind !== 'toon') {
+            return undefined;
+          }
+          return {
+            payload: {
+              ...payload,
+              grammar: buildToonLlGuidanceGrammar(payload.decoding.maxTokens),
+            },
+            stop: true,
+            output: { sourcePackage: TOON_GRAMMAR_SOURCE_PACKAGE },
+          };
+        },
+      });
+      hooks.registerPipe<ConstrainedOutputDecodeHookPayload>({
+        id: TOON_DECODE_HOOK_ID,
+        point: CONSTRAINED_DECODING_DECODE_HOOK_POINT,
+        kind: 'deterministic',
+        run: ({ payload }) => {
+          if (payload.decoding.kind !== 'toon') {
+            return undefined;
+          }
+          return {
+            payload: {
+              ...payload,
+              decoded: decodeToonDocument(payload.text),
+            },
+            stop: true,
+            output: { sourcePackage: TOON_GRAMMAR_SOURCE_PACKAGE },
+          };
+        },
+      });
+    },
+  };
 }
