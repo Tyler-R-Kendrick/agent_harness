@@ -1,14 +1,14 @@
 # Agent Harness Competition Summary
 
 Updated: 2026-04-30
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenClaw`, `OpenCode`, `T3 Code`
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `T3 Code`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, DeerFlow planning and sub-tasking, Hermes parallel sub-agents, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
@@ -50,14 +50,14 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 7. Git/PR-native execution
 - Common pattern: successful coding harnesses end in branches, diffs, and PRs rather than plain text.
-- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, OpenClaw development use cases.
+- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases.
 - Why it matters: reviewable change sets are easier to trust than chat responses.
 - One-shot build instruction:
   - Make code tasks branch-native: create isolated workspaces, show structured diffs, attach validation output, support inline review comments, and optionally open a PR when acceptance checks pass.
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, OpenClaw integrations, OpenCode MCP servers and custom tools.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -104,6 +104,27 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add a background execution mode that streams diffs, tool output, and validation status into a side panel or timeline without forcing focus changes, while preserving one-click rollback and approval controls.
 
+### 15. Issue-tracker control planes and dependency-aware execution
+- Common pattern: the issue tracker is becoming the primary orchestration surface, with agents dispatching from tracker state instead of from manually launched chat sessions.
+- Seen in: OpenAI Symphony explicitly maps Linear issues to dedicated runs, respects blocked dependencies, and continues working until a workflow-defined handoff state is reached.
+- Why it matters: work management systems already encode priority, ownership, and blockers, so using them directly reduces session babysitting and makes parallel execution easier to reason about.
+- One-shot build instruction:
+  - Build a tracker-native orchestration mode that polls eligible issues, maps each issue to an isolated browser-agent run, respects blocker relationships and handoff states, and lets humans supervise progress from the project board rather than from individual sessions.
+
+### 16. Repo-owned workflow contracts and live operational reload
+- Common pattern: runtime policy is moving into versioned repository contracts instead of being hidden in local prompts or service config.
+- Seen in: OpenAI Symphony `WORKFLOW.md` with YAML front matter, strict prompt rendering, hooks, agent settings, and required live reload on file change.
+- Why it matters: teams need agent behavior, setup rules, and safety posture to evolve under version control alongside the codebase the agent is changing.
+- One-shot build instruction:
+  - Add a repository-owned workflow contract file for browser agents that defines prompt policy, workspace hooks, tool settings, concurrency, and tracker integration, then reload it live with validation, last-known-good fallback, and clear operator-visible errors.
+
+### 17. Operator-facing orchestration telemetry
+- Common pattern: long-running agent systems increasingly expose runtime state through structured logs, dashboards, and debug APIs rather than expecting operators to infer health from terminal noise.
+- Seen in: OpenAI Symphony structured logs, optional status surface, Phoenix dashboard, and `/api/v1/*` observability endpoints.
+- Why it matters: once a harness runs continuously across many issues, operator trust depends on inspectable health, queue, retry, and session state.
+- One-shot build instruction:
+  - Build an operator telemetry surface for browser-agent orchestration with structured logs, queue and session views, issue-specific debug pages, and a read-mostly JSON API that supports refresh triggers and postmortem inspection.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -115,7 +136,10 @@ Method: current-product research from first-party product pages, help centers, d
 7. Add policy-driven permission presets for browser-capable agents.
 8. Remote pairing plus traceable long-running browser sessions.
 9. Background browser/code execution that does not steal the active editing surface.
+10. Turn Linear-style boards into the control plane for browser-agent work.
+11. Add a repo-owned workflow contract with live reload for browser-agent policy.
+12. Ship operator-visible orchestration telemetry for long-running agent queues.
 
 ## Notes
-- This pass extends the earlier eleven-harness corpus with `Cline` as a twelfth competitor.
+- This pass extends the earlier twelve-harness corpus with `OpenAI Symphony` as a thirteenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.

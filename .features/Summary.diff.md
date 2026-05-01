@@ -1,63 +1,65 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-04-30
-Baseline: `.features/Summary.md` updated from the 2026-04-29 eleven-harness corpus.
-Diff type: additive update after Cline research
+Baseline: `.features/Summary.md` updated from the 2026-04-30 twelve-harness corpus.
+Diff type: additive update after OpenAI Symphony research
 
 ## Net new normalized features
 
 ### Expanded: Parallel agent orchestration
-- Why now: Cline shows that parallelism is now being packaged at two layers at once: read-only subagents for codebase research and branch-isolated worktrees for concurrent implementation.
+- Why now: OpenAI Symphony reframes orchestration around the issue tracker itself, where each eligible Linear issue gets its own continuously managed agent run instead of requiring humans to juggle session tabs and terminals.
 - Research delta:
-  - the official Subagents docs describe focused research agents with separate prompts, context windows, and token budgets
-  - the official Worktrees docs recommend opening worktrees in new windows for parallel Cline sessions and show `cline --cwd ... -y ...` for concurrent CLI runs
+  - the April 27, 2026 OpenAI announcement says every open task gets an agent and the system restarts agents that crash or stall
+  - the spec requires bounded concurrency, issue eligibility checks, reconciliation, and blocker-aware dispatch
+  - the orchestrator continues work until a workflow-defined handoff state is reached, not just until one prompt finishes
 
-### Expanded: Persistent memory plus project instructions
-- Why now: Cline makes inspectable markdown memory a visible product feature rather than an informal community pattern.
+### Expanded: Git/PR-native execution
+- Why now: Symphony raises the bar from plain diffs to proof-of-work review packets and merge shepherding.
 - Research delta:
-  - the official Memory Bank docs describe a structured documentation system for maintaining context across sessions
-  - the memory model is explicitly paired with session resume and Plan mode, which strengthens the case for inspectable layered memory in agent-browser
+  - the repo README says agents return CI status, PR review feedback, complexity analysis, and walkthrough videos
+  - the announcement says Symphony watches CI, rebases when needed, resolves conflicts, retries flaky checks, and shepherds work through the landing pipeline
 
-### Expanded: Skills and reusable browser workflows
-- Why now: Cline combines on-demand skills, markdown workflows, lifecycle hooks, and centrally managed enterprise `globalSkills`, which broadens the packaging story from local prompts to governed workflow distribution.
-- Research delta:
-  - the Skills docs describe progressive loading with metadata, instructions, and resources
-  - the Workflows docs turn completed task sequences into reusable slash-command procedures
-  - the `v3.80.0` release on April 22, 2026 added enterprise remote `globalSkills` with UI toggles and `alwaysEnabled` enforcement
+### Added: Turn the issue tracker into the browser-agent control plane
+- Why now: Symphony makes the project board itself the primary operator surface, which is a materially different UX from launching browser-agent jobs manually.
+- Linear issue title:
+  - `Use Linear as the browser-agent control plane`
+- Suggested problem statement:
+  - Browser-agent work is still launched and supervised session by session, which does not scale once a team wants multiple concurrent implementation runs across a backlog.
+- One-shot instruction for an LLM:
+  - Design and implement a tracker-native orchestration mode that polls eligible Linear issues, creates or reuses isolated browser-agent workspaces per issue, respects blocker dependencies and workflow-defined handoff states, restarts stalled runs, and exposes board-linked status back to operators.
+
+### Added: Add a repo-owned workflow contract with live reload
+- Why now: Symphony's `WORKFLOW.md` contract shows a clean way to version prompt policy, hooks, and runtime settings directly with the codebase.
+- Linear issue title:
+  - `Add live reloading workflow contracts for browser agents`
+- Suggested problem statement:
+  - Browser-agent runtime policy is still too fragmented across local config, prompts, and code, which makes it hard for teams to version, review, and safely update shared behavior.
+- One-shot instruction for an LLM:
+  - Build a repository-owned workflow contract file for browser agents with YAML front matter plus markdown prompt body, covering tracker integration, workspace hooks, concurrency, tool settings, and prompt policy, then implement strict validation, live reload, last-known-good fallback, and operator-visible error reporting.
+
+### Added: Ship orchestration telemetry and operator APIs
+- Why now: Symphony already treats dashboards and JSON debug endpoints as first-class operating tools for a long-running harness.
+- Linear issue title:
+  - `Expose browser-agent orchestration telemetry`
+- Suggested problem statement:
+  - Long-running browser-agent queues are hard to trust when operators cannot inspect live session state, retry queues, or issue-specific debugging details without digging through raw logs.
+- One-shot instruction for an LLM:
+  - Implement an operator telemetry surface for browser-agent orchestration with structured logs, a queue/session dashboard, issue-scoped debug views, and a read-mostly JSON API for current state plus manual refresh triggers.
+
+### Added: Automate proof-of-work review packets
+- Why now: Symphony treats review packets as a primary deliverable, not just an internal implementation detail.
+- Linear issue title:
+  - `Generate proof-of-work packets for browser-agent runs`
+- Suggested problem statement:
+  - Browser-agent changes still require humans to assemble validation evidence manually, which slows review and reduces trust in autonomous execution.
+- One-shot instruction for an LLM:
+  - Build a proof-of-work packet generator for browser-agent tasks that assembles CI status, validation output, diff summaries, screenshots or walkthrough media, and review notes into a structured handoff artifact ready for PR review or human approval.
 
 ### Expanded: External tool connectivity and actionability
-- Why now: Cline's MCP surface is no longer just raw protocol support. It now includes marketplace discovery plus agent-assisted server creation and troubleshooting.
+- Why now: Symphony demonstrates a clean orchestrator boundary where tracker mutations live in agent tools rather than in scheduler business logic.
 - Research delta:
-  - the MCP overview points users to the Cline MCP Marketplace
-  - the docs say Cline can help clone, configure, build, and debug MCP servers
-  - MCP is available in both the extension and the CLI
-
-### Added: Background execution without stealing focus
-- Why now: Cline packages reversible background editing and background command execution as explicit product behavior, which is a better fit for long-lived browser-agent sessions than modal diff or terminal takeovers.
-- Linear issue title:
-  - `Keep browser-agent execution in the background`
-- Suggested problem statement:
-  - Browser-agent runs still interrupt the active editing surface too often, forcing users to babysit diffs and command panes instead of supervising asynchronously.
-- One-shot instruction for an LLM:
-  - Design and implement a background execution mode for browser-agent tasks that streams diffs, validation output, browser evidence, and status updates into a side timeline without stealing focus, while preserving rollback, approval checkpoints, and quick resume controls.
-
-### Added: Enterprise-managed workflow packs and always-on skills
-- Why now: Cline's April 22, 2026 `v3.80.0` release makes enterprise-managed `globalSkills` explicit, which is a clear pattern for centrally governed agent behavior.
-- Linear issue title:
-  - `Publish governed workflow packs for teams`
-- Suggested problem statement:
-  - Shared browser workflows are still too dependent on personal prompt lore, and teams lack a way to centrally publish, require, and update sanctioned workflow packs.
-- One-shot instruction for an LLM:
-  - Build governed workflow packs with central publishing, team-scoped distribution, always-on enforcement, versioned rollout, and a local inspector so workspace admins can require specific browser-agent skills or procedures without hiding them from users.
-
-### Added: Parallel worktree sessions for browser-agent tasks
-- Why now: Cline turns Git worktrees into a visible parallel-session primitive instead of leaving branch isolation as an advanced manual trick.
-- Linear issue title:
-  - `Launch browser-agent tasks into isolated worktrees`
-- Suggested problem statement:
-  - Browser-agent coding tasks still compete for one working directory, which makes concurrent implementation and review harder than it should be.
-- One-shot instruction for an LLM:
-  - Add a worktree launcher for browser-agent tasks that can create or reuse branch-isolated environments, open them in parallel sessions, copy required local config, and surface merge-back guidance plus verification state in the parent workspace.
+  - the spec defines `linear_graphql` as the current standardized optional client-side tool
+  - ticket comments, state changes, and PR metadata are meant to stay in the agent toolchain while the orchestrator remains a scheduler/runner
 
 ## How to use this file
 
@@ -68,6 +70,7 @@ Diff type: additive update after Cline research
 
 ## Recommended next Linear batch
 
-1. `Keep browser-agent execution in the background`
-2. `Publish governed workflow packs for teams`
-3. `Launch browser-agent tasks into isolated worktrees`
+1. `Use Linear as the browser-agent control plane`
+2. `Add live reloading workflow contracts for browser agents`
+3. `Expose browser-agent orchestration telemetry`
+4. `Generate proof-of-work packets for browser-agent runs`
