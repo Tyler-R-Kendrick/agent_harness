@@ -13,6 +13,73 @@ export {
 } from './agent.js';
 export { PendingMessageQueue, type QueueMode } from './queue.js';
 export {
+  buildAgentsPromptContext,
+  buildWorkspacePromptContext,
+  detectWorkspaceFileKind,
+  discoverWorkspaceCapabilities,
+  validateWorkspaceFile,
+  WORKSPACE_SKILL_DIRECTORIES,
+  type BuildAgentsPromptContextOptions,
+  type WorkspaceCapabilities,
+  type WorkspaceFile,
+  type WorkspaceFileKind,
+  type WorkspaceHook,
+  type WorkspacePlugin,
+  type WorkspaceSkill,
+} from './agents.js';
+export {
+  appendAgentEvent,
+  createAgentBus,
+  readAgentBusEntries,
+  resolveAgentBus,
+  type AgentBusEvent,
+  type AgentBusEntrySnapshot,
+} from './agentBus.js';
+export {
+  appendMemoryMessage,
+  createMemory,
+  MemoryRegistry,
+  resolveLogActInput,
+  type Memory,
+  type MemoryMessage,
+  type MemoryOperation,
+  type MemoryRunOptions,
+  type MemoryRunResult,
+  type MemoryStrategy,
+  type MemoryStrategyContext,
+  type MemoryStrategyResult,
+  type ResolveLogActInputOptions,
+} from './memory.js';
+export {
+  runActorWorkflow,
+  type ActorWorkflowOptions,
+  type ActorWorkflowRunContext,
+} from './actorWorkflow.js';
+export {
+  createAgentRuntime,
+  type AgentRuntime,
+  type BaseAgentComponents,
+  type BaseAgentContext,
+  type BaseAgentDefinition,
+  type CreateAgentRuntimeOptions,
+} from './baseAgent.js';
+export {
+  HookRegistry,
+  createInferenceHook,
+  type HarnessHook,
+  type HarnessHookEvent,
+  type HarnessHookKind,
+  type HarnessHookMode,
+  type HarnessHookMiddlewareRunResult,
+  type HarnessHookOutput,
+  type HarnessHookPipeRunResult,
+  type HarnessHookPoint,
+  type HarnessHookResult,
+  type HarnessHookRunOptions,
+  type HarnessHookRunResult,
+  type HarnessHookRunner,
+} from './hooks.js';
+export {
   runLogActAgentLoop,
   wrapCompletionCheckerWithCallbacks,
   wrapVoterWithCallbacks,
@@ -22,3 +89,52 @@ export {
   type CoreVoterStep,
   type LogActAgentLoopOptions,
 } from './logactLoop.js';
+export {
+  SECRET_REF_PREFIX,
+  MemorySecretStore,
+  SecretsManagerAgent,
+  containsSecretRef,
+  createSecretsManagerAgent,
+  getDefaultSecretsManagerAgent,
+  isSecretRef,
+  secretRefForId,
+  wrapToolsForSecretResolution,
+  type InferenceMessageLike,
+  type PreparedInferenceMessages,
+  type SanitizeDataResult,
+  type SanitizeTextResult,
+  type SecretRecord,
+  type SecretStore,
+  type SecretsManagerOptions,
+} from './secrets.js';
+export {
+  CommandRegistry,
+  type Command,
+  type CommandArgInference,
+  type CommandArgInferenceRequest,
+  type CommandExecutionContext,
+  type CommandExecutionResult,
+  type CommandGroups,
+  type CommandMatch,
+  type CommandRegistryOptions,
+  type CommandTarget,
+} from './commands.js';
+export {
+  PluginRegistry,
+  createAgentsMdHookPlugin,
+  createHarnessExtensionContext,
+  type AgentsMdHookPluginOptions,
+  type HarnessExtensionContext,
+  type HarnessPlugin,
+  type InferenceMessagesPayload,
+} from './plugins.js';
+export {
+  ToolRegistry,
+  createPromptTemplateTool,
+  type HarnessJsonSchema,
+  type HarnessToolContext,
+  type HarnessToolDefinition,
+  type HarnessToolKind,
+  type HarnessToolSet,
+  type HarnessToolSetEntry,
+} from './tools.js';

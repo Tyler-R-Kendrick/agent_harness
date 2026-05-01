@@ -8,15 +8,18 @@ import {
   detectWorkspaceMemoryScope,
   mergeDefaultWorkspaceMemoryFiles,
 } from './workspaceMemory';
+import {
+  WORKSPACE_SKILL_DIRECTORIES,
+  detectWorkspaceFileKind as detectCoreWorkspaceFileKind,
+  discoverWorkspaceCapabilities as discoverCoreWorkspaceCapabilities,
+  validateWorkspaceFile as validateCoreWorkspaceFile,
+} from 'harness-core';
 
 import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspaceHook, WorkspacePlugin, WorkspaceSkill } from '../types';
 
 export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
 export const WORKSPACE_FILE_STORAGE_DEBOUNCE_MS = 120;
-export const WORKSPACE_SKILL_DIRECTORIES = ['.agents/skill/', '.agents/skills/'] as const;
-const PLUGIN_MANIFESTS = ['plugin.yaml', 'plugin.yml', 'plugin.json', 'manifest.json', 'marketplace.json'] as const;
-const KEBAB_CASE_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const HOOK_FILENAME = /^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+$/;
+export { WORKSPACE_SKILL_DIRECTORIES };
 
 function slugify(value: string) {
   return value
@@ -99,100 +102,29 @@ export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''):
 }
 
 export function detectWorkspaceFileKind(path: string): WorkspaceFileKind | null {
-  if (path.endsWith('AGENTS.md')) return 'agents';
-  if (WORKSPACE_SKILL_DIRECTORIES.some((directory) => path.startsWith(directory) && path.endsWith('/SKILL.md'))) return 'skill';
-  if (path.startsWith('.agents/hooks/')) return 'hook';
-  if (path.startsWith('.agents/plugins/') && PLUGIN_MANIFESTS.some((manifest) => path.endsWith(`/${manifest}`))) return 'plugin';
-  if (path.startsWith('.memory/')) return 'memory';
-  return null;
+  return detectCoreWorkspaceFileKind(path) as WorkspaceFileKind | null;
 }
 
 export function validateWorkspaceFile(file: WorkspaceFile): string | null {
   const kind = detectWorkspaceFileKind(file.path);
   if (!kind) return 'Unsupported workspace file path.';
 
-  if (kind === 'agents') {
-    return file.path === 'AGENTS.md' || file.path.endsWith('/AGENTS.md')
-      ? null
-      : 'AGENTS.md files must be named AGENTS.md.';
-  }
-
-  if (kind === 'skill') {
-    const root = WORKSPACE_SKILL_DIRECTORIES.find((directory) => file.path.startsWith(directory));
-    if (!root) return 'Skills must live in .agents/skill/ or .agents/skills/.';
-    const remainder = file.path.slice(root.length);
-    const [directoryName, maybeSkillFile, ...rest] = remainder.split('/');
-    if (!directoryName || !maybeSkillFile || rest.length) return 'Skills must use <dir>/SKILL.md paths.';
-    if (maybeSkillFile !== 'SKILL.md') return 'Skills must be stored in SKILL.md files.';
-    if (!KEBAB_CASE_SEGMENT.test(directoryName)) return 'Skill directories must be lowercase kebab-case.';
-    return null;
-  }
-
-  if (kind === 'hook') {
-    const remainder = file.path.replace(/^\.agents\/hooks\//, '');
-    const [fileName, ...rest] = remainder.split('/');
-    if (!fileName || rest.length) return 'Hooks must use .agents/hooks/<name>.<ext> paths.';
-    if (!HOOK_FILENAME.test(fileName)) return 'Hooks must be single lowercase kebab-case files with an extension.';
-    return null;
-  }
-
-  if (kind === 'plugin') {
-    const remainder = file.path.replace(/^\.agents\/plugins\//, '');
-    const [directoryName, manifestName, ...rest] = remainder.split('/');
-    if (!directoryName || !manifestName || rest.length) return 'Plugins must use .agents/plugins/<plugin>/<manifest> paths.';
-    if (!KEBAB_CASE_SEGMENT.test(directoryName)) return 'Plugin directories must be lowercase kebab-case.';
-    if (!PLUGIN_MANIFESTS.includes(manifestName as (typeof PLUGIN_MANIFESTS)[number])) return 'Plugins must use a supported manifest filename.';
-    return null;
-  }
-
   if (kind === 'memory') {
     return detectWorkspaceMemoryScope(file.path) ? null : 'Unsupported memory file path.';
   }
 
-  return null;
-}
-
-function parseSkillFrontmatter(content: string): Pick<WorkspaceSkill, 'name' | 'description'> | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return null;
-  const lines = match[1].split('\n');
-  const values = Object.fromEntries(lines.map((line) => {
-    const [key, ...rest] = line.split(':');
-    return [key.trim(), rest.join(':').trim().replace(/^"|"$/g, '')];
-  }));
-  if (!values.name || !values.description) return null;
-  return { name: values.name, description: values.description };
+  return validateCoreWorkspaceFile(file);
 }
 
 export function discoverWorkspaceCapabilities(files: WorkspaceFile[]): WorkspaceCapabilities {
-  const agents = files.filter((file) => detectWorkspaceFileKind(file.path) === 'agents');
-  const memory = files.filter((file) => detectWorkspaceFileKind(file.path) === 'memory');
-  const hooks: WorkspaceHook[] = files
-    .filter((file) => detectWorkspaceFileKind(file.path) === 'hook')
-    .map((file) => ({ path: file.path, name: file.path.split('/').pop() ?? file.path, content: file.content }));
-  const plugins: WorkspacePlugin[] = files
-    .filter((file) => detectWorkspaceFileKind(file.path) === 'plugin')
-    .map((file) => {
-      const segments = file.path.split('/');
-      return {
-        path: file.path,
-        directory: segments[2] ?? file.path,
-        manifestName: segments.at(-1) ?? 'plugin.yaml',
-        content: file.content,
-      };
-    });
-  const skills: WorkspaceSkill[] = files
-    .filter((file) => detectWorkspaceFileKind(file.path) === 'skill')
-    .map((file) => {
-      const parsed = parseSkillFrontmatter(file.content);
-      const segments = file.path.split('/');
-      const directory = segments[2] ?? 'skill';
-      return parsed
-        ? { path: file.path, directory, name: parsed.name, description: parsed.description, content: file.content }
-        : { path: file.path, directory, name: directory, description: 'Skill file is missing required frontmatter.', content: file.content };
-    });
-
-  return { agents, skills, plugins, hooks, memory };
+  const capabilities = discoverCoreWorkspaceCapabilities(files);
+  return {
+    agents: capabilities.agents as WorkspaceFile[],
+    skills: capabilities.skills as WorkspaceSkill[],
+    plugins: capabilities.plugins as WorkspacePlugin[],
+    hooks: capabilities.hooks as WorkspaceHook[],
+    memory: capabilities.memory as WorkspaceFile[],
+  };
 }
 
 export function buildWorkspacePromptContext(files: WorkspaceFile[], activeAgentPath?: string | null): string {
