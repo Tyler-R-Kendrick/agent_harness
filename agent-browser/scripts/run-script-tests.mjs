@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -42,6 +42,37 @@ async function main() {
   assert.match(packageJson, /"check:generated-files": "node scripts\/check-generated-files-clean\.mjs"/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
+  const vercelConfig = JSON.parse(await readScript('vercel.json'));
+  assert.equal(vercelConfig.installCommand, 'node scripts/vercel-install.mjs');
+  assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
+  assert.equal(vercelConfig.outputDirectory, 'agent-browser/dist');
+
+  const vercelInstall = await import(pathToFileURL(path.resolve(repoRoot, 'scripts/vercel-install.mjs')).href);
+  assert.equal(vercelInstall.getNpmExecutable('win32'), 'npm.cmd');
+  assert.equal(vercelInstall.getNpmExecutable('linux'), 'npm');
+  assert.equal(vercelInstall.usesShellForPlatform('win32'), true);
+  assert.equal(vercelInstall.usesShellForPlatform('linux'), false);
+  assert.deepEqual(vercelInstall.buildInstallSteps('npm'), [
+    ['npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--loglevel=error']],
+    ['npm', ['ci', '--no-audit', '--loglevel=error']],
+    ['npm', ['audit', '--audit-level=moderate']],
+  ]);
+  const lockfileFixture = await mkdtemp(path.join(tmpdir(), 'vercel-install-lockfile-'));
+  const rootLockfile = path.join(lockfileFixture, 'package-lock.json');
+  const workspaceLockfile = path.join(lockfileFixture, 'agent-browser', 'package-lock.json');
+  const rootNodeModules = path.join(lockfileFixture, 'node_modules');
+  const workspaceNodeModules = path.join(lockfileFixture, 'agent-browser', 'node_modules');
+  await mkdir(path.dirname(workspaceLockfile), { recursive: true });
+  await mkdir(rootNodeModules);
+  await mkdir(workspaceNodeModules);
+  await writeFile(rootLockfile, '{}');
+  await writeFile(workspaceLockfile, '{}');
+  await vercelInstall.removeCachedLockfiles(lockfileFixture);
+  await assert.rejects(() => readFile(rootLockfile), { code: 'ENOENT' });
+  await assert.rejects(() => readFile(workspaceLockfile), { code: 'ENOENT' });
+  await assert.rejects(() => stat(rootNodeModules), { code: 'ENOENT' });
+  await assert.rejects(() => stat(workspaceNodeModules), { code: 'ENOENT' });
+  await vercelInstall.removeCachedLockfiles(lockfileFixture);
 
   const coverageRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href

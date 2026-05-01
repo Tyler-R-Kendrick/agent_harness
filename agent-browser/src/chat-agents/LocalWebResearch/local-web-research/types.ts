@@ -14,6 +14,19 @@ export type AgentLogger = {
   error?: (message: string, data?: unknown) => void;
 };
 
+export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+export type WebSearchProviderId =
+  | 'searxng'
+  | 'perplexity'
+  | 'tavily'
+  | 'duckduckgo-instant'
+  | 'custom';
+
+export type ConfiguredWebSearchProviderId = Exclude<WebSearchProviderId, 'custom'>;
+
+export type SecretRefResolver = <T>(value: T) => Promise<T>;
+
 export type Cache = {
   get<T>(key: string): Promise<T | undefined>;
   set<T>(key: string, value: T, ttlMs?: number): Promise<void>;
@@ -22,6 +35,9 @@ export type Cache = {
 
 export type WebResearchAgentConfig = {
   searxngBaseUrl?: string;
+  searchProviderName?: ConfiguredWebSearchProviderId;
+  perplexityApiKey?: string;
+  tavilyApiKey?: string;
   defaultModel?: string;
   maxSearchResults?: number;
   maxPagesToExtract?: number;
@@ -34,6 +50,7 @@ export type WebResearchAgentConfig = {
   extractCacheTtlMs?: number;
   cache?: Cache;
   searchProvider?: SearchProvider;
+  resolveSecretRefs?: SecretRefResolver;
   extractor?: Extractor;
   synthesizer?: Synthesizer;
   logger?: AgentLogger;
@@ -76,7 +93,7 @@ export type WebSearchResult = {
   url: string;
   normalizedUrl: string;
   snippet?: string;
-  provider: 'searxng' | 'custom';
+  provider: WebSearchProviderId;
   engine?: string;
   score?: number;
   rank: number;

@@ -6,7 +6,7 @@ import { stableHash } from './hash';
 import { normalizeUrl } from './normalizeUrl';
 import { planSearchQueries } from './planSearchQueries';
 import { rankEvidenceChunks } from './rankEvidenceChunks';
-import { SearxngSearchProvider } from './searxng';
+import { createSearchProviderFromConfig } from './searchProviders';
 import type {
   AgentErrorInfo,
   AgentWorkflowStep,
@@ -130,9 +130,9 @@ export class LocalWebResearchAgent {
   }
 
   private searchProvider() {
-    return this.config.searchProvider ?? new SearxngSearchProvider({
-      baseUrl: this.config.searxngBaseUrl,
-      timeoutMs: this.config.searchTimeoutMs ?? DEFAULTS.searchTimeoutMs,
+    return this.config.searchProvider ?? createSearchProviderFromConfig({
+      ...this.config,
+      searchTimeoutMs: this.config.searchTimeoutMs ?? DEFAULTS.searchTimeoutMs,
     });
   }
 

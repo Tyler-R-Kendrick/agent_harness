@@ -1,0 +1,272 @@
+diff --git a/node_modules/@tavily/core/dist/index.js b/node_modules/@tavily/core/dist/index.js
+index 198a040..58fff1a 100644
+--- a/node_modules/@tavily/core/dist/index.js
++++ b/node_modules/@tavily/core/dist/index.js
+@@ -102,11 +102,30 @@ var import_axios2 = require("axios");
+ 
+ // src/utils.ts
+ var import_axios = __toESM(require("axios"));
+-var import_js_tiktoken = require("js-tiktoken");
+-var import_https_proxy_agent = require("https-proxy-agent");
+ var BASE_URL = "https://api.tavily.com";
+ var DEFAULT_MODEL_ENCODING = "gpt-3.5-turbo";
+ var DEFAULT_MAX_TOKENS = 4e3;
++function readTavilyEnv(name) {
++  var _a;
++  return typeof process !== "undefined" ? (_a = process.env) == null ? void 0 : _a[name] : void 0;
++}
++function createHttpsProxyAgent(proxyUrl) {
++  return __async(this, null, function* () {
++    if (typeof window !== "undefined" && typeof document !== "undefined") {
++      throw new Error("Tavily SDK proxy options require a Node.js runtime.");
++    }
++    const loadProxyAgent = new Function("specifier", "return import(specifier)");
++    const { HttpsProxyAgent } = yield loadProxyAgent("https-proxy-agent");
++    return new HttpsProxyAgent(proxyUrl);
++  });
++}
++function loadEncodingForModel() {
++  return __async(this, null, function* () {
++    const loadTokenizer = new Function("specifier", "return import(specifier)");
++    const { encodingForModel } = yield loadTokenizer("js-tiktoken");
++    return encodingForModel;
++  });
++}
+ function post(endpoint, body, requestConfig, timeout, responseType) {
+   return __async(this, null, function* () {
+     const { apiKey, proxies, apiBaseURL, clientSource, projectId, sessionId, humanId, clientName } = requestConfig;
+@@ -128,10 +147,10 @@ function post(endpoint, body, requestConfig, timeout, responseType) {
+     }
+     if (proxies) {
+       if (proxies.http) {
+-        config.httpAgent = new import_https_proxy_agent.HttpsProxyAgent(proxies.http);
++        config.httpAgent = yield createHttpsProxyAgent(proxies.http);
+       }
+       if (proxies.https) {
+-        config.httpsAgent = new import_https_proxy_agent.HttpsProxyAgent(proxies.https);
++        config.httpsAgent = yield createHttpsProxyAgent(proxies.https);
+       }
+     }
+     if (responseType) {
+@@ -158,32 +177,37 @@ function get(endpoint, requestConfig, timeout) {
+     const config = { headers, timeout: timeoutInMillis };
+     if (proxies) {
+       if (proxies.http) {
+-        config.httpAgent = new import_https_proxy_agent.HttpsProxyAgent(proxies.http);
++        config.httpAgent = yield createHttpsProxyAgent(proxies.http);
+       }
+       if (proxies.https) {
+-        config.httpsAgent = new import_https_proxy_agent.HttpsProxyAgent(proxies.https);
++        config.httpsAgent = yield createHttpsProxyAgent(proxies.https);
+       }
+     }
+     return import_axios.default.get(url, config);
+   });
+ }
+ function getTotalTokensFromString(str, encodingName = DEFAULT_MODEL_ENCODING) {
+-  const encoding = (0, import_js_tiktoken.encodingForModel)(encodingName);
+-  return encoding.encode(str).length;
++  return __async(this, null, function* () {
++    const encodingForModel = yield loadEncodingForModel();
++    const encoding = encodingForModel(encodingName);
++    return encoding.encode(str).length;
++  });
+ }
+ function getMaxTokensFromList(data, maxTokens = DEFAULT_MAX_TOKENS) {
+-  var result = [];
+-  let currentTokens = 0;
+-  for (let item of data) {
+-    let itemString = JSON.stringify(item);
+-    let newTotalTokens = currentTokens + getTotalTokensFromString(itemString);
+-    if (newTotalTokens > maxTokens) {
+-      break;
++  return __async(this, null, function* () {
++    var result = [];
++    let currentTokens = 0;
++    for (let item of data) {
++      let itemString = JSON.stringify(item);
++      let newTotalTokens = currentTokens + (yield getTotalTokensFromString(itemString));
++      if (newTotalTokens > maxTokens) {
++        break;
++      }
++      result.push(item);
++      currentTokens = newTotalTokens;
+     }
+-    result.push(item);
+-    currentTokens = newTotalTokens;
+-  }
+-  return JSON.stringify(result);
++    return JSON.stringify(result);
++  });
+ }
+ function handleRequestError(res) {
+   var _a, _b, _c, _d;
+@@ -406,7 +430,7 @@ function _searchContext(requestConfig) {
+           };
+         });
+         return JSON.stringify(
+-          getMaxTokensFromList(context, (_c = options.maxTokens) != null ? _c : DEFAULT_MAX_TOKENS)
++          yield getMaxTokensFromList(context, (_c = options.maxTokens) != null ? _c : DEFAULT_MAX_TOKENS)
+         );
+       } catch (err) {
+         if (err instanceof import_axios2.AxiosError) {
+@@ -804,11 +828,11 @@ function _getResearch(requestConfig) {
+ 
+ // src/client.ts
+ function tavily(options) {
+-  const apiKey = (options == null ? void 0 : options.apiKey) || process.env.TAVILY_API_KEY;
++  const apiKey = (options == null ? void 0 : options.apiKey) || readTavilyEnv("TAVILY_API_KEY");
+   const proxies = (() => {
+     var _a, _b;
+-    const http = ((_a = options == null ? void 0 : options.proxies) == null ? void 0 : _a.http) || process.env.TAVILY_HTTP_PROXY;
+-    const https = ((_b = options == null ? void 0 : options.proxies) == null ? void 0 : _b.https) || process.env.TAVILY_HTTPS_PROXY;
++    const http = ((_a = options == null ? void 0 : options.proxies) == null ? void 0 : _a.http) || readTavilyEnv("TAVILY_HTTP_PROXY");
++    const https = ((_b = options == null ? void 0 : options.proxies) == null ? void 0 : _b.https) || readTavilyEnv("TAVILY_HTTPS_PROXY");
+     const result = {};
+     if (http) result.http = http;
+     if (https) result.https = https;
+@@ -824,7 +848,7 @@ function tavily(options) {
+     proxies,
+     apiBaseURL: options == null ? void 0 : options.apiBaseURL,
+     clientSource: options == null ? void 0 : options.clientSource,
+-    projectId: (options == null ? void 0 : options.projectId) || process.env.TAVILY_PROJECT,
++    projectId: (options == null ? void 0 : options.projectId) || readTavilyEnv("TAVILY_PROJECT"),
+     sessionId: options == null ? void 0 : options.sessionId,
+     humanId: options == null ? void 0 : options.humanId,
+     clientName: options == null ? void 0 : options.clientName
+diff --git a/node_modules/@tavily/core/dist/index.mjs b/node_modules/@tavily/core/dist/index.mjs
+index 79717b7..f535d0e 100644
+--- a/node_modules/@tavily/core/dist/index.mjs
++++ b/node_modules/@tavily/core/dist/index.mjs
+@@ -69,11 +69,30 @@ import { AxiosError } from "axios";
+ 
+ // src/utils.ts
+ import axios from "axios";
+-import { encodingForModel } from "js-tiktoken";
+-import { HttpsProxyAgent } from "https-proxy-agent";
+ var BASE_URL = "https://api.tavily.com";
+ var DEFAULT_MODEL_ENCODING = "gpt-3.5-turbo";
+ var DEFAULT_MAX_TOKENS = 4e3;
++function readTavilyEnv(name) {
++  var _a;
++  return typeof process !== "undefined" ? (_a = process.env) == null ? void 0 : _a[name] : void 0;
++}
++function createHttpsProxyAgent(proxyUrl) {
++  return __async(this, null, function* () {
++    if (typeof window !== "undefined" && typeof document !== "undefined") {
++      throw new Error("Tavily SDK proxy options require a Node.js runtime.");
++    }
++    const loadProxyAgent = new Function("specifier", "return import(specifier)");
++    const { HttpsProxyAgent } = yield loadProxyAgent("https-proxy-agent");
++    return new HttpsProxyAgent(proxyUrl);
++  });
++}
++function loadEncodingForModel() {
++  return __async(this, null, function* () {
++    const loadTokenizer = new Function("specifier", "return import(specifier)");
++    const { encodingForModel } = yield loadTokenizer("js-tiktoken");
++    return encodingForModel;
++  });
++}
+ function post(endpoint, body, requestConfig, timeout, responseType) {
+   return __async(this, null, function* () {
+     const { apiKey, proxies, apiBaseURL, clientSource, projectId, sessionId, humanId, clientName } = requestConfig;
+@@ -95,10 +114,10 @@ function post(endpoint, body, requestConfig, timeout, responseType) {
+     }
+     if (proxies) {
+       if (proxies.http) {
+-        config.httpAgent = new HttpsProxyAgent(proxies.http);
++        config.httpAgent = yield createHttpsProxyAgent(proxies.http);
+       }
+       if (proxies.https) {
+-        config.httpsAgent = new HttpsProxyAgent(proxies.https);
++        config.httpsAgent = yield createHttpsProxyAgent(proxies.https);
+       }
+     }
+     if (responseType) {
+@@ -125,32 +144,37 @@ function get(endpoint, requestConfig, timeout) {
+     const config = { headers, timeout: timeoutInMillis };
+     if (proxies) {
+       if (proxies.http) {
+-        config.httpAgent = new HttpsProxyAgent(proxies.http);
++        config.httpAgent = yield createHttpsProxyAgent(proxies.http);
+       }
+       if (proxies.https) {
+-        config.httpsAgent = new HttpsProxyAgent(proxies.https);
++        config.httpsAgent = yield createHttpsProxyAgent(proxies.https);
+       }
+     }
+     return axios.get(url, config);
+   });
+ }
+ function getTotalTokensFromString(str, encodingName = DEFAULT_MODEL_ENCODING) {
+-  const encoding = encodingForModel(encodingName);
+-  return encoding.encode(str).length;
++  return __async(this, null, function* () {
++    const encodingForModel = yield loadEncodingForModel();
++    const encoding = encodingForModel(encodingName);
++    return encoding.encode(str).length;
++  });
+ }
+ function getMaxTokensFromList(data, maxTokens = DEFAULT_MAX_TOKENS) {
+-  var result = [];
+-  let currentTokens = 0;
+-  for (let item of data) {
+-    let itemString = JSON.stringify(item);
+-    let newTotalTokens = currentTokens + getTotalTokensFromString(itemString);
+-    if (newTotalTokens > maxTokens) {
+-      break;
++  return __async(this, null, function* () {
++    var result = [];
++    let currentTokens = 0;
++    for (let item of data) {
++      let itemString = JSON.stringify(item);
++      let newTotalTokens = currentTokens + (yield getTotalTokensFromString(itemString));
++      if (newTotalTokens > maxTokens) {
++        break;
++      }
++      result.push(item);
++      currentTokens = newTotalTokens;
+     }
+-    result.push(item);
+-    currentTokens = newTotalTokens;
+-  }
+-  return JSON.stringify(result);
++    return JSON.stringify(result);
++  });
+ }
+ function handleRequestError(res) {
+   var _a, _b, _c, _d;
+@@ -373,7 +397,7 @@ function _searchContext(requestConfig) {
+           };
+         });
+         return JSON.stringify(
+-          getMaxTokensFromList(context, (_c = options.maxTokens) != null ? _c : DEFAULT_MAX_TOKENS)
++          yield getMaxTokensFromList(context, (_c = options.maxTokens) != null ? _c : DEFAULT_MAX_TOKENS)
+         );
+       } catch (err) {
+         if (err instanceof AxiosError) {
+@@ -771,11 +795,11 @@ function _getResearch(requestConfig) {
+ 
+ // src/client.ts
+ function tavily(options) {
+-  const apiKey = (options == null ? void 0 : options.apiKey) || process.env.TAVILY_API_KEY;
++  const apiKey = (options == null ? void 0 : options.apiKey) || readTavilyEnv("TAVILY_API_KEY");
+   const proxies = (() => {
+     var _a, _b;
+-    const http = ((_a = options == null ? void 0 : options.proxies) == null ? void 0 : _a.http) || process.env.TAVILY_HTTP_PROXY;
+-    const https = ((_b = options == null ? void 0 : options.proxies) == null ? void 0 : _b.https) || process.env.TAVILY_HTTPS_PROXY;
++    const http = ((_a = options == null ? void 0 : options.proxies) == null ? void 0 : _a.http) || readTavilyEnv("TAVILY_HTTP_PROXY");
++    const https = ((_b = options == null ? void 0 : options.proxies) == null ? void 0 : _b.https) || readTavilyEnv("TAVILY_HTTPS_PROXY");
+     const result = {};
+     if (http) result.http = http;
+     if (https) result.https = https;
+@@ -791,7 +815,7 @@ function tavily(options) {
+     proxies,
+     apiBaseURL: options == null ? void 0 : options.apiBaseURL,
+     clientSource: options == null ? void 0 : options.clientSource,
+-    projectId: (options == null ? void 0 : options.projectId) || process.env.TAVILY_PROJECT,
++    projectId: (options == null ? void 0 : options.projectId) || readTavilyEnv("TAVILY_PROJECT"),
+     sessionId: options == null ? void 0 : options.sessionId,
+     humanId: options == null ? void 0 : options.humanId,
+     clientName: options == null ? void 0 : options.clientName

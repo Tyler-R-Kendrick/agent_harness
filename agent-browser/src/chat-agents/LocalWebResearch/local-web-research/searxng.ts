@@ -1,9 +1,6 @@
-import { stableHash } from './hash';
-import { normalizeUrl } from './normalizeUrl';
+import { normalizeSearchResults } from './searchResultNormalizer';
 import { withTimeout } from './timeout';
-import type { SearchProvider, WebSearchResult } from './types';
-
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+import type { FetchLike, SearchProvider, WebSearchResult } from './types';
 
 type SearxngResponse = {
   results?: Array<{
@@ -59,27 +56,14 @@ export class SearxngSearchProvider implements SearchProvider {
     }
 
     const parsed = await response.json() as SearxngResponse;
-    const seen = new Set<string>();
-    const results: WebSearchResult[] = [];
-    for (const item of parsed.results ?? []) {
-      if (!item.title || !item.url) continue;
-      const normalizedUrl = normalizeUrl(item.url);
-      if (seen.has(normalizedUrl)) continue;
-      seen.add(normalizedUrl);
-      results.push({
-        id: `search-${stableHash(normalizedUrl)}`,
-        title: item.title.trim(),
-        url: item.url.trim(),
-        normalizedUrl,
-        ...(item.content ? { snippet: item.content.trim() } : {}),
-        provider: 'searxng',
-        ...(item.engine ? { engine: item.engine } : {}),
-        ...(typeof item.score === 'number' ? { score: item.score } : {}),
-        rank: results.length + 1,
-        ...(item.publishedDate ? { publishedDate: item.publishedDate } : {}),
-      });
-      if (results.length >= request.maxResults) break;
-    }
-    return results;
+    return normalizeSearchResults((parsed.results ?? []).map((item) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.content,
+      provider: 'searxng',
+      engine: item.engine,
+      score: item.score,
+      publishedDate: item.publishedDate,
+    })), request.maxResults);
   }
 }
