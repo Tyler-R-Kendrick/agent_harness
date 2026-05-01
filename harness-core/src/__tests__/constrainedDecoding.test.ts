@@ -8,8 +8,12 @@ import {
   constrainToToon,
   constrainToZod,
   createGuidanceTsInferenceClient,
+  createHarnessExtensionContext,
+  createToonGrammarPlugin,
   decodeConstrainedOutput,
+  decodeConstrainedOutputWithHooks,
   guidanceConnectionString,
+  resolveGuidanceTsGrammar,
   runLogActAgentLoop,
   toGuidanceTsGrammar,
   type CoreInferenceOptions,
@@ -92,8 +96,15 @@ function toHex(text: string): string {
     .join('');
 }
 
+async function createToonHooks() {
+  const context = createHarnessExtensionContext();
+  await context.plugins.load(createToonGrammarPlugin());
+  return context.hooks;
+}
+
 describe('constrained decoding grammar adapters', () => {
-  it('serializes JSON Schema, Lark, and TOON constraints for guidance-ts', () => {
+  it('serializes JSON Schema, Lark, and hook-provided TOON constraints for guidance-ts', async () => {
+    const hooks = await createToonHooks();
     const schema = {
       type: 'object',
       properties: {
@@ -112,7 +123,11 @@ describe('constrained decoding grammar adapters', () => {
         grammars: [{ name: 'lark_grammar', lark_grammar: 'start: "APPROVE"' }],
         max_tokens: 8,
       });
-    expect(toGuidanceTsGrammar(constrainToToon()).serialize())
+    expect(() => toGuidanceTsGrammar(constrainToToon()))
+      .toThrow('No constrained decoding hook resolved toon');
+    await expect(resolveGuidanceTsGrammar(constrainToToon()))
+      .rejects.toThrow('No constrained decoding hook resolved toon');
+    expect((await resolveGuidanceTsGrammar(constrainToToon(), { hooks })).serialize())
       .toEqual(buildToonLlGuidanceGrammar());
   });
 
@@ -166,7 +181,8 @@ describe('constrained decoding grammar adapters', () => {
     });
   });
 
-  it('accepts direct guidance grammars, serialized grammars, and per-format overrides', () => {
+  it('accepts direct guidance grammars, serialized grammars, and per-format overrides', async () => {
+    const hooks = await createToonHooks();
     const directGrammar = { serialize: () => ({ grammars: [{ name: 'direct' }] }) };
     const serializedGrammar = { grammars: [{ name: 'serialized' }] };
 
@@ -180,9 +196,23 @@ describe('constrained decoding grammar adapters', () => {
     })).serialize()).toEqual({
       grammars: [{ name: 'lark_grammar', lark_grammar: 'start: "toon"' }],
     });
-    expect(toGuidanceTsGrammar(constrainToZod({ parse: (value: unknown) => value }, {
+    expect((await resolveGuidanceTsGrammar(constrainToToon({
+      grammar: constrainToLarkGrammar('start: "resolved-toon"'),
+    }), { hooks })).serialize()).toEqual({
+      grammars: [{ name: 'lark_grammar', lark_grammar: 'start: "resolved-toon"' }],
+    });
+    expect((await resolveGuidanceTsGrammar(constrainToJsonSchema({ type: 'string' }, {
+      grammar: constrainToToon({ maxTokens: 3 }),
+    }), { hooks })).serialize()).toEqual(buildToonLlGuidanceGrammar(3));
+    expect(() => toGuidanceTsGrammar(constrainToZod({ parse: (value: unknown) => value }, {
       format: 'toon',
-    })).serialize()).toEqual(buildToonLlGuidanceGrammar());
+    }))).toThrow('No constrained decoding hook resolved toon');
+    expect((await resolveGuidanceTsGrammar(constrainToZod({ parse: (value: unknown) => value }, {
+      format: 'toon',
+    }), { hooks })).serialize()).toEqual(buildToonLlGuidanceGrammar());
+    expect((await resolveGuidanceTsGrammar(constrainToZod({ parse: (value: unknown) => value }, {
+      grammar: serializedGrammar,
+    }), { hooks })).serialize()).toEqual(serializedGrammar);
   });
 });
 
@@ -255,6 +285,26 @@ describe('guidance-ts inference client', () => {
       .toEqual([9, 16, undefined]);
   });
 
+  it('uses output-production hooks to resolve TOON constraints for generation', async () => {
+    const hooks = await createToonHooks();
+    const client = createGuidanceTsInferenceClient({
+      settings: { guidanceServerUrl: 'https://guidance.example/run', apiKey: 'secret' },
+      fallback: { infer: vi.fn(async () => 'fallback') },
+      hooks,
+    });
+
+    await expect(client.infer(
+      [{ role: 'user', content: 'encode as toon' }],
+      { constrainedDecoding: constrainToToon({ maxTokens: 5 }) },
+    )).resolves.toBe('APPROVE');
+
+    expect(guidanceRequests[0].body).toMatchObject({
+      controller_arg: {
+        grammar: buildToonLlGuidanceGrammar(5),
+      },
+    });
+  });
+
   it('builds guidance connection strings from remote settings', () => {
     expect(guidanceConnectionString({ guidanceServerUrl: 'https://guidance.example/run', apiKey: 'secret' }))
       .toBe('https://guidance.example/run#key=secret');
@@ -266,7 +316,8 @@ describe('guidance-ts inference client', () => {
 });
 
 describe('constrained output decoding', () => {
-  it('decodes JSON, Zod, TOON, and Lark outputs', () => {
+  it('decodes JSON, Zod, hook-provided TOON, and Lark outputs', async () => {
+    const hooks = await createToonHooks();
     const zodLikeSchema = {
       parse: vi.fn((value: unknown) => ({ value, parsed: true })),
     };
@@ -275,11 +326,17 @@ describe('constrained output decoding', () => {
       .toEqual({ status: 'ok' });
     expect(decodeConstrainedOutput('{"status":"ok"}', constrainToZod(zodLikeSchema)))
       .toEqual({ value: { status: 'ok' }, parsed: true });
+    await expect(decodeConstrainedOutputWithHooks('{"status":"ok"}', constrainToJsonSchema({ type: 'object' })))
+      .resolves.toEqual({ status: 'ok' });
     expect(decodeConstrainedOutput('status: ok', constrainToToon({
       decode: (text) => ({ raw: text }),
     }))).toEqual({ raw: 'status: ok' });
-    expect(decodeConstrainedOutput('status: ok\ncount: 2', constrainToToon()))
-      .toEqual({ status: 'ok', count: 2 });
+    expect(() => decodeConstrainedOutput('status: ok\ncount: 2', constrainToToon()))
+      .toThrow('No constrained decoding hook resolved toon output');
+    await expect(decodeConstrainedOutputWithHooks('status: ok\ncount: 2', constrainToToon()))
+      .rejects.toThrow('No constrained decoding hook resolved toon output');
+    await expect(decodeConstrainedOutputWithHooks('status: ok\ncount: 2', constrainToToon(), { hooks }))
+      .resolves.toEqual({ status: 'ok', count: 2 });
     expect(decodeConstrainedOutput('APPROVE', constrainToLarkGrammar('start: "APPROVE"', {
       parse: (text) => text.toLowerCase(),
     }))).toBe('approve');
@@ -289,6 +346,9 @@ describe('constrained output decoding', () => {
       format: 'toon',
       decodeToon: () => ({ status: 'ok' }),
     }))).toEqual({ value: { status: 'ok' }, parsed: true });
+    await expect(decodeConstrainedOutputWithHooks('status: ok', constrainToZod(zodLikeSchema, {
+      format: 'toon',
+    }), { hooks })).resolves.toEqual({ value: { status: 'ok' }, parsed: true });
 
     expect(zodLikeSchema.parse).toHaveBeenCalledWith({ status: 'ok' });
   });

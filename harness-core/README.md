@@ -14,6 +14,52 @@ event stream and records `ActorMessageEvent` entries with session and actor
 metadata. The first implementation is local-session only, with the public bus
 and session types shaped for shared or remote stores later.
 
+## Storage-backed artifacts
+
+`HarnessStorage` is a small async key-value abstraction for host-provided
+persistence. `InMemoryHarnessStorage` is the default local adapter, and
+`createHarnessStorageAdapter()` wraps host storage callbacks such as IndexedDB,
+localStorage, or remote APIs. Artifact refs can either point at harness storage
+or at a remote provider that owns the bytes:
+
+```ts
+import { ArtifactRegistry, InMemoryHarnessStorage } from 'harness-core';
+
+const storage = new InMemoryHarnessStorage();
+const artifacts = new ArtifactRegistry({ storage });
+
+const draft = await artifacts.create({
+  data: '# Draft',
+  mediaType: 'text/markdown',
+});
+
+await artifacts.write(draft.id, { data: '# Final', mediaType: 'text/markdown' });
+const current = await artifacts.read(draft);
+```
+
+`createAgentRuntime()` and `createHarnessExtensionContext()` expose shared
+`storage` and `artifacts` components so parent agents, subagents, and plugins
+can keep working against the same persistent artifact handle. Remote artifacts
+are registered with a URI/provider and can be read or written through supplied
+remote handlers without copying their contents into harness storage.
+
+Storage can be supplied directly, through `HarnessStorageProvider`, or through a
+factory function:
+
+```ts
+import { createAgentRuntime, createHarnessStorageAdapter } from 'harness-core';
+
+const storage = createHarnessStorageAdapter({
+  get: (key) => remoteStore.get(key),
+  set: async (key, value, options) => remoteStore.put(key, value, options),
+});
+
+createAgentRuntime({
+  storage: () => storage,
+  agent,
+});
+```
+
 ## Default commands
 
 `createDefaultCommandRegistry()` and `createHarnessExtensionContext()` include:
@@ -60,6 +106,18 @@ const commands = createDefaultCommandRegistry({
   },
 });
 ```
+
+## Extension adapters
+
+The core package stays generic: workspace capability discovery recognizes
+tools, hooks, plugins, and memory files. Product-specific instruction formats
+live under `harness-core/ext`.
+
+- `harness-core/ext/agent-skills` maps `.agents/skills/*/SKILL.md` files into
+  executable tools plus a `/skill <name> [input]` command backed by a supplied
+  agent-skills client.
+- `harness-core/ext/agents-md` maps `AGENTS.md` files into a hook plugin that
+  prepends the active workspace instructions before model inference.
 
 ## Optional constrained decoding
 
@@ -112,10 +170,33 @@ await inferenceClient.infer(messages, {
 
 Constraints can target JSON Schema, Lark grammars, TOON, or Zod schemas. Zod
 constraints default to JSON Schema conversion and can override the grammar with
-Lark, TOON, or a serialized guidance grammar. TOON support is built by
-`buildToonGrammar()`/`buildToonLlGuidanceGrammar()`, which load the
-`@toon-format/toon` package surface and expose a reusable Lark grammar
-representation for llguidance.
+Lark, TOON, or a serialized guidance grammar. TOON support is provided by the
+`createToonGrammarPlugin()` extension plugin. The plugin registers deterministic
+pipe hooks on the constrained output-production path: one hook resolves the
+llguidance grammar before generation, and another decodes TOON text after
+generation.
+
+```ts
+import {
+  constrainToToon,
+  createGuidanceTsInferenceClient,
+  createHarnessExtensionContext,
+  createToonGrammarPlugin,
+} from 'harness-core';
+
+const context = createHarnessExtensionContext();
+await context.plugins.load(createToonGrammarPlugin());
+
+const inferenceClient = createGuidanceTsInferenceClient({
+  settings,
+  fallback: unconstrainedInferenceClient,
+  hooks: context.hooks,
+});
+
+await inferenceClient.infer(messages, {
+  constrainedDecoding: constrainToToon(),
+});
+```
 
 ## Config-backed model providers
 

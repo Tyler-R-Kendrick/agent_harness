@@ -34,11 +34,6 @@ export type CommandTarget =
   | {
       type: 'prompt-template';
       template: (args: Record<string, unknown>, match: CommandMatch) => string;
-    }
-  | {
-      type: 'agent-skill';
-      skillName: string | ((match: CommandMatch) => string);
-      input?: string | ((match: CommandMatch) => string);
     };
 
 export interface Command {
@@ -143,18 +138,9 @@ export class CommandRegistry {
         args,
       };
     }
-    if (target.type === 'prompt-template') {
-      return {
-        type: 'prompt',
-        prompt: target.template(args, match),
-        args,
-      };
-    }
-
     return {
-      type: 'agent-skill',
-      skillName: typeof target.skillName === 'function' ? target.skillName(match) : target.skillName,
-      input: typeof target.input === 'function' ? target.input(match) : target.input,
+      type: 'prompt',
+      prompt: target.template(args, match),
       args,
     };
   }

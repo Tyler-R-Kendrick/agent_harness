@@ -4,7 +4,7 @@ import {
   MemorySecretStore,
   CommandRegistry,
   ToolRegistry,
-  buildAgentsPromptContext,
+  buildWorkspacePromptContext,
   createInferenceHook,
   createPromptTemplateTool,
   createSecretsManagerAgent,
@@ -181,12 +181,6 @@ describe('harness-core platform contracts', () => {
       parseArgs: ({ groups }) => groups.query ? { query: groups.query } : undefined,
     });
     registry.register({
-      id: 'skill',
-      description: 'Dispatch an agent skill directly.',
-      pattern: /^\/skill\s+(?<name>[a-z-]+)\s*(?<input>.*)$/i,
-      target: { type: 'agent-skill', skillName: ({ groups }) => groups.name, input: ({ groups }) => groups.input },
-    });
-    registry.register({
       id: 'help',
       description: 'Return static help.',
       pattern: /^\/help$/i,
@@ -211,13 +205,6 @@ describe('harness-core platform contracts', () => {
       pattern: /^\/template\s+(?<topic>.+)$/i,
       target: { type: 'prompt-template', template: (_args, { groups }) => `Explain ${groups.topic}.` },
     });
-    registry.register({
-      id: 'static-skill',
-      description: 'Dispatch a static skill.',
-      pattern: /^\/review$/i,
-      target: { type: 'agent-skill', skillName: 'review-pr', input: 'current diff' },
-    });
-
     await expect(registry.execute('/search AGENTS.md hooks')).resolves.toEqual({
       matched: true,
       commandId: 'search',
@@ -227,11 +214,6 @@ describe('harness-core platform contracts', () => {
       matched: true,
       commandId: 'search',
       result: { searched: 'hooks from inference' },
-    });
-    await expect(registry.execute('/skill review-pr src')).resolves.toEqual({
-      matched: true,
-      commandId: 'skill',
-      result: { type: 'agent-skill', skillName: 'review-pr', input: 'src', args: {} },
     });
     await expect(registry.execute('/help')).resolves.toEqual({
       matched: true,
@@ -253,12 +235,7 @@ describe('harness-core platform contracts', () => {
       commandId: 'template',
       result: { type: 'prompt', prompt: 'Explain hooks.', args: {} },
     });
-    await expect(registry.execute('/review')).resolves.toEqual({
-      matched: true,
-      commandId: 'static-skill',
-      result: { type: 'agent-skill', skillName: 'review-pr', input: 'current diff', args: {} },
-    });
-    expect(registry.list().map((command) => command.id)).toEqual(['search', 'skill', 'help', 'prompt-fn', 'echo', 'template', 'static-skill']);
+    expect(registry.list().map((command) => command.id)).toEqual(['search', 'help', 'prompt-fn', 'echo', 'template']);
     expect(registry.match('/help')?.match.groups).toEqual({});
     await expect(registry.execute('plain text')).resolves.toEqual({ matched: false });
     await expect(new CommandRegistry().execute('/missing-tools', {
@@ -317,10 +294,10 @@ describe('harness-core platform contracts', () => {
     expect(execute).toHaveBeenCalledWith({ authorization: token }, undefined);
   });
 
-  it('discovers AGENTS.md instructions and workspace capability files for prompt context', () => {
+  it('discovers generic workspace tools and extension files without agent-skills or AGENTS.md coupling', () => {
     const files = [
       { path: 'AGENTS.md', content: '# Root\nUse TDD.', updatedAt: '2026-05-01T00:00:00.000Z' },
-      { path: 'docs/AGENTS.md', content: '# Docs\nKeep examples current.', updatedAt: '2026-05-01T00:00:00.000Z' },
+      { path: '.agents/tools/review-pr/tool.json', content: '{"name":"review-pr"}', updatedAt: '2026-05-01T00:00:00.000Z' },
       {
         path: '.agents/skills/review-pr/SKILL.md',
         content: '---\nname: review-pr\ndescription: Review PRs.\n---\n\n# Review',
@@ -331,37 +308,35 @@ describe('harness-core platform contracts', () => {
     ];
 
     const capabilities = discoverWorkspaceCapabilities(files);
-    const prompt = buildAgentsPromptContext(files, { activeAgentPath: 'docs/AGENTS.md' });
+    const prompt = buildWorkspacePromptContext(files);
 
-    expect(detectWorkspaceFileKind('nested/AGENTS.md')).toBe('agents');
-    expect(detectWorkspaceFileKind('.agents/skills/review-pr/SKILL.md')).toBe('skill');
+    expect(detectWorkspaceFileKind('nested/AGENTS.md')).toBeNull();
+    expect(detectWorkspaceFileKind('.agents/skills/review-pr/SKILL.md')).toBeNull();
+    expect(detectWorkspaceFileKind('.agents/tools/review-pr/tool.json')).toBe('tool');
     expect(validateWorkspaceFile({ path: '.agents/hooks/Bad.sh', content: '' })).toContain('kebab-case');
-    expect(capabilities.agents.map((file) => file.path)).toEqual(['AGENTS.md', 'docs/AGENTS.md']);
-    expect(capabilities.skills[0]).toEqual(expect.objectContaining({ name: 'review-pr', description: 'Review PRs.' }));
+    expect(capabilities.tools[0]).toEqual(expect.objectContaining({ directory: 'review-pr', manifestName: 'tool.json' }));
     expect(capabilities.hooks[0]).toEqual(expect.objectContaining({ name: 'pre-tool.sh' }));
     expect(capabilities.plugins[0]).toEqual(expect.objectContaining({ directory: 'github' }));
-    expect(prompt).toContain('Active AGENTS.md:');
-    expect(prompt).toContain('Keep examples current.');
-    expect(prompt).toContain('Other AGENTS.md files:');
-    expect(prompt).toContain('Use TDD.');
-    expect(prompt).toContain('review-pr (.agents/skills/review-pr/SKILL.md): Review PRs.');
+    expect(prompt).not.toContain('AGENTS.md');
+    expect(prompt).not.toContain('Review PRs.');
+    expect(prompt).toContain('review-pr (.agents/tools/review-pr/tool.json)');
     expect(prompt).toContain('pre-tool.sh (.agents/hooks/pre-tool.sh)');
     expect(prompt).toContain('github (.agents/plugins/github/plugin.yaml)');
   });
 
   it('validates workspace capability paths and renders sparse capability contexts', () => {
-    expect(buildAgentsPromptContext([])).toBe('No workspace capability files are currently stored.');
-    expect(buildAgentsPromptContext([
+    expect(buildWorkspacePromptContext([])).toBe('No workspace capability files are currently stored.');
+    expect(buildWorkspacePromptContext([
       { path: '.memory/project.memory.md', content: '- Use Vitest.' },
-      { path: '.agents/skills/missing-frontmatter/SKILL.md', content: '# Missing' },
     ])).toContain('Memory files:');
 
-    expect(validateWorkspaceFile({ path: 'AGENTS.md', content: '' })).toBeNull();
+    expect(validateWorkspaceFile({ path: 'AGENTS.md', content: '' })).toContain('Unsupported');
     expect(validateWorkspaceFile({ path: 'README.md', content: '' })).toContain('Unsupported');
-    expect(validateWorkspaceFile({ path: '.agents/skill/review-pr/SKILL.md', content: '' })).toBeNull();
-    expect(validateWorkspaceFile({ path: '.agents/skills/Review PR/SKILL.md', content: '' })).toContain('kebab-case');
-    expect(validateWorkspaceFile({ path: '.agents/skills/review-pr/nested/SKILL.md', content: '' })).toContain('<dir>/SKILL.md');
-    expect(validateWorkspaceFile({ path: '.agents/skills/review-pr/README.md', content: '' })).toContain('Unsupported');
+    expect(validateWorkspaceFile({ path: '.agents/skills/review-pr/SKILL.md', content: '' })).toContain('Unsupported');
+    expect(validateWorkspaceFile({ path: '.agents/tools/review-pr/tool.json', content: '' })).toBeNull();
+    expect(validateWorkspaceFile({ path: '.agents/tools/Review PR/tool.json', content: '' })).toContain('Tool directories');
+    expect(validateWorkspaceFile({ path: '.agents/tools/review-pr/nested/tool.json', content: '' })).toContain('<tool>/<manifest>');
+    expect(validateWorkspaceFile({ path: '.agents/tools/review-pr/README.md', content: '' })).toContain('supported manifest');
     expect(validateWorkspaceFile({ path: '.agents/hooks/pre/tool.sh', content: '' })).toContain('.agents/hooks/<name>.<ext>');
     expect(validateWorkspaceFile({ path: '.agents/hooks/pre-tool.sh', content: '' })).toBeNull();
     expect(validateWorkspaceFile({ path: '.agents/plugins/Bad/plugin.yaml', content: '' })).toContain('Plugin directories');
@@ -369,19 +344,9 @@ describe('harness-core platform contracts', () => {
     expect(validateWorkspaceFile({ path: '.agents/plugins/github/other.txt', content: '' })).toContain('supported manifest');
     expect(validateWorkspaceFile({ path: '.agents/plugins/github/plugin.yaml/extra', content: '' })).toContain('<plugin>/<manifest>');
     expect(validateWorkspaceFile({ path: '.memory/project.memory.md', content: '' })).toBeNull();
-    expect(buildAgentsPromptContext([
-      { path: 'AGENTS.md', content: '# Root' },
-    ])).toContain('AGENTS.md files:');
-    expect(buildAgentsPromptContext([
-      { path: 'AGENTS.md', content: '# Root' },
-    ], { activeAgentPath: 'AGENTS.md' })).not.toContain('Other AGENTS.md files:');
-    expect(buildAgentsPromptContext([
-      { path: 'AGENTS.md', content: '# Root' },
-    ], { activeAgentPath: 'missing/AGENTS.md' })).toContain('AGENTS.md files:');
-    expect(discoverWorkspaceCapabilities([{
-      path: '.agents/skills/no-description/SKILL.md',
-      content: '---\nname: no-description\n---\n\n# Missing description',
-    }]).skills[0]?.description).toBe('Skill file is missing required frontmatter.');
+    expect(buildWorkspacePromptContext([
+      { path: '.agents/tools/review-pr/tool.json', content: '{}' },
+    ])).toContain('Tools:');
     expect(detectWorkspaceFileKind('README.md')).toBeNull();
   });
 });

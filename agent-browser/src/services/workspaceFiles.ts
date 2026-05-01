@@ -9,13 +9,24 @@ import {
   mergeDefaultWorkspaceMemoryFiles,
 } from './workspaceMemory';
 import {
-  WORKSPACE_SKILL_DIRECTORIES,
   detectWorkspaceFileKind as detectCoreWorkspaceFileKind,
   discoverWorkspaceCapabilities as discoverCoreWorkspaceCapabilities,
   validateWorkspaceFile as validateCoreWorkspaceFile,
 } from 'harness-core';
+import {
+  WORKSPACE_SKILL_DIRECTORIES,
+  detectAgentSkillFile,
+  discoverAgentSkills,
+  validateAgentSkillFile,
+} from 'harness-core/ext/agent-skills';
+import {
+  buildAgentsMdPromptContext,
+  detectAgentsMdFile,
+  discoverAgentsMdFiles,
+  validateAgentsMdFile,
+} from 'harness-core/ext/agents-md';
 
-import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspaceHook, WorkspacePlugin, WorkspaceSkill } from '../types';
+import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspaceHook, WorkspacePlugin, WorkspaceSkill, WorkspaceTool } from '../types';
 
 export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
 export const WORKSPACE_FILE_STORAGE_DEBOUNCE_MS = 120;
@@ -75,6 +86,19 @@ export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''):
     };
   }
 
+  if (kind === 'tool') {
+    return {
+      path: `.agents/tools/${slug}/tool.json`,
+      updatedAt: nowIso(),
+      content: [
+        '{',
+        `  "name": "${slug}",`,
+        '  "description": "Describe the tool capability exposed to the harness."',
+        '}',
+      ].join('\n'),
+    };
+  }
+
   if (kind === 'hook') {
     return {
       path: `.agents/hooks/${slug}.sh`,
@@ -95,13 +119,15 @@ export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''):
       `name: ${slug}`,
       'version: 0.1.0',
       'description: Describe the plugin capability exposed to the harness.',
-      'skills: []',
+      'tools: []',
       'hooks: []',
     ].join('\n'),
   };
 }
 
 export function detectWorkspaceFileKind(path: string): WorkspaceFileKind | null {
+  if (detectAgentsMdFile(path)) return 'agents';
+  if (detectAgentSkillFile(path)) return 'skill';
   return detectCoreWorkspaceFileKind(path) as WorkspaceFileKind | null;
 }
 
@@ -113,46 +139,40 @@ export function validateWorkspaceFile(file: WorkspaceFile): string | null {
     return detectWorkspaceMemoryScope(file.path) ? null : 'Unsupported memory file path.';
   }
 
+  if (kind === 'agents') return validateAgentsMdFile(file);
+  if (kind === 'skill') return validateAgentSkillFile(file);
+
   return validateCoreWorkspaceFile(file);
 }
 
 export function discoverWorkspaceCapabilities(files: WorkspaceFile[]): WorkspaceCapabilities {
-  const capabilities = discoverCoreWorkspaceCapabilities(files);
+  const coreCapabilities = discoverCoreWorkspaceCapabilities(files);
   return {
-    agents: capabilities.agents as WorkspaceFile[],
-    skills: capabilities.skills as WorkspaceSkill[],
-    plugins: capabilities.plugins as WorkspacePlugin[],
-    hooks: capabilities.hooks as WorkspaceHook[],
-    memory: capabilities.memory as WorkspaceFile[],
+    agents: discoverAgentsMdFiles(files) as WorkspaceFile[],
+    skills: discoverAgentSkills(files) as WorkspaceSkill[],
+    tools: coreCapabilities.tools as WorkspaceTool[],
+    plugins: coreCapabilities.plugins as WorkspacePlugin[],
+    hooks: coreCapabilities.hooks as WorkspaceHook[],
+    memory: coreCapabilities.memory as WorkspaceFile[],
   };
 }
 
 export function buildWorkspacePromptContext(files: WorkspaceFile[], activeAgentPath?: string | null): string {
   const capabilities = discoverWorkspaceCapabilities(files);
-  const activeAgent = activeAgentPath
-    ? capabilities.agents.find((file) => file.path === activeAgentPath) ?? null
-    : null;
-  const otherAgents = activeAgent
-    ? capabilities.agents.filter((file) => file.path !== activeAgent.path)
-    : capabilities.agents;
-  if (!capabilities.agents.length && !capabilities.skills.length && !capabilities.plugins.length && !capabilities.hooks.length && !capabilities.memory.length) {
+  if (!capabilities.agents.length && !capabilities.skills.length && !capabilities.tools.length && !capabilities.plugins.length && !capabilities.hooks.length && !capabilities.memory.length) {
     return 'No workspace capability files are currently stored.';
   }
 
   return [
     'Workspace capability files loaded from browser storage:',
     buildWorkspaceMemoryPromptContext(files),
-    activeAgent
-      ? `Active AGENTS.md:\n- ${activeAgent.path}\n${activeAgent.content}`
-      : (otherAgents.length
-          ? `AGENTS.md files:\n${otherAgents.map((file) => `- ${file.path}\n${file.content}`).join('\n')}`
-          : 'AGENTS.md files: none'),
-    activeAgent && otherAgents.length
-      ? `Other AGENTS.md files:\n${otherAgents.map((file) => `- ${file.path}\n${file.content}`).join('\n')}`
-      : null,
+    buildAgentsMdPromptContext(files, { activeAgentPath }),
     capabilities.skills.length
       ? `Skills:\n${capabilities.skills.map((skill) => `- ${skill.name} (${skill.path}): ${skill.description}`).join('\n')}`
       : 'Skills: none',
+    capabilities.tools.length
+      ? `Tools:\n${capabilities.tools.map((tool) => `- ${tool.directory} (${tool.path})`).join('\n')}`
+      : 'Tools: none',
     capabilities.plugins.length
       ? `Plugins:\n${capabilities.plugins.map((plugin) => `- ${plugin.directory} (${plugin.path})`).join('\n')}`
       : 'Plugins: none',

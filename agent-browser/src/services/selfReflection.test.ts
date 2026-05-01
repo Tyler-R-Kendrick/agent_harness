@@ -18,6 +18,9 @@ const SAMPLE_WORKSPACE_CONTEXT = [
   '- memory (.agents/skills/memory/SKILL.md): Recall and store durable workspace memory.',
   '- create-agent-eval (.agents/skills/create-agent-eval/SKILL.md): Create repeatable AgentEvals suites.',
   '',
+  'Tools:',
+  '- review-pr (.agents/tools/review-pr/tool.json)',
+  '',
   'Plugins:',
   '- review-tools (.agents/plugins/review-tools/plugin.yaml)',
   '',
@@ -70,6 +73,7 @@ describe('selfReflection', () => {
       'memory (.agents/skills/memory/SKILL.md): Recall and store durable workspace memory.',
       'create-agent-eval (.agents/skills/create-agent-eval/SKILL.md): Create repeatable AgentEvals suites.',
     ]));
+    expect(inventory.tools).toEqual(['review-pr (.agents/tools/review-pr/tool.json)']);
     expect(inventory.plugins).toEqual(['review-tools (.agents/plugins/review-tools/plugin.yaml)']);
     expect(inventory.hooks).toEqual(['pre-task.sh (.agents/hooks/pre-task.sh)']);
   });
@@ -90,6 +94,7 @@ describe('selfReflection', () => {
     expect(answer).toContain('read_session_file (Read session file)');
     expect(answer).toContain('Registered workspace capabilities:');
     expect(answer).toContain('memory (.agents/skills/memory/SKILL.md)');
+    expect(answer).toContain('review-pr (.agents/tools/review-pr/tool.json)');
     expect(answer).toContain('review-tools (.agents/plugins/review-tools/plugin.yaml)');
     expect(answer).toContain('pre-task.sh (.agents/hooks/pre-task.sh)');
     expect(answer).toContain('Limitations:');
@@ -107,7 +112,7 @@ describe('selfReflection', () => {
 
     expect(answer).toContain('active workspace agent for Empty');
     expect(answer).toContain('No runtime tools are currently selected');
-    expect(answer).toContain('No workspace skills, plugins, or hooks are currently registered');
+    expect(answer).toContain('No workspace skills, tools, plugins, or hooks are currently registered');
     expect(answer).not.toContain('cli (CLI)');
     expect(answer).not.toContain('webmcp:local_web_research');
   });
