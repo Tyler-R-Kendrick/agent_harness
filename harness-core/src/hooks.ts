@@ -58,28 +58,28 @@ export interface HarnessHookPipeRunResult<TPayload> extends HarnessHookRunResult
   bubbled: boolean;
 }
 
-type RegisteredHook<TPayload> = {
-  hook: HarnessHook<TPayload>;
+type RegisteredHook = {
+  hook: HarnessHook<unknown>;
   order: number;
 };
 
 export class HookRegistry<TPayload = unknown> {
-  private readonly hooks = new Map<string, RegisteredHook<TPayload>>();
+  private readonly hooks = new Map<string, RegisteredHook>();
   private nextOrder = 0;
 
-  register(hook: HarnessHook<TPayload>): void {
-    this.registerHook({ ...hook, mode: hook.mode ?? 'pipe' });
+  register<TSpecificPayload = TPayload>(hook: HarnessHook<TSpecificPayload>): void {
+    this.registerHook({ ...hook, mode: hook.mode ?? 'pipe' } as HarnessHook<unknown>);
   }
 
-  registerMiddleware(hook: Omit<HarnessHook<TPayload>, 'mode'>): void {
-    this.registerHook({ ...hook, mode: 'middleware' });
+  registerMiddleware<TSpecificPayload = TPayload>(hook: Omit<HarnessHook<TSpecificPayload>, 'mode'>): void {
+    this.registerHook({ ...hook, mode: 'middleware' } as HarnessHook<unknown>);
   }
 
-  registerPipe(hook: Omit<HarnessHook<TPayload>, 'mode'>): void {
-    this.registerHook({ ...hook, mode: 'pipe' });
+  registerPipe<TSpecificPayload = TPayload>(hook: Omit<HarnessHook<TSpecificPayload>, 'mode'>): void {
+    this.registerHook({ ...hook, mode: 'pipe' } as HarnessHook<unknown>);
   }
 
-  private registerHook(hook: HarnessHook<TPayload>): void {
+  private registerHook(hook: HarnessHook<unknown>): void {
     if (this.hooks.has(hook.id)) {
       throw new Error(`Hook already registered: ${hook.id}`);
     }
@@ -87,31 +87,31 @@ export class HookRegistry<TPayload = unknown> {
     this.nextOrder += 1;
   }
 
-  get(id: string): HarnessHook<TPayload> | undefined {
-    return this.hooks.get(id)?.hook;
+  get<TSpecificPayload = TPayload>(id: string): HarnessHook<TSpecificPayload> | undefined {
+    return this.hooks.get(id)?.hook as HarnessHook<TSpecificPayload> | undefined;
   }
 
-  list(): HarnessHook<TPayload>[] {
-    return [...this.hooks.values()].map((entry) => entry.hook);
+  list<TSpecificPayload = TPayload>(): HarnessHook<TSpecificPayload>[] {
+    return [...this.hooks.values()].map((entry) => entry.hook as HarnessHook<TSpecificPayload>);
   }
 
-  forPoint(point: HarnessHookPoint, mode?: HarnessHookMode): HarnessHook<TPayload>[] {
+  forPoint<TSpecificPayload = TPayload>(point: HarnessHookPoint, mode?: HarnessHookMode): HarnessHook<TSpecificPayload>[] {
     return [...this.hooks.values()]
       .filter((entry) => entry.hook.point === point && (mode === undefined || entry.hook.mode === mode))
       .sort((left, right) => {
         const priorityDelta = (left.hook.priority ?? 0) - (right.hook.priority ?? 0);
         return priorityDelta || left.order - right.order;
       })
-      .map((entry) => entry.hook);
+      .map((entry) => entry.hook as HarnessHook<TSpecificPayload>);
   }
 
-  async runMiddleware(
+  async runMiddleware<TSpecificPayload = TPayload>(
     point: HarnessHookPoint,
-    payload: TPayload,
+    payload: TSpecificPayload,
     options: HarnessHookRunOptions = {},
-  ): Promise<HarnessHookMiddlewareRunResult<TPayload>> {
+  ): Promise<HarnessHookMiddlewareRunResult<TSpecificPayload>> {
     const metadata = options.metadata ?? {};
-    const results = await Promise.all(this.forPoint(point, 'middleware').map(async (hook) => ({
+    const results = await Promise.all(this.forPoint<TSpecificPayload>(point, 'middleware').map(async (hook) => ({
       hook,
       result: await hook.run({
         point,
@@ -127,16 +127,16 @@ export class HookRegistry<TPayload = unknown> {
     return { payload, outputs };
   }
 
-  async runPipes(
+  async runPipes<TSpecificPayload = TPayload>(
     point: HarnessHookPoint,
-    payload: TPayload,
+    payload: TSpecificPayload,
     options: HarnessHookRunOptions = {},
-  ): Promise<HarnessHookPipeRunResult<TPayload>> {
+  ): Promise<HarnessHookPipeRunResult<TSpecificPayload>> {
     let currentPayload = payload;
     const outputs: HarnessHookOutput[] = [];
     const metadata = options.metadata ?? {};
 
-    for (const hook of this.forPoint(point, 'pipe')) {
+    for (const hook of this.forPoint<TSpecificPayload>(point, 'pipe')) {
       const result = await hook.run({
         point,
         payload: currentPayload,
@@ -169,11 +169,11 @@ export class HookRegistry<TPayload = unknown> {
     };
   }
 
-  async run(
+  async run<TSpecificPayload = TPayload>(
     point: HarnessHookPoint,
-    payload: TPayload,
+    payload: TSpecificPayload,
     options: HarnessHookRunOptions = {},
-  ): Promise<HarnessHookRunResult<TPayload>> {
+  ): Promise<HarnessHookRunResult<TSpecificPayload>> {
     const middleware = await this.runMiddleware(point, payload, options);
     const pipes = await this.runPipes(point, payload, options);
     const result = {
