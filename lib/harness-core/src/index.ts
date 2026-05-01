@@ -181,6 +181,16 @@ export {
   type HarnessUpdateHandler,
 } from './defaultCommands.js';
 export {
+  SettingsRegistry,
+  createSettingsRegistry,
+  formatSettingValue,
+  type HarnessSettingDefinition,
+  type HarnessSettingType,
+  type HarnessSettingTypeDefinition,
+  type HarnessSettingsInput,
+  type SettingsRegistryOptions,
+} from './settings.js';
+export {
   PluginRegistry,
   createAgentsMdHookPlugin,
   createHarnessExtensionContext,
