@@ -196,6 +196,25 @@ export {
   type InferenceMessagesPayload,
 } from './plugins.js';
 export {
+  DESIGN_MD_SUBSTITUTION_PLAN_SCHEMA,
+  buildDesignMdGuidanceMessage,
+  createCssDesignTokenApplyProvider,
+  createDesignMdPlugin,
+  createLlGuidanceDesignSubstitutionProvider,
+  discoverDesignMdSemanticHooks,
+  type DesignMdApplyIntent,
+  type DesignMdApplyProvider,
+  type DesignMdApplyRequest,
+  type DesignMdApplyResult,
+  type DesignMdApplyTarget,
+  type DesignMdCodeSubstitution,
+  type DesignMdDocument,
+  type DesignMdPluginOptions,
+  type DesignMdSemanticHook,
+  type DesignMdSemanticHookInput,
+  type LlGuidanceDesignSubstitutionProviderOptions,
+} from './ext/design-md.js';
+export {
   ToolRegistry,
   createPromptTemplateTool,
   type HarnessJsonSchema,

@@ -13,7 +13,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./ext/agent-skills": "./src/ext/agent-skills.ts",
-    "./ext/agents-md": "./src/ext/agents-md.ts"
+    "./ext/agents-md": "./src/ext/agents-md.ts",
+    "./ext/design-md": "./src/ext/design-md.ts"
   },
   "scripts": {
     "test": "node ../scripts/run-package-bin.mjs vitest run",
