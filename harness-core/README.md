@@ -70,6 +70,43 @@ createAgentRuntime({
 - `/version` for the current `harness-core` version.
 - `tool:<tool-name>(<param>=<value>, ...)` for direct invocation of registered tools.
 
+The `/config` command accepts either the legacy `config` value map or a typed
+`settings` registry. Setting definitions can describe built-in value types
+(`string`, `number`, `integer`, `boolean`, `json`, and `enum`), defaults, and
+descriptions so host apps can render settings without hard-coding the schema:
+
+```ts
+import { createDefaultCommandRegistry } from 'harness-core';
+
+const commands = createDefaultCommandRegistry({
+  settings: {
+    definitions: [
+      { key: 'theme', type: 'enum', values: ['light', 'dark'], defaultValue: 'dark' },
+      { key: 'maxTurns', type: 'integer', defaultValue: 3 },
+      { key: 'approvalRequired', type: 'boolean', defaultValue: false },
+    ],
+  },
+});
+
+await commands.execute('/config maxTurns=5');
+```
+
+Apps can register custom setting types when their UI stores a domain-specific
+shape while the command should parse or format a friendlier value:
+
+```ts
+const commands = createDefaultCommandRegistry({
+  settings: {
+    types: [{
+      id: 'percentage',
+      parse: (value) => Number(value) / 100,
+      format: (value) => `${Number(value) * 100}%`,
+    }],
+    definitions: [{ key: 'confidence', type: 'percentage', defaultValue: 0.75 }],
+  },
+});
+```
+
 ## Extension adapters
 
 The core package stays generic: workspace capability discovery recognizes

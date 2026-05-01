@@ -4,6 +4,12 @@ import {
   type CommandExecutionContext,
   type CommandRegistryOptions,
 } from './commands.js';
+import {
+  SettingsRegistry,
+  createSettingsRegistry,
+  type HarnessSettingsInput,
+  type HarnessSettingDefinition,
+} from './settings.js';
 import type { HarnessToolContext } from './tools.js';
 
 export const HARNESS_CORE_VERSION = '0.1.0';
@@ -19,6 +25,7 @@ export interface DefaultCommandInfo {
 export interface DefaultCommandOptions extends CommandRegistryOptions {
   version?: string;
   config?: Record<string, unknown>;
+  settings?: HarnessSettingsInput;
   update?: HarnessUpdateHandler;
 }
 
@@ -51,7 +58,7 @@ export function registerDefaultCommands(
   registry: CommandRegistry,
   options: DefaultCommandOptions = {},
 ): CommandRegistry {
-  const settings = new Map<string, unknown>(Object.entries(options.config ?? {}));
+  const settings = createSettingsRegistry(options.settings, options.config);
   for (const command of createDefaultCommands(registry, settings, options)) {
     registry.register(command);
   }
@@ -60,7 +67,7 @@ export function registerDefaultCommands(
 
 function createDefaultCommands(
   registry: CommandRegistry,
-  settings: Map<string, unknown>,
+  settings: SettingsRegistry,
   options: DefaultCommandOptions,
 ): Command[] {
   const version = options.version ?? HARNESS_CORE_VERSION;
@@ -196,17 +203,18 @@ function parseConfigExpression(expression: string): ConfigCommandArgs {
 
 function runConfigCommand(
   args: ConfigCommandArgs,
-  settings: Map<string, unknown>,
+  settings: SettingsRegistry,
 ): Record<string, unknown> {
   if (args.action === 'set') {
-    settings.set(args.key, args.value);
+    const value = settings.set(args.key, args.value);
     return {
       type: 'config',
       action: 'set',
       key: args.key,
-      value: args.value,
-      settings: sortedSettings(settings),
-      text: `${args.key}=${formatValue(args.value)}`,
+      value,
+      settings: settings.entries(),
+      ...settingDefinitionPayload(settings, args.key),
+      text: `${args.key}=${settings.format(args.key, value)}`,
     };
   }
 
@@ -217,16 +225,18 @@ function runConfigCommand(
       action: 'get',
       key: args.key,
       value,
-      text: `${args.key}=${formatValue(value)}`,
+      ...settingDefinitionPayload(settings, args.key),
+      text: `${args.key}=${settings.format(args.key, value)}`,
     };
   }
 
-  const listed = sortedSettings(settings);
+  const listed = settings.entries();
   return {
     type: 'config',
     action: 'list',
     settings: listed,
-    text: formatSettings(listed),
+    ...settingDefinitionsPayload(settings),
+    text: formatSettings(settings, listed),
   };
 }
 
@@ -333,18 +343,24 @@ function isNumberLiteral(value: string): boolean {
   return /^-?\d+(?:\.\d+)?$/.test(value);
 }
 
-function sortedSettings(settings: Map<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries([...settings.entries()].sort(([left], [right]) => left.localeCompare(right)));
-}
-
-function formatSettings(settings: Record<string, unknown>): string {
+function formatSettings(registry: SettingsRegistry, settings: Record<string, unknown>): string {
   const entries = Object.entries(settings);
   if (entries.length === 0) return 'No settings configured.';
-  return entries.map(([key, value]) => `${key}=${formatValue(value)}`).join('\n');
+  return entries.map(([key, value]) => `${key}=${registry.format(key, value)}`).join('\n');
 }
 
-function formatValue(value: unknown): string {
-  return typeof value === 'string' ? value : `${JSON.stringify(value)}`;
+function settingDefinitionPayload(
+  settings: SettingsRegistry,
+  key: string,
+): { definition?: HarnessSettingDefinition } {
+  const definition = settings.getDefinition(key);
+  return definition ? { definition } : {};
+}
+
+function settingDefinitionsPayload(
+  settings: SettingsRegistry,
+): { definitions?: HarnessSettingDefinition[] } {
+  return settings.hasDefinitions() ? { definitions: settings.listDefinitions() } : {};
 }
 
 function normalizeCommandContext(context: CommandExecutionContext): CommandExecutionContext {
