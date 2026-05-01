@@ -90,19 +90,24 @@ export {
   type LogActAgentLoopOptions,
 } from './logactLoop.js';
 export {
+  DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   SECRET_REF_PREFIX,
   MemorySecretStore,
   SecretsManagerAgent,
   containsSecretRef,
   createSecretsManagerAgent,
   getDefaultSecretsManagerAgent,
+  isSecretManagementSettings,
   isSecretRef,
+  normalizeSecretManagementSettings,
+  resetDefaultSecretsManagerAgentForTests,
   secretRefForId,
   wrapToolsForSecretResolution,
   type InferenceMessageLike,
   type PreparedInferenceMessages,
   type SanitizeDataResult,
   type SanitizeTextResult,
+  type SecretManagementSettings,
   type SecretRecord,
   type SecretStore,
   type SecretsManagerOptions,
@@ -119,6 +124,15 @@ export {
   type CommandRegistryOptions,
   type CommandTarget,
 } from './commands.js';
+export {
+  HARNESS_CORE_VERSION,
+  createDefaultCommandRegistry,
+  registerDefaultCommands,
+  type DefaultCommandId,
+  type DefaultCommandInfo,
+  type DefaultCommandOptions,
+  type HarnessUpdateHandler,
+} from './defaultCommands.js';
 export {
   PluginRegistry,
   createAgentsMdHookPlugin,

@@ -2,6 +2,7 @@ import type { IAgentBus } from 'logact';
 import { appendAgentEvent, resolveAgentBus } from './agentBus.js';
 import { runActorWorkflow } from './actorWorkflow.js';
 import { CommandRegistry } from './commands.js';
+import { createDefaultCommandRegistry } from './defaultCommands.js';
 import { HookRegistry } from './hooks.js';
 import { MemoryRegistry, type MemoryMessage } from './memory.js';
 import { ToolRegistry } from './tools.js';
@@ -80,12 +81,13 @@ export function createAgentRuntime<
   tools,
   commands,
 }: CreateAgentRuntimeOptions<TInput, TOutput, TMessage, THookPayload>): AgentRuntime<TInput, TOutput, TMessage, THookPayload> {
+  const resolvedTools = tools ?? new ToolRegistry();
   const components: BaseAgentComponents<TMessage, THookPayload> = {
     bus: resolveAgentBus(bus),
     hooks: hooks ?? new HookRegistry<THookPayload>(),
     memory: memory ?? new MemoryRegistry<TMessage>(),
-    tools: tools ?? new ToolRegistry(),
-    commands: commands ?? new CommandRegistry(),
+    tools: resolvedTools,
+    commands: commands ?? createDefaultCommandRegistry({ tools: resolvedTools }),
   };
 
   const run = async (

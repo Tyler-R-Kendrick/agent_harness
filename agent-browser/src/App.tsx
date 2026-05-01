@@ -33,6 +33,7 @@ import {
   HardDrive,
   History,
   Keyboard,
+  KeyRound,
   Layers3,
   Link,
   LoaderCircle,
@@ -118,6 +119,7 @@ import {
   type WorkspaceMcpSessionFsEntry,
   type WorkspaceMcpSessionState,
   type WorkspaceMcpElicitationField,
+  type WorkspaceMcpSecretRequestResult,
   type WorkspaceMcpWorktreeItem,
   type WorkspaceMcpWriteSessionInput,
 } from 'agent-browser-mcp';
@@ -181,6 +183,7 @@ import {
   isTreeNode,
   isWorkspaceViewStateRecord,
   removeStoredRecordEntry,
+  saveJson,
   useStoredState,
 } from './services/sessionState';
 import {
@@ -194,6 +197,14 @@ import {
   searchUserContextMemory,
   upsertUserContextMemory,
 } from './services/userContextMemory';
+import {
+  DEFAULT_SECRET_MANAGEMENT_SETTINGS,
+  getDefaultSecretsManagerAgent,
+  isSecretManagementSettings,
+  secretRefForId,
+  type SecretManagementSettings,
+  type SecretRecord,
+} from './chat-agents/Secrets';
 import {
   WORKSPACE_COLORS,
   buildWorkspaceNodeMap,
@@ -266,12 +277,23 @@ type SessionMcpController = {
 };
 
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
+const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
+
+type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
+const pendingSecretRequestResolvers = new Map<string, (result: SecretRequestCreatedResult) => void>();
 
 type UserElicitationEventDetail = {
   requestId: string;
   prompt: string;
   reason?: string;
   fields: WorkspaceMcpElicitationField[];
+};
+
+type SecretRequestEventDetail = {
+  requestId: string;
+  name: string;
+  prompt: string;
+  reason?: string;
 };
 
 function isSearchTurnContext(value: unknown): value is SearchTurnContext {
@@ -445,6 +467,7 @@ const TOOL_GROUP_ORDER = [
   'sessions-worktree-mcp',
   'files-worktree-mcp',
   'clipboard-worktree-mcp',
+  'secrets-mcp',
 ] as const;
 const DEFAULT_COLLAPSED_TOOL_GROUPS = new Set<string>(['mcp', 'webmcp']);
 
@@ -461,6 +484,7 @@ const icons = {
   panes: Copy,
   search: Search,
   keyboard: Keyboard,
+  keyRound: KeyRound,
   folder: Folder,
   folderOpen: FolderOpen,
   hardDrive: HardDrive,
@@ -914,12 +938,78 @@ function McpElicitationCard({
   );
 }
 
+function readSecretNameFromArgs(args: Record<string, unknown>): string | undefined {
+  const value = args.name;
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function McpSecretRequestCard({
+  messageId,
+  card,
+  onSubmit,
+}: {
+  messageId: string;
+  card: NonNullable<ChatMessage['cards']>[number];
+  onSubmit?: (messageId: string, requestId: string, input: { name: string; value: string }) => void;
+}) {
+  const requestId = card.requestId ?? `secret:${messageId}`;
+  const [name, setName] = useState(card.secretName ?? readSecretNameFromArgs(card.args) ?? 'API_KEY');
+  const [value, setValue] = useState('');
+  if (card.status === 'submitted') {
+    return (
+      <div className="message-tool-call message-tool-call-secret">
+        <span className="tool-call-label">Secret ref created</span>
+        <div className="secret-card-result">
+          <span>{card.secretName ?? name}</span>
+          {card.secretRef ? <code>{card.secretRef}</code> : null}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <form
+      aria-label="Secrets Manager request"
+      className="message-tool-call message-tool-call-secret"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit?.(messageId, requestId, { name, value });
+      }}
+    >
+      <span className="tool-call-label">Secrets Manager</span>
+      {card.prompt ? <p className="elicitation-prompt">{card.prompt}</p> : null}
+      {card.reason ? <p className="secret-request-reason">{card.reason}</p> : null}
+      <label className="elicitation-field">
+        <span>Secret name</span>
+        <input
+          aria-label="Secret name"
+          value={name}
+          autoComplete="off"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <label className="elicitation-field">
+        <span>Secret value</span>
+        <input
+          aria-label="Secret value"
+          type="password"
+          value={value}
+          autoComplete="off"
+          required
+          onChange={(event) => setValue(event.target.value)}
+        />
+      </label>
+      <button type="submit" className="elicitation-submit">Create secret ref</button>
+    </form>
+  );
+}
+
 function ChatMessageView({
   message,
   agentName,
   activitySelected,
   onOpenActivity,
   onSubmitElicitation,
+  onSubmitSecret,
   onCopyMessage,
 }: {
   message: ChatMessage;
@@ -927,6 +1017,7 @@ function ChatMessageView({
   activitySelected?: boolean;
   onOpenActivity?: (messageId: string) => void;
   onSubmitElicitation?: (messageId: string, requestId: string, values: Record<string, string>) => void;
+  onSubmitSecret?: (messageId: string, requestId: string, input: { name: string; value: string }) => void;
   onCopyMessage?: (input: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => Promise<void>;
 }) {
   const content = message.streamedContent || message.content;
@@ -1015,6 +1106,15 @@ function ChatMessageView({
               messageId={message.id}
               card={card}
               onSubmit={onSubmitElicitation}
+            />
+          )
+          : card.kind === 'secret'
+          ? (
+            <McpSecretRequestCard
+              key={card.requestId ?? i}
+              messageId={message.id}
+              card={card}
+              onSubmit={onSubmitSecret}
             />
           )
           : (
@@ -1583,10 +1683,12 @@ function ChatPanel({
   onOpenSettings,
   onWorkspaceFileUpsert,
   onCopyToClipboard,
+  onSecretRecordsChanged,
   bashBySessionRef,
   webMcpModelContext,
   browserLocationContext,
   setBrowserLocationContext,
+  secretSettings,
   onSessionMcpControllerChange,
   dragHandleProps,
 }: {
@@ -1610,10 +1712,12 @@ function ChatPanel({
   onOpenSettings: () => void;
   onWorkspaceFileUpsert: (file: WorkspaceFile) => void;
   onCopyToClipboard: (text: string, label: string) => Promise<void>;
+  onSecretRecordsChanged?: () => void | Promise<void>;
   bashBySessionRef: React.MutableRefObject<Record<string, Bash>>;
   webMcpModelContext: ModelContext;
   browserLocationContext: BrowserLocationContext;
   setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
+  secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
@@ -2044,6 +2148,52 @@ function ChatPanel({
     window.addEventListener(USER_ELICITATION_EVENT, listener);
     return () => window.removeEventListener(USER_ELICITATION_EVENT, listener);
   }, [appendElicitationCard]);
+
+  const appendSecretRequestCard = useCallback((detail: SecretRequestEventDetail) => {
+    const card: NonNullable<ChatMessage['cards']>[number] = {
+      app: 'Secrets Manager',
+      kind: 'secret',
+      requestId: detail.requestId,
+      prompt: detail.prompt,
+      reason: detail.reason,
+      secretName: detail.name,
+      status: 'pending',
+      args: {
+        name: detail.name,
+        prompt: detail.prompt,
+        reason: detail.reason,
+      },
+    };
+    const targetAssistantId = activeGenerationRef.current?.assistantId;
+    if (!targetAssistantId) {
+      appendSharedMessages([{
+        id: createUniqueId(),
+        role: 'assistant',
+        status: 'complete',
+        content: '',
+        cards: [card],
+      }]);
+      return;
+    }
+    setMessagesBySession((current) => {
+      const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+      const nextMessages = sessionMessages.map((message) => (
+        message.id === targetAssistantId
+          ? { ...message, cards: [...(message.cards ?? []), card] }
+          : message
+      ));
+      messagesRef.current = nextMessages;
+      return { ...current, [activeChatSessionId]: nextMessages };
+    });
+  }, [activeChatSessionId]);
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      appendSecretRequestCard((event as CustomEvent<SecretRequestEventDetail>).detail);
+    };
+    window.addEventListener(SECRET_REQUEST_EVENT, listener);
+    return () => window.removeEventListener(SECRET_REQUEST_EVENT, listener);
+  }, [appendSecretRequestCard]);
 
 
   const handleToggleBrowserNotifications = useCallback(async () => {
@@ -4267,6 +4417,7 @@ function ChatPanel({
         workspaceName,
         workspacePromptContext,
         voters: codiVoters,
+        secretSettings,
       }, streamCallbacks, controller.signal);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -4279,7 +4430,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -4309,6 +4460,49 @@ function ChatPanel({
     });
     void sendMessage(`Location: ${locationValue}`);
   }, [activeChatSessionId, sendMessage, workspaceName]);
+
+  const handleSecretSubmit = useCallback(async (
+    messageId: string,
+    requestId: string,
+    { name, value }: { name: string; value: string },
+  ) => {
+    const secretName = name.trim() || 'API_KEY';
+    if (!value) return;
+    const secretRef = await getDefaultSecretsManagerAgent().storeSecret({ name: secretName, value });
+    const result: SecretRequestCreatedResult = {
+      status: 'secret_ref_created',
+      requestId,
+      name: secretName,
+      secretRef,
+    };
+    pendingSecretRequestResolvers.get(requestId)?.(result);
+    pendingSecretRequestResolvers.delete(requestId);
+    setMessagesBySession((current) => {
+      const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+      const nextMessages = sessionMessages.map((message) => (
+        message.id === messageId
+          ? {
+            ...message,
+            cards: (message.cards ?? []).map((card) => (
+              card.requestId === requestId
+                ? {
+                  ...card,
+                  status: 'submitted' as const,
+                  secretName,
+                  secretRef,
+                  response: { name: secretName, secretRef },
+                }
+                : card
+            )),
+          }
+          : message
+      ));
+      messagesRef.current = nextMessages;
+      return { ...current, [activeChatSessionId]: nextMessages };
+    });
+    void onSecretRecordsChanged?.();
+    onToast({ msg: 'Secret saved', type: 'success' });
+  }, [activeChatSessionId, onSecretRecordsChanged, onToast, setMessagesBySession]);
 
   const handleChatInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isSkillAutocompleteOpen) {
@@ -4647,7 +4841,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onCopyMessage={handleCopyMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -4981,7 +5175,140 @@ function EvaluationAgentsSettings({
   );
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric }: { copilotState: CopilotRuntimeState; isCopilotLoading: boolean; onRefreshCopilot: () => void; registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void; evaluationAgents: CustomEvaluationAgent[]; negativeRubricTechniques: string[]; onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void; onResetEvaluationAgents: () => void; onResetNegativeRubric: () => void }) {
+function SecretsSettings({
+  records,
+  settings,
+  onSaveSecret,
+  onDeleteSecret,
+  onSettingsChange,
+}: {
+  records: SecretRecord[];
+  settings: SecretManagementSettings;
+  onSaveSecret: (input: { name: string; value: string }) => Promise<string>;
+  onDeleteSecret: (idOrRef: string) => Promise<void>;
+  onSettingsChange: (settings: SecretManagementSettings) => void;
+}) {
+  const [name, setName] = useState('');
+  const [value, setValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const updateSetting = (key: keyof SecretManagementSettings, nextValue: boolean) => {
+    onSettingsChange({ ...settings, [key]: nextValue });
+  };
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!name.trim() || !value) return;
+    setIsSaving(true);
+    try {
+      await onSaveSecret({ name, value });
+      setName('');
+      setValue('');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <SettingsSection title={`Secrets (${records.length})`} bodyClassName="secrets-section-body">
+      <div className="secrets-toolbar">
+        <div>
+          <strong>Secret refs</strong>
+          <p className="muted">Store values locally and expose only secret-ref handles to chat agents and tools.</p>
+        </div>
+        <span className={`badge${settings.enabled ? ' connected' : ''}`}>{settings.enabled ? 'Redaction on' : 'Redaction off'}</span>
+      </div>
+      <form className="secrets-form" onSubmit={(event) => void handleSubmit(event)}>
+        <label className="provider-command-field">
+          <span>Secret name</span>
+          <input aria-label="Secret name" value={name} onChange={(event) => setName(event.target.value)} placeholder="OPENWEATHER_API_KEY" autoComplete="off" />
+        </label>
+        <label className="provider-command-field">
+          <span>Secret value</span>
+          <input aria-label="Secret value" type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Value is never shown again" autoComplete="off" />
+        </label>
+        <button type="submit" className="secondary-button secrets-add-button" disabled={isSaving || !name.trim() || !value}>
+          {isSaving ? 'Adding…' : 'Add secret'}
+        </button>
+      </form>
+      <div className="secret-settings-grid">
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            aria-label={settings.enabled ? 'Disable secret redaction' : 'Enable secret redaction'}
+            onChange={(event) => updateSetting('enabled', event.target.checked)}
+          />
+          <span><strong>Secret redaction</strong><small>Run the sanitizer before model calls.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.replaceStoredSecrets}
+            aria-label={settings.replaceStoredSecrets ? 'Disable stored secret replacement' : 'Enable stored secret replacement'}
+            onChange={(event) => updateSetting('replaceStoredSecrets', event.target.checked)}
+          />
+          <span><strong>Stored values</strong><small>Replace values already saved in the local vault.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.detectKnownSecrets}
+            aria-label={settings.detectKnownSecrets ? 'Disable known secret detectors' : 'Enable known secret detectors'}
+            onChange={(event) => updateSetting('detectKnownSecrets', event.target.checked)}
+          />
+          <span><strong>Known formats</strong><small>Provider tokens, auth headers, URLs, JWTs, and private keys.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.detectGenericSecrets}
+            aria-label={settings.detectGenericSecrets ? 'Disable generic secret assignments' : 'Enable generic secret assignments'}
+            onChange={(event) => updateSetting('detectGenericSecrets', event.target.checked)}
+          />
+          <span><strong>Generic assignments</strong><small>Keys named token, password, secret, API key, and similar.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.detectHighEntropySecrets}
+            aria-label={settings.detectHighEntropySecrets ? 'Disable high entropy secret fallback' : 'Enable high entropy secret fallback'}
+            onChange={(event) => updateSetting('detectHighEntropySecrets', event.target.checked)}
+          />
+          <span><strong>High entropy fallback</strong><small>Contextual detection for token-like values in user text.</small></span>
+        </label>
+      </div>
+      <div className="secrets-table" role="table" aria-label="Stored secrets">
+        <div className="secrets-row secrets-row-header" role="row">
+          <span role="columnheader">Name</span>
+          <span role="columnheader">Value</span>
+          <span role="columnheader">Reference</span>
+          <span role="columnheader">Updated</span>
+          <span role="columnheader">Actions</span>
+        </div>
+        {records.map((record) => (
+          <div className="secrets-row" role="row" key={record.id}>
+            <span className="secret-name" role="cell">{record.label}</span>
+            <span className="secret-mask" role="cell">••••••••••••••••</span>
+            <code className="secret-ref" role="cell">{secretRefForId(record.id)}</code>
+            <span className="secret-updated" role="cell">{formatSecretUpdated(record.updatedAt)}</span>
+            <span role="cell">
+              <button type="button" className="secondary-button danger-button btn-xs" aria-label={`Delete secret ${record.label}`} onClick={() => void onDeleteSecret(record.id)}>Delete</button>
+            </span>
+          </div>
+        ))}
+        {!records.length ? <p className="secrets-empty muted">No secrets stored yet.</p> : null}
+      </div>
+    </SettingsSection>
+  );
+}
+
+function formatSecretUpdated(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: { copilotState: CopilotRuntimeState; isCopilotLoading: boolean; onRefreshCopilot: () => void; registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void; evaluationAgents: CustomEvaluationAgent[]; negativeRubricTechniques: string[]; onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void; onResetEvaluationAgents: () => void; onResetNegativeRubric: () => void; secretRecords: SecretRecord[]; secretSettings: SecretManagementSettings; onSaveSecret: (input: { name: string; value: string }) => Promise<string>; onDeleteSecret: (idOrRef: string) => Promise<void>; onSecretSettingsChange: (settings: SecretManagementSettings) => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -5043,6 +5370,14 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
           </article>
         </div>
       </SettingsSection>
+
+      <SecretsSettings
+        records={secretRecords}
+        settings={secretSettings}
+        onSaveSecret={onSaveSecret}
+        onDeleteSecret={onDeleteSecret}
+        onSettingsChange={onSecretSettingsChange}
+      />
 
       {copilotState.models.length > 0 && (
         <SettingsSection title={`GitHub Copilot models (${copilotState.models.length})`} defaultOpen={false} scrollBody>
@@ -6407,6 +6742,14 @@ function AgentBrowserApp() {
     isBrowserLocationContext,
     DEFAULT_BROWSER_LOCATION_CONTEXT,
   );
+  const secretsManager = useMemo(() => getDefaultSecretsManagerAgent(), []);
+  const [secretSettings, setSecretSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.secretManagementSettings,
+    isSecretManagementSettings,
+    DEFAULT_SECRET_MANAGEMENT_SETTINGS,
+  );
+  const [secretRecords, setSecretRecords] = useState<SecretRecord[]>([]);
   const evaluationAgentRegistry = useMemo(
     () => createEvaluationAgentRegistry(localStorageBackend, activeWorkspaceId),
     [activeWorkspaceId],
@@ -6472,11 +6815,35 @@ function AgentBrowserApp() {
     if (initialRootRef.current?.children) seedBrowserTabs(initialRootRef.current.children);
     return initial;
   });
+  const refreshSecretRecords = useCallback(async () => {
+    setSecretRecords(await secretsManager.listSecrets());
+  }, [secretsManager]);
+  const saveManualSecret = useCallback(async (input: { name: string; value: string }) => {
+    const ref = await secretsManager.storeSecret(input);
+    await refreshSecretRecords();
+    setToast({ msg: 'Secret added', type: 'success' });
+    return ref;
+  }, [refreshSecretRecords, secretsManager, setToast]);
+  const deleteManualSecret = useCallback(async (idOrRef: string) => {
+    await secretsManager.deleteSecret(idOrRef);
+    await refreshSecretRecords();
+    setToast({ msg: 'Secret deleted', type: 'info' });
+  }, [refreshSecretRecords, secretsManager, setToast]);
+  const updateSecretSettings = useCallback((next: SecretManagementSettings) => {
+    setSecretSettings(next);
+    if (localStorageBackend) {
+      saveJson(localStorageBackend, STORAGE_KEYS.secretManagementSettings, next);
+    }
+  }, [setSecretSettings]);
   const webMcpModelContext = useMemo(
     () => installModelContext(typeof window === 'undefined' ? undefined : window) ?? new ModelContext(),
     [],
   );
   const workspaceWebMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
+
+  useEffect(() => {
+    void refreshSecretRecords();
+  }, [refreshSecretRecords]);
 
   useEffect(() => {
     setEvaluationAgents(evaluationAgentRegistry.list());
@@ -8927,6 +9294,22 @@ function AgentBrowserApp() {
           fields: input.fields,
         };
       },
+      onRequestSecret: (input) => {
+        const requestId = `secret-${createUniqueId()}`;
+        const name = input.name?.trim() || 'API_KEY';
+        const prompt = input.prompt || `Create a secret named ${name}.`;
+        const detail: SecretRequestEventDetail = {
+          requestId,
+          name,
+          prompt,
+          reason: input.reason,
+        };
+        const result = new Promise<SecretRequestCreatedResult>((resolve) => {
+          pendingSecretRequestResolvers.set(requestId, resolve);
+        });
+        window.dispatchEvent(new CustomEvent<SecretRequestEventDetail>(SECRET_REQUEST_EVENT, { detail }));
+        return result;
+      },
       onSearchWeb: searchWebFromApi,
       onReadWebPage: readWebPageFromApi,
       sessionFsEntries: activeSessionFsEntries,
@@ -9050,7 +9433,7 @@ function AgentBrowserApp() {
     }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
-    if (activePanel === 'settings') return <SettingsPanel copilotState={copilotState} isCopilotLoading={isCopilotStateLoading} onRefreshCopilot={() => void refreshCopilotState(true)} registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} evaluationAgents={evaluationAgents} negativeRubricTechniques={negativeRubricTechniques} onSaveEvaluationAgents={saveEvaluationAgents} onResetEvaluationAgents={resetEvaluationAgents} onResetNegativeRubric={resetNegativeRubric} />;
+    if (activePanel === 'settings') return <SettingsPanel copilotState={copilotState} isCopilotLoading={isCopilotStateLoading} onRefreshCopilot={() => void refreshCopilotState(true)} registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} evaluationAgents={evaluationAgents} negativeRubricTechniques={negativeRubricTechniques} onSaveEvaluationAgents={saveEvaluationAgents} onResetEvaluationAgents={resetEvaluationAgents} onResetNegativeRubric={resetNegativeRubric} secretRecords={secretRecords} secretSettings={secretSettings} onSaveSecret={saveManualSecret} onDeleteSecret={deleteManualSecret} onSecretSettingsChange={updateSecretSettings} />;
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 
@@ -9227,10 +9610,12 @@ function AgentBrowserApp() {
                   [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),
                 }))}
                 onCopyToClipboard={writeToClipboard}
+                onSecretRecordsChanged={refreshSecretRecords}
                 bashBySessionRef={bashBySessionRef}
                 webMcpModelContext={webMcpModelContext}
                 browserLocationContext={browserLocationContext}
                 setBrowserLocationContext={setBrowserLocationContext}
+                secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 dragHandleProps={dragHandleProps}
               />

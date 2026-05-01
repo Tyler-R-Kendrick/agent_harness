@@ -7,26 +7,35 @@ import {
   set as idbSet,
 } from 'idb-keyval';
 import {
+  DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   MemorySecretStore,
   SECRET_REF_PREFIX,
   SecretsManagerAgent,
   containsSecretRef,
+  createSecretsManagerAgent as createCoreSecretsManagerAgent,
+  isSecretManagementSettings,
   isSecretRef,
+  normalizeSecretManagementSettings,
+  resetDefaultSecretsManagerAgentForTests as resetCoreDefaultSecretsManagerAgentForTests,
   secretRefForId,
+  type SecretManagementSettings,
   type SecretRecord,
   type SecretStore,
   type SecretsManagerOptions,
 } from 'harness-core';
 
 export {
+  DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   MemorySecretStore,
   SECRET_REF_PREFIX,
   SecretsManagerAgent,
   containsSecretRef,
+  isSecretManagementSettings,
   isSecretRef,
+  normalizeSecretManagementSettings,
   secretRefForId,
 };
-export type { SecretRecord, SecretStore, SecretsManagerOptions };
+export type { SecretManagementSettings, SecretRecord, SecretStore, SecretsManagerOptions };
 
 export const SECRETS_MANAGER_AGENT_ID = 'secrets-manager-agent';
 export const SECRETS_MANAGER_AGENT_LABEL = 'Secrets Manager';
@@ -70,7 +79,7 @@ export function createDefaultSecretStore(): SecretStore {
 let defaultSecretsManager: SecretsManagerAgent | null = null;
 
 export function createSecretsManagerAgent(options: SecretsManagerOptions = {}): SecretsManagerAgent {
-  return new SecretsManagerAgent({
+  return createCoreSecretsManagerAgent({
     ...options,
     store: options.store ?? createDefaultSecretStore(),
   });
@@ -79,6 +88,11 @@ export function createSecretsManagerAgent(options: SecretsManagerOptions = {}): 
 export function getDefaultSecretsManagerAgent(): SecretsManagerAgent {
   defaultSecretsManager ??= createSecretsManagerAgent();
   return defaultSecretsManager;
+}
+
+export function resetDefaultSecretsManagerAgentForTests(): void {
+  defaultSecretsManager = null;
+  resetCoreDefaultSecretsManagerAgentForTests();
 }
 
 export function wrapToolsForSecretResolution<T extends ToolSet>(tools: T, secrets: SecretsManagerAgent): T {

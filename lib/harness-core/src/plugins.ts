@@ -1,5 +1,6 @@
 import { buildAgentsPromptContext, type WorkspaceFile } from './agents.js';
 import { CommandRegistry } from './commands.js';
+import { createDefaultCommandRegistry } from './defaultCommands.js';
 import { HookRegistry } from './hooks.js';
 import { MemoryRegistry, type MemoryMessage } from './memory.js';
 import { ToolRegistry } from './tools.js';
@@ -61,7 +62,7 @@ export function createHarnessExtensionContext<
   const tools = new ToolRegistry();
   const context = {
     hooks: new HookRegistry<THookPayload>(),
-    commands: new CommandRegistry({ tools }),
+    commands: createDefaultCommandRegistry({ tools }),
     tools,
     memory: new MemoryRegistry<TMessage>(),
   } as Omit<HarnessExtensionContext<TMessage, THookPayload>, 'plugins'> & {

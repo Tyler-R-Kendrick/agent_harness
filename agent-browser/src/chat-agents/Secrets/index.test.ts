@@ -1,18 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   IndexedDbSecretStore,
   MemorySecretStore,
   containsSecretRef,
   createDefaultSecretStore,
   createSecretsManagerAgent,
   getDefaultSecretsManagerAgent,
+  isSecretManagementSettings,
   isSecretRef,
+  normalizeSecretManagementSettings,
+  resetDefaultSecretsManagerAgentForTests,
   secretRefForId,
   wrapToolsForSecretResolution,
 } from '.';
 
 describe('Secrets manager agent', () => {
   afterEach(() => {
+    resetDefaultSecretsManagerAgentForTests();
     vi.doUnmock('idb-keyval');
     vi.restoreAllMocks();
     vi.resetModules();
@@ -308,5 +313,142 @@ describe('Secrets manager agent', () => {
   it('can construct an IndexedDB store with an explicit namespace', () => {
     expect(new IndexedDbSecretStore('custom-secrets')).toBeInstanceOf(IndexedDbSecretStore);
     expect(secretRefForId('!!!')).toBe('secret-ref://local/secret');
+  });
+
+  it('stores manual name/secret pairs as refs and updates existing records without exposing values', async () => {
+    const agent = createSecretsManagerAgent({
+      store: new MemorySecretStore(),
+      now: () => '2026-04-30T00:00:00.000Z',
+    });
+
+    await expect(agent.storeSecret({
+      name: 'OPENWEATHER_API_KEY',
+      value: 'weather-key-value-1234567890',
+    })).resolves.toBe('secret-ref://local/openweather-api-key');
+    await expect(agent.storeSecret({
+      name: 'OPENWEATHER_API_KEY',
+      value: 'weather-key-value-0987654321',
+    })).resolves.toBe('secret-ref://local/openweather-api-key');
+
+    await expect(agent.listSecrets()).resolves.toEqual([expect.objectContaining({
+      id: 'openweather-api-key',
+      label: 'OPENWEATHER_API_KEY',
+      value: 'weather-key-value-0987654321',
+      source: 'manual',
+      createdAt: '2026-04-30T00:00:00.000Z',
+      updatedAt: '2026-04-30T00:00:00.000Z',
+    })]);
+
+    await expect(agent.deleteSecret('openweather-api-key')).resolves.toBeUndefined();
+    await expect(agent.listSecrets()).resolves.toEqual([]);
+  });
+
+  it('redacts an inclusive set of meaningful provider, transport, and credential formats', async () => {
+    const store = new MemorySecretStore();
+    let nextId = 0;
+    const agent = createSecretsManagerAgent({
+      store,
+      idFactory: ({ label }) => `${label}-${++nextId}`,
+      now: () => '2026-04-30T00:00:00.000Z',
+    });
+    const stripeLikeSecret = ['sk', 'live', '1234567890abcdefghijklmnopqrstuv'].join('_');
+    const samples = [
+      `STRIPE_SECRET_KEY=${stripeLikeSecret}`,
+      'SUPABASE_SERVICE_ROLE_KEY=eyJaaaaaaaaaaaa.bbbbbbbbbbbb.cccccccccccc',
+      'GOOGLE_API_KEY=AIzaSyA1234567890abcdefghijklmnopqrst',
+      'SENDGRID_API_KEY=SG.12345678901234567890.abcdefghijklmnopqrstuvwxyz',
+      'RESEND_API_KEY=re_1234567890abcdefghijklmnopqrstuv',
+      'HUGGING_FACE_TOKEN=hf_1234567890abcdefghijklmnopqrstuv',
+      'LINEAR_API_KEY=lin_api_1234567890abcdefghijklmnopqrstuv',
+      'VERCEL_TOKEN=vercel_1234567890abcdefghijklmnopqrstuv',
+      'aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+      'postgres://app_user:db-password-1234@db.example.com:5432/app',
+      'mongodb+srv://mongo_user:mongo-password-1234@cluster.example.com/app',
+      'mysql://mysql_user:mysql-password-1234@db.example.com:3306/app',
+      'https://service-user:service-password-1234@api.example.com/v1',
+      '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCfakeprivatekeymaterial1234567890\n-----END PRIVATE KEY-----',
+    ];
+
+    const result = await agent.sanitizeText(samples.join('\n'));
+
+    for (const sample of samples) {
+      const secretishPart = sample.includes('=')
+        ? sample.split('=').slice(1).join('=').trim()
+        : sample;
+      expect(result.text).not.toContain(secretishPart);
+    }
+    expect(result.refs.length).toBe(samples.length);
+    expect(result.refs.every(isSecretRef)).toBe(true);
+    await expect(store.list()).resolves.toHaveLength(samples.length);
+  });
+
+  it('uses contextual high-entropy fallback detection without treating ordinary ids as secrets', async () => {
+    const store = new MemorySecretStore();
+    const agent = createSecretsManagerAgent({
+      store,
+      idFactory: () => 'contextual-secret',
+      now: () => '2026-04-30T00:00:00.000Z',
+    });
+    const highEntropySecret = 'n9vK8xQp2LmR7sT4yZ0aBcDeFgHiJk';
+
+    const result = await agent.sanitizeText([
+      `The integration token is ${highEntropySecret}.`,
+      'The fallback token is aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.',
+      'Keep request id 018f7b7a-6c2d-7a99-a111-abcdefabcdef visible.',
+      'Keep commit abcdef1234567890abcdef1234567890abcdef12 visible.',
+    ].join('\n'));
+
+    expect(result.text).toContain('secret-ref://local/contextual-secret');
+    expect(result.text).not.toContain(highEntropySecret);
+    expect(result.text).toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(result.text).toContain('018f7b7a-6c2d-7a99-a111-abcdefabcdef');
+    expect(result.text).toContain('abcdef1234567890abcdef1234567890abcdef12');
+    await expect(store.list()).resolves.toHaveLength(1);
+  });
+
+  it('validates and normalizes secret management settings', () => {
+    expect(isSecretManagementSettings(null)).toBe(false);
+    expect(isSecretManagementSettings({
+      ...DEFAULT_SECRET_MANAGEMENT_SETTINGS,
+      detectKnownSecrets: 'yes',
+    })).toBe(false);
+    expect(isSecretManagementSettings(DEFAULT_SECRET_MANAGEMENT_SETTINGS)).toBe(true);
+    expect(normalizeSecretManagementSettings({
+      detectHighEntropySecrets: false,
+    })).toEqual({
+      ...DEFAULT_SECRET_MANAGEMENT_SETTINGS,
+      detectHighEntropySecrets: false,
+    });
+  });
+
+  it('honors sanitization settings for known patterns, stored values, and entropy fallback', async () => {
+    const store = new MemorySecretStore();
+    const agent = createSecretsManagerAgent({
+      store,
+      idFactory: ({ label }) => label,
+      now: () => '2026-04-30T00:00:00.000Z',
+    });
+    await agent.storeSecret({ name: 'MANUAL_SECRET', value: 'manual-secret-value' });
+    const text = 'manual-secret-value ghp_abcdefghijklmnopqrstuvwxyz123456 token is q1W2e3R4t5Y6u7I8o9P0a1S2d3F4g5H6';
+
+    await expect(agent.sanitizeText(text, {
+      enabled: true,
+      replaceStoredSecrets: false,
+      detectKnownSecrets: false,
+      detectGenericSecrets: false,
+      detectHighEntropySecrets: false,
+    })).resolves.toEqual({ text, refs: [] });
+
+    const storedOnly = await agent.sanitizeText(text, {
+      enabled: true,
+      replaceStoredSecrets: true,
+      detectKnownSecrets: false,
+      detectGenericSecrets: false,
+      detectHighEntropySecrets: false,
+    });
+
+    expect(storedOnly.text).toContain('secret-ref://local/manual-secret');
+    expect(storedOnly.text).toContain('ghp_abcdefghijklmnopqrstuvwxyz123456');
+    expect(storedOnly.text).toContain('q1W2e3R4t5Y6u7I8o9P0a1S2d3F4g5H6');
   });
 });
