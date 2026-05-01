@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
 Updated: 2026-04-30
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `T3 Code`
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
@@ -132,6 +132,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
 
+### 19. Agent-ready remote environments and trigger wiring
+- Common pattern: hosted agent systems are increasingly packaging reusable execution environments together with triggers from issue trackers, chat systems, and CI so automation can start from live business events instead of a local terminal.
+- Seen in: Warp Cloud Agents with reusable setup plus GitHub, Linear, Slack, scheduled runs, and GitHub Actions triggers; OpenAI Symphony isolated issue workspaces and workflow hooks are adjacent from the orchestration side.
+- Why it matters: reliable automation depends on reproducible remote environments and first-class launch wiring, not just a strong prompt in a developer laptop session.
+- One-shot build instruction:
+  - Build reusable remote execution environments for browser agents with repo bootstrap, secrets, and dependency setup captured once, then let users bind those environments to schedules, issue events, chat commands, and CI triggers with clear audit history and replayable launch parameters.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -147,7 +154,8 @@ Method: current-product research from first-party product pages, help centers, d
 11. Add a repo-owned workflow contract with live reload for browser-agent policy.
 12. Ship operator-visible orchestration telemetry for long-running agent queues.
 13. Expose `agent-browser` as an embeddable runtime via SDK and streaming protocol.
+14. Build reusable remote execution environments plus trigger wiring for browser-agent automations.
 
 ## Notes
-- This pass extends the earlier thirteen-harness corpus with `Pi` as a fourteenth competitor.
+- This pass extends the earlier fourteen-harness corpus with `Warp` as a fifteenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
