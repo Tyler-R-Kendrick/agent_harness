@@ -3,6 +3,7 @@ import type { ToolDescriptor } from '../tools';
 export interface WorkspaceSelfReflectionInventory {
   agents: string[];
   skills: string[];
+  tools: string[];
   plugins: string[];
   hooks: string[];
   memory: string[];
@@ -36,6 +37,7 @@ const SECTION_HEADINGS = [
   'AGENTS.md files',
   'Other AGENTS.md files',
   'Skills',
+  'Tools',
   'Plugins',
   'Hooks',
   'Workspace memory files loaded from .memory/',
@@ -112,6 +114,7 @@ export function extractWorkspaceSelfReflectionInventory(workspacePromptContext: 
   return {
     agents: collectBullets(workspacePromptContext, ['Active AGENTS.md', 'AGENTS.md files', 'Other AGENTS.md files']),
     skills: collectBullets(workspacePromptContext, ['Skills']),
+    tools: collectBullets(workspacePromptContext, ['Tools']),
     plugins: collectBullets(workspacePromptContext, ['Plugins']),
     hooks: collectBullets(workspacePromptContext, ['Hooks']),
     memory: collectBullets(workspacePromptContext, ['Workspace memory files loaded from .memory/']),
@@ -131,13 +134,14 @@ function formatNamedLines(label: string, values: readonly string[], emptyText: s
 function formatWorkspaceCapabilityLines(inventory: WorkspaceSelfReflectionInventory): string[] {
   const hasWorkspaceCapabilities = inventory.agents.length
     || inventory.skills.length
+    || inventory.tools.length
     || inventory.plugins.length
     || inventory.hooks.length;
 
   if (!hasWorkspaceCapabilities) {
     return [
       'Registered workspace capabilities:',
-      '- No workspace skills, plugins, or hooks are currently registered in the loaded workspace context.',
+      '- No workspace skills, tools, plugins, or hooks are currently registered in the loaded workspace context.',
     ];
   }
 
@@ -145,6 +149,7 @@ function formatWorkspaceCapabilityLines(inventory: WorkspaceSelfReflectionInvent
     'Registered workspace capabilities:',
     ...formatNamedLines('Active AGENTS.md', inventory.agents, 'none'),
     ...formatNamedLines('Skills', inventory.skills, 'none'),
+    ...formatNamedLines('Tools', inventory.tools, 'none'),
     ...formatNamedLines('Plugins', inventory.plugins, 'none'),
     ...formatNamedLines('Hooks', inventory.hooks, 'none'),
   ];
@@ -204,6 +209,7 @@ export function evaluateSelfReflectionAnswer({
   const inventory = extractWorkspaceSelfReflectionInventory(workspacePromptContext);
   const hasWorkspaceCapabilities = inventory.agents.length
     || inventory.skills.length
+    || inventory.tools.length
     || inventory.plugins.length
     || inventory.hooks.length;
   const assertions: SelfReflectionAssertion[] = [
@@ -222,9 +228,9 @@ export function evaluateSelfReflectionAnswer({
     makeAssertion(
       'mentions-workspace-capabilities',
       hasWorkspaceCapabilities
-        ? [...inventory.agents, ...inventory.skills, ...inventory.plugins, ...inventory.hooks]
+        ? [...inventory.agents, ...inventory.skills, ...inventory.tools, ...inventory.plugins, ...inventory.hooks]
           .every((item) => answer.includes(item))
-        : answer.includes('No workspace skills, plugins, or hooks are currently registered'),
+        : answer.includes('No workspace skills, tools, plugins, or hooks are currently registered'),
       answer,
     ),
   ];
