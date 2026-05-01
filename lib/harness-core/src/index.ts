@@ -11,6 +11,40 @@ export {
   type HarnessTurnContext,
   type HarnessTurnRunner,
 } from './agent.js';
+export {
+  constrainToJsonSchema,
+  constrainToLarkGrammar,
+  constrainToToon,
+  constrainToZod,
+  createGuidanceTsInferenceClient,
+  decodeConstrainedOutput,
+  guidanceConnectionString,
+  toGuidanceTsGrammar,
+  type ConstrainedDecoding,
+  type CoreInferenceClient,
+  type CoreInferenceOptions,
+  type CoreMessage,
+  type GuidanceGrammarInput,
+  type GuidanceServerSettings,
+  type GuidanceSerializedGrammar,
+  type GuidanceTsGrammar,
+  type GuidanceTsInferenceClientOptions,
+  type JsonSchema,
+  type JsonSchemaConstrainedDecoding,
+  type LarkConstrainedDecoding,
+  type ToonConstrainedDecoding,
+  type ZodConstrainedDecoding,
+  type ZodLikeSchema,
+} from './constrainedDecoding.js';
+export {
+  TOON_GRAMMAR_SOURCE_PACKAGE,
+  TOON_LARK_GRAMMAR,
+  buildToonGrammar,
+  buildToonLarkGrammar,
+  buildToonLlGuidanceGrammar,
+  decodeToonDocument,
+  type ToonGrammarBuild,
+} from './toonGrammar.js';
 export { PendingMessageQueue, type QueueMode } from './queue.js';
 export {
   buildAgentsPromptContext,

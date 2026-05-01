@@ -1,10 +1,11 @@
 import { LogActAgent, QuorumPolicy } from 'logact';
 import { resolveAgentBus } from './agentBus.js';
 import { runActorWorkflow } from './actorWorkflow.js';
-import { resolveLogActInput } from './memory.js';
 import { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 import { wrapVoterWithCallbacks } from './chat-agents/voter.js';
+import type { CoreInferenceClient } from './constrainedDecoding.js';
 import type { CoreAgentLoopCallbacks, LogActAgentLoopOptions } from './logactLoopTypes.js';
+import { resolveLogActInput } from './memory.js';
 
 export { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 export { wrapVoterWithCallbacks } from './chat-agents/voter.js';
@@ -28,10 +29,17 @@ export async function runLogActAgentLoop(
     quorumPolicy = voters.length > 0 ? QuorumPolicy.BooleanAnd : QuorumPolicy.OnByDefault,
     completionChecker,
     executor,
+    constrainedDecoding,
   }: LogActAgentLoopOptions,
   callbacks: CoreAgentLoopCallbacks,
 ): Promise<void> {
   const agentBus = resolveAgentBus(bus);
+  const driverInferenceClient: CoreInferenceClient = constrainedDecoding
+    ? {
+        infer: (inferenceMessages, inferenceOptions) =>
+          inferenceClient.infer(inferenceMessages, { ...inferenceOptions, constrainedDecoding }),
+    }
+    : inferenceClient;
 
   await runActorWorkflow({
     actorId: 'logact-loop',
@@ -40,7 +48,7 @@ export async function runLogActAgentLoop(
     run: async ({ input: resolvedInput }) => {
       const agent = new LogActAgent({
         bus: agentBus,
-        inferenceClient,
+        inferenceClient: driverInferenceClient,
         voters: voters.map((voter) => wrapVoterWithCallbacks(voter, callbacks)),
         ...(executor ? { executor } : {}),
         completionChecker: completionChecker
