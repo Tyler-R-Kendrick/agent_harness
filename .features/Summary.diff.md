@@ -1,65 +1,65 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-04-30
-Baseline: `.features/Summary.md` updated from the 2026-04-30 twelve-harness corpus.
-Diff type: additive update after OpenAI Symphony research
+Baseline: `.features/Summary.md` updated from the 2026-04-30 thirteen-harness corpus.
+Diff type: additive update after Pi research
 
 ## Net new normalized features
 
-### Expanded: Parallel agent orchestration
-- Why now: OpenAI Symphony reframes orchestration around the issue tracker itself, where each eligible Linear issue gets its own continuously managed agent run instead of requiring humans to juggle session tabs and terminals.
+### Added: Expose browser agents as embeddable runtimes
+- Why now: Pi treats the harness as a reusable runtime, not just a human-facing CLI, with interactive, print/JSON, JSON-RPC, and SDK modes all documented from the main product surface.
 - Research delta:
-  - the April 27, 2026 OpenAI announcement says every open task gets an agent and the system restarts agents that crash or stall
-  - the spec requires bounded concurrency, issue eligibility checks, reconciliation, and blocker-aware dispatch
-  - the orchestrator continues work until a workflow-defined handoff state is reached, not just until one prompt finishes
+  - the Pi README says the coding harness runs in interactive, print or JSON, RPC, and SDK modes
+  - the RPC docs define a real protocol with command IDs, streaming events, and strict JSONL framing over stdin/stdout
+  - the SDK path is explicit enough that the docs recommend in-process `AgentSession` usage for Node.js instead of always spawning a subprocess
 
-### Expanded: Git/PR-native execution
-- Why now: Symphony raises the bar from plain diffs to proof-of-work review packets and merge shepherding.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: Pi pushes packaging farther than most harnesses by letting prompt templates, skills, extensions, and themes travel together as installable Pi Packages from npm, git, GitHub URLs, or local paths.
 - Research delta:
-  - the repo README says agents return CI status, PR review feedback, complexity analysis, and walkthrough videos
-  - the announcement says Symphony watches CI, rebases when needed, resolves conflicts, retries flaky checks, and shepherds work through the landing pipeline
+  - package docs show global, project, and one-run ephemeral install flows
+  - project package settings can be shared with a team and auto-install on startup
+  - extensions can alter not just tools but large parts of the terminal UI and command surface
 
-### Added: Turn the issue tracker into the browser-agent control plane
-- Why now: Symphony makes the project board itself the primary operator surface, which is a materially different UX from launching browser-agent jobs manually.
-- Linear issue title:
-  - `Use Linear as the browser-agent control plane`
-- Suggested problem statement:
-  - Browser-agent work is still launched and supervised session by session, which does not scale once a team wants multiple concurrent implementation runs across a backlog.
-- One-shot instruction for an LLM:
-  - Design and implement a tracker-native orchestration mode that polls eligible Linear issues, creates or reuses isolated browser-agent workspaces per issue, respects blocker dependencies and workflow-defined handoff states, restarts stalled runs, and exposes board-linked status back to operators.
-
-### Added: Add a repo-owned workflow contract with live reload
-- Why now: Symphony's `WORKFLOW.md` contract shows a clean way to version prompt policy, hooks, and runtime settings directly with the codebase.
-- Linear issue title:
-  - `Add live reloading workflow contracts for browser agents`
-- Suggested problem statement:
-  - Browser-agent runtime policy is still too fragmented across local config, prompts, and code, which makes it hard for teams to version, review, and safely update shared behavior.
-- One-shot instruction for an LLM:
-  - Build a repository-owned workflow contract file for browser agents with YAML front matter plus markdown prompt body, covering tracker integration, workspace hooks, concurrency, tool settings, and prompt policy, then implement strict validation, live reload, last-known-good fallback, and operator-visible error reporting.
-
-### Added: Ship orchestration telemetry and operator APIs
-- Why now: Symphony already treats dashboards and JSON debug endpoints as first-class operating tools for a long-running harness.
-- Linear issue title:
-  - `Expose browser-agent orchestration telemetry`
-- Suggested problem statement:
-  - Long-running browser-agent queues are hard to trust when operators cannot inspect live session state, retry queues, or issue-specific debugging details without digging through raw logs.
-- One-shot instruction for an LLM:
-  - Implement an operator telemetry surface for browser-agent orchestration with structured logs, a queue/session dashboard, issue-scoped debug views, and a read-mostly JSON API for current state plus manual refresh triggers.
-
-### Added: Automate proof-of-work review packets
-- Why now: Symphony treats review packets as a primary deliverable, not just an internal implementation detail.
-- Linear issue title:
-  - `Generate proof-of-work packets for browser-agent runs`
-- Suggested problem statement:
-  - Browser-agent changes still require humans to assemble validation evidence manually, which slows review and reduces trust in autonomous execution.
-- One-shot instruction for an LLM:
-  - Build a proof-of-work packet generator for browser-agent tasks that assembles CI status, validation output, diff summaries, screenshots or walkthrough media, and review notes into a structured handoff artifact ready for PR review or human approval.
-
-### Expanded: External tool connectivity and actionability
-- Why now: Symphony demonstrates a clean orchestrator boundary where tracker mutations live in agent tools rather than in scheduler business logic.
+### Expanded: Persistent memory plus project instructions
+- Why now: Pi sharpens the repo-instruction pattern by treating `AGENTS.md` or `CLAUDE.md` loading and system-prompt layering as a documented contract, while also adding a clean-room escape hatch.
 - Research delta:
-  - the spec defines `linear_graphql` as the current standardized optional client-side tool
-  - ticket comments, state changes, and PR metadata are meant to stay in the agent toolchain while the orchestrator remains a scheduler/runner
+  - Pi loads global, parent-directory, and current-directory context files automatically
+  - `.pi/SYSTEM.md` and `APPEND_SYSTEM.md` let projects replace or append to the system prompt
+  - recent releases added `--no-context-files` for deliberately bypassing inherited guidance
+
+### Expanded: Shareable sessions and debug handoff
+- Why now: Pi combines private gist-based HTML sharing with a public workflow for publishing real OSS coding sessions to Hugging Face.
+- Research delta:
+  - `/export` writes HTML artifacts and `/share` publishes a private gist-backed share link
+  - the README explicitly asks users to publish real open-source sessions to improve models, tools, prompts, and evals
+  - recent release notes include export-safety fixes, showing the artifact path is actively maintained
+
+### Added: Ship a typed SDK plus JSON-RPC surface for `agent-browser`
+- Why now: Browser agents are still mostly trapped inside their own first-party UI, which makes it harder to reuse the same runtime in editors, dashboards, and orchestrators.
+- Linear issue title:
+  - `Expose agent-browser via SDK and JSON-RPC`
+- Suggested problem statement:
+  - `agent-browser` is still too tied to its own UI and process model, which blocks other product surfaces from embedding the same session, tool, and artifact lifecycle directly.
+- One-shot instruction for an LLM:
+  - Design and implement a reusable runtime layer for `agent-browser` with a typed in-process SDK plus a documented JSON-RPC or JSONL streaming protocol for subprocess clients, including request correlation, event streaming, session persistence hooks, and examples for embedding the harness in another app.
+
+### Added: Version installable browser-agent workflow packs
+- Why now: Pi treats installable packages as the main way to transport prompts, skills, themes, and extensions between projects and teams.
+- Linear issue title:
+  - `Create installable workflow packs for agent-browser`
+- Suggested problem statement:
+  - Repeatable browser-agent workflows still depend too much on local prompts and ad hoc scripts, which makes team reuse and governed rollout difficult.
+- One-shot instruction for an LLM:
+  - Build an installable workflow-pack format for `agent-browser` that can bundle prompts, skills, tool permissions, UI affordances, and optional scripts, support local and remote package sources, allow project-scoped auto-install, and expose clear enable-disable controls for teams.
+
+### Added: Add branch-aware compaction and session-tree navigation
+- Why now: Pi treats long-running sessions as tree-structured state with explicit compaction and revisitable history instead of a flat transcript that only grows until it breaks.
+- Linear issue title:
+  - `Add session trees and branch-aware compaction`
+- Suggested problem statement:
+  - Long browser-agent runs become hard to steer or resume once the transcript grows, and alternative branches are difficult to compare without forking external artifacts by hand.
+- One-shot instruction for an LLM:
+  - Implement tree-structured session history for `agent-browser` with labeled branch points, resumable forks, lossy compaction with preserved raw history, and a UI for revisiting or continuing from earlier checkpoints without losing later branches.
 
 ## How to use this file
 
@@ -70,7 +70,6 @@ Diff type: additive update after OpenAI Symphony research
 
 ## Recommended next Linear batch
 
-1. `Use Linear as the browser-agent control plane`
-2. `Add live reloading workflow contracts for browser agents`
-3. `Expose browser-agent orchestration telemetry`
-4. `Generate proof-of-work packets for browser-agent runs`
+1. `Expose agent-browser via SDK and JSON-RPC`
+2. `Create installable workflow packs for agent-browser`
+3. `Add session trees and branch-aware compaction`
