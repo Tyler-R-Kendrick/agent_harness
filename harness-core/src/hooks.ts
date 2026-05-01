@@ -1,16 +1,26 @@
 export type HarnessHookKind = 'deterministic' | 'inference';
 export type HarnessHookMode = 'middleware' | 'pipe';
+export type HarnessHookFormat = 'code' | 'semantic';
+export type HarnessHookEventType = 'llm' | 'agent' | 'harness' | 'system';
 export type HarnessHookPoint = string;
+
+export interface HarnessHookEventDescriptor {
+  type: HarnessHookEventType;
+  name: string;
+}
 
 export interface HarnessHookEvent<TPayload> {
   point: HarnessHookPoint;
+  event?: HarnessHookEventDescriptor;
   payload: TPayload;
   metadata: Record<string, unknown>;
   signal?: AbortSignal;
+  semantic?: HarnessSemanticHook;
 }
 
 export interface HarnessHookResult<TPayload> {
   payload?: TPayload;
+  pass?: boolean;
   cancel?: boolean;
   bubble?: boolean;
   stop?: boolean;
@@ -25,7 +35,10 @@ export type HarnessHookRunner<TPayload> = (
 export interface HarnessHook<TPayload = unknown> {
   id: string;
   point: HarnessHookPoint;
+  event?: HarnessHookEventDescriptor;
   kind: HarnessHookKind;
+  format?: HarnessHookFormat;
+  prompt?: string;
   mode?: HarnessHookMode;
   priority?: number;
   run: HarnessHookRunner<TPayload>;
@@ -41,6 +54,11 @@ export interface HarnessHookOutput {
   output: unknown;
 }
 
+export interface HarnessHookPolicyFailure {
+  hookId: string;
+  reason?: string;
+}
+
 export interface HarnessHookRunResult<TPayload> {
   payload: TPayload;
   stopped: boolean;
@@ -51,6 +69,8 @@ export interface HarnessHookRunResult<TPayload> {
 export interface HarnessHookMiddlewareRunResult<TPayload> {
   payload: TPayload;
   outputs: HarnessHookOutput[];
+  passed?: boolean;
+  failures?: HarnessHookPolicyFailure[];
 }
 
 export interface HarnessHookPipeRunResult<TPayload> extends HarnessHookRunResult<TPayload> {
@@ -62,6 +82,82 @@ type RegisteredHook = {
   hook: HarnessHook<unknown>;
   order: number;
 };
+
+export const LLM_HOOK_EVENTS = {
+  input: { type: 'llm', name: 'input' },
+  toolCall: { type: 'llm', name: 'tool-call' },
+  output: { type: 'llm', name: 'output' },
+} as const satisfies Record<string, HarnessHookEventDescriptor>;
+
+export const AGENT_LOOP_HOOK_EVENTS = {
+  loopStart: { type: 'harness', name: 'loop.start' },
+  loopEnd: { type: 'harness', name: 'loop.end' },
+  turnStart: { type: 'agent', name: 'turn.start' },
+  turnEnd: { type: 'agent', name: 'turn.end' },
+  messageStart: { type: 'agent', name: 'message.start' },
+  messageEnd: { type: 'agent', name: 'message.end' },
+  contextInput: { type: 'agent', name: 'context.input' },
+  contextOutput: { type: 'agent', name: 'context.output' },
+  steeringMessages: { type: 'agent', name: 'queue.steering' },
+  followUpMessages: { type: 'agent', name: 'queue.follow-up' },
+} as const satisfies Record<string, HarnessHookEventDescriptor>;
+
+export const ACTOR_WORKFLOW_HOOK_EVENTS = {
+  started: { type: 'agent', name: 'actor.workflow.started' },
+  input: { type: 'agent', name: 'actor.workflow.input' },
+  output: { type: 'agent', name: 'actor.workflow.output' },
+  completed: { type: 'agent', name: 'actor.workflow.completed' },
+  failed: { type: 'agent', name: 'actor.workflow.failed' },
+} as const satisfies Record<string, HarnessHookEventDescriptor>;
+
+export const AGENT_BUS_HOOK_EVENTS = {
+  append: { type: 'agent', name: 'bus.append' },
+  appendResult: { type: 'agent', name: 'bus.append.result' },
+  read: { type: 'agent', name: 'bus.read' },
+  readResult: { type: 'agent', name: 'bus.read.result' },
+  tail: { type: 'agent', name: 'bus.tail' },
+  tailResult: { type: 'agent', name: 'bus.tail.result' },
+  poll: { type: 'agent', name: 'bus.poll' },
+  pollResult: { type: 'agent', name: 'bus.poll.result' },
+} as const satisfies Record<string, HarnessHookEventDescriptor>;
+
+export const LOGACT_AGENT_LOOP_HOOK_EVENTS = {
+  loopStart: { type: 'agent', name: 'logact.loop.start' },
+  loopEnd: { type: 'agent', name: 'logact.loop.end' },
+  workflowStart: { type: 'agent', name: 'logact.workflow.start' },
+  workflowSnapshot: { type: 'agent', name: 'logact.workflow.snapshot' },
+  triggerInput: { type: 'agent', name: 'logact.trigger.input' },
+  triggerOutput: { type: 'agent', name: 'logact.trigger.output' },
+  driverInput: { type: 'llm', name: 'logact.driver.input' },
+  driverOutput: { type: 'llm', name: 'logact.driver.output' },
+  voterInput: { type: 'agent', name: 'logact.voter.input' },
+  voterOutput: { type: 'agent', name: 'logact.voter.output' },
+  deciderInput: { type: 'agent', name: 'logact.decider.input' },
+  deciderOutput: { type: 'agent', name: 'logact.decider.output' },
+  executorInput: { type: 'llm', name: 'logact.executor.input' },
+  executorOutput: { type: 'llm', name: 'logact.executor.output' },
+  completionInput: { type: 'agent', name: 'logact.completion.input' },
+  completionOutput: { type: 'agent', name: 'logact.completion.output' },
+} as const satisfies Record<string, HarnessHookEventDescriptor>;
+
+export interface HarnessSemanticHook {
+  prompt: string;
+}
+
+export class HarnessHookPolicyError extends Error {
+  constructor(
+    message: string,
+    public readonly failures: HarnessHookPolicyFailure[],
+    public readonly outputs: HarnessHookOutput[],
+  ) {
+    super(message);
+    this.name = 'HarnessHookPolicyError';
+  }
+}
+
+export function hookPointForEvent(event: HarnessHookEventDescriptor): HarnessHookPoint {
+  return `${event.type}:${event.name}`;
+}
 
 export class HookRegistry<TPayload = unknown> {
   private readonly hooks = new Map<string, RegisteredHook>();
@@ -105,24 +201,60 @@ export class HookRegistry<TPayload = unknown> {
       .map((entry) => entry.hook as HarnessHook<TSpecificPayload>);
   }
 
+  forEvent<TSpecificPayload = TPayload>(
+    event: HarnessHookEventDescriptor,
+    mode?: HarnessHookMode,
+  ): HarnessHook<TSpecificPayload>[] {
+    return this.forPoint<TSpecificPayload>(hookPointForEvent(event), mode);
+  }
+
   async runMiddleware<TSpecificPayload = TPayload>(
     point: HarnessHookPoint,
     payload: TSpecificPayload,
     options: HarnessHookRunOptions = {},
+  ): Promise<HarnessHookMiddlewareRunResult<TSpecificPayload>> {
+    return this.runMiddlewareInternal(point, payload, options);
+  }
+
+  async runMiddlewareForEvent<TSpecificPayload = TPayload>(
+    event: HarnessHookEventDescriptor,
+    payload: TSpecificPayload,
+    options: HarnessHookRunOptions = {},
+  ): Promise<HarnessHookMiddlewareRunResult<TSpecificPayload>> {
+    return this.runMiddlewareInternal(hookPointForEvent(event), payload, options, event);
+  }
+
+  private async runMiddlewareInternal<TSpecificPayload>(
+    point: HarnessHookPoint,
+    payload: TSpecificPayload,
+    options: HarnessHookRunOptions,
+    event?: HarnessHookEventDescriptor,
   ): Promise<HarnessHookMiddlewareRunResult<TSpecificPayload>> {
     const metadata = options.metadata ?? {};
     const results = await Promise.all(this.forPoint<TSpecificPayload>(point, 'middleware').map(async (hook) => ({
       hook,
       result: await hook.run({
         point,
+        event: event ?? hook.event,
         payload,
         metadata,
         signal: options.signal,
+        semantic: semanticForHook(hook),
       }),
     })));
     const outputs = results
       .filter(({ result }) => result && Object.prototype.hasOwnProperty.call(result, 'output'))
       .map(({ hook, result }) => ({ hookId: hook.id, output: result?.output }));
+    const failures = results
+      .filter(({ result }) => result?.pass === false || result?.cancel || result?.stop)
+      .map(({ hook, result }) => ({
+        hookId: hook.id,
+        ...(result?.reason === undefined ? {} : { reason: result.reason }),
+      }));
+
+    if (failures.length > 0) {
+      return { payload, outputs, passed: false, failures };
+    }
 
     return { payload, outputs };
   }
@@ -132,6 +264,23 @@ export class HookRegistry<TPayload = unknown> {
     payload: TSpecificPayload,
     options: HarnessHookRunOptions = {},
   ): Promise<HarnessHookPipeRunResult<TSpecificPayload>> {
+    return this.runPipesInternal(point, payload, options);
+  }
+
+  async runPipesForEvent<TSpecificPayload = TPayload>(
+    event: HarnessHookEventDescriptor,
+    payload: TSpecificPayload,
+    options: HarnessHookRunOptions = {},
+  ): Promise<HarnessHookPipeRunResult<TSpecificPayload>> {
+    return this.runPipesInternal(hookPointForEvent(event), payload, options, event);
+  }
+
+  private async runPipesInternal<TSpecificPayload>(
+    point: HarnessHookPoint,
+    payload: TSpecificPayload,
+    options: HarnessHookRunOptions,
+    event?: HarnessHookEventDescriptor,
+  ): Promise<HarnessHookPipeRunResult<TSpecificPayload>> {
     let currentPayload = payload;
     const outputs: HarnessHookOutput[] = [];
     const metadata = options.metadata ?? {};
@@ -139,9 +288,11 @@ export class HookRegistry<TPayload = unknown> {
     for (const hook of this.forPoint<TSpecificPayload>(point, 'pipe')) {
       const result = await hook.run({
         point,
+        event: event ?? hook.event,
         payload: currentPayload,
         metadata,
         signal: options.signal,
+        semantic: semanticForHook(hook),
       });
       if (!result) continue;
       if (result.payload !== undefined) currentPayload = result.payload;
@@ -175,6 +326,9 @@ export class HookRegistry<TPayload = unknown> {
     options: HarnessHookRunOptions = {},
   ): Promise<HarnessHookRunResult<TSpecificPayload>> {
     const middleware = await this.runMiddleware(point, payload, options);
+    if (middleware.failures && middleware.failures.length > 0) {
+      throw new HarnessHookPolicyError('One or more middleware hooks denied propagation.', middleware.failures, middleware.outputs);
+    }
     const pipes = await this.runPipes(point, payload, options);
     const result = {
       payload: pipes.payload,
@@ -183,6 +337,69 @@ export class HookRegistry<TPayload = unknown> {
     };
     return pipes.reason === undefined ? result : { ...result, reason: pipes.reason };
   }
+
+  async runEvent<TSpecificPayload = TPayload>(
+    event: HarnessHookEventDescriptor,
+    payload: TSpecificPayload,
+    options: HarnessHookRunOptions = {},
+  ): Promise<HarnessHookRunResult<TSpecificPayload>> {
+    const middleware = await this.runMiddlewareForEvent(event, payload, options);
+    if (middleware.failures && middleware.failures.length > 0) {
+      throw new HarnessHookPolicyError('One or more middleware hooks denied propagation.', middleware.failures, middleware.outputs);
+    }
+    const pipes = await this.runPipesForEvent(event, payload, options);
+    const result = {
+      payload: pipes.payload,
+      stopped: pipes.stopped,
+      outputs: [...middleware.outputs, ...pipes.outputs],
+    };
+    return pipes.reason === undefined ? result : { ...result, reason: pipes.reason };
+  }
+}
+
+export function createCodeHook<TPayload>({
+  event,
+  point,
+  ...hook
+}: Omit<HarnessHook<TPayload>, 'kind' | 'point' | 'format'> & {
+  event?: HarnessHookEventDescriptor;
+  point?: HarnessHookPoint;
+}): HarnessHook<TPayload> {
+  const hookPoint = point ?? (event ? hookPointForEvent(event) : undefined);
+  if (!hookPoint) {
+    throw new Error('Code hooks require either an event or point.');
+  }
+  return {
+    ...hook,
+    point: hookPoint,
+    ...(event !== undefined ? { event } : {}),
+    kind: 'deterministic',
+    format: 'code',
+  };
+}
+
+export function createSemanticHook<TPayload>({
+  event,
+  point,
+  prompt,
+  ...hook
+}: Omit<HarnessHook<TPayload>, 'kind' | 'point' | 'format' | 'prompt'> & {
+  event?: HarnessHookEventDescriptor;
+  point?: HarnessHookPoint;
+  prompt: string;
+}): HarnessHook<TPayload> {
+  const hookPoint = point ?? (event ? hookPointForEvent(event) : undefined);
+  if (!hookPoint) {
+    throw new Error('Semantic hooks require either an event or point.');
+  }
+  return {
+    ...hook,
+    point: hookPoint,
+    ...(event !== undefined ? { event } : {}),
+    kind: 'inference',
+    format: 'semantic',
+    prompt,
+  };
 }
 
 export function createInferenceHook<TPayload>({
@@ -206,4 +423,10 @@ export function createInferenceHook<TPayload>({
       return payload === undefined ? undefined : { payload };
     },
   };
+}
+
+function semanticForHook<TPayload>(hook: HarnessHook<TPayload>): HarnessSemanticHook | undefined {
+  return hook.format === 'semantic' && hook.prompt !== undefined
+    ? { prompt: hook.prompt }
+    : undefined;
 }

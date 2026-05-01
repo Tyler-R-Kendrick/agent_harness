@@ -89,13 +89,14 @@ export function createAgentRuntime<
   artifacts,
 }: CreateAgentRuntimeOptions<TInput, TOutput, TMessage, THookPayload>): AgentRuntime<TInput, TOutput, TMessage, THookPayload> {
   const resolvedTools = tools ?? new ToolRegistry();
+  const resolvedHooks = hooks ?? new HookRegistry<THookPayload>();
   const resolvedStorage = storage === undefined
     ? artifacts?.storage ?? resolveHarnessStorage()
     : resolveHarnessStorage(storage);
   const resolvedArtifacts = artifacts ?? new ArtifactRegistry({ storage: resolvedStorage });
   const components: BaseAgentComponents<TMessage, THookPayload> = {
-    bus: resolveAgentBus(bus),
-    hooks: hooks ?? new HookRegistry<THookPayload>(),
+    bus: resolveAgentBus(bus, { hooks: resolvedHooks as HookRegistry }),
+    hooks: resolvedHooks,
     memory: memory ?? new MemoryRegistry<TMessage>(),
     tools: resolvedTools,
     commands: commands ?? createDefaultCommandRegistry({ tools: resolvedTools }),
@@ -112,6 +113,7 @@ export function createAgentRuntime<
     input,
     bus: components.bus,
     signal: options.signal,
+    hooks: components.hooks as HookRegistry,
     run: async ({ parentActorId, signal }) => {
       await appendAgentEvent(components.bus, {
         eventType: 'agent.instructions',

@@ -8,6 +8,7 @@ import type {
 } from 'logact';
 import type { ConstrainedDecoding, CoreInferenceClient } from './constrainedDecoding.js';
 import type { AgentSessionRef } from './agent.js';
+import type { HookRegistry } from './hooks.js';
 
 export type CoreStepStatus = 'active' | 'done';
 
@@ -58,4 +59,5 @@ export interface LogActAgentLoopOptions {
   executor?: IExecutor;
   constrainedDecoding?: ConstrainedDecoding;
   session?: AgentSessionRef;
+  hooks?: HookRegistry;
 }
