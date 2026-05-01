@@ -71,3 +71,41 @@ Lark, TOON, or a serialized guidance grammar. TOON support is built by
 `buildToonGrammar()`/`buildToonLlGuidanceGrammar()`, which load the
 `@toon-format/toon` package surface and expose a reusable Lark grammar
 representation for llguidance.
+
+## Config-backed model providers
+
+`harness-core` owns the custom provider catalog contract so apps can load model
+providers from JSON, local storage, or any other runtime config source without
+recompiling TypeScript.
+
+```ts
+import {
+  createConfiguredModel,
+  defineModelProviderCatalog,
+} from 'harness-core';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+
+const catalog = defineModelProviderCatalog({
+  activeModel: 'lmstudio:qwen3',
+  providers: [
+    {
+      id: 'lmstudio',
+      kind: 'openai-compatible',
+      baseURL: 'http://127.0.0.1:1234/v1',
+      apiKeyEnvVar: 'LMSTUDIO_API_KEY',
+      models: ['qwen3'],
+    },
+  ],
+});
+
+const model = createConfiguredModel(
+  catalog,
+  undefined,
+  { openAICompatible: createOpenAICompatible },
+  { getSecret: (name) => process.env[name] },
+);
+```
+
+Provider refs use `provider:model` syntax, so model ids may still contain `/`.
+`apiKeyEnvVar` and header values such as `Bearer ${env:OPENROUTER_API_KEY}` are
+resolved by the host app through the supplied `getSecret` callback.

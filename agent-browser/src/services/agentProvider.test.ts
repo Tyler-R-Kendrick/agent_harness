@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { LanguageModel } from 'ai';
+import type { OpenAICompatibleProviderOptions } from 'harness-core';
 
 // Mock the gateway module before importing agentProvider
 vi.mock('@ai-sdk/gateway', () => {
@@ -16,12 +18,32 @@ vi.mock('@ai-sdk/gateway', () => {
   };
 });
 
+vi.mock('@ai-sdk/openai-compatible', () => ({
+  createOpenAICompatible: vi.fn((options) => ({
+    chatModel: vi.fn((modelId: string) => ({
+      specificationVersion: 'v3' as const,
+      provider: options.name,
+      modelId,
+      supportedUrls: {},
+      doGenerate: vi.fn(),
+      doStream: vi.fn(),
+      options,
+    })),
+  })),
+}));
+
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import {
   resolveLanguageModel,
   createAutoProvider,
   getModelCapabilities,
   type AgentModelConfig,
 } from './agentProvider';
+import { defineModelProviderCatalog } from 'harness-core';
+
+type FakeCustomLanguageModel = LanguageModel & {
+  options: OpenAICompatibleProviderOptions;
+};
 
 // ── resolveLanguageModel ──────────────────────────────────────────────────────
 
@@ -55,6 +77,81 @@ describe('resolveLanguageModel', () => {
     expect(model.provider).toBe('local');
     expect(model.modelId).toBe('onnx-community/Qwen3-0.6B-ONNX');
     expect(model.specificationVersion).toBe('v3');
+  });
+
+  it('returns an injected OpenAI-compatible LanguageModel for config-backed custom providers', () => {
+    const catalog = defineModelProviderCatalog({
+      providers: [
+        {
+          id: 'openrouter',
+          kind: 'openai-compatible',
+          baseURL: 'https://openrouter.ai/api/v1/',
+          apiKeyEnvVar: 'OPENROUTER_API_KEY',
+          headers: { 'HTTP-Referer': 'https://harness.local' },
+          models: ['deepseek/deepseek-chat'],
+        },
+      ],
+    });
+    const factory = vi.fn((options: OpenAICompatibleProviderOptions) => ({
+      chatModel: vi.fn((modelId: string) => ({
+        specificationVersion: 'v3' as const,
+        provider: options.name,
+        modelId,
+        supportedUrls: {},
+        doGenerate: vi.fn(),
+        doStream: vi.fn(),
+        options,
+      } as unknown as FakeCustomLanguageModel)),
+    }));
+    const config = {
+      kind: 'custom',
+      catalog,
+      modelRef: 'openrouter:deepseek/deepseek-chat',
+      secrets: { OPENROUTER_API_KEY: 'or-key' },
+    } as AgentModelConfig;
+
+    const model = resolveLanguageModel(config, { createOpenAICompatibleProvider: factory }) as FakeCustomLanguageModel;
+
+    expect(model).toMatchObject({
+      specificationVersion: 'v3',
+      provider: 'openrouter',
+      modelId: 'deepseek/deepseek-chat',
+      options: {
+        name: 'openrouter',
+        baseURL: 'https://openrouter.ai/api/v1',
+        apiKey: 'or-key',
+        headers: { 'HTTP-Referer': 'https://harness.local' },
+      },
+    });
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the default OpenAI-compatible factory for custom providers', () => {
+    const catalog = defineModelProviderCatalog({
+      providers: [
+        {
+          id: 'lmstudio',
+          kind: 'openai-compatible',
+          baseURL: 'http://127.0.0.1:1234/v1',
+          models: ['qwen3'],
+        },
+      ],
+    });
+
+    const model = resolveLanguageModel({
+      kind: 'custom',
+      catalog,
+      modelRef: 'lmstudio:qwen3',
+    } as AgentModelConfig) as FakeCustomLanguageModel;
+
+    expect(createOpenAICompatible).toHaveBeenCalledWith({
+      name: 'lmstudio',
+      baseURL: 'http://127.0.0.1:1234/v1',
+    });
+    expect(model).toMatchObject({
+      provider: 'lmstudio',
+      modelId: 'qwen3',
+    });
   });
 });
 
@@ -115,6 +212,25 @@ describe('createAutoProvider', () => {
     });
     expect(config.kind).toBe('gateway');
     expect((config as any).modelId).toBe('anthropic/claude-sonnet-4.6');
+  });
+
+  it('picks a configured custom provider before local and copilot fallbacks', () => {
+    const customProviderCatalog = defineModelProviderCatalog({
+      providers: [{ id: 'lmstudio', kind: 'openai-compatible', baseURL: 'http://127.0.0.1:1234/v1', models: ['qwen3'] }],
+    });
+
+    const config = createAutoProvider({
+      copilotState: authenticatedCopilotState,
+      installedModels: [installedHfModel],
+      customProviderCatalog,
+      customModelRef: 'lmstudio:qwen3',
+      customSecrets: { LMSTUDIO_API_KEY: 'optional' },
+    });
+
+    expect(config.kind).toBe('custom');
+    expect((config as any).catalog).toBe(customProviderCatalog);
+    expect((config as any).modelRef).toBe('lmstudio:qwen3');
+    expect((config as any).secrets).toEqual({ LMSTUDIO_API_KEY: 'optional' });
   });
 
   it('gateway takes precedence over copilot when both available', () => {
@@ -182,6 +298,35 @@ describe('getModelCapabilities', () => {
       contextWindow: 2048,
       maxOutputTokens: 512,
       supportsNativeToolCalls: false,
+    });
+  });
+
+  it('uses configured custom provider model metadata', () => {
+    const catalog = defineModelProviderCatalog({
+      providers: [
+        {
+          id: 'openrouter',
+          kind: 'openai-compatible',
+          baseURL: 'https://openrouter.ai/api/v1',
+          models: [{
+            id: 'deepseek/deepseek-chat',
+            contextWindow: 64_000,
+            maxOutputTokens: 8_000,
+            supportsNativeToolCalls: true,
+          }],
+        },
+      ],
+    });
+
+    expect(getModelCapabilities({
+      kind: 'custom',
+      catalog,
+      modelRef: 'openrouter:deepseek/deepseek-chat',
+    } as AgentModelConfig)).toEqual({
+      provider: 'openrouter',
+      contextWindow: 64000,
+      maxOutputTokens: 8000,
+      supportsNativeToolCalls: true,
     });
   });
 });

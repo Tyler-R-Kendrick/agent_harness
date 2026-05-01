@@ -12,7 +12,17 @@
 
 import { gateway } from '@ai-sdk/gateway';
 import type { GatewayModelId } from '@ai-sdk/gateway';
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
+import {
+  createConfiguredModel,
+  getModelProviderCapabilities as getConfiguredModelProviderCapabilities,
+  resolveModelProvider,
+  type ModelProviderCatalog,
+  type ModelProviderRef,
+  type OpenAICompatibleModelProviderFactory,
+  type OpenAICompatibleProviderOptions,
+} from 'harness-core';
 import type { CopilotModelSummary, CopilotRuntimeState } from './copilotApi';
 import type { HFModel } from '../types';
 import { CopilotLanguageModel } from './copilotLanguageModel';
@@ -41,13 +51,27 @@ export type LocalModelConfig = {
   task?: string;
 };
 
-export type AgentModelConfig = GatewayModelConfig | CopilotModelConfig | LocalModelConfig;
+export type CustomProviderModelConfig = {
+  kind: 'custom';
+  /** Runtime/provider catalog parsed by harness-core from config JSON. */
+  catalog: ModelProviderCatalog;
+  /** Optional provider:model ref. Falls back to the catalog active/default model. */
+  modelRef?: string | ModelProviderRef;
+  /** Secret values used by env placeholders such as ${env:OPENROUTER_API_KEY}. */
+  secrets?: Record<string, string>;
+};
+
+export type AgentModelConfig = GatewayModelConfig | CopilotModelConfig | LocalModelConfig | CustomProviderModelConfig;
 
 export type ModelCapabilities = {
-  provider: AgentModelConfig['kind'];
+  provider: string;
   contextWindow: number;
   maxOutputTokens: number;
   supportsNativeToolCalls: boolean;
+};
+
+export type ResolveLanguageModelOptions = {
+  createOpenAICompatibleProvider?: OpenAICompatibleModelProviderFactory<LanguageModel>;
 };
 
 const DEFAULT_GATEWAY_CONTEXT_WINDOW = 8_192;
@@ -96,6 +120,12 @@ export function getModelCapabilities(
         supportsNativeToolCalls: false,
       };
     }
+
+    case 'custom': {
+      return getConfiguredModelProviderCapabilities(
+        resolveModelProvider(config.catalog, config.modelRef),
+      );
+    }
   }
 }
 
@@ -107,8 +137,12 @@ export function getModelCapabilities(
  * - gateway: uses @ai-sdk/gateway — supports native tool calling for all major cloud models
  * - copilot: custom LanguageModelV3 wrapping /api/copilot/chat (tool calling via ReAct prompting)
  * - local:   custom LanguageModelV3 wrapping the in-browser HF worker (tool calling via ReAct prompting)
+ * - custom:  harness-core config catalog backed by an OpenAI-compatible provider factory
  */
-export function resolveLanguageModel(config: AgentModelConfig): LanguageModel {
+export function resolveLanguageModel(
+  config: AgentModelConfig,
+  options: ResolveLanguageModelOptions = {},
+): LanguageModel {
   switch (config.kind) {
     case 'gateway':
       return gateway(config.modelId as GatewayModelId);
@@ -118,7 +152,26 @@ export function resolveLanguageModel(config: AgentModelConfig): LanguageModel {
 
     case 'local':
       return new LocalLanguageModel(config.modelId, config.task ?? 'text-generation') as unknown as LanguageModel;
+
+    case 'custom':
+      return createConfiguredModel(
+        config.catalog,
+        config.modelRef,
+        {
+          openAICompatible: options.createOpenAICompatibleProvider ?? createDefaultOpenAICompatibleProvider,
+        },
+        {
+          getSecret: (name) => config.secrets?.[name],
+        },
+      );
   }
+}
+
+function createDefaultOpenAICompatibleProvider(options: OpenAICompatibleProviderOptions) {
+  const provider = createOpenAICompatible(options);
+  return {
+    chatModel: (modelId: string) => provider.chatModel(modelId) as unknown as LanguageModel,
+  };
 }
 
 // ── Auto-selection ────────────────────────────────────────────────────────────
@@ -128,6 +181,10 @@ export type AutoProviderOptions = {
   installedModels: HFModel[];
   /** When provided, always use the gateway with this model ID. */
   gatewayModelId?: GatewayModelId | string;
+  /** Config-backed custom providers supplied without changing app code. */
+  customProviderCatalog?: ModelProviderCatalog;
+  customModelRef?: string | ModelProviderRef;
+  customSecrets?: Record<string, string>;
   /** Preferred copilot model. Falls back to first available. */
   preferredCopilotModelId?: string;
 };
@@ -137,16 +194,34 @@ export type AutoProviderOptions = {
  *
  * Priority order:
  *  1. gateway (explicit cloud model key — supports native tool calling)
- *  2. local   (installed HF ONNX model — privacy-first, offline)
- *  3. copilot (authenticated GHCP — fallback cloud)
+ *  2. custom  (config-backed OpenAI-compatible provider)
+ *  3. local   (installed HF ONNX model — privacy-first, offline)
+ *  4. copilot (authenticated GHCP — fallback cloud)
  *
  * Throws if no provider is available.
  */
 export function createAutoProvider(options: AutoProviderOptions): AgentModelConfig {
-  const { copilotState, installedModels, gatewayModelId, preferredCopilotModelId } = options;
+  const {
+    copilotState,
+    installedModels,
+    gatewayModelId,
+    customProviderCatalog,
+    customModelRef,
+    customSecrets,
+    preferredCopilotModelId,
+  } = options;
 
   if (gatewayModelId) {
     return { kind: 'gateway', modelId: gatewayModelId };
+  }
+
+  if (customProviderCatalog) {
+    return {
+      kind: 'custom',
+      catalog: customProviderCatalog,
+      ...(customModelRef ? { modelRef: customModelRef } : {}),
+      ...(customSecrets ? { secrets: customSecrets } : {}),
+    };
   }
 
   const installed = installedModels.filter((m) => m.status === 'installed');
