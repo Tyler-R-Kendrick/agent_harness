@@ -43,9 +43,29 @@ async function main() {
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
   const vercelConfig = JSON.parse(await readScript('vercel.json'));
-  assert.equal(vercelConfig.installCommand, 'npm install --package-lock-only --ignore-scripts && npm ci');
+  assert.equal(vercelConfig.installCommand, 'node scripts/vercel-install.mjs');
   assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
   assert.equal(vercelConfig.outputDirectory, 'agent-browser/dist');
+
+  const vercelInstall = await import(pathToFileURL(path.resolve(repoRoot, 'scripts/vercel-install.mjs')).href);
+  assert.equal(vercelInstall.getNpmExecutable('win32'), 'npm.cmd');
+  assert.equal(vercelInstall.getNpmExecutable('linux'), 'npm');
+  assert.equal(vercelInstall.usesShellForPlatform('win32'), true);
+  assert.equal(vercelInstall.usesShellForPlatform('linux'), false);
+  assert.deepEqual(vercelInstall.buildInstallSteps('npm'), [
+    ['npm', ['install', '--package-lock-only', '--ignore-scripts']],
+    ['npm', ['ci']],
+  ]);
+  const lockfileFixture = await mkdtemp(path.join(tmpdir(), 'vercel-install-lockfile-'));
+  const rootLockfile = path.join(lockfileFixture, 'package-lock.json');
+  const workspaceLockfile = path.join(lockfileFixture, 'agent-browser', 'package-lock.json');
+  await mkdir(path.dirname(workspaceLockfile), { recursive: true });
+  await writeFile(rootLockfile, '{}');
+  await writeFile(workspaceLockfile, '{}');
+  await vercelInstall.removeCachedLockfiles(lockfileFixture);
+  await assert.rejects(() => readFile(rootLockfile), { code: 'ENOENT' });
+  await assert.rejects(() => readFile(workspaceLockfile), { code: 'ENOENT' });
+  await vercelInstall.removeCachedLockfiles(lockfileFixture);
 
   const coverageRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href
