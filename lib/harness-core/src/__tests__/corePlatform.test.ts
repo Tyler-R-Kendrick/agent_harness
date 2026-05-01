@@ -133,7 +133,7 @@ describe('harness-core platform contracts', () => {
         return { total: left + right };
       },
     });
-    registry.register(createPromptTemplateTool({
+    registry.register(createPromptTemplateTool<unknown>({
       id: 'review-pr',
       description: 'Create review instructions.',
       template: (args) => `Review ${String((args as { target: string }).target)} with tests first.`,

@@ -3,10 +3,10 @@ import type {
   IAgentBus,
   ICompletionChecker,
   IExecutor,
-  IInferenceClient,
   IVoter,
   QuorumPolicy,
 } from 'logact';
+import type { ConstrainedDecoding, CoreInferenceClient } from './constrainedDecoding.js';
 
 export type CoreStepStatus = 'active' | 'done';
 
@@ -45,7 +45,7 @@ export interface CoreAgentLoopCallbacks {
 }
 
 export interface LogActAgentLoopOptions {
-  inferenceClient: IInferenceClient;
+  inferenceClient: CoreInferenceClient;
   messages: Array<{ content: string }>;
   voters?: IVoter[];
   input?: string;
@@ -55,4 +55,5 @@ export interface LogActAgentLoopOptions {
   quorumPolicy?: QuorumPolicy;
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
+  constrainedDecoding?: ConstrainedDecoding;
 }

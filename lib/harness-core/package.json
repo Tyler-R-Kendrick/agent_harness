@@ -19,8 +19,11 @@
     "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
   },
   "dependencies": {
+    "@toon-format/toon": "^2.1.0",
+    "guidance-ts": "github:guidance-ai/guidance-ts",
     "logact": "0.1.0",
-    "xstate": "^5.31.0"
+    "xstate": "^5.31.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.5",
