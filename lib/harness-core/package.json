@@ -19,7 +19,8 @@
     "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
   },
   "dependencies": {
-    "logact": "0.1.0"
+    "logact": "0.1.0",
+    "xstate": "^5.31.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.5",
