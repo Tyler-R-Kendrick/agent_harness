@@ -1,65 +1,58 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-04-30
-Baseline: `.features/Summary.md` updated from the 2026-04-30 thirteen-harness corpus.
-Diff type: additive update after Pi research
+Baseline: `.features/Summary.md` updated from the 2026-04-30 fifteen-harness corpus.
+Diff type: additive update after Space Agent research
 
 ## Net new normalized features
 
-### Added: Expose browser agents as embeddable runtimes
-- Why now: Pi treats the harness as a reusable runtime, not just a human-facing CLI, with interactive, print/JSON, JSON-RPC, and SDK modes all documented from the main product surface.
+### Added: Mutable agent-built workspace surfaces
+- Why now: Space Agent makes the strongest current case that the agent should build the workspace itself, not only fill a fixed chat transcript with answers.
 - Research delta:
-  - the Pi README says the coding harness runs in interactive, print or JSON, RPC, and SDK modes
-  - the RPC docs define a real protocol with command IDs, streaming events, and strict JSONL framing over stdin/stdout
-  - the SDK path is explicit enough that the docs recommend in-process `AgentSession` usage for Node.js instead of always spawning a subprocess
+  - the README says the agent reshapes the interface and can build a page, tool, widget, or workflow into the running workspace
+  - the product site says Space Agent builds your space right in the browser
+  - recent browser-surface work makes popup and inline browser panes part of one live runtime model instead of separate UI concepts
 
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Pi pushes packaging farther than most harnesses by letting prompt templates, skills, extensions, and themes travel together as installable Pi Packages from npm, git, GitHub URLs, or local paths.
+### Expanded: Shared team agents and governance
+- Why now: Space Agent adds a sharper model for user-specific layers, group-shared behavior, and admin rollback than the current summary captured.
 - Research delta:
-  - package docs show global, project, and one-run ephemeral install flows
-  - project package settings can be shared with a team and auto-install on startup
-  - extensions can alter not just tools but large parts of the terminal UI and command surface
+  - the README describes users building in their own layer while groups share tools and workflows across teams
+  - the self-hosted surface is explicitly positioned for multi-user setups with group management
+  - admin mode plus Git-backed history frames governance as a control-plane and rollback problem, not only a chat-history problem
 
-### Expanded: Persistent memory plus project instructions
-- Why now: Pi sharpens the repo-instruction pattern by treating `AGENTS.md` or `CLAUDE.md` loading and system-prompt layering as a documented contract, while also adding a clean-room escape hatch.
+### Expanded: Browser use and computer control
+- Why now: Space Agent tightens the relationship between browser automation and the harness UI by unifying popup and inline browser surfaces.
 - Research delta:
-  - Pi loads global, parent-directory, and current-directory context files automatically
-  - `.pi/SYSTEM.md` and `APPEND_SYSTEM.md` let projects replace or append to the system prompt
-  - recent releases added `--no-context-files` for deliberately bypassing inherited guidance
+  - the `v0.64` release moves web browsing to registered browser surfaces with one API and lifecycle
+  - prompt-time runtime state now reasons about currently open and last interacted browser surfaces
+  - the agent can operate against browser surfaces that are part of the workspace it is also shaping
 
-### Expanded: Shareable sessions and debug handoff
-- Why now: Pi combines private gist-based HTML sharing with a public workflow for publishing real OSS coding sessions to Hugging Face.
-- Research delta:
-  - `/export` writes HTML artifacts and `/share` publishes a private gist-backed share link
-  - the README explicitly asks users to publish real open-source sessions to improve models, tools, prompts, and evals
-  - recent release notes include export-safety fixes, showing the artifact path is actively maintained
-
-### Added: Ship a typed SDK plus JSON-RPC surface for `agent-browser`
-- Why now: Browser agents are still mostly trapped inside their own first-party UI, which makes it harder to reuse the same runtime in editors, dashboards, and orchestrators.
+### Added: Let browser agents build persistent in-app workspace surfaces
+- Why now: `agent-browser` still treats the app shell mostly as a fixed surface, while Space Agent shows the harness itself can become a task-specific artifact the agent assembles.
 - Linear issue title:
-  - `Expose agent-browser via SDK and JSON-RPC`
+  - `Let browser agents build persistent workspace surfaces`
 - Suggested problem statement:
-  - `agent-browser` is still too tied to its own UI and process model, which blocks other product surfaces from embedding the same session, tool, and artifact lifecycle directly.
+  - `agent-browser` can drive tools and browsers, but it cannot yet persistently add dashboards, widgets, guided flows, or review panels into the app as first-class outputs of the run.
 - One-shot instruction for an LLM:
-  - Design and implement a reusable runtime layer for `agent-browser` with a typed in-process SDK plus a documented JSON-RPC or JSONL streaming protocol for subprocess clients, including request correlation, event streaming, session persistence hooks, and examples for embedding the harness in another app.
+  - Design and implement a mutable workspace-surface system for `agent-browser` where an agent can create task-specific pages, widgets, browser panes, and review panels inside the app, persist them as named artifacts, and expose ownership, permissions, and rollback for every agent-authored surface.
 
-### Added: Version installable browser-agent workflow packs
-- Why now: Pi treats installable packages as the main way to transport prompts, skills, themes, and extensions between projects and teams.
+### Added: Add layered team customware with rollback
+- Why now: Space Agent shows a strong pattern for combining personal layers, shared group layers, and admin-safe rollback in one system.
 - Linear issue title:
-  - `Create installable workflow packs for agent-browser`
+  - `Add layered workspace customware and rollback`
 - Suggested problem statement:
-  - Repeatable browser-agent workflows still depend too much on local prompts and ad hoc scripts, which makes team reuse and governed rollout difficult.
+  - `agent-browser` lacks a clean way for individuals and teams to publish reusable workspace behavior without risking cross-user breakage or manual cleanup when an experiment goes wrong.
 - One-shot instruction for an LLM:
-  - Build an installable workflow-pack format for `agent-browser` that can bundle prompts, skills, tool permissions, UI affordances, and optional scripts, support local and remote package sources, allow project-scoped auto-install, and expose clear enable-disable controls for teams.
+  - Implement layered customware for `agent-browser` with user, team, and admin scopes; let agents publish reusable tools and workflow surfaces into those scopes; and back every change with versioned history, diff inspection, and one-click rollback to the last known good state.
 
-### Added: Add branch-aware compaction and session-tree navigation
-- Why now: Pi treats long-running sessions as tree-structured state with explicit compaction and revisitable history instead of a flat transcript that only grows until it breaks.
+### Added: Unify popup and inline browser surfaces
+- Why now: Space Agent's browser-surface model is a concrete reminder that browser automation becomes more composable when embedded panes and separate windows share the same runtime contract.
 - Linear issue title:
-  - `Add session trees and branch-aware compaction`
+  - `Unify browser panes and popup windows`
 - Suggested problem statement:
-  - Long browser-agent runs become hard to steer or resume once the transcript grows, and alternative branches are difficult to compare without forking external artifacts by hand.
+  - `agent-browser` still risks fragmented UX and duplicated logic between embedded browser views and detached windows, which makes task-specific workspace composition harder to build.
 - One-shot instruction for an LLM:
-  - Implement tree-structured session history for `agent-browser` with labeled branch points, resumable forks, lossy compaction with preserved raw history, and a UI for revisiting or continuing from earlier checkpoints without losing later branches.
+  - Refactor `agent-browser` so embedded browser panes and popup windows register through one browser-surface abstraction with shared lifecycle, focus semantics, state reporting, and prompt exposure, then migrate existing browser actions and UI controls onto that contract.
 
 ## How to use this file
 
@@ -70,6 +63,6 @@ Diff type: additive update after Pi research
 
 ## Recommended next Linear batch
 
-1. `Expose agent-browser via SDK and JSON-RPC`
-2. `Create installable workflow packs for agent-browser`
-3. `Add session trees and branch-aware compaction`
+1. `Let browser agents build persistent workspace surfaces`
+2. `Add layered workspace customware and rollback`
+3. `Unify browser panes and popup windows`

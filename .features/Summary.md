@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
 Updated: 2026-04-30
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `T3 Code`
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
@@ -22,7 +22,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, Pi packages plus extensions/skills/prompts/themes, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -36,14 +36,14 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 5. Browser use and computer control
 - Common pattern: harnesses are expanding from code/text to direct web and desktop action.
-- Seen in: ChatGPT agent mode, Claude in Chrome, Claude Cowork computer use, Cline web tools and browser automation, DeerFlow AIO sandbox, Hermes browser/web control, OpenClaw browser automation.
+- Seen in: ChatGPT agent mode, Claude in Chrome, Claude Cowork computer use, Cline web tools and browser automation, DeerFlow AIO sandbox, Hermes browser/web control, OpenClaw browser automation, Space Agent registered browser surfaces across popup and inline runtime widgets.
 - Why it matters: many valuable workflows still terminate in websites or GUI tools rather than APIs.
 - One-shot build instruction:
   - Ship a browser/desktop action layer that can inspect DOM, screenshots, console and network state, request confirmation for risky actions, and feed captured evidence back into the agent thread.
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile, DeerFlow IM channels, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, T3 Code remote pairing plus headless serve.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile, DeerFlow IM channels, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
@@ -64,7 +64,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 9. Shared team agents and governance
 - Common pattern: products are moving from personal assistants to organization-shared agents.
-- Seen in: ChatGPT workspace agents, Claude Cowork admin controls and analytics, Cline enterprise-managed skills, Copilot enterprise controls, Codex team-configured skills.
+- Seen in: ChatGPT workspace agents, Claude Cowork admin controls and analytics, Cline enterprise-managed skills, Copilot enterprise controls, Codex team-configured skills, Space Agent user/group layers with admin control plane and shared customware.
 - Why it matters: repeated team workflows need ownership, review, and policy controls.
 - One-shot build instruction:
   - Add shared workspace agents with publishing, versioning, approval, RBAC, analytics, and team discovery so repeatable workflows become institutional assets instead of personal prompt lore.
@@ -132,6 +132,20 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
 
+### 19. Agent-ready remote environments and trigger wiring
+- Common pattern: hosted agent systems are increasingly packaging reusable execution environments together with triggers from issue trackers, chat systems, and CI so automation can start from live business events instead of a local terminal.
+- Seen in: Warp Cloud Agents with reusable setup plus GitHub, Linear, Slack, scheduled runs, and GitHub Actions triggers; OpenAI Symphony isolated issue workspaces and workflow hooks are adjacent from the orchestration side.
+- Why it matters: reliable automation depends on reproducible remote environments and first-class launch wiring, not just a strong prompt in a developer laptop session.
+- One-shot build instruction:
+  - Build reusable remote execution environments for browser agents with repo bootstrap, secrets, and dependency setup captured once, then let users bind those environments to schedules, issue events, chat commands, and CI triggers with clear audit history and replayable launch parameters.
+
+### 20. Mutable agent-built workspace surfaces
+- Common pattern: a few harnesses are starting to treat the product surface itself as something the agent can construct and reshape, instead of limiting the agent to a fixed chat panel or detached tool result.
+- Seen in: Space Agent explicitly makes pages, widgets, workflows, and browser surfaces part of the live runtime the agent can build into; some browser agents are adjacent through tool-driven UI updates, but Space Agent currently makes this idea the clearest product primitive.
+- Why it matters: once the agent can create the working surface itself, the harness can evolve from chat UI into a dynamic workspace optimized around the task at hand.
+- One-shot build instruction:
+  - Let browser agents create and persist task-specific workspace surfaces such as dashboards, widgets, guided flows, browser panes, and review panels inside the app itself, with clear ownership, permissions, and rollback for anything the agent adds or changes.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -147,7 +161,9 @@ Method: current-product research from first-party product pages, help centers, d
 11. Add a repo-owned workflow contract with live reload for browser-agent policy.
 12. Ship operator-visible orchestration telemetry for long-running agent queues.
 13. Expose `agent-browser` as an embeddable runtime via SDK and streaming protocol.
+14. Build reusable remote execution environments plus trigger wiring for browser-agent automations.
+15. Let browser agents build persistent in-app workspace surfaces.
 
 ## Notes
-- This pass extends the earlier thirteen-harness corpus with `Pi` as a fourteenth competitor.
+- This pass extends the earlier fifteen-harness corpus with `Space Agent` as a sixteenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
