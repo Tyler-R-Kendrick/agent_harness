@@ -4,7 +4,15 @@ Reusable TypeScript agent-loop primitives for `agent_harness`.
 
 The package follows the parts of Pi's agent core that are useful outside a TUI:
 typed messages, lifecycle events, stateful queues, awaited subscribers, a
-low-level loop runner, and a LogAct adapter used by Agent Browser.
+low-level loop runner, and an XState-backed LogAct workflow used by Agent
+Browser.
+
+The workflow surface formulates a serializable machine definition whose named
+actors cover the driver, voters, decider, executor, and completion checker.
+`WorkflowAgentBus` is the local write-ahead bus wrapper for the XState workflow
+event stream and records `ActorMessageEvent` entries with session and actor
+metadata. The first implementation is local-session only, with the public bus
+and session types shaped for shared or remote stores later.
 
 ## Default commands
 

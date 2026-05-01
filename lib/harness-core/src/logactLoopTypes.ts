@@ -7,6 +7,7 @@ import type {
   QuorumPolicy,
 } from 'logact';
 import type { ConstrainedDecoding, CoreInferenceClient } from './constrainedDecoding.js';
+import type { AgentSessionRef } from './agent.js';
 
 export type CoreStepStatus = 'active' | 'done';
 
@@ -56,4 +57,5 @@ export interface LogActAgentLoopOptions {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   constrainedDecoding?: ConstrainedDecoding;
+  session?: AgentSessionRef;
 }

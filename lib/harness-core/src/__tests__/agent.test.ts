@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { HarnessAgent, runHarnessLoop, type HarnessEvent, type HarnessMessage } from '../agent.js';
+import {
+  HarnessAgent,
+  createActorMessageEvent,
+  normalizeSession,
+  resolveDefaultMessageActor,
+  runHarnessLoop,
+  type ActorMessageEvent,
+  type HarnessEvent,
+  type HarnessMessage,
+} from '../agent.js';
 
 describe('runHarnessLoop', () => {
   it('emits Pi-style lifecycle events around prompts, turns, and agent completion', async () => {
@@ -84,6 +93,84 @@ describe('runHarnessLoop', () => {
 });
 
 describe('HarnessAgent', () => {
+  it('normalizes sessions and resolves default actor message metadata', () => {
+    const session = normalizeSession({ id: 'session-meta', metadata: { tenant: 'acme' } });
+    const defaultSession = normalizeSession();
+    const fallbackEvent = createActorMessageEvent(
+      'actor.message',
+      { content: 'without timestamp' },
+      defaultSession,
+      resolveDefaultMessageActor,
+      0,
+      { kind: 'unit-test' },
+    );
+
+    expect(session).toEqual({ id: 'session-meta', mode: 'local', metadata: { tenant: 'acme' } });
+    expect(resolveDefaultMessageActor({ role: 'assistant' }, session)).toEqual({
+      id: 'agent',
+      role: 'agent',
+      sessionId: 'session-meta',
+    });
+    expect(resolveDefaultMessageActor({ role: 'system' }, session)).toEqual({
+      id: 'system',
+      role: 'system',
+      sessionId: 'session-meta',
+    });
+    expect(resolveDefaultMessageActor({ role: 'user' }, session)).toEqual({
+      id: 'user',
+      role: 'user',
+      sessionId: 'session-meta',
+    });
+    expect(fallbackEvent).toMatchObject({
+      eventId: 'local:actor.message:0',
+      sessionId: 'local',
+      source: { kind: 'unit-test' },
+      actor: { id: 'user', role: 'user', sessionId: 'local' },
+    });
+    expect(fallbackEvent.timestamp).toBeGreaterThan(0);
+  });
+
+  it('emits actor message events with session and actor metadata', async () => {
+    const messageEvents: Array<ActorMessageEvent<HarnessMessage>> = [];
+    const agent = new HarnessAgent<HarnessMessage>({
+      session: { id: 'session-1' },
+      createUserMessage: (content) => ({ role: 'user', content, timestamp: 1 }),
+      resolveMessageActor: (message, session) => ({
+        id: message.role === 'assistant' ? 'agent-1' : 'user-device-a',
+        role: message.role === 'assistant' ? 'agent' : 'user',
+        sessionId: session.id,
+      }),
+      runTurn: async () => ({ role: 'assistant', content: 'reply', timestamp: 2 }),
+    });
+
+    agent.subscribe((event) => {
+      if (event.type === 'message_start' || event.type === 'message_end') {
+        messageEvents.push(event);
+      }
+    });
+
+    await agent.prompt('hello');
+
+    expect(messageEvents).toHaveLength(4);
+    expect(messageEvents.map((event) => event.sessionId)).toEqual([
+      'session-1',
+      'session-1',
+      'session-1',
+      'session-1',
+    ]);
+    expect(messageEvents[0]).toMatchObject({
+      type: 'message_start',
+      actor: { id: 'user-device-a', role: 'user', sessionId: 'session-1' },
+      message: { role: 'user', content: 'hello' },
+    });
+    expect(messageEvents[2]).toMatchObject({
+      type: 'message_start',
+      actor: { id: 'agent-1', role: 'agent', sessionId: 'session-1' },
+      message: { role: 'assistant', content: 'reply' },
+    });
+    expect(JSON.parse(JSON.stringify(messageEvents[0]))).toEqual(messageEvents[0]);
+  });
+
   it('owns state, queues follow-ups, and awaits event subscribers before becoming idle', async () => {
     const listener = vi.fn<() => Promise<void>>(async () => undefined);
     const agent = new HarnessAgent<HarnessMessage>({
