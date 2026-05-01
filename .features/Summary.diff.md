@@ -1,65 +1,58 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-04-30
-Baseline: `.features/Summary.md` updated from the 2026-04-30 thirteen-harness corpus.
-Diff type: additive update after Pi research
+Baseline: `.features/Summary.md` updated from the 2026-04-30 fourteen-harness corpus.
+Diff type: additive update after Warp research
 
 ## Net new normalized features
 
-### Added: Expose browser agents as embeddable runtimes
-- Why now: Pi treats the harness as a reusable runtime, not just a human-facing CLI, with interactive, print/JSON, JSON-RPC, and SDK modes all documented from the main product surface.
+### Added: Agent-ready remote environments and trigger wiring
+- Why now: Warp makes hosted execution environments a first-class product object, then wires them into schedules and trigger surfaces such as Linear, Slack, and GitHub Actions instead of assuming a human-open terminal.
 - Research delta:
-  - the Pi README says the coding harness runs in interactive, print or JSON, RPC, and SDK modes
-  - the RPC docs define a real protocol with command IDs, streaming events, and strict JSONL framing over stdin/stdout
-  - the SDK path is explicit enough that the docs recommend in-process `AgentSession` usage for Node.js instead of always spawning a subprocess
-
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Pi pushes packaging farther than most harnesses by letting prompt templates, skills, extensions, and themes travel together as installable Pi Packages from npm, git, GitHub URLs, or local paths.
-- Research delta:
-  - package docs show global, project, and one-run ephemeral install flows
-  - project package settings can be shared with a team and auto-install on startup
-  - extensions can alter not just tools but large parts of the terminal UI and command surface
-
-### Expanded: Persistent memory plus project instructions
-- Why now: Pi sharpens the repo-instruction pattern by treating `AGENTS.md` or `CLAUDE.md` loading and system-prompt layering as a documented contract, while also adding a clean-room escape hatch.
-- Research delta:
-  - Pi loads global, parent-directory, and current-directory context files automatically
-  - `.pi/SYSTEM.md` and `APPEND_SYSTEM.md` let projects replace or append to the system prompt
-  - recent releases added `--no-context-files` for deliberately bypassing inherited guidance
+  - Warp documents reusable Cloud Agent setup rather than only local terminal sessions
+  - integrations include GitHub, Linear, and Slack from the main Cloud Agent surface
+  - GitHub Actions and scheduled runs are documented as native launch paths for hosted agents
 
 ### Expanded: Shareable sessions and debug handoff
-- Why now: Pi combines private gist-based HTML sharing with a public workflow for publishing real OSS coding sessions to Hugging Face.
+- Why now: Warp pushes the run-sharing model toward live collaboration by letting people inspect and steer remote sessions while the agent is still working.
 - Research delta:
-  - `/export` writes HTML artifacts and `/share` publishes a private gist-backed share link
-  - the README explicitly asks users to publish real open-source sessions to improve models, tools, prompts, and evals
-  - recent release notes include export-safety fixes, showing the artifact path is actively maintained
+  - Cloud Agent docs include both session sharing and live remote sessions
+  - the product allows observation during execution, not only a final artifact after execution
+  - collaborative intervention is part of the story, which is stronger than plain transcript export
 
-### Added: Ship a typed SDK plus JSON-RPC surface for `agent-browser`
-- Why now: Browser agents are still mostly trapped inside their own first-party UI, which makes it harder to reuse the same runtime in editors, dashboards, and orchestrators.
-- Linear issue title:
-  - `Expose agent-browser via SDK and JSON-RPC`
-- Suggested problem statement:
-  - `agent-browser` is still too tied to its own UI and process model, which blocks other product surfaces from embedding the same session, tool, and artifact lifecycle directly.
-- One-shot instruction for an LLM:
-  - Design and implement a reusable runtime layer for `agent-browser` with a typed in-process SDK plus a documented JSON-RPC or JSONL streaming protocol for subprocess clients, including request correlation, event streaming, session persistence hooks, and examples for embedding the harness in another app.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: Warp Drive continues the shift from ad hoc prompts to team-discoverable workflows and notebooks that mix runnable blocks with explanatory operational context.
+- Research delta:
+  - Workflows package reusable command sequences with variables
+  - Notebooks combine runnable terminal blocks and explanatory text
+  - Drive assets form a searchable team knowledge layer the agent can work within
 
-### Added: Version installable browser-agent workflow packs
-- Why now: Pi treats installable packages as the main way to transport prompts, skills, themes, and extensions between projects and teams.
+### Added: Build reusable remote execution environments for `agent-browser`
+- Why now: Browser-agent automations still depend too much on the operator's current machine state, which makes scheduling, chat-triggered runs, and CI-driven work harder than they should be.
 - Linear issue title:
-  - `Create installable workflow packs for agent-browser`
+  - `Build remote execution environments for agent-browser`
 - Suggested problem statement:
-  - Repeatable browser-agent workflows still depend too much on local prompts and ad hoc scripts, which makes team reuse and governed rollout difficult.
+  - `agent-browser` lacks a reusable hosted environment model, so every long-running or remotely triggered automation has to rediscover repo setup, dependencies, and secrets at run time.
 - One-shot instruction for an LLM:
-  - Build an installable workflow-pack format for `agent-browser` that can bundle prompts, skills, tool permissions, UI affordances, and optional scripts, support local and remote package sources, allow project-scoped auto-install, and expose clear enable-disable controls for teams.
+  - Design and implement remote execution environments for `agent-browser` that capture repo bootstrap, dependency install, browser setup, secrets injection, and validation commands once, then let later runs launch against that environment predictably with audit logs, replayable parameters, and environment health checks.
 
-### Added: Add branch-aware compaction and session-tree navigation
-- Why now: Pi treats long-running sessions as tree-structured state with explicit compaction and revisitable history instead of a flat transcript that only grows until it breaks.
+### Added: Trigger browser agents from Linear Slack and CI
+- Why now: Warp shows that hosted agents become more valuable when real project events can launch them directly instead of waiting for a human to open the product first.
 - Linear issue title:
-  - `Add session trees and branch-aware compaction`
+  - `Add event triggers for browser-agent runs`
 - Suggested problem statement:
-  - Long browser-agent runs become hard to steer or resume once the transcript grows, and alternative branches are difficult to compare without forking external artifacts by hand.
+  - `agent-browser` runs are still launched mostly by hand, which limits recurring maintenance, issue-driven execution, and repo-event automation.
 - One-shot instruction for an LLM:
-  - Implement tree-structured session history for `agent-browser` with labeled branch points, resumable forks, lossy compaction with preserved raw history, and a UI for revisiting or continuing from earlier checkpoints without losing later branches.
+  - Implement an event-trigger layer for `agent-browser` that can start runs from issue-tracker events, chat commands, schedules, and CI webhooks, route each launch into an isolated browser-agent session, preserve launch context in the run timeline, and enforce per-trigger permission and environment policies.
+
+### Added: Add live collaborative steering for remote agent runs
+- Why now: Warp demonstrates that remote runs become easier to trust when humans can watch, intervene, and fork while the work is still in progress.
+- Linear issue title:
+  - `Add live steering and handoff for remote agent runs`
+- Suggested problem statement:
+  - Remote browser-agent executions are still too opaque once launched, which makes debugging, teammate handoff, and mid-run correction slower than necessary.
+- One-shot instruction for an LLM:
+  - Build a live remote-session surface for `agent-browser` that streams current step state, browser evidence, tool output, and validation progress to observers, allows authorized humans to pause, steer, or fork the run, and preserves those interventions as first-class timeline events.
 
 ## How to use this file
 
@@ -70,6 +63,6 @@ Diff type: additive update after Pi research
 
 ## Recommended next Linear batch
 
-1. `Expose agent-browser via SDK and JSON-RPC`
-2. `Create installable workflow packs for agent-browser`
-3. `Add session trees and branch-aware compaction`
+1. `Build remote execution environments for agent-browser`
+2. `Add event triggers for browser-agent runs`
+3. `Add live steering and handoff for remote agent runs`
