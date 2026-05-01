@@ -43,7 +43,7 @@ async function main() {
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
   const vercelConfig = JSON.parse(await readScript('vercel.json'));
-  assert.equal(vercelConfig.installCommand, 'npm install');
+  assert.equal(vercelConfig.installCommand, 'npm install --package-lock-only --ignore-scripts && npm ci');
   assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
   assert.equal(vercelConfig.outputDirectory, 'agent-browser/dist');
 

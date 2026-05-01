@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm install",
+  "installCommand": "npm install --package-lock-only --ignore-scripts && npm ci",
   "buildCommand": "cd agent-browser && npm run build",
   "outputDirectory": "agent-browser/dist",
   "headers": [
