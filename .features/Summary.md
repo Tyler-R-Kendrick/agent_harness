@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
 Updated: 2026-04-30
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `T3 Code`
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `T3 Code`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
@@ -15,14 +15,14 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 2. Persistent memory plus project instructions
 - Common pattern: harnesses retain repo, workflow, and user preferences across runs.
-- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Hermes persistent memory, Codex skills/team config, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules.
+- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Hermes persistent memory, Codex skills/team config, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
 - Why it matters: repeated steering is turning into the main productivity tax.
 - One-shot build instruction:
   - Add layered memory with explicit scopes (`workspace`, `project`, `user`, `agent`) and clear precedence, plus a memory inspector/editor so users can see, edit, import, disable, and diff what the harness has learned.
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, Pi packages plus extensions/skills/prompts/themes, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -85,7 +85,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 12. Shareable sessions and debug handoff
 - Common pattern: harnesses increasingly let users publish a run artifact that others can inspect without replaying the whole session locally.
-- Seen in: OpenCode share links, GitHub Copilot cloud logs and PR sessions, Codex thread sharing and review surfaces.
+- Seen in: OpenCode share links, GitHub Copilot cloud logs and PR sessions, Codex thread sharing and review surfaces, Pi private gist sharing plus public OSS session publishing.
 - Why it matters: async debugging and review improve when the run itself is a portable artifact rather than an anecdote.
 - One-shot build instruction:
   - Add review-safe run sharing that publishes a sanitized session artifact with transcript, artifacts, diff links, and verification evidence, plus retention controls and a clear private-by-default policy.
@@ -125,6 +125,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Build an operator telemetry surface for browser-agent orchestration with structured logs, queue and session views, issue-specific debug pages, and a read-mostly JSON API that supports refresh triggers and postmortem inspection.
 
+### 18. Embeddable agent runtimes and protocol surfaces
+- Common pattern: some harnesses are no longer just end-user apps and are instead exposing stable runtime layers other products can embed directly.
+- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, OpenAI Symphony operator APIs, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
+- Why it matters: product teams increasingly want the same agent core available in the terminal, in the browser, in IDEs, and inside orchestrators without re-implementing session, transport, and tool behavior each time.
+- One-shot build instruction:
+  - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -139,7 +146,8 @@ Method: current-product research from first-party product pages, help centers, d
 10. Turn Linear-style boards into the control plane for browser-agent work.
 11. Add a repo-owned workflow contract with live reload for browser-agent policy.
 12. Ship operator-visible orchestration telemetry for long-running agent queues.
+13. Expose `agent-browser` as an embeddable runtime via SDK and streaming protocol.
 
 ## Notes
-- This pass extends the earlier twelve-harness corpus with `OpenAI Symphony` as a thirteenth competitor.
+- This pass extends the earlier thirteen-harness corpus with `Pi` as a fourteenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
