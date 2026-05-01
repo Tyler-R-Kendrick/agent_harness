@@ -225,6 +225,26 @@ export interface WorkspaceMcpElicitationResult {
   fields: readonly WorkspaceMcpElicitationField[];
 }
 
+export interface WorkspaceMcpSecretRequest {
+  name?: string;
+  prompt: string;
+  reason?: string;
+}
+
+export type WorkspaceMcpSecretRequestResult =
+  | {
+    status: 'needs_secret';
+    requestId: string;
+    name: string;
+    prompt: string;
+  }
+  | {
+    status: 'secret_ref_created';
+    requestId: string;
+    name: string;
+    secretRef: string;
+  };
+
 export interface WorkspaceMcpSearchWebRequest {
   query: string;
   limit: number;
@@ -309,6 +329,9 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   onElicitUserInput?: (
     input: WorkspaceMcpElicitationRequest
   ) => Promise<WorkspaceMcpElicitationResult> | WorkspaceMcpElicitationResult;
+  onRequestSecret?: (
+    input: WorkspaceMcpSecretRequest
+  ) => Promise<WorkspaceMcpSecretRequestResult> | WorkspaceMcpSecretRequestResult;
   onSearchWeb?: (
     input: WorkspaceMcpSearchWebRequest
   ) => Promise<WorkspaceMcpSearchWebResult> | WorkspaceMcpSearchWebResult;

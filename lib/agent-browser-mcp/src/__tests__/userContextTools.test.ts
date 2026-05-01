@@ -5,7 +5,7 @@ import { createWebMcpTool } from '../tool';
 import { registerWorkspaceTools } from '../workspaceTools';
 
 describe('registerUserContextTools', () => {
-  it('registers app-owned memory recall, browser location, and user elicitation tools', async () => {
+  it('registers app-owned memory recall, browser location, user elicitation, and secret request tools', async () => {
     const modelContext = new ModelContext();
     const getUserContextMemory = vi.fn(async ({ query }: { query?: string }) => ({
       status: 'found',
@@ -28,6 +28,12 @@ describe('registerUserContextTools', () => {
       prompt,
       fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
     }));
+    const onRequestSecret = vi.fn(async ({ name }: { name?: string }) => ({
+      status: 'secret_ref_created',
+      requestId: 'secret-1',
+      name: name ?? 'API_KEY',
+      secretRef: 'secret-ref://local/api-key',
+    }));
 
     (registerWorkspaceTools as (context: ModelContext, options: Record<string, unknown>) => void)(modelContext, {
       workspaceName: 'Research',
@@ -35,12 +41,14 @@ describe('registerUserContextTools', () => {
       getUserContextMemory,
       getBrowserLocation,
       onElicitUserInput,
+      onRequestSecret,
     });
 
     expect(getModelContextRegistry(modelContext).list().map(({ name }) => name)).toEqual(expect.arrayContaining([
       'recall_user_context',
       'read_browser_location',
       'elicit_user_input',
+      'request_secret',
     ]));
 
     const webmcpTool = createWebMcpTool(modelContext);
@@ -68,6 +76,18 @@ describe('registerUserContextTools', () => {
       prompt: 'What city or neighborhood should I use?',
       fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
     });
+    await expect(webmcpTool.execute?.({
+      tool: 'request_secret',
+      args: {
+        name: 'OPENWEATHER_API_KEY',
+        reason: 'Weather API calls need authentication.',
+      },
+    }, {} as never)).resolves.toEqual({
+      status: 'secret_ref_created',
+      requestId: 'secret-1',
+      name: 'OPENWEATHER_API_KEY',
+      secretRef: 'secret-ref://local/api-key',
+    });
 
     expect(getUserContextMemory).toHaveBeenCalledWith({ query: 'location', limit: 20 });
     expect(getBrowserLocation).toHaveBeenCalledTimes(1);
@@ -75,6 +95,11 @@ describe('registerUserContextTools', () => {
       prompt: 'What city or neighborhood should I use?',
       fields: [{ id: 'location', label: 'City or neighborhood', required: true }],
       reason: undefined,
+    });
+    expect(onRequestSecret).toHaveBeenCalledWith({
+      name: 'OPENWEATHER_API_KEY',
+      prompt: 'Create a secret named OPENWEATHER_API_KEY.',
+      reason: 'Weather API calls need authentication.',
     });
   });
 
@@ -112,6 +137,15 @@ describe('registerUserContextTools', () => {
       requestId: expect.stringMatching(/^elicitation-[0-9a-z]+$/),
       prompt: 'Please provide the missing information before I continue.',
       fields: [{ id: 'location', label: 'City or neighborhood', required: true, placeholder: 'Chicago, IL' }],
+    });
+    await expect(webmcpTool.execute?.({
+      tool: 'request_secret',
+      args: {},
+    }, {} as never)).resolves.toEqual({
+      status: 'needs_secret',
+      requestId: expect.stringMatching(/^secret-[0-9a-z]+$/),
+      name: 'API_KEY',
+      prompt: 'Create a secret named API_KEY.',
     });
   });
 

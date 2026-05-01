@@ -2,7 +2,7 @@ import type { IVoter } from 'logact';
 import type { CopilotRuntimeState } from '../services/copilotApi';
 import type { ChatMessage, HFModel } from '../types';
 import type { AgentStreamCallbacks } from './types';
-import { getDefaultSecretsManagerAgent, type SecretsManagerAgent } from './Secrets';
+import { getDefaultSecretsManagerAgent, type SecretManagementSettings, type SecretsManagerAgent } from './Secrets';
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
@@ -106,6 +106,7 @@ export type StreamAgentChatOptions = {
   sessionId?: string;
   latestUserInput?: string;
   secrets?: SecretsManagerAgent;
+  secretSettings?: SecretManagementSettings;
 };
 
 export async function streamAgentChat(
@@ -114,11 +115,11 @@ export async function streamAgentChat(
   signal?: AbortSignal,
 ): Promise<void> {
   const secrets = options.secrets ?? getDefaultSecretsManagerAgent();
-  const messages = await secrets.sanitizeChatMessages(options.messages);
-  const workspacePromptContext = (await secrets.sanitizeText(options.workspacePromptContext)).text;
+  const messages = await secrets.sanitizeChatMessages(options.messages, options.secretSettings);
+  const workspacePromptContext = (await secrets.sanitizeText(options.workspacePromptContext, options.secretSettings)).text;
   const latestUserInput = options.latestUserInput === undefined
     ? undefined
-    : (await secrets.sanitizeText(options.latestUserInput)).text;
+    : (await secrets.sanitizeText(options.latestUserInput, options.secretSettings)).text;
   const latestRequest = latestUserInput ?? messages.at(-1)?.content ?? '';
 
   if (isSelfReflectionTaskText(latestRequest)) {
