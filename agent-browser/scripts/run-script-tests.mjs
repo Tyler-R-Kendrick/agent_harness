@@ -42,6 +42,10 @@ async function main() {
   assert.match(packageJson, /"check:generated-files": "node scripts\/check-generated-files-clean\.mjs"/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
+  const vercelConfig = JSON.parse(await readScript('vercel.json'));
+  assert.equal(vercelConfig.installCommand, 'npm install');
+  assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
+  assert.equal(vercelConfig.outputDirectory, 'agent-browser/dist');
 
   const coverageRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href
