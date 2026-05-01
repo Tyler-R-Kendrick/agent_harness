@@ -33,6 +33,39 @@ From the repository root:
 
 Prefer the repo-root wrapper scripts for contributor onboarding, CI parity, and repeatable validation.
 
+## Custom providers
+
+Agent Browser consumes config-backed custom providers through `harness-core`.
+The app-specific `src/services/agentProvider.ts` only binds that core catalog to
+AI SDK's OpenAI-compatible provider factory. To add a provider, load a catalog
+with entries such as:
+
+```json
+{
+  "activeModel": "openrouter:deepseek/deepseek-chat",
+  "providers": [
+    {
+      "id": "openrouter",
+      "kind": "openai-compatible",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "apiKeyEnvVar": "OPENROUTER_API_KEY",
+      "models": [
+        {
+          "id": "deepseek/deepseek-chat",
+          "contextWindow": 64000,
+          "maxOutputTokens": 8000,
+          "supportsNativeToolCalls": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+Use `provider:model` refs when selecting models; the model id itself may contain
+slashes. Secret values stay outside the catalog and are supplied by the host
+through the `harness-core` secret resolver.
+
 ## Hot reload in Codespaces
 
 Opening the repository in VS Code should start the Vite dev server automatically through `.vscode/tasks.json`. In Codespaces, the workspace also installs a small local helper extension that opens VS Code Simple Browser to the forwarded URL for port `5174`.
