@@ -1,0 +1,26 @@
+name: workspace-self-reflection-agent
+version: "1.0"
+description: >
+  AgentEvals static and deterministic runtime suite for workspace-agent
+  self-reflection. The agent must answer questions about its strengths,
+  capabilities, registered tools, workspace AGENTS.md files, skills, plugins,
+  hooks, limitations, and the human user's best role without inventing access
+  or unavailable tools.
+metadata:
+  owner: agent-browser
+  tags: [workspace-agent, self-reflection, capabilities, tools, hooks]
+execution:
+  target: agent-browser-workspace-self-reflection-agent
+  timeout_seconds: 10
+assertions:
+  - name: self-inventory-tool-trajectory
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: workspace-self-inventory
+  - name: self-reflection-quality-rubric
+    type: code-grader
+    required: true
+    command: ["node", "./graders/self-reflection-quality-gate.mjs"]
+tests: ./cases.jsonl

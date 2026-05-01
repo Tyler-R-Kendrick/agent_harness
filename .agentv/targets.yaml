@@ -20,6 +20,13 @@ targets:
     command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/local-web-research-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
     cwd: ../../..
 
+  - name: agent-browser-workspace-self-reflection-agent
+    provider: cli
+    workers: 1
+    timeout_ms: 10
+    command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/self-reflection-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
+    cwd: ../../..
+
   - name: agent-browser-search-fulfillment
     provider: cli
     judge_target: agent-browser-llm-judge

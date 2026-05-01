@@ -6,12 +6,7 @@
  */
 
 import { createInAppPage } from 'inbrowser-use';
-import type { PlaywrightLikePage } from 'inbrowser-use';
 
-declare global {
-  interface Window {
-    __inBrowserUse: PlaywrightLikePage;
-  }
-}
-
-window.__inBrowserUse = createInAppPage();
+Object.assign(window, {
+  __inBrowserUse: createInAppPage(),
+});

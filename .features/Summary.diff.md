@@ -1,58 +1,58 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-04-30
-Baseline: `.features/Summary.md` updated from the 2026-04-30 fifteen-harness corpus.
-Diff type: additive update after Space Agent research
+Updated: 2026-05-01
+Baseline: `.features/Summary.md` updated from the 2026-05-01 sixteen-harness corpus.
+Diff type: additive update after Cursor research
 
 ## Net new normalized features
 
-### Added: Mutable agent-built workspace surfaces
-- Why now: Space Agent makes the strongest current case that the agent should build the workspace itself, not only fill a fixed chat transcript with answers.
+### Added: Durable interactive agent artifacts
+- Why now: Cursor's canvases make interactive agent output part of the working surface, not only part of the transcript.
 - Research delta:
-  - the README says the agent reshapes the interface and can build a page, tool, widget, or workflow into the running workspace
-  - the product site says Space Agent builds your space right in the browser
-  - recent browser-surface work makes popup and inline browser panes part of one live runtime model instead of separate UI concepts
+  - the April 15, 2026 Cursor changelog says agents can create interactive canvases containing dashboards, custom interfaces, charts, diagrams, diffs, and to-do lists
+  - those canvases live as durable side-panel artifacts alongside terminal, browser, and source control
+  - Cursor's MCP Apps release reinforces the same direction by rendering richer interactive app UIs inside the agent surface
 
-### Expanded: Shared team agents and governance
-- Why now: Space Agent adds a sharper model for user-specific layers, group-shared behavior, and admin rollback than the current summary captured.
+### Expanded: Embeddable agent runtimes and protocol surfaces
+- Why now: Cursor just made its internal harness available as a public SDK with a more explicit run lifecycle API.
 - Research delta:
-  - the README describes users building in their own layer while groups share tools and workflows across teams
-  - the self-hosted surface is explicitly positioned for multi-user setups with group management
-  - admin mode plus Git-backed history frames governance as a control-plane and rollback problem, not only a chat-history problem
+  - the April 29, 2026 SDK launch exposes the same runtime used by Cursor desktop, CLI, and web
+  - the updated Cloud Agents API is run-scoped, supports SSE streaming and reconnect, and adds archive and delete lifecycle controls
+  - Cursor explicitly positions this for CI, automations, internal platforms, and embedded product experiences
 
-### Expanded: Browser use and computer control
-- Why now: Space Agent tightens the relationship between browser automation and the harness UI by unifying popup and inline browser surfaces.
+### Expanded: Parallel agent orchestration
+- Why now: Cursor's April 24, 2026 multitask release makes async subagents, worktrees, and multi-root workspaces a cleaner supervisor workflow than the current summary captured.
 - Research delta:
-  - the `v0.64` release moves web browsing to registered browser surfaces with one API and lifecycle
-  - prompt-time runtime state now reasons about currently open and last interacted browser surfaces
-  - the agent can operate against browser surfaces that are part of the workspace it is also shaping
+  - `/multitask` now breaks larger tasks into async subagents instead of merely queueing them
+  - worktrees in the Agents Window support isolated background runs across branches with one-click foreground handoff
+  - multi-root workspaces let one agent session span frontend, backend, and shared libraries across folders or repos
 
-### Added: Let browser agents build persistent in-app workspace surfaces
-- Why now: `agent-browser` still treats the app shell mostly as a fixed surface, while Space Agent shows the harness itself can become a task-specific artifact the agent assembles.
+### Added: Expose browser-agent via SDK and durable run API
+- Why now: `agent-browser` still behaves mostly like an app-local UI surface, while Cursor is now exposing its harness as a programmable platform.
 - Linear issue title:
-  - `Let browser agents build persistent workspace surfaces`
+  - `Expose browser-agent runs through a typed SDK`
 - Suggested problem statement:
-  - `agent-browser` can drive tools and browsers, but it cannot yet persistently add dashboards, widgets, guided flows, or review panels into the app as first-class outputs of the run.
+  - `agent-browser` has no clean public runtime for other tools, automations, or products to launch durable runs, stream status, reconnect later, and manage lifecycle state without driving the UI indirectly.
 - One-shot instruction for an LLM:
-  - Design and implement a mutable workspace-surface system for `agent-browser` where an agent can create task-specific pages, widgets, browser panes, and review panels inside the app, persist them as named artifacts, and expose ownership, permissions, and rollback for every agent-authored surface.
+  - Design and implement a typed `agent-browser` SDK and durable run API that can launch local or remote browser-agent sessions, stream structured events, support reconnect and cancellation, expose explicit run lifecycle controls, and let other internal tools embed the harness without screen-scraping the app.
 
-### Added: Add layered team customware with rollback
-- Why now: Space Agent shows a strong pattern for combining personal layers, shared group layers, and admin-safe rollback in one system.
+### Added: Add multitask subagents with worktree-aware branch isolation
+- Why now: Cursor shows a concrete path for parallel subagents that can each work in their own isolated branch context and then be compared or foregrounded deliberately.
 - Linear issue title:
-  - `Add layered workspace customware and rollback`
+  - `Add multitask subagents and branch isolation`
 - Suggested problem statement:
-  - `agent-browser` lacks a clean way for individuals and teams to publish reusable workspace behavior without risking cross-user breakage or manual cleanup when an experiment goes wrong.
+  - `agent-browser` still centers one active run at a time, which makes larger tasks slow to supervise and makes parallel branch-safe experimentation awkward.
 - One-shot instruction for an LLM:
-  - Implement layered customware for `agent-browser` with user, team, and admin scopes; let agents publish reusable tools and workflow surfaces into those scopes; and back every change with versioned history, diff inspection, and one-click rollback to the last known good state.
+  - Implement a multitask mode for `agent-browser` that decomposes larger work into async subagents, launches each subagent in an isolated branch or worktree context, shows side-by-side status and output comparison, and allows one-click promotion of a chosen branch back into the primary foreground workflow.
 
-### Added: Unify popup and inline browser surfaces
-- Why now: Space Agent's browser-surface model is a concrete reminder that browser automation becomes more composable when embedded panes and separate windows share the same runtime contract.
+### Added: Add durable interactive canvases for agent runs
+- Why now: Cursor canvases suggest that planning, review, and debugging benefit from interactive artifacts that outlive the chat turn.
 - Linear issue title:
-  - `Unify browser panes and popup windows`
+  - `Add durable agent canvases`
 - Suggested problem statement:
-  - `agent-browser` still risks fragmented UX and duplicated logic between embedded browser views and detached windows, which makes task-specific workspace composition harder to build.
+  - `agent-browser` can show transcript, browser, and code state, but it cannot yet preserve agent-authored dashboards, diagrams, checklists, or review panels as durable workspace artifacts.
 - One-shot instruction for an LLM:
-  - Refactor `agent-browser` so embedded browser panes and popup windows register through one browser-surface abstraction with shared lifecycle, focus semantics, state reporting, and prompt exposure, then migrate existing browser actions and UI controls onto that contract.
+  - Implement a canvas artifact system for `agent-browser` where agents can create and update persistent dashboards, diagrams, checklists, and review panels that live beside transcript, terminal, browser, and diff views, with explicit artifact IDs, revision history, and safe follow-up updates.
 
 ## How to use this file
 
@@ -63,6 +63,6 @@ Diff type: additive update after Space Agent research
 
 ## Recommended next Linear batch
 
-1. `Let browser agents build persistent workspace surfaces`
-2. `Add layered workspace customware and rollback`
-3. `Unify browser panes and popup windows`
+1. `Expose browser-agent runs through a typed SDK`
+2. `Add multitask subagents and branch isolation`
+3. `Add durable agent canvases`

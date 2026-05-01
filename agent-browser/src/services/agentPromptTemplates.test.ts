@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAgentSystemPrompt,
+  buildSelfReflectionTemplate,
   buildResearchTemplate,
   buildDelegationWorkerPrompt,
   buildDelegationWorkerTask,
@@ -28,6 +29,9 @@ describe('agentPromptTemplates', () => {
     expect(resolveAgentScenario('Switch the workspace in agent-browser terminal mode.')).toBe('harness-control');
     expect(resolveAgentScenario('Open the overlay for this tab and switch the panel.')).toBe('harness-control');
     expect(resolveAgentScenario('Research the current browser automation options with citations.')).toBe('research');
+    expect(resolveAgentScenario('What are you best at as this workspace agent?')).toBe('self-reflection');
+    expect(resolveAgentScenario('Which tools, hooks, and skills do you have registered?')).toBe('self-reflection');
+    expect(resolveAgentScenario('What can you not do, and what is best left to a human?')).toBe('self-reflection');
     expect(resolveAgentScenario('Hello there')).toBe('general-chat');
   });
 
@@ -57,6 +61,26 @@ describe('agentPromptTemplates', () => {
     expect(template).toContain('.memory/MEMORY.md');
     expect(template).toContain('.memory/*.memory.md');
     expect(template).toContain('markdown list item');
+  });
+
+  it('builds self-reflection guidance for agent identity, capability inventory, limits, and human handoff', () => {
+    const template = buildSelfReflectionTemplate();
+
+    expect(template).toContain('active workspace agent');
+    expect(template).toContain('registered tools');
+    expect(template).toContain('skills, plugins, hooks');
+    expect(template).toContain('best for a human');
+    expect(template).toContain('Do not invent unavailable tools');
+
+    const prompt = buildAgentSystemPrompt({
+      workspaceName: 'Research',
+      goal: 'Answer questions about the active workspace agent.',
+      scenario: 'self-reflection',
+    });
+
+    expect(prompt).toContain('## Self-Reflection Guidance');
+    expect(prompt).toContain('Active workspace: Research');
+    expect(prompt).toContain('Answer questions about the active workspace agent.');
   });
 
   it('builds tool instructions with available tool detail', () => {
