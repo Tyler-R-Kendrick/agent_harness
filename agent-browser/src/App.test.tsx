@@ -4,6 +4,10 @@ import { createWebMcpTool } from 'agent-browser-mcp';
 import { installModelContext } from 'webmcp';
 import App from './App';
 import {
+  getDefaultSecretsManagerAgent,
+  resetDefaultSecretsManagerAgentForTests,
+} from './chat-agents/Secrets';
+import {
   buildRenamedSessionFsPath,
   buildSessionFsChildPath,
   normalizeSessionFsEntryName,
@@ -263,6 +267,7 @@ describe('App', () => {
   });
 
   beforeEach(() => {
+    resetDefaultSecretsManagerAgentForTests();
     window.localStorage.clear();
     window.sessionStorage.clear();
     bashExecCommands.length = 0;
@@ -414,6 +419,60 @@ describe('App', () => {
         source: 'workspace-memory',
       }),
     ]));
+  });
+
+  it('renders an MCP secret app form that returns only a secretRef to the agent', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    const webmcpTool = createWebMcpTool(modelContext!);
+    const secretValue = 'weather-secret-value-1234567890';
+    let secretResult: ReturnType<NonNullable<typeof webmcpTool.execute>>;
+    await act(async () => {
+      secretResult = webmcpTool.execute?.({
+        tool: 'request_secret',
+        args: {
+          name: 'OPENWEATHER_API_KEY',
+          reason: 'The weather API requires a server-side key.',
+        },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('form', { name: 'Secrets Manager request' })).toBeInTheDocument();
+    expect(screen.getByText('The weather API requires a server-side key.')).toBeInTheDocument();
+    let resolvedSecretResult: unknown;
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Secret name'), { target: { value: 'OPENWEATHER_API_KEY' } });
+      fireEvent.change(screen.getByLabelText('Secret value'), { target: { value: secretValue } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create secret ref' }));
+      resolvedSecretResult = await secretResult!;
+      await Promise.resolve();
+    });
+
+    expect(resolvedSecretResult).toEqual({
+      status: 'secret_ref_created',
+      requestId: expect.stringMatching(/^secret-/),
+      name: 'OPENWEATHER_API_KEY',
+      secretRef: 'secret-ref://local/openweather-api-key',
+    });
+
+    expect(screen.getByText('Secret ref created')).toBeInTheDocument();
+    expect(screen.getByText('secret-ref://local/openweather-api-key')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(secretValue);
+    await expect(getDefaultSecretsManagerAgent().listSecrets()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'openweather-api-key',
+        label: 'OPENWEATHER_API_KEY',
+        value: secretValue,
+        source: 'manual',
+      }),
+    ]);
   });
 
   it('renders Files as a compute surface and mounts workspace directories as drives', async () => {
@@ -1319,6 +1378,45 @@ describe('App', () => {
 
     expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('button', { name: 'Refresh status' })).not.toBeInTheDocument();
+  });
+
+  it('manages secrets and redaction settings from the settings panel without revealing values', async () => {
+    vi.useFakeTimers();
+    const stripeLikeSecret = ['sk', 'live', '1234567890abcdefghijklmnopqrstuv'].join('_');
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    expect(screen.getByRole('button', { name: /Secrets \(0\)/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Secret name'), { target: { value: 'STRIPE_SECRET_KEY' } });
+    fireEvent.change(screen.getByLabelText('Secret value'), { target: { value: stripeLikeSecret } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add secret' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: /Secrets \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByText('STRIPE_SECRET_KEY')).toBeInTheDocument();
+    expect(screen.getByText('secret-ref://local/stripe-secret-key')).toBeInTheDocument();
+    expect(screen.getByText('••••••••••••••••')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(stripeLikeSecret);
+
+    fireEvent.click(screen.getByLabelText('Disable high entropy secret fallback'));
+    expect(JSON.parse(window.localStorage.getItem('agent-browser.secret-management-settings') ?? '{}')).toMatchObject({
+      detectHighEntropySecrets: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete secret STRIPE_SECRET_KEY' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: /Secrets \(0\)/i })).toBeInTheDocument();
+    expect(screen.queryByText('STRIPE_SECRET_KEY')).not.toBeInTheDocument();
   });
 
   it('manages custom LogAct evaluation agents from settings', async () => {

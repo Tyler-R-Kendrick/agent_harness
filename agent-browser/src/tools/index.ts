@@ -19,6 +19,7 @@ export type ToolGroup =
   | 'files-worktree-mcp'
   | 'clipboard-worktree-mcp'
   | 'user-context-mcp'
+  | 'secrets-mcp'
   | 'web-search-mcp';
 
 export interface ToolDescriptor {
@@ -49,6 +50,7 @@ const TOOL_GROUP_DESCRIPTIONS: Readonly<Record<ToolGroup, string>> = {
   'files-worktree-mcp': 'Workspace and session filesystem tools for reading and editing files.',
   'clipboard-worktree-mcp': 'Clipboard inspection and restore tools.',
   'user-context-mcp': 'User context tools for app memory, browser location, and eliciting missing data.',
+  'secrets-mcp': 'Secret request tools that return secret-ref handles without exposing raw values.',
   'web-search-mcp': 'Web search tools for current external facts, source snippets, and local recommendations.',
 };
 

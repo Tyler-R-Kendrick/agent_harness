@@ -4,6 +4,7 @@ import type {
   RegisterWorkspaceToolsOptions,
   WorkspaceMcpElicitationField,
   WorkspaceMcpElicitationRequest,
+  WorkspaceMcpSecretRequest,
 } from './workspaceToolTypes';
 
 type RecallInput = {
@@ -15,6 +16,12 @@ type ElicitationInput = {
   prompt?: string;
   reason?: string;
   fields?: unknown;
+};
+
+type SecretRequestInput = {
+  name?: string;
+  prompt?: string;
+  reason?: string;
 };
 
 const DEFAULT_ELICITATION_FIELDS: WorkspaceMcpElicitationField[] = [{
@@ -59,6 +66,7 @@ export function registerUserContextTools(modelContext: ModelContext, options: Re
     getUserContextMemory,
     getBrowserLocation,
     onElicitUserInput,
+    onRequestSecret,
     signal,
   } = options;
 
@@ -145,6 +153,40 @@ export function registerUserContextTools(modelContext: ModelContext, options: Re
         };
       }
       return onElicitUserInput(request);
+    },
+  }, { signal });
+
+  modelContext.registerTool({
+    name: 'request_secret',
+    title: 'Request secret',
+    description: 'Pause execution and show an inline MCP app form that stores a named secret locally and returns only a secretRef, never the raw secret value.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        prompt: { type: 'string' },
+        reason: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+    execute: async (input: object) => {
+      const typedInput = input as SecretRequestInput;
+      const name = readString(typedInput.name) ?? 'API_KEY';
+      const prompt = readString(typedInput.prompt) ?? `Create a secret named ${name}.`;
+      const request: WorkspaceMcpSecretRequest = {
+        name,
+        prompt,
+        reason: readString(typedInput.reason),
+      };
+      if (!onRequestSecret) {
+        return {
+          status: 'needs_secret' as const,
+          requestId: `secret-${Date.now().toString(36)}`,
+          name,
+          prompt,
+        };
+      }
+      return onRequestSecret(request);
     },
   }, { signal });
 }
