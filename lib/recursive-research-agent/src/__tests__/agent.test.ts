@@ -103,4 +103,25 @@ describe('RecursiveResearchAgent', () => {
     expect(result.evidence).toHaveLength(1);
     expect(result.errors.some((error) => error.stage === 'synthesis')).toBe(true);
   });
+
+  it('does not execute research tools when the caller signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const tool = webTool([{ url: 'https://should-not-run.example.com', text: 'unused evidence' }]);
+    const synthesizer = { synthesize: vi.fn(async () => 'should not synthesize') };
+    const agent = new RecursiveResearchAgent({
+      tools: { webResearchAgent: tool, synthesizer },
+      defaults: { maxIterations: 3, targetSufficiencyScore: 0.1 },
+    });
+
+    const result = await agent.run({ question: 'collect sources without running', signal: controller.signal, synthesize: true });
+
+    expect(tool.run).not.toHaveBeenCalled();
+    expect(synthesizer.synthesize).not.toHaveBeenCalled();
+    expect(result.metrics.iterations).toBe(0);
+    expect(result.metrics.searchQueriesExecuted).toBe(0);
+    expect(result.metrics.urlsFetched).toBe(0);
+    expect(result.visited).toEqual([]);
+    expect(result.metadata).toEqual(expect.objectContaining({ aborted: true }));
+  });
 });

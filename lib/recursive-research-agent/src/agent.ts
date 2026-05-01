@@ -30,37 +30,50 @@ export class RecursiveResearchAgent {
       enableSemanticExpansion: this.config.enableSemanticExpansion,
       enableLocalIndexSearch: Boolean(this.config.tools.localIndexSearchAgent),
     };
-    await this.emit({ type: 'started', task: state.task });
-    const initialTargets = generateInitialTargets({ request, task: state.task });
-    for (const target of initialTargets) addTargetIfAllowed({ target, state });
-    await this.emit({ type: 'frontier_seeded', targets: state.frontier.list() });
-
-    while (!shouldStop(state).stop) {
-      const targets = selectNextTargets(state, state.budget.maxTargetsPerIteration);
-      if (targets.length === 0) break;
-      await this.emit({ type: 'iteration_started', iteration: state.counters.iterations + 1, targets });
-      await mapWithConcurrency(targets, 2, async (target) => this.executeAndIngest(state, target, request));
-      state.counters.iterations += 1;
-      await this.updateGaps(state, request.signal);
-      const decision = decideNextStep(state);
-      const logged = logDecision(state, decision);
-      state.decisions.push(logged);
-      await this.emit({ type: 'decision', decision: logged });
-      if ('nextTargets' in decision) {
-        for (const target of decision.nextTargets) addTargetIfAllowed({ target, state });
-      }
-      if (decision.action === 'stop') break;
+    const markAborted = (): void => {
+      state.metadata = { ...state.metadata, aborted: true };
+    };
+    if (request.signal?.aborted) {
+      markAborted();
+    } else {
+      request.signal?.addEventListener('abort', markAborted, { once: true });
     }
 
-    const result = await finalizeResult({
-      state,
-      synthesizer: this.config.enableSynthesis === false ? undefined : this.config.tools.synthesizer,
-      synthesize: request.synthesize,
-      model: request.model,
-      signal: request.signal,
-    });
-    await this.emit({ type: 'completed', result });
-    return result;
+    try {
+      await this.emit({ type: 'started', task: state.task });
+      const initialTargets = generateInitialTargets({ request, task: state.task });
+      for (const target of initialTargets) addTargetIfAllowed({ target, state });
+      await this.emit({ type: 'frontier_seeded', targets: state.frontier.list() });
+
+      while (!shouldStop(state).stop) {
+        const targets = selectNextTargets(state, state.budget.maxTargetsPerIteration);
+        if (targets.length === 0) break;
+        await this.emit({ type: 'iteration_started', iteration: state.counters.iterations + 1, targets });
+        await mapWithConcurrency(targets, 2, async (target) => this.executeAndIngest(state, target, request));
+        state.counters.iterations += 1;
+        await this.updateGaps(state, request.signal);
+        const decision = decideNextStep(state);
+        const logged = logDecision(state, decision);
+        state.decisions.push(logged);
+        await this.emit({ type: 'decision', decision: logged });
+        if ('nextTargets' in decision) {
+          for (const target of decision.nextTargets) addTargetIfAllowed({ target, state });
+        }
+        if (decision.action === 'stop') break;
+      }
+
+      const result = await finalizeResult({
+        state,
+        synthesizer: this.config.enableSynthesis === false || state.metadata?.aborted === true ? undefined : this.config.tools.synthesizer,
+        synthesize: state.metadata?.aborted === true ? false : request.synthesize,
+        model: request.model,
+        signal: request.signal,
+      });
+      await this.emit({ type: 'completed', result });
+      return result;
+    } finally {
+      request.signal?.removeEventListener('abort', markAborted);
+    }
   }
 
   private async executeAndIngest(state: ResearchState, target: CrawlTarget, request: RecursiveResearchRequest): Promise<void> {
