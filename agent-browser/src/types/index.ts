@@ -349,7 +349,7 @@ export interface BrowserNavHistory {
   currentIndex: number;
 }
 
-export type WorkspaceFileKind = 'agents' | 'skill' | 'plugin' | 'hook' | 'memory';
+export type WorkspaceFileKind = 'agents' | 'skill' | 'tool' | 'plugin' | 'hook' | 'memory';
 
 export interface IntegrationSurface {
   id: string;
@@ -377,6 +377,13 @@ export interface WorkspaceSkill {
   content: string;
 }
 
+export interface WorkspaceTool {
+  path: string;
+  directory: string;
+  manifestName: string;
+  content: string;
+}
+
 export interface WorkspacePlugin {
   path: string;
   directory: string;
@@ -393,6 +400,7 @@ export interface WorkspaceHook {
 export interface WorkspaceCapabilities {
   agents: WorkspaceFile[];
   skills: WorkspaceSkill[];
+  tools: WorkspaceTool[];
   plugins: WorkspacePlugin[];
   hooks: WorkspaceHook[];
   memory: WorkspaceFile[];
