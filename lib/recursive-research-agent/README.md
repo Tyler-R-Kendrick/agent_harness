@@ -113,6 +113,20 @@ Results include the task, optional final answer, evidence, citations, claims, ga
 - Persistence through caller-owned state/event handling.
 - MCP or HTTP wrappers around the same tool contracts.
 
+## Package Boundary
+
+Use the package root as the stable public import path:
+
+```ts
+import { RecursiveResearchAgent } from '@agent-harness/recursive-research-agent';
+```
+
+The package exports the controller class and the request/result/configuration
+types needed by callers. Files under `src/decisions`, `src/frontier`,
+`src/gaps`, `src/graph`, `src/links`, `src/queries`, `src/state`, and
+`src/utils` are implementation modules for the root entry point rather than
+documented deep-import APIs.
+
 ## Validation
 
 ```sh
