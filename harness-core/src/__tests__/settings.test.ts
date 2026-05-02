@@ -96,16 +96,25 @@ describe('SettingsRegistry', () => {
   it('applies fallback values to existing registries without replacing explicit settings', () => {
     const existing = new SettingsRegistry({
       definitions: [
+        { key: 'label', type: 'string' },
         { key: 'maxTurns', type: 'integer', defaultValue: 3 },
         { key: 'theme', type: 'enum', values: ['light', 'dark'], defaultValue: 'light' },
       ],
-      values: { maxTurns: 7 },
+      values: { maxTurns: '7' },
     });
 
-    const reused = createSettingsRegistry(existing, { maxTurns: '5', theme: 'dark' });
+    const reused = createSettingsRegistry(existing, {
+      label: 'fallback label',
+      maxTurns: '5',
+      theme: 'dark',
+    });
 
     expect(reused).toBe(existing);
-    expect(reused.entries()).toEqual({ maxTurns: 7, theme: 'dark' });
+    expect(reused.entries()).toEqual({
+      label: 'fallback label',
+      maxTurns: 7,
+      theme: 'dark',
+    });
   });
 
   it('returns defensive copies of setting definitions', () => {
