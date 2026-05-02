@@ -6,6 +6,7 @@ import { getDefaultSecretsManagerAgent, type SecretManagementSettings, type Secr
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
+import { isPlannerTaskText, PLANNER_LABEL, streamPlannerChat } from './Planner';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
@@ -29,6 +30,38 @@ export {
   isTourGuideTaskText,
   streamTourGuideChat,
 } from './TourGuide';
+export {
+  buildPlannerOperatingInstructions,
+  buildPlannerRuntimeSnapshot,
+  buildPlannerSystemPrompt,
+  buildPlannerToolInstructions,
+  createPlannerTaskRecord,
+  isPlannerTaskText,
+  normalizePlannerTaskId,
+  PLANNER_AGENT_ID,
+  PLANNER_BOARD_ARTIFACT_PATH,
+  PLANNER_LABEL,
+  PLANNER_TASK_ARTIFACT_PATH,
+  renderPlannerTaskBoardMarkdown,
+  streamPlannerChat,
+  summarizePlannerRuntime,
+  upsertPlannerTask,
+} from './Planner';
+export type {
+  CreatePlannerTaskRecordInput,
+  PlannerExternalTaskManagerConfig,
+  PlannerExternalTaskManagerKind,
+  PlannerExternalTaskManagerMode,
+  PlannerExternalTaskRef,
+  PlannerMonitoredSession,
+  PlannerRuntimeSnapshot,
+  PlannerSessionSource,
+  PlannerSessionStatus,
+  PlannerTaskRecord,
+  PlannerTaskSource,
+  PlannerTaskStatus,
+  PlannerTaskUpdate,
+} from './Planner';
 export {
   buildResearcherOperatingInstructions,
   buildResearcherSystemPrompt,
@@ -181,6 +214,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'planner') {
+    await streamPlannerChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'tour-guide') {
     await streamTourGuideChat({
       workspaceName: options.workspaceName,
@@ -227,11 +275,16 @@ export function getAgentDisplayName({
   activeGhcpModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher' || provider === 'debugger') {
+  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : (activeCodiModelName ?? 'Codi');
-    return `${provider === 'researcher' ? RESEARCHER_LABEL : DEBUGGER_LABEL}: ${modelName}`;
+    const label = provider === 'researcher'
+      ? RESEARCHER_LABEL
+      : provider === 'debugger'
+        ? DEBUGGER_LABEL
+        : PLANNER_LABEL;
+    return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
   return provider === 'ghcp'
@@ -260,6 +313,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCodiModelsReady)
       ? 'Ask Debugger…'
       : 'Sign in to GHCP or install a Codi model to debug';
+  }
+  if (provider === 'planner') {
+    return (hasGhcpModelsReady || hasCodiModelsReady)
+      ? 'Ask Planner…'
+      : 'Sign in to GHCP or install a Codi model to plan';
   }
   if (provider === 'tour-guide') {
     return 'Ask Tour Guide…';
@@ -297,6 +355,14 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Debugger models`
       : 'Debugger needs GHCP or Codi';
   }
+  if (provider === 'planner') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Planner models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Planner models`
+      : 'Planner needs GHCP or Codi';
+  }
   if (provider === 'tour-guide') {
     return 'Creates guided product tours';
   }
@@ -312,6 +378,7 @@ export function resolveAgentProviderForTask({
 }): AgentProvider {
   if (isResearchTaskText(latestUserInput)) return 'researcher';
   if (isDebuggingTaskText(latestUserInput)) return 'debugger';
+  if (isPlannerTaskText(latestUserInput)) return 'planner';
   return isTourGuideTaskText(latestUserInput) ? 'tour-guide' : selectedProvider;
 }
 
@@ -324,7 +391,7 @@ export function resolveRuntimeAgentProvider({
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'tour-guide') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   return hasCodiModelsReady ? 'codi' : 'ghcp';
 }
