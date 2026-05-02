@@ -93,6 +93,21 @@ describe('SettingsRegistry', () => {
     expect(formatSettingValue(undefined)).toBe('undefined');
   });
 
+  it('applies fallback values to existing registries without replacing explicit settings', () => {
+    const existing = new SettingsRegistry({
+      definitions: [
+        { key: 'maxTurns', type: 'integer', defaultValue: 3 },
+        { key: 'theme', type: 'enum', values: ['light', 'dark'], defaultValue: 'light' },
+      ],
+      values: { maxTurns: 7 },
+    });
+
+    const reused = createSettingsRegistry(existing, { maxTurns: '5', theme: 'dark' });
+
+    expect(reused).toBe(existing);
+    expect(reused.entries()).toEqual({ maxTurns: 7, theme: 'dark' });
+  });
+
   it('returns defensive copies of setting definitions', () => {
     const registry = new SettingsRegistry({
       definitions: [{ key: 'mode', type: 'enum', values: ['auto'], defaultValue: 'auto' }],
