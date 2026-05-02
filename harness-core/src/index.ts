@@ -109,8 +109,11 @@ export {
   createAgentBus,
   readAgentBusEntries,
   resolveAgentBus,
+  withAgentBusHooks,
+  type AgentBusHookOptions,
   type AgentBusEvent,
   type AgentBusEntrySnapshot,
+  type CreateAgentBusOptions,
 } from './agentBus.js';
 export {
   appendMemoryMessage,
@@ -141,20 +144,34 @@ export {
   type CreateAgentRuntimeOptions,
 } from './baseAgent.js';
 export {
+  ACTOR_WORKFLOW_HOOK_EVENTS,
+  AGENT_BUS_HOOK_EVENTS,
+  AGENT_LOOP_HOOK_EVENTS,
+  HarnessHookPolicyError,
   HookRegistry,
+  LLM_HOOK_EVENTS,
+  LOGACT_AGENT_LOOP_HOOK_EVENTS,
+  createCodeHook,
   createInferenceHook,
+  createSemanticHook,
+  hookPointForEvent,
   type HarnessHook,
   type HarnessHookEvent,
+  type HarnessHookEventDescriptor,
+  type HarnessHookEventType,
+  type HarnessHookFormat,
   type HarnessHookKind,
   type HarnessHookMode,
   type HarnessHookMiddlewareRunResult,
   type HarnessHookOutput,
   type HarnessHookPipeRunResult,
   type HarnessHookPoint,
+  type HarnessHookPolicyFailure,
   type HarnessHookResult,
   type HarnessHookRunOptions,
   type HarnessHookRunResult,
   type HarnessHookRunner,
+  type HarnessSemanticHook,
 } from './hooks.js';
 export {
   WorkflowAgentBus,
@@ -217,6 +234,16 @@ export {
   type DefaultCommandOptions,
   type HarnessUpdateHandler,
 } from './defaultCommands.js';
+export {
+  SettingsRegistry,
+  createSettingsRegistry,
+  formatSettingValue,
+  type HarnessSettingDefinition,
+  type HarnessSettingType,
+  type HarnessSettingTypeDefinition,
+  type HarnessSettingsInput,
+  type SettingsRegistryOptions,
+} from './settings.js';
 export {
   PluginRegistry,
   createHarnessExtensionContext,

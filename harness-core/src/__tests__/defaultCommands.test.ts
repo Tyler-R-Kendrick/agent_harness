@@ -135,6 +135,96 @@ describe('default harness commands', () => {
     });
   });
 
+  it('validates and describes typed settings supplied through the settings option', async () => {
+    const registry = createDefaultCommandRegistry({
+      settings: {
+        definitions: [
+          { key: 'theme', type: 'enum', values: ['dark', 'light'], defaultValue: 'dark', description: 'UI theme.' },
+          { key: 'maxTurns', type: 'integer', defaultValue: 3 },
+          { key: 'approvalRequired', type: 'boolean', defaultValue: false },
+        ],
+        values: { maxTurns: 4 },
+      },
+    });
+
+    await expect(registry.execute('/config')).resolves.toEqual({
+      matched: true,
+      commandId: 'config',
+      result: {
+        type: 'config',
+        action: 'list',
+        settings: { approvalRequired: false, maxTurns: 4, theme: 'dark' },
+        definitions: [
+          { key: 'approvalRequired', type: 'boolean', defaultValue: false },
+          { key: 'maxTurns', type: 'integer', defaultValue: 3 },
+          { key: 'theme', type: 'enum', values: ['dark', 'light'], defaultValue: 'dark', description: 'UI theme.' },
+        ],
+        text: 'approvalRequired=false\nmaxTurns=4\ntheme=dark',
+      },
+    });
+
+    await expect(registry.execute('/config approvalRequired=true')).resolves.toMatchObject({
+      matched: true,
+      commandId: 'config',
+      result: {
+        type: 'config',
+        action: 'set',
+        key: 'approvalRequired',
+        value: true,
+        text: 'approvalRequired=true',
+      },
+    });
+    await expect(registry.execute('/config set maxTurns=2.5')).rejects.toThrow(/integer/i);
+    await expect(registry.execute('/config theme=blue')).rejects.toThrow(/dark, light/i);
+  });
+
+  it('allows hosts to register custom setting types for config command values', async () => {
+    const registry = createDefaultCommandRegistry({
+      settings: {
+        types: [
+          {
+            id: 'percentage',
+            parse(value: unknown) {
+              const parsed = Number(value);
+              if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+                throw new Error('Expected a percentage between 0 and 100.');
+              }
+              return parsed / 100;
+            },
+            format(value: unknown) {
+              return `${Number(value) * 100}%`;
+            },
+          },
+        ],
+        definitions: [
+          { key: 'confidence', type: 'percentage', defaultValue: 0.75 },
+        ],
+      },
+    });
+
+    await expect(registry.execute('/config confidence=80')).resolves.toMatchObject({
+      matched: true,
+      commandId: 'config',
+      result: {
+        type: 'config',
+        action: 'set',
+        key: 'confidence',
+        value: 0.8,
+        settings: { confidence: 0.8 },
+        text: 'confidence=80%',
+      },
+    });
+    await expect(registry.execute('/config')).resolves.toMatchObject({
+      matched: true,
+      commandId: 'config',
+      result: {
+        settings: { confidence: 0.8 },
+        text: 'confidence=80%',
+      },
+    });
+    await expect(registry.execute('/config confidence=101')).rejects.toThrow(/percentage/i);
+  });
+
   it('runs update handlers and reports when no updater is configured', async () => {
     const applyUpdate = vi.fn(async () => ({ status: 'updated', version: '0.2.0' }));
     const registry = createDefaultCommandRegistry({ update: applyUpdate });
