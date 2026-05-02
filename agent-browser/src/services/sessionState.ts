@@ -10,6 +10,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { WorkspaceViewState } from './workspaceTree';
+import { assertHarnessElementAllowedByCatalog } from '../features/harness-ui/harnessCatalog';
+import type { HarnessAppSpec, HarnessElement } from '../features/harness-ui/types';
 import type { ChatMessage, NodeKind, NodeType, TreeNode } from '../types';
 
 export const STORAGE_KEYS = {
@@ -19,6 +21,7 @@ export const STORAGE_KEYS = {
   workspaceViewStateByWorkspace: 'agent-browser.workspace-view-state-by-workspace',
   chatMessagesBySession: 'agent-browser.chat-messages-by-session',
   chatHistoryBySession: 'agent-browser.chat-history-by-session',
+  harnessSpecsByWorkspace: 'agent-browser.harness-specs-by-workspace',
   browserNotificationSettings: 'agent-browser.browser-notification-settings',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
@@ -158,6 +161,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isJsonValue(value: unknown): boolean {
+  if (
+    value === null
+    || typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
@@ -217,6 +235,7 @@ function isWorkspaceViewState(value: unknown): value is WorkspaceViewState {
   return (
     isStringArray(value.openTabIds)
     && (value.editingFilePath === null || typeof value.editingFilePath === 'string')
+    && (value.dashboardOpen === undefined || typeof value.dashboardOpen === 'boolean')
     && (value.activeMode === 'agent' || value.activeMode === 'terminal')
     && isStringArray(value.activeSessionIds)
     && isStringArray(value.mountedSessionFsIds)
@@ -226,6 +245,52 @@ function isWorkspaceViewState(value: unknown): value is WorkspaceViewState {
 
 export function isWorkspaceViewStateRecord(value: unknown): value is Record<string, WorkspaceViewState> {
   return isRecord(value) && Object.values(value).every(isWorkspaceViewState);
+}
+
+function isHarnessElement(value: unknown, key: string): value is HarnessElement {
+  if (!isRecord(value)) return false;
+  if (value.id !== key || typeof value.type !== 'string') return false;
+  if (value.props !== undefined && (!isRecord(value.props) || !Object.values(value.props).every(isJsonValue))) {
+    return false;
+  }
+  if (value.children !== undefined && !isStringArray(value.children)) return false;
+  if (value.slot !== undefined && typeof value.slot !== 'string') return false;
+  if (value.editable !== undefined && typeof value.editable !== 'boolean') return false;
+
+  try {
+    assertHarnessElementAllowedByCatalog(value as HarnessElement);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+function isHarnessAppSpec(value: unknown): value is HarnessAppSpec {
+  if (!isRecord(value)) return false;
+  if (value.version !== 'harness-ui/v1' || typeof value.root !== 'string' || !isRecord(value.elements)) {
+    return false;
+  }
+  if (!isRecord(value.metadata)) return false;
+  const metadata = value.metadata;
+  if (
+    typeof metadata.workspaceId !== 'string'
+    || typeof metadata.workspaceName !== 'string'
+    || metadata.createdBy !== 'agent-browser'
+    || metadata.designSystemId !== 'agent-browser/current'
+    || typeof metadata.revision !== 'number'
+    || !Number.isInteger(metadata.revision)
+    || metadata.revision < 1
+  ) {
+    return false;
+  }
+  if (!Object.prototype.hasOwnProperty.call(value.elements, value.root)) {
+    return false;
+  }
+  return Object.entries(value.elements).every(([key, element]) => isHarnessElement(element, key));
+}
+
+export function isHarnessAppSpecRecord(value: unknown): value is Record<string, HarnessAppSpec> {
+  return isRecord(value) && Object.values(value).every(isHarnessAppSpec);
 }
 
 function isChatMessage(value: unknown): value is ChatMessage {

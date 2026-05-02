@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   STORAGE_KEYS,
   isChatMessagesBySession,
+  isHarnessAppSpecRecord,
   isStringArrayRecord,
   isStringRecord,
   isTreeNode,
@@ -12,6 +13,7 @@ import {
   saveJson,
   useStoredState,
 } from './sessionState';
+import { createDefaultHarnessAppSpec } from '../features/harness-ui/harnessSpec';
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string');
@@ -45,6 +47,7 @@ describe('STORAGE_KEYS', () => {
       chatMessagesBySession: expect.any(String),
       chatHistoryBySession: expect.any(String),
       browserNotificationSettings: expect.any(String),
+      harnessSpecsByWorkspace: expect.any(String),
     });
   });
 });
@@ -92,10 +95,22 @@ describe('persistent session validators', () => {
       'ws-research': {
         openTabIds: [],
         editingFilePath: 'notes.md',
+        dashboardOpen: true,
         activeMode: 'agent',
         activeSessionIds: ['session-1'],
         mountedSessionFsIds: ['session-1'],
         panelOrder: ['session:session-1'],
+      },
+    })).toBe(true);
+
+    expect(isWorkspaceViewStateRecord({
+      'ws-legacy': {
+        openTabIds: [],
+        editingFilePath: null,
+        activeMode: 'terminal',
+        activeSessionIds: [],
+        mountedSessionFsIds: [],
+        panelOrder: [],
       },
     })).toBe(true);
 
@@ -125,6 +140,30 @@ describe('persistent session validators', () => {
     })).toBe(false);
     expect(isStringArrayRecord({ 'session-1': ['Hello', 'Again'] })).toBe(true);
     expect(isStringArrayRecord({ 'session-1': ['Hello', 42] })).toBe(false);
+  });
+
+  it('accepts persisted harness app specs and rejects unsafe generated specs', () => {
+    const spec = createDefaultHarnessAppSpec({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+    });
+
+    expect(isHarnessAppSpecRecord({ 'ws-research': spec })).toBe(true);
+    expect(isHarnessAppSpecRecord({
+      'ws-research': {
+        ...spec,
+        metadata: { ...spec.metadata, designSystemId: 'other-design' },
+      },
+    })).toBe(false);
+    expect(isHarnessAppSpecRecord({
+      'ws-research': {
+        ...spec,
+        elements: {
+          ...spec.elements,
+          'bad-widget': { id: 'bad-widget', type: 'RawHtml', props: { className: 'x' } },
+        },
+      },
+    })).toBe(false);
   });
 
   it('rejects invalid record and optional persisted chat fields', () => {

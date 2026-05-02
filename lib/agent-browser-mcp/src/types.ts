@@ -2,6 +2,7 @@ export type WebMcpToolGroup =
   | 'built-in'
   | 'worktree-mcp'
   | 'renderer-viewport-mcp'
+  | 'harness-ui-mcp'
   | 'browser-worktree-mcp'
   | 'sessions-worktree-mcp'
   | 'files-worktree-mcp'

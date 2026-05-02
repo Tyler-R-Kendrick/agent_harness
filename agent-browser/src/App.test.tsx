@@ -14,6 +14,7 @@ import {
   normalizeSessionFsPath,
 } from './services/sessionFsPath';
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
+import { STORAGE_KEYS } from './services/sessionState';
 import type { CopilotRuntimeState } from './services/copilotApi';
 
 const searchBrowserModelsMock = vi.fn();
@@ -311,6 +312,9 @@ describe('App', () => {
 
     expect(screen.getByLabelText('Primary navigation')).toBeInTheDocument();
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    expect(dashboard).toBeInTheDocument();
+    expect(within(dashboard).getByText('Page: Hugging Face')).toBeInTheDocument();
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Chat mode' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Terminal mode' })).toBeInTheDocument();
@@ -323,6 +327,38 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Browser' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Sessions' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
+  });
+
+  it('customizes and persists the generated harness app spec from the dashboard', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Customize' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace tree' }));
+    fireEvent.change(screen.getByLabelText('Element title'), {
+      target: { value: 'Project map' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save element' }));
+
+    expect(screen.getByRole('button', { name: 'Project map' })).toBeInTheDocument();
+
+    fireEvent.change(within(dashboard).getByLabelText('Describe widget'), {
+      target: { value: 'Add a browser status widget' },
+    });
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Go' }));
+
+    expect(within(dashboard).getByRole('article', { name: 'Browser status widget' })).toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
+    expect(persisted['ws-research'].elements['workspace-sidebar'].props.title).toBe('Project map');
+    expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-browser-status-widget-'))).toBe(true);
   });
 
   it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context sub-groups', async () => {
@@ -355,7 +391,7 @@ describe('App', () => {
 
     // All six surface sub-groups must appear inside the Built-In bucket —
     // not as separate top-level groups. Each must have a toggle-all checkbox.
-    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Workspace', 'User Context']) {
+    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Harness UI', 'Workspace', 'User Context']) {
       expect(
         screen.getByRole('checkbox', { name: `Toggle all ${subGroupLabel} tools` }),
         `Expected sub-group "${subGroupLabel}" inside Built-In, not as a separate top-level group`,
@@ -363,6 +399,57 @@ describe('App', () => {
     }
 
     fireEvent.keyDown(document, { key: 'Escape' });
+  });
+
+  it('exposes harness customization through WebMCP tools', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    const webmcpTool = createWebMcpTool(modelContext!);
+
+    const elements = await webmcpTool.execute?.({ tool: 'list_harness_elements' }, {} as never) as Array<{ id: string; type: string; title: string }>;
+    expect(elements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'workspace-sidebar', type: 'WorkspaceSidebar', title: 'Workspace tree' }),
+      expect.objectContaining({ id: 'render-pane-viewport', type: 'RenderPaneViewport' }),
+    ]));
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'patch_harness_element',
+        args: { elementId: 'workspace-sidebar', props: { title: 'Project map' } },
+      }, {} as never);
+    });
+
+    await flushAsyncUpdates();
+    await expect(webmcpTool.execute?.({
+      tool: 'read_harness_element',
+      args: { elementId: 'workspace-sidebar' },
+    }, {} as never)).resolves.toMatchObject({
+      id: 'workspace-sidebar',
+      props: { title: 'Project map' },
+    });
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'regenerate_harness_ui',
+        args: { prompt: 'Add a browser status widget' },
+      }, {} as never);
+    });
+    await flushAsyncUpdates();
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    expect(within(dashboard).getByRole('article', { name: 'Browser status widget' })).toBeInTheDocument();
+    await expect(webmcpTool.execute?.({ tool: 'read_harness_prompt_context' }, {} as never)).resolves.toMatchObject({
+      rows: expect.arrayContaining([
+        expect.stringContaining('Project map'),
+        expect.stringContaining('Browser status'),
+      ]),
+    });
   });
 
   it('renders an MCP elicitation card, submits the answer, and stores location in app memory', async () => {
@@ -891,9 +978,30 @@ describe('App', () => {
         selected: boolean;
       }>;
     });
+    const nonCliToolId = availableSessionTools.find((descriptor) => descriptor.id !== 'cli')?.id;
+    expect(nonCliToolId).toBeDefined();
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'change_session_tools',
+        args: { sessionId: sessionOne!.id, action: 'select', toolIds: [nonCliToolId!] },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      availableSessionTools = await webmcpTool.execute?.({
+        tool: 'list_session_tools',
+        args: { sessionId: sessionOne!.id },
+      }, {} as never) as Array<{
+        id: string;
+        selected: boolean;
+      }>;
+    });
     const toolIdsToDeselect = availableSessionTools
       .filter((descriptor) => descriptor.selected && descriptor.id !== 'cli')
       .map((descriptor) => descriptor.id);
+    expect(toolIdsToDeselect).toEqual([nonCliToolId]);
 
     let updatedSessionAgentState: {
       agentId: string | null;
@@ -3454,7 +3562,7 @@ describe('App', () => {
       return { text: 'Parallel delegation plan', steps: 1 };
     });
 
-    render(<App />);
+    const { container } = render(<App />);
 
     await act(async () => {
       vi.advanceTimersByTime(350);
@@ -3481,7 +3589,7 @@ describe('App', () => {
     // sequence above interleaves bus rows around the coordinator stage, so
     // the rendered rows MUST follow: Mail (bus-0) → Coordinator brief →
     // InfIn (bus-1). Anything else means branch priority is back.
-    const orderedRows = screen.getAllByRole('button').filter((button) => {
+    const orderedRows = Array.from(container.querySelectorAll<HTMLButtonElement>('.pg-row')).filter((button) => {
       const label = button.textContent ?? '';
       return /Coordinator brief|Mail|InfIn/.test(label);
     });
@@ -4722,7 +4830,7 @@ describe('App', () => {
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(2);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(splitRows[1]).toHaveClass('panels-1');
+    expect(splitRows[1]).toHaveClass('panels-2');
   });
 
   it('shows all panels in a single row when the container is wide enough', async () => {
@@ -4742,14 +4850,14 @@ describe('App', () => {
     // Ctrl+click Transformers.js to also open it → 3 panels (2 browser + 1 session)
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
 
-    // 1280px fits 4 panels of 320px, so all 3 panels fit in a single row
+    // 1280px fits 4 panels of 320px, so dashboard + 3 active panes fit in a single row
     await act(async () => {
       resizeCallback?.([{ contentRect: { width: 1280 } } as ResizeObserverEntry], null as unknown as ResizeObserver);
     });
 
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(1);
-    expect(splitRows[0]).toHaveClass('panels-3');
+    expect(splitRows[0]).toHaveClass('panels-4');
   });
 
   it('hides panels that would breach the minimum panel height', async () => {
@@ -4764,7 +4872,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Open 3 panels: HF + Transformers.js browser tabs plus the active Session 1
+    // Open 4 panels: dashboard, HF + Transformers.js browser tabs, and active Session 1
     fireEvent.click(screen.getByText('Hugging Face'));
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
 
@@ -4773,11 +4881,12 @@ describe('App', () => {
       resizeCallback?.([{ contentRect: { width: 640, height: 280 } } as ResizeObserverEntry], null as unknown as ResizeObserver);
     });
 
-    // Only the first row (2 browser panels) should be rendered; the session panel is hidden
+    // Only the first row (dashboard + first browser panel) should be rendered; later panels are hidden
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(1);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(1);
     expect(screen.queryByLabelText('Chat panel')).not.toBeInTheDocument();
   });
 
@@ -4793,7 +4902,7 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Open 3 panels: HF + Transformers.js browser tabs plus the active Session 1
+    // Open 4 panels: dashboard, HF + Transformers.js browser tabs, and active Session 1
     fireEvent.click(screen.getByText('Hugging Face'));
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
 
@@ -4805,7 +4914,8 @@ describe('App', () => {
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(2);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(splitRows[1]).toHaveClass('panels-1');
+    expect(splitRows[1]).toHaveClass('panels-2');
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });
@@ -4943,16 +5053,17 @@ describe('App', () => {
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Open two panels: a browser tab and the default session
+    // Open a browser tab beside the default dashboard and session
     fireEvent.click(screen.getByText('Hugging Face'));
 
-    // Verify initial order: browser panel first, then session
+    // Verify initial order: dashboard, browser panel, then session
     const splitView = document.querySelector('.browser-split-view');
     expect(splitView).not.toBeNull();
     const cells = splitView!.querySelectorAll('.panel-drag-cell');
-    expect(cells).toHaveLength(2);
-    expect(cells[0].querySelector('[aria-label="Page overlay"]')).not.toBeNull();
-    expect(cells[1].querySelector('[aria-label="Chat panel"]')).not.toBeNull();
+    expect(cells).toHaveLength(3);
+    expect(cells[0].querySelector('[aria-label="Harness dashboard"]')).not.toBeNull();
+    expect(cells[1].querySelector('[aria-label="Page overlay"]')).not.toBeNull();
+    expect(cells[2].querySelector('[aria-label="Chat panel"]')).not.toBeNull();
 
     // Simulate dnd-kit drag from the first draggable title bar.
     const [handleA] = document.querySelectorAll('.panel-titlebar--draggable');
@@ -4964,8 +5075,9 @@ describe('App', () => {
     // (full pointer-sensor integration requires a real browser; here we verify
     // the draggable title bars and ARIA attributes exist and the component stays mounted).
     const handles = document.querySelectorAll('.panel-titlebar--draggable');
-    expect(handles).toHaveLength(2);
+    expect(handles).toHaveLength(3);
     // Both panel types must still be rendered after interaction
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });
