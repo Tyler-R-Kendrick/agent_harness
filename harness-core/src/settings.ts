@@ -67,6 +67,10 @@ export class SettingsRegistry {
     return definition && Object.hasOwn(definition, 'defaultValue') ? definition.defaultValue : undefined;
   }
 
+  hasValue(key: string): boolean {
+    return this.values.has(key);
+  }
+
   set(key: string, value: unknown): unknown {
     const parsed = this.parse(key, value);
     this.values.set(key, parsed);
@@ -118,7 +122,9 @@ export function createSettingsRegistry(
 ): SettingsRegistry {
   if (input instanceof SettingsRegistry) {
     for (const [key, value] of Object.entries(fallbackValues)) {
-      input.set(key, value);
+      if (!input.hasValue(key)) {
+        input.set(key, value);
+      }
     }
     return input;
   }
