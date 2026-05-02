@@ -14,6 +14,7 @@ export type ToolGroup =
   | 'webmcp'
   | 'worktree-mcp'
   | 'renderer-viewport-mcp'
+  | 'harness-ui-mcp'
   | 'browser-worktree-mcp'
   | 'sessions-worktree-mcp'
   | 'files-worktree-mcp'
@@ -45,6 +46,7 @@ const TOOL_GROUP_DESCRIPTIONS: Readonly<Record<ToolGroup, string>> = {
   webmcp: 'Generic WebMCP tools that are not tied to a specific workspace surface.',
   'worktree-mcp': 'Workspace-level tools that act across the current workspace state.',
   'renderer-viewport-mcp': 'Renderer and viewport inspection tools for visible output surfaces.',
+  'harness-ui-mcp': 'Harness UI tools for reading, editing, and regenerating app surfaces.',
   'browser-worktree-mcp': 'Browser page navigation, reading, and history tools.',
   'sessions-worktree-mcp': 'Session management, agent switching, and conversation control tools.',
   'files-worktree-mcp': 'Workspace and session filesystem tools for reading and editing files.',

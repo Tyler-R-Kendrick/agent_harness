@@ -87,6 +87,7 @@ describe('workspaceTree', () => {
     expect(normalized.activeSessionIds).toEqual([]);
     expect(normalized.mountedSessionFsIds).toEqual([sessionId]);
     expect(normalized.panelOrder).toEqual(['browser:ok', 'session:ok']);
+    expect(normalized.dashboardOpen).toBe(true);
   });
 
   it('filters workspace trees and maps nodes back to owning workspaces', () => {
@@ -113,6 +114,7 @@ describe('workspaceTree', () => {
     const left = {
       openTabIds: ['tab-1'],
       editingFilePath: null,
+      dashboardOpen: true,
       activeMode: 'agent' as const,
       activeSessionIds: ['session-1'],
       mountedSessionFsIds: ['session-1'],
@@ -120,7 +122,23 @@ describe('workspaceTree', () => {
     };
 
     expect(renderPaneIdForNode(file)).toBe('file:AGENTS.md');
+    expect(renderPaneIdForNode({ id: 'ws-test', name: 'Test', type: 'workspace' })).toBe('dashboard:ws-test');
     expect(workspaceViewStateEquals(left, { ...left })).toBe(true);
+    expect(workspaceViewStateEquals(left, { ...left, dashboardOpen: false })).toBe(false);
     expect(workspaceViewStateEquals(left, { ...left, panelOrder: [] })).toBe(false);
+  });
+
+  it('opens the dashboard by default for new workspace view entries', () => {
+    const workspace = createWorkspaceNode({
+      id: 'ws-dashboard',
+      name: 'Dashboard',
+      color: '#fff',
+      browserTabs: [],
+    });
+
+    expect(createWorkspaceViewEntry(workspace)).toEqual(expect.objectContaining({
+      dashboardOpen: true,
+      activeSessionIds: expect.any(Array),
+    }));
   });
 });

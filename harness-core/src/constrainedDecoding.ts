@@ -378,7 +378,7 @@ async function resolveGuidanceTsGrammarFromHooks(
 }
 
 async function loadGuidanceTsRuntime(): Promise<GuidanceTsRuntime> {
-  guidanceTsRuntimePromise ??= import(GUIDANCE_TS_MODULE_SPECIFIER) as Promise<unknown> as Promise<GuidanceTsRuntime>;
+  guidanceTsRuntimePromise ??= import(/* @vite-ignore */ GUIDANCE_TS_MODULE_SPECIFIER) as Promise<unknown> as Promise<GuidanceTsRuntime>;
   return guidanceTsRuntimePromise;
 }
 
