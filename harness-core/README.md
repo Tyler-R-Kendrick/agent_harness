@@ -7,6 +7,26 @@ typed messages, lifecycle events, stateful queues, awaited subscribers, a
 low-level loop runner, and an XState-backed LogAct workflow used by Agent
 Browser.
 
+## Package boundary
+
+Use the root entry point for stable core runtime APIs:
+
+```ts
+import { createAgentRuntime } from 'harness-core';
+```
+
+Product-specific instruction adapters are separate public subpath entry points:
+
+```ts
+import { createAgentSkillsPlugin } from 'harness-core/ext/agent-skills';
+import { createAgentsMdHookPlugin } from 'harness-core/ext/agents-md';
+import { createDesignMdPlugin } from 'harness-core/ext/design-md';
+```
+
+Deep imports from `harness-core/src/*` are internal implementation details.
+Consumers should use the root package export or one of the documented `ext/*`
+subpaths so internal module layout can change without breaking package users.
+
 The workflow surface formulates a serializable machine definition whose named
 actors cover the driver, voters, decider, executor, and completion checker.
 `WorkflowAgentBus` is the local write-ahead bus wrapper for the XState workflow
