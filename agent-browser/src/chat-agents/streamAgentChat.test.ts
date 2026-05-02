@@ -7,6 +7,7 @@ vi.mock('@huggingface/transformers', () => ({
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
+import * as PlannerModule from './Planner';
 import * as TourGuideModule from './TourGuide';
 import { streamAgentChat } from './index';
 import { MemorySecretStore, createSecretsManagerAgent } from './Secrets';
@@ -129,6 +130,28 @@ describe('streamAgentChat', () => {
       latestUserInput: 'Show me how to configure tools.',
       workspaceName: 'Ops',
       workspacePromptContext: 'Use workspace files.',
+    }), {}, undefined);
+  });
+
+  it('routes Planner sessions through the Planner adapter', async () => {
+    const streamPlannerChatSpy = vi.spyOn(PlannerModule, 'streamPlannerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'planner',
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'Plan and orchestrate this delegated workflow.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Plan the work.' }],
+      workspaceName: 'Build',
+      workspacePromptContext: 'Use workspace files.',
+    }, {});
+
+    expect(streamPlannerChatSpy).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      latestUserInput: 'Plan and orchestrate this delegated workflow.',
+      workspaceName: 'Build',
     }), {}, undefined);
   });
 

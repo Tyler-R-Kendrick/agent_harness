@@ -78,6 +78,7 @@ describe('agent helpers', () => {
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Researcher: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'codi', activeCodiModelName: 'Qwen' })).toBe('Researcher: Qwen');
     expect(getAgentDisplayName({ provider: 'debugger', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Debugger: GPT-4.1');
+    expect(getAgentDisplayName({ provider: 'planner', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Planner: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'tour-guide' })).toBe('Tour Guide');
 
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Codi…');
@@ -87,6 +88,7 @@ describe('agent helpers', () => {
     expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: true })).toBe('Ask Researcher…');
     expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or install a Codi model to research');
     expect(getAgentInputPlaceholder({ provider: 'debugger', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Debugger…');
+    expect(getAgentInputPlaceholder({ provider: 'planner', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Planner…');
     expect(getAgentInputPlaceholder({ provider: 'tour-guide', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Ask Tour Guide…');
   });
 
@@ -135,6 +137,11 @@ describe('agent helpers', () => {
       copilotState: createCopilotState(),
     })).toBe('1 Codi-backed Debugger models');
     expect(getAgentProviderSummary({
+      provider: 'planner',
+      installedModels,
+      copilotState: createCopilotState(),
+    })).toBe('1 Codi-backed Planner models');
+    expect(getAgentProviderSummary({
       provider: 'tour-guide',
       installedModels: [],
       copilotState: createCopilotState(),
@@ -169,6 +176,10 @@ describe('agent helpers', () => {
       selectedProvider: 'codi',
       latestUserInput: 'Show me how to configure tools.',
     })).toBe('tour-guide');
+    expect(resolveAgentProviderForTask({
+      selectedProvider: 'codi',
+      latestUserInput: 'Plan and orchestrate this delegated agent workflow.',
+    })).toBe('planner');
 
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
@@ -190,5 +201,10 @@ describe('agent helpers', () => {
       hasCodiModelsReady: true,
       hasGhcpModelsReady: false,
     })).toBe('codi');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'planner',
+      hasCodiModelsReady: false,
+      hasGhcpModelsReady: true,
+    })).toBe('ghcp');
   });
 });
