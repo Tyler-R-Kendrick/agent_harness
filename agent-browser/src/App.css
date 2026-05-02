@@ -602,7 +602,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .memory-pulse-dot { position: relative; width: 6px; height: 6px; border-radius: 50%; background: #34d399; }
 @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
 .content-area { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #111214; }
-.chat-panel, .page-overlay { height: 100%; display: flex; flex-direction: column; }
+.chat-panel, .page-overlay, .harness-dashboard-panel { height: 100%; display: flex; flex-direction: column; }
 .chat-header, .page-toolbar, .modal-header {
   display: flex;
   justify-content: space-between;
@@ -2187,6 +2187,284 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   line-height: 1.5;
 }
 
+.harness-dashboard-panel {
+  min-width: 0;
+  min-height: 0;
+  background: #121416;
+}
+.harness-dashboard-titlebar {
+  min-height: 46px;
+  border-bottom: 1px solid var(--panel-border);
+  background: #181b1f;
+}
+.harness-dashboard-titlebar h2 {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 13px;
+  font-weight: 600;
+}
+.harness-dashboard-titlebar .panel-titlebar-heading {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.panel-resource-eyebrow {
+  color: var(--text-muted);
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 10px;
+}
+.harness-dashboard-workbench {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.harness-dashboard-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    #101113;
+  background-size: 28px 28px;
+}
+.harness-dashboard-grid {
+  --harness-cell: 72px;
+  --harness-gap: 10px;
+  position: relative;
+  min-width: 1038px;
+  min-height: 570px;
+}
+.harness-widget-card,
+.harness-add-widget-card {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 8px;
+  background: rgba(28, 32, 37, 0.96);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+.harness-widget-card {
+  position: absolute;
+  left: calc((var(--harness-widget-col) + 7) * (var(--harness-cell) + var(--harness-gap)));
+  top: calc((var(--harness-widget-row) + 3) * (var(--harness-cell) + var(--harness-gap)));
+  width: calc(var(--harness-widget-cols) * var(--harness-cell) + (var(--harness-widget-cols) - 1) * var(--harness-gap));
+  height: calc(var(--harness-widget-rows) * var(--harness-cell) + (var(--harness-widget-rows) - 1) * var(--harness-gap));
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+.harness-widget-header {
+  min-height: 36px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.harness-widget-header h3 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: #e5e7eb;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+.harness-widget-badge {
+  flex: 0 0 auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: rgba(45, 212, 191, 0.12);
+  color: #99f6e4;
+  font-size: 10px;
+}
+.harness-widget-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+.harness-widget-rendered,
+.harness-render-block {
+  min-height: 0;
+}
+.harness-widget-kicker {
+  margin: 0 0 8px;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+.harness-metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.harness-metric-row span {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 6px;
+  padding: 10px 8px;
+  background: rgba(15, 23, 42, 0.42);
+  color: #dbeafe;
+  font-size: 12px;
+  text-align: center;
+}
+.harness-widget-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.harness-widget-list li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  padding: 6px 0;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+.harness-widget-list small {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.harness-widget-empty {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.harness-render-fallback {
+  overflow: auto;
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.harness-add-widget-card {
+  position: absolute;
+  left: 0;
+  top: 410px;
+  width: 318px;
+  min-height: 136px;
+  overflow: hidden;
+}
+.harness-add-widget-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+.harness-suggestion-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.harness-suggestion-button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+.harness-add-widget-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.harness-add-widget-form input {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 4px;
+  background: rgba(8, 10, 13, 0.7);
+  color: #f8fafc;
+  padding: 8px 10px;
+}
+.harness-inspector-panel {
+  width: 320px;
+  min-width: 280px;
+  max-width: 36vw;
+  border-left: 1px solid var(--panel-border);
+  background: #171a1f;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: 0;
+}
+.harness-inspector-elements {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  overflow: auto;
+  padding: 10px;
+}
+.harness-inspector-element {
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #e5e7eb;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+  text-align: left;
+}
+.harness-inspector-element.is-selected {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(96, 165, 250, 0.12);
+}
+.harness-inspector-element span,
+.harness-inspector-element small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.harness-inspector-element small,
+.harness-inspector-meta span,
+.harness-inspector-editor label,
+.harness-inspector-regenerate label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.harness-inspector-editor,
+.harness-inspector-regenerate {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 10px;
+}
+.harness-inspector-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.harness-inspector-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f3f4f6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.harness-inspector-editor input,
+.harness-inspector-regenerate textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 4px;
+  background: rgba(8, 10, 13, 0.7);
+  color: #f8fafc;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.harness-inspector-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Add file form in modal */
 .add-file-form {
   display: grid;
@@ -2325,7 +2603,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* Inner panels fill the drag cell */
 .browser-split-view .panel-drag-cell .page-overlay,
 .browser-split-view .panel-drag-cell .chat-panel,
-.browser-split-view .panel-drag-cell .file-editor-panel {
+.browser-split-view .panel-drag-cell .file-editor-panel,
+.browser-split-view .panel-drag-cell .harness-dashboard-panel {
   flex: 1;
   min-height: 0;
   border-right: none;
@@ -2357,7 +2636,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .browser-split-view > .page-overlay:last-child,
 .browser-split-view > .chat-panel:last-child,
-.browser-split-view > .file-editor-panel:last-child {
+.browser-split-view > .file-editor-panel:last-child,
+.browser-split-view > .harness-dashboard-panel:last-child {
   border-right: none;
 }
 .browser-split-view > .chat-panel {
@@ -2367,6 +2647,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   height: 100%;
 }
 .browser-split-view > .file-editor-panel {
+  flex: 1;
+  min-width: 320px;
+  border-right: 1px solid var(--panel-border);
+}
+.browser-split-view > .harness-dashboard-panel {
   flex: 1;
   min-width: 320px;
   border-right: 1px solid var(--panel-border);
@@ -3414,6 +3699,15 @@ kbd {
   .composer-toolbar { flex-direction: column; align-items: stretch; }
   .model-pill { max-width: none; min-width: 0; }
   .file-editor-chrome { flex-direction: column; align-items: stretch; }
+  .harness-dashboard-canvas { padding: 10px; }
+  .harness-dashboard-grid {
+    --harness-cell: 60px;
+    min-width: 860px;
+  }
+  .harness-add-widget-card {
+    top: 350px;
+    width: 286px;
+  }
   .shared-console-body {
     flex-direction: column;
   }

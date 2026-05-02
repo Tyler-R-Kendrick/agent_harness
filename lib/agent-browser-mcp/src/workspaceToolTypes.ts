@@ -154,7 +154,7 @@ export interface WorkspaceMcpWorktreeContextMenuState {
   supported: boolean;
 }
 
-export type WorkspaceMcpRenderPaneType = 'browser-page' | 'session' | 'workspace-file';
+export type WorkspaceMcpRenderPaneType = 'dashboard' | 'browser-page' | 'session' | 'workspace-file';
 
 export interface WorkspaceMcpRenderPane {
   id: string;
@@ -163,6 +163,29 @@ export interface WorkspaceMcpRenderPane {
   label: string;
   path?: string;
   url?: string;
+}
+
+export interface WorkspaceMcpHarnessElement {
+  id: string;
+  type: string;
+  title: string;
+  editable: boolean;
+  slot: string;
+  path: string;
+}
+
+export interface WorkspaceMcpHarnessElementSpec {
+  id: string;
+  type: string;
+  slot?: string;
+  props?: Record<string, unknown>;
+  children?: readonly string[];
+  editable?: boolean;
+}
+
+export interface WorkspaceMcpHarnessElementPatch {
+  elementId: string;
+  props: Record<string, unknown>;
 }
 
 export interface WorkspaceMcpSessionDrive {
@@ -314,6 +337,7 @@ export interface WorkspaceMcpWriteSessionInput {
 export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileToolsOptions {
   browserPages?: readonly WorkspaceMcpBrowserPage[];
   renderPanes?: readonly WorkspaceMcpRenderPane[];
+  harnessElements?: readonly WorkspaceMcpHarnessElement[];
   sessions?: readonly WorkspaceMcpSessionSummary[];
   sessionTools?: readonly WorkspaceMcpSessionTool[];
   getSessionTools?: () => readonly WorkspaceMcpSessionTool[];
@@ -321,6 +345,8 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   clipboardEntries?: readonly WorkspaceMcpClipboardEntry[];
   getSessionState?: (sessionId: string) => WorkspaceMcpSessionState | null | undefined;
   getBrowserPageHistory?: (pageId: string) => WorkspaceMcpBrowserPageHistory | null | undefined;
+  getHarnessElement?: (elementId: string) => WorkspaceMcpHarnessElementSpec | null | undefined;
+  getHarnessPromptContext?: () => readonly string[];
   getUserContextMemory?: (input: {
     query?: string;
     limit: number;
@@ -346,6 +372,9 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   onRefreshBrowserPage?: (pageId: string) => Promise<WorkspaceMcpBrowserPage | void> | WorkspaceMcpBrowserPage | void;
   onCloseRenderPane?: (paneId: string) => Promise<unknown> | unknown;
   onMoveRenderPane?: (input: { paneId: string; toIndex: number }) => Promise<unknown> | unknown;
+  onPatchHarnessElement?: (input: WorkspaceMcpHarnessElementPatch) => Promise<unknown> | unknown;
+  onRegenerateHarness?: (input: { prompt: string }) => Promise<unknown> | unknown;
+  onRestoreHarness?: () => Promise<unknown> | unknown;
   onCreateSession?: (input: { name?: string }) => Promise<WorkspaceMcpSessionSummary | void> | WorkspaceMcpSessionSummary | void;
   onWriteSession?: (input: WorkspaceMcpWriteSessionInput) => Promise<WorkspaceMcpSessionState | void> | WorkspaceMcpSessionState | void;
   onCreateWorkspaceFile?: (input: { path: string; content: string }) => Promise<WorkspaceMcpFile | void> | WorkspaceMcpFile | void;

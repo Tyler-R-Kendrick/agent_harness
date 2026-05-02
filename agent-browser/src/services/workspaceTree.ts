@@ -6,6 +6,7 @@ export type FlatTreeItem = { node: TreeNode; depth: number };
 export type WorkspaceViewState = {
   openTabIds: string[];
   editingFilePath: string | null;
+  dashboardOpen: boolean;
   activeMode: 'agent' | 'terminal';
   activeSessionIds: string[];
   mountedSessionFsIds: string[];
@@ -232,6 +233,7 @@ export function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewStat
   return {
     openTabIds: [],
     editingFilePath: null,
+    dashboardOpen: true,
     activeMode: 'agent',
     activeSessionIds: firstId ? [firstId] : [],
     mountedSessionFsIds: sessionIds,
@@ -258,6 +260,7 @@ export function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: Workspa
   return {
     ...base,
     openTabIds: validOpenTabIds,
+    dashboardOpen: base.dashboardOpen ?? true,
     activeSessionIds,
     mountedSessionFsIds,
     panelOrder: (base.panelOrder ?? []).filter((id) => typeof id === 'string' && id.trim().length > 0),
@@ -276,6 +279,7 @@ export function workspaceViewStateEquals(left: WorkspaceViewState, right: Worksp
   return left.openTabIds.length === right.openTabIds.length
     && left.openTabIds.every((id, index) => id === right.openTabIds[index])
     && left.editingFilePath === right.editingFilePath
+    && left.dashboardOpen === right.dashboardOpen
     && left.activeMode === right.activeMode
     && left.activeSessionIds.length === right.activeSessionIds.length
     && left.activeSessionIds.every((id, index) => id === right.activeSessionIds[index])
@@ -286,6 +290,9 @@ export function workspaceViewStateEquals(left: WorkspaceViewState, right: Worksp
 }
 
 export function renderPaneIdForNode(node: TreeNode): string | null {
+  if (node.type === 'workspace') {
+    return `dashboard:${node.id}`;
+  }
   if (node.type === 'tab' && (node.nodeKind ?? 'browser') === 'browser') {
     return `browser:${node.id}`;
   }

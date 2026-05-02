@@ -114,6 +114,8 @@ import {
   type WorkspaceMcpBrowserPage,
   type WorkspaceMcpClipboardEntry,
   type WorkspaceMcpContextAction,
+  type WorkspaceMcpHarnessElement,
+  type WorkspaceMcpHarnessElementPatch,
   type WorkspaceMcpRenderPane,
   type WorkspaceMcpSessionDrive,
   type WorkspaceMcpSessionFsEntry,
@@ -177,6 +179,7 @@ import {
 import {
   STORAGE_KEYS,
   isChatMessagesBySession,
+  isHarnessAppSpecRecord,
   isString,
   isStringArrayRecord,
   isStringRecord,
@@ -244,6 +247,18 @@ import {
   type WorkspaceContextMenuState,
 } from './services/workspaceMcpWorktree';
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
+import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
+import {
+  applyHarnessElementPatch,
+  buildHarnessPromptContextRows,
+  createDefaultHarnessAppSpec,
+  listEditableHarnessElements,
+} from './features/harness-ui/harnessSpec';
+import {
+  regenerateHarnessAppSpec,
+  restoreDefaultHarnessAppSpec,
+} from './features/harness-ui/harnessRegeneration';
+import type { HarnessAppSpec, HarnessElementPatch, JsonValue } from './features/harness-ui/types';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
 import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, SearchTurnContext, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
@@ -253,10 +268,11 @@ import { installModelContext, ModelContext } from 'webmcp';
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
 type SidebarPanel = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
+type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
 type FilePanel = { type: 'file'; file: WorkspaceFile };
-type Panel = BrowserPanel | SessionPanel | FilePanel;
+type Panel = DashboardPanel | BrowserPanel | SessionPanel | FilePanel;
 type PanelDragHandleProps = React.HTMLAttributes<HTMLElement>;
 type SessionMcpRuntimeState = {
   mode: 'agent' | 'terminal';
@@ -463,6 +479,7 @@ const TOOL_GROUP_ORDER = [
   'mcp',
   'worktree-mcp',
   'renderer-viewport-mcp',
+  'harness-ui-mcp',
   'browser-worktree-mcp',
   'sessions-worktree-mcp',
   'files-worktree-mcp',
@@ -4633,6 +4650,11 @@ function ChatPanel({
     }
 
     if (input.mode && input.mode !== activeModeRef.current) {
+      if (input.mode === 'terminal' && !Array.isArray(input.toolIds) && !selectedToolIdsRef.current.includes('cli')) {
+        const nextToolIds = ['cli', ...selectedToolIdsRef.current];
+        selectedToolIdsRef.current = nextToolIds;
+        setSelectedToolIdsBySession((current) => ({ ...current, [activeChatSessionId]: nextToolIds }));
+      }
       activeModeRef.current = input.mode;
       onSwitchMode(input.mode);
     }
@@ -6575,6 +6597,7 @@ function Toast({ toast }: { toast: ToastState }) {
 }
 
 function panelKey(panel: Panel): string {
+  if (panel.type === 'dashboard') return `dashboard:${panel.workspaceId}`;
   if (panel.type === 'file') return `file:${panel.file.path}`;
   if (panel.type === 'browser') return `browser:${panel.tab.id}`;
   return `session:${panel.id}`;
@@ -6782,6 +6805,12 @@ function AgentBrowserApp() {
     isWorkspaceViewStateRecord,
     createWorkspaceViewState(root),
   );
+  const [harnessSpecsByWorkspace, setHarnessSpecsByWorkspace] = useStoredState<Record<string, HarnessAppSpec>>(
+    localStorageBackend,
+    STORAGE_KEYS.harnessSpecsByWorkspace,
+    isHarnessAppSpecRecord,
+    {},
+  );
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
   const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
@@ -6876,6 +6905,7 @@ function AgentBrowserApp() {
     : {
         openTabIds: [],
         editingFilePath: null,
+        dashboardOpen: true,
         activeMode: 'agent',
         activeSessionIds: [],
         mountedSessionFsIds: [],
@@ -6922,9 +6952,84 @@ function AgentBrowserApp() {
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
+  const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
+    workspaceId: activeWorkspaceId,
+    workspaceName: activeWorkspace.name,
+  }), [activeWorkspace.name, activeWorkspaceId]);
+  const activeHarnessSpec = harnessSpecsByWorkspace[activeWorkspaceId] ?? defaultActiveHarnessSpec;
+  const updateActiveHarnessSpec = useCallback((updater: (spec: HarnessAppSpec) => HarnessAppSpec) => {
+    setHarnessSpecsByWorkspace((current) => {
+      const baseSpec = current[activeWorkspaceId] ?? createDefaultHarnessAppSpec({
+        workspaceId: activeWorkspaceId,
+        workspaceName: activeWorkspace.name,
+      });
+      return {
+        ...current,
+        [activeWorkspaceId]: updater(baseSpec),
+      };
+    });
+  }, [activeWorkspace.name, activeWorkspaceId, setHarnessSpecsByWorkspace]);
+  const patchActiveHarnessElement = useCallback((patch: HarnessElementPatch) => {
+    updateActiveHarnessSpec((spec) => applyHarnessElementPatch(spec, patch));
+    setToast({ msg: 'Harness element updated', type: 'success' });
+  }, [setToast, updateActiveHarnessSpec]);
+  const regenerateActiveHarnessSpec = useCallback((prompt: string) => {
+    let summary = 'Harness regenerated';
+    updateActiveHarnessSpec((spec) => {
+      const result = regenerateHarnessAppSpec({
+        spec,
+        prompt,
+        workspaceId: activeWorkspaceId,
+        workspaceName: activeWorkspace.name,
+      });
+      summary = result.summary;
+      return result.spec;
+    });
+    setToast({ msg: summary, type: 'success' });
+    return summary;
+  }, [activeWorkspace.name, activeWorkspaceId, setToast, updateActiveHarnessSpec]);
+  const restoreActiveHarnessSpec = useCallback(() => {
+    updateActiveHarnessSpec((spec) => restoreDefaultHarnessAppSpec({
+      spec,
+      workspaceId: activeWorkspaceId,
+      workspaceName: activeWorkspace.name,
+    }).spec);
+    setToast({ msg: 'Harness defaults restored', type: 'success' });
+    return 'Harness defaults restored';
+  }, [activeWorkspace.name, activeWorkspaceId, setToast, updateActiveHarnessSpec]);
+  const activeHarnessElements = useMemo<WorkspaceMcpHarnessElement[]>(
+    () => listEditableHarnessElements(activeHarnessSpec),
+    [activeHarnessSpec],
+  );
+  const readHarnessElementFromMcp = useCallback((elementId: string) => activeHarnessSpec.elements[elementId] ?? null, [activeHarnessSpec]);
+  const readHarnessPromptContextFromMcp = useCallback(() => buildHarnessPromptContextRows(activeHarnessSpec), [activeHarnessSpec]);
+  const patchHarnessElementFromMcp = useCallback((input: WorkspaceMcpHarnessElementPatch) => {
+    patchActiveHarnessElement({
+      elementId: input.elementId,
+      props: input.props as Record<string, JsonValue>,
+    });
+    return { elementId: input.elementId, updated: true };
+  }, [patchActiveHarnessElement]);
+  const regenerateHarnessFromMcp = useCallback(
+    ({ prompt }: { prompt: string }) => ({ summary: regenerateActiveHarnessSpec(prompt) }),
+    [regenerateActiveHarnessSpec],
+  );
+  const restoreHarnessFromMcp = useCallback(
+    () => ({ summary: restoreActiveHarnessSpec() }),
+    [restoreActiveHarnessSpec],
+  );
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
+
+    if (activeWorkspaceViewState.dashboardOpen) {
+      panes.push({
+        id: `dashboard:${activeWorkspaceId}`,
+        paneType: 'dashboard',
+        itemId: activeWorkspaceId,
+        label: `${activeWorkspace.name} harness`,
+      });
+    }
 
     if (editingFile) {
       panes.push({
@@ -6957,7 +7062,16 @@ function AgentBrowserApp() {
     }
 
     return orderRenderPanes(panes, activeWorkspaceViewState.panelOrder ?? []);
-  }, [activeSessionIds, activeWorkspaceSessions, activeWorkspaceViewState.panelOrder, editingFile, openBrowserTabs]);
+  }, [
+    activeSessionIds,
+    activeWorkspace.name,
+    activeWorkspaceSessions,
+    activeWorkspaceId,
+    activeWorkspaceViewState.dashboardOpen,
+    activeWorkspaceViewState.panelOrder,
+    editingFile,
+    openBrowserTabs,
+  ]);
   const activeClipboardEntries = useMemo<WorkspaceMcpClipboardEntry[]>(() => clipboardHistory.map((entry, index) => ({
     id: entry.id,
     label: entry.label,
@@ -7237,6 +7351,7 @@ function AgentBrowserApp() {
       const existing = current[workspaceId] ?? {
         openTabIds: [],
         editingFilePath: null,
+        dashboardOpen: true,
         activeMode: 'agent' as const,
         activeSessionIds: [],
         mountedSessionFsIds: [],
@@ -8871,6 +8986,20 @@ function AgentBrowserApp() {
   }, [activeWorkspace.name, activeWorkspaceSessions, renameSessionNodeById]);
 
   const closeRenderPaneFromMcp = useCallback(async (paneId: string) => {
+    if (paneId === `dashboard:${activeWorkspaceId}`) {
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+        return {
+          ...current,
+          [activeWorkspaceId]: {
+            ...existing,
+            dashboardOpen: false,
+            panelOrder: existing.panelOrder.filter((id) => id !== paneId),
+          },
+        };
+      });
+      return { paneId, closed: true };
+    }
     if (paneId.startsWith('browser:')) {
       const pageId = paneId.slice('browser:'.length);
       readBrowserPageFromWorkspace(pageId);
@@ -9269,12 +9398,15 @@ function AgentBrowserApp() {
       workspaceFiles: activeWorkspaceFiles,
       browserPages: activeBrowserPages,
       renderPanes: activeRenderPanes,
+      harnessElements: activeHarnessElements,
       sessions: activeWorkspaceSessions,
       getSessionTools: getSessionToolsFromMcp,
       sessionDrives: activeSessionDrives,
       clipboardEntries: activeClipboardEntries,
       getSessionState: getSessionStateFromMcp,
       getBrowserPageHistory: getBrowserPageHistoryFromMcp,
+      getHarnessElement: readHarnessElementFromMcp,
+      getHarnessPromptContext: readHarnessPromptContextFromMcp,
       getUserContextMemory: ({ query, limit }) => searchUserContextMemory(activeWorkspace.name, query, limit),
       getBrowserLocation: () => browserLocationResultFromContext(browserLocationContext)
         ?? readBrowserLocationFromNavigator(),
@@ -9321,6 +9453,9 @@ function AgentBrowserApp() {
       onRefreshBrowserPage: refreshBrowserPageFromMcp,
       onCloseRenderPane: closeRenderPaneFromMcp,
       onMoveRenderPane: moveRenderPaneFromMcp,
+      onPatchHarnessElement: patchHarnessElementFromMcp,
+      onRegenerateHarness: regenerateHarnessFromMcp,
+      onRestoreHarness: restoreHarnessFromMcp,
       onCreateSession: createSessionFromMcp,
       onWriteSession: writeSessionFromMcp,
       onCreateWorkspaceFile: createWorkspaceFileFromMcp,
@@ -9361,6 +9496,7 @@ function AgentBrowserApp() {
     activeClipboardEntries,
     activeRenderPanes,
     activeSessionDrives,
+    activeHarnessElements,
     closeSessionFromMcp,
     createBrowserPageFromMcp,
     createSessionFromMcp,
@@ -9377,10 +9513,14 @@ function AgentBrowserApp() {
     invokeWorktreeContextActionFromMcp,
     duplicateWorkspaceFileFromMcp,
     getBrowserPageHistoryFromMcp,
+    patchHarnessElementFromMcp,
     getFilesystemHistoryFromMcp,
     openActiveWorkspaceFileFromMcp,
     readSessionFsFileFromMcp,
+    readHarnessElementFromMcp,
+    readHarnessPromptContextFromMcp,
     renameSessionFsEntryFromMcp,
+    regenerateHarnessFromMcp,
     rollbackFilesystemHistoryFromMcp,
     mountSessionDriveFromMcp,
     moveRenderPaneFromMcp,
@@ -9394,6 +9534,7 @@ function AgentBrowserApp() {
     refreshBrowserPageFromMcp,
     writeSessionFromMcp,
     restoreClipboardEntryFromMcp,
+    restoreHarnessFromMcp,
     unmountSessionDriveFromMcp,
     writeSessionFsFileFromMcp,
     symlinkWorkspaceFileFromMcp,
@@ -9534,6 +9675,9 @@ function AgentBrowserApp() {
             },
           }));
           const panelEntries: Array<[string, Panel]> = [];
+          if (activeWorkspaceViewState.dashboardOpen) {
+            panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
+          }
           if (editingFile) {
             panelEntries.push([`file:${editingFile.path}`, { type: 'file', file: editingFile }]);
           }
@@ -9546,6 +9690,30 @@ function AgentBrowserApp() {
             .map((pane) => panelsById.get(pane.id) ?? null)
             .filter((panel): panel is Panel => panel !== null);
           const renderPanel = (panel: Panel, dragHandleProps?: PanelDragHandleProps) => {
+            if (panel.type === 'dashboard') {
+              return (
+                <HarnessDashboardPanel
+                  key={panel.workspaceId}
+                  spec={activeHarnessSpec}
+                  workspaceName={activeWorkspace.name}
+                  sessions={activeWorkspaceSessions}
+                  browserPages={activeBrowserPages.map((page) => ({
+                    id: page.id,
+                    title: page.title,
+                    url: page.url,
+                  }))}
+                  files={activeWorkspaceFiles.map((file) => ({
+                    path: file.path,
+                    kind: detectWorkspaceFileKind(file.path) ?? undefined,
+                  }))}
+                  onAddWidget={regenerateActiveHarnessSpec}
+                  onPatchElement={patchActiveHarnessElement}
+                  onRegenerate={regenerateActiveHarnessSpec}
+                  onRestoreDefault={restoreActiveHarnessSpec}
+                  dragHandleProps={dragHandleProps}
+                />
+              );
+            }
             if (panel.type === 'file') {
               return (
                 <FileEditorPanel

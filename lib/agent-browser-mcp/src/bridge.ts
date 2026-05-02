@@ -75,6 +75,13 @@ const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGro
   list_render_panes: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
   close_render_pane: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
   move_render_pane: { subGroup: 'renderer-viewport-mcp', subGroupLabel: 'Renderer' },
+  // Harness UI
+  list_harness_elements: { subGroup: 'harness-ui-mcp', subGroupLabel: 'Harness UI' },
+  read_harness_element: { subGroup: 'harness-ui-mcp', subGroupLabel: 'Harness UI' },
+  read_harness_prompt_context: { subGroup: 'harness-ui-mcp', subGroupLabel: 'Harness UI' },
+  patch_harness_element: { subGroup: 'harness-ui-mcp', subGroupLabel: 'Harness UI' },
+  regenerate_harness_ui: { subGroup: 'harness-ui-mcp', subGroupLabel: 'Harness UI' },
+  restore_harness_ui: { subGroup: 'harness-ui-mcp', subGroupLabel: 'Harness UI' },
   // Workspace context (worktree, files surface, prompt tools)
   workspace_overview: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },
   workspace_file: { subGroup: 'worktree-mcp', subGroupLabel: 'Workspace' },

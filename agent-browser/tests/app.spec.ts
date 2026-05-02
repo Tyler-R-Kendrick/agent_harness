@@ -1833,7 +1833,7 @@ test('title bar controls remain clickable while split panels are draggable', asy
 
   await page.getByRole('button', { name: 'Hugging Face' }).first().click();
   await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
-  await expect(page.locator('.panel-drag-cell')).toHaveCount(3);
+  await expect(page.locator('.panel-drag-cell')).toHaveCount(4);
 
   await page.getByRole('tab', { name: 'Terminal mode' }).click();
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
