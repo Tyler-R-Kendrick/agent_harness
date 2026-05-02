@@ -210,6 +210,10 @@ async function main() {
     'package-lock.json',
     'output/evals/search-fulfillment-agentv/timing.json',
     'output/dev-server/agent-browser-5174.out.log',
+    '.npm-cache/_logs/2026-05-02T00_00_00_000Z-debug-0.log',
+    '_cacache/index-v5/00/00/cache-entry',
+    '_logs/2026-05-02T00_00_00_000Z-debug-0.log',
+    '_update-notifier-last-checked',
     '.agentv/cache.json',
     '.codex/environments/environment.toml',
     '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
@@ -221,6 +225,10 @@ async function main() {
       'package-lock.json',
       'output/evals/search-fulfillment-agentv/timing.json',
       'output/dev-server/agent-browser-5174.out.log',
+      '.npm-cache/_logs/2026-05-02T00_00_00_000Z-debug-0.log',
+      '_cacache/index-v5/00/00/cache-entry',
+      '_logs/2026-05-02T00_00_00_000Z-debug-0.log',
+      '_update-notifier-last-checked',
       '.agentv/cache.json',
       '.codex/environments/environment.toml',
       '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
@@ -232,6 +240,8 @@ async function main() {
     /Generated or local-only artifacts are tracked by git/,
   );
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /output\/evals/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.npm-cache\/_logs/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /_cacache\//);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
   assert.deepEqual(
     buildGitLsFilesInvocation(repoRoot, 'win32'),

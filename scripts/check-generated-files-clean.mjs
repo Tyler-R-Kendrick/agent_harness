@@ -9,6 +9,22 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === 'package-lock.json',
   },
   {
+    label: '.npm-cache/',
+    matches: (filePath) => filePath === '.npm-cache' || filePath.startsWith('.npm-cache/'),
+  },
+  {
+    label: '_cacache/',
+    matches: (filePath) => filePath === '_cacache' || filePath.startsWith('_cacache/'),
+  },
+  {
+    label: '_logs/',
+    matches: (filePath) => filePath === '_logs' || filePath.startsWith('_logs/'),
+  },
+  {
+    label: '_update-notifier-last-checked',
+    matches: (filePath) => filePath === '_update-notifier-last-checked',
+  },
+  {
     label: 'output/',
     matches: (filePath) => filePath === 'output' || filePath.startsWith('output/'),
   },
