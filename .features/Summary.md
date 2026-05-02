@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-01
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-02
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `GitHub Copilot`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
@@ -22,14 +22,14 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
 
 ### 4. Scheduled automations and background execution
 - Common pattern: agents now run on schedules and return results later.
-- Seen in: Codex Automations, ChatGPT Tasks, ChatGPT workspace agents schedules, Claude Cowork scheduled tasks, Claude in Chrome scheduled shortcuts, Cursor background agents and Slack/web launch surfaces are adjacent here even when the trigger is human-initiated, Hermes scheduled automations, OpenClaw always-on agent framing.
+- Seen in: Codex Automations, ChatGPT Tasks, ChatGPT workspace agents schedules, Claude Cowork scheduled tasks, Claude in Chrome scheduled shortcuts, Cursor background agents and Slack/web launch surfaces are adjacent here even when the trigger is human-initiated, Hermes scheduled automations, OpenClaw always-on agent framing, OpenHands Cloud automations with fresh sandboxes and resumable conversations.
 - Why it matters: recurring operational work is a strong wedge for agent retention.
 - One-shot build instruction:
   - Add a scheduler for one-off, recurring, and event-triggered jobs, with inbox-style results, retry history, last-run artifacts, and per-automation permissions.
@@ -50,14 +50,14 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 7. Git/PR-native execution
 - Common pattern: successful coding harnesses end in branches, diffs, and PRs rather than plain text.
-- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, Cursor Bugbot plus PR review flows plus SDK auto-PR support, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases.
+- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, Cursor Bugbot plus PR review flows plus SDK auto-PR support, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases, OpenHands issue and PR resolution through `fix-me` labels and `@openhands-agent` comments.
 - Why it matters: reviewable change sets are easier to trust than chat responses.
 - One-shot build instruction:
   - Make code tasks branch-native: create isolated workspaces, show structured diffs, attach validation output, support inline review comments, and optionally open a PR when acceptance checks pass.
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -120,21 +120,21 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 17. Operator-facing orchestration telemetry
 - Common pattern: long-running agent systems increasingly expose runtime state through structured logs, dashboards, and debug APIs rather than expecting operators to infer health from terminal noise.
-- Seen in: OpenAI Symphony structured logs, optional status surface, Phoenix dashboard, and `/api/v1/*` observability endpoints.
+- Seen in: OpenAI Symphony structured logs, optional status surface, Phoenix dashboard, and `/api/v1/*` observability endpoints; OpenHands control-plane audit and cost views plus OTEL tracing.
 - Why it matters: once a harness runs continuously across many issues, operator trust depends on inspectable health, queue, retry, and session state.
 - One-shot build instruction:
   - Build an operator telemetry surface for browser-agent orchestration with structured logs, queue and session views, issue-specific debug pages, and a read-mostly JSON API that supports refresh triggers and postmortem inspection.
 
 ### 18. Embeddable agent runtimes and protocol surfaces
 - Common pattern: some harnesses are no longer just end-user apps and are instead exposing stable runtime layers other products can embed directly.
-- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, OpenAI Symphony operator APIs, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
+- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
 - Why it matters: product teams increasingly want the same agent core available in the terminal, in the browser, in IDEs, and inside orchestrators without re-implementing session, transport, and tool behavior each time.
 - One-shot build instruction:
   - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
 
 ### 19. Agent-ready remote environments and trigger wiring
 - Common pattern: hosted agent systems are increasingly packaging reusable execution environments together with triggers from issue trackers, chat systems, and CI so automation can start from live business events instead of a local terminal.
-- Seen in: Warp Cloud Agents with reusable setup plus GitHub, Linear, Slack, scheduled runs, and GitHub Actions triggers; OpenAI Symphony isolated issue workspaces and workflow hooks are adjacent from the orchestration side.
+- Seen in: Warp Cloud Agents with reusable setup plus GitHub, Linear, Slack, scheduled runs, and GitHub Actions triggers; OpenAI Symphony isolated issue workspaces and workflow hooks are adjacent from the orchestration side; OpenHands cloud agents with Kubernetes-based isolated runtimes, issue triggers, Slack and Jira events, and scheduled automations.
 - Why it matters: reliable automation depends on reproducible remote environments and first-class launch wiring, not just a strong prompt in a developer laptop session.
 - One-shot build instruction:
   - Build reusable remote execution environments for browser agents with repo bootstrap, secrets, and dependency setup captured once, then let users bind those environments to schedules, issue events, chat commands, and CI triggers with clear audit history and replayable launch parameters.
@@ -167,6 +167,20 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add evaluation-native observability for browser agents with trace capture, live scorer hooks, experiment datasets, issue-linked regression views, and operator dashboards that connect run evidence to quality signals.
 
+### 24. Verification-native critic stacks and adaptive retries
+- Common pattern: some harnesses are starting to score trajectories during the run, using lightweight critics or verifiers to decide whether to continue, stop, refine, or compare multiple attempts before humans review a final diff.
+- Seen in: OpenHands trajectory-level critic model trained on production traces and sparse production outcomes such as PR merge and code survival; several other products have review or proof surfaces, but OpenHands currently states this runtime verification loop most directly.
+- Why it matters: browser and coding agents need cheap online quality checks so failures can be caught and redirected before they waste budget or open low-confidence changes.
+- One-shot build instruction:
+  - Add a lightweight trajectory critic layer for browser-agent runs that scores tool traces and intermediate artifacts, decides whether to continue, stop, retry, or branch, and records the rationale beside validation output so humans can inspect why the harness trusted or rejected a run.
+
+### 25. Benchmark-informed model routing and task-aware model choice
+- Common pattern: model-agnostic harnesses are beginning to expose benchmark surfaces that help users route planning, implementation, testing, and information-gathering work to different models based on cost, latency, and task fit.
+- Seen in: OpenHands Index with broad task coverage and explicit framing around choosing different models for planning, implementation, and review/testing; Pi, OpenCode, and other model-agnostic harnesses are adjacent on routing flexibility but not as benchmark-driven.
+- Why it matters: once a harness supports many models, the next product problem is choosing the right one for the job instead of pretending one model is universally best.
+- One-shot build instruction:
+  - Build benchmark-informed model routing for browser agents by maintaining task-class evaluations, exposing cost and latency tradeoffs, and using those signals to recommend or auto-select different models for planning, execution, verification, and follow-up research.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -187,7 +201,9 @@ Method: current-product research from first-party product pages, help centers, d
 16. Let browser agents build persistent in-app workspace surfaces.
 17. Extract a reusable harness core for browser-agent-powered apps.
 18. Add evaluation-native observability and live scorers for browser-agent runs.
+19. Add trajectory critics and adaptive retry control to browser-agent runs.
+20. Add benchmark-informed model routing for planning, execution, and verification.
 
 ## Notes
-- This pass extends the earlier seventeen-harness corpus with `Mastra` as an eighteenth competitor.
+- This pass extends the earlier eighteen-harness corpus with `OpenHands` as a nineteenth competitor.
 - Screenshot-heavy official assets were linked at the source-page level rather than copied into the repo during this pass.
