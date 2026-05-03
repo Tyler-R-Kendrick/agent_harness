@@ -113,6 +113,7 @@ async function main() {
     await expect(page).toHaveTitle('Agent Browser');
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('tree', { name: 'Workspace tree' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Cursor', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
@@ -124,6 +125,33 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await benchmarkObjective.scrollIntoViewIfNeeded();
+    await page.getByRole('button', { name: 'Symphony' }).click();
+    const symphonyBoard = page.getByRole('region', { name: 'Symphony task board' });
+    await expect(symphonyBoard).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'MT-891 Summarize feedback from Slack channels' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyBoard.getByText('In Progress')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Create Symphony task' }).click();
+    await page.getByLabel('Symphony task title').fill('Visual smoke multi-agent task');
+    await page.getByLabel('Symphony task brief').fill('Confirm Symphony board accepts new work.');
+    await page.getByRole('button', { name: 'Save Symphony task' }).click();
+    await expect(page.getByRole('button', { name: 'MT-892 Visual smoke multi-agent task' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.getByRole('button', { name: 'Dispatch agent for MT-892' }).click();
+    await expect(page.getByRole('list', { name: 'In Progress tasks' }).getByText('MT-892')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByRole('complementary', { name: 'Symphony task inspector' })).toContainText('Agent running');
+    await page.getByRole('button', { name: 'Review', exact: true }).click();
+    const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });
+    await expect(reviewPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(reviewPanel).toContainText('TK-47 review-native PR understanding', { timeout: shellTimeoutMs });
+    await expect(reviewPanel).toContainText('Change groups', { timeout: shellTimeoutMs });
+    await expect(reviewPanel).toContainText('Review risks', { timeout: shellTimeoutMs });
+    await expect(reviewPanel).toContainText('Validation evidence', { timeout: shellTimeoutMs });
+    await expect(reviewPanel).toContainText('Reviewer follow-up', { timeout: shellTimeoutMs });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
   } catch (error) {

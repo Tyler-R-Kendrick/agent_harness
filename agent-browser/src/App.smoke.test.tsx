@@ -93,6 +93,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session widget' })).toBeInTheDocument();
+    expect(screen.getByRole('tree', { name: 'Workspace tree' })).toBeInTheDocument();
   });
 
   it('hydrates installed local models from durable session storage', async () => {
@@ -122,5 +123,18 @@ describe('App smoke coverage', () => {
 
     expect(screen.getAllByText('Installed').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Qwen3-0\.6B-ONNX/i).length).toBeGreaterThan(0);
+  });
+
+  it('hydrates the Review sidebar panel from durable session storage', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('review'));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
   });
 });

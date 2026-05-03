@@ -21,25 +21,26 @@ $warningPatterns = @(
 )
 
 foreach ($step in $steps) {
-  $previousErrorActionPreference = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  $outputLines = & npm.cmd @($step.Args) 2>&1
-  $exitCode = $LASTEXITCODE
-  $ErrorActionPreference = $previousErrorActionPreference
+  $outputFile = [System.IO.Path]::GetTempFileName()
+  try {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & npm.cmd @($step.Args) 2>&1 | Tee-Object -FilePath $outputFile
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
 
-  foreach ($line in $outputLines) {
-    Write-Output $line
-  }
-
-  if ($exitCode -ne 0) {
-    exit $exitCode
-  }
-
-  $output = ($outputLines | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
-  foreach ($pattern in $warningPatterns) {
-    if ($output -match $pattern) {
-      Write-Error "verify:agent-browser failed: $($step.Label) emitted a warning matching $pattern."
-      exit 1
+    if ($exitCode -ne 0) {
+      exit $exitCode
     }
+
+    $output = Get-Content -LiteralPath $outputFile -Raw
+    foreach ($pattern in $warningPatterns) {
+      if ($output -match $pattern) {
+        Write-Error "verify:agent-browser failed: $($step.Label) emitted a warning matching $pattern."
+        exit 1
+      }
+    }
+  } finally {
+    Remove-Item -LiteralPath $outputFile -Force -ErrorAction SilentlyContinue
   }
 }

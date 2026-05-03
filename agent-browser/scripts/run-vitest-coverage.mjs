@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 
 const APP_TEST_FILES = ['src/App.smoke.test.tsx'];
+const DEFAULT_COVERAGE_SHARD_COUNT = 8;
 
 function defaultReportsDirectory() {
   return process.env.AGENT_BROWSER_COVERAGE_DIR
@@ -52,6 +53,8 @@ export function buildVitestCoverageArgs(
     `--coverage.reportsDirectory=${reportsDirectory}`,
     '--no-file-parallelism',
     '--maxWorkers=1',
+    '--pool=forks',
+    '--teardownTimeout=60000',
     ...APP_TEST_FILES.flatMap((filePath) => ['--exclude', filePath]),
     ...reporterArgs,
     ...extraArgs,
@@ -63,9 +66,27 @@ export function buildAppTestArgs() {
     'run',
     '--no-file-parallelism',
     '--maxWorkers=1',
+    '--pool=forks',
+    '--teardownTimeout=60000',
     '--reporter=dot',
     ...APP_TEST_FILES,
   ];
+}
+
+export function buildVitestCoverageShardRuns(
+  shardCount = DEFAULT_COVERAGE_SHARD_COUNT,
+  reportsDirectory = defaultReportsDirectory(),
+) {
+  return Array.from({ length: shardCount }, (_, index) => {
+    const shardIndex = index + 1;
+    return {
+      label: `Vitest coverage shard ${shardIndex}/${shardCount}`,
+      args: buildVitestCoverageArgs(
+        [`--shard=${shardIndex}/${shardCount}`],
+        path.join(reportsDirectory, `shard-${shardIndex}`),
+      ),
+    };
+  });
 }
 
 export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
@@ -91,8 +112,7 @@ export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
 async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   const vitestBin = await resolvePackageBin('vitest');
   if (extraArgs.length > 0) {
-    const exitCode = await runVitestCommand(vitestBin, buildVitestCoverageArgs(extraArgs), 'Vitest coverage');
-    return exitCode;
+    return runVitestCommandWithRetry(vitestBin, buildVitestCoverageArgs(extraArgs), 'Vitest coverage');
   }
 
   const reportsDirectory = defaultReportsDirectory();
@@ -100,7 +120,7 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   const testChunks = chunkTestFiles(await findTestFiles(path.resolve(process.cwd(), 'src')), chunkSize);
   for (const [index, files] of testChunks.entries()) {
     console.log(`Vitest coverage chunk ${index + 1}/${testChunks.length}: ${files.join(', ')}`);
-    const exitCode = await runVitestCommand(
+    const exitCode = await runVitestCommandWithRetry(
       vitestBin,
       buildVitestCoverageArgs(files, path.join(reportsDirectory, `chunk-${index + 1}`)),
       `Vitest coverage chunk ${index + 1}/${testChunks.length}`,
@@ -110,7 +130,19 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
 
   // App smoke coverage crashes Node's v8 coverage worker on this Windows runner,
   // so keep it in the gate without collecting coverage for that file.
-  return runVitestCommand(vitestBin, buildAppTestArgs(), 'Vitest App tests');
+  return runVitestCommandWithRetry(vitestBin, buildAppTestArgs(), 'Vitest App tests');
+}
+
+async function runVitestCommandWithRetry(vitestBin, args, label, maxAttempts = 2) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const attemptLabel = attempt === 1 ? label : `${label} retry ${attempt}/${maxAttempts}`;
+    const exitCode = await runVitestCommand(vitestBin, args, attemptLabel);
+    if (exitCode === 0 || attempt === maxAttempts) {
+      return exitCode;
+    }
+    console.warn(`${label} failed with exit code ${exitCode}; retrying once.`);
+  }
+  return 1;
 }
 
 async function runVitestCommand(vitestBin, args, label) {
@@ -154,6 +186,10 @@ async function runVitestCommand(vitestBin, args, label) {
   if (isVitestCoverageTmpCleanupRace({ exitCode, output })) {
     console.warn(`${label} completed; ignoring v8 coverage temporary-directory cleanup race.`);
     return 0;
+  }
+
+  if (exitCode !== 0) {
+    console.error(`${label} failed with exit code ${exitCode}.`);
   }
 
   return exitCode;

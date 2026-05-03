@@ -59,6 +59,8 @@ async function main() {
   assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*300_000/);
   assert.match(visualSmokeScript, /shellTimeoutMs\s*=\s*30_000/);
   assert.match(visualSmokeScript, /\*\*\/api\/cursor\/status/);
+  assert.match(visualSmokeScript, /PR review understanding/);
+  assert.match(visualSmokeScript, /TK-47 review-native PR understanding/);
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');
@@ -111,6 +113,9 @@ async function main() {
   const coverageRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href
   );
+  const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
+  assert.match(coverageRunnerScript, /runVitestCommandWithRetry/);
+  assert.match(coverageRunnerScript, /retrying once/);
   assert.deepEqual(
     coverageRunner.buildVitestCoverageArgs(['--reporter=dot'], '../output/coverage/agent-browser-test'),
     [
@@ -120,6 +125,8 @@ async function main() {
       '--coverage.reportsDirectory=../output/coverage/agent-browser-test',
       '--no-file-parallelism',
       '--maxWorkers=1',
+      '--pool=forks',
+      '--teardownTimeout=60000',
       '--exclude',
       'src/App.smoke.test.tsx',
       '--reporter=dot',
@@ -131,6 +138,8 @@ async function main() {
       'run',
       '--no-file-parallelism',
       '--maxWorkers=1',
+      '--pool=forks',
+      '--teardownTimeout=60000',
       '--reporter=dot',
       'src/App.smoke.test.tsx',
     ],
@@ -206,6 +215,9 @@ async function main() {
   assert.match(verifyScript, /npm warn/i);
   assert.match(verifyScript, /vite:reporter/i);
   assert.match(verifyScript, /warn exec The following package was not found/i);
+  assert.match(verifyScript, /\[System\.IO\.Path\]::GetTempFileName\(\)/);
+  assert.match(verifyScript, /Tee-Object -FilePath \$outputFile/);
+  assert.match(verifyScript, /Get-Content -LiteralPath \$outputFile -Raw/);
 
   const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'search-eval-target-bin-'));
   await writeJson(path.join(fixtureRoot, 'package.json'), { name: 'fixture-app', private: true });
