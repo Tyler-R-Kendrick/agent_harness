@@ -208,6 +208,13 @@ async function main() {
     'agent-browser/evals/search-fulfillment/EVAL.yaml',
     'skills/agent-harness-context/evals/evals.json',
     'package-lock.json',
+    'agent-browser/package-lock.json',
+    'coverage/lcov.info',
+    'lib/webmcp/coverage/coverage-final.json',
+    'playwright-report/index.html',
+    'test-results/.last-run.json',
+    'agent-browser/tsconfig.tsbuildinfo',
+    'agent-browser-debug.log',
     'output/evals/search-fulfillment-agentv/timing.json',
     'output/dev-server/agent-browser-5174.out.log',
     '.npm-cache/_logs/2026-05-02T00_00_00_000Z-debug-0.log',
@@ -223,6 +230,13 @@ async function main() {
     trackedArtifacts.map((artifact) => artifact.path),
     [
       'package-lock.json',
+      'agent-browser/package-lock.json',
+      'coverage/lcov.info',
+      'lib/webmcp/coverage/coverage-final.json',
+      'playwright-report/index.html',
+      'test-results/.last-run.json',
+      'agent-browser/tsconfig.tsbuildinfo',
+      'agent-browser-debug.log',
       'output/evals/search-fulfillment-agentv/timing.json',
       'output/dev-server/agent-browser-5174.out.log',
       '.npm-cache/_logs/2026-05-02T00_00_00_000Z-debug-0.log',
@@ -240,6 +254,12 @@ async function main() {
     /Generated or local-only artifacts are tracked by git/,
   );
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /output\/evals/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/package-lock\.json/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /coverage\/lcov\.info/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /playwright-report\/index\.html/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /test-results\/\.last-run\.json/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/tsconfig\.tsbuildinfo/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser-debug\.log/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.npm-cache\/_logs/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /_cacache\//);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
