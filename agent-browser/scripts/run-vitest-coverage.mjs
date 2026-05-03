@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 
-const APP_TEST_FILES = ['src/App.test.tsx', 'src/App.persistence.test.tsx'];
+const APP_TEST_FILES = ['src/App.smoke.test.tsx'];
 
 function defaultReportsDirectory() {
   return process.env.AGENT_BROWSER_COVERAGE_DIR
@@ -23,8 +23,6 @@ export function buildVitestCoverageArgs(
     '--coverage',
     '--coverage.processingConcurrency=1',
     `--coverage.reportsDirectory=${reportsDirectory}`,
-    '--no-file-parallelism',
-    '--maxWorkers=1',
     ...APP_TEST_FILES.flatMap((filePath) => ['--exclude', filePath]),
     ...reporterArgs,
     ...extraArgs,
@@ -34,8 +32,6 @@ export function buildVitestCoverageArgs(
 export function buildAppTestArgs() {
   return [
     'run',
-    '--no-file-parallelism',
-    '--maxWorkers=1',
     '--reporter=dot',
     ...APP_TEST_FILES,
   ];
@@ -62,8 +58,8 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
     return exitCode;
   }
 
-  // The App UI suite crashes Node's v8 coverage worker on this Windows runner,
-  // so keep it in the gate without collecting coverage for that one file.
+  // App smoke coverage crashes Node's v8 coverage worker on this Windows runner,
+  // so keep it in the gate without collecting coverage for that file.
   return runVitestCommand(vitestBin, buildAppTestArgs(), 'Vitest App tests');
 }
 

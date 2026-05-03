@@ -2,25 +2,78 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
+const alias = {
+  logact: path.resolve(__dirname, '../lib/logact/src/index.ts'),
+  'harness-core/ext/agent-skills': path.resolve(__dirname, '../harness-core/src/ext/agent-skills.ts'),
+  'harness-core/ext/agents-md': path.resolve(__dirname, '../harness-core/src/ext/agents-md.ts'),
+  'harness-core': path.resolve(__dirname, '../harness-core/src/index.ts'),
+  'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
+  webmcp: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
+  'agent-browser-mcp': path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
+};
+
+const baseExclude = [
+  'tests/**',
+  'node_modules/**',
+  'dist/**',
+  'evals/**',
+  'scripts/**/*.test.*',
+  'src/App.integration.test.tsx',
+];
+
+const domTestFiles = [
+  'src/features/flags.test.ts',
+  'src/features/tours/driverTour.test.ts',
+  'src/sandbox/iframe-session.test.ts',
+  'src/sandbox/runner.test.ts',
+  'src/services/chatMessageCopy.test.ts',
+  'src/services/chatMessageCopyControls.test.ts',
+  'src/services/sessionState.test.ts',
+  'src/services/workspaceFiles.test.ts',
+];
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: {
-      logact: path.resolve(__dirname, '../lib/logact/src/index.ts'),
-      'harness-core/ext/agent-skills': path.resolve(__dirname, '../harness-core/src/ext/agent-skills.ts'),
-      'harness-core/ext/agents-md': path.resolve(__dirname, '../harness-core/src/ext/agents-md.ts'),
-      'harness-core': path.resolve(__dirname, '../harness-core/src/index.ts'),
-      'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
-      webmcp: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
-      'agent-browser-mcp': path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
-    },
+    alias,
   },
   test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['src/test-setup.ts'],
-    exclude: ['tests/**', 'node_modules/**', 'dist/**', 'scripts/**/*.test.*'],
     testTimeout: 60_000,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          globals: true,
+          environment: 'node',
+          include: [
+            'server/**/*.test.ts',
+            'src/**/*.test.ts',
+            'agent-skills/**/*.test.ts',
+          ],
+          exclude: [
+            ...baseExclude,
+            ...domTestFiles,
+          ],
+          testTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'jsdom',
+          globals: true,
+          environment: 'jsdom',
+          setupFiles: ['src/test-setup.ts'],
+          include: [
+            'src/**/*.test.tsx',
+            ...domTestFiles,
+          ],
+          exclude: baseExclude,
+          testTimeout: 60_000,
+        },
+      },
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
