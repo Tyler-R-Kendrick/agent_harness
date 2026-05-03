@@ -201,6 +201,12 @@ import {
   useStoredState,
 } from './services/sessionState';
 import {
+  DEFAULT_TRAJECTORY_CRITIC_SETTINGS,
+  isTrajectoryCriticSettings,
+  normalizeTrajectoryCriticSettings,
+  type TrajectoryCriticSettings,
+} from './services/trajectoryCritic';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -1748,6 +1754,7 @@ function ChatPanel({
   browserLocationContext,
   setBrowserLocationContext,
   secretSettings,
+  trajectoryCriticSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
   dragHandleProps,
@@ -1778,6 +1785,7 @@ function ChatPanel({
   browserLocationContext: BrowserLocationContext;
   setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
   secretSettings: SecretManagementSettings;
+  trajectoryCriticSettings: TrajectoryCriticSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
   dragHandleProps?: PanelDragHandleProps;
@@ -4944,7 +4952,7 @@ function ChatPanel({
       <div className="shared-console-body">
         <div className="shared-console-main">
           {!showBash && activeActivityMessage ? (
-            <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+            <ProcessPanel message={activeActivityMessage} criticSettings={trajectoryCriticSettings} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
@@ -5414,6 +5422,64 @@ function formatSecretUpdated(value: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function TrajectoryCriticSettingsPanel({
+  settings,
+  onSettingsChange,
+}: {
+  settings: TrajectoryCriticSettings;
+  onSettingsChange: (settings: TrajectoryCriticSettings) => void;
+}) {
+  const updateSettings = (next: Partial<TrajectoryCriticSettings>) => {
+    onSettingsChange(normalizeTrajectoryCriticSettings({ ...settings, ...next }));
+  };
+  const updateThreshold = (key: keyof Pick<TrajectoryCriticSettings, 'stopThreshold' | 'branchThreshold' | 'retryThreshold' | 'humanReviewThreshold'>, value: string) => {
+    const parsed = Number.parseFloat(value);
+    updateSettings({ [key]: Number.isFinite(parsed) ? parsed : settings[key] });
+  };
+  const fields: Array<{
+    key: keyof Pick<TrajectoryCriticSettings, 'stopThreshold' | 'branchThreshold' | 'retryThreshold' | 'humanReviewThreshold'>;
+    label: string;
+  }> = [
+    { key: 'stopThreshold', label: 'Stop' },
+    { key: 'branchThreshold', label: 'Branch' },
+    { key: 'retryThreshold', label: 'Retry' },
+    { key: 'humanReviewThreshold', label: 'Human review' },
+  ];
+
+  return (
+    <SettingsSection title="Trajectory critic">
+      <div className="trajectory-settings">
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            aria-label={settings.enabled ? 'Disable trajectory critic' : 'Enable trajectory critic'}
+            onChange={(event) => updateSettings({ enabled: event.target.checked })}
+          />
+          <span><strong>Runtime trajectory scoring</strong><small>Score process traces before a low-confidence run burns more time.</small></span>
+        </label>
+        <div className="trajectory-threshold-grid">
+          {fields.map((field) => (
+            <label key={field.key} className="provider-command-field">
+              <span>{field.label}</span>
+              <input
+                aria-label={`${field.label} threshold`}
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={settings[field.key]}
+                onChange={(event) => updateThreshold(field.key, event.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+        <p className="muted">Actions escalate as confidence falls: human review, retry, branch, then stop.</p>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function ClaudeDesignSettings({
   workspaceFiles,
   settings,
@@ -5530,13 +5596,15 @@ interface SettingsPanelProps {
   onSaveSecret: (input: { name: string; value: string }) => Promise<string>;
   onDeleteSecret: (idOrRef: string) => Promise<void>;
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
+  trajectoryCriticSettings: TrajectoryCriticSettings;
+  onTrajectoryCriticSettingsChange: (settings: TrajectoryCriticSettings) => void;
   workspaceFiles: WorkspaceFile[];
   designThemeSettings: DesignThemeSettings;
   designCss: DesignMdCssRenderResult | null;
   onDesignThemeSettingsChange: (settings: DesignThemeSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -5612,6 +5680,11 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
         onSaveSecret={onSaveSecret}
         onDeleteSecret={onDeleteSecret}
         onSettingsChange={onSecretSettingsChange}
+      />
+
+      <TrajectoryCriticSettingsPanel
+        settings={trajectoryCriticSettings}
+        onSettingsChange={onTrajectoryCriticSettingsChange}
       />
 
       {copilotState.models.length > 0 && (
@@ -7000,6 +7073,12 @@ function AgentBrowserApp() {
     isSecretManagementSettings,
     DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   );
+  const [trajectoryCriticSettings, setTrajectoryCriticSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.trajectoryCriticSettings,
+    isTrajectoryCriticSettings,
+    DEFAULT_TRAJECTORY_CRITIC_SETTINGS,
+  );
   const [secretRecords, setSecretRecords] = useState<SecretRecord[]>([]);
   const evaluationAgentRegistry = useMemo(
     () => createEvaluationAgentRegistry(localStorageBackend, activeWorkspaceId),
@@ -7099,6 +7178,12 @@ function AgentBrowserApp() {
       saveJson(localStorageBackend, STORAGE_KEYS.secretManagementSettings, next);
     }
   }, [setSecretSettings]);
+  const updateTrajectoryCriticSettings = useCallback((next: TrajectoryCriticSettings) => {
+    setTrajectoryCriticSettings(next);
+    if (localStorageBackend) {
+      saveJson(localStorageBackend, STORAGE_KEYS.trajectoryCriticSettings, next);
+    }
+  }, [setTrajectoryCriticSettings]);
   const webMcpModelContext = useMemo(
     () => installModelContext(typeof window === 'undefined' ? undefined : window) ?? new ModelContext(),
     [],
@@ -9963,6 +10048,8 @@ function AgentBrowserApp() {
         onSaveSecret={saveManualSecret}
         onDeleteSecret={deleteManualSecret}
         onSecretSettingsChange={updateSecretSettings}
+        trajectoryCriticSettings={trajectoryCriticSettings}
+        onTrajectoryCriticSettingsChange={updateTrajectoryCriticSettings}
         workspaceFiles={activeWorkspaceFiles}
         designThemeSettings={designThemeSettings}
         designCss={activeDesignCss}
@@ -10206,6 +10293,7 @@ function AgentBrowserApp() {
                 browserLocationContext={browserLocationContext}
                 setBrowserLocationContext={setBrowserLocationContext}
                 secretSettings={secretSettings}
+                trajectoryCriticSettings={trajectoryCriticSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}
                 dragHandleProps={dragHandleProps}
