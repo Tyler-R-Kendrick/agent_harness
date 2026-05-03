@@ -1,11 +1,13 @@
 import type { IVoter } from 'logact';
 import type { CopilotRuntimeState } from '../services/copilotApi';
+import type { CursorRuntimeState } from '../services/cursorApi';
 import type { ChatMessage, HFModel } from '../types';
 import type { AgentStreamCallbacks } from './types';
 import { getDefaultSecretsManagerAgent, type SecretManagementSettings, type SecretsManagerAgent } from './Secrets';
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
+import { CURSOR_LABEL, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
 import { isPlannerTaskText, PLANNER_LABEL, streamPlannerChat } from './Planner';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
@@ -22,6 +24,7 @@ export {
   streamDebuggerChat,
 } from './Debugger';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
+export { CURSOR_LABEL, buildCursorPrompt, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
 export {
   TOUR_GUIDE_AGENT_ID,
   TOUR_GUIDE_LABEL,
@@ -184,6 +187,23 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'cursor') {
+    if (!options.modelId || !options.sessionId) {
+      throw new Error('Cursor chat requires a modelId and sessionId.');
+    }
+
+    await streamCursorAgentChat({
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'researcher') {
     await streamResearcherChat({
       runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
@@ -256,11 +276,14 @@ export async function streamAgentChat(
 export function getDefaultAgentProvider({
   installedModels,
   copilotState,
+  cursorState,
 }: {
   installedModels: HFModel[];
   copilotState: CopilotRuntimeState;
+  cursorState?: CursorRuntimeState;
 }): AgentProvider {
   if (hasCodiModels(installedModels)) return 'codi';
+  if (cursorState && hasCursorAccess(cursorState)) return 'cursor';
   return hasGhcpAccess(copilotState) ? 'ghcp' : 'codi';
 }
 
@@ -268,17 +291,21 @@ export function getAgentDisplayName({
   provider,
   activeCodiModelName,
   activeGhcpModelName,
+  activeCursorModelName,
   researcherRuntimeProvider,
 }: {
   provider: AgentProvider;
   activeCodiModelName?: string;
   activeGhcpModelName?: string;
+  activeCursorModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
   if (provider === 'researcher' || provider === 'debugger' || provider === 'planner') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
-      : (activeCodiModelName ?? 'Codi');
+      : researcherRuntimeProvider === 'cursor'
+        ? (activeCursorModelName ?? 'Cursor')
+        : (activeCodiModelName ?? 'Codi');
     const label = provider === 'researcher'
       ? RESEARCHER_LABEL
       : provider === 'debugger'
@@ -287,6 +314,7 @@ export function getAgentDisplayName({
     return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
+  if (provider === 'cursor') return `${CURSOR_LABEL}: ${activeCursorModelName ?? 'Cursor'}`;
   return provider === 'ghcp'
     ? `${GHCP_LABEL}: ${activeGhcpModelName ?? 'Copilot'}`
     : `${CODI_LABEL}: ${activeCodiModelName ?? 'Codi'}`;
@@ -296,28 +324,33 @@ export function getAgentInputPlaceholder({
   provider,
   hasCodiModelsReady,
   hasGhcpModelsReady,
+  hasCursorModelsReady = false,
 }: {
   provider: AgentProvider;
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
+  hasCursorModelsReady?: boolean;
 }): string {
   if (provider === 'ghcp') {
     return hasGhcpModelsReady ? 'Ask GHCP…' : 'Sign in to GHCP to start chatting';
   }
+  if (provider === 'cursor') {
+    return hasCursorModelsReady ? 'Ask Cursor…' : 'Sign in to Cursor to start chatting';
+  }
   if (provider === 'researcher') {
-    return (hasGhcpModelsReady || hasCodiModelsReady)
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Researcher…'
-      : 'Sign in to GHCP or install a Codi model to research';
+      : 'Sign in to GHCP or Cursor, or install a Codi model to research';
   }
   if (provider === 'debugger') {
-    return (hasGhcpModelsReady || hasCodiModelsReady)
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Debugger…'
-      : 'Sign in to GHCP or install a Codi model to debug';
+      : 'Sign in to GHCP or Cursor, or install a Codi model to debug';
   }
   if (provider === 'planner') {
-    return (hasGhcpModelsReady || hasCodiModelsReady)
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Planner…'
-      : 'Sign in to GHCP or install a Codi model to plan';
+      : 'Sign in to GHCP or Cursor, or install a Codi model to plan';
   }
   if (provider === 'tour-guide') {
     return 'Ask Tour Guide…';
@@ -329,39 +362,56 @@ export function getAgentProviderSummary({
   provider,
   installedModels,
   copilotState,
+  cursorState,
 }: {
   provider: AgentProvider;
   installedModels: HFModel[];
   copilotState: CopilotRuntimeState;
+  cursorState?: CursorRuntimeState;
 }): string {
   if (provider === 'ghcp') {
     return hasGhcpAccess(copilotState)
       ? `${copilotState.models.length} GHCP models enabled`
       : (copilotState.authenticated ? 'GHCP has no enabled models' : 'GHCP sign-in required');
   }
+  if (provider === 'cursor') {
+    if (!cursorState) return 'Cursor sign-in required';
+    return hasCursorAccess(cursorState)
+      ? `${cursorState.models.length} Cursor models enabled`
+      : (cursorState.authenticated ? 'Cursor has no enabled models' : 'Cursor sign-in required');
+  }
   if (provider === 'researcher') {
     if (hasGhcpAccess(copilotState)) {
       return `${copilotState.models.length} GHCP-backed Researcher models`;
     }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Researcher models`;
+    }
     return installedModels.length
       ? `${installedModels.length} Codi-backed Researcher models`
-      : 'Researcher needs GHCP or Codi';
+      : 'Researcher needs GHCP, Cursor, or Codi';
   }
   if (provider === 'debugger') {
     if (hasGhcpAccess(copilotState)) {
       return `${copilotState.models.length} GHCP-backed Debugger models`;
     }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Debugger models`;
+    }
     return installedModels.length
       ? `${installedModels.length} Codi-backed Debugger models`
-      : 'Debugger needs GHCP or Codi';
+      : 'Debugger needs GHCP, Cursor, or Codi';
   }
   if (provider === 'planner') {
     if (hasGhcpAccess(copilotState)) {
       return `${copilotState.models.length} GHCP-backed Planner models`;
     }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Planner models`;
+    }
     return installedModels.length
       ? `${installedModels.length} Codi-backed Planner models`
-      : 'Planner needs GHCP or Codi';
+      : 'Planner needs GHCP, Cursor, or Codi';
   }
   if (provider === 'tour-guide') {
     return 'Creates guided product tours';
@@ -386,13 +436,16 @@ export function resolveRuntimeAgentProvider({
   provider,
   hasCodiModelsReady,
   hasGhcpModelsReady,
+  hasCursorModelsReady = false,
 }: {
   provider: AgentProvider;
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
+  hasCursorModelsReady?: boolean;
 }): ModelBackedAgentProvider {
   if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
+  if (hasCursorModelsReady) return 'cursor';
   return hasCodiModelsReady ? 'codi' : 'ghcp';
 }
 
@@ -401,14 +454,19 @@ export function resolveAgentModelIds({
   selectedCodiModelId,
   copilotModels,
   selectedGhcpModelId,
+  cursorModels = [],
+  selectedCursorModelId = '',
 }: {
   installedModels: HFModel[];
   selectedCodiModelId: string;
   copilotModels: CopilotRuntimeState['models'];
   selectedGhcpModelId: string;
+  cursorModels?: CursorRuntimeState['models'];
+  selectedCursorModelId?: string;
 }) {
   return {
     codiModelId: resolveCodiModelId(installedModels, selectedCodiModelId),
     ghcpModelId: resolveGhcpModelId(copilotModels, selectedGhcpModelId),
+    cursorModelId: resolveCursorModelId(cursorModels, selectedCursorModelId),
   };
 }

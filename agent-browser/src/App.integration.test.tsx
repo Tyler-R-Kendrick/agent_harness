@@ -1526,12 +1526,14 @@ describe('App', () => {
 
     const providersToggle = screen.getByRole('button', { name: /Providers/i });
     expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh Cursor status' })).toBeInTheDocument();
 
     fireEvent.click(providersToggle);
 
     expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('button', { name: 'Refresh status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh GitHub Copilot status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh Cursor status' })).not.toBeInTheDocument();
   });
 
   it('applies a DESIGN.md theme to the Agent Browser shell from settings', async () => {
@@ -1713,7 +1715,7 @@ styles:
     expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    expect(screen.getByText('1 GHCP · 0 Codi')).toBeInTheDocument();
+    expect(screen.getByText('1 GHCP · 0 Cursor · 0 Codi')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /GitHub Copilot models \(1\)/i }));
 
     expect(screen.getAllByText('GPT-4.1').length).toBeGreaterThanOrEqual(2);
@@ -1804,7 +1806,7 @@ styles:
     expect(screen.getByText('Failed to list GitHub Copilot models: models.list failed')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sign in to Copilot' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('GitHub Copilot sign-in command')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh status' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
   });
 
   it('adds workspace capability files and persists them to local storage', async () => {

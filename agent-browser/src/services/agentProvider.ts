@@ -24,8 +24,10 @@ import {
   type OpenAICompatibleProviderOptions,
 } from 'harness-core';
 import type { CopilotModelSummary, CopilotRuntimeState } from './copilotApi';
+import type { CursorModelSummary } from './cursorApi';
 import type { HFModel } from '../types';
 import { CopilotLanguageModel } from './copilotLanguageModel';
+import { CursorLanguageModel } from './cursorLanguageModel';
 import { LocalLanguageModel } from './localLanguageModel';
 
 // ── Config discriminated union ────────────────────────────────────────────────
@@ -41,6 +43,12 @@ export type CopilotModelConfig = {
   /** GitHub Copilot model ID, e.g. 'gpt-4.1' */
   modelId: string;
   /** Stable app chat-session identifier used to reuse one Copilot session. */
+  sessionId?: string;
+};
+
+export type CursorModelConfig = {
+  kind: 'cursor';
+  modelId: string;
   sessionId?: string;
 };
 
@@ -61,7 +69,7 @@ export type CustomProviderModelConfig = {
   secrets?: Record<string, string>;
 };
 
-export type AgentModelConfig = GatewayModelConfig | CopilotModelConfig | LocalModelConfig | CustomProviderModelConfig;
+export type AgentModelConfig = GatewayModelConfig | CopilotModelConfig | CursorModelConfig | LocalModelConfig | CustomProviderModelConfig;
 
 export type ModelCapabilities = {
   provider: string;
@@ -76,9 +84,11 @@ export type ResolveLanguageModelOptions = {
 
 const DEFAULT_GATEWAY_CONTEXT_WINDOW = 8_192;
 const DEFAULT_COPILOT_CONTEXT_WINDOW = 8_192;
+const DEFAULT_CURSOR_CONTEXT_WINDOW = 8_192;
 const DEFAULT_LOCAL_CONTEXT_WINDOW = 2_048;
 const DEFAULT_GATEWAY_MAX_OUTPUT_TOKENS = 1_024;
 const DEFAULT_COPILOT_MAX_OUTPUT_TOKENS = 1_024;
+const DEFAULT_CURSOR_MAX_OUTPUT_TOKENS = 1_024;
 const DEFAULT_LOCAL_MAX_OUTPUT_TOKENS = 512;
 
 function pickPositiveNumber(value: number | undefined, fallback: number): number {
@@ -90,6 +100,7 @@ export function getModelCapabilities(
   options: {
     installedModels?: HFModel[];
     copilotModels?: CopilotModelSummary[];
+    cursorModels?: CursorModelSummary[];
   } = {},
 ): ModelCapabilities {
   switch (config.kind) {
@@ -107,6 +118,16 @@ export function getModelCapabilities(
         provider: 'copilot',
         contextWindow: pickPositiveNumber(model?.contextWindow, DEFAULT_COPILOT_CONTEXT_WINDOW),
         maxOutputTokens: pickPositiveNumber(model?.maxOutputTokens, DEFAULT_COPILOT_MAX_OUTPUT_TOKENS),
+        supportsNativeToolCalls: false,
+      };
+    }
+
+    case 'cursor': {
+      const model = options.cursorModels?.find((candidate) => candidate.id === config.modelId);
+      return {
+        provider: 'cursor',
+        contextWindow: pickPositiveNumber(model?.contextWindow, DEFAULT_CURSOR_CONTEXT_WINDOW),
+        maxOutputTokens: pickPositiveNumber(model?.maxOutputTokens, DEFAULT_CURSOR_MAX_OUTPUT_TOKENS),
         supportsNativeToolCalls: false,
       };
     }
@@ -149,6 +170,9 @@ export function resolveLanguageModel(
 
     case 'copilot':
       return new CopilotLanguageModel(config.modelId, config.sessionId ?? 'copilot-session:fallback') as unknown as LanguageModel;
+
+    case 'cursor':
+      return new CursorLanguageModel(config.modelId, config.sessionId ?? 'cursor-session:fallback') as unknown as LanguageModel;
 
     case 'local':
       return new LocalLanguageModel(config.modelId, config.task ?? 'text-generation') as unknown as LanguageModel;

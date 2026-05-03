@@ -66,6 +66,16 @@ describe('resolveLanguageModel', () => {
     expect(model.specificationVersion).toBe('v3');
   });
 
+  it('returns a CursorLanguageModel for cursor config', () => {
+    const config: AgentModelConfig = { kind: 'cursor', modelId: 'composer-2', sessionId: 'chat-session-1' };
+    const model = resolveLanguageModel(config) as any;
+    expect(model).toBeDefined();
+    expect(model.provider).toBe('cursor');
+    expect(model.modelId).toBe('composer-2');
+    expect(model.sessionId).toBe('chat-session-1');
+    expect(model.specificationVersion).toBe('v3');
+  });
+
   it('returns a LocalLanguageModel for local config', () => {
     const config: AgentModelConfig = {
       kind: 'local',
@@ -278,6 +288,18 @@ describe('getModelCapabilities', () => {
       provider: 'copilot',
       contextWindow: 32768,
       maxOutputTokens: 2048,
+      supportsNativeToolCalls: false,
+    });
+  });
+
+  it('uses cursor model metadata when available', () => {
+    expect(getModelCapabilities(
+      { kind: 'cursor', modelId: 'composer-2' },
+      { cursorModels: [{ id: 'composer-2', name: 'Composer 2', contextWindow: 128000, maxOutputTokens: 8192 }] },
+    )).toEqual({
+      provider: 'cursor',
+      contextWindow: 128000,
+      maxOutputTokens: 8192,
       supportsNativeToolCalls: false,
     });
   });

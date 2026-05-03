@@ -4,6 +4,7 @@ import type { Plugin } from 'vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createCopilotApiMiddleware } from './server/copilotMiddleware';
+import { createCursorApiMiddleware } from './server/cursorMiddleware';
 import { createSearchApiMiddleware, createWebPageApiMiddleware } from './server/searchMiddleware';
 
 // just-bash/browser imports gunzipSync from node:zlib for gzip/gunzip/zcat.
@@ -32,11 +33,13 @@ const copilotApiPlugin: Plugin = {
   name: 'copilot-api',
   configureServer(server) {
     server.middlewares.use(createCopilotApiMiddleware());
+    server.middlewares.use(createCursorApiMiddleware());
     server.middlewares.use(createSearchApiMiddleware());
     server.middlewares.use(createWebPageApiMiddleware());
   },
   configurePreviewServer(server) {
     server.middlewares.use(createCopilotApiMiddleware());
+    server.middlewares.use(createCursorApiMiddleware());
     server.middlewares.use(createSearchApiMiddleware());
     server.middlewares.use(createWebPageApiMiddleware());
   },

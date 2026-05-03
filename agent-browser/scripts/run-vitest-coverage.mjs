@@ -21,7 +21,7 @@ export function chunkTestFiles(files, chunkSize) {
   return chunks;
 }
 
-async function findTestFiles(directory, root = directory) {
+export async function findTestFiles(directory, root = directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
@@ -50,6 +50,8 @@ export function buildVitestCoverageArgs(
     '--coverage',
     '--coverage.processingConcurrency=1',
     `--coverage.reportsDirectory=${reportsDirectory}`,
+    '--no-file-parallelism',
+    '--maxWorkers=1',
     ...APP_TEST_FILES.flatMap((filePath) => ['--exclude', filePath]),
     ...reporterArgs,
     ...extraArgs,
@@ -59,6 +61,8 @@ export function buildVitestCoverageArgs(
 export function buildAppTestArgs() {
   return [
     'run',
+    '--no-file-parallelism',
+    '--maxWorkers=1',
     '--reporter=dot',
     ...APP_TEST_FILES,
   ];
@@ -70,12 +74,18 @@ export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
   const completedTests = /Test Files\s+\d+\s+passed\s+\(\d+\)/.test(text)
     && /Tests\s+\d+\s+passed\s+\(\d+\)/.test(text);
   const completedCoverage = /Coverage summary/.test(text);
+  const printedCoverageReport = /Coverage report from v8/.test(text);
   const failedTests = /(?:Test Files|Tests)\s+.*\bfailed\b/i.test(text) || /\bFAIL\b/.test(text);
   const coverageTmpPath = /coverage(?:[\\/][^'"\s]+)*[\\/]\.tmp/i;
   const coverageTmpMissing = (/(?:ENOENT|Something removed the coverage directory)/i.test(text)
     && coverageTmpPath.test(text));
+  const coverageReporterCrash = completedTests
+    && printedCoverageReport
+    && !failedTests
+    && (exitCode === -1 || exitCode === 4294967295);
 
-  return completedTests && completedCoverage && !failedTests && coverageTmpMissing;
+  return (completedTests && completedCoverage && !failedTests && coverageTmpMissing)
+    || coverageReporterCrash;
 }
 
 async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
@@ -86,7 +96,7 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   }
 
   const reportsDirectory = defaultReportsDirectory();
-  const chunkSize = Number(process.env.AGENT_BROWSER_COVERAGE_CHUNK_SIZE ?? 4);
+  const chunkSize = Number(process.env.AGENT_BROWSER_COVERAGE_CHUNK_SIZE ?? 3);
   const testChunks = chunkTestFiles(await findTestFiles(path.resolve(process.cwd(), 'src')), chunkSize);
   for (const [index, files] of testChunks.entries()) {
     console.log(`Vitest coverage chunk ${index + 1}/${testChunks.length}: ${files.join(', ')}`);
@@ -112,7 +122,18 @@ async function runVitestCommand(vitestBin, args, label) {
   const child = spawn(process.execPath, [vitestBin, ...args], {
     cwd: process.cwd(),
     env: process.env,
-    stdio: 'inherit',
+    stdio: ['inherit', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout?.on('data', (chunk) => {
+    const text = chunk.toString();
+    output += text;
+    process.stdout.write(text);
+  });
+  child.stderr?.on('data', (chunk) => {
+    const text = chunk.toString();
+    output += text;
+    process.stderr.write(text);
   });
 
   const exitCode = await new Promise((resolve, reject) => {
@@ -129,6 +150,11 @@ async function runVitestCommand(vitestBin, args, label) {
       resolve(code ?? 1);
     });
   });
+
+  if (isVitestCoverageTmpCleanupRace({ exitCode, output })) {
+    console.warn(`${label} completed; ignoring v8 coverage temporary-directory cleanup race.`);
+    return 0;
+  }
 
   return exitCode;
 }
