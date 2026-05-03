@@ -293,6 +293,10 @@ type SessionMcpController = {
   writeSession: (input: WorkspaceMcpWriteSessionInput) => Promise<void>;
 };
 
+function areSessionRuntimeSnapshotsEqual(left: SessionMcpRuntimeState | undefined, right: SessionMcpRuntimeState): boolean {
+  return JSON.stringify(left ?? null) === JSON.stringify(right);
+}
+
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
 
@@ -1708,6 +1712,7 @@ function ChatPanel({
   setBrowserLocationContext,
   secretSettings,
   onSessionMcpControllerChange,
+  onSessionRuntimeChange,
   dragHandleProps,
 }: {
   installedModels: HFModel[];
@@ -1737,6 +1742,7 @@ function ChatPanel({
   setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
+  onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
@@ -4626,6 +4632,32 @@ function ChatPanel({
     })),
   }), [activeSessionId]);
 
+  useEffect(() => {
+    if (!activeSessionId || !onSessionRuntimeChange) {
+      return;
+    }
+    onSessionRuntimeChange(activeSessionId, getSessionRuntimeState());
+  }, [
+    activeMode,
+    activeSessionId,
+    cwdBySession,
+    effectiveSelectedCopilotModelId,
+    effectiveSelectedModelId,
+    getSessionRuntimeState,
+    messages,
+    onSessionRuntimeChange,
+    selectedAgentId,
+    selectedProvider,
+    selectedToolIds,
+  ]);
+
+  useEffect(() => {
+    if (!activeSessionId || !onSessionRuntimeChange) {
+      return undefined;
+    }
+    return () => onSessionRuntimeChange(activeSessionId, null);
+  }, [activeSessionId, onSessionRuntimeChange]);
+
   const applySessionWrite = useCallback(async (input: WorkspaceMcpWriteSessionInput) => {
     if (!activeSessionId || input.sessionId !== activeSessionId) {
       throw new DOMException(`Session "${input.sessionId}" is not the current chat panel session.`, 'NotFoundError');
@@ -6912,6 +6944,21 @@ function AgentBrowserApp() {
     evaluationAgentRegistry.addNegativeRubricTechnique(technique);
     setNegativeRubricTechniques(evaluationAgentRegistry.listNegativeRubricTechniques());
   }, [evaluationAgentRegistry]);
+  const [sessionRuntimeSnapshotsById, setSessionRuntimeSnapshotsById] = useState<Record<string, SessionMcpRuntimeState>>({});
+  const handleSessionRuntimeChange = useCallback((sessionId: string, runtime: SessionMcpRuntimeState | null) => {
+    setSessionRuntimeSnapshotsById((current) => {
+      if (!runtime) {
+        if (!current[sessionId]) return current;
+        const next = { ...current };
+        delete next[sessionId];
+        return next;
+      }
+      if (areSessionRuntimeSnapshotsEqual(current[sessionId], runtime)) {
+        return current;
+      }
+      return { ...current, [sessionId]: runtime };
+    });
+  }, []);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
@@ -8475,6 +8522,26 @@ function AgentBrowserApp() {
       inferSessionFsEntryKind,
     });
   }, [activeMountedSessionFsIds, activeWorkspace, terminalFsPathsBySession]);
+  const activeSessionAssetsById = useMemo(() => activeSessionFsEntries.reduce<Record<string, Array<{ path: string; kind: string; isRoot?: boolean }>>>((entriesBySession, entry) => {
+    const current = entriesBySession[entry.sessionId] ?? [];
+    entriesBySession[entry.sessionId] = [
+      ...current,
+      {
+        path: entry.path,
+        kind: entry.kind,
+        ...(entry.isRoot ? { isRoot: true } : {}),
+      },
+    ];
+    return entriesBySession;
+  }, {}), [activeSessionFsEntries]);
+  const activeDashboardSessions = useMemo(() => activeWorkspaceSessions.map((session) => {
+    const runtime = sessionRuntimeSnapshotsById[session.id] ?? sessionMcpControllersRef.current[session.id]?.getRuntimeState();
+    return {
+      ...session,
+      ...(runtime ?? {}),
+      assets: activeSessionAssetsById[session.id] ?? [],
+    };
+  }), [activeSessionAssetsById, activeWorkspaceSessions, sessionRuntimeSnapshotsById]);
 
   const activeWorktreeItems = useMemo<WorkspaceMcpWorktreeItem[]>(() => {
     if (activeWorkspace.type !== 'workspace') {
@@ -9711,7 +9778,7 @@ function AgentBrowserApp() {
                   key={panel.workspaceId}
                   spec={activeHarnessSpec}
                   workspaceName={activeWorkspace.name}
-                  sessions={activeWorkspaceSessions}
+                  sessions={activeDashboardSessions}
                   browserPages={activeBrowserPages.map((page) => ({
                     id: page.id,
                     title: page.title,
@@ -9800,6 +9867,7 @@ function AgentBrowserApp() {
                 setBrowserLocationContext={setBrowserLocationContext}
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
+                onSessionRuntimeChange={handleSessionRuntimeChange}
                 dragHandleProps={dragHandleProps}
               />
             );

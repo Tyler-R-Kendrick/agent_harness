@@ -1,8 +1,9 @@
-import { useMemo, useState, type CSSProperties, type HTMLAttributes } from 'react';
+import { useMemo, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
 import { HarnessJsonRenderer, type HarnessBrowserPageSummary, type HarnessFileSummary, type HarnessSessionSummary } from './HarnessJsonRenderer';
 import { HarnessInspectorPanel } from './HarnessInspectorPanel';
-import { buildCenteredFirstFitLayout } from './spaceLayout';
-import type { HarnessAppSpec, HarnessElementPatch, WidgetPosition, WidgetSize } from './types';
+import { normalizeWidgetPosition, normalizeWidgetSize, resolveSpaceLayout } from './spaceLayout';
+import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, JsonValue, WidgetPosition, WidgetSize } from './types';
 
 export type HarnessDashboardPanelProps = {
   spec: HarnessAppSpec;
@@ -18,6 +19,10 @@ export type HarnessDashboardPanelProps = {
 };
 
 const DEFAULT_WIDGET_SIZES: Record<string, WidgetSize> = {
+  'conversation-summary-widget': { cols: 5, rows: 3 },
+  'session-storage-widget': { cols: 4, rows: 3 },
+  'session-activity-widget': { cols: 5, rows: 3 },
+  'runtime-context-widget': { cols: 4, rows: 2 },
   'workspace-summary-widget': { cols: 5, rows: 2 },
   'session-list-widget': { cols: 4, rows: 3 },
   'browser-pages-widget': { cols: 5, rows: 3 },
@@ -26,9 +31,9 @@ const DEFAULT_WIDGET_SIZES: Record<string, WidgetSize> = {
 };
 
 const PROMPT_SUGGESTIONS = [
-  'Create session overview',
-  'Show active browser pages',
-  'Summarize workspace files',
+  'Create conversation summary',
+  'Show session storage assets',
+  'Show session runtime',
 ];
 
 function readDashboardElement(spec: HarnessAppSpec) {
@@ -40,6 +45,20 @@ function readTitle(spec: HarnessAppSpec, elementId: string, fallback: string) {
   return typeof title === 'string' && title.trim() ? title.trim() : fallback;
 }
 
+function readStringProp(element: HarnessElement | undefined, propName: string, fallback = '') {
+  const value = element?.props?.[propName];
+  return typeof value === 'string' ? value : fallback;
+}
+
+function readBooleanProp(element: HarnessElement | undefined, propName: string, fallback = false) {
+  const value = element?.props?.[propName];
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function defaultWidgetSize(widgetId: string) {
+  return DEFAULT_WIDGET_SIZES[widgetId] ?? { cols: 4, rows: 3 };
+}
+
 function widgetStyle(position: WidgetPosition, size: WidgetSize) {
   return {
     '--harness-widget-col': String(position.col),
@@ -47,6 +66,33 @@ function widgetStyle(position: WidgetPosition, size: WidgetSize) {
     '--harness-widget-cols': String(size.cols),
     '--harness-widget-rows': String(size.rows),
   } as CSSProperties;
+}
+
+function resolveWidgetSessionId(element: HarnessElement | undefined, sessions: HarnessSessionSummary[]) {
+  const requestedSessionId = readStringProp(element, 'sessionId', 'active');
+  if (requestedSessionId && requestedSessionId !== 'active' && sessions.some((session) => session.id === requestedSessionId)) {
+    return requestedSessionId;
+  }
+  return sessions.find((session) => session.isOpen)?.id ?? sessions[0]?.id ?? '';
+}
+
+function patchWidget(onPatchElement: HarnessDashboardPanelProps['onPatchElement'], elementId: string, props: Record<string, JsonValue>) {
+  onPatchElement?.({ elementId, props });
+}
+
+function IconButton({ children, disabled, label, onClick }: { children: ReactNode; disabled?: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="harness-widget-tool-button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
 }
 
 export function HarnessDashboardPanel({
@@ -65,11 +111,19 @@ export function HarnessDashboardPanel({
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const dashboard = readDashboardElement(spec);
   const widgetIds = dashboard.children ?? [];
-  const layout = useMemo(() => buildCenteredFirstFitLayout({
-    viewportCols: 14,
-    widgetIds,
-    widgetSizes: DEFAULT_WIDGET_SIZES,
-  }), [widgetIds]);
+  const widgetLayoutInput = useMemo(() => {
+    const widgetPositions: Record<string, unknown> = {};
+    const widgetSizes: Record<string, unknown> = {};
+    const minimizedWidgetIds: string[] = [];
+    for (const widgetId of widgetIds) {
+      const element = spec.elements[widgetId];
+      widgetPositions[widgetId] = element?.props?.position;
+      widgetSizes[widgetId] = element?.props?.size ?? defaultWidgetSize(widgetId);
+      if (readBooleanProp(element, 'minimized')) minimizedWidgetIds.push(widgetId);
+    }
+    return { minimizedWidgetIds, widgetIds, widgetPositions, widgetSizes };
+  }, [spec, widgetIds]);
+  const layout = useMemo(() => resolveSpaceLayout(widgetLayoutInput), [widgetLayoutInput]);
   const context = useMemo(() => ({
     workspaceName,
     sessions,
@@ -111,8 +165,14 @@ export function HarnessDashboardPanel({
           <div className="harness-dashboard-grid" aria-label="Editable harness widgets">
             {widgetIds.map((widgetId) => {
               const title = readTitle(spec, widgetId, widgetId);
-              const size = DEFAULT_WIDGET_SIZES[widgetId] ?? { cols: 4, rows: 3 };
+              const element = spec.elements[widgetId];
+              const size = layout.renderedSizes[widgetId] ?? normalizeWidgetSize(element?.props?.size, defaultWidgetSize(widgetId));
               const position = layout.positions[widgetId] ?? { col: 0, row: 0 };
+              const storedPosition = normalizeWidgetPosition(element?.props?.position, position);
+              const storedSize = normalizeWidgetSize(element?.props?.size, defaultWidgetSize(widgetId));
+              const minimized = layout.minimizedMap[widgetId] ?? readBooleanProp(element, 'minimized');
+              const selectedSessionId = resolveWidgetSessionId(element, sessions);
+              const controlsDisabled = !onPatchElement;
               return (
                 <article
                   key={widgetId}
@@ -121,10 +181,45 @@ export function HarnessDashboardPanel({
                   style={widgetStyle(position, size)}
                 >
                   <header className="harness-widget-header">
-                    <h3>{title}</h3>
-                    <span className="harness-widget-badge">editable</span>
+                    <div className="harness-widget-title-group">
+                      <h3>{title}</h3>
+                      <select
+                        aria-label={`Session for ${title} widget`}
+                        className="harness-widget-session-select"
+                        value={selectedSessionId}
+                        disabled={!sessions.length || controlsDisabled}
+                        onChange={(event) => patchWidget(onPatchElement, widgetId, { sessionId: event.target.value })}
+                      >
+                        {sessions.length ? sessions.map((session) => (
+                          <option key={session.id} value={session.id}>Widget session: {session.name}</option>
+                        )) : <option value="">No session</option>}
+                      </select>
+                    </div>
+                    <div className="harness-widget-controls" aria-label={`${title} widget controls`}>
+                      <IconButton disabled={controlsDisabled} label={`Move ${title} widget left`} onClick={() => patchWidget(onPatchElement, widgetId, { position: { col: storedPosition.col - 1, row: storedPosition.row } })}>
+                        <ArrowLeft size={13} />
+                      </IconButton>
+                      <IconButton disabled={controlsDisabled} label={`Move ${title} widget right`} onClick={() => patchWidget(onPatchElement, widgetId, { position: { col: storedPosition.col + 1, row: storedPosition.row } })}>
+                        <ArrowRight size={13} />
+                      </IconButton>
+                      <IconButton disabled={controlsDisabled} label={`Move ${title} widget up`} onClick={() => patchWidget(onPatchElement, widgetId, { position: { col: storedPosition.col, row: storedPosition.row - 1 } })}>
+                        <ArrowUp size={13} />
+                      </IconButton>
+                      <IconButton disabled={controlsDisabled} label={`Move ${title} widget down`} onClick={() => patchWidget(onPatchElement, widgetId, { position: { col: storedPosition.col, row: storedPosition.row + 1 } })}>
+                        <ArrowDown size={13} />
+                      </IconButton>
+                      <IconButton disabled={controlsDisabled} label={`Shrink ${title} widget`} onClick={() => patchWidget(onPatchElement, widgetId, { size: { cols: Math.max(2, storedSize.cols - 1), rows: storedSize.rows } })}>
+                        <Minus size={13} />
+                      </IconButton>
+                      <IconButton disabled={controlsDisabled} label={`Grow ${title} widget`} onClick={() => patchWidget(onPatchElement, widgetId, { size: { cols: storedSize.cols + 1, rows: storedSize.rows } })}>
+                        <Plus size={13} />
+                      </IconButton>
+                      <IconButton disabled={controlsDisabled} label={`${minimized ? 'Restore' : 'Minimize'} ${title} widget`} onClick={() => patchWidget(onPatchElement, widgetId, { minimized: !minimized })}>
+                        {minimized ? <Maximize2 size={13} /> : <Minimize2 size={13} />}
+                      </IconButton>
+                    </div>
                   </header>
-                  <div className="harness-widget-body">
+                  <div className={`harness-widget-body${minimized ? ' harness-widget-body--minimized' : ''}`}>
                     <HarnessJsonRenderer spec={spec} rootId={widgetId} context={context} />
                   </div>
                 </article>

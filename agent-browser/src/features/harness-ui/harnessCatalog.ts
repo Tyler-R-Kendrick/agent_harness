@@ -2,7 +2,18 @@ import type { HarnessCatalogComponent, HarnessElement } from './types';
 
 const SHARED_PROPS = ['title', 'label', 'visible'];
 const PANEL_PROPS = [...SHARED_PROPS, 'density', 'emptyLabel'];
-const WIDGET_PROPS = [...SHARED_PROPS, 'density', 'emptyLabel', 'metric', 'addWidgetLabel'];
+const WIDGET_PROPS = [
+  ...SHARED_PROPS,
+  'density',
+  'emptyLabel',
+  'metric',
+  'addWidgetLabel',
+  'minimized',
+  'position',
+  'sessionId',
+  'size',
+  'summary',
+];
 const UNSAFE_PROPS = new Set(['className', 'style', 'dangerouslySetInnerHTML', 'html', 'script']);
 
 const CATALOG: HarnessCatalogComponent[] = [
@@ -99,11 +110,47 @@ const CATALOG: HarnessCatalogComponent[] = [
   {
     type: 'WorkspaceSummary',
     label: 'Workspace summary widget',
-    description: 'Dashboard widget summarizing workspace state.',
+    description: 'Legacy dashboard widget; renders as a session-scoped conversation summary.',
     allowedSlots: ['dashboard.canvas'],
     allowedProps: WIDGET_PROPS,
     designTokens: ['harness-widget-card', 'harness-metric-row'],
     naturalLanguageHints: ['workspace summary', 'metrics', 'overview'],
+  },
+  {
+    type: 'SessionConversationSummary',
+    label: 'Session conversation summary widget',
+    description: 'Dashboard widget summarizing the selected session conversation.',
+    allowedSlots: ['dashboard.canvas'],
+    allowedProps: WIDGET_PROPS,
+    designTokens: ['harness-widget-card', 'harness-metric-row', 'harness-session-summary'],
+    naturalLanguageHints: ['conversation summary', 'session summary', 'chat summary'],
+  },
+  {
+    type: 'SessionStorageAssets',
+    label: 'Session storage assets widget',
+    description: 'Dashboard widget listing storage assets for the selected session.',
+    allowedSlots: ['dashboard.canvas'],
+    allowedProps: WIDGET_PROPS,
+    designTokens: ['harness-widget-card', 'harness-widget-list', 'harness-session-assets'],
+    naturalLanguageHints: ['session storage', 'session assets', 'saved files'],
+  },
+  {
+    type: 'SessionActivity',
+    label: 'Session activity widget',
+    description: 'Dashboard widget showing recent chat history for the selected session.',
+    allowedSlots: ['dashboard.canvas'],
+    allowedProps: WIDGET_PROPS,
+    designTokens: ['harness-widget-card', 'harness-widget-list'],
+    naturalLanguageHints: ['session activity', 'chat history', 'handoff notes'],
+  },
+  {
+    type: 'SessionRuntime',
+    label: 'Session runtime widget',
+    description: 'Dashboard widget showing runtime controls and storage context for the selected session.',
+    allowedSlots: ['dashboard.canvas'],
+    allowedProps: WIDGET_PROPS,
+    designTokens: ['harness-widget-card', 'harness-metric-row'],
+    naturalLanguageHints: ['runtime context', 'tools', 'cwd', 'model'],
   },
   {
     type: 'SessionList',

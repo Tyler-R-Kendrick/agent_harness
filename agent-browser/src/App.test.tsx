@@ -314,7 +314,8 @@ describe('App', () => {
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
     expect(dashboard).toBeInTheDocument();
-    expect(within(dashboard).getByText('Page: Hugging Face')).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Conversation summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).queryByText('Page: Hugging Face')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Chat mode' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Terminal mode' })).toBeInTheDocument();
@@ -347,18 +348,18 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: 'Project map' })).toBeInTheDocument();
 
     fireEvent.change(within(dashboard).getByLabelText('Describe widget'), {
-      target: { value: 'Add a browser status widget' },
+      target: { value: 'Add a session summary widget' },
     });
     fireEvent.click(within(dashboard).getByRole('button', { name: 'Go' }));
 
-    expect(within(dashboard).getByRole('article', { name: 'Browser status widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
     expect(persisted['ws-research'].elements['workspace-sidebar'].props.title).toBe('Project map');
-    expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-browser-status-widget-'))).toBe(true);
+    expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-session-summary-widget-'))).toBe(true);
   });
 
   it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context sub-groups', async () => {
@@ -437,17 +438,17 @@ describe('App', () => {
     await act(async () => {
       await webmcpTool.execute?.({
         tool: 'regenerate_harness_ui',
-        args: { prompt: 'Add a browser status widget' },
+        args: { prompt: 'Add a session summary widget' },
       }, {} as never);
     });
     await flushAsyncUpdates();
 
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
-    expect(within(dashboard).getByRole('article', { name: 'Browser status widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
     await expect(webmcpTool.execute?.({ tool: 'read_harness_prompt_context' }, {} as never)).resolves.toMatchObject({
       rows: expect.arrayContaining([
         expect.stringContaining('Project map'),
-        expect.stringContaining('Browser status'),
+        expect.stringContaining('Session summary'),
       ]),
     });
   });
