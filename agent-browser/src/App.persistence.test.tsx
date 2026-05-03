@@ -219,7 +219,7 @@ describe('App session-bound persistence', () => {
     await act(async () => { vi.advanceTimersByTime(350); });
 
     // Settings button has class 'active' when its panel is active.
-    const settingsButton = screen.getByTitle('Settings (Alt+4)');
+    const settingsButton = screen.getByTitle('Settings (Alt+5)');
     expect(settingsButton.className).toContain('active');
   });
 
