@@ -106,7 +106,7 @@ Use `localhost` only for tools running inside the container, such as `curl`, Pla
 - `agent-browser/docs/features.md`: live prototype feature language and screenshot guide
 - `reference_impl/workspace-architecture.md`: conceptual workspace model and terminology
 - `agent-browser/src/App.tsx`: current implementation of workspace, page overlay, chat, and terminal behaviors
-- `agent-browser/tests/app.spec.ts` and `agent-browser/src/App.test.tsx`: executable expectations for current UI behavior
+- `agent-browser/tests/app.spec.ts` and `agent-browser/src/App.integration.test.tsx`: executable expectations for current UI behavior
 - `skills/agent-harness-context/scripts/codespaces-uri.sh`: deterministic helper for Codespaces browse URLs and redirect URIs
 
 ## Conflict Resolution

@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",
-    "postinstall": "patch-package",
+    "postinstall": "node scripts/run-package-bin.mjs patch-package",
     "check:generated-files": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-generated-files-clean.ps1",
     "verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",
     "test:agent-browser": "npm --workspace agent-browser run test",

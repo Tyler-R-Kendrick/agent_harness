@@ -8,7 +8,7 @@
       "files": [
         "AGENTS.md",
         "agent-browser/src/App.tsx",
-        "agent-browser/src/App.test.tsx",
+        "agent-browser/src/App.integration.test.tsx",
         "agent-browser/docs/features.md"
       ]
     },

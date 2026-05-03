@@ -117,12 +117,8 @@ async function main() {
       '--coverage',
       '--coverage.processingConcurrency=1',
       '--coverage.reportsDirectory=../output/coverage/agent-browser-test',
-      '--no-file-parallelism',
-      '--maxWorkers=1',
       '--exclude',
-      'src/App.test.tsx',
-      '--exclude',
-      'src/App.persistence.test.tsx',
+      'src/App.smoke.test.tsx',
       '--reporter=dot',
     ],
   );
@@ -130,11 +126,8 @@ async function main() {
     coverageRunner.buildAppTestArgs(),
     [
       'run',
-      '--no-file-parallelism',
-      '--maxWorkers=1',
       '--reporter=dot',
-      'src/App.test.tsx',
-      'src/App.persistence.test.tsx',
+      'src/App.smoke.test.tsx',
     ],
   );
   assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
