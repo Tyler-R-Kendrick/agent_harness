@@ -202,7 +202,7 @@ describe('web search providers', () => {
       'utf8',
     );
 
-    expect(providerSource).toContain("import { tavily } from '@tavily/core'");
+    expect(providerSource).toContain("await import('@tavily/core')");
     expect(providerSource).not.toContain('createTavilyRestClient');
     expect(providerSource).not.toContain('importRuntimePackage');
     expect(patchSource).toContain('-import { HttpsProxyAgent } from "https-proxy-agent";');
