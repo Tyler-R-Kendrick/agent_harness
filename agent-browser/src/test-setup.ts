@@ -1,7 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 import { setMaxListeners } from 'node:events';
+import {
+  ReadableStream,
+  TransformStream,
+  WritableStream,
+} from 'node:stream/web';
 
 Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', { value: () => undefined, writable: true });
+
+globalThis.ReadableStream ??= ReadableStream;
+globalThis.TransformStream ??= TransformStream;
+globalThis.WritableStream ??= WritableStream;
 
 const NativeAbortController = globalThis.AbortController;
 
