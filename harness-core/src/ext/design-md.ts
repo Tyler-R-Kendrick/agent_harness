@@ -76,13 +76,57 @@ export interface LlGuidanceDesignSubstitutionProviderOptions {
   inferenceClient: CoreInferenceClient;
 }
 
-interface ParsedDesignMd {
-  name: string;
-  prose: string;
+export interface DesignMdThemeOption {
+  id: string;
+  label: string;
+}
+
+export interface DesignMdCssRenderOptions {
+  themeId?: string;
+}
+
+export interface DesignMdCssRenderResult {
+  css: string;
+  diagnostics: string[];
+  variables: Record<string, string>;
+  themeId: string;
+}
+
+interface DesignMdTokenGroups {
   colors: Record<string, string>;
   typography: Record<string, Record<string, string>>;
   rounded: Record<string, string>;
   spacing: Record<string, string>;
+  shadows: Record<string, string>;
+  motion: Record<string, string>;
+}
+
+interface ParsedDesignMd extends DesignMdTokenGroups {
+  name: string;
+  prose: string;
+  themes: Record<string, DesignMdTokenGroups>;
+  styles: DesignMdStyles;
+}
+
+interface DesignMdStyles {
+  agentBrowser: Record<string, string>;
+  widgets: Record<string, Record<string, string>>;
+}
+
+interface TokenReferenceEntry {
+  reference: string;
+  variable: string;
+  value: string;
+}
+
+interface TokenReferenceIndex {
+  entries: TokenReferenceEntry[];
+  byReference: Map<string, TokenReferenceEntry>;
+}
+
+interface StyleDeclarationRender {
+  cssLines: string[];
+  variables: Record<string, string>;
 }
 
 interface DesignMdApplyToolArgs {
@@ -108,6 +152,7 @@ const FRONTEND_CODE_PATH_PATTERN = /\.(css|html|jsx|tsx)$|(^|\/)(tailwind\.confi
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 const DESIGN_MARKER_START = '/* design.md:start */';
 const DESIGN_MARKER_END = '/* design.md:end */';
+const DESIGN_TOKEN_REFERENCE_GROUPS = new Set(['colors', 'typography', 'rounded', 'spacing', 'shadows', 'motion']);
 
 export const DESIGN_MD_SUBSTITUTION_PLAN_SCHEMA = {
   type: 'object',
@@ -226,7 +271,8 @@ export function createCssDesignTokenApplyProvider(): DesignMdApplyProvider {
     description: 'Render DESIGN.md tokens into a managed CSS custom-property block.',
     canApply: (request) => request.intent.kind === 'code-substitution' && /\.css$/i.test(request.target.path),
     apply: (request) => {
-      const block = renderCssTokenBlock(parseDesignMd(request.design));
+      const rendered = renderDesignMdCss(request.design);
+      const block = rendered.css;
       const existingBlock = new RegExp(`${escapeRegExp(DESIGN_MARKER_START)}[\\s\\S]*?${escapeRegExp(DESIGN_MARKER_END)}\\r?\\n?`);
       const hasBlock = existingBlock.test(request.target.content);
       const content = hasBlock
@@ -243,8 +289,8 @@ export function createCssDesignTokenApplyProvider(): DesignMdApplyProvider {
           method: hasBlock ? 'marker-replace' : 'marker-insert',
           description: 'Synchronize CSS custom properties from DESIGN.md tokens.',
         }],
-        diagnostics: [],
-        usedTooling: ['design-md-token-parser', 'css-custom-property-substitution'],
+        diagnostics: rendered.diagnostics,
+        usedTooling: ['design-md-token-parser', 'design-md-theme-resolver', 'css-custom-property-substitution'],
       };
     },
   };
@@ -310,6 +356,46 @@ export function buildDesignMdGuidanceMessage(document: DesignMdDocument): string
   ].filter(Boolean).join('\n\n');
 }
 
+export function listDesignMdThemeOptions(document: DesignMdDocument): DesignMdThemeOption[] {
+  const parsed = parseDesignMd(document);
+  return [
+    { id: 'default', label: parsed.name },
+    ...Object.keys(parsed.themes).map((id) => ({ id, label: id })),
+  ];
+}
+
+export function renderDesignMdCss(
+  document: DesignMdDocument,
+  options: DesignMdCssRenderOptions = {},
+): DesignMdCssRenderResult {
+  const parsed = parseDesignMd(document);
+  const diagnostics: string[] = [];
+  const { themeId, tokens } = resolveThemeTokens(parsed, options.themeId, diagnostics);
+  const tokenReferences = buildTokenReferenceIndex(tokens, diagnostics);
+  const shellDeclarations = renderStyleDeclarations(
+    parsed.styles.agentBrowser,
+    'styles.agentBrowser',
+    tokenReferences,
+    diagnostics,
+    true,
+  );
+  const widgetBlocks = renderWidgetBlocks(parsed.styles.widgets, tokenReferences, diagnostics);
+  return {
+    themeId,
+    diagnostics,
+    variables: shellDeclarations.variables,
+    css: [
+      DESIGN_MARKER_START,
+      ':root {',
+      ...tokenReferences.entries.map((entry) => `  ${entry.variable}: ${entry.value};`),
+      ...shellDeclarations.cssLines,
+      '}',
+      ...widgetBlocks,
+      DESIGN_MARKER_END,
+    ].join('\n'),
+  };
+}
+
 async function executeDesignMdApplyTool(
   args: DesignMdApplyToolArgs,
   context: HarnessToolContext | undefined,
@@ -362,6 +448,10 @@ function parseDesignMd(document: DesignMdDocument): ParsedDesignMd {
     typography: doubleNestedStringRecord(parsed, 'typography'),
     rounded: nestedStringRecord(parsed, 'rounded'),
     spacing: nestedStringRecord(parsed, 'spacing'),
+    shadows: nestedStringRecord(parsed, 'shadows'),
+    motion: nestedStringRecord(parsed, 'motion'),
+    themes: parseThemeRecords(parsed),
+    styles: parseStyleRecords(parsed),
   };
 }
 
@@ -377,20 +467,203 @@ function formatTokenSummary(parsed: ParsedDesignMd): string {
   ].filter(Boolean).join('\n');
 }
 
-function renderCssTokenBlock(parsed: ParsedDesignMd): string {
-  return [
-    DESIGN_MARKER_START,
-    ':root {',
-    ...Object.entries(parsed.colors).map(([key, value]) => `  --design-color-${key}: ${value};`),
-    ...Object.entries(parsed.typography).flatMap(([key, typography]) => Object.entries(typography).map(([property, value]) => {
-      const cssProperty = property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
-      return `  --design-${cssProperty}-${key}: ${value};`;
-    })),
-    ...Object.entries(parsed.rounded).map(([key, value]) => `  --design-radius-${key}: ${value};`),
-    ...Object.entries(parsed.spacing).map(([key, value]) => `  --design-space-${key}: ${value};`),
-    '}',
-    DESIGN_MARKER_END,
-  ].join('\n');
+function resolveThemeTokens(
+  parsed: ParsedDesignMd,
+  requestedThemeId: string | undefined,
+  diagnostics: string[],
+): { themeId: string; tokens: DesignMdTokenGroups } {
+  const baseTokens = pickBaseTokens(parsed);
+  if (!requestedThemeId || requestedThemeId === 'default') {
+    return { themeId: 'default', tokens: baseTokens };
+  }
+
+  const theme = parsed.themes[requestedThemeId];
+  if (!theme) {
+    diagnostics.push(`Unknown DESIGN.md theme "${requestedThemeId}"; using default tokens.`);
+    return { themeId: 'default', tokens: baseTokens };
+  }
+
+  return {
+    themeId: requestedThemeId,
+    tokens: mergeTokenGroups(baseTokens, theme),
+  };
+}
+
+function pickBaseTokens(parsed: ParsedDesignMd): DesignMdTokenGroups {
+  return {
+    colors: parsed.colors,
+    typography: parsed.typography,
+    rounded: parsed.rounded,
+    spacing: parsed.spacing,
+    shadows: parsed.shadows,
+    motion: parsed.motion,
+  };
+}
+
+function mergeTokenGroups(base: DesignMdTokenGroups, override: DesignMdTokenGroups): DesignMdTokenGroups {
+  return {
+    colors: { ...base.colors, ...override.colors },
+    typography: mergeNestedStringRecords(base.typography, override.typography),
+    rounded: { ...base.rounded, ...override.rounded },
+    spacing: { ...base.spacing, ...override.spacing },
+    shadows: { ...base.shadows, ...override.shadows },
+    motion: { ...base.motion, ...override.motion },
+  };
+}
+
+function mergeNestedStringRecords(
+  base: Record<string, Record<string, string>>,
+  override: Record<string, Record<string, string>>,
+): Record<string, Record<string, string>> {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    merged[key] = { ...(merged[key] ?? {}), ...value };
+  }
+  return merged;
+}
+
+function buildTokenReferenceIndex(tokens: DesignMdTokenGroups, diagnostics: string[]): TokenReferenceIndex {
+  const entries: TokenReferenceEntry[] = [];
+  const add = (reference: string, variable: string, value: string) => {
+    if (!isSafeCssValue(value)) {
+      diagnostics.push(`Skipped unsafe value for ${reference}.`);
+      return;
+    }
+    entries.push({ reference, variable, value });
+  };
+
+  for (const [key, value] of Object.entries(tokens.colors)) {
+    add(`colors.${key}`, `--design-color-${cssName(key)}`, value);
+  }
+  for (const [key, typography] of Object.entries(tokens.typography)) {
+    for (const [property, value] of Object.entries(typography)) {
+      add(`typography.${key}.${property}`, `--design-${cssName(property)}-${cssName(key)}`, value);
+    }
+  }
+  for (const [key, value] of Object.entries(tokens.rounded)) {
+    add(`rounded.${key}`, `--design-radius-${cssName(key)}`, value);
+  }
+  for (const [key, value] of Object.entries(tokens.spacing)) {
+    add(`spacing.${key}`, `--design-space-${cssName(key)}`, value);
+  }
+  for (const [key, value] of Object.entries(tokens.shadows)) {
+    add(`shadows.${key}`, `--design-shadow-${cssName(key)}`, value);
+  }
+  for (const [key, value] of Object.entries(tokens.motion)) {
+    add(`motion.${key}`, `--design-motion-${cssName(key)}`, value);
+  }
+
+  return {
+    entries,
+    byReference: new Map(entries.map((entry) => [entry.reference, entry])),
+  };
+}
+
+function renderStyleDeclarations(
+  styles: Record<string, string>,
+  path: string,
+  tokenReferences: TokenReferenceIndex,
+  diagnostics: string[],
+  asCustomProperties: boolean,
+): StyleDeclarationRender {
+  const cssLines: string[] = [];
+  const variables: Record<string, string> = {};
+
+  for (const [name, rawValue] of Object.entries(styles)) {
+    const declaration = resolveStyleDeclaration(`${path}.${name}`, rawValue, tokenReferences, diagnostics);
+    if (!declaration) continue;
+    const propertyName = asCustomProperties ? cssCustomPropertyName(name) : cssName(name);
+    cssLines.push(`  ${propertyName}: ${declaration.cssValue};`);
+    if (asCustomProperties) {
+      variables[propertyName] = declaration.value;
+    }
+  }
+
+  return { cssLines, variables };
+}
+
+function renderWidgetBlocks(
+  widgets: Record<string, Record<string, string>>,
+  tokenReferences: TokenReferenceIndex,
+  diagnostics: string[],
+): string[] {
+  return Object.entries(widgets).flatMap(([widgetId, styles]) => {
+    const rendered = renderStyleDeclarations(styles, `styles.widgets.${widgetId}`, tokenReferences, diagnostics, false);
+    if (!rendered.cssLines.length) return [];
+    return [
+      `[data-design-widget="${cssName(widgetId)}"] {`,
+      ...rendered.cssLines,
+      '}',
+    ];
+  });
+}
+
+function resolveStyleDeclaration(
+  path: string,
+  rawValue: string,
+  tokenReferences: TokenReferenceIndex,
+  diagnostics: string[],
+): { cssValue: string; value: string } | null {
+  const value = rawValue.trim();
+  if (isDesignTokenReference(value)) {
+    const token = tokenReferences.byReference.get(value);
+    if (!token) {
+      diagnostics.push(`Missing token reference ${value} for ${path}.`);
+      return null;
+    }
+    return { cssValue: `var(${token.variable})`, value: token.value };
+  }
+  if (!isSafeCssValue(value)) {
+    diagnostics.push(`Skipped unsafe value for ${path}.`);
+    return null;
+  }
+  return { cssValue: value, value };
+}
+
+function isDesignTokenReference(value: string): boolean {
+  const group = /^([A-Za-z][A-Za-z0-9_-]*)\./.exec(value)?.[1];
+  return Boolean(group && DESIGN_TOKEN_REFERENCE_GROUPS.has(group));
+}
+
+function parseThemeRecords(source: Record<string, unknown>): Record<string, DesignMdTokenGroups> {
+  const value = source.themes;
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(Object.entries(value)
+    .filter((entry): entry is [string, Record<string, unknown>] => isRecord(entry[1]))
+    .map(([themeId, theme]) => [themeId, {
+      colors: nestedStringRecord(theme, 'colors'),
+      typography: doubleNestedStringRecord(theme, 'typography'),
+      rounded: nestedStringRecord(theme, 'rounded'),
+      spacing: nestedStringRecord(theme, 'spacing'),
+      shadows: nestedStringRecord(theme, 'shadows'),
+      motion: nestedStringRecord(theme, 'motion'),
+    }]));
+}
+
+function parseStyleRecords(source: Record<string, unknown>): DesignMdStyles {
+  const value = source.styles;
+  if (!isRecord(value)) return { agentBrowser: {}, widgets: {} };
+  return {
+    agentBrowser: nestedStringRecord(value, 'agentBrowser'),
+    widgets: doubleNestedStringRecord(value, 'widgets'),
+  };
+}
+
+function cssCustomPropertyName(value: string): string {
+  return `--${cssName(value.replace(/^--/, ''))}`;
+}
+
+function cssName(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'token';
+}
+
+function isSafeCssValue(value: string): boolean {
+  return !/[;{}<>]/.test(value);
 }
 
 function parseSimpleYaml(source: string): Record<string, unknown> {

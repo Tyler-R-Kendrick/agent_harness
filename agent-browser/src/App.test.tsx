@@ -1470,6 +1470,33 @@ describe('App', () => {
     expect(screen.getByLabelText('History')).toBeInTheDocument();
   });
 
+  it('opens the Designer workspace from navigation and generates DESIGN.md files', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Designer'));
+    expect(screen.getByRole('heading', { name: 'Claude Design' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Design systems' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up design system' }));
+    fireEvent.change(screen.getByLabelText('Company name and blurb'), {
+      target: { value: 'Agent Browser Design System for browser-native design agents' },
+    });
+    fireEvent.change(screen.getByLabelText('Link code on GitHub'), {
+      target: { value: 'https://github.com/example/agent-harness' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to generation' }));
+
+    expect(screen.getByText('Creating your design system...')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review draft design system' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Design Files' }));
+    expect(screen.getByText('colors_and_type.css')).toBeInTheDocument();
+    expect(screen.getByText('manifest.json')).toBeInTheDocument();
+  });
+
   it('renders settings as a collapsible settings surface', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
@@ -1502,6 +1529,60 @@ describe('App', () => {
 
     expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('button', { name: 'Refresh status' })).not.toBeInTheDocument();
+  });
+
+  it('applies a DESIGN.md theme to the Agent Browser shell from settings', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
+      'ws-research': [{
+        path: 'DESIGN.md',
+        updatedAt: '2026-05-02T00:00:00.000Z',
+        content: `---
+name: Agent Browser Design System
+colors:
+  canvas: "#1e1e1e"
+  surface: "#181818"
+  accent: "#0ea5e9"
+  text: "#e4e4e7"
+themes:
+  claude-light:
+    colors:
+      canvas: "#f8f6f2"
+      surface: "#ffffff"
+      accent: "#d97757"
+styles:
+  agentBrowser:
+    app-bg: colors.canvas
+    panel-bg: colors.surface
+    accent: colors.accent
+  widgets:
+    buttonPrimary:
+      background: colors.accent
+      color: colors.text
+---
+# Design system
+`,
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.change(screen.getByLabelText('Claude Design theme'), { target: { value: 'claude-light' } });
+    fireEvent.click(screen.getByLabelText('Apply Claude Design theme to Agent Browser'));
+    await flushAsyncUpdates(2);
+
+    expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe('#f8f6f2');
+    expect(document.documentElement.style.getPropertyValue('--panel-bg')).toBe('#ffffff');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#d97757');
+    const generatedCss = screen.getByLabelText('Generated Claude Design CSS') as HTMLTextAreaElement;
+    expect(generatedCss.value).toContain('--app-bg: var(--design-color-canvas);');
+    expect(generatedCss.value).toContain('[data-design-widget="button-primary"]');
   });
 
   it('manages secrets and redaction settings from the settings panel without revealing values', async () => {

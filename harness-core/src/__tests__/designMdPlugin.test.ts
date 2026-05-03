@@ -7,6 +7,8 @@ import {
   createHarnessExtensionContext,
   createLlGuidanceDesignSubstitutionProvider,
   discoverDesignMdSemanticHooks,
+  listDesignMdThemeOptions,
+  renderDesignMdCss,
   type CoreInferenceOptions,
   type DesignMdApplyProvider,
 } from '../index.js';
@@ -37,6 +39,64 @@ const designDocument = {
   path: 'DESIGN.md',
   content: DESIGN_MD,
 };
+
+const CLAUDE_DESIGN_MD = `---
+name: Agent Browser Design System
+colors:
+  canvas: "#1e1e1e"
+  surface: "#181818"
+  accent: "#0ea5e9"
+  text: "#e4e4e7"
+typography:
+  ui:
+    fontFamily: Segoe UI
+    fontSize: 13px
+rounded:
+  sm: 4px
+spacing:
+  md: 16px
+shadows:
+  floating: 0 14px 32px rgba(0,0,0,.45)
+motion:
+  standard: 140ms ease
+themes:
+  claude-light:
+    colors:
+      canvas: "#f8f6f2"
+      surface: "#ffffff"
+      accent: "#d97757"
+    typography:
+      ui:
+        fontSize: 14px
+      caption:
+        fontSize: 12px
+    rounded:
+      sm: 6px
+    spacing:
+      md: 18px
+    shadows:
+      floating: 0 10px 24px rgba(0,0,0,.35)
+    motion:
+      standard: 180ms ease
+styles:
+  agentBrowser:
+    app-bg: colors.canvas
+    panel-bg: colors.surface
+    panel-bg-elevated: "#faf8f4"
+    accent: colors.accent
+    accent-strong: colors.missing
+    text-soft: colors.text
+  widgets:
+    buttonPrimary:
+      background: colors.accent
+      color: colors.text
+      border-color: colors.accent
+      font-family: typography.ui.fontFamily
+---
+
+## Claude Design
+Claude Design exports swappable shell and widget styling through DESIGN.md.
+`;
 
 describe('design.md extension plugin', () => {
   it('uses semantic hooks to inject design guidance only for design-facing requests', async () => {
@@ -171,6 +231,98 @@ No front matter name.
       'Apply these design tokens as normative values. Use the markdown rationale for taste, hierarchy, and exceptions.',
       '# Plain\nNo frontmatter here.',
     ].join('\n\n'));
+  });
+
+  it('renders DESIGN.md themes into shell and widget CSS targets', () => {
+    const document = { path: 'DESIGN.md', content: CLAUDE_DESIGN_MD };
+    const rendered = renderDesignMdCss(document, { themeId: 'claude-light' });
+
+    expect(listDesignMdThemeOptions(document)).toEqual([
+      { id: 'default', label: 'Agent Browser Design System' },
+      { id: 'claude-light', label: 'claude-light' },
+    ]);
+    expect(rendered.themeId).toBe('claude-light');
+    expect(rendered.variables).toMatchObject({
+      '--app-bg': '#f8f6f2',
+      '--panel-bg': '#ffffff',
+      '--panel-bg-elevated': '#faf8f4',
+      '--accent': '#d97757',
+      '--text-soft': '#e4e4e7',
+    });
+    expect(rendered.css).toContain('--design-color-canvas: #f8f6f2;');
+    expect(rendered.css).toContain('--design-font-size-ui: 14px;');
+    expect(rendered.css).toContain('--design-font-size-caption: 12px;');
+    expect(rendered.css).toContain('--design-radius-sm: 6px;');
+    expect(rendered.css).toContain('--design-space-md: 18px;');
+    expect(rendered.css).toContain('--design-shadow-floating: 0 10px 24px rgba(0,0,0,.35);');
+    expect(rendered.css).toContain('--design-motion-standard: 180ms ease;');
+    expect(rendered.css).toContain('--app-bg: var(--design-color-canvas);');
+    expect(rendered.css).toContain('[data-design-widget="button-primary"]');
+    expect(rendered.css).toContain('background: var(--design-color-accent);');
+    expect(rendered.css).toContain('color: var(--design-color-text);');
+    expect(rendered.css).toContain('font-family: var(--design-font-family-ui);');
+    expect(rendered.diagnostics).toContain('Missing token reference colors.missing for styles.agentBrowser.accent-strong.');
+  });
+
+  it('reports unknown themes and skips unsafe DESIGN.md style values', () => {
+    const rendered = renderDesignMdCss({
+      path: 'DESIGN.md',
+      content: `---
+name: Risky
+colors:
+  canvas: "#111111"
+  "@@": "#222222"
+  dangerous: "bad; nope"
+styles:
+  agentBrowser:
+    app-bg: "red; color: blue"
+    panel-bg: colors.canvas
+  widgets:
+    broken:
+      background: colors.missing
+---
+`,
+    }, { themeId: 'missing-theme' });
+
+    expect(rendered.themeId).toBe('default');
+    expect(rendered.variables).toEqual({ '--panel-bg': '#111111' });
+    expect(rendered.css).toContain('--design-color-token: #222222;');
+    expect(rendered.css).toContain('--panel-bg: var(--design-color-canvas);');
+    expect(rendered.css).not.toContain('red; color');
+    expect(rendered.css).not.toContain('[data-design-widget="broken"]');
+    expect(rendered.diagnostics).toEqual([
+      'Unknown DESIGN.md theme "missing-theme"; using default tokens.',
+      'Skipped unsafe value for colors.dangerous.',
+      'Skipped unsafe value for styles.agentBrowser.app-bg.',
+      'Missing token reference colors.missing for styles.widgets.broken.background.',
+    ]);
+
+    const emptyTheme = renderDesignMdCss({
+      path: 'DESIGN.md',
+      content: `---
+name: Empty Theme
+colors:
+  canvas: "#111111"
+typography:
+  ui:
+    fontFamily: System UI
+rounded:
+  sm: 4px
+spacing:
+  md: 16px
+shadows:
+  floating: 0 8px 20px rgba(0,0,0,.2)
+motion:
+  standard: 120ms ease
+themes:
+  empty:
+---
+`,
+    }, { themeId: 'empty' });
+
+    expect(emptyTheme.themeId).toBe('empty');
+    expect(emptyTheme.css).toContain('--design-color-canvas: #111111;');
+    expect(emptyTheme.css).toContain('--design-motion-standard: 120ms ease;');
   });
 
   it('exposes a pluggable apply tool that can select provider adapters', async () => {

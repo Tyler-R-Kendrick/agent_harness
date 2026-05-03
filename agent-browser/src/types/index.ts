@@ -11,7 +11,7 @@ export type ReasoningStepKind = 'thinking' | 'search' | 'tool' | 'summary';
 export type ReasoningStepStatus = 'active' | 'done';
 export type ReasoningStepLane = 'sequential' | 'parallel';
 export type ModelStatus = 'available' | 'installed' | 'loading';
-export type PanelId = 'workspaces' | 'symphony' | 'history' | 'extensions' | 'settings' | 'account';
+export type PanelId = 'workspaces' | 'symphony' | 'history' | 'extensions' | 'settings' | 'account' | 'designer';
 /** ONNX quantization dtype values understood by Transformers.js. */
 export type OnnxDtype = 'q4' | 'q4f16' | 'int8' | 'uint8' | 'fp16' | 'q8' | 'bnb4' | 'fp32';
 
