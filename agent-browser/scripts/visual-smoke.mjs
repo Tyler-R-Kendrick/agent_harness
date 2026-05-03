@@ -63,7 +63,7 @@ async function main() {
   const serverOutput = [];
   const server = spawn(
     process.execPath,
-    ['../scripts/run-package-bin.mjs', 'vite', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+    ['../scripts/run-package-bin.mjs', 'vite', '--force', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
     {
       cwd: packageRoot,
       env: { ...process.env, FORCE_COLOR: '0' },

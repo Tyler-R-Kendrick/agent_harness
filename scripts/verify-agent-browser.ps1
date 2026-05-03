@@ -20,14 +20,34 @@ $warningPatterns = @(
   '(?i)warn exec The following package was not found'
 )
 
+$maxAttempts = 2
+
 foreach ($step in $steps) {
-  $outputFile = [System.IO.Path]::GetTempFileName()
+  Write-Output "verify:agent-browser starting $($step.Label)."
+  $exitCode = 0
+  $outputFile = $null
+
   try {
-    $previousErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    & npm.cmd @($step.Args) 2>&1 | Tee-Object -FilePath $outputFile
-    $exitCode = $LASTEXITCODE
-    $ErrorActionPreference = $previousErrorActionPreference
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+      if ($outputFile) {
+        Remove-Item -LiteralPath $outputFile -Force -ErrorAction SilentlyContinue
+      }
+      $outputFile = [System.IO.Path]::GetTempFileName()
+
+      $previousErrorActionPreference = $ErrorActionPreference
+      $ErrorActionPreference = 'Continue'
+      & npm.cmd @($step.Args) 2>&1 | Tee-Object -FilePath $outputFile
+      $exitCode = $LASTEXITCODE
+      $ErrorActionPreference = $previousErrorActionPreference
+
+      if ($exitCode -eq 0) {
+        break
+      }
+
+      if ($attempt -lt $maxAttempts) {
+        Write-Output "verify:agent-browser step $($step.Label) failed with exit code $exitCode; retrying once."
+      }
+    }
 
     if ($exitCode -ne 0) {
       exit $exitCode

@@ -248,6 +248,9 @@ async function main() {
   assert.match(verifyScript, /\[System\.IO\.Path\]::GetTempFileName\(\)/);
   assert.match(verifyScript, /Tee-Object -FilePath \$outputFile/);
   assert.match(verifyScript, /Get-Content -LiteralPath \$outputFile -Raw/);
+  assert.match(verifyScript, /\$maxAttempts = 2/);
+  assert.match(verifyScript, /retrying once/);
+  assert.match(verifyScript, /verify:agent-browser starting/);
 
   const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'search-eval-target-bin-'));
   await writeJson(path.join(fixtureRoot, 'package.json'), { name: 'fixture-app', private: true });
