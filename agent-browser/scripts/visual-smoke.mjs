@@ -121,6 +121,16 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await expect(page.getByRole('complementary', { name: 'Symphony task inspector' })).toContainText('Agent running');
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Benchmark routing' }).click();
+    await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
+    const benchmarkObjective = page.getByLabel('Benchmark routing objective');
+    await expect(benchmarkObjective).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText(/Fallback priors|benchmark source|Refreshing evidence/)).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await benchmarkObjective.scrollIntoViewIfNeeded();
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
   } catch (error) {

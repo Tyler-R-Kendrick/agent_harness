@@ -111,6 +111,27 @@ import { MarkdownContent } from './utils/MarkdownContent';
 import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
+import {
+  BENCHMARK_TASK_CLASSES,
+  DEFAULT_BENCHMARK_EVIDENCE_STATE,
+  DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+  buildBenchmarkRoutingCandidates,
+  discoverBenchmarkEvidence,
+  getBenchmarkTaskClass,
+  inferBenchmarkTaskClass,
+  isBenchmarkEvidenceDiscoveryState,
+  isBenchmarkRoutingSettings,
+  mergeDiscoveredBenchmarkEvidence,
+  recommendBenchmarkRoute,
+  splitBenchmarkModelRef,
+  type BenchmarkEvidenceDiscoveryState,
+  type BenchmarkModelRef,
+  type BenchmarkRouteRecommendation,
+  type BenchmarkRoutingCandidate,
+  type BenchmarkRoutingObjective,
+  type BenchmarkRoutingSettings,
+  type BenchmarkTaskClassId,
+} from './services/benchmarkModelRouting';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
@@ -1721,6 +1742,44 @@ function ToolsPicker({
   );
 }
 
+function BenchmarkRouteBadge({ route }: { route: BenchmarkRouteRecommendation | null }) {
+  if (!route) return null;
+  const taskClass = getBenchmarkTaskClass(route.taskClass);
+  return (
+    <span className="benchmark-route-badge" title={route.reason}>
+      <span>{taskClass.label}</span>
+      <strong>{route.candidate.label}</strong>
+    </span>
+  );
+}
+
+function selectCompatibleBenchmarkCandidates(
+  provider: AgentProvider,
+  candidates: BenchmarkRoutingCandidate[],
+): BenchmarkRoutingCandidate[] {
+  if (provider === 'codi' || provider === 'ghcp') {
+    return candidates.filter((candidate) => candidate.provider === provider);
+  }
+  return candidates;
+}
+
+function parseBenchmarkIndexUrlList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+  if (typeof value !== 'string') return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function getConfiguredBenchmarkIndexUrls(): string[] {
+  const globalUrls = typeof window !== 'undefined'
+    ? parseBenchmarkIndexUrlList((window as Window & { __AGENT_BROWSER_BENCHMARK_INDEX_URLS__?: unknown }).__AGENT_BROWSER_BENCHMARK_INDEX_URLS__)
+    : [];
+  const envUrls = parseBenchmarkIndexUrlList(import.meta.env.VITE_AGENT_BROWSER_BENCHMARK_INDEX_URLS);
+  return Array.from(new Set([...globalUrls, ...envUrls]));
+}
+
 function ChatPanel({
   installedModels,
   copilotState,
@@ -1747,6 +1806,8 @@ function ChatPanel({
   webMcpModelContext,
   browserLocationContext,
   setBrowserLocationContext,
+  benchmarkRoutingSettings,
+  benchmarkRoutingCandidates,
   secretSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
@@ -1777,6 +1838,8 @@ function ChatPanel({
   webMcpModelContext: ModelContext;
   browserLocationContext: BrowserLocationContext;
   setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
+  benchmarkRoutingSettings: BenchmarkRoutingSettings;
+  benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
@@ -1909,6 +1972,20 @@ function ChatPanel({
   );
   const selectedToolIds = selectedToolIdsBySession[activeChatSessionId] ?? toolDescriptors.map((descriptor) => descriptor.id);
   const toolsEnabled = selectedToolIds.length > 0;
+  const compatibleBenchmarkRoutingCandidates = useMemo(
+    () => selectCompatibleBenchmarkCandidates(selectedProvider, benchmarkRoutingCandidates),
+    [benchmarkRoutingCandidates, selectedProvider],
+  );
+  const currentBenchmarkTaskClass = inferBenchmarkTaskClass({
+    provider: selectedProvider,
+    latestUserInput: input.trim(),
+    toolsEnabled,
+  });
+  const currentBenchmarkRoute = recommendBenchmarkRoute({
+    taskClass: currentBenchmarkTaskClass,
+    candidates: compatibleBenchmarkRoutingCandidates,
+    settings: benchmarkRoutingSettings,
+  });
   const setSelectedToolIdsForActiveSession = useCallback((ids: string[]) => {
     setSelectedToolIdsBySession((current) => ({ ...current, [activeChatSessionId]: ids }));
   }, [activeChatSessionId]);
@@ -2401,15 +2478,52 @@ function ChatPanel({
     const assistantId = createUniqueId();
     const userId = createUniqueId();
     const trimmedText = text.trim();
-    const providerForRequest = resolveAgentProviderForTask({
+    let providerForRequest = resolveAgentProviderForTask({
       selectedProvider,
       latestUserInput: trimmedText,
     });
-    const runtimeProviderForRequest = resolveRuntimeAgentProvider({
+    const requestBenchmarkTaskClass = inferBenchmarkTaskClass({
+      provider: providerForRequest,
+      latestUserInput: trimmedText,
+      toolsEnabled,
+    });
+    const requestBenchmarkRoute = recommendBenchmarkRoute({
+      taskClass: requestBenchmarkTaskClass,
+      candidates: selectCompatibleBenchmarkCandidates(providerForRequest, benchmarkRoutingCandidates),
+      settings: benchmarkRoutingSettings,
+    });
+    let requestCodiModelId = effectiveSelectedModelId;
+    let requestGhcpModelId = effectiveSelectedCopilotModelId;
+    let requestLocalModel = activeLocalModel;
+    let runtimeProviderForRequest = resolveRuntimeAgentProvider({
       provider: providerForRequest,
       hasCodiModelsReady: Boolean(activeLocalModel),
       hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
     });
+    if (requestBenchmarkRoute) {
+      const routed = requestBenchmarkRoute.candidate;
+      if (providerForRequest === 'planner' || providerForRequest === 'researcher' || providerForRequest === 'debugger') {
+        if (routed.provider === 'ghcp') {
+          requestGhcpModelId = routed.modelId;
+          runtimeProviderForRequest = 'ghcp';
+        } else {
+          const routedLocalModel = installedModels.find((model) => model.id === routed.modelId);
+          if (routedLocalModel) {
+            requestCodiModelId = routed.modelId;
+            requestLocalModel = routedLocalModel;
+            runtimeProviderForRequest = 'codi';
+          }
+        }
+      } else if (providerForRequest === 'ghcp' && routed.provider === 'ghcp') {
+        requestGhcpModelId = routed.modelId;
+      } else if (providerForRequest === 'codi' && routed.provider === 'codi') {
+        const routedLocalModel = installedModels.find((model) => model.id === routed.modelId);
+        if (routedLocalModel) {
+          requestCodiModelId = routed.modelId;
+          requestLocalModel = routedLocalModel;
+        }
+      }
+    }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
       setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: providerForRequest }));
@@ -2428,7 +2542,7 @@ function ChatPanel({
       return;
     }
 
-    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'ghcp' && (!effectiveSelectedCopilotModelId || !hasAvailableCopilotModels)) {
+    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'ghcp' && (!requestGhcpModelId || !hasAvailableCopilotModels)) {
       updateMessage(assistantId, {
         status: 'error',
         content: copilotState.authenticated
@@ -2438,7 +2552,7 @@ function ChatPanel({
       return;
     }
 
-    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !activeLocalModel) {
+    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !requestLocalModel) {
       updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
@@ -2517,7 +2631,7 @@ function ChatPanel({
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
         agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : providerForRequest === 'planner' ? 'planner' : 'tool-agent',
         agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : providerForRequest === 'planner' ? 'Planner' : 'Tool Agent',
-        modelId: runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId,
+        modelId: runtimeProviderForRequest === 'ghcp' ? requestGhcpModelId : requestCodiModelId,
         modelProvider: providerForRequest,
       });
       const processMetaFromStageMeta = (meta?: StageMeta): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
@@ -3521,13 +3635,13 @@ function ChatPanel({
         };
 
         const modelConfig = runtimeProviderForRequest === 'ghcp'
-          ? { kind: 'copilot' as const, modelId: effectiveSelectedCopilotModelId, sessionId: activeChatSessionId }
-          : { kind: 'local' as const, modelId: activeLocalModel!.id, task: activeLocalModel!.task };
+          ? { kind: 'copilot' as const, modelId: requestGhcpModelId, sessionId: activeChatSessionId }
+          : { kind: 'local' as const, modelId: requestLocalModel!.id, task: requestLocalModel!.task };
         const model = runtimeProviderForRequest === 'ghcp'
           ? resolveLanguageModel(modelConfig)
           : new LocalLanguageModel(
-              activeLocalModel!.id,
-              activeLocalModel!.task,
+              requestLocalModel!.id,
+              requestLocalModel!.task,
               {
                 // Reset the idle watchdog on every raw worker token, even
                 // when the upstream consumer hides the chunk (e.g. while
@@ -4483,8 +4597,8 @@ function ChatPanel({
       await streamAgentChat({
         provider: providerForRequest,
         runtimeProvider: runtimeProviderForRequest,
-        model: activeLocalModel,
-        modelId: effectiveSelectedCopilotModelId,
+        model: requestLocalModel,
+        modelId: requestGhcpModelId,
         sessionId: activeChatSessionId,
         latestUserInput: text,
         messages: nextMessages,
@@ -4504,7 +4618,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -4864,6 +4978,7 @@ function ChatPanel({
                       : (
                         <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
                       ))}
+                <BenchmarkRouteBadge route={currentBenchmarkRoute} />
                 {workspaceCapabilities.agents.length > 0 && (
                   <label className="header-model-selector" {...panelTitlebarControlProps}>
                     <select
@@ -5074,6 +5189,117 @@ function CopilotModelCard({ model }: { model: CopilotModelSummary }) {
       </div>
       <span className="badge connected">Enabled</span>
     </div>
+  );
+}
+
+function BenchmarkRoutingSettingsPanel({
+  settings,
+  candidates,
+  evidenceState,
+  onChange,
+}: {
+  settings: BenchmarkRoutingSettings;
+  candidates: BenchmarkRoutingCandidate[];
+  evidenceState: BenchmarkEvidenceDiscoveryState;
+  onChange: (settings: BenchmarkRoutingSettings) => void;
+}) {
+  const setPin = (taskClass: BenchmarkTaskClassId, value: string) => {
+    const pins = { ...settings.pins };
+    if (value === 'auto') {
+      delete pins[taskClass];
+    } else {
+      pins[taskClass] = value as BenchmarkModelRef;
+    }
+    onChange({ ...settings, pins });
+  };
+  const candidateOptions = candidates.map((candidate) => {
+    const { provider } = splitBenchmarkModelRef(candidate.ref);
+    return {
+      value: candidate.ref,
+      label: `${provider.toUpperCase()} · ${candidate.label}`,
+    };
+  });
+
+  return (
+    <SettingsSection title="Benchmark routing" defaultOpen={false}>
+      <div className="benchmark-routing-settings">
+        <div className="benchmark-routing-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              aria-label={settings.enabled ? 'Disable benchmark routing' : 'Enable benchmark routing'}
+              checked={settings.enabled}
+              onChange={(event) => onChange({ ...settings, enabled: event.target.checked })}
+            />
+            <span>Auto-select models from benchmark evidence</span>
+          </label>
+          <label className="provider-command-field benchmark-objective-field">
+            <span>Objective</span>
+            <select
+              aria-label="Benchmark routing objective"
+              value={settings.objective}
+              onChange={(event) => onChange({ ...settings, objective: event.target.value as BenchmarkRoutingObjective })}
+            >
+              <option value="balanced">Balanced</option>
+              <option value="quality">Quality</option>
+              <option value="cost">Cost</option>
+              <option value="latency">Latency</option>
+            </select>
+          </label>
+        </div>
+        <div className="benchmark-evidence-status">
+          <span className={`badge${evidenceState.records.length ? ' connected' : ''}`}>
+            {evidenceState.status === 'refreshing'
+              ? 'Refreshing evidence'
+              : evidenceState.records.length
+                ? `${evidenceState.records.length} benchmark source${evidenceState.records.length === 1 ? '' : 's'}`
+                : 'Fallback priors'}
+          </span>
+          {evidenceState.retrievedAt ? <span>Updated {new Date(evidenceState.retrievedAt).toLocaleString()}</span> : null}
+        </div>
+        {evidenceState.errors.length > 0 ? (
+          <p className="benchmark-route-reason">{evidenceState.errors[0]}</p>
+        ) : null}
+        <div className="benchmark-route-grid">
+          {BENCHMARK_TASK_CLASSES.map((taskClass) => {
+            const route = recommendBenchmarkRoute({
+              taskClass: taskClass.id,
+              candidates,
+              settings,
+            });
+            return (
+              <article key={taskClass.id} className="benchmark-route-card">
+                <div className="provider-card-header">
+                  <div className="provider-body">
+                    <strong>{taskClass.label}</strong>
+                    <p>{taskClass.description}</p>
+                  </div>
+                  <span className={`badge${route ? ' connected' : ''}`}>{route ? `${Math.round(route.score)}` : 'No route'}</span>
+                </div>
+                <label className="provider-command-field">
+                  <span>Model route</span>
+                  <select
+                    aria-label={`${taskClass.label} model route`}
+                    value={settings.pins[taskClass.id] ?? 'auto'}
+                    onChange={(event) => setPin(taskClass.id, event.target.value)}
+                  >
+                    <option value="auto">{route ? `Auto · ${route.candidate.label}` : 'Auto'}</option>
+                    {candidateOptions.map((option) => (
+                      <option key={`${taskClass.id}:${option.value}`} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                {route ? (
+                  <p className="benchmark-route-reason">{route.reason}</p>
+                ) : (
+                  <p className="benchmark-route-reason">Connect GHCP or install a Codi model to enable routing.</p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </SettingsSection>
   );
 }
 
@@ -5514,12 +5740,16 @@ interface SettingsPanelProps {
   onRefreshCopilot: () => void;
   registryModels: HFModel[];
   installedModels: HFModel[];
+  benchmarkRoutingSettings: BenchmarkRoutingSettings;
+  benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
+  benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
   task: string;
   loadingModelId: string | null;
   onTaskChange: (task: string) => void;
   onSearch: (query: string) => void;
   onInstall: (model: HFModel) => Promise<void>;
   onDelete: (id: string) => void;
+  onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
@@ -5536,7 +5766,7 @@ interface SettingsPanelProps {
   onDesignThemeSettingsChange: (settings: DesignThemeSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -5546,7 +5776,6 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
   const recommendedIds = new Set(recommended.map((m) => m.id));
   // HF results, deduped against installed + recommended
   const hfResults = registryModels.filter((r) => !installedIds.has(r.id) && !recommendedIds.has(r.id));
-
   function handleSearch(value: string) {
     setSearchQuery(value);
     onSearch(value);
@@ -5598,6 +5827,13 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
           </article>
         </div>
       </SettingsSection>
+
+      <BenchmarkRoutingSettingsPanel
+        settings={benchmarkRoutingSettings}
+        candidates={benchmarkRoutingCandidates}
+        evidenceState={benchmarkEvidenceState}
+        onChange={onBenchmarkRoutingSettingsChange}
+      />
 
       <ClaudeDesignSettings
         workspaceFiles={workspaceFiles}
@@ -6981,6 +7217,18 @@ function AgentBrowserApp() {
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useStoredState<HFModel[]>(localStorageBackend, STORAGE_KEYS.installedModels, isHFModelArray, []);
+  const [benchmarkRoutingSettings, setBenchmarkRoutingSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.benchmarkModelRoutingSettings,
+    isBenchmarkRoutingSettings,
+    DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+  );
+  const [benchmarkEvidenceState, setBenchmarkEvidenceState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.benchmarkEvidenceState,
+    isBenchmarkEvidenceDiscoveryState,
+    DEFAULT_BENCHMARK_EVIDENCE_STATE,
+  );
   const [browserLocationContext, setBrowserLocationContext] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.locationContext,
@@ -7009,6 +7257,18 @@ function AgentBrowserApp() {
   const [negativeRubricTechniques, setNegativeRubricTechniques] = useState<string[]>(() => evaluationAgentRegistry.listNegativeRubricTechniques());
   const [copilotState, setCopilotState] = useState<CopilotRuntimeState>(EMPTY_COPILOT_STATE);
   const [isCopilotStateLoading, setIsCopilotStateLoading] = useState(true);
+  const benchmarkRoutingBaseCandidates = useMemo(
+    () => buildBenchmarkRoutingCandidates({ copilotModels: copilotState.models, installedModels }),
+    [copilotState.models, installedModels],
+  );
+  const benchmarkRoutingCandidates = useMemo(
+    () => mergeDiscoveredBenchmarkEvidence(benchmarkRoutingBaseCandidates, benchmarkEvidenceState.records),
+    [benchmarkEvidenceState.records, benchmarkRoutingBaseCandidates],
+  );
+  const benchmarkRoutingCandidateFingerprint = useMemo(
+    () => benchmarkRoutingBaseCandidates.map((candidate) => candidate.ref).sort().join('|'),
+    [benchmarkRoutingBaseCandidates],
+  );
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
   const [omnibar, setOmnibar] = useState('');
   const [cursorId, setCursorId] = useState<string | null>(null);
@@ -7429,6 +7689,36 @@ function AgentBrowserApp() {
   useEffect(() => {
     void refreshCopilotState(false);
   }, [refreshCopilotState]);
+
+  useEffect(() => {
+    if (!benchmarkRoutingSettings.enabled || benchmarkRoutingBaseCandidates.length === 0) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    setBenchmarkEvidenceState((current) => ({
+      ...current,
+      status: 'refreshing',
+      errors: [],
+    }));
+    void discoverBenchmarkEvidence({
+      candidates: benchmarkRoutingBaseCandidates,
+      benchmarkIndexUrls: getConfiguredBenchmarkIndexUrls(),
+      signal: controller.signal,
+    }).then((state) => {
+      if (!cancelled) setBenchmarkEvidenceState(state);
+    }).catch((error) => {
+      if (cancelled || (error instanceof DOMException && error.name === 'AbortError')) return;
+      setBenchmarkEvidenceState({
+        status: 'error',
+        retrievedAt: new Date().toISOString(),
+        records: [],
+        errors: [error instanceof Error ? error.message : String(error)],
+      });
+    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [benchmarkRoutingBaseCandidates, benchmarkRoutingCandidateFingerprint, benchmarkRoutingSettings.enabled, setBenchmarkEvidenceState]);
 
   useEffect(() => {
     setWorkspaceViewStateByWorkspace((current) => {
@@ -9947,12 +10237,16 @@ function AgentBrowserApp() {
         onRefreshCopilot={() => void refreshCopilotState(true)}
         registryModels={registryModels}
         installedModels={installedModels}
+        benchmarkRoutingSettings={benchmarkRoutingSettings}
+        benchmarkRoutingCandidates={benchmarkRoutingCandidates}
+        benchmarkEvidenceState={benchmarkEvidenceState}
         task={registryTask}
         loadingModelId={loadingModelId}
         onTaskChange={setRegistryTask}
         onSearch={setRegistryQuery}
         onInstall={installModel}
         onDelete={deleteModel}
+        onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
         onSaveEvaluationAgents={saveEvaluationAgents}
@@ -10205,6 +10499,8 @@ function AgentBrowserApp() {
                 webMcpModelContext={webMcpModelContext}
                 browserLocationContext={browserLocationContext}
                 setBrowserLocationContext={setBrowserLocationContext}
+                benchmarkRoutingSettings={benchmarkRoutingSettings}
+                benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}

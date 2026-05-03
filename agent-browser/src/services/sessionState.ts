@@ -24,6 +24,8 @@ export const STORAGE_KEYS = {
   harnessSpecsByWorkspace: 'agent-browser.harness-specs-by-workspace',
   symphonyBoardsByWorkspace: 'agent-browser.symphony-boards-by-workspace',
   browserNotificationSettings: 'agent-browser.browser-notification-settings',
+  benchmarkModelRoutingSettings: 'agent-browser.benchmark-model-routing-settings',
+  benchmarkEvidenceState: 'agent-browser.benchmark-evidence-state',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
   // sessionStorage — per-tab, refresh-only

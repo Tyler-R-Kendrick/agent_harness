@@ -710,6 +710,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .header-model-selector select:hover { border-color: rgba(255,255,255,.18); }
 .header-model-selector select:focus-visible { outline: 1px solid rgba(125,211,252,.45); }
+.benchmark-route-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 260px;
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid rgba(125,211,252,.22);
+  border-radius: 5px;
+  background: rgba(14,165,233,.08);
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.benchmark-route-badge strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
 .install-model-btn {
   appearance: none;
   background: rgba(255,255,255,.06);
@@ -1962,6 +1984,59 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   gap: 10px;
   padding: 10px;
+}
+.benchmark-routing-settings {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+}
+.benchmark-routing-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.benchmark-routing-toolbar .settings-checkbox-row {
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.benchmark-objective-field { margin: 0; }
+.benchmark-objective-field select,
+.benchmark-route-card select {
+  min-height: 30px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 4px;
+  background: rgba(13,16,22,.92);
+  color: var(--text);
+  padding: 6px 8px;
+}
+.benchmark-route-grid {
+  display: grid;
+  gap: 8px;
+}
+.benchmark-evidence-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.benchmark-route-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+  padding: 10px;
+}
+.benchmark-route-reason {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 .provider-card-header {
   display: flex;

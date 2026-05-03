@@ -137,6 +137,13 @@ async function main() {
       'src/App.persistence.test.tsx',
     ],
   );
+  assert.deepEqual(
+    coverageRunner.chunkTestFiles(['a.test.ts', 'b.test.ts', 'c.test.ts'], 2),
+    [
+      ['a.test.ts', 'b.test.ts'],
+      ['c.test.ts'],
+    ],
+  );
   assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
     exitCode: 1,
     output: [
