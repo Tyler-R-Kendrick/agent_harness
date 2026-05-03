@@ -30,6 +30,7 @@ import {
   Folder,
   FolderInput,
   FolderOpen,
+  GitPullRequest,
   Globe,
   HardDrive,
   History,
@@ -99,6 +100,7 @@ import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
 import { SymphonyPanel, SymphonySidebar } from './features/symphony/SymphonyPanel';
+import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPanel';
 import {
   createDefaultSymphonyBoardState,
   isSymphonyBoardRecord,
@@ -230,6 +232,10 @@ import {
   type TrajectoryCriticSettings,
 } from './services/trajectoryCritic';
 import {
+  buildPullRequestReview,
+  createSamplePullRequestReviewInput,
+} from './services/prReviewUnderstanding';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -308,7 +314,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'symphony' | 'history' | 'extensions' | 'settings' | 'account' | 'designer';
+type SidebarPanel = 'workspaces' | 'symphony' | 'review' | 'history' | 'extensions' | 'settings' | 'account' | 'designer';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -485,6 +491,7 @@ const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
   ['symphony', 'clipboard', 'Symphony'],
+  ['review', 'gitPullRequest', 'Review'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
 ] as const;
@@ -493,10 +500,11 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'history', 'extensions', 'settings', 'account', 'designer'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account', 'designer'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
   symphony: { label: 'Symphony', icon: 'clipboard' },
+  review: { label: 'Review', icon: 'gitPullRequest' },
   designer: { label: 'Designer', icon: 'sparkles' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
@@ -540,7 +548,7 @@ const WORKSPACE_SHORTCUT_GROUPS = [
   {
     title: 'Panels',
     items: [
-      { keys: 'Alt+1-7', description: 'Switch sidebar panel' },
+      { keys: `Alt+1-${PANEL_SHORTCUT_ORDER.length}`, description: 'Switch sidebar panel' },
       { keys: 'Ctrl/Cmd+`', description: 'Toggle chat / terminal' },
     ],
   },
@@ -605,6 +613,7 @@ const icons = {
   terminal: Terminal,
   trash: Trash2,
   clipboard: Clipboard,
+  gitPullRequest: GitPullRequest,
   slidersHorizontal: SlidersHorizontal,
 } as const;
 
@@ -7370,7 +7379,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'history', 'extensions', 'settings', 'account', 'designer'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account', 'designer'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -7683,6 +7692,11 @@ function AgentBrowserApp() {
       : [],
     [activeSessionIds, activeWorkspace],
   );
+  const activePrReviewReport = useMemo(
+    () => buildPullRequestReview(createSamplePullRequestReviewInput(activeWorkspace.name)),
+    [activeWorkspace.name],
+  );
+  const [pendingReviewFollowUp, setPendingReviewFollowUp] = useState<{ sessionId: string; prompt: string } | null>(null);
   const activeMountedSessionFsIds = activeWorkspaceViewState.mountedSessionFsIds ?? [];
   const activeSessionDrives = useMemo<WorkspaceMcpSessionDrive[]>(() => activeWorkspaceSessions.map((session) => ({
     sessionId: session.id,
@@ -8507,11 +8521,13 @@ function AgentBrowserApp() {
         jumpToWorkspaceByIndex(Number(event.key) - 1);
         return;
       }
-      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-7]$/.test(event.key)) {
-        event.preventDefault();
+      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-9]$/.test(event.key)) {
         const targetPanel = PANEL_SHORTCUT_ORDER[Number(event.key) - 1];
-        if (targetPanel) switchSidebarPanel(targetPanel);
-        return;
+        if (targetPanel) {
+          event.preventDefault();
+          switchSidebarPanel(targetPanel);
+          return;
+        }
       }
       if ((event.ctrlKey || event.metaKey) && event.altKey && event.key.toLowerCase() === 'n') {
         event.preventDefault();
@@ -9880,6 +9896,35 @@ function AgentBrowserApp() {
     return undefined;
   }, [activeWorkspace.name, activeWorkspaceSessions, renameSessionNodeById]);
 
+  const startReviewFollowUp = useCallback((prompt: string) => {
+    const sessionId = activeSessionIds[0] ?? addSessionToWorkspace(activeWorkspaceId, 'Review follow-up')?.id;
+    if (!sessionId) {
+      setToast({ msg: 'Create a session before starting review follow-up', type: 'error' });
+      return;
+    }
+    setPendingReviewFollowUp({ sessionId, prompt });
+    switchSidebarPanel('workspaces');
+    setToast({ msg: 'Review follow-up queued in the active session', type: 'info' });
+  }, [activeSessionIds, activeWorkspaceId, addSessionToWorkspace, setToast, switchSidebarPanel]);
+
+  useEffect(() => {
+    if (!pendingReviewFollowUp) return;
+    if (!sessionMcpControllersRef.current[pendingReviewFollowUp.sessionId]) return;
+
+    const nextFollowUp = pendingReviewFollowUp;
+    setPendingReviewFollowUp(null);
+    void writeSessionFromMcp({
+      sessionId: nextFollowUp.sessionId,
+      message: nextFollowUp.prompt,
+      mode: 'agent',
+    }).catch((error) => {
+      setToast({
+        msg: error instanceof Error ? error.message : 'Failed to start review follow-up',
+        type: 'error',
+      });
+    });
+  }, [pendingReviewFollowUp, setToast, writeSessionFromMcp]);
+
   const closeRenderPaneFromMcp = useCallback(async (paneId: string) => {
     if (paneId === `dashboard:${activeWorkspaceId}`) {
       setWorkspaceViewStateByWorkspace((current) => {
@@ -10476,6 +10521,14 @@ function AgentBrowserApp() {
         />
       );
     }
+    if (activePanel === 'review') {
+      return (
+        <PullRequestReviewPanel
+          report={activePrReviewReport}
+          onStartFollowUp={startReviewFollowUp}
+        />
+      );
+    }
     if (activePanel === 'designer') {
       return (
         <section className="panel-scroll designer-sidebar-summary">
@@ -10537,7 +10590,7 @@ function AgentBrowserApp() {
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
-          <button type="button" className={`activity-button ${activePanel === DESIGNER_NAV[0] ? 'active' : ''}`} onClick={() => switchSidebarPanel(DESIGNER_NAV[0])} aria-label={DESIGNER_NAV[2]} title={`${DESIGNER_NAV[2]} (Alt+7)`}><Icon name={DESIGNER_NAV[1]} size={16} color={activePanel === DESIGNER_NAV[0] ? '#7dd3fc' : '#71717a'} /></button>
+          <button type="button" className={`activity-button ${activePanel === DESIGNER_NAV[0] ? 'active' : ''}`} onClick={() => switchSidebarPanel(DESIGNER_NAV[0])} aria-label={DESIGNER_NAV[2]} title={`${DESIGNER_NAV[2]} (Alt+${PANEL_SHORTCUT_ORDER.indexOf(DESIGNER_NAV[0]) + 1})`}><Icon name={DESIGNER_NAV[1]} size={16} color={activePanel === DESIGNER_NAV[0] ? '#7dd3fc' : '#71717a'} /></button>
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">

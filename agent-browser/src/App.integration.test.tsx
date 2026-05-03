@@ -4533,11 +4533,17 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.keyDown(window, { key: '5', altKey: true });
+    fireEvent.keyDown(window, { key: '6', altKey: true });
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '3', altKey: true });
+    expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '4', altKey: true });
     expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '8', altKey: true });
+    expect(screen.getByRole('region', { name: 'Designer' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });
     expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
