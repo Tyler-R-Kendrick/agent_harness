@@ -48,6 +48,7 @@ describe('STORAGE_KEYS', () => {
       chatHistoryBySession: expect.any(String),
       browserNotificationSettings: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
+      trajectoryCriticSettings: 'agent-browser.trajectory-critic-settings',
     });
   });
 });
