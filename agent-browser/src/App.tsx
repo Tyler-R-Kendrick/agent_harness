@@ -264,6 +264,7 @@ import {
   type WorkspaceContextMenuState,
 } from './services/workspaceMcpWorktree';
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
+import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
 import {
   applyHarnessElementPatch,
@@ -6934,15 +6935,14 @@ function PanelSplitView({
   }, []);
 
   const displayPanels = panels;
-  const panelsPerRow = containerWidth > 0 ? Math.max(1, Math.floor(containerWidth / PANEL_MIN_WIDTH_PX)) : displayPanels.length;
-  const maxRows = containerHeight > 0 ? Math.max(1, Math.floor(containerHeight / PANEL_MIN_HEIGHT_PX)) : Math.ceil(displayPanels.length / panelsPerRow);
-  const visiblePanels = displayPanels.slice(0, maxRows * panelsPerRow);
+  const layout = planRenderPaneRows(displayPanels, {
+    width: containerWidth,
+    height: containerHeight,
+    minWidth: PANEL_MIN_WIDTH_PX,
+    minHeight: PANEL_MIN_HEIGHT_PX,
+  });
+  const visiblePanels = layout.rows.flat();
   const sortableIds = visiblePanels.map(panelKey);
-
-  const rows: Panel[][] = [];
-  for (let i = 0; i < visiblePanels.length; i += panelsPerRow) {
-    rows.push(visiblePanels.slice(i, i + panelsPerRow));
-  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -6972,7 +6972,7 @@ function PanelSplitView({
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
         <div ref={containerRef} className="panel-rows-container" aria-label="Split panels">
-          {rows.map((row, rowIndex) => (
+          {layout.rows.map((row, rowIndex) => (
             <div key={rowIndex} className={`browser-split-view panels-${row.length}`}>
               {row.map((panel) => (
                 <SortablePanelCell key={panelKey(panel)} id={panelKey(panel)}>
@@ -6981,6 +6981,11 @@ function PanelSplitView({
               ))}
             </div>
           ))}
+          {layout.hiddenCount > 0 ? (
+            <div className="panel-hidden-notice" role="status">
+              {layout.hiddenCount} render {layout.hiddenCount === 1 ? 'pane is' : 'panes are'} hidden until there is more room.
+            </div>
+          ) : null}
         </div>
       </SortableContext>
       <DragOverlay dropAnimation={null}>
@@ -7402,8 +7407,9 @@ function AgentBrowserApp() {
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
+    const hasActiveRenderPane = Boolean(editingFile || openBrowserTabs.length || activeSessionIds.length);
 
-    if (activeWorkspaceViewState.dashboardOpen) {
+    if (activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane) {
       panes.push({
         id: `dashboard:${activeWorkspaceId}`,
         paneType: 'dashboard',
@@ -7696,7 +7702,8 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
-  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string): { id: string; name: string; isOpen: boolean } | null => {
+  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean } = {}): { id: string; name: string; isOpen: boolean } | null => {
+    const shouldOpen = options.open ?? true;
     let createdSession: { id: string; name: string; isOpen: boolean } | null = null;
     let newSessionId: string | null = null;
     setRoot((current) => {
@@ -7715,7 +7722,7 @@ function AgentBrowserApp() {
         newSession.name = nameOverride.trim();
       }
       newSessionId = newSession.id;
-      createdSession = { id: newSession.id, name: newSession.name, isOpen: true };
+      createdSession = { id: newSession.id, name: newSession.name, isOpen: shouldOpen };
       return deepUpdate(current, workspaceId, (node) => {
         const withCategories = ensureWorkspaceCategories(node);
         return {
@@ -7742,9 +7749,9 @@ function AgentBrowserApp() {
         ...current,
         [workspaceId]: {
           ...existing,
-          openTabIds: [],
-          editingFilePath: null,
-          activeSessionIds: newSessionId ? [newSessionId] : [],
+          activeSessionIds: shouldOpen && newSessionId
+            ? [...(existing.activeSessionIds ?? []).filter((id) => id !== newSessionId), newSessionId]
+            : existing.activeSessionIds ?? [],
           mountedSessionFsIds: newSessionId && !existing.mountedSessionFsIds.includes(newSessionId)
             ? [...existing.mountedSessionFsIds, newSessionId]
             : existing.mountedSessionFsIds,
@@ -7771,9 +7778,7 @@ function AgentBrowserApp() {
         ...current,
         [activeWorkspaceId]: {
           ...existing,
-          openTabIds: [],
-          editingFilePath: null,
-          activeSessionIds: [sessionId],
+          activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
           mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
             ? existing.mountedSessionFsIds
             : [...existing.mountedSessionFsIds, sessionId],
@@ -7847,7 +7852,19 @@ function AgentBrowserApp() {
     if (!workspace) return;
     const normalized = normalizeWorkspaceViewEntry(workspace, workspaceViewStateByWorkspace[workspaceId]);
     if (!normalized.activeSessionIds.length) {
-      addSessionToWorkspace(workspaceId);
+      const firstSessionId = findFirstSessionId(workspace);
+      if (!firstSessionId) {
+        addSessionToWorkspace(workspaceId);
+        return;
+      }
+      setWorkspaceViewStateByWorkspace((current) => ({
+        ...current,
+        [workspaceId]: {
+          ...(current[workspaceId] ?? createWorkspaceViewEntry(workspace)),
+          activeMode: mode,
+          activeSessionIds: [firstSessionId],
+        },
+      }));
       return;
     }
     setWorkspaceViewStateByWorkspace((current) => ({
@@ -8237,8 +8254,10 @@ function AgentBrowserApp() {
         ...current,
         [activeWorkspaceId]: {
           ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
-          openTabIds: [tab.id],
-          editingFilePath: null,
+          openTabIds: [
+            ...((current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)).openTabIds ?? []).filter((id) => id !== tab.id),
+            tab.id,
+          ],
         },
       }));
       setToast({ msg: `Opened ${result.value}`, type: 'success' });
@@ -8702,7 +8721,6 @@ function AgentBrowserApp() {
       });
     }
     const nextRoot = removeNodeById(root, nodeId);
-    const nextWorkspace = getWorkspace(nextRoot, ownerWorkspaceId);
     setRoot(nextRoot);
     setWorkspaceViewStateByWorkspace((current) => {
       const existing = current[ownerWorkspaceId];
@@ -8711,9 +8729,7 @@ function AgentBrowserApp() {
       const nextEntry: WorkspaceViewState = {
         ...existing,
         openTabIds: (existing.openTabIds ?? []).filter((id) => id !== nodeId),
-        activeSessionIds: remainingSessionIds.length > 0
-          ? remainingSessionIds
-          : (nextWorkspace ? (findFirstSessionId(nextWorkspace) ? [findFirstSessionId(nextWorkspace)!] : []) : []),
+        activeSessionIds: remainingSessionIds,
         mountedSessionFsIds: (existing.mountedSessionFsIds ?? []).filter((id) => id !== nodeId),
         panelOrder: paneId ? existing.panelOrder.filter((id) => id !== paneId) : existing.panelOrder,
       };
@@ -8786,32 +8802,35 @@ function AgentBrowserApp() {
       if (workspace) {
         setWorkspaceViewStateByWorkspace((current) => ({
           ...current,
-          [workspace.id]: {
-            ...(current[workspace.id] ?? createWorkspaceViewEntry(workspace)),
-            editingFilePath: node.filePath ?? null,
-          },
+          [workspace.id]: (() => {
+            const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
+            return {
+              ...existing,
+              editingFilePath: existing.editingFilePath === node.filePath ? null : node.filePath ?? null,
+            };
+          })(),
         }));
         switchWorkspace(workspace.id);
       }
     }
   }
 
-  function handleOpenTreeTab(nodeId: string, multi = false) {
+  function handleOpenTreeTab(nodeId: string, _multi = false) {
     const node = findNode(root, nodeId);
     if (!node || node.type !== 'tab') return;
     const workspace = findWorkspaceForNode(root, nodeId);
     if (workspace) switchWorkspace(workspace.id);
     if (!workspace) return;
+    const toggleId = (ids: string[]) => ids.includes(nodeId)
+      ? ids.filter((id) => id !== nodeId)
+      : [...ids, nodeId];
     if ((node.nodeKind ?? 'browser') === 'browser') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.openTabIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
         return {
           ...current,
-          [workspace.id]: { ...existing, openTabIds: newIds },
+          [workspace.id]: { ...existing, openTabIds: toggleId(currentIds) },
         };
       });
       return;
@@ -8820,10 +8839,7 @@ function AgentBrowserApp() {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: newIds } };
+        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
       });
       return;
     }
@@ -8831,20 +8847,14 @@ function AgentBrowserApp() {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: newIds } };
+        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
       });
     }
     if (node.nodeKind === 'session') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: newIds } };
+        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
       });
     }
   }
@@ -10184,7 +10194,8 @@ function AgentBrowserApp() {
             },
           }));
           const panelEntries: Array<[string, Panel]> = [];
-          if (activeWorkspaceViewState.dashboardOpen) {
+          const hasActivePanel = Boolean(editingFile || openBrowserTabs.length || activeSessionIds.length);
+          if (activeWorkspaceViewState.dashboardOpen && !hasActivePanel) {
             panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
           }
           if (editingFile) {
@@ -10215,7 +10226,20 @@ function AgentBrowserApp() {
                     path: file.path,
                     kind: detectWorkspaceFileKind(file.path) ?? undefined,
                   }))}
-                  onAddWidget={regenerateActiveHarnessSpec}
+                  onCreateSessionWidget={() => addSessionToWorkspace(activeWorkspaceId, undefined, { open: false })}
+                  onOpenSession={(sessionId) => setWorkspaceViewStateByWorkspace((current) => {
+                    const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+                    return {
+                      ...current,
+                      [activeWorkspaceId]: {
+                        ...existing,
+                        activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
+                        mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
+                          ? existing.mountedSessionFsIds
+                          : [...existing.mountedSessionFsIds, sessionId],
+                      },
+                    };
+                  })}
                   onPatchElement={patchActiveHarnessElement}
                   onRegenerate={regenerateActiveHarnessSpec}
                   onRestoreDefault={restoreActiveHarnessSpec}

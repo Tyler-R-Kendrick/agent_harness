@@ -14,6 +14,7 @@ const WIDGET_PROPS = [
   'size',
   'summary',
 ];
+const DASHBOARD_CANVAS_PROPS = [...WIDGET_PROPS, 'sessionWidgetLayouts'];
 const UNSAFE_PROPS = new Set(['className', 'style', 'dangerouslySetInnerHTML', 'html', 'script']);
 
 const CATALOG: HarnessCatalogComponent[] = [
@@ -103,7 +104,7 @@ const CATALOG: HarnessCatalogComponent[] = [
     label: 'Dashboard canvas',
     description: 'Infinite-canvas dashboard surface for generated widgets.',
     allowedSlots: ['dashboard.canvas', 'app.main'],
-    allowedProps: WIDGET_PROPS,
+    allowedProps: DASHBOARD_CANVAS_PROPS,
     designTokens: ['harness-dashboard-panel', 'harness-dashboard-canvas', 'harness-dashboard-grid'],
     naturalLanguageHints: ['dashboard', 'canvas', 'widgets', 'home view'],
   },

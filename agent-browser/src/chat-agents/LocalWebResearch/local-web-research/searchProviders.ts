@@ -1,5 +1,4 @@
 import { Perplexity } from '@perplexity-ai/perplexity_ai';
-import { tavily } from '@tavily/core';
 import { normalizeSearchResults } from './searchResultNormalizer';
 import { SearxngSearchProvider } from './searxng';
 import { withTimeout } from './timeout';
@@ -289,6 +288,7 @@ async function createPerplexityClient({
 }
 
 async function createTavilyClient({ apiKey }: TavilyClientFactoryOptions): Promise<TavilySearchClient> {
+  const { tavily } = await import('@tavily/core');
   return tavily({ apiKey }) as TavilySearchClient;
 }
 

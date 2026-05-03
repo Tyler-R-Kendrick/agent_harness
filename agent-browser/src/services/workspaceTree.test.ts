@@ -138,7 +138,7 @@ describe('workspaceTree', () => {
 
     expect(createWorkspaceViewEntry(workspace)).toEqual(expect.objectContaining({
       dashboardOpen: true,
-      activeSessionIds: expect.any(Array),
+      activeSessionIds: [],
     }));
   });
 });
