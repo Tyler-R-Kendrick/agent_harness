@@ -259,6 +259,10 @@ export {
   createDesignMdPlugin,
   createLlGuidanceDesignSubstitutionProvider,
   discoverDesignMdSemanticHooks,
+  listDesignMdThemeOptions,
+  renderDesignMdCss,
+  type DesignMdCssRenderOptions,
+  type DesignMdCssRenderResult,
   type DesignMdApplyIntent,
   type DesignMdApplyProvider,
   type DesignMdApplyRequest,
@@ -269,6 +273,7 @@ export {
   type DesignMdPluginOptions,
   type DesignMdSemanticHook,
   type DesignMdSemanticHookInput,
+  type DesignMdThemeOption,
   type LlGuidanceDesignSubstitutionProviderOptions,
 } from './ext/design-md.js';
 export {

@@ -120,6 +120,13 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         toolAgentHarness: path.resolve(__dirname, 'tool-agent-harness.html'),
       },
+      output: {
+        manualChunks(id) {
+          return id.includes('/src/features/designer/') || id.includes('\\src\\features\\designer\\')
+            ? 'designer'
+            : undefined;
+        },
+      },
     },
   },
   worker: {
