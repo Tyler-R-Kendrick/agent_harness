@@ -34,7 +34,14 @@ export interface WorkspaceCapabilities {
 }
 
 const TOOL_MANIFESTS = ['tool.yaml', 'tool.yml', 'tool.json', 'manifest.json'] as const;
-const PLUGIN_MANIFESTS = ['plugin.yaml', 'plugin.yml', 'plugin.json', 'manifest.json', 'marketplace.json'] as const;
+const PLUGIN_MANIFESTS = [
+  'agent-harness.plugin.json',
+  'plugin.yaml',
+  'plugin.yml',
+  'plugin.json',
+  'manifest.json',
+  'marketplace.json',
+] as const;
 const KEBAB_CASE_SEGMENT = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const HOOK_FILENAME = /^[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+$/;
 

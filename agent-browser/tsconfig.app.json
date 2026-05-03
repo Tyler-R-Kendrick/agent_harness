@@ -20,8 +20,6 @@
     "paths": {
       "inbrowser-use": ["../lib/inbrowser-use/src/index.ts"],
       "logact": ["../lib/logact/src/index.ts"],
-      "harness-core/ext/agent-skills": ["../harness-core/src/ext/agent-skills.ts"],
-      "harness-core/ext/agents-md": ["../harness-core/src/ext/agents-md.ts"],
       "harness-core": ["../harness-core/src/index.ts"],
       "ralph-loop": ["../lib/ralph-loop/src/index.ts"],
       "webmcp": ["../lib/webmcp/src/index.ts"],

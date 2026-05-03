@@ -3,9 +3,9 @@ version: "1.0"
 description: >
   AgentEvals static and deterministic runtime suite for workspace-agent
   self-reflection. The agent must answer questions about its strengths,
-  capabilities, registered tools, workspace AGENTS.md files, skills, plugins,
-  hooks, limitations, and the human user's best role without inventing access
-  or unavailable tools.
+  capabilities, registered tools, plugin-provided capability files, hooks,
+  limitations, and the human user's best role without inventing access,
+  built-in AGENTS.md/skill support, or unavailable tools.
 metadata:
   owner: agent-browser
   tags: [workspace-agent, self-reflection, capabilities, tools, hooks]

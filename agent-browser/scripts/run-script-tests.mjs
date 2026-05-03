@@ -122,16 +122,44 @@ async function main() {
       'run',
       '--coverage',
       '--coverage.processingConcurrency=1',
+      '--coverage.reporter=text-summary',
       '--coverage.reportsDirectory=../output/coverage/agent-browser-test',
       '--no-file-parallelism',
       '--maxWorkers=1',
       '--pool=forks',
       '--teardownTimeout=60000',
       '--exclude',
+      'src/App.integration.test.tsx',
+      '--exclude',
       'src/App.smoke.test.tsx',
       '--reporter=dot',
     ],
   );
+  assert.deepEqual(
+    coverageRunner.buildVitestCoverageArgs([], '../output/coverage/agent-browser-test', ['src/services/workspaceFiles.test.ts']),
+    [
+      'run',
+      '--coverage',
+      '--coverage.processingConcurrency=1',
+      '--coverage.reporter=text-summary',
+      '--coverage.reportsDirectory=../output/coverage/agent-browser-test',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      '--pool=forks',
+      '--teardownTimeout=60000',
+      '--exclude',
+      'src/App.integration.test.tsx',
+      '--exclude',
+      'src/App.smoke.test.tsx',
+      '--reporter=dot',
+      'src/services/workspaceFiles.test.ts',
+    ],
+  );
+  assert.deepEqual(
+    coverageRunner.chunkTestFiles(['a.test.ts', 'b.test.ts', 'c.test.ts'], 2),
+    [['a.test.ts', 'b.test.ts'], ['c.test.ts']],
+  );
+  assert.throws(() => coverageRunner.chunkTestFiles(['a.test.ts'], 0), /positive integer/);
   assert.deepEqual(
     coverageRunner.buildAppTestArgs(),
     [
@@ -141,6 +169,7 @@ async function main() {
       '--pool=forks',
       '--teardownTimeout=60000',
       '--reporter=dot',
+      'src/App.integration.test.tsx',
       'src/App.smoke.test.tsx',
     ],
   );
@@ -157,10 +186,11 @@ async function main() {
   );
   const coverageFileFixture = await mkdtemp(path.join(tmpdir(), 'agent-browser-coverage-files-'));
   await mkdir(path.join(coverageFileFixture, 'src', 'services'), { recursive: true });
+  await writeFile(path.join(coverageFileFixture, 'src', 'App.integration.test.tsx'), '');
   await writeFile(path.join(coverageFileFixture, 'src', 'App.smoke.test.tsx'), '');
   await writeFile(path.join(coverageFileFixture, 'src', 'services', 'cursorApi.test.ts'), '');
   assert.deepEqual(
-    await coverageRunner.findTestFiles(path.join(coverageFileFixture, 'src')),
+    await coverageRunner.discoverCoverageTestFiles(coverageFileFixture),
     ['src/services/cursorApi.test.ts'],
   );
   assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({

@@ -160,33 +160,6 @@ describe('registerSessionTools', () => {
     });
 
     await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: {
-        sessionId: 'session-1',
-        agentId: 'docs/AGENTS.md',
-      },
-    }, {} as never)).resolves.toEqual(expect.objectContaining({
-      agentId: 'docs/AGENTS.md',
-    }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(3, {
-      sessionId: 'session-1',
-      agentId: 'docs/AGENTS.md',
-    });
-
-    await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: {
-        sessionId: 'session-1',
-        agentId: '   ',
-      },
-    }, {} as never)).rejects.toThrow('agentId');
-
-    await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: { sessionId: 'session-1' },
-    }, {} as never)).rejects.toThrow('agentId');
-
-    await expect(webmcpTool.execute?.({
       tool: 'switch_session_mode',
       args: {
         sessionId: 'session-1',
@@ -195,7 +168,7 @@ describe('registerSessionTools', () => {
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       mode: 'terminal',
     }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(4, {
+    expect(onWriteSession).toHaveBeenNthCalledWith(3, {
       sessionId: 'session-1',
       mode: 'terminal',
     });
@@ -218,7 +191,7 @@ describe('registerSessionTools', () => {
       provider: 'ghcp',
       modelId: 'gpt-4o-mini',
     }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(5, {
+    expect(onWriteSession).toHaveBeenNthCalledWith(4, {
       sessionId: 'session-1',
       modelId: 'gpt-4o-mini',
     });
@@ -233,7 +206,7 @@ describe('registerSessionTools', () => {
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       toolIds: ['cli'],
     }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(6, {
+    expect(onWriteSession).toHaveBeenNthCalledWith(5, {
       sessionId: 'session-1',
       toolIds: ['cli'],
     });
@@ -241,11 +214,6 @@ describe('registerSessionTools', () => {
     await expect(webmcpTool.execute?.({
       tool: 'read_session',
       args: { sessionId: 'session-2' },
-    }, {} as never)).rejects.toThrow('active session');
-
-    await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: { sessionId: 'session-2', agentId: 'docs/AGENTS.md' },
     }, {} as never)).rejects.toThrow('active session');
   });
 
@@ -294,7 +262,6 @@ describe('registerSessionTools', () => {
     expect(getModelContextRegistry(modelContext).list().map(({ name }) => name)).toEqual([
       'read_session',
       'submit_session_message',
-      'change_session_agent',
       'change_session_model',
       'switch_session_mode',
     ]);

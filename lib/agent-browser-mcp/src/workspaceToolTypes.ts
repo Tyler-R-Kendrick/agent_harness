@@ -398,7 +398,7 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   onScaffoldSessionFsEntry?: (input: {
     sessionId: string;
     basePath: string;
-    template: 'agents' | 'skill' | 'hook' | 'eval';
+    template: 'hook';
   }) => Promise<unknown> | unknown;
   getFilesystemProperties?: (input: {
     targetType: WorkspaceMcpFilesystemTargetType;

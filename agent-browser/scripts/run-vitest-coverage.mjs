@@ -5,43 +5,21 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 
-const APP_TEST_FILES = ['src/App.smoke.test.tsx'];
 const DEFAULT_COVERAGE_SHARD_COUNT = 8;
+const APP_TEST_FILES = ['src/App.integration.test.tsx', 'src/App.smoke.test.tsx'];
+const COVERAGE_TEST_ROOTS = ['src', 'server', 'evals'];
+const COVERAGE_BATCH_SIZE = 25;
+const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
 
 function defaultReportsDirectory() {
   return process.env.AGENT_BROWSER_COVERAGE_DIR
     ?? path.join(tmpdir(), 'agent-browser-coverage', `agent-browser-${process.pid}`);
 }
 
-export function chunkTestFiles(files, chunkSize) {
-  const size = Math.max(1, chunkSize);
-  const chunks = [];
-  for (let index = 0; index < files.length; index += size) {
-    chunks.push(files.slice(index, index + size));
-  }
-  return chunks;
-}
-
-export async function findTestFiles(directory, root = directory) {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const files = [];
-  for (const entry of entries) {
-    const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await findTestFiles(entryPath, root));
-      continue;
-    }
-    if (!/\.(test)\.(ts|tsx)$/.test(entry.name)) continue;
-    const relativePath = `src/${path.relative(root, entryPath).split(path.sep).join('/')}`;
-    if (APP_TEST_FILES.includes(relativePath)) continue;
-    files.push(relativePath);
-  }
-  return files.sort();
-}
-
 export function buildVitestCoverageArgs(
   extraArgs = [],
   reportsDirectory = defaultReportsDirectory(),
+  testFiles = [],
 ) {
   const reporterArgs = extraArgs.some((arg) => arg === '--reporter' || arg.startsWith('--reporter='))
     ? []
@@ -50,6 +28,7 @@ export function buildVitestCoverageArgs(
     'run',
     '--coverage',
     '--coverage.processingConcurrency=1',
+    '--coverage.reporter=text-summary',
     `--coverage.reportsDirectory=${reportsDirectory}`,
     '--no-file-parallelism',
     '--maxWorkers=1',
@@ -58,6 +37,7 @@ export function buildVitestCoverageArgs(
     ...APP_TEST_FILES.flatMap((filePath) => ['--exclude', filePath]),
     ...reporterArgs,
     ...extraArgs,
+    ...testFiles,
   ];
 }
 
@@ -109,6 +89,55 @@ export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
     || coverageReporterCrash;
 }
 
+export function chunkTestFiles(files, batchSize = COVERAGE_BATCH_SIZE) {
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new TypeError('Coverage batch size must be a positive integer.');
+  }
+
+  const chunks = [];
+  for (let index = 0; index < files.length; index += batchSize) {
+    chunks.push(files.slice(index, index + batchSize));
+  }
+  return chunks;
+}
+
+export async function discoverCoverageTestFiles(cwd = process.cwd()) {
+  const files = [];
+  for (const root of COVERAGE_TEST_ROOTS) {
+    await collectTestFiles(path.join(cwd, root), root, files);
+  }
+  return files
+    .filter((filePath) => !APP_TEST_FILES.includes(filePath))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+async function collectTestFiles(absoluteDirectory, relativeDirectory, files) {
+  let entries;
+  try {
+    entries = await readdir(absoluteDirectory, { withFileTypes: true });
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  for (const entry of entries) {
+    const relativePath = path.posix.join(relativeDirectory.replaceAll(path.sep, '/'), entry.name);
+    const absolutePath = path.join(absoluteDirectory, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === 'dist') {
+        continue;
+      }
+      await collectTestFiles(absolutePath, relativePath, files);
+      continue;
+    }
+    if (entry.isFile() && TEST_FILE_PATTERN.test(entry.name)) {
+      files.push(relativePath);
+    }
+  }
+}
+
 async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   const vitestBin = await resolvePackageBin('vitest');
   if (extraArgs.length > 0) {
@@ -116,20 +145,22 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   }
 
   const reportsDirectory = defaultReportsDirectory();
-  const chunkSize = Number(process.env.AGENT_BROWSER_COVERAGE_CHUNK_SIZE ?? 3);
-  const testChunks = chunkTestFiles(await findTestFiles(path.resolve(process.cwd(), 'src')), chunkSize);
-  for (const [index, files] of testChunks.entries()) {
-    console.log(`Vitest coverage chunk ${index + 1}/${testChunks.length}: ${files.join(', ')}`);
+  const coverageTestFiles = await discoverCoverageTestFiles();
+  const coverageBatches = chunkTestFiles(coverageTestFiles);
+  for (const [index, files] of coverageBatches.entries()) {
+    const label = `Vitest coverage batch ${index + 1}/${coverageBatches.length}`;
     const exitCode = await runVitestCommandWithRetry(
       vitestBin,
-      buildVitestCoverageArgs(files, path.join(reportsDirectory, `chunk-${index + 1}`)),
-      `Vitest coverage chunk ${index + 1}/${testChunks.length}`,
+      buildVitestCoverageArgs([], path.join(reportsDirectory, `batch-${index + 1}`), files),
+      label,
     );
-    if (exitCode !== 0) return exitCode;
+    if (exitCode !== 0) {
+      return exitCode;
+    }
   }
 
-  // App smoke coverage crashes Node's v8 coverage worker on this Windows runner,
-  // so keep it in the gate without collecting coverage for that file.
+  // App UI suites crash Node's v8 coverage worker on this Windows runner,
+  // so keep them in the gate without collecting coverage for those files.
   return runVitestCommandWithRetry(vitestBin, buildAppTestArgs(), 'Vitest App tests');
 }
 

@@ -23,10 +23,6 @@ type SessionMessageInput = SessionInput & {
   message?: string;
 };
 
-type SessionAgentInput = SessionInput & {
-  agentId?: string;
-};
-
 type SessionModelInput = SessionInput & {
   provider?: string;
   modelId?: string;
@@ -166,35 +162,6 @@ export function registerWorkspaceSessionTools(modelContext: ModelContext, option
         const update: WorkspaceMcpWriteSessionInput = {
           sessionId: session.id,
           message,
-        };
-        return applySessionMutation(workspaceName, currentState, update, onWriteSession);
-      },
-    }, { signal });
-
-    modelContext.registerTool({
-      name: 'change_session_agent',
-      title: 'Change session agent',
-      description: 'Change the active AGENTS.md selection for an open session.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string' },
-          agentId: { type: 'string' },
-        },
-        additionalProperties: false,
-      },
-      execute: async (input: object) => {
-        const typedInput = input as SessionAgentInput;
-        const session = resolveSessionSummaryInput(sessions, typedInput);
-        const currentState = readOpenSessionState(sessions, getSessionState, { sessionId: session.id });
-        const agentId = typeof typedInput.agentId === 'string' ? typedInput.agentId.trim() : '';
-        if (!agentId) {
-          throw new TypeError('change_session_agent requires an agentId.');
-        }
-
-        const update: WorkspaceMcpWriteSessionInput = {
-          sessionId: session.id,
-          agentId,
         };
         return applySessionMutation(workspaceName, currentState, update, onWriteSession);
       },

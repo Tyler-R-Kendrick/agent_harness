@@ -13,7 +13,6 @@ import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dn
 import { CSS } from '@dnd-kit/utilities';
 import type { ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
-import { listDesignMdThemeOptions, renderDesignMdCss, type DesignMdCssRenderResult } from 'harness-core';
 import {
   ArrowLeft,
   ArrowRight,
@@ -142,7 +141,6 @@ import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipe
 import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
 import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
 import { InlineProcess, ProcessPanel } from './features/process';
-import { DesignerPanel } from './features/designer/DesignerPanel';
 import {
   createWebMcpToolBridge,
   registerWorkspaceTools,
@@ -314,7 +312,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'symphony' | 'review' | 'history' | 'extensions' | 'settings' | 'account' | 'designer';
+type SidebarPanel = 'workspaces' | 'symphony' | 'review' | 'history' | 'extensions' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -345,32 +343,8 @@ function areSessionRuntimeSnapshotsEqual(left: SessionMcpRuntimeState | undefine
 
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
-const DESIGN_THEME_SETTINGS_STORAGE_KEY = 'agent-browser.design-theme-settings';
-const DESIGN_SHELL_VARIABLES = new Set([
-  '--app-bg',
-  '--panel-bg',
-  '--panel-bg-elevated',
-  '--panel-bg-soft',
-  '--panel-border',
-  '--panel-border-strong',
-  '--text-soft',
-  '--text-muted',
-  '--accent',
-  '--accent-strong',
-]);
-
 type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
 const pendingSecretRequestResolvers = new Map<string, (result: SecretRequestCreatedResult) => void>();
-
-type DesignThemeSettings = {
-  themeId: string;
-  applyToShell: boolean;
-};
-
-const DEFAULT_DESIGN_THEME_SETTINGS: DesignThemeSettings = {
-  themeId: 'default',
-  applyToShell: false,
-};
 
 type UserElicitationEventDetail = {
   requestId: string;
@@ -495,17 +469,15 @@ const PRIMARY_NAV = [
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
 ] as const;
-const DESIGNER_NAV = ['designer', 'sparkles', 'Designer'] as const;
 const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account', 'designer'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
   symphony: { label: 'Symphony', icon: 'clipboard' },
   review: { label: 'Review', icon: 'gitPullRequest' },
-  designer: { label: 'Designer', icon: 'sparkles' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
   settings: { label: 'Settings', icon: 'settings' },
@@ -1918,7 +1890,6 @@ function ChatPanel({
     isStringRecord,
     {},
   );
-  const [selectedAgentIdBySession, setSelectedAgentIdBySession] = useState<Record<string, string | null>>({});
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
   const [bashHistoryBySession, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
@@ -1965,21 +1936,16 @@ function ChatPanel({
   const webMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
-  const availableAgentIds = useMemo(() => workspaceCapabilities.agents.map((file) => file.path), [workspaceCapabilities.agents]);
-  const selectedAgentIdState = selectedAgentIdBySession[activeChatSessionId] ?? null;
-  const selectedAgentId = selectedAgentIdState && availableAgentIds.includes(selectedAgentIdState)
-    ? selectedAgentIdState
-    : (availableAgentIds[0] ?? null);
   const locationPromptContext = useMemo(
     () => buildBrowserLocationPromptContext(browserLocationContext),
     [browserLocationContext],
   );
   const workspacePromptContext = useMemo(
     () => [
-      buildWorkspacePromptContext(workspaceFiles, selectedAgentId),
+      buildWorkspacePromptContext(workspaceFiles),
       locationPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [locationPromptContext, selectedAgentId, workspaceFiles],
+    [locationPromptContext, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -2080,13 +2046,12 @@ function ChatPanel({
     ))
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState, cursorState });
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
   const effectiveSelectedCopilotModelIdRef = useRef(effectiveSelectedCopilotModelId);
   const effectiveSelectedCursorModelIdRef = useRef(effectiveSelectedCursorModelId);
-  const selectedAgentIdRef = useRef<string | null>(selectedAgentId);
   const selectedToolIdsRef = useRef<string[]>(selectedToolIds);
   const activeModeRef = useRef(activeMode);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -2108,10 +2073,6 @@ function ChatPanel({
   useEffect(() => {
     effectiveSelectedCursorModelIdRef.current = effectiveSelectedCursorModelId;
   }, [effectiveSelectedCursorModelId]);
-
-  useEffect(() => {
-    selectedAgentIdRef.current = selectedAgentId;
-  }, [selectedAgentId]);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -4844,7 +4805,7 @@ function ChatPanel({
         ? effectiveSelectedCopilotModelIdRef.current
         : effectiveSelectedModelIdRef.current
     ) || null,
-    agentId: selectedAgentIdRef.current ?? null,
+    agentId: null,
     toolIds: [...selectedToolIdsRef.current],
     cwd: activeSessionId ? (cwdBySessionRef.current[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD,
     messages: messagesRef.current.map((message) => ({
@@ -4868,7 +4829,6 @@ function ChatPanel({
     getSessionRuntimeState,
     messages,
     onSessionRuntimeChange,
-    selectedAgentId,
     selectedProvider,
     selectedToolIds,
   ]);
@@ -4903,12 +4863,6 @@ function ChatPanel({
         effectiveSelectedModelIdRef.current = nextModelId;
         setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
       }
-    }
-
-    if (typeof input.agentId === 'string') {
-      const nextAgentId = input.agentId.trim() || null;
-      selectedAgentIdRef.current = nextAgentId;
-      setSelectedAgentIdBySession((current) => ({ ...current, [activeChatSessionId]: nextAgentId }));
     }
 
     if (Array.isArray(input.toolIds)) {
@@ -5065,24 +5019,6 @@ function ChatPanel({
                         <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
                       ))}
                 <BenchmarkRouteBadge route={currentBenchmarkRoute} />
-                {workspaceCapabilities.agents.length > 0 && (
-                  <label className="header-model-selector" {...panelTitlebarControlProps}>
-                    <select
-                      aria-label="Session AGENTS.md"
-                      value={selectedAgentId ?? ''}
-                      onChange={(event) => {
-                        const nextAgentId = event.target.value.trim() || null;
-                        selectedAgentIdRef.current = nextAgentId;
-                        setSelectedAgentIdBySession((current) => ({ ...current, [activeChatSessionId]: nextAgentId }));
-                      }}
-                      {...panelTitlebarControlProps}
-                    >
-                      {workspaceCapabilities.agents.map((agentFile) => (
-                        <option key={agentFile.path} value={agentFile.path}>{agentFile.path}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 <ToolsPicker
                   descriptors={toolDescriptors}
                   selectedIds={selectedToolIds}
@@ -5807,100 +5743,6 @@ function TrajectoryCriticSettingsPanel({
   );
 }
 
-function ClaudeDesignSettings({
-  workspaceFiles,
-  settings,
-  renderedCss,
-  onSettingsChange,
-}: {
-  workspaceFiles: WorkspaceFile[];
-  settings: DesignThemeSettings;
-  renderedCss: DesignMdCssRenderResult | null;
-  onSettingsChange: (settings: DesignThemeSettings) => void;
-}) {
-  const designDocument = useMemo(
-    () => workspaceFiles.find((file) => /(^|\/)DESIGN\.md$/i.test(file.path)) ?? null,
-    [workspaceFiles],
-  );
-  const themeOptions = useMemo(
-    () => designDocument ? listDesignMdThemeOptions(designDocument) : [{ id: 'default', label: 'Default' }],
-    [designDocument],
-  );
-  const selectedThemeId = themeOptions.some((option) => option.id === settings.themeId)
-    ? settings.themeId
-    : 'default';
-  const previewCss = useMemo(() => {
-    if (!designDocument) return null;
-    if (renderedCss && selectedThemeId === settings.themeId) return renderedCss;
-    return renderDesignMdCss(designDocument, { themeId: selectedThemeId });
-  }, [designDocument, renderedCss, selectedThemeId, settings.themeId]);
-  const shellVariables = Object.entries(previewCss?.variables ?? {});
-
-  return (
-    <SettingsSection title="Claude Design">
-      <div className="claude-design-settings">
-        <div className="claude-design-status">
-          <div>
-            <strong>{designDocument ? designDocument.path : 'No DESIGN.md found'}</strong>
-            <p className="muted">Use DESIGN.md themes as swappable tokens for widgets and the Agent Browser shell.</p>
-          </div>
-          <span className={`badge${designDocument ? ' connected' : ''}`}>{designDocument ? `${themeOptions.length} theme${themeOptions.length === 1 ? '' : 's'}` : 'Add DESIGN.md'}</span>
-        </div>
-
-        {designDocument ? (
-          <>
-            <label className="design-setting-field">
-              <span>Theme</span>
-              <select
-                aria-label="Claude Design theme"
-                value={selectedThemeId}
-                onChange={(event) => onSettingsChange({ ...settings, themeId: event.target.value })}
-              >
-                {themeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>{option.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="settings-checkbox-row">
-              <input
-                type="checkbox"
-                aria-label="Apply Claude Design theme to Agent Browser"
-                checked={settings.applyToShell}
-                onChange={(event) => onSettingsChange({ ...settings, applyToShell: event.target.checked })}
-              />
-              <span>Apply theme to Agent Browser shell</span>
-            </label>
-            {shellVariables.length ? (
-              <div className="design-token-grid" aria-label="Agent Browser shell variables">
-                {shellVariables.map(([name, value]) => (
-                  <span key={name} className="design-token-chip">
-                    <span className="design-swatch" style={{ background: value }} />
-                    <code>{name}</code>
-                  </span>
-                ))}
-              </div>
-            ) : <p className="muted">No agentBrowser styles are defined yet.</p>}
-            {previewCss?.diagnostics.length ? (
-              <ul className="design-diagnostics">
-                {previewCss.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
-              </ul>
-            ) : null}
-            <textarea
-              className="design-css-preview"
-              aria-label="Generated Claude Design CSS"
-              value={previewCss?.css ?? ''}
-              readOnly
-              rows={8}
-            />
-          </>
-        ) : (
-          <p className="muted">Create a DESIGN.md file with colors, themes, and styles.agentBrowser mappings to enable live shell theming.</p>
-        )}
-      </div>
-    </SettingsSection>
-  );
-}
-
 interface SettingsPanelProps {
   copilotState: CopilotRuntimeState;
   isCopilotLoading: boolean;
@@ -5932,13 +5774,9 @@ interface SettingsPanelProps {
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
   trajectoryCriticSettings: TrajectoryCriticSettings;
   onTrajectoryCriticSettingsChange: (settings: TrajectoryCriticSettings) => void;
-  workspaceFiles: WorkspaceFile[];
-  designThemeSettings: DesignThemeSettings;
-  designCss: DesignMdCssRenderResult | null;
-  onDesignThemeSettingsChange: (settings: DesignThemeSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -6038,13 +5876,6 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         candidates={benchmarkRoutingCandidates}
         evidenceState={benchmarkEvidenceState}
         onChange={onBenchmarkRoutingSettingsChange}
-      />
-
-      <ClaudeDesignSettings
-        workspaceFiles={workspaceFiles}
-        settings={designThemeSettings}
-        renderedCss={designCss}
-        onSettingsChange={onDesignThemeSettingsChange}
       />
 
       <SecretsSettings
@@ -7090,74 +6921,21 @@ function ContextMenu({ x, y, entries, topButtons, onClose }: { x: number; y: num
 
 // — Session FS scaffold templates ——————————————————————————
 
-function makeAgentsMd(basePath: string): { path: string; content: string } {
-  return {
-    path: `${basePath}/AGENTS.md`,
-    content: [
-      '# Agent Instructions',
-      '',
-      '## Goals',
-      '- Describe the expected outcomes for this session.',
-      '',
-      '## Constraints',
-      '- Add safety, testing, or review rules the agent should respect.',
-    ].join('\n'),
-  };
-}
-
-function makeAgentSkill(basePath: string): { path: string; content: string } {
-  return {
-    path: `${basePath}/.agents/skills/new-skill/SKILL.md`,
-    content: [
-      '---',
-      'name: new-skill',
-      'description: Describe when this skill should be loaded.',
-      '---',
-      '',
-      '# New Skill',
-      '',
-      '## Workflow',
-      '1. Explain what to do.',
-      '2. Explain how to validate the result.',
-    ].join('\n'),
-  };
-}
-
 function makeAgentHook(basePath: string): { path: string; content: string } {
   return {
     path: `${basePath}/.agents/hooks/pre-tool.sh`,
     content: [
       '#!/usr/bin/env bash',
-      '# Pre-tool hook — compatible with Claude Code, OpenAI Codex, GitHub Copilot',
+      '# Pre-tool hook compatible with Claude Code, OpenAI Codex, GitHub Copilot',
       '# Environment variables:',
-      '#   AGENT_TOOL  — name of the tool being called (read, write, bash, …)',
-      '#   AGENT_INPUT — JSON-encoded input to the tool',
-      '#   AGENT_CWD   — current working directory',
+      '#   AGENT_TOOL  - name of the tool being called',
+      '#   AGENT_INPUT - JSON-encoded input to the tool',
+      '#   AGENT_CWD   - current working directory',
       '# Exit 0 to allow execution, non-zero to block (where supported).',
       'set -euo pipefail',
       '',
       'echo "Pre-tool hook: ${AGENT_TOOL:-unknown}"',
       'exit 0',
-    ].join('\n'),
-  };
-}
-
-function makeAgentEval(basePath: string): { path: string; content: string } {
-  return {
-    path: `${basePath}/.agents/evals/new-eval.yaml`,
-    content: [
-      '# Agent Eval Suite — following AgentEvals.io standards',
-      'name: new-eval',
-      'version: "1.0"',
-      'description: Describe what this eval suite tests.',
-      'cases:',
-      '  - id: case-001',
-      '    description: Example case',
-      '    prompt: |',
-      '      What is 2 + 2?',
-      '    assertions:',
-      '      - type: contains',
-      '        value: "4"',
     ].join('\n'),
   };
 }
@@ -7379,7 +7157,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account', 'designer'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -7407,15 +7185,6 @@ function isAgentProviderRecord(value: unknown): value is Record<string, AgentPro
     && Object.values(value as Record<string, unknown>).every((entry) => (
       typeof entry === 'string' && (VALID_AGENT_PROVIDERS as string[]).includes(entry)
     ))
-  );
-}
-
-function isDesignThemeSettings(value: unknown): value is DesignThemeSettings {
-  return (
-    typeof value === 'object'
-    && value !== null
-    && typeof (value as DesignThemeSettings).themeId === 'string'
-    && typeof (value as DesignThemeSettings).applyToShell === 'boolean'
   );
 }
 
@@ -7456,12 +7225,6 @@ function AgentBrowserApp() {
     STORAGE_KEYS.locationContext,
     isBrowserLocationContext,
     DEFAULT_BROWSER_LOCATION_CONTEXT,
-  );
-  const [designThemeSettings, setDesignThemeSettings] = useStoredState(
-    localStorageBackend,
-    DESIGN_THEME_SETTINGS_STORAGE_KEY,
-    isDesignThemeSettings,
-    DEFAULT_DESIGN_THEME_SETTINGS,
   );
   const secretsManager = useMemo(() => getDefaultSecretsManagerAgent(), []);
   const [secretSettings, setSecretSettings] = useStoredState(
@@ -7516,7 +7279,6 @@ function AgentBrowserApp() {
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
-  const appliedDesignShellVariablesRef = useRef<string[]>([]);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
   const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
     localStorageBackend,
@@ -7779,42 +7541,7 @@ function AgentBrowserApp() {
     () => ({ summary: restoreActiveHarnessSpec() }),
     [restoreActiveHarnessSpec],
   );
-  const activeDesignDocument = useMemo(
-    () => activeWorkspaceFiles.find((file) => /(^|\/)DESIGN\.md$/i.test(file.path)) ?? null,
-    [activeWorkspaceFiles],
-  );
-  const activeDesignCss = useMemo(
-    () => activeDesignDocument ? renderDesignMdCss(activeDesignDocument, { themeId: designThemeSettings.themeId }) : null,
-    [activeDesignDocument, designThemeSettings.themeId],
-  );
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return undefined;
-    const rootStyle = document.documentElement.style;
-    const clearAppliedVariables = () => {
-      for (const name of appliedDesignShellVariablesRef.current) {
-        rootStyle.removeProperty(name);
-      }
-      appliedDesignShellVariablesRef.current = [];
-    };
-
-    clearAppliedVariables();
-
-    if (!designThemeSettings.applyToShell || !activeDesignCss) {
-      return clearAppliedVariables;
-    }
-
-    const appliedNames: string[] = [];
-    for (const [name, value] of Object.entries(activeDesignCss.variables)) {
-      if (!DESIGN_SHELL_VARIABLES.has(name)) continue;
-      rootStyle.setProperty(name, value);
-      appliedNames.push(name);
-    }
-    appliedDesignShellVariablesRef.current = appliedNames;
-
-    return clearAppliedVariables;
-  }, [activeDesignCss, designThemeSettings.applyToShell]);
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
@@ -8432,8 +8159,9 @@ function AgentBrowserApp() {
       installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
       tabsInWorkspace: countTabs(activeWorkspace),
       workspaceFiles: activeWorkspaceFiles.map((file) => file.path),
-      agentsInstructions: activeWorkspaceCapabilities.agents.map((file) => file.path),
-      skills: activeWorkspaceCapabilities.skills.map((skill) => skill.name),
+      capabilityFiles: activeWorkspaceFiles
+        .filter((file) => file.path.startsWith('.agents/') || file.path.startsWith('.memory/'))
+        .map((file) => file.path),
       plugins: activeWorkspaceCapabilities.plugins.map((plugin) => plugin.directory),
       hooks: activeWorkspaceCapabilities.hooks.map((hook) => hook.name),
     },
@@ -8901,10 +8629,7 @@ function AgentBrowserApp() {
       { label: 'Add File', onClick: () => setAddSessionFsMenu({ ...vfsArgs, kind: 'file' }) },
       { label: 'Add Folder', onClick: () => setAddSessionFsMenu({ ...vfsArgs, kind: 'folder' }) },
       'separator',
-      { label: 'Add AGENTS.md', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentsMd(vfsArgs.basePath)) },
-      { label: 'Add agent-skill', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentSkill(vfsArgs.basePath)) },
-      { label: 'Add agent-hook', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentHook(vfsArgs.basePath)) },
-      { label: 'Add agent-eval', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentEval(vfsArgs.basePath)) },
+      { label: 'Add hook', onClick: () => void handleScaffoldToSessionFs(vfsArgs.sessionId, makeAgentHook(vfsArgs.basePath)) },
     ];
   }
 
@@ -9708,15 +9433,9 @@ function AgentBrowserApp() {
   }: {
     sessionId: string;
     basePath: string;
-    template: 'agents' | 'skill' | 'hook' | 'eval';
+    template: 'hook';
   }) => {
-    const nextTemplate = template === 'agents'
-      ? makeAgentsMd(basePath)
-      : template === 'skill'
-        ? makeAgentSkill(basePath)
-        : template === 'hook'
-          ? makeAgentHook(basePath)
-          : makeAgentEval(basePath);
+    const nextTemplate = makeAgentHook(basePath);
     const bash = getOrCreateSessionBash(sessionId);
     const dir = nextTemplate.path.slice(0, nextTemplate.path.lastIndexOf('/'));
     if (dir) {
@@ -10167,10 +9886,7 @@ function AgentBrowserApp() {
           ...(!vfsArgs.isDriveRoot ? [{ id: 'rename', label: 'Rename' }, { id: 'delete', label: 'Delete' }] : []),
           { id: 'new_file', label: 'Add File' },
           { id: 'new_folder', label: 'Add Folder' },
-          { id: 'add_agents_md', label: 'Add AGENTS.md' },
-          { id: 'add_agent_skill', label: 'Add agent-skill' },
-          { id: 'add_agent_hook', label: 'Add agent-hook' },
-          { id: 'add_agent_eval', label: 'Add agent-eval' },
+          { id: 'add_hook', label: 'Add hook' },
           { id: 'history', label: 'History' },
           { id: 'properties', label: 'Properties' },
         ];
@@ -10282,15 +9998,8 @@ function AgentBrowserApp() {
           kind: actionId === 'new_folder' ? 'folder' : 'file',
           ...(typeof args.content === 'string' ? { content: args.content } : {}),
         });
-      } else if (actionId === 'add_agents_md' || actionId === 'add_agent_skill' || actionId === 'add_agent_hook' || actionId === 'add_agent_eval') {
-        const template = actionId === 'add_agents_md'
-          ? 'agents'
-          : actionId === 'add_agent_skill'
-            ? 'skill'
-            : actionId === 'add_agent_hook'
-              ? 'hook'
-              : 'eval';
-        await scaffoldSessionFsEntryFromMcp({ sessionId: vfsArgs.sessionId, basePath: vfsArgs.basePath, template });
+      } else if (actionId === 'add_hook') {
+        await scaffoldSessionFsEntryFromMcp({ sessionId: vfsArgs.sessionId, basePath: vfsArgs.basePath, template: 'hook' });
       } else if (actionId === 'history' && node) {
         setHistoryNode(node);
       } else if (actionId === 'properties' && node) {
@@ -10529,19 +10238,6 @@ function AgentBrowserApp() {
         />
       );
     }
-    if (activePanel === 'designer') {
-      return (
-        <section className="panel-scroll designer-sidebar-summary">
-          <h2>Designer</h2>
-          <p className="muted">Create Claude Design-style projects, design systems, files, sketches, comments, exports, and DESIGN.md token packs.</p>
-          <div className="designer-sidebar-list">
-            <span>DESIGN.md source</span>
-            <span>Token theme swap</span>
-            <span>Share/export handoff</span>
-          </div>
-        </section>
-      );
-    }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
     if (activePanel === 'settings') return (
@@ -10576,10 +10272,6 @@ function AgentBrowserApp() {
         onSecretSettingsChange={updateSecretSettings}
         trajectoryCriticSettings={trajectoryCriticSettings}
         onTrajectoryCriticSettingsChange={updateTrajectoryCriticSettings}
-        workspaceFiles={activeWorkspaceFiles}
-        designThemeSettings={designThemeSettings}
-        designCss={activeDesignCss}
-        onDesignThemeSettingsChange={setDesignThemeSettings}
       />
     );
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
@@ -10590,7 +10282,6 @@ function AgentBrowserApp() {
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
-          <button type="button" className={`activity-button ${activePanel === DESIGNER_NAV[0] ? 'active' : ''}`} onClick={() => switchSidebarPanel(DESIGNER_NAV[0])} aria-label={DESIGNER_NAV[2]} title={`${DESIGNER_NAV[2]} (Alt+${PANEL_SHORTCUT_ORDER.indexOf(DESIGNER_NAV[0]) + 1})`}><Icon name={DESIGNER_NAV[1]} size={16} color={activePanel === DESIGNER_NAV[0] ? '#7dd3fc' : '#71717a'} /></button>
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">
@@ -10663,21 +10354,6 @@ function AgentBrowserApp() {
               />
             );
           }
-          if (activePanel === 'designer') {
-            return (
-              <DesignerPanel
-                workspaceName={activeWorkspace.name}
-                workspaceFiles={activeWorkspaceFiles}
-                designCss={activeDesignCss}
-                designThemeSettings={designThemeSettings}
-                onDesignThemeSettingsChange={setDesignThemeSettings}
-                onWorkspaceFilesChange={(nextFiles) => setWorkspaceFilesByWorkspace((current) => ({
-                  ...current,
-                  [activeWorkspaceId]: nextFiles,
-                }))}
-              />
-            );
-          }
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {
               const existing = current[activeWorkspaceId] ?? [];
@@ -10688,7 +10364,7 @@ function AgentBrowserApp() {
               ...current,
               [activeWorkspaceId]: {
                 ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
-                editingFilePath: detectWorkspaceFileKind(nextFile.path) === 'agents' ? null : nextFile.path,
+                editingFilePath: nextFile.path,
               },
             }));
           };
@@ -10867,7 +10543,7 @@ function AgentBrowserApp() {
           return renderPanel(allPanels[0]);
         })()}
       </main>
-      {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('agents', showAddFileMenu)}>AGENTS.md</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('skill', showAddFileMenu)}>Skill</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button></div></div></div></div> : null}
+      {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('tool', showAddFileMenu)}>Tool</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('memory', showAddFileMenu)}>Memory</button></div></div></div></div> : null}
       {addSessionFsMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add to session filesystem"><div className="modal-card compact"><div className="modal-header"><h2>Add to {addSessionFsMenu.basePath}</h2><button type="button" className="icon-button" onClick={() => { setAddSessionFsMenu(null); setAddSessionFsName(''); }}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name</span><input aria-label="Entry name" value={addSessionFsName} onChange={(event) => setAddSessionFsName(event.target.value)} placeholder="e.g. notes.md" autoFocus onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, addSessionFsMenu.kind === 'folder'); } if (event.key === 'Escape') { setAddSessionFsMenu(null); setAddSessionFsName(''); } }} /></label><div className="add-file-buttons">{addSessionFsMenu.kind === 'file' ? <button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, false)}>Create file</button> : addSessionFsMenu.kind === 'folder' ? <button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, true)}>Create folder</button> : <><button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, false)}>File</button><button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, true)}>Folder</button></>}</div></div></div></div> : null}
       {showWorkspaces ? <WorkspaceSwitcherOverlay workspaces={root.children ?? []} activeWorkspaceId={activeWorkspaceId} onSwitch={switchWorkspace} onCreateWorkspace={createWorkspace} onRenameWorkspace={openRenameWorkspace} onClose={() => setShowWorkspaces(false)} /> : null}
       {showShortcuts ? <ShortcutOverlay onClose={() => setShowShortcuts(false)} /> : null}

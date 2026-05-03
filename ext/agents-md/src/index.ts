@@ -1,6 +1,4 @@
-import type { WorkspaceFile } from '../agents.js';
-import type { MemoryMessage } from '../memory.js';
-import type { HarnessPlugin, InferenceMessagesPayload } from '../plugins.js';
+import type { HarnessPlugin, InferenceMessagesPayload, MemoryMessage, WorkspaceFile } from 'harness-core';
 
 export interface AgentsMdHookPluginOptions {
   point?: string;

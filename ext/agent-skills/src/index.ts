@@ -1,6 +1,4 @@
-import type { WorkspaceFile } from '../agents.js';
-import type { MemoryMessage } from '../memory.js';
-import type { HarnessPlugin } from '../plugins.js';
+import type { HarnessPlugin, MemoryMessage, WorkspaceFile } from 'harness-core';
 
 export const WORKSPACE_AGENT_SKILL_DIRECTORIES = ['.agents/skill/', '.agents/skills/'] as const;
 export const WORKSPACE_SKILL_DIRECTORIES = WORKSPACE_AGENT_SKILL_DIRECTORIES;

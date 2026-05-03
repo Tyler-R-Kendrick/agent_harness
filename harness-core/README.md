@@ -15,17 +15,17 @@ Use the root entry point for stable core runtime APIs:
 import { createAgentRuntime } from 'harness-core';
 ```
 
-Product-specific instruction adapters are separate public subpath entry points:
+The package also defines the plugin manifest and marketplace manifest standards:
 
 ```ts
-import { createAgentSkillsPlugin } from 'harness-core/ext/agent-skills';
-import { createAgentsMdHookPlugin } from 'harness-core/ext/agents-md';
-import { createDesignMdPlugin } from 'harness-core/ext/design-md';
+import { validateHarnessPluginManifest } from 'harness-core';
 ```
 
 Deep imports from `harness-core/src/*` are internal implementation details.
-Consumers should use the root package export or one of the documented `ext/*`
-subpaths so internal module layout can change without breaking package users.
+Optional adapters such as AGENTS.md, agent-skills, and DESIGN.md ship as standalone plugins.
+Consumers should use the root package export for core APIs and load optional
+plugin packages through their manifests so internal module layout can change
+without breaking package users.
 
 The workflow surface formulates a serializable machine definition whose named
 actors cover the driver, voters, decider, executor, and completion checker.
@@ -127,17 +127,34 @@ const commands = createDefaultCommandRegistry({
 });
 ```
 
-## Extension adapters
+## Plugin standards
 
 The core package stays generic: workspace capability discovery recognizes
 tools, hooks, plugins, and memory files. Product-specific instruction formats
-live under `harness-core/ext`.
+are packaged outside `harness-core` as runtime-loaded plugin assets.
 
-- `harness-core/ext/agent-skills` maps `.agents/skills/*/SKILL.md` files into
-  executable tools plus a `/skill <name> [input]` command backed by a supplied
-  agent-skills client.
-- `harness-core/ext/agents-md` maps `AGENTS.md` files into a hook plugin that
-  prepends the active workspace instructions before model inference.
+Plugin projects use `agent-harness.plugin.json` at the package root. Marketplace
+catalogs use `agent-harness.marketplace.json` and point at plugin manifests
+instead of source files. A manifest declares the plugin id, version, entrypoint,
+capabilities, custom hook events, runtime assets, requested permissions, and
+compatibility range.
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.example",
+  "name": "Example plugin",
+  "version": "0.1.0",
+  "description": "Registers one optional harness feature.",
+  "entrypoint": { "module": "./src/index.ts", "export": "createExamplePlugin" },
+  "capabilities": [{ "kind": "hook", "id": "example" }],
+  "events": [{ "type": "plugin", "name": "agent-harness.ext.example.before-run" }]
+}
+```
+
+Custom events use the same hook-point mapping as built-in events. For example,
+`createPluginHookPoint('agent-harness.ext.example', 'before-run')` resolves to
+`plugin:agent-harness.ext.example.before-run`.
 
 ## Optional constrained decoding
 

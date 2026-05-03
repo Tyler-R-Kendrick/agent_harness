@@ -595,7 +595,7 @@ describe('workspaceTools', () => {
     }: {
       sessionId: string;
       basePath: string;
-      template: 'agents' | 'skill' | 'hook' | 'eval';
+      template: 'hook';
     }) => ({
       sessionId,
       path: `${basePath}/${template}.txt`,
@@ -754,7 +754,6 @@ describe('workspaceTools', () => {
       expect.objectContaining({ name: 'read_session', readOnlyHint: true }),
       expect.objectContaining({ name: 'create_session', readOnlyHint: false }),
       expect.objectContaining({ name: 'submit_session_message', readOnlyHint: false }),
-      expect.objectContaining({ name: 'change_session_agent', readOnlyHint: false }),
       expect.objectContaining({ name: 'change_session_model', readOnlyHint: false }),
       expect.objectContaining({ name: 'switch_session_mode', readOnlyHint: false }),
       expect.objectContaining({ name: 'change_session_tools', readOnlyHint: false }),
@@ -961,20 +960,6 @@ describe('workspaceTools', () => {
     });
 
     await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: {
-        sessionId: 'session-1',
-        agentId: 'docs/AGENTS.md',
-      },
-    }, {} as never)).resolves.toEqual(expect.objectContaining({
-      agentId: 'docs/AGENTS.md',
-    }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(3, {
-      sessionId: 'session-1',
-      agentId: 'docs/AGENTS.md',
-    });
-
-    await expect(webmcpTool.execute?.({
       tool: 'switch_session_mode',
       args: {
         sessionId: 'session-1',
@@ -983,7 +968,7 @@ describe('workspaceTools', () => {
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       mode: 'terminal',
     }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(4, {
+    expect(onWriteSession).toHaveBeenNthCalledWith(3, {
       sessionId: 'session-1',
       mode: 'terminal',
     });
@@ -998,7 +983,7 @@ describe('workspaceTools', () => {
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       toolIds: ['cli'],
     }));
-    expect(onWriteSession).toHaveBeenNthCalledWith(5, {
+    expect(onWriteSession).toHaveBeenNthCalledWith(4, {
       sessionId: 'session-1',
       toolIds: ['cli'],
     });

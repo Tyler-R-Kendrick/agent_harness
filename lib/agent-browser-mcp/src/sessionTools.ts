@@ -18,10 +18,6 @@ type SessionMessageInput = SessionInput & {
   message?: string;
 };
 
-type SessionAgentInput = SessionInput & {
-  agentId?: string;
-};
-
 type SessionModelInput = SessionInput & {
   provider?: string;
   modelId?: string;
@@ -114,30 +110,6 @@ export function registerSessionTools(modelContext: ModelContext, options: Regist
         }
 
         return applySessionMutation(workspaceName, session, { sessionId, message }, onWriteSession);
-      },
-    }, { signal });
-
-    modelContext.registerTool({
-      name: 'change_session_agent',
-      title: 'Change session agent',
-      description: `Change the active AGENTS.md selection for the active session in ${workspaceName}.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          sessionId: { type: 'string' },
-          agentId: { type: 'string' },
-        },
-        additionalProperties: false,
-      },
-      execute: async (input: object) => {
-        const typedInput = input as SessionAgentInput;
-        const sessionId = requireActiveSession(typedInput);
-        const agentId = typeof typedInput.agentId === 'string' ? typedInput.agentId.trim() : '';
-        if (!agentId) {
-          throw new TypeError('change_session_agent requires an agentId.');
-        }
-
-        return applySessionMutation(workspaceName, session, { sessionId, agentId }, onWriteSession);
       },
     }, { signal });
 

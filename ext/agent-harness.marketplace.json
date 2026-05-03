@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "name": "Agent Harness extension examples",
+  "publisher": {
+    "id": "agent-harness",
+    "name": "Agent Harness"
+  },
+  "plugins": [
+    {
+      "id": "agent-harness.ext.agent-skills",
+      "name": "Agent skills",
+      "version": "0.1.0",
+      "description": "Loads selected .agents/skills/*/SKILL.md files as optional tools and commands.",
+      "manifest": "./agent-skills/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./agent-skills"
+      },
+      "categories": ["workspace-context"],
+      "keywords": ["skills", "agent-skills"]
+    },
+    {
+      "id": "agent-harness.ext.agents-md",
+      "name": "AGENTS.md workspace instructions",
+      "version": "0.1.0",
+      "description": "Loads selected AGENTS.md files as optional prompt-context hooks.",
+      "manifest": "./agents-md/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./agents-md"
+      },
+      "categories": ["workspace-context"],
+      "keywords": ["agents-md", "instructions"]
+    },
+    {
+      "id": "agent-harness.ext.design-md",
+      "name": "DESIGN.md design tokens",
+      "version": "0.1.0",
+      "description": "Loads selected DESIGN.md files as optional design guidance and code-substitution assets.",
+      "manifest": "./design-md/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./design-md"
+      },
+      "categories": ["design", "workspace-context"],
+      "keywords": ["design-md", "tokens", "css"]
+    }
+  ]
+}

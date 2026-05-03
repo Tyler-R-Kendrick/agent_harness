@@ -593,15 +593,16 @@ describe('App', () => {
     expect(filesButton.querySelector('[data-icon="cpu"]')).not.toBeNull();
 
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-tools' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
 
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-pr' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'pre-task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hook' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
@@ -616,19 +617,20 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '//workspace' }));
     expect(screen.queryByRole('button', { name: '//.agents' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '.agents' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'AGENTS.md' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '.agents' }));
-    fireEvent.click(screen.getByRole('button', { name: 'skills' }));
-    expect(screen.getByText('review-pr')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'plugins' }));
+    expect(screen.getByText('review-tools')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'hooks' }));
+    expect(screen.getByText('pre-task.sh')).toBeInTheDocument();
   }, 90_000);
 
   it('registers unified filesystem WebMCP tools that a client can invoke', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
       'ws-research': [{
-        path: 'AGENTS.md',
-        content: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
+        path: '.agents/plugins/review-tools/agent-harness.plugin.json',
+        content: '{ "schemaVersion": 1, "id": "local.workspace.review-tools", "name": "Review tools", "version": "0.1.0", "description": "Review helpers.", "entrypoint": { "module": "./src/index.ts" }, "capabilities": [] }',
         updatedAt: '2026-04-18T00:00:00.000Z',
       }],
       'ws-build': [],
@@ -653,46 +655,35 @@ describe('App', () => {
     });
 
     expect(listedFiles).toEqual(expect.arrayContaining([
-      {
-        targetType: 'workspace-file',
-        kind: 'file',
-        label: 'AGENTS.md',
-        path: 'AGENTS.md',
-        uri: 'files://workspace/AGENTS.md',
-        updatedAt: '2026-04-18T00:00:00.000Z',
-      },
-      expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md', label: 'SKILL.md' }),
-      expect.objectContaining({ path: '.agents/skills/agent-browser/references/tool-map.md', label: 'tool-map.md' }),
-      expect.objectContaining({ path: '.agents/skills/create-agent/SKILL.md', label: 'SKILL.md' }),
-      expect.objectContaining({ path: '.agents/skills/create-agent/scripts/scaffold-agent.ts', label: 'scaffold-agent.ts' }),
-      expect.objectContaining({ path: '.agents/skills/create-agent-skill/SKILL.md', label: 'SKILL.md' }),
-      expect.objectContaining({ path: '.agents/skills/create-agent-eval/SKILL.md', label: 'SKILL.md' }),
-      expect.objectContaining({ path: '.agents/skills/create-agent-eval/evals/evals.json', label: 'evals.json' }),
-      expect.objectContaining({ path: '.agents/skills/memory/SKILL.md', label: 'SKILL.md' }),
+      expect.objectContaining({
+        path: '.agents/plugins/review-tools/agent-harness.plugin.json',
+        label: 'agent-harness.plugin.json',
+        uri: 'files://workspace/.agents/plugins/review-tools/agent-harness.plugin.json',
+      }),
       expect.objectContaining({ path: '.memory/MEMORY.md', label: 'MEMORY.md' }),
       expect.objectContaining({ path: '.memory/user.memory.md', label: 'user.memory.md' }),
       expect.objectContaining({ path: '.memory/project.memory.md', label: 'project.memory.md' }),
       expect.objectContaining({ path: '.memory/workspace.memory.md', label: 'workspace.memory.md' }),
       expect.objectContaining({ path: '.memory/session.memory.md', label: 'session.memory.md' }),
     ]));
-    expect((listedFiles as unknown[])).toHaveLength(31);
+    expect((listedFiles as unknown[])).toHaveLength(6);
 
     let fileProperties: unknown;
     await act(async () => {
       fileProperties = await webmcpTool.execute?.({
         tool: 'read_filesystem_properties',
-        args: { targetType: 'workspace-file', path: 'AGENTS.md' },
+        args: { targetType: 'workspace-file', path: '.agents/plugins/review-tools/agent-harness.plugin.json' },
       }, {} as never);
     });
 
     expect(fileProperties).toEqual(expect.objectContaining({
       targetType: 'workspace-file',
       kind: 'file',
-      label: 'AGENTS.md',
-      path: 'AGENTS.md',
-      uri: 'files://workspace/AGENTS.md',
+      label: 'agent-harness.plugin.json',
+      path: '.agents/plugins/review-tools/agent-harness.plugin.json',
+      uri: 'files://workspace/.agents/plugins/review-tools/agent-harness.plugin.json',
       updatedAt: '2026-04-18T00:00:00.000Z',
-      preview: '# Workspace agent instructions\n\n## Goals\n- Verify WebMCP file tools.',
+      preview: expect.stringContaining('Review helpers.'),
     }));
   });
 
@@ -717,7 +708,7 @@ describe('App', () => {
           action: 'create',
           targetType: 'workspace-file',
           kind: 'file',
-          path: 'AGENTS.md',
+          path: '.memory/project.memory.md',
           content: '# Original\nKeep this synced.',
         },
       }, {} as never);
@@ -728,15 +719,15 @@ describe('App', () => {
           targetType: 'session-fs-entry',
           kind: 'file',
           path: '//session-1-fs/workspace',
-          sourcePath: '//workspace/AGENTS.md',
+          sourcePath: '//workspace/.memory/project.memory.md',
         },
       }, {} as never) as { path: string; content: string };
       await Promise.resolve();
     });
 
     expect(createdReference).toEqual(expect.objectContaining({
-      path: '/workspace/AGENTS.md',
-      content: 'workspace://AGENTS.md',
+      path: '/workspace/project.memory.md',
+      content: 'workspace://.memory/project.memory.md',
     }));
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Files' })[0]);
@@ -750,7 +741,7 @@ describe('App', () => {
     expect(workspaceFolderRow).toBeDefined();
 
     const referenceRow = screen.getAllByRole('treeitem').find((row) =>
-      row.textContent?.includes('AGENTS.md') && row.querySelector('[data-icon="link"]'),
+      row.textContent?.includes('project.memory.md') && row.querySelector('[data-icon="link"]'),
     );
     expect(referenceRow).toBeDefined();
 
@@ -762,7 +753,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByLabelText('File editor')).toHaveTextContent('AGENTS.md');
+    expect(screen.getByLabelText('File editor')).toHaveTextContent('project.memory.md');
     expect(screen.getByLabelText('Workspace file content')).toHaveValue('# Original\nKeep this synced.');
 
     fireEvent.change(screen.getByLabelText('Workspace file content'), {
@@ -774,7 +765,7 @@ describe('App', () => {
     await act(async () => {
       updatedFile = await webmcpTool.execute?.({
         tool: 'read_filesystem_properties',
-        args: { targetType: 'workspace-file', path: 'AGENTS.md' },
+        args: { targetType: 'workspace-file', path: '.memory/project.memory.md' },
       }, {} as never) as { preview: string };
     });
 
@@ -789,12 +780,12 @@ describe('App', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, writable: true, configurable: true });
     window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
       'ws-research': [{
-        path: 'AGENTS.md',
-        content: '# Workspace agent instructions\n\n## Goals\n- Verify full WebMCP coverage.',
+        path: '.agents/plugins/review-tools/agent-harness.plugin.json',
+        content: '{ "schemaVersion": 1, "id": "local.workspace.review-tools", "name": "Review tools", "version": "0.1.0", "description": "Review helpers.", "entrypoint": { "module": "./src/index.ts" }, "capabilities": [] }',
         updatedAt: '2026-04-18T00:00:00.000Z',
       }, {
-        path: 'docs/AGENTS.md',
-        content: '# Docs agent instructions\n\n## Goals\n- Focus on docs capability flows.',
+        path: '.agents/hooks/pre-task.sh',
+        content: '#!/usr/bin/env bash\necho pre-task',
         updatedAt: '2026-04-18T00:05:00.000Z',
       }],
       'ws-build': [],
@@ -1022,20 +1013,6 @@ describe('App', () => {
       .map((descriptor) => descriptor.id);
     expect(toolIdsToDeselect).toEqual([nonCliToolId]);
 
-    let updatedSessionAgentState: {
-      agentId: string | null;
-    } | undefined;
-    await act(async () => {
-      updatedSessionAgentState = await webmcpTool.execute?.({
-        tool: 'change_session_agent',
-        args: { sessionId: sessionOne!.id, agentId: 'docs/AGENTS.md' },
-      }, {} as never) as {
-        agentId: string | null;
-      };
-      await Promise.resolve();
-    });
-    expect(updatedSessionAgentState).toEqual(expect.objectContaining({ agentId: 'docs/AGENTS.md' }));
-
     let updatedSessionToolsState: {
       toolIds: string[];
     } | undefined;
@@ -1052,7 +1029,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Chat mode' }));
 
-    expect(screen.getByRole('combobox', { name: 'Session AGENTS.md' })).toHaveValue('docs/AGENTS.md');
+    expect(screen.queryByRole('combobox', { name: 'Session AGENTS.md' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Configure tools/i })).toHaveAttribute('aria-label', expect.stringMatching(/1 of \d+ selected/));
 
     let createdSessionFile: { sessionId: string; path: string; kind: string; content: string } | undefined;
@@ -1147,20 +1124,17 @@ describe('App', () => {
     expect(worktreeItems).toEqual(expect.arrayContaining([
       expect.objectContaining({ itemType: 'browser-page', label: 'Transformers.js' }),
       expect.objectContaining({ itemType: 'session', label: 'Session 1' }),
-      expect.objectContaining({ itemType: 'workspace-file', label: 'AGENTS.md' }),
       expect.objectContaining({ itemType: 'clipboard', label: 'Clipboard' }),
     ]));
 
     const browserItem = worktreeItems.find((item) => item.itemType === 'browser-page' && item.label === 'Transformers.js');
     const createdBrowserItem = worktreeItems.find((item) => item.itemType === 'browser-page' && item.label === 'MCP Tab');
     const sessionItem = worktreeItems.find((item) => item.itemType === 'session' && item.label === 'Session 1');
-    const fileItem = worktreeItems.find((item) => item.itemType === 'workspace-file' && item.label === 'AGENTS.md');
     const vfsItem = worktreeItems.find((item) => item.itemType === 'session-fs-entry');
     const clipboardItem = worktreeItems.find((item) => item.itemType === 'clipboard');
     expect(browserItem).toBeDefined();
     expect(createdBrowserItem).toBeDefined();
     expect(sessionItem).toBeDefined();
-    expect(fileItem).toBeDefined();
     expect(vfsItem).toBeDefined();
     expect(clipboardItem).toBeDefined();
 
@@ -1388,21 +1362,26 @@ describe('App', () => {
     await act(async () => {
       movedWorkspaceFile = await webmcpTool.execute?.({
         tool: 'update_filesystem_entry',
-        args: { action: 'move', targetType: 'workspace-file', path: 'AGENTS.md', nextPath: 'capabilities/AGENTS.main.md' },
+        args: {
+          action: 'move',
+          targetType: 'workspace-file',
+          path: '.agents/plugins/review-tools/agent-harness.plugin.json',
+          nextPath: '.agents/plugins/review-tools-copy/agent-harness.plugin.json',
+        },
       }, {} as never) as { path: string; content: string };
     });
-    expect(movedWorkspaceFile).toEqual(expect.objectContaining({ path: 'capabilities/AGENTS.main.md' }));
+    expect(movedWorkspaceFile).toEqual(expect.objectContaining({ path: '.agents/plugins/review-tools-copy/agent-harness.plugin.json' }));
 
     let movedWorkspaceFileContent: { path: string; preview: string } | undefined;
     await act(async () => {
       movedWorkspaceFileContent = await webmcpTool.execute?.({
         tool: 'read_filesystem_properties',
-        args: { targetType: 'workspace-file', path: 'capabilities/AGENTS.main.md' },
+        args: { targetType: 'workspace-file', path: '.agents/plugins/review-tools-copy/agent-harness.plugin.json' },
       }, {} as never) as { path: string; preview: string };
     });
     expect(movedWorkspaceFileContent).toEqual(expect.objectContaining({
-      path: 'capabilities/AGENTS.main.md',
-      preview: '# Workspace agent instructions\n\n## Goals\n- Verify full WebMCP coverage.',
+      path: '.agents/plugins/review-tools-copy/agent-harness.plugin.json',
+      preview: expect.stringContaining('Review helpers.'),
     }));
 
     let duplicatedWorkspaceFile: { path: string } | undefined;
@@ -1413,12 +1392,12 @@ describe('App', () => {
           action: 'duplicate',
           targetType: 'workspace-file',
           kind: 'file',
-          path: 'copies/AGENTS.copy.md',
-          sourcePath: 'capabilities/AGENTS.main.md',
+          path: '.agents/plugins/review-tools-duplicate/agent-harness.plugin.json',
+          sourcePath: '.agents/plugins/review-tools-copy/agent-harness.plugin.json',
         },
       }, {} as never) as { path: string };
     });
-    expect(duplicatedWorkspaceFile).toEqual(expect.objectContaining({ path: 'copies/AGENTS.copy.md' }));
+    expect(duplicatedWorkspaceFile).toEqual(expect.objectContaining({ path: '.agents/plugins/review-tools-duplicate/agent-harness.plugin.json' }));
 
     let symlinkedWorkspaceFile: { path: string } | undefined;
     await act(async () => {
@@ -1428,23 +1407,23 @@ describe('App', () => {
           action: 'symlink',
           targetType: 'workspace-file',
           kind: 'file',
-          path: 'links/AGENTS.link.md',
-          sourcePath: 'capabilities/AGENTS.main.md',
+          path: '.agents/plugins/review-tools-link/agent-harness.plugin.json',
+          sourcePath: '.agents/plugins/review-tools-copy/agent-harness.plugin.json',
         },
       }, {} as never) as { path: string };
     });
-    expect(symlinkedWorkspaceFile).toEqual(expect.objectContaining({ path: 'links/AGENTS.link.md' }));
+    expect(symlinkedWorkspaceFile).toEqual(expect.objectContaining({ path: '.agents/plugins/review-tools-link/agent-harness.plugin.json' }));
 
     let symlinkedWorkspaceFileContent: { path: string; preview: string } | undefined;
     await act(async () => {
       symlinkedWorkspaceFileContent = await webmcpTool.execute?.({
         tool: 'read_filesystem_properties',
-        args: { targetType: 'workspace-file', path: 'links/AGENTS.link.md' },
+        args: { targetType: 'workspace-file', path: '.agents/plugins/review-tools-link/agent-harness.plugin.json' },
       }, {} as never) as { path: string; preview: string };
     });
     expect(symlinkedWorkspaceFileContent).toEqual(expect.objectContaining({
-      path: 'links/AGENTS.link.md',
-      preview: expect.stringContaining('capabilities/AGENTS.main.md'),
+      path: '.agents/plugins/review-tools-link/agent-harness.plugin.json',
+      preview: expect.stringContaining('.agents/plugins/review-tools-copy/agent-harness.plugin.json'),
     }));
   }, 90_000);
 
@@ -1473,7 +1452,7 @@ describe('App', () => {
     expect(screen.getByLabelText('History')).toBeInTheDocument();
   });
 
-  it('opens the Designer workspace from navigation and generates DESIGN.md files', async () => {
+  it('does not include the DESIGN.md Designer workspace by default', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -1481,23 +1460,8 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByLabelText('Designer'));
-    expect(screen.getByRole('heading', { name: 'Claude Design' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Design systems' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Set up design system' }));
-    fireEvent.change(screen.getByLabelText('Company name and blurb'), {
-      target: { value: 'Agent Browser Design System for browser-native design agents' },
-    });
-    fireEvent.change(screen.getByLabelText('Link code on GitHub'), {
-      target: { value: 'https://github.com/example/agent-harness' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to generation' }));
-
-    expect(screen.getByText('Creating your design system...')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Review draft design system' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Design Files' }));
-    expect(screen.getByText('colors_and_type.css')).toBeInTheDocument();
-    expect(screen.getByText('manifest.json')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Designer')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Claude Design' })).not.toBeInTheDocument();
   });
 
   it('renders settings as a collapsible settings surface', async () => {
@@ -1536,7 +1500,7 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Refresh Cursor status' })).not.toBeInTheDocument();
   });
 
-  it('applies a DESIGN.md theme to the Agent Browser shell from settings', async () => {
+  it('does not apply DESIGN.md themes from settings by default', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
       'ws-research': [{
@@ -1578,16 +1542,11 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    fireEvent.change(screen.getByLabelText('Claude Design theme'), { target: { value: 'claude-light' } });
-    fireEvent.click(screen.getByLabelText('Apply Claude Design theme to Agent Browser'));
-    await flushAsyncUpdates(2);
 
-    expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe('#f8f6f2');
-    expect(document.documentElement.style.getPropertyValue('--panel-bg')).toBe('#ffffff');
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#d97757');
-    const generatedCss = screen.getByLabelText('Generated Claude Design CSS') as HTMLTextAreaElement;
-    expect(generatedCss.value).toContain('--app-bg: var(--design-color-canvas);');
-    expect(generatedCss.value).toContain('[data-design-widget="button-primary"]');
+    expect(screen.queryByLabelText('Claude Design theme')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Apply Claude Design theme to Agent Browser')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Generated Claude Design CSS')).not.toBeInTheDocument();
+    expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe('');
   });
 
   it('manages secrets and redaction settings from the settings panel without revealing values', async () => {
@@ -1820,19 +1779,19 @@ styles:
     fireEvent.click(screen.getByLabelText('Add file to Research'));
     expect(screen.getByText('Add file')).toBeInTheDocument();
 
-    // Add AGENTS.md
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-tools' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('File editor')).toBeInTheDocument();
 
-    // Open add file modal again, name it, and add a skill
+    // Open add file modal again, name it, and add a hook
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-pr' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'pre-task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hook' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
@@ -1841,14 +1800,14 @@ styles:
     await ensureFilesExpanded();
     await expandWorkspaceDrive();
     await clickTreeButton('.agents');
-    await clickTreeButton('skills');
+    await clickTreeButton('hooks');
 
-    expect(screen.getByText('review-pr')).toBeInTheDocument();
+    expect(screen.getByText('pre-task.sh')).toBeInTheDocument();
 
     const storedFiles = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, Array<{ path: string }>>;
     expect(storedFiles['ws-research']).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: 'AGENTS.md' }),
-      expect.objectContaining({ path: '.agents/skills/review-pr/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/plugins/review-tools/agent-harness.plugin.json' }),
+      expect.objectContaining({ path: '.agents/hooks/pre-task.sh' }),
     ]));
   });
 
@@ -1865,13 +1824,14 @@ styles:
 
     // Click the "+" button on the Research workspace to open add-file modal
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-tools' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('File editor')).toBeInTheDocument();
     expect(setItemSpy).toHaveBeenCalled();
     const warningToast = document.querySelector('.toast.warning');
     expect(warningToast).not.toBeNull();
@@ -1897,16 +1857,17 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    // Add AGENTS.md via the tree "+" button
+    // Add a memory file via the tree "+" button
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'project' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Memory' }));
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
 
     // Edit the file content in the file editor (now in the content area)
-    fireEvent.change(screen.getByLabelText('Workspace file content'), { target: { value: '# Rules\nAlways run workspace checks first.' } });
+    fireEvent.change(screen.getByLabelText('Workspace file content'), { target: { value: '# Project memory\n\n- Always run workspace checks first.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save file' }));
 
     expect(screen.queryByLabelText('Workspace file path')).not.toBeInTheDocument();
@@ -2478,7 +2439,7 @@ styles:
     expect(screen.getByLabelText('Chat input')).toHaveValue('Search the web for: browser sandbox constraints');
   });
 
-  it('autocompletes loaded session skills in the chat composer', async () => {
+  it('does not autocomplete agent skills in the chat composer by default', async () => {
     vi.useFakeTimers();
     render(<App />);
 
@@ -2490,14 +2451,8 @@ styles:
     const chatInput = screen.getByLabelText('Chat input');
     fireEvent.change(chatInput, { target: { value: 'Use @create' } });
 
-    expect(screen.getByRole('listbox', { name: 'Skill suggestions' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'create-agent' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'create-agent-eval' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'create-agent-skill' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('option', { name: 'create-agent-skill' }));
-
-    expect(screen.getByLabelText('Chat input')).toHaveValue('Use @create-agent-skill ');
+    expect(screen.queryByRole('listbox', { name: 'Skill suggestions' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Chat input')).toHaveValue('Use @create');
     expect(screen.queryByRole('listbox', { name: 'Skill suggestions' })).not.toBeInTheDocument();
   });
 
@@ -5037,10 +4992,10 @@ styles:
     fireEvent.click(screen.getByText('Hugging Face'));
     fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
-    // Add a skill file to trigger the file editor
+    // Add a plugin manifest to trigger the file editor
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-skill' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-plugin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
 
     await act(async () => { vi.advanceTimersByTime(150); });
 
@@ -5058,10 +5013,10 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Add a skill file to open the file editor
+    // Add a plugin manifest to open the file editor
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-skill' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-plugin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
 
     await act(async () => { vi.advanceTimersByTime(150); });
 
@@ -5080,7 +5035,8 @@ styles:
     await act(async () => { vi.advanceTimersByTime(350); });
 
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-plugin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
 
     await act(async () => { vi.advanceTimersByTime(150); });
 
@@ -5106,7 +5062,8 @@ styles:
 
     // Step 2: open a file pane
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-plugin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
     await act(async () => { vi.advanceTimersByTime(150); });
     expect(screen.getByLabelText('File editor')).toBeInTheDocument();
     expect(screen.getByLabelText('Terminal')).toBeInTheDocument();
@@ -5127,7 +5084,8 @@ styles:
 
     // Open a file pane
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'my-plugin' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
     await act(async () => { vi.advanceTimersByTime(150); });
     expect(screen.getByLabelText('File editor')).toBeInTheDocument();
 
@@ -5216,10 +5174,10 @@ styles:
     expect(screen.getByRole('menuitem', { name: 'Add File' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Add Folder' })).toBeInTheDocument();
     expect(document.querySelector('.ctx-menu-sep')).not.toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Add AGENTS.md' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add agent-skill' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add agent-hook' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add agent-eval' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add hook' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add AGENTS.md' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add agent-skill' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add agent-eval' })).not.toBeInTheDocument();
   });
 
   it('context menu "Add File" opens the session FS modal pre-set to file mode', async () => {
@@ -5264,7 +5222,7 @@ styles:
     expect(screen.queryByRole('button', { name: 'Folder' })).not.toBeInTheDocument();
   });
 
-  it('context menu "Add AGENTS.md" scaffolds the file into the session FS and shows a success toast', async () => {
+  it('context menu "Add hook" scaffolds a hook file into the session FS and shows a success toast', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -5277,14 +5235,14 @@ styles:
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Add AGENTS.md' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add hook' }));
       await Promise.resolve();
     });
 
-    expect(screen.getByText('Created /workspace/AGENTS.md')).toBeInTheDocument();
+    expect(screen.getByText('Created /workspace/.agents/hooks/pre-tool.sh')).toBeInTheDocument();
   });
 
-  it('context menu "Add agent-skill" scaffolds a SKILL.md file and shows a success toast', async () => {
+  it('does not show built-in AGENTS.md or agent-skill scaffolders in the session FS menu', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -5296,12 +5254,9 @@ styles:
     fireEvent.contextMenu(treeRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Add agent-skill' }));
-      await Promise.resolve();
-    });
-
-    expect(screen.getByText(/Created.*SKILL\.md/)).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add AGENTS.md' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add agent-skill' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add agent-eval' })).not.toBeInTheDocument();
   });
 
   it('pressing Escape closes the context menu', async () => {
@@ -5375,9 +5330,9 @@ styles:
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add Folder' }));
 
-    // ArrowDown skips the separator to the third actionable item
+    // ArrowDown skips the separator to the hook scaffolder
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add AGENTS.md' }));
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add hook' }));
 
     // ArrowUp returns to previous item
     fireEvent.keyDown(menu, { key: 'ArrowUp' });
@@ -5397,7 +5352,7 @@ styles:
     fireEvent.click(screen.getByRole('menuitem', { name: 'New' }));
 
     const menu = screen.getByRole('menu', { name: 'Context menu' });
-    screen.getByRole('menuitem', { name: 'Add agent-eval' }).focus();
+    screen.getByRole('menuitem', { name: 'Add hook' }).focus();
 
     fireEvent.keyDown(menu, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Add File' }));
@@ -5998,10 +5953,10 @@ styles:
 
     expect(screen.getByRole('menuitem', { name: 'Add File' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Add Folder' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add AGENTS.md' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add agent-skill' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add agent-hook' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Add agent-eval' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add hook' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add AGENTS.md' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add agent-skill' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Add agent-eval' })).not.toBeInTheDocument();
   });
 
   it('clicking the Back button in the sub-menu returns to the main toolbar view', async () => {
@@ -6262,7 +6217,7 @@ styles:
 
   async function expandWorkspaceDrive() {
     await ensureFilesExpanded();
-    if (!screen.queryByRole('button', { name: '.agents' }) && !screen.queryByRole('button', { name: 'AGENTS.md' })) {
+    if (!screen.queryByRole('button', { name: '.agents' }) && !screen.queryByRole('button', { name: '.memory' })) {
       await clickTreeButton('//workspace');
     }
   }
@@ -6275,36 +6230,39 @@ styles:
     fireEvent.click(screen.getByLabelText('Add file to Research'));
     await act(async () => { await Promise.resolve(); });
     fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: skillName } });
-    fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
     await expandWorkspaceDrive();
     await clickTreeButton('.agents');
-    await clickTreeButton('skills');
+    await clickTreeButton('plugins');
     await clickTreeButton(skillName);
 
-    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('SKILL.md'));
-    if (!treeitem) throw new Error('SKILL.md treeitem not found');
+    const treeitem = screen.getAllByRole('treeitem').find((el) => el.textContent?.includes('agent-harness.plugin.json'));
+    if (!treeitem) throw new Error('plugin manifest treeitem not found');
     return treeitem;
   }
 
-  /** Helper: add AGENTS.md to the Research workspace and return its treeitem element. */
+  /** Helper: add a plugin manifest to the Research workspace and return its treeitem element. */
   async function addAgentsMdAndGetTreeItem() {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
     fireEvent.click(screen.getByLabelText('Add file to Research'));
-    fireEvent.click(screen.getByRole('button', { name: 'AGENTS.md' }));
+    fireEvent.change(screen.getByLabelText('Capability name'), { target: { value: 'review-tools' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Plugin' }));
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
     await expandWorkspaceDrive();
+    await clickTreeButton('.agents');
+    await clickTreeButton('plugins');
+    await clickTreeButton('review-tools');
 
-    // AGENTS.md appears both in the add-file modal and in the tree; pick the treeitem one
-    const treeitem = screen.getAllByText('AGENTS.md')
+    const treeitem = screen.getAllByText('agent-harness.plugin.json')
       .map((el) => el.closest('[role="treeitem"]'))
       .find((el): el is Element => el !== null);
-    if (!treeitem) throw new Error('AGENTS.md treeitem not found');
+    if (!treeitem) throw new Error('plugin manifest treeitem not found');
     return treeitem;
   }
 

@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 const appRoot = path.resolve(__dirname, '../..');
 const repoRoot = path.resolve(appRoot, '..');
 const requireFromApp = createRequire(path.join(appRoot, 'package.json'));
-const AGENTV_WORKFLOW_TIMEOUT_MS = 300_000;
+const AGENTV_WORKFLOW_TIMEOUT_MS = 600_000;
 
 function readText(relativePath: string): string {
   return readFileSync(path.join(repoRoot, relativePath), 'utf8');

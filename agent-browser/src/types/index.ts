@@ -349,7 +349,7 @@ export interface BrowserNavHistory {
   currentIndex: number;
 }
 
-export type WorkspaceFileKind = 'agents' | 'skill' | 'tool' | 'plugin' | 'hook' | 'memory';
+export type WorkspaceFileKind = 'tool' | 'plugin' | 'hook' | 'memory';
 
 export interface IntegrationSurface {
   id: string;

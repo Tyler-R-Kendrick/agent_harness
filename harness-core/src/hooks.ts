@@ -1,7 +1,7 @@
 export type HarnessHookKind = 'deterministic' | 'inference';
 export type HarnessHookMode = 'middleware' | 'pipe';
 export type HarnessHookFormat = 'code' | 'semantic';
-export type HarnessHookEventType = 'llm' | 'agent' | 'harness' | 'system';
+export type HarnessHookEventType = 'llm' | 'agent' | 'harness' | 'system' | 'plugin';
 export type HarnessHookPoint = string;
 
 export interface HarnessHookEventDescriptor {

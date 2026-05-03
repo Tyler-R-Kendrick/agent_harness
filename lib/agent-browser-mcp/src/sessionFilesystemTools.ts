@@ -354,13 +354,13 @@ export function registerSessionFilesystemTools(modelContext: ModelContext, optio
     modelContext.registerTool({
       name: 'scaffold_session_filesystem_entry',
       title: 'Scaffold session filesystem entry',
-      description: 'Scaffold a built-in template into a mounted session filesystem.',
+      description: 'Scaffold a built-in hook template into a mounted session filesystem.',
       inputSchema: {
         type: 'object',
         properties: {
           sessionId: { type: 'string' },
           basePath: { type: 'string' },
-          template: { type: 'string', enum: ['agents', 'skill', 'hook', 'eval'] },
+          template: { type: 'string', enum: ['hook'] },
         },
         required: ['sessionId', 'basePath', 'template'],
         additionalProperties: false,

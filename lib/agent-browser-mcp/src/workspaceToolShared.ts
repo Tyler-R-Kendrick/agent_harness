@@ -42,7 +42,7 @@ export interface SessionFsRenameInput extends SessionFsPathInput {
 export interface SessionFsScaffoldInput {
   sessionId?: string;
   basePath?: string;
-  template?: 'agents' | 'skill' | 'hook' | 'eval';
+  template?: 'hook';
 }
 
 export interface WorktreeItemInput {
@@ -560,7 +560,7 @@ export function normalizeSessionFsMutationResult(
     kind?: 'file' | 'folder';
     content?: string;
     previousPath?: string;
-    template?: 'agents' | 'skill' | 'hook' | 'eval';
+    template?: 'hook';
   },
   result: unknown,
 ) {

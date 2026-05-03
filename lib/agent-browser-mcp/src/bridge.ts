@@ -34,7 +34,6 @@ const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGro
   read_session: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
   list_session_tools: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
   submit_session_message: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
-  change_session_agent: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
   change_session_model: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
   switch_session_mode: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },
   change_session_tools: { subGroup: 'sessions-worktree-mcp', subGroupLabel: 'Sessions' },

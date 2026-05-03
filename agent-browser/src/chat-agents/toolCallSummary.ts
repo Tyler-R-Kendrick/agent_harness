@@ -167,7 +167,6 @@ function summarizeWebMcpCall(name: string, args: unknown): string {
   if (name === 'read_session') return 'Read session';
   if (name === 'list_session_tools') return 'Listed session tools';
   if (name === 'submit_session_message') return 'Submitted message to session';
-  if (name === 'change_session_agent') return 'Changed session agent';
   if (name === 'change_session_model') return 'Changed session model';
   if (name === 'switch_session_mode') return 'Switched session mode';
   if (name === 'change_session_tools') return 'Changed session tools';

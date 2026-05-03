@@ -27,9 +27,6 @@ describe('harness-core package boundary', () => {
     expect(packageJson.types).toBe('./src/index.ts');
     expect(packageJson.exports).toEqual({
       '.': './src/index.ts',
-      './ext/agent-skills': './src/ext/agent-skills.ts',
-      './ext/agents-md': './src/ext/agents-md.ts',
-      './ext/design-md': './src/ext/design-md.ts',
     });
   });
 
@@ -48,9 +45,9 @@ describe('harness-core package boundary', () => {
 
     expect(readme).toContain('## Package boundary');
     expect(readme).toContain("import { createAgentRuntime } from 'harness-core';");
-    expect(readme).toContain("import { createAgentSkillsPlugin } from 'harness-core/ext/agent-skills';");
-    expect(readme).toContain("import { createAgentsMdHookPlugin } from 'harness-core/ext/agents-md';");
-    expect(readme).toContain("import { createDesignMdPlugin } from 'harness-core/ext/design-md';");
+    expect(readme).toContain("import { validateHarnessPluginManifest } from 'harness-core';");
+    expect(readme).toContain('Optional adapters such as AGENTS.md, agent-skills, and DESIGN.md ship as standalone plugins.');
+    expect(readme).not.toContain('harness-core/ext/');
     expect(readme).toContain('Deep imports from `harness-core/src/*` are internal implementation details.');
   });
 });

@@ -166,15 +166,13 @@ describe('streamAgentChat', () => {
       workspaceName: 'Research',
       workspacePromptContext: [
         'Workspace capability files loaded from browser storage:',
-        'Active AGENTS.md:',
-        '- AGENTS.md',
-        '# Workspace rules',
-        'Use TDD and verify changes.',
+        'Workspace memory:',
+        '- [project] Use TDD and verify changes.',
         '',
-        'Skills:',
-        '- memory (.agents/skills/memory/SKILL.md): Recall and store durable workspace memory.',
+        'Tools: none',
         '',
-        'Plugins: none',
+        'Plugins:',
+        '- review-tools (.agents/plugins/review-tools/agent-harness.plugin.json)',
         '',
         'Hooks:',
         '- pre-task.sh (.agents/hooks/pre-task.sh)',
@@ -182,7 +180,8 @@ describe('streamAgentChat', () => {
     }, { onToken, onDone });
 
     expect(onToken).toHaveBeenCalledWith(expect.stringContaining('active workspace agent for Research'));
-    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('memory (.agents/skills/memory/SKILL.md)'));
+    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('review-tools (.agents/plugins/review-tools/agent-harness.plugin.json)'));
+    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('pre-task.sh (.agents/hooks/pre-task.sh)'));
     expect(onDone).toHaveBeenCalledWith(expect.stringContaining('Limitations:'));
     expect(onDone).toHaveBeenCalledWith(expect.stringContaining('Best for a human:'));
   });

@@ -3,11 +3,12 @@ import {
   decodeConstrainedOutput,
   type CoreInferenceClient,
   type CoreMessage,
+  type HarnessPlugin,
+  type HarnessToolContext,
+  type InferenceMessagesPayload,
   type JsonSchema,
-} from '../constrainedDecoding.js';
-import type { MemoryMessage } from '../memory.js';
-import type { InferenceMessagesPayload, HarnessPlugin } from '../plugins.js';
-import type { HarnessToolContext } from '../tools.js';
+  type MemoryMessage,
+} from 'harness-core';
 
 export interface DesignMdDocument {
   path: string;
