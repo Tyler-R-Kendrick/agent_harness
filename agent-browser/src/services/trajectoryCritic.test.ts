@@ -42,6 +42,23 @@ describe('trajectoryCritic', () => {
     expect(result.reasons.some((reason) => reason.kind === 'confidence')).toBe(true);
   });
 
+  it('treats zero-failure tool output as a useful result instead of a tool error', () => {
+    const result = evaluateTrajectory({
+      entries: [
+        entry({
+          id: 'tool',
+          kind: 'tool-result',
+          summary: 'Tests passed',
+          transcript: '20 passed, 0 failed, 0 errors',
+        }),
+      ],
+    });
+
+    expect(result.action).toBe('continue');
+    expect(result.reasons.map((reason) => reason.code)).toContain('useful-tool-result');
+    expect(result.reasons.map((reason) => reason.code)).not.toContain('tool-error');
+  });
+
   it('recommends retry for recoverable tool errors', () => {
     const result = evaluateTrajectory({
       entries: [
