@@ -1,57 +1,63 @@
 # Summary Diff For Linear Feature Generation
 
 Updated: 2026-05-02
-Baseline: `.features/Summary.md` updated from the 2026-05-01 eighteen-harness corpus.
-Diff type: additive update after OpenHands research
+Baseline: `.features/Summary.md` updated from the 2026-05-02 nineteen-harness corpus.
+Diff type: additive update after Devin research
 
 ## Net new normalized features
 
-### Added: Verification-native critic stacks and adaptive retries
-- Why now: OpenHands is explicitly moving verification into the run itself with a fast trajectory critic, which is a stronger answer to agent drift than waiting for only end-of-run tests or human review.
+### Added: Review-native pull request understanding
+- Why now: Devin is explicitly shipping a dedicated review product that groups and explains a PR after the code has already been generated, which is a stronger answer to reviewer overload than leaving humans alone with raw diffs.
 - Research delta:
-  - the March 5, 2026 OpenHands verification post describes a layered verification stack for coding agents
-  - the first layer is a trajectory-level verifier implemented as a small, fast critic model
-  - OpenHands says the critic can decide whether to continue, stop, refine, or choose among multiple attempts
-  - the same post says critics trained only on benchmark-style traces translated poorly to production, so OpenHands trains on production signals such as PR merge and code survival
+  - the Devin Review docs describe a dedicated review workflow instead of a generic chat follow-up
+  - Devin says the review surface groups related changes and summarizes intent so reviewers can reason about a patch at a higher level than line-by-line diff noise
+  - the March 6, 2026 release notes call out improved copy or move detection and richer PR context, which shows active investment in review quality rather than only generation quality
 
-### Added: Benchmark-informed model routing and task-aware model choice
-- Why now: OpenHands is turning model selection into a product surface with the OpenHands Index instead of leaving users to guess which model should plan, implement, or review a task.
+### Added: Repository-grounded wiki generation and architecture views
+- Why now: Devin DeepWiki turns codebase understanding into a durable product artifact with repository maps and architecture diagrams instead of recomputing orientation from scratch in every session.
 - Research delta:
-  - the January 29, 2026 OpenHands Index launch frames the benchmark as broad-coverage and continually updated
-  - it scores models across issue resolution, greenfield apps, frontend work, software testing, and information gathering
-  - OpenHands explicitly argues that model-agnostic harnesses should switch models across planning, implementation, and review/testing depending on priorities and cost/runtime constraints
+  - the DeepWiki docs present a standing repository wiki rather than a one-off generated report
+  - Devin exposes repository maps and architecture diagrams as part of the same code-grounded knowledge surface
+  - the product positions the wiki as navigable alongside active coding work, which makes repo understanding reusable across sessions and across users
 
-### Expanded: Scheduled automations and background execution
-- Why now: OpenHands is making automation runs look like first-class conversations rather than detached cron jobs.
+### Expanded: Parallel agent orchestration
+- Why now: Devin's current docs no longer treat multi-agent work as an accidental workaround; managed child sessions and Advanced Mode make it a formal orchestration pattern.
 - Research delta:
-  - OpenHands Automations beta runs full conversations on a schedule in fresh sandboxes
-  - each run can reuse configured integrations and stored secrets, then remain available for later review or follow-up continuation
-  - the docs also surface plugin-based automations and event-based automations alongside scheduled ones
+  - the January 22, 2026 release introduced child sessions plus session-origin tracking
+  - the February 3, 2026 release added structured output for child sessions
+  - the Advanced Mode docs explicitly describe orchestrating managed Devins in parallel
 
-### Expanded: Git/PR-native execution
-- Why now: OpenHands is showing a strong repo-native feedback loop where issue labels and review comments directly drive the next agent attempt.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: Devin is maturing workflow packaging beyond reusable prompt text through playbook macros, version history, and community distribution.
 - Research delta:
-  - the GitHub Action docs use `fix-me` labels and `@openhands-agent` comments as trigger surfaces
-  - follow-up can happen through top-level comments, inline review comments, or PR thread feedback
-  - OpenHands distinguishes full-issue resolution from narrower comment-scoped requests
+  - the Playbooks docs frame workflows as reusable team assets
+  - the March 20, 2026 release added playbook macros
+  - the April 18, 2026 release added playbook version history
 
-### Added: Add trajectory critics and adaptive retry control
-- Why now: `agent-browser` still relies heavily on downstream validation and human inspection, while OpenHands shows a viable path for cheap in-run scoring that can stop weak attempts earlier.
+### Expanded: External tool connectivity and actionability
+- Why now: Devin is moving beyond raw MCP compatibility toward a real install and deployment surface.
+- Research delta:
+  - the April 7, 2026 release added an MCP marketplace
+  - the April 18, 2026 release added custom transports for remote MCP servers
+  - Devin's API and ACP work reinforce that external clients can orchestrate sessions programmatically
+
+### Added: Build review-native PR understanding for browser-agent changes
+- Why now: `agent-browser` can produce diffs and evidence, but it still lacks a dedicated review surface that helps another human or agent understand the patch at the semantic level before approving or requesting follow-up work.
 - Linear issue title:
-  - `Add trajectory critics and adaptive retry control`
+  - `Build review-native PR understanding for browser-agent changes`
 - Suggested problem statement:
-  - `agent-browser` can run tools, tests, and browser actions, but it still lacks a lightweight runtime critic that scores the trajectory itself and uses that score to decide whether to continue, stop, retry, branch, or request human intervention before a low-confidence run burns more time and tokens.
+  - `agent-browser` can generate diffs, test logs, and browser evidence, but reviewers still have to reconstruct the narrative and risk profile from low-level artifacts instead of getting a structured, review-native understanding of what changed and why.
 - One-shot instruction for an LLM:
-  - Implement a trajectory-critic layer for `agent-browser` that scores conversation and tool traces during execution, records structured reasons for confidence or concern, and uses configurable thresholds to continue, stop, retry, branch into an alternative attempt, or escalate for human review.
+  - Implement a review-native PR understanding surface for `agent-browser` that groups related changes, summarizes intent, highlights likely risks, links validation and browser evidence, and supports comment-driven follow-up runs or reviewer requests without forcing users back into raw diff-only review.
 
-### Added: Add benchmark-informed model routing for browser-agent tasks
-- Why now: `agent-browser` has growing multi-model pressure, but it still lacks a first-class way to recommend or route models differently for planning, execution, verification, and research.
+### Added: Generate repository-grounded wiki and architecture views for browser-agent projects
+- Why now: `agent-browser` still re-derives too much repo orientation inside individual sessions, while Devin shows the value of a standing, refreshable codebase wiki that both people and agents can cite during work.
 - Linear issue title:
-  - `Add benchmark-informed model routing for browser-agent tasks`
+  - `Generate repository-grounded wiki and architecture views for browser-agent projects`
 - Suggested problem statement:
-  - `agent-browser` does not yet maintain durable task-class evidence about which models perform best for planning, browser execution, verification, or follow-up analysis, so model choice remains too manual and anecdotal.
+  - `agent-browser` lacks a durable, repo-grounded knowledge surface for codebase maps, architecture views, and onboarding guidance, so each new run or reviewer often has to rebuild the same orientation context from scratch.
 - One-shot instruction for an LLM:
-  - Build benchmark-informed model routing for `agent-browser` by defining task classes, collecting repeatable evaluations with cost and latency metadata, surfacing recommendation logic in the UI and runtime, and allowing workflows to pin or auto-select different models for planning, browser action, verification, and review.
+  - Build a repository-grounded wiki system for `agent-browser` that scans the current project, generates refreshable codebase maps and architecture diagrams, stores grounded explanations as durable artifacts, and lets agent runs cite, open, and update those views during planning, implementation, and review.
 
 ## How to use this file
 
@@ -62,5 +68,5 @@ Diff type: additive update after OpenHands research
 
 ## Recommended next Linear batch
 
-1. `Add trajectory critics and adaptive retry control`
-2. `Add benchmark-informed model routing for browser-agent tasks`
+1. `Build review-native PR understanding for browser-agent changes`
+2. `Generate repository-grounded wiki and architecture views for browser-agent projects`
