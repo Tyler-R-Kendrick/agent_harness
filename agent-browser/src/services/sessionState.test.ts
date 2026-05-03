@@ -47,6 +47,8 @@ describe('STORAGE_KEYS', () => {
       chatMessagesBySession: expect.any(String),
       chatHistoryBySession: expect.any(String),
       browserNotificationSettings: expect.any(String),
+      benchmarkModelRoutingSettings: expect.any(String),
+      benchmarkEvidenceState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       trajectoryCriticSettings: 'agent-browser.trajectory-critic-settings',
     });

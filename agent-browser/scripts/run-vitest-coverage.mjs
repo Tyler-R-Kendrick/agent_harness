@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,32 @@ const APP_TEST_FILES = ['src/App.smoke.test.tsx'];
 function defaultReportsDirectory() {
   return process.env.AGENT_BROWSER_COVERAGE_DIR
     ?? path.join(tmpdir(), 'agent-browser-coverage', `agent-browser-${process.pid}`);
+}
+
+export function chunkTestFiles(files, chunkSize) {
+  const size = Math.max(1, chunkSize);
+  const chunks = [];
+  for (let index = 0; index < files.length; index += size) {
+    chunks.push(files.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function findTestFiles(directory, root = directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await findTestFiles(entryPath, root));
+      continue;
+    }
+    if (!/\.(test)\.(ts|tsx)$/.test(entry.name)) continue;
+    const relativePath = `src/${path.relative(root, entryPath).split(path.sep).join('/')}`;
+    if (APP_TEST_FILES.includes(relativePath)) continue;
+    files.push(relativePath);
+  }
+  return files.sort();
 }
 
 export function buildVitestCoverageArgs(
@@ -53,9 +80,22 @@ export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
 
 async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   const vitestBin = await resolvePackageBin('vitest');
-  const exitCode = await runVitestCommand(vitestBin, buildVitestCoverageArgs(extraArgs), 'Vitest coverage');
-  if (exitCode !== 0 || extraArgs.length > 0) {
+  if (extraArgs.length > 0) {
+    const exitCode = await runVitestCommand(vitestBin, buildVitestCoverageArgs(extraArgs), 'Vitest coverage');
     return exitCode;
+  }
+
+  const reportsDirectory = defaultReportsDirectory();
+  const chunkSize = Number(process.env.AGENT_BROWSER_COVERAGE_CHUNK_SIZE ?? 4);
+  const testChunks = chunkTestFiles(await findTestFiles(path.resolve(process.cwd(), 'src')), chunkSize);
+  for (const [index, files] of testChunks.entries()) {
+    console.log(`Vitest coverage chunk ${index + 1}/${testChunks.length}: ${files.join(', ')}`);
+    const exitCode = await runVitestCommand(
+      vitestBin,
+      buildVitestCoverageArgs(files, path.join(reportsDirectory, `chunk-${index + 1}`)),
+      `Vitest coverage chunk ${index + 1}/${testChunks.length}`,
+    );
+    if (exitCode !== 0) return exitCode;
   }
 
   // App smoke coverage crashes Node's v8 coverage worker on this Windows runner,
