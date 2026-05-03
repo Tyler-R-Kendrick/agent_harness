@@ -330,6 +330,21 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
+  it('exposes the Symphony task board from primary navigation', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Symphony'));
+
+    const board = screen.getByRole('region', { name: 'Symphony task board' });
+    expect(board).toBeInTheDocument();
+    expect(within(board).getByText('MT-891')).toBeInTheDocument();
+    expect(within(board).getAllByText('Human Review').length).toBeGreaterThan(0);
+  });
+
   it('customizes and persists the generated harness app spec from the dashboard', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -4512,10 +4527,10 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.keyDown(window, { key: '4', altKey: true });
+    fireEvent.keyDown(window, { key: '5', altKey: true });
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '2', altKey: true });
+    fireEvent.keyDown(window, { key: '3', altKey: true });
     expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });

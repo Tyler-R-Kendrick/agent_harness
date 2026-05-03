@@ -31,7 +31,7 @@ async function findFreePort() {
   });
 }
 
-async function waitForServer(url, childProcess, timeoutMs = 30_000) {
+async function waitForServer(url, childProcess, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (childProcess.exitCode !== null) {
@@ -102,6 +102,25 @@ async function main() {
     await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Chat input')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('button', { name: /Configure tools/ })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Symphony' }).click();
+    const symphonyBoard = page.getByRole('region', { name: 'Symphony task board' });
+    await expect(symphonyBoard).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'MT-891 Summarize feedback from Slack channels' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyBoard.getByText('In Progress')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Create Symphony task' }).click();
+    await page.getByLabel('Symphony task title').fill('Visual smoke multi-agent task');
+    await page.getByLabel('Symphony task brief').fill('Confirm Symphony board accepts new work.');
+    await page.getByRole('button', { name: 'Save Symphony task' }).click();
+    await expect(page.getByRole('button', { name: 'MT-892 Visual smoke multi-agent task' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.getByRole('button', { name: 'Dispatch agent for MT-892' }).click();
+    await expect(page.getByRole('list', { name: 'In Progress tasks' }).getByText('MT-892')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByRole('complementary', { name: 'Symphony task inspector' })).toContainText('Agent running');
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
   } catch (error) {

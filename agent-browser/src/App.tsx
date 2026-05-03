@@ -97,6 +97,14 @@ import { executeCliCommand } from './tools/cli/exec';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
+import { SymphonyPanel, SymphonySidebar } from './features/symphony/SymphonyPanel';
+import {
+  createDefaultSymphonyBoardState,
+  isSymphonyBoardRecord,
+  selectSymphonyTask,
+  type SymphonyBoardState,
+  type SymphonyTask,
+} from './features/symphony/symphonyBoard';
 // Unified per-turn process visualization surfaced via InlineProcess and
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
@@ -270,7 +278,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'designer' | 'history' | 'extensions' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'symphony' | 'history' | 'extensions' | 'settings' | 'account' | 'designer';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -438,6 +446,7 @@ const PANEL_MIN_HEIGHT_PX = 240;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
+  ['symphony', 'clipboard', 'Symphony'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
 ] as const;
@@ -446,9 +455,10 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account', 'designer'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'history', 'extensions', 'settings', 'account', 'designer'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
+  symphony: { label: 'Symphony', icon: 'clipboard' },
   designer: { label: 'Designer', icon: 'sparkles' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
@@ -492,7 +502,7 @@ const WORKSPACE_SHORTCUT_GROUPS = [
   {
     title: 'Panels',
     items: [
-      { keys: 'Alt+1-6', description: 'Switch sidebar panel' },
+      { keys: 'Alt+1-7', description: 'Switch sidebar panel' },
       { keys: 'Ctrl/Cmd+`', description: 'Toggle chat / terminal' },
     ],
   },
@@ -6911,7 +6921,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'history', 'extensions', 'settings', 'account', 'designer'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -7030,6 +7040,12 @@ function AgentBrowserApp() {
     isHarnessAppSpecRecord,
     {},
   );
+  const [symphonyBoardsByWorkspace, setSymphonyBoardsByWorkspace] = useStoredState<Record<string, SymphonyBoardState>>(
+    localStorageBackend,
+    STORAGE_KEYS.symphonyBoardsByWorkspace,
+    isSymphonyBoardRecord,
+    {},
+  );
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
   const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
@@ -7133,6 +7149,16 @@ function AgentBrowserApp() {
   }, []);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
+  const activeSymphonyBoard = useMemo(
+    () => symphonyBoardsByWorkspace[activeWorkspaceId] ?? createDefaultSymphonyBoardState(activeWorkspace.name),
+    [activeWorkspace.name, activeWorkspaceId, symphonyBoardsByWorkspace],
+  );
+  const updateActiveSymphonyBoard = useCallback((nextBoard: SymphonyBoardState) => {
+    setSymphonyBoardsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: nextBoard,
+    }));
+  }, [activeWorkspaceId, setSymphonyBoardsByWorkspace]);
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
   const activeWorkspaceViewState: WorkspaceViewState = activeWorkspace.type === 'workspace'
     ? normalizeWorkspaceViewEntry(activeWorkspace, workspaceViewStateByWorkspace[activeWorkspaceId])
@@ -7585,7 +7611,7 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
-  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string) => {
+  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string): { id: string; name: string; isOpen: boolean } | null => {
     let createdSession: { id: string; name: string; isOpen: boolean } | null = null;
     let newSessionId: string | null = null;
     setRoot((current) => {
@@ -7643,6 +7669,34 @@ function AgentBrowserApp() {
     setToast({ msg: 'New session created', type: 'success' });
     return createdSession;
   }, [setToast, switchWorkspace]);
+
+  const dispatchSymphonyTaskToSession = useCallback((task: SymphonyTask) => {
+    const session = addSessionToWorkspace(activeWorkspaceId, task.identifier);
+    return {
+      sessionId: session?.id,
+      sessionName: session?.name ?? task.identifier,
+      workspacePath: activeWorkspace.name,
+    };
+  }, [activeWorkspace.name, activeWorkspaceId, addSessionToWorkspace]);
+
+  const openSymphonySession = useCallback((sessionId: string) => {
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          openTabIds: [],
+          editingFilePath: null,
+          activeSessionIds: [sessionId],
+          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
+            ? existing.mountedSessionFsIds
+            : [...existing.mountedSessionFsIds, sessionId],
+        },
+      };
+    });
+    switchSidebarPanel('workspaces');
+  }, [activeWorkspace, activeWorkspaceId, setWorkspaceViewStateByWorkspace, switchSidebarPanel]);
 
   const addBrowserTabToWorkspace = useCallback((workspaceId: string) => {
     setNewTabWorkspaceId(workspaceId);
@@ -7895,7 +7949,7 @@ function AgentBrowserApp() {
         jumpToWorkspaceByIndex(Number(event.key) - 1);
         return;
       }
-      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-6]$/.test(event.key)) {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-7]$/.test(event.key)) {
         event.preventDefault();
         const targetPanel = PANEL_SHORTCUT_ORDER[Number(event.key) - 1];
         if (targetPanel) switchSidebarPanel(targetPanel);
@@ -9862,6 +9916,15 @@ function AgentBrowserApp() {
         </div>
       );
     }
+    if (activePanel === 'symphony') {
+      return (
+        <SymphonySidebar
+          board={activeSymphonyBoard}
+          workspaceName={activeWorkspace.name}
+          onSelectTask={(taskId) => updateActiveSymphonyBoard(selectSymphonyTask(activeSymphonyBoard, taskId))}
+        />
+      );
+    }
     if (activePanel === 'designer') {
       return (
         <section className="panel-scroll designer-sidebar-summary">
@@ -9914,7 +9977,7 @@ function AgentBrowserApp() {
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
-          <button type="button" className={`activity-button ${activePanel === DESIGNER_NAV[0] ? 'active' : ''}`} onClick={() => switchSidebarPanel(DESIGNER_NAV[0])} aria-label={DESIGNER_NAV[2]} title={`${DESIGNER_NAV[2]} (Alt+6)`}><Icon name={DESIGNER_NAV[1]} size={16} color={activePanel === DESIGNER_NAV[0] ? '#7dd3fc' : '#71717a'} /></button>
+          <button type="button" className={`activity-button ${activePanel === DESIGNER_NAV[0] ? 'active' : ''}`} onClick={() => switchSidebarPanel(DESIGNER_NAV[0])} aria-label={DESIGNER_NAV[2]} title={`${DESIGNER_NAV[2]} (Alt+7)`}><Icon name={DESIGNER_NAV[1]} size={16} color={activePanel === DESIGNER_NAV[0] ? '#7dd3fc' : '#71717a'} /></button>
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">
@@ -9975,6 +10038,18 @@ function AgentBrowserApp() {
       ) : null}
       <main className="content-area">
         {(() => {
+          if (activePanel === 'symphony') {
+            return (
+              <SymphonyPanel
+                board={activeSymphonyBoard}
+                workspaceName={activeWorkspace.name}
+                sessions={activeWorkspaceSessions}
+                onBoardChange={updateActiveSymphonyBoard}
+                onDispatchTask={dispatchSymphonyTaskToSession}
+                onOpenSession={openSymphonySession}
+              />
+            );
+          }
           if (activePanel === 'designer') {
             return (
               <DesignerPanel
