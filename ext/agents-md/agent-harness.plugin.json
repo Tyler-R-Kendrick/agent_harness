@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.agents-md",
+  "name": "AGENTS.md workspace instructions",
+  "version": "0.1.0",
+  "description": "Loads selected AGENTS.md files as optional prompt-context hooks.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createAgentsMdHookPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "hook",
+      "id": "agents-md",
+      "event": {
+        "type": "plugin",
+        "name": "agent-harness.ext.agents-md.before-llm-messages"
+      },
+      "description": "Prepends selected AGENTS.md instructions before model inference."
+    }
+  ],
+  "events": [
+    {
+      "type": "plugin",
+      "name": "agent-harness.ext.agents-md.before-llm-messages",
+      "description": "Runs before LLM message preparation when this plugin is loaded."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read",
+      "reason": "Reads user-selected AGENTS.md assets."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

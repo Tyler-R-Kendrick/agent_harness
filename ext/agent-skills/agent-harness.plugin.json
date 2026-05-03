@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.agent-skills",
+  "name": "Agent skills",
+  "version": "0.1.0",
+  "description": "Loads selected .agents/skills/*/SKILL.md files as optional tools and commands.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createAgentSkillsPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "tool",
+      "id": "agent-skills",
+      "description": "Registers one tool per selected skill."
+    },
+    {
+      "kind": "command",
+      "id": "agent-skills",
+      "description": "Registers /skill <name> [input]."
+    }
+  ],
+  "assets": [
+    {
+      "kind": "example",
+      "path": "./examples/default-workspace-skills",
+      "description": "Former Agent Browser bundled skill examples."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read",
+      "reason": "Reads user-selected SKILL.md assets."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

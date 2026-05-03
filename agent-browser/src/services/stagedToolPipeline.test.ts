@@ -257,16 +257,13 @@ describe('stagedToolPipeline', () => {
       toolDescriptors,
       instructions: [
         'Workspace capability files loaded from browser storage:',
-        'Active AGENTS.md:',
-        '- AGENTS.md',
-        '# Workspace rules',
-        'Use TDD and verify changes.',
+        'Workspace memory:',
+        '- [project] Use TDD and verify changes.',
         '',
-        'Skills:',
-        '- create-agent-eval (.agents/skills/create-agent-eval/SKILL.md): Create AgentEvals suites.',
+        'Tools: none',
         '',
         'Plugins:',
-        '- review-tools (.agents/plugins/review-tools/plugin.yaml)',
+        '- review-tools (.agents/plugins/review-tools/agent-harness.plugin.json)',
         '',
         'Hooks:',
         '- pre-task.sh (.agents/hooks/pre-task.sh)',
@@ -278,8 +275,8 @@ describe('stagedToolPipeline', () => {
 
     expect(result.text).toContain('cli (CLI)');
     expect(result.text).toContain('read_session_file (Read session file)');
-    expect(result.text).toContain('create-agent-eval (.agents/skills/create-agent-eval/SKILL.md)');
-    expect(result.text).toContain('review-tools (.agents/plugins/review-tools/plugin.yaml)');
+    expect(result.text).not.toContain('.agents/skills/');
+    expect(result.text).toContain('review-tools (.agents/plugins/review-tools/agent-harness.plugin.json)');
     expect(result.text).toContain('pre-task.sh (.agents/hooks/pre-task.sh)');
     expect(result.steps).toBe(1);
     expect(onDone).toHaveBeenCalledWith(result.text);

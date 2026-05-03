@@ -261,16 +261,6 @@ describe('workspaceTools coverage branches', () => {
       mode: 'terminal',
     }));
     await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: { agentId: 'docs/AGENTS.md' },
-    }, {} as never)).resolves.toEqual(expect.objectContaining({
-      agentId: 'docs/AGENTS.md',
-    }));
-    await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: { agentId: '   ' },
-    }, {} as never)).rejects.toThrow('agentId');
-    await expect(webmcpTool.execute?.({
       tool: 'change_session_tools',
       args: { action: 'select', toolIds: ['browser'] },
     }, {} as never)).resolves.toEqual(expect.objectContaining({
@@ -454,10 +444,6 @@ describe('workspaceTools coverage branches', () => {
       expect.objectContaining({ id: 'webmcp:list_filesystem_entries', selected: false }),
     ]);
     await expect(sessionTool.execute?.({
-      tool: 'change_session_agent',
-      args: { sessionId: 'session-2', agentId: 'docs/AGENTS.md' },
-    }, {} as never)).rejects.toThrow('not the active session');
-    await expect(sessionTool.execute?.({
       tool: 'submit_session_message',
       args: { message: 'hello' },
     }, {} as never)).resolves.toEqual(expect.objectContaining({
@@ -515,10 +501,6 @@ describe('workspaceTools coverage branches', () => {
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       toolIds: ['cli'],
     }));
-    await expect(webmcpTool.execute?.({
-      tool: 'change_session_agent',
-      args: {},
-    }, {} as never)).rejects.toThrow('agentId');
   });
 
   it('covers session filesystem fallback and validation branches', async () => {

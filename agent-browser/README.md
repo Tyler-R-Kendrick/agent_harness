@@ -4,13 +4,13 @@
 
 ## Default workspace content
 
-Each new workspace is pre-seeded with checked-in files under `.agents/skills/` and `.memory/`.
+Each new workspace is pre-seeded only with memory files under `.memory/`.
 
-- `agent-browser/agent-skills/` is the app-local default skill bundle copied into runtime workspaces by [`src/services/defaultAgentSkills.ts`](./src/services/defaultAgentSkills.ts).
+- Optional formats such as AGENTS.md, agent-skills, and DESIGN.md are plugin-owned extension assets under [`../ext/`](../ext/).
 - Repo-root [`../skills/`](../skills/) contains the broader bundled skill library used across the repository and by compatible agents outside the browser app.
-- Runtime tests cover the default seeded files under `.agents/skills/...`, including `agent-browser`, `create-agent`, `create-agent-skill`, `create-agent-eval`, and `memory`.
+- Runtime tests cover the default seeded memory files and generic tool, plugin, and hook manifest handling.
 
-Use the app-local bundle when documenting what appears in a fresh browser workspace. Use the repo-root skill library when documenting reusable checked-in skills for the wider repository.
+Use the `ext/*` plugin manifests when documenting optional runtime extension behavior. Use the repo-root skill library when documenting reusable checked-in skills for the wider repository.
 
 ## Commands
 

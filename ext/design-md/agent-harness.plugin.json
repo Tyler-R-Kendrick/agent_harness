@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.design-md",
+  "name": "DESIGN.md design tokens",
+  "version": "0.1.0",
+  "description": "Loads selected DESIGN.md files as optional design guidance, theming, and code-substitution assets.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createDesignMdPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "hook",
+      "id": "design-md",
+      "description": "Adds design guidance only when semantic design cues match."
+    },
+    {
+      "kind": "tool",
+      "id": "design-md.apply",
+      "description": "Applies DESIGN.md tokens through plugin-selected providers."
+    }
+  ],
+  "assets": [
+    {
+      "kind": "example",
+      "path": "./examples/agent-browser-designer",
+      "description": "Former Agent Browser DESIGN.md designer example surface."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read-write",
+      "reason": "Reads DESIGN.md assets and can emit transformed target content through an explicit tool."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

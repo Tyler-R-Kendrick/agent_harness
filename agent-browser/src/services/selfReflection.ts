@@ -1,8 +1,6 @@
 import type { ToolDescriptor } from '../tools';
 
 export interface WorkspaceSelfReflectionInventory {
-  agents: string[];
-  skills: string[];
   tools: string[];
   plugins: string[];
   hooks: string[];
@@ -33,10 +31,6 @@ const SELF_REFERENCE_TERMS = /\b(you|your|yourself|agent|workspace agent|codi|gh
 const OVERCLAIM_TERMS = /\b(do anything|access every file|omniscient|guarantee|global admin|bypass|hidden system prompt|developer message|unlisted-skill|made-up-tool)\b/i;
 
 const SECTION_HEADINGS = [
-  'Active AGENTS.md',
-  'AGENTS.md files',
-  'Other AGENTS.md files',
-  'Skills',
   'Tools',
   'Plugins',
   'Hooks',
@@ -74,30 +68,6 @@ function collectBullets(context: string, headings: readonly string[]): string[] 
   return uniq(values);
 }
 
-function collectAgentInstructionHighlights(context: string): string[] {
-  const highlights: string[] = [];
-  let active = false;
-
-  for (const line of context.split(/\r?\n/)) {
-    const heading = matchesHeading(line);
-    if (heading) {
-      active = heading === 'Active AGENTS.md' || heading === 'AGENTS.md files';
-      continue;
-    }
-    if (!active) continue;
-
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('- ')) continue;
-    if (trimmed.startsWith('#')) {
-      highlights.push(trimmed.replace(/^#+\s*/, ''));
-      continue;
-    }
-    highlights.push(trimmed);
-  }
-
-  return uniq(highlights).slice(0, 3);
-}
-
 export function isSelfReflectionTaskText(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
@@ -112,8 +82,6 @@ export function isSelfReflectionTaskText(text: string): boolean {
 
 export function extractWorkspaceSelfReflectionInventory(workspacePromptContext: string): WorkspaceSelfReflectionInventory {
   return {
-    agents: collectBullets(workspacePromptContext, ['Active AGENTS.md', 'AGENTS.md files', 'Other AGENTS.md files']),
-    skills: collectBullets(workspacePromptContext, ['Skills']),
     tools: collectBullets(workspacePromptContext, ['Tools']),
     plugins: collectBullets(workspacePromptContext, ['Plugins']),
     hooks: collectBullets(workspacePromptContext, ['Hooks']),
@@ -132,26 +100,24 @@ function formatNamedLines(label: string, values: readonly string[], emptyText: s
 }
 
 function formatWorkspaceCapabilityLines(inventory: WorkspaceSelfReflectionInventory): string[] {
-  const hasWorkspaceCapabilities = inventory.agents.length
-    || inventory.skills.length
-    || inventory.tools.length
+  const hasWorkspaceCapabilities = inventory.tools.length
     || inventory.plugins.length
-    || inventory.hooks.length;
+    || inventory.hooks.length
+    || inventory.memory.length;
 
   if (!hasWorkspaceCapabilities) {
     return [
       'Registered workspace capabilities:',
-      '- No workspace skills, tools, plugins, or hooks are currently registered in the loaded workspace context.',
+      '- No workspace tools, plugins, hooks, or memory files are currently registered in the loaded workspace context.',
     ];
   }
 
   return [
     'Registered workspace capabilities:',
-    ...formatNamedLines('Active AGENTS.md', inventory.agents, 'none'),
-    ...formatNamedLines('Skills', inventory.skills, 'none'),
     ...formatNamedLines('Tools', inventory.tools, 'none'),
     ...formatNamedLines('Plugins', inventory.plugins, 'none'),
     ...formatNamedLines('Hooks', inventory.hooks, 'none'),
+    ...formatNamedLines('Memory', inventory.memory, 'none'),
   ];
 }
 
@@ -161,7 +127,6 @@ export function buildWorkspaceSelfReflectionAnswer({
   toolDescriptors = [],
 }: WorkspaceSelfReflectionAnswerOptions): string {
   const inventory = extractWorkspaceSelfReflectionInventory(workspacePromptContext);
-  const instructionHighlights = collectAgentInstructionHighlights(workspacePromptContext);
   const toolLines = toolDescriptors.length
     ? toolDescriptors.map(formatToolLine)
     : ['- No runtime tools are currently selected for this answer.'];
@@ -178,13 +143,6 @@ export function buildWorkspaceSelfReflectionAnswer({
     ...toolLines,
     '',
     ...formatWorkspaceCapabilityLines(inventory),
-    ...(instructionHighlights.length
-      ? [
-          '',
-          'Active instruction highlights:',
-          ...instructionHighlights.map((highlight) => `- ${highlight}`),
-        ]
-      : []),
     '',
     'Limitations:',
     '- I can only rely on currently loaded workspace files, available tools, and conversation context.',
@@ -207,11 +165,10 @@ export function evaluateSelfReflectionAnswer({
   toolDescriptors = [],
 }: WorkspaceSelfReflectionAnswerOptions & { answer: string }): SelfReflectionEvaluation {
   const inventory = extractWorkspaceSelfReflectionInventory(workspacePromptContext);
-  const hasWorkspaceCapabilities = inventory.agents.length
-    || inventory.skills.length
-    || inventory.tools.length
+  const hasWorkspaceCapabilities = inventory.tools.length
     || inventory.plugins.length
-    || inventory.hooks.length;
+    || inventory.hooks.length
+    || inventory.memory.length;
   const assertions: SelfReflectionAssertion[] = [
     makeAssertion('states-active-workspace-agent', /active workspace agent/i.test(answer), answer),
     makeAssertion('states-strengths', /Best at:/i.test(answer) && /verification|evidence|focused implementation/i.test(answer), answer),
@@ -228,9 +185,9 @@ export function evaluateSelfReflectionAnswer({
     makeAssertion(
       'mentions-workspace-capabilities',
       hasWorkspaceCapabilities
-        ? [...inventory.agents, ...inventory.skills, ...inventory.tools, ...inventory.plugins, ...inventory.hooks]
+        ? [...inventory.tools, ...inventory.plugins, ...inventory.hooks, ...inventory.memory]
           .every((item) => answer.includes(item))
-        : answer.includes('No workspace skills, tools, plugins, or hooks are currently registered'),
+        : answer.includes('No workspace tools, plugins, hooks, or memory files are currently registered'),
       answer,
     ),
   ];

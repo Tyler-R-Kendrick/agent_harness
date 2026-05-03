@@ -197,10 +197,6 @@ describe('webmcp: session tools', () => {
       );
     });
 
-    it('changes session agent', () => {
-      expect(summarizeToolCall('webmcp:change_session_agent', {})).toBe('Changed session agent');
-    });
-
     it('changes session model', () => {
       expect(summarizeToolCall('webmcp:change_session_model', {})).toBe('Changed session model');
     });

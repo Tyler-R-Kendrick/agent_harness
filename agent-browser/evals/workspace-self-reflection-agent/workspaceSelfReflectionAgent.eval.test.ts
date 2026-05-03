@@ -21,14 +21,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const SAMPLE_WORKSPACE_CONTEXT = [
   'Workspace capability files loaded from browser storage:',
-  'Active AGENTS.md:',
-  '- AGENTS.md',
-  '# Workspace rules',
-  'Use TDD and verify changes.',
-  '',
-  'Skills:',
-  '- memory (.agents/skills/memory/SKILL.md): Recall and store durable workspace memory.',
-  '- create-agent-eval (.agents/skills/create-agent-eval/SKILL.md): Create repeatable AgentEvals suites.',
+  'Workspace memory files loaded from .memory/:',
+  '- [project] Use TDD and verify changes. (.memory/project.memory.md:3)',
   '',
   'Tools:',
   '- review-pr (.agents/tools/review-pr/tool.json)',

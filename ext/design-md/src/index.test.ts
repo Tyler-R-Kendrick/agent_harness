@@ -4,14 +4,16 @@ import {
   buildDesignMdGuidanceMessage,
   createCssDesignTokenApplyProvider,
   createDesignMdPlugin,
-  createHarnessExtensionContext,
   createLlGuidanceDesignSubstitutionProvider,
   discoverDesignMdSemanticHooks,
   listDesignMdThemeOptions,
   renderDesignMdCss,
-  type CoreInferenceOptions,
   type DesignMdApplyProvider,
-} from '../index.js';
+} from './index.js';
+import {
+  createHarnessExtensionContext,
+  type CoreInferenceOptions,
+} from 'harness-core';
 
 const DESIGN_MD = `---
 name: Heritage

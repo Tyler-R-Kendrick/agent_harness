@@ -22,7 +22,7 @@ import {
   Upload,
   Wand2,
 } from 'lucide-react';
-import { listDesignMdThemeOptions, type DesignMdCssRenderResult } from 'harness-core';
+import { listDesignMdThemeOptions, type DesignMdCssRenderResult } from '../../src/index';
 import type { WorkspaceFile } from '../../types';
 import {
   buildDesignSystemArtifacts,

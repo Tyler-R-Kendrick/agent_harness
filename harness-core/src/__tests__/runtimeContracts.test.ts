@@ -14,18 +14,6 @@ import {
   runActorWorkflow,
   type MemoryMessage,
 } from '../index.js';
-import {
-  createAgentSkillsPlugin,
-  detectAgentSkillFile,
-  discoverAgentSkills,
-  validateAgentSkillFile,
-} from '../ext/agent-skills.js';
-import {
-  buildAgentsMdPromptContext,
-  createAgentsMdHookPlugin,
-  discoverAgentsMdFiles,
-  validateAgentsMdFile,
-} from '../ext/agents-md.js';
 
 describe('runtime extension contracts', () => {
   it('uses commands as the direct-execution registry and routes explicit regex matches', async () => {
@@ -270,9 +258,8 @@ describe('runtime extension contracts', () => {
     expect(calls).not.toContain('after-bubble');
   });
 
-  it('loads plugins through one extension point and injects AGENTS.md as a hook plugin', async () => {
-    type Message = MemoryMessage & { role: 'system' | 'user' | 'assistant' };
-    const context = createHarnessExtensionContext<Message, { messages: Message[] }>();
+  it('loads plugins through one generic extension point', async () => {
+    const context = createHarnessExtensionContext<MemoryMessage, { messages: MemoryMessage[] }>();
     const plugins = context.plugins;
 
     await plugins.load({
@@ -302,16 +289,13 @@ describe('runtime extension contracts', () => {
         });
       },
     });
-    await plugins.load(createAgentsMdHookPlugin<Message>([
-      { path: 'AGENTS.md', content: '# Root\nUse TDD.' },
-    ]));
 
     await expect(context.commands.execute('/demo')).resolves.toEqual({
       matched: true,
       commandId: 'demo',
       result: 'tool-result',
     });
-    await expect(context.memory.run('observe', createMemory<Message>([]))).resolves.toEqual({
+    await expect(context.memory.run('observe', createMemory<MemoryMessage>([]))).resolves.toEqual({
       memory: { messages: [], metadata: {} },
       summaries: [],
       observations: ['observed'],
@@ -321,32 +305,7 @@ describe('runtime extension contracts', () => {
       outputs: [{ hookId: 'demo-audit', output: 'audited' }],
     });
 
-    const prepared = await context.hooks.runPipes('before-llm-messages', {
-      messages: [{ role: 'user', content: 'hello' }],
-    });
-    expect(prepared.payload.messages[0]).toEqual(expect.objectContaining({
-      role: 'system',
-      content: expect.stringContaining('Use TDD.'),
-    }));
-    expect(prepared.payload.messages[1]).toEqual({ role: 'user', content: 'hello' });
-    expect(discoverAgentsMdFiles([
-      { path: 'AGENTS.md', content: '# Root' },
-      { path: 'notes.md', content: '# Notes' },
-    ])).toEqual([{ path: 'AGENTS.md', content: '# Root' }]);
-    expect(buildAgentsMdPromptContext([
-      { path: 'AGENTS.md', content: '# Root' },
-      { path: 'docs/AGENTS.md', content: '# Docs' },
-    ], { activeAgentPath: 'docs/AGENTS.md' })).toContain('Active AGENTS.md:');
-    expect(buildAgentsMdPromptContext([
-      { path: 'AGENTS.md', content: '# Root' },
-    ], { activeAgentPath: 'AGENTS.md' })).not.toContain('Other AGENTS.md files:');
-    expect(buildAgentsMdPromptContext([
-      { path: 'AGENTS.md', content: '# Root' },
-    ], { activeAgentPath: 'missing/AGENTS.md' })).toContain('AGENTS.md files:');
-    expect(buildAgentsMdPromptContext([])).toBe('AGENTS.md files: none');
-    expect(validateAgentsMdFile({ path: 'AGENTS.md', content: '' })).toBeNull();
-    expect(validateAgentsMdFile({ path: 'README.md', content: '' })).toContain('AGENTS.md');
-    expect(plugins.list().map((plugin) => plugin.id)).toEqual(['demo', 'agents-md']);
+    expect(plugins.list().map((plugin) => plugin.id)).toEqual(['demo']);
 
     const batchContext = createHarnessExtensionContext();
     await batchContext.plugins.loadAll([
@@ -356,80 +315,6 @@ describe('runtime extension contracts', () => {
     expect(batchContext.plugins.get('one')?.id).toBe('one');
     expect(batchContext.plugins.list().map((plugin) => plugin.id)).toEqual(['one', 'two']);
     await expect(batchContext.plugins.load({ id: 'one', register: () => undefined })).rejects.toThrow(/already registered/i);
-  });
-
-  it('loads agent-skills as an extension plugin that registers tools and a command', async () => {
-    const context = createHarnessExtensionContext();
-    const executeSkill = vi.fn(async ({ skill, input }) => ({
-      skill: skill.name,
-      input,
-    }));
-
-    await context.plugins.load(createAgentSkillsPlugin([
-      {
-        path: '.agents/skills/review-pr/SKILL.md',
-        content: '---\nname: review-pr\ndescription: Review a pull request.\n---\n\n# Review\nUse tests.',
-      },
-    ], {
-      client: { executeSkill },
-    }));
-
-    expect(detectAgentSkillFile('.agents/skill/review-pr/SKILL.md')).toBe(true);
-    expect(detectAgentSkillFile('.agents/skills/review-pr/README.md')).toBe(false);
-    expect(validateAgentSkillFile({ path: '.agents/skills/review-pr/SKILL.md', content: '' })).toBeNull();
-    expect(validateAgentSkillFile({ path: '.agents/skills/Review PR/SKILL.md', content: '' })).toContain('kebab-case');
-    expect(validateAgentSkillFile({ path: '.agents/skills/review-pr/nested/SKILL.md', content: '' })).toContain('<dir>/SKILL.md');
-    expect(validateAgentSkillFile({ path: 'README.md', content: '' })).toContain('agent skill');
-    expect(discoverAgentSkills([
-      { path: '.agents/skills/missing-frontmatter/SKILL.md', content: '# Missing' },
-    ])[0]).toEqual(expect.objectContaining({
-      directory: 'missing-frontmatter',
-      name: 'missing-frontmatter',
-      description: 'Skill file is missing required frontmatter.',
-    }));
-    expect(discoverAgentSkills([
-      { path: '.agents/skills/no-description/SKILL.md', content: '---\nname: no-description\n---\n\n# Missing' },
-    ])[0]).toEqual(expect.objectContaining({
-      name: 'no-description',
-      description: 'Skill file is missing required frontmatter.',
-    }));
-    expect(context.tools.get('agent-skill:review-pr')).toEqual(expect.objectContaining({
-      id: 'agent-skill:review-pr',
-      description: 'Review a pull request.',
-    }));
-    await expect(context.tools.execute('agent-skill:review-pr', { input: 'src/index.ts' })).resolves.toEqual({
-      skill: 'review-pr',
-      input: 'src/index.ts',
-    });
-    await expect(context.tools.execute('agent-skill:review-pr', {})).resolves.toEqual({
-      skill: 'review-pr',
-      input: '',
-    });
-    await expect(context.tools.execute('agent-skill:review-pr', 'loose input')).resolves.toEqual({
-      skill: 'review-pr',
-      input: '',
-    });
-    await expect(context.commands.execute('/skill review-pr src/index.ts')).resolves.toEqual({
-      matched: true,
-      commandId: 'agent-skills',
-      result: {
-        skill: 'review-pr',
-        input: 'src/index.ts',
-      },
-    });
-    await expect(context.commands.execute('/skill review-pr')).resolves.toEqual({
-      matched: true,
-      commandId: 'agent-skills',
-      result: {
-        skill: 'review-pr',
-        input: '',
-      },
-    });
-    await expect(context.commands.execute('/skill missing')).rejects.toThrow(/Unknown agent skill/i);
-    expect(executeSkill).toHaveBeenCalledWith(expect.objectContaining({
-      skill: expect.objectContaining({ name: 'review-pr' }),
-      input: 'src/index.ts',
-    }));
   });
 
   it('runs agents and subagents through xstate actors while writing to the AgentBus event store', async () => {

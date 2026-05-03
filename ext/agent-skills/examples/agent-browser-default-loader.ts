@@ -1,13 +1,13 @@
-import type { WorkspaceFile } from '../types';
+import type { WorkspaceFile } from 'harness-core';
 
-const DEFAULT_AGENT_SKILL_MODULES = import.meta.glob('../../agent-skills/*/**', {
+const DEFAULT_AGENT_SKILL_MODULES = import.meta.glob('./default-workspace-skills/*/**', {
   query: '?raw',
   import: 'default',
   eager: true,
 }) as Record<string, string>;
 
 function toWorkspaceSkillPath(modulePath: string): string | null {
-  const match = modulePath.match(/^\.\.\/\.\.\/agent-skills\/([^/]+)\/(.+)$/);
+  const match = modulePath.match(/^\.\/default-workspace-skills\/([^/]+)\/(.+)$/);
   if (!match) return null;
 
   const [, skillName, relativePath] = match;

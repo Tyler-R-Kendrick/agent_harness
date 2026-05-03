@@ -29,14 +29,11 @@ type EvalToolCall = {
 
 const SAMPLE_WORKSPACE_CONTEXT = [
   'Workspace capability files loaded from browser storage:',
-  'Active AGENTS.md:',
-  '- AGENTS.md',
-  '# Workspace rules',
-  'Use TDD and verify changes.',
+  'Workspace memory files loaded from .memory/:',
+  '- [project] Use TDD and verify changes. (.memory/project.memory.md:3)',
   '',
-  'Skills:',
-  '- memory (.agents/skills/memory/SKILL.md): Recall and store durable workspace memory.',
-  '- create-agent-eval (.agents/skills/create-agent-eval/SKILL.md): Create repeatable AgentEvals suites.',
+  'Tools:',
+  '- review-pr (.agents/tools/review-pr/tool.json)',
   '',
   'Plugins:',
   '- review-tools (.agents/plugins/review-tools/plugin.yaml)',

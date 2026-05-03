@@ -1,4 +1,4 @@
-import { renderDesignMdCss } from 'harness-core';
+import { renderDesignMdCss } from '../../src/index';
 import type { WorkspaceFile } from '../../types';
 
 export const DESIGNER_MANIFEST_PATH = 'design/manifest.json';

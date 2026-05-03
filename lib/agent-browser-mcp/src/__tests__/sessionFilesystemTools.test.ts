@@ -442,11 +442,11 @@ describe('registerSessionFilesystemTools', () => {
     const tool = createWebMcpTool(modelContext);
     const result = await tool.execute?.({
       tool: 'scaffold_session_filesystem_entry',
-      args: { sessionId: 'session-1', basePath: '/workspace', template: 'agents' },
+      args: { sessionId: 'session-1', basePath: '/workspace', template: 'hook' },
     }, {} as never);
 
-    expect(result).toMatchObject({ sessionId: 'session-1', path: '/workspace/agents', template: 'agents' });
-    expect(onScaffoldSessionFsEntry).toHaveBeenCalledWith({ sessionId: 'session-1', basePath: '/workspace', template: 'agents' });
+    expect(result).toMatchObject({ sessionId: 'session-1', path: '/workspace/hook', template: 'hook' });
+    expect(onScaffoldSessionFsEntry).toHaveBeenCalledWith({ sessionId: 'session-1', basePath: '/workspace', template: 'hook' });
   });
 
   it('throws TypeError when scaffolding without a template', async () => {
