@@ -1,63 +1,63 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-02
-Baseline: `.features/Summary.md` updated from the 2026-05-02 nineteen-harness corpus.
-Diff type: additive update after Devin research
+Updated: 2026-05-03
+Baseline: `.features/Summary.md` updated from the 2026-05-02 twenty-harness corpus.
+Diff type: additive update after Goose research
 
 ## Net new normalized features
 
-### Added: Review-native pull request understanding
-- Why now: Devin is explicitly shipping a dedicated review product that groups and explains a PR after the code has already been generated, which is a stronger answer to reviewer overload than leaving humans alone with raw diffs.
+### Added: Private local inference and offline-first execution
+- Why now: Goose has turned private local inference into a first-class harness feature instead of treating local models as an external integration that users must assemble themselves.
 - Research delta:
-  - the Devin Review docs describe a dedicated review workflow instead of a generic chat follow-up
-  - Devin says the review surface groups related changes and summarizes intent so reviewers can reason about a patch at a higher level than line-by-line diff noise
-  - the March 6, 2026 release notes call out improved copy or move detection and richer PR context, which shows active investment in review quality rather than only generation quality
+  - the April 24, 2026 Goose blog says built-in local inference is available directly in the desktop app
+  - Goose uses embedded `llama.cpp`, downloadable GGUF models, and in-process execution instead of requiring Ollama, Docker, or a background server
+  - Goose frames the feature as private-by-default and offline-capable, which makes local execution part of the core harness product story rather than a power-user workaround
 
-### Added: Repository-grounded wiki generation and architecture views
-- Why now: Devin DeepWiki turns codebase understanding into a durable product artifact with repository maps and architecture diagrams instead of recomputing orientation from scratch in every session.
+### Added: Context-aware tool-call guardrails with adversary review
+- Why now: Goose is shipping a stronger answer to prompt injection and goal drift than static approval modes by adding a second-pass reviewer at the tool-call boundary.
 - Research delta:
-  - the DeepWiki docs present a standing repository wiki rather than a one-off generated report
-  - Devin exposes repository maps and architecture diagrams as part of the same code-grounded knowledge surface
-  - the product positions the wiki as navigable alongside active coding work, which makes repo understanding reusable across sessions and across users
+  - Goose supports four permission modes, but the newer differentiator is Adversary Mode
+  - Adversary Mode checks each planned tool call against the original task, recent messages, and user-defined rules before execution
+  - Goose positions the feature as protection against prompt injection and compromised or misaligned agent behavior, which makes runtime action review a productized safety loop
 
 ### Expanded: Parallel agent orchestration
-- Why now: Devin's current docs no longer treat multi-agent work as an accidental workaround; managed child sessions and Advanced Mode make it a formal orchestration pattern.
+- Why now: Goose's subagent docs show that orchestration now includes internal workers, external agents like Codex, explicit extension constraints, and parallel execution as normal operation.
 - Research delta:
-  - the January 22, 2026 release introduced child sessions plus session-origin tracking
-  - the February 3, 2026 release added structured output for child sessions
-  - the Advanced Mode docs explicitly describe orchestrating managed Devins in parallel
+  - Goose can autonomously create subagents in autonomous mode
+  - users can request sequential or parallel execution in natural language
+  - Goose documents external subagents, including Codex configured as a delegated worker
 
 ### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Devin is maturing workflow packaging beyond reusable prompt text through playbook macros, version history, and community distribution.
+- Why now: Goose makes workflow packaging more launchable through recipes, subrecipes, project-local storage, and deeplink sharing.
 - Research delta:
-  - the Playbooks docs frame workflows as reusable team assets
-  - the March 20, 2026 release added playbook macros
-  - the April 18, 2026 release added playbook version history
+  - Goose recipes package prompts, extensions, and settings together
+  - project-local `.goose/recipes/` storage makes workflows repo-aware
+  - the recipe generator and deeplink flow make those workflows directly shareable and launchable
 
 ### Expanded: External tool connectivity and actionability
-- Why now: Devin is moving beyond raw MCP compatibility toward a real install and deployment surface.
+- Why now: Goose combines broad MCP reach with smarter install and activation mechanics instead of stopping at basic server compatibility.
 - Research delta:
-  - the April 7, 2026 release added an MCP marketplace
-  - the April 18, 2026 release added custom transports for remote MCP servers
-  - Devin's API and ACP work reinforce that external clients can orchestrate sessions programmatically
+  - Goose advertises 70+ extensions and says arbitrary MCP servers can be added
+  - Goose adds malware checks, smart extension recommendation, and roots-aware workspace mapping
+  - Goose also bridges to ACP clients and ACP providers, widening the range of external agent and tool surfaces it can coordinate
 
-### Added: Build review-native PR understanding for browser-agent changes
-- Why now: `agent-browser` can produce diffs and evidence, but it still lacks a dedicated review surface that helps another human or agent understand the patch at the semantic level before approving or requesting follow-up work.
+### Added: Add built-in local inference for browser-agent sessions
+- Why now: `agent-browser` currently assumes hosted-model execution, while Goose shows that private, offline, zero-dependency local execution can be a core harness differentiator for sensitive repositories and unreliable-network workflows.
 - Linear issue title:
-  - `Build review-native PR understanding for browser-agent changes`
+  - `Add built-in local inference for browser-agent sessions`
 - Suggested problem statement:
-  - `agent-browser` can generate diffs, test logs, and browser evidence, but reviewers still have to reconstruct the narrative and risk profile from low-level artifacts instead of getting a structured, review-native understanding of what changed and why.
+  - `agent-browser` lacks a built-in local inference path, so teams that need offline operation, private-by-default execution, or zero external API dependence still have to leave the product surface and assemble separate local-model infrastructure.
 - One-shot instruction for an LLM:
-  - Implement a review-native PR understanding surface for `agent-browser` that groups related changes, summarizes intent, highlights likely risks, links validation and browser evidence, and supports comment-driven follow-up runs or reviewer requests without forcing users back into raw diff-only review.
+  - Implement built-in local inference for `agent-browser` so users can download supported local models inside the app, run browser-agent sessions offline or on sensitive codebases without a sidecar server, see capability and hardware constraints clearly, and switch between local and hosted models without changing the rest of the harness workflow.
 
-### Added: Generate repository-grounded wiki and architecture views for browser-agent projects
-- Why now: `agent-browser` still re-derives too much repo orientation inside individual sessions, while Devin shows the value of a standing, refreshable codebase wiki that both people and agents can cite during work.
+### Added: Add adversary-style tool-call review for browser-agent actions
+- Why now: `agent-browser` has approvals and validation surfaces, but it still lacks a contextual reviewer that evaluates each browser or tool action against user intent before execution, which Goose now productizes as Adversary Mode.
 - Linear issue title:
-  - `Generate repository-grounded wiki and architecture views for browser-agent projects`
+  - `Add adversary-style tool-call review for browser-agent actions`
 - Suggested problem statement:
-  - `agent-browser` lacks a durable, repo-grounded knowledge surface for codebase maps, architecture views, and onboarding guidance, so each new run or reviewer often has to rebuild the same orientation context from scratch.
+  - `agent-browser` can ask for approval, but it does not yet have a contextual second-pass reviewer that can catch prompt injection, unsafe browser actions, or tool-call drift before execution based on the actual task and recent conversation state.
 - One-shot instruction for an LLM:
-  - Build a repository-grounded wiki system for `agent-browser` that scans the current project, generates refreshable codebase maps and architecture diagrams, stores grounded explanations as durable artifacts, and lets agent runs cite, open, and update those views during planning, implementation, and review.
+  - Implement an adversary-style runtime reviewer for `agent-browser` that intercepts planned tool and browser actions, compares them against user intent, recent context, and policy, then allows, blocks, or escalates those actions with an inspectable rationale and a fail-safe operator experience.
 
 ## How to use this file
 
@@ -68,5 +68,5 @@ Diff type: additive update after Devin research
 
 ## Recommended next Linear batch
 
-1. `Build review-native PR understanding for browser-agent changes`
-2. `Generate repository-grounded wiki and architecture views for browser-agent projects`
+1. `Add built-in local inference for browser-agent sessions`
+2. `Add adversary-style tool-call review for browser-agent actions`
