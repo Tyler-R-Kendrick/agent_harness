@@ -45,6 +45,12 @@ const flushAsyncUpdates = async (cycles = 25) => {
   });
 };
 
+function getTreeItemByText(text: string): HTMLElement {
+  const treeItem = screen.getAllByRole('treeitem').find((item) => within(item).queryByText(text));
+  if (!treeItem) throw new Error(`Unable to find tree item containing ${text}`);
+  return treeItem;
+}
+
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
@@ -314,7 +320,7 @@ describe('App', () => {
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
     expect(dashboard).toBeInTheDocument();
-    expect(within(dashboard).getByRole('article', { name: 'Conversation summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
     expect(within(dashboard).queryByText('Page: Hugging Face')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Chat mode' })).toBeInTheDocument();
@@ -362,19 +368,16 @@ describe('App', () => {
 
     expect(screen.getByRole('button', { name: 'Project map' })).toBeInTheDocument();
 
-    fireEvent.change(within(dashboard).getByLabelText('Describe widget'), {
-      target: { value: 'Add a session summary widget' },
-    });
-    fireEvent.click(within(dashboard).getByRole('button', { name: 'Go' }));
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'New session widget' }));
 
-    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session 2 widget' })).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
     expect(persisted['ws-research'].elements['workspace-sidebar'].props.title).toBe('Project map');
-    expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-session-summary-widget-'))).toBe(true);
+    expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-session-summary-widget-'))).toBe(false);
   });
 
   it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context sub-groups', async () => {
@@ -459,11 +462,11 @@ describe('App', () => {
     await flushAsyncUpdates();
 
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
-    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
+    expect(within(dashboard).queryByRole('article', { name: 'Session summary widget' })).not.toBeInTheDocument();
     await expect(webmcpTool.execute?.({ tool: 'read_harness_prompt_context' }, {} as never)).resolves.toMatchObject({
       rows: expect.arrayContaining([
         expect.stringContaining('Project map'),
-        expect.stringContaining('Session summary'),
       ]),
     });
   });
@@ -1453,10 +1456,10 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByLabelText('Add session to Research'));
-    expect(screen.getByText('Session 2')).toBeInTheDocument();
+    expect(getTreeItemByText('Session 2')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'New session' }));
-    expect(screen.getByText('Session 3')).toBeInTheDocument();
+    expect(getTreeItemByText('Session 3')).toBeInTheDocument();
   });
 
   it('renders settings and history labels from the navigation', async () => {
@@ -1905,6 +1908,7 @@ styles:
     fireEvent.click(screen.getByRole('button', { name: 'Save file' }));
 
     expect(screen.queryByLabelText('Workspace file path')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
 
     // Navigate to settings and install the model
@@ -4829,7 +4833,7 @@ styles:
     expect(screen.getAllByText('Transformers.js').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('splits session panes side by side on ctrl+click', async () => {
+  it('splits session panes side by side from normal worktree clicks', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -4838,22 +4842,19 @@ styles:
 
     // Add a second session
     fireEvent.click(screen.getByLabelText('Add session to Research'));
-    expect(screen.getByText('Session 2')).toBeInTheDocument();
+    expect(getTreeItemByText('Session 2')).toBeInTheDocument();
 
     // Before multi-select: only one chat panel visible
     expect(screen.getAllByRole('region', { name: /Chat panel|Terminal/ })).toHaveLength(1);
 
-    // Single-click Session 1 to activate it
-    fireEvent.click(screen.getByText('Session 1'));
-
-    // Ctrl+click Session 2 to add it alongside
-    fireEvent.click(screen.getByText('Session 2'), { ctrlKey: true });
+    // Single-click Session 1 to add it alongside Session 2
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
     // Now two chat panels should be visible
     expect(screen.getAllByRole('region', { name: /Chat panel|Terminal/ })).toHaveLength(2);
 
-    // Ctrl+click Session 2 again to remove it from split
-    fireEvent.click(screen.getByText('Session 2'), { ctrlKey: true });
+    // Clicking Session 2 again removes it from the split view
+    fireEvent.click(screen.getByRole('button', { name: 'Session 2' }));
     expect(screen.getAllByRole('region', { name: /Chat panel|Terminal/ })).toHaveLength(1);
   });
 
@@ -4865,7 +4866,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Add session to Research'));
-    fireEvent.click(screen.getByText('Session 1'), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
     expect(screen.getAllByRole('region', { name: /Chat panel|Terminal/ })).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: 'Close chat panel' })).toHaveLength(2);
@@ -4885,21 +4886,20 @@ styles:
     fireEvent.click(screen.getByLabelText('Add session to Research'));
 
     // Single-click Session 1
-    fireEvent.click(screen.getByText('Session 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
-    // Only Session 1 row should be active, not Session 2
+    // Session 1 is added to the existing Session 2 split
     const rows = document.querySelectorAll('.tree-row');
     const session1Row = [...rows].find((row) => row.textContent?.includes('Session 1') && !row.textContent?.includes('Session 2'));
     const session2Row = [...rows].find((row) => row.textContent?.includes('Session 2') && !row.textContent?.includes('Session 1'));
     expect(session1Row).toHaveClass('active');
-    expect(session2Row).not.toHaveClass('active');
-
-    // Ctrl+click Session 2 to add it
-    fireEvent.click(screen.getByText('Session 2'), { ctrlKey: true });
-
-    // Both rows should now be active
-    expect(session1Row).toHaveClass('active');
     expect(session2Row).toHaveClass('active');
+
+    // Clicking Session 2 again toggles it closed
+
+    fireEvent.click(screen.getByRole('button', { name: 'Session 2' }));
+    expect(session1Row).toHaveClass('active');
+    expect(session2Row).not.toHaveClass('active');
   });
 
   it('wraps panels into a new row when container width is below the per-panel minimum', async () => {
@@ -4914,10 +4914,10 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Click Hugging Face (browser tab) → 2 panels (1 browser + 1 session) → PanelSplitView mounts
+    // Open three render panes: two browser tabs and one session
     fireEvent.click(screen.getByText('Hugging Face'));
-    // Ctrl+click Transformers.js to also open it → 3 panels (2 browser + 1 session)
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
     // 640px fits exactly 2 panels of 320px, so the 3rd panel wraps to a new row
     await act(async () => {
@@ -4927,10 +4927,10 @@ styles:
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(2);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(splitRows[1]).toHaveClass('panels-2');
+    expect(splitRows[1]).toHaveClass('panels-1');
   });
 
-  it('shows all panels in a single row when the container is wide enough', async () => {
+  it('keeps split panes capped at two columns even when the container is wide', async () => {
     vi.useFakeTimers();
     let resizeCallback: ResizeObserverCallback | null = null;
     vi.stubGlobal('ResizeObserver', class {
@@ -4942,19 +4942,20 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Click Hugging Face (browser tab) → 2 panels (1 browser + 1 session) → PanelSplitView mounts
+    // Open three render panes: two browser tabs and one session
     fireEvent.click(screen.getByText('Hugging Face'));
-    // Ctrl+click Transformers.js to also open it → 3 panels (2 browser + 1 session)
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
-    // 1280px fits 4 panels of 320px, so dashboard + 3 active panes fit in a single row
     await act(async () => {
       resizeCallback?.([{ contentRect: { width: 1280 } } as ResizeObserverEntry], null as unknown as ResizeObserver);
     });
 
     const splitRows = document.querySelectorAll('.browser-split-view');
-    expect(splitRows).toHaveLength(1);
-    expect(splitRows[0]).toHaveClass('panels-4');
+    expect(splitRows).toHaveLength(2);
+    expect(splitRows[0]).toHaveClass('panels-2');
+    expect(splitRows[1]).toHaveClass('panels-1');
+    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
   });
 
   it('hides panels that would breach the minimum panel height', async () => {
@@ -4969,21 +4970,22 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Open 4 panels: dashboard, HF + Transformers.js browser tabs, and active Session 1
+    // Open three render panes: two browser tabs and one session
     fireEvent.click(screen.getByText('Hugging Face'));
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
-    // 640px width → 2 per row; 280px height → floor(280/240)=1 max row → only 2 panels shown
+    // 640px width: 2 per row; 280px height: 1 max row, so only 2 panels are shown
     await act(async () => {
       resizeCallback?.([{ contentRect: { width: 640, height: 280 } } as ResizeObserverEntry], null as unknown as ResizeObserver);
     });
 
-    // Only the first row (dashboard + first browser panel) should be rendered; later panels are hidden
+    // Only the first row is rendered; later panels are hidden
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(1);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
-    expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(1);
+    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.queryByLabelText('Chat panel')).not.toBeInTheDocument();
   });
 
@@ -4999,11 +5001,12 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Open 4 panels: dashboard, HF + Transformers.js browser tabs, and active Session 1
+    // Open three render panes: two browser tabs and one session
     fireEvent.click(screen.getByText('Hugging Face'));
     fireEvent.click(screen.getByText('Transformers.js'), { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
-    // 640px width → 2 per row; 520px height → floor(520/240)=2 max rows → all 3 panels shown
+    // 640px width: 2 per row; 520px height: 2 max rows, so all 3 panels are shown
     await act(async () => {
       resizeCallback?.([{ contentRect: { width: 640, height: 520 } } as ResizeObserverEntry], null as unknown as ResizeObserver);
     });
@@ -5011,8 +5014,8 @@ styles:
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(2);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(splitRows[1]).toHaveClass('panels-2');
-    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
+    expect(splitRows[1]).toHaveClass('panels-1');
+    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });
@@ -5024,6 +5027,7 @@ styles:
 
     // Open a browser tab so there is already one panel alongside the session
     fireEvent.click(screen.getByText('Hugging Face'));
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
 
     // Add a skill file to trigger the file editor
     fireEvent.click(screen.getByLabelText('Add file to Research'));
@@ -5059,7 +5063,7 @@ styles:
     fireEvent.click(screen.getByRole('button', { name: 'Close file editor' }));
 
     expect(screen.queryByLabelText('File editor')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
   });
 
   it('keeps the file name as a label until edit is clicked', async () => {
@@ -5133,7 +5137,8 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Default session panel is active
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
 
     // Single-click Hugging Face
@@ -5150,17 +5155,17 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
 
-    // Open a browser tab beside the default dashboard and session
+    // Open a browser tab beside an active session
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
     fireEvent.click(screen.getByText('Hugging Face'));
+    fireEvent.click(screen.getByText('Transformers.js'));
 
-    // Verify initial order: dashboard, browser panel, then session
-    const splitView = document.querySelector('.browser-split-view');
-    expect(splitView).not.toBeNull();
-    const cells = splitView!.querySelectorAll('.panel-drag-cell');
+    // Verify initial order: session, first browser panel, then second browser panel
+    const cells = document.querySelectorAll('.panel-drag-cell');
     expect(cells).toHaveLength(3);
-    expect(cells[0].querySelector('[aria-label="Harness dashboard"]')).not.toBeNull();
+    expect(cells[0].querySelector('[aria-label="Chat panel"]')).not.toBeNull();
     expect(cells[1].querySelector('[aria-label="Page overlay"]')).not.toBeNull();
-    expect(cells[2].querySelector('[aria-label="Chat panel"]')).not.toBeNull();
+    expect(cells[2].querySelector('[aria-label="Page overlay"]')).not.toBeNull();
 
     // Simulate dnd-kit drag from the first draggable title bar.
     const [handleA] = document.querySelectorAll('.panel-titlebar--draggable');
@@ -5174,8 +5179,8 @@ styles:
     const handles = document.querySelectorAll('.panel-titlebar--draggable');
     expect(handles).toHaveLength(3);
     // Both panel types must still be rendered after interaction
-    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });
 
@@ -5735,7 +5740,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
 
     expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
@@ -5752,7 +5757,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
 
     await act(async () => {
@@ -5769,7 +5774,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
 
@@ -5782,7 +5787,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
 
@@ -5801,7 +5806,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
 
@@ -5821,14 +5826,14 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
 
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session name' }), { key: 'Escape' });
 
     expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument();
-    expect(screen.getByText('Session 1')).toBeInTheDocument();
+    expect(getTreeItemByText('Session 1')).toBeInTheDocument();
   });
 
   it('clicking Remove in session context menu removes the session', async () => {
@@ -5838,9 +5843,9 @@ styles:
 
     // Add a second session so removing Session 1 doesn’t break the panel
     fireEvent.click(screen.getByLabelText('Add session to Research'));
-    expect(screen.getByText('Session 2')).toBeInTheDocument();
+    expect(getTreeItemByText('Session 2')).toBeInTheDocument();
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
@@ -5858,9 +5863,9 @@ styles:
 
     // Add a second session so removing Session 1 doesn't leave the panel empty
     fireEvent.click(screen.getByLabelText('Add session to Research'));
-    expect(screen.getByText('Session 2')).toBeInTheDocument();
+    expect(getTreeItemByText('Session 2')).toBeInTheDocument();
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
     fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
@@ -5934,7 +5939,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    const sessionRow = screen.getByText('Session 1').closest('[role="treeitem"]')!;
+    const sessionRow = getTreeItemByText('Session 1');
     fireEvent.contextMenu(sessionRow);
 
     const menu = screen.getByRole('menu', { name: 'Context menu' });
@@ -6027,7 +6032,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(getTreeItemByText('Session 1'));
     expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
   });
 
@@ -6107,7 +6112,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(getTreeItemByText('Session 1'));
     expect(screen.getByRole('menuitem', { name: 'History' })).toBeInTheDocument();
   });
 
@@ -6203,7 +6208,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(getTreeItemByText('Session 1'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
 
     expect(screen.getByRole('dialog', { name: 'Session history' })).toBeInTheDocument();
@@ -6215,7 +6220,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(getTreeItemByText('Session 1'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
 
     expect(screen.getAllByRole('button', { name: /Branch from here/i }).length).toBeGreaterThanOrEqual(1);
@@ -6226,7 +6231,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(getTreeItemByText('Session 1'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'History' }));
 
     const branchBtn = screen.getAllByRole('button', { name: /Branch from here/i })[0];
@@ -6497,7 +6502,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
 
-    fireEvent.contextMenu(screen.getByText('Session 1').closest('[role="treeitem"]')!);
+    fireEvent.contextMenu(getTreeItemByText('Session 1'));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Properties' }));
 
     const dialog = screen.getByRole('dialog', { name: 'Properties' });

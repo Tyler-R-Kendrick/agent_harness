@@ -62,6 +62,20 @@ describe('harness catalog', () => {
     })).not.toThrow();
 
     expect(() => assertHarnessElementAllowedByCatalog({
+      id: 'main-dashboard',
+      type: 'DashboardCanvas',
+      slot: 'dashboard.canvas',
+      props: {
+        sessionWidgetLayouts: {
+          session1: {
+            position: { col: 0, row: 0 },
+            size: { cols: 6, rows: 4 },
+          },
+        },
+      },
+    })).not.toThrow();
+
+    expect(() => assertHarnessElementAllowedByCatalog({
       id: 'bad-type',
       type: 'RawHtml',
       slot: 'app.sidebar',

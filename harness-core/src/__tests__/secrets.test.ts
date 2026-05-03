@@ -301,6 +301,7 @@ describe('core secrets manager', () => {
     const highEntropySecret = 'n9vK8xQp2LmR7sT4yZ0aBcDeFgHiJk';
     const samples = [
       `STRIPE_SECRET_KEY=${stripeLikeSecret}`,
+      'SUPABASE_SERVICE_ROLE_KEY=eyJaaaaaaaaaaaa.bbbbbbbbbbbb.cccccccccccc',
       'GOOGLE_API_KEY=AIzaSyA1234567890abcdefghijklmnopqrst',
       'SENDGRID_API_KEY=SG.12345678901234567890.abcdefghijklmnopqrstuvwxyz',
       'RESEND_API_KEY=re_1234567890abcdefghijklmnopqrstuv',
@@ -309,6 +310,8 @@ describe('core secrets manager', () => {
       'VERCEL_TOKEN=vercel_1234567890abcdefghijklmnopqrstuv',
       'aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
       'postgres://app_user:db-password-1234@db.example.com:5432/app',
+      'mongodb+srv://mongo_user:mongo-password-1234@cluster.example.com/app',
+      'mysql://mysql_user:mysql-password-1234@db.example.com:3306/app',
       'https://service-user:service-password-1234@api.example.com/v1',
       '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCfakeprivatekeymaterial1234567890\n-----END PRIVATE KEY-----',
       `The integration token is ${highEntropySecret}.`,
@@ -322,6 +325,9 @@ describe('core secrets manager', () => {
     const result = await secrets.sanitizeText(samples.join('\n'));
 
     expect(result.text).not.toContain(stripeLikeSecret);
+    expect(result.text).not.toContain('eyJaaaaaaaaaaaa.bbbbbbbbbbbb.cccccccccccc');
+    expect(result.text).not.toContain('mongo-password-1234');
+    expect(result.text).not.toContain('mysql-password-1234');
     expect(result.text).not.toContain(highEntropySecret);
     expect(result.text).not.toContain('p9vK8xQp2LmR7sT4yZ0aBcDeFgHiJk');
     expect(result.text).toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
@@ -329,7 +335,7 @@ describe('core secrets manager', () => {
     expect(result.text).toContain('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzz.');
     expect(result.text).toContain('018f7b7a-6c2d-7a99-a111-abcdefabcdef');
     expect(result.refs.every(isSecretRef)).toBe(true);
-    await expect(store.list()).resolves.toHaveLength(13);
+    await expect(store.list()).resolves.toHaveLength(16);
   });
 
   it('honors sanitization settings and validates persisted settings shape', async () => {

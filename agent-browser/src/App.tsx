@@ -222,6 +222,12 @@ import {
   useStoredState,
 } from './services/sessionState';
 import {
+  DEFAULT_TRAJECTORY_CRITIC_SETTINGS,
+  isTrajectoryCriticSettings,
+  normalizeTrajectoryCriticSettings,
+  type TrajectoryCriticSettings,
+} from './services/trajectoryCritic';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -279,6 +285,7 @@ import {
   type WorkspaceContextMenuState,
 } from './services/workspaceMcpWorktree';
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
+import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
 import {
   applyHarnessElementPatch,
@@ -1809,6 +1816,7 @@ function ChatPanel({
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
   secretSettings,
+  trajectoryCriticSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
   dragHandleProps,
@@ -1841,6 +1849,7 @@ function ChatPanel({
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   secretSettings: SecretManagementSettings;
+  trajectoryCriticSettings: TrajectoryCriticSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
   dragHandleProps?: PanelDragHandleProps;
@@ -5059,7 +5068,7 @@ function ChatPanel({
       <div className="shared-console-body">
         <div className="shared-console-main">
           {!showBash && activeActivityMessage ? (
-            <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+            <ProcessPanel message={activeActivityMessage} criticSettings={trajectoryCriticSettings} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
@@ -5640,6 +5649,64 @@ function formatSecretUpdated(value: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function TrajectoryCriticSettingsPanel({
+  settings,
+  onSettingsChange,
+}: {
+  settings: TrajectoryCriticSettings;
+  onSettingsChange: (settings: TrajectoryCriticSettings) => void;
+}) {
+  const updateSettings = (next: Partial<TrajectoryCriticSettings>) => {
+    onSettingsChange(normalizeTrajectoryCriticSettings({ ...settings, ...next }));
+  };
+  const updateThreshold = (key: keyof Pick<TrajectoryCriticSettings, 'stopThreshold' | 'branchThreshold' | 'retryThreshold' | 'humanReviewThreshold'>, value: string) => {
+    const parsed = Number.parseFloat(value);
+    updateSettings({ [key]: Number.isFinite(parsed) ? parsed : settings[key] });
+  };
+  const fields: Array<{
+    key: keyof Pick<TrajectoryCriticSettings, 'stopThreshold' | 'branchThreshold' | 'retryThreshold' | 'humanReviewThreshold'>;
+    label: string;
+  }> = [
+    { key: 'stopThreshold', label: 'Stop' },
+    { key: 'branchThreshold', label: 'Branch' },
+    { key: 'retryThreshold', label: 'Retry' },
+    { key: 'humanReviewThreshold', label: 'Human review' },
+  ];
+
+  return (
+    <SettingsSection title="Trajectory critic">
+      <div className="trajectory-settings">
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            aria-label={settings.enabled ? 'Disable trajectory critic' : 'Enable trajectory critic'}
+            onChange={(event) => updateSettings({ enabled: event.target.checked })}
+          />
+          <span><strong>Runtime trajectory scoring</strong><small>Score process traces before a low-confidence run burns more time.</small></span>
+        </label>
+        <div className="trajectory-threshold-grid">
+          {fields.map((field) => (
+            <label key={field.key} className="provider-command-field">
+              <span>{field.label}</span>
+              <input
+                aria-label={`${field.label} threshold`}
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                value={settings[field.key]}
+                onChange={(event) => updateThreshold(field.key, event.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+        <p className="muted">Actions escalate as confidence falls: human review, retry, branch, then stop.</p>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function ClaudeDesignSettings({
   workspaceFiles,
   settings,
@@ -5760,13 +5827,15 @@ interface SettingsPanelProps {
   onSaveSecret: (input: { name: string; value: string }) => Promise<string>;
   onDeleteSecret: (idOrRef: string) => Promise<void>;
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
+  trajectoryCriticSettings: TrajectoryCriticSettings;
+  onTrajectoryCriticSettingsChange: (settings: TrajectoryCriticSettings) => void;
   workspaceFiles: WorkspaceFile[];
   designThemeSettings: DesignThemeSettings;
   designCss: DesignMdCssRenderResult | null;
   onDesignThemeSettingsChange: (settings: DesignThemeSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -5848,6 +5917,11 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
         onSaveSecret={onSaveSecret}
         onDeleteSecret={onDeleteSecret}
         onSettingsChange={onSecretSettingsChange}
+      />
+
+      <TrajectoryCriticSettingsPanel
+        settings={trajectoryCriticSettings}
+        onSettingsChange={onTrajectoryCriticSettingsChange}
       />
 
       {copilotState.models.length > 0 && (
@@ -7097,15 +7171,14 @@ function PanelSplitView({
   }, []);
 
   const displayPanels = panels;
-  const panelsPerRow = containerWidth > 0 ? Math.max(1, Math.floor(containerWidth / PANEL_MIN_WIDTH_PX)) : displayPanels.length;
-  const maxRows = containerHeight > 0 ? Math.max(1, Math.floor(containerHeight / PANEL_MIN_HEIGHT_PX)) : Math.ceil(displayPanels.length / panelsPerRow);
-  const visiblePanels = displayPanels.slice(0, maxRows * panelsPerRow);
+  const layout = planRenderPaneRows(displayPanels, {
+    width: containerWidth,
+    height: containerHeight,
+    minWidth: PANEL_MIN_WIDTH_PX,
+    minHeight: PANEL_MIN_HEIGHT_PX,
+  });
+  const visiblePanels = layout.rows.flat();
   const sortableIds = visiblePanels.map(panelKey);
-
-  const rows: Panel[][] = [];
-  for (let i = 0; i < visiblePanels.length; i += panelsPerRow) {
-    rows.push(visiblePanels.slice(i, i + panelsPerRow));
-  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -7135,7 +7208,7 @@ function PanelSplitView({
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
         <div ref={containerRef} className="panel-rows-container" aria-label="Split panels">
-          {rows.map((row, rowIndex) => (
+          {layout.rows.map((row, rowIndex) => (
             <div key={rowIndex} className={`browser-split-view panels-${row.length}`}>
               {row.map((panel) => (
                 <SortablePanelCell key={panelKey(panel)} id={panelKey(panel)}>
@@ -7144,6 +7217,11 @@ function PanelSplitView({
               ))}
             </div>
           ))}
+          {layout.hiddenCount > 0 ? (
+            <div className="panel-hidden-notice" role="status">
+              {layout.hiddenCount} render {layout.hiddenCount === 1 ? 'pane is' : 'panes are'} hidden until there is more room.
+            </div>
+          ) : null}
         </div>
       </SortableContext>
       <DragOverlay dropAnimation={null}>
@@ -7247,6 +7325,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.secretManagementSettings,
     isSecretManagementSettings,
     DEFAULT_SECRET_MANAGEMENT_SETTINGS,
+  );
+  const [trajectoryCriticSettings, setTrajectoryCriticSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.trajectoryCriticSettings,
+    isTrajectoryCriticSettings,
+    DEFAULT_TRAJECTORY_CRITIC_SETTINGS,
   );
   const [secretRecords, setSecretRecords] = useState<SecretRecord[]>([]);
   const evaluationAgentRegistry = useMemo(
@@ -7359,6 +7443,12 @@ function AgentBrowserApp() {
       saveJson(localStorageBackend, STORAGE_KEYS.secretManagementSettings, next);
     }
   }, [setSecretSettings]);
+  const updateTrajectoryCriticSettings = useCallback((next: TrajectoryCriticSettings) => {
+    setTrajectoryCriticSettings(next);
+    if (localStorageBackend) {
+      saveJson(localStorageBackend, STORAGE_KEYS.trajectoryCriticSettings, next);
+    }
+  }, [setTrajectoryCriticSettings]);
   const webMcpModelContext = useMemo(
     () => installModelContext(typeof window === 'undefined' ? undefined : window) ?? new ModelContext(),
     [],
@@ -7577,8 +7667,9 @@ function AgentBrowserApp() {
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
+    const hasActiveRenderPane = Boolean(editingFile || openBrowserTabs.length || activeSessionIds.length);
 
-    if (activeWorkspaceViewState.dashboardOpen) {
+    if (activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane) {
       panes.push({
         id: `dashboard:${activeWorkspaceId}`,
         paneType: 'dashboard',
@@ -7901,7 +7992,8 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
-  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string): { id: string; name: string; isOpen: boolean } | null => {
+  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean } = {}): { id: string; name: string; isOpen: boolean } | null => {
+    const shouldOpen = options.open ?? true;
     let createdSession: { id: string; name: string; isOpen: boolean } | null = null;
     let newSessionId: string | null = null;
     setRoot((current) => {
@@ -7920,7 +8012,7 @@ function AgentBrowserApp() {
         newSession.name = nameOverride.trim();
       }
       newSessionId = newSession.id;
-      createdSession = { id: newSession.id, name: newSession.name, isOpen: true };
+      createdSession = { id: newSession.id, name: newSession.name, isOpen: shouldOpen };
       return deepUpdate(current, workspaceId, (node) => {
         const withCategories = ensureWorkspaceCategories(node);
         return {
@@ -7947,9 +8039,9 @@ function AgentBrowserApp() {
         ...current,
         [workspaceId]: {
           ...existing,
-          openTabIds: [],
-          editingFilePath: null,
-          activeSessionIds: newSessionId ? [newSessionId] : [],
+          activeSessionIds: shouldOpen && newSessionId
+            ? [...(existing.activeSessionIds ?? []).filter((id) => id !== newSessionId), newSessionId]
+            : existing.activeSessionIds ?? [],
           mountedSessionFsIds: newSessionId && !existing.mountedSessionFsIds.includes(newSessionId)
             ? [...existing.mountedSessionFsIds, newSessionId]
             : existing.mountedSessionFsIds,
@@ -7976,9 +8068,7 @@ function AgentBrowserApp() {
         ...current,
         [activeWorkspaceId]: {
           ...existing,
-          openTabIds: [],
-          editingFilePath: null,
-          activeSessionIds: [sessionId],
+          activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
           mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
             ? existing.mountedSessionFsIds
             : [...existing.mountedSessionFsIds, sessionId],
@@ -8052,7 +8142,19 @@ function AgentBrowserApp() {
     if (!workspace) return;
     const normalized = normalizeWorkspaceViewEntry(workspace, workspaceViewStateByWorkspace[workspaceId]);
     if (!normalized.activeSessionIds.length) {
-      addSessionToWorkspace(workspaceId);
+      const firstSessionId = findFirstSessionId(workspace);
+      if (!firstSessionId) {
+        addSessionToWorkspace(workspaceId);
+        return;
+      }
+      setWorkspaceViewStateByWorkspace((current) => ({
+        ...current,
+        [workspaceId]: {
+          ...(current[workspaceId] ?? createWorkspaceViewEntry(workspace)),
+          activeMode: mode,
+          activeSessionIds: [firstSessionId],
+        },
+      }));
       return;
     }
     setWorkspaceViewStateByWorkspace((current) => ({
@@ -8442,8 +8544,10 @@ function AgentBrowserApp() {
         ...current,
         [activeWorkspaceId]: {
           ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
-          openTabIds: [tab.id],
-          editingFilePath: null,
+          openTabIds: [
+            ...((current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)).openTabIds ?? []).filter((id) => id !== tab.id),
+            tab.id,
+          ],
         },
       }));
       setToast({ msg: `Opened ${result.value}`, type: 'success' });
@@ -8907,7 +9011,6 @@ function AgentBrowserApp() {
       });
     }
     const nextRoot = removeNodeById(root, nodeId);
-    const nextWorkspace = getWorkspace(nextRoot, ownerWorkspaceId);
     setRoot(nextRoot);
     setWorkspaceViewStateByWorkspace((current) => {
       const existing = current[ownerWorkspaceId];
@@ -8916,9 +9019,7 @@ function AgentBrowserApp() {
       const nextEntry: WorkspaceViewState = {
         ...existing,
         openTabIds: (existing.openTabIds ?? []).filter((id) => id !== nodeId),
-        activeSessionIds: remainingSessionIds.length > 0
-          ? remainingSessionIds
-          : (nextWorkspace ? (findFirstSessionId(nextWorkspace) ? [findFirstSessionId(nextWorkspace)!] : []) : []),
+        activeSessionIds: remainingSessionIds,
         mountedSessionFsIds: (existing.mountedSessionFsIds ?? []).filter((id) => id !== nodeId),
         panelOrder: paneId ? existing.panelOrder.filter((id) => id !== paneId) : existing.panelOrder,
       };
@@ -8991,32 +9092,35 @@ function AgentBrowserApp() {
       if (workspace) {
         setWorkspaceViewStateByWorkspace((current) => ({
           ...current,
-          [workspace.id]: {
-            ...(current[workspace.id] ?? createWorkspaceViewEntry(workspace)),
-            editingFilePath: node.filePath ?? null,
-          },
+          [workspace.id]: (() => {
+            const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
+            return {
+              ...existing,
+              editingFilePath: existing.editingFilePath === node.filePath ? null : node.filePath ?? null,
+            };
+          })(),
         }));
         switchWorkspace(workspace.id);
       }
     }
   }
 
-  function handleOpenTreeTab(nodeId: string, multi = false) {
+  function handleOpenTreeTab(nodeId: string, _multi = false) {
     const node = findNode(root, nodeId);
     if (!node || node.type !== 'tab') return;
     const workspace = findWorkspaceForNode(root, nodeId);
     if (workspace) switchWorkspace(workspace.id);
     if (!workspace) return;
+    const toggleId = (ids: string[]) => ids.includes(nodeId)
+      ? ids.filter((id) => id !== nodeId)
+      : [...ids, nodeId];
     if ((node.nodeKind ?? 'browser') === 'browser') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.openTabIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
         return {
           ...current,
-          [workspace.id]: { ...existing, openTabIds: newIds },
+          [workspace.id]: { ...existing, openTabIds: toggleId(currentIds) },
         };
       });
       return;
@@ -9025,10 +9129,7 @@ function AgentBrowserApp() {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: newIds } };
+        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
       });
       return;
     }
@@ -9036,20 +9137,14 @@ function AgentBrowserApp() {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: newIds } };
+        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
       });
     }
     if (node.nodeKind === 'session') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        const newIds = multi
-          ? (currentIds.includes(nodeId) ? currentIds.filter((id) => id !== nodeId) : [...currentIds, nodeId])
-          : [nodeId];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: newIds } };
+        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
       });
     }
   }
@@ -10257,6 +10352,8 @@ function AgentBrowserApp() {
         onSaveSecret={saveManualSecret}
         onDeleteSecret={deleteManualSecret}
         onSecretSettingsChange={updateSecretSettings}
+        trajectoryCriticSettings={trajectoryCriticSettings}
+        onTrajectoryCriticSettingsChange={updateTrajectoryCriticSettings}
         workspaceFiles={activeWorkspaceFiles}
         designThemeSettings={designThemeSettings}
         designCss={activeDesignCss}
@@ -10391,7 +10488,8 @@ function AgentBrowserApp() {
             },
           }));
           const panelEntries: Array<[string, Panel]> = [];
-          if (activeWorkspaceViewState.dashboardOpen) {
+          const hasActivePanel = Boolean(editingFile || openBrowserTabs.length || activeSessionIds.length);
+          if (activeWorkspaceViewState.dashboardOpen && !hasActivePanel) {
             panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
           }
           if (editingFile) {
@@ -10422,7 +10520,20 @@ function AgentBrowserApp() {
                     path: file.path,
                     kind: detectWorkspaceFileKind(file.path) ?? undefined,
                   }))}
-                  onAddWidget={regenerateActiveHarnessSpec}
+                  onCreateSessionWidget={() => addSessionToWorkspace(activeWorkspaceId, undefined, { open: false })}
+                  onOpenSession={(sessionId) => setWorkspaceViewStateByWorkspace((current) => {
+                    const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+                    return {
+                      ...current,
+                      [activeWorkspaceId]: {
+                        ...existing,
+                        activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
+                        mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
+                          ? existing.mountedSessionFsIds
+                          : [...existing.mountedSessionFsIds, sessionId],
+                      },
+                    };
+                  })}
                   onPatchElement={patchActiveHarnessElement}
                   onRegenerate={regenerateActiveHarnessSpec}
                   onRestoreDefault={restoreActiveHarnessSpec}
@@ -10502,6 +10613,7 @@ function AgentBrowserApp() {
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 secretSettings={secretSettings}
+                trajectoryCriticSettings={trajectoryCriticSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}
                 dragHandleProps={dragHandleProps}

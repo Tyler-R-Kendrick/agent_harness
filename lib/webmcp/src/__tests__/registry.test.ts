@@ -65,10 +65,13 @@ describe('ToolRegistry', () => {
     expect(registry.get('echo')).toEqual(tool);
     expect(registry.list()).toEqual([tool]);
 
-    unsubscribe();
     expect(registry.unregister('echo')).toBe(true);
     expect(registry.unregister('echo')).toBe(false);
-    expect(changes).toEqual(['register:echo']);
+    expect(changes).toEqual(['register:echo', 'unregister:echo']);
+
+    unsubscribe();
+    registry.register(createTool('quiet'));
+    expect(changes).toEqual(['register:echo', 'unregister:echo']);
   });
 });
 
@@ -87,10 +90,19 @@ describe('ResourceRegistry', () => {
     expect(registry.get('files://workspace/AGENTS.md')).toEqual(resource);
     expect(registry.list()).toEqual([resource]);
 
-    unsubscribe();
     expect(registry.unregister('files://workspace/AGENTS.md')).toBe(true);
     expect(registry.unregister('files://workspace/AGENTS.md')).toBe(false);
-    expect(changes).toEqual(['register:files://workspace/AGENTS.md']);
+    expect(changes).toEqual([
+      'register:files://workspace/AGENTS.md',
+      'unregister:files://workspace/AGENTS.md',
+    ]);
+
+    unsubscribe();
+    registry.register(createResource('files://workspace/quiet.md'));
+    expect(changes).toEqual([
+      'register:files://workspace/AGENTS.md',
+      'unregister:files://workspace/AGENTS.md',
+    ]);
   });
 });
 
@@ -109,10 +121,13 @@ describe('PromptRegistry', () => {
     expect(registry.get('workspace-overview')).toEqual(prompt);
     expect(registry.list()).toEqual([prompt]);
 
-    unsubscribe();
     expect(registry.unregister('workspace-overview')).toBe(true);
     expect(registry.unregister('workspace-overview')).toBe(false);
-    expect(changes).toEqual(['register:workspace-overview']);
+    expect(changes).toEqual(['register:workspace-overview', 'unregister:workspace-overview']);
+
+    unsubscribe();
+    registry.register(createPrompt('quiet-prompt'));
+    expect(changes).toEqual(['register:workspace-overview', 'unregister:workspace-overview']);
   });
 });
 
@@ -131,9 +146,12 @@ describe('PromptTemplateRegistry', () => {
     expect(registry.get('workspace-file')).toEqual(promptTemplate);
     expect(registry.list()).toEqual([promptTemplate]);
 
-    unsubscribe();
     expect(registry.unregister('workspace-file')).toBe(true);
     expect(registry.unregister('workspace-file')).toBe(false);
-    expect(changes).toEqual(['register:workspace-file']);
+    expect(changes).toEqual(['register:workspace-file', 'unregister:workspace-file']);
+
+    unsubscribe();
+    registry.register(createPromptTemplate('quiet-template'));
+    expect(changes).toEqual(['register:workspace-file', 'unregister:workspace-file']);
   });
 });

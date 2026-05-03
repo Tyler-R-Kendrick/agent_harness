@@ -229,13 +229,12 @@ export function listWorkspaceSessionIds(workspace: TreeNode): string[] {
 
 export function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewState {
   const sessionIds = listWorkspaceSessionIds(workspace);
-  const firstId = sessionIds[0] ?? null;
   return {
     openTabIds: [],
     editingFilePath: null,
     dashboardOpen: true,
     activeMode: 'agent',
-    activeSessionIds: firstId ? [firstId] : [],
+    activeSessionIds: [],
     mountedSessionFsIds: sessionIds,
     panelOrder: [],
   };
@@ -246,7 +245,7 @@ export function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: Workspa
   const sessionIds = listWorkspaceSessionIds(workspace);
   const requestedSessionIds = base.activeSessionIds ?? [];
   const rawIds = requestedSessionIds.filter((id) => Boolean(findNode(workspace, id)));
-  const shouldFallbackToFirstSession = !entry || requestedSessionIds.length > 0;
+  const shouldFallbackToFirstSession = requestedSessionIds.length > 0;
   const firstSessionId = sessionIds[0] ?? null;
   const activeSessionIds = rawIds.length > 0
     ? rawIds

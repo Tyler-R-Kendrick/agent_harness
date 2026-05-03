@@ -50,6 +50,7 @@ describe('STORAGE_KEYS', () => {
       benchmarkModelRoutingSettings: expect.any(String),
       benchmarkEvidenceState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
+      trajectoryCriticSettings: 'agent-browser.trajectory-critic-settings',
     });
   });
 });

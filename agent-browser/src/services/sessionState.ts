@@ -28,6 +28,7 @@ export const STORAGE_KEYS = {
   benchmarkEvidenceState: 'agent-browser.benchmark-evidence-state',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
+  trajectoryCriticSettings: 'agent-browser.trajectory-critic-settings',
   // sessionStorage — per-tab, refresh-only
   selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
   selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',
