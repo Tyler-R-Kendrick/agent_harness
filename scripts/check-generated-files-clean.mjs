@@ -6,7 +6,27 @@ import { fileURLToPath } from 'node:url';
 export const GENERATED_ARTIFACT_RULES = [
   {
     label: 'package-lock.json',
-    matches: (filePath) => filePath === 'package-lock.json',
+    matches: (filePath) => filePath === 'package-lock.json' || filePath.endsWith('/package-lock.json'),
+  },
+  {
+    label: 'coverage/',
+    matches: (filePath) => filePath === 'coverage' || filePath.startsWith('coverage/') || filePath.includes('/coverage/'),
+  },
+  {
+    label: 'playwright-report/',
+    matches: (filePath) => filePath === 'playwright-report' || filePath.startsWith('playwright-report/'),
+  },
+  {
+    label: 'test-results/',
+    matches: (filePath) => filePath === 'test-results' || filePath.startsWith('test-results/'),
+  },
+  {
+    label: '*.tsbuildinfo',
+    matches: (filePath) => filePath.endsWith('.tsbuildinfo'),
+  },
+  {
+    label: '*.log',
+    matches: (filePath) => filePath.endsWith('.log'),
   },
   {
     label: '.npm-cache/',
