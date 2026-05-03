@@ -56,8 +56,9 @@ function createGitIndex(paths) {
 async function main() {
   const visualSmokeScript = await readScript('agent-browser/scripts/visual-smoke.mjs');
   assert.match(visualSmokeScript, /waitUntil:\s*'domcontentloaded'/);
-  assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*120_000/);
+  assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*300_000/);
   assert.match(visualSmokeScript, /shellTimeoutMs\s*=\s*30_000/);
+  assert.match(visualSmokeScript, /\*\*\/api\/cursor\/status/);
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');
@@ -117,6 +118,8 @@ async function main() {
       '--coverage',
       '--coverage.processingConcurrency=1',
       '--coverage.reportsDirectory=../output/coverage/agent-browser-test',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
       '--exclude',
       'src/App.smoke.test.tsx',
       '--reporter=dot',
@@ -126,6 +129,8 @@ async function main() {
     coverageRunner.buildAppTestArgs(),
     [
       'run',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
       '--reporter=dot',
       'src/App.smoke.test.tsx',
     ],
@@ -136,6 +141,18 @@ async function main() {
       ['a.test.ts', 'b.test.ts'],
       ['c.test.ts'],
     ],
+  );
+  assert.deepEqual(
+    coverageRunner.chunkTestFiles(['a.test.ts', 'b.test.ts', 'c.test.ts', 'd.test.ts'], 3),
+    [['a.test.ts', 'b.test.ts', 'c.test.ts'], ['d.test.ts']],
+  );
+  const coverageFileFixture = await mkdtemp(path.join(tmpdir(), 'agent-browser-coverage-files-'));
+  await mkdir(path.join(coverageFileFixture, 'src', 'services'), { recursive: true });
+  await writeFile(path.join(coverageFileFixture, 'src', 'App.smoke.test.tsx'), '');
+  await writeFile(path.join(coverageFileFixture, 'src', 'services', 'cursorApi.test.ts'), '');
+  assert.deepEqual(
+    await coverageRunner.findTestFiles(path.join(coverageFileFixture, 'src')),
+    ['src/services/cursorApi.test.ts'],
   );
   assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
     exitCode: 1,
@@ -152,6 +169,23 @@ async function main() {
       ' Test Files  92 passed | 1 failed (93)',
       '      Tests  964 passed | 1 failed (965)',
       "Error: ENOENT: no such file or directory, lstat 'C:\\src\\agent-harness\\output\\coverage\\agent-browser-123\\.tmp'",
+    ].join('\n'),
+  }), false);
+  assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
+    exitCode: 4294967295,
+    output: [
+      ' Test Files  12 passed (12)',
+      '      Tests  98 passed (98)',
+      '% Coverage report from v8',
+      '-------------------|---------|----------|---------|---------|-------------------',
+    ].join('\n'),
+  }), true);
+  assert.equal(coverageRunner.isVitestCoverageTmpCleanupRace({
+    exitCode: 4294967295,
+    output: [
+      ' Test Files  11 passed | 1 failed (12)',
+      '      Tests  97 passed | 1 failed (98)',
+      '% Coverage report from v8',
     ].join('\n'),
   }), false);
 

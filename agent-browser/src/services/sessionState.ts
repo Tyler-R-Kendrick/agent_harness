@@ -33,6 +33,7 @@ export const STORAGE_KEYS = {
   selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
   selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',
   selectedCopilotModelBySession: 'agent-browser.session.selected-copilot-model-by-session',
+  selectedCursorModelBySession: 'agent-browser.session.selected-cursor-model-by-session',
   activeWorkspaceId: 'agent-browser.session.active-workspace-id',
   activePanel: 'agent-browser.session.active-panel',
 } as const;

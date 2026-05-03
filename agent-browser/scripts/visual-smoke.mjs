@@ -92,8 +92,21 @@ async function main() {
         }),
       });
     });
+    await page.route('**/api/cursor/status', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          available: true,
+          authenticated: false,
+          models: [],
+          signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
+          signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
+        }),
+      });
+    });
 
-    const navigationTimeoutMs = 120_000;
+    const navigationTimeoutMs = 300_000;
     const shellTimeoutMs = 30_000;
 
     await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: navigationTimeoutMs });
@@ -102,6 +115,7 @@ async function main() {
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Cursor', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');

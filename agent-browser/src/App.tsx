@@ -85,6 +85,7 @@ import {
   buildPlannerToolInstructions,
   buildResearcherToolInstructions,
   hasCodiModels,
+  hasCursorAccess,
   hasGhcpAccess,
   resolveAgentModelIds,
   resolveRuntimeAgentProvider,
@@ -110,6 +111,7 @@ import {
 import { MarkdownContent } from './utils/MarkdownContent';
 import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
+import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import {
   BENCHMARK_TASK_CLASSES,
@@ -465,6 +467,14 @@ const EMPTY_COPILOT_STATE: CopilotRuntimeState = {
   models: [],
   signInCommand: 'copilot login',
   signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+};
+
+const EMPTY_CURSOR_STATE: CursorRuntimeState = {
+  available: false,
+  authenticated: false,
+  models: [],
+  signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
+  signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
 };
 
 const NEW_TAB_NAME_LENGTH = 32;
@@ -1790,6 +1800,7 @@ function getConfiguredBenchmarkIndexUrls(): string[] {
 function ChatPanel({
   installedModels,
   copilotState,
+  cursorState,
   pendingSearch,
   onSearchConsumed,
   onToast,
@@ -1823,6 +1834,7 @@ function ChatPanel({
 }: {
   installedModels: HFModel[];
   copilotState: CopilotRuntimeState;
+  cursorState: CursorRuntimeState;
   pendingSearch: string | null;
   onSearchConsumed: () => void;
   onToast: (toast: Exclude<ToastState, null>) => void;
@@ -1891,6 +1903,12 @@ function ChatPanel({
     isStringRecord,
     {},
   );
+  const [selectedCursorModelBySession, setSelectedCursorModelBySession] = useStoredState<Record<string, string>>(
+    sessionStorageBackend,
+    STORAGE_KEYS.selectedCursorModelBySession,
+    isStringRecord,
+    {},
+  );
   const [selectedAgentIdBySession, setSelectedAgentIdBySession] = useState<Record<string, string | null>>({});
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
@@ -1955,23 +1973,29 @@ function ChatPanel({
     [locationPromptContext, selectedAgentId, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
-  const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState });
+  const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
   const selectedCopilotModelId = selectedCopilotModelBySession[activeChatSessionId] ?? '';
-  const { codiModelId: effectiveSelectedModelId, ghcpModelId: effectiveSelectedCopilotModelId } = resolveAgentModelIds({
+  const selectedCursorModelId = selectedCursorModelBySession[activeChatSessionId] ?? '';
+  const { codiModelId: effectiveSelectedModelId, ghcpModelId: effectiveSelectedCopilotModelId, cursorModelId: effectiveSelectedCursorModelId } = resolveAgentModelIds({
     installedModels,
     selectedCodiModelId: selectedModelId,
     copilotModels: copilotState.models,
     selectedGhcpModelId: selectedCopilotModelId,
+    cursorModels: cursorState.models,
+    selectedCursorModelId,
   });
   const activeLocalModel = installedModels.find((model) => model.id === effectiveSelectedModelId);
   const activeCopilotModel = copilotState.models.find((model) => model.id === effectiveSelectedCopilotModelId);
+  const activeCursorModel = cursorState.models.find((model) => model.id === effectiveSelectedCursorModelId);
   const hasInstalledModels = hasCodiModels(installedModels);
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
+  const hasAvailableCursorModels = hasCursorAccess(cursorState);
   const selectedRuntimeProvider = resolveRuntimeAgentProvider({
     provider: selectedProvider,
     hasCodiModelsReady: Boolean(activeLocalModel),
     hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+    hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
   });
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
@@ -2039,17 +2063,20 @@ function ChatPanel({
     || resolveAgentProviderForTask({ selectedProvider, latestUserInput: input.trim() }) === 'tour-guide'
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+    || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
     || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
+      || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
     ))
   );
-  const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState });
+  const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState, cursorState });
   const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.agents.length} AGENTS.md · ${workspaceCapabilities.skills.length} skills · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
   const effectiveSelectedCopilotModelIdRef = useRef(effectiveSelectedCopilotModelId);
+  const effectiveSelectedCursorModelIdRef = useRef(effectiveSelectedCursorModelId);
   const selectedAgentIdRef = useRef<string | null>(selectedAgentId);
   const selectedToolIdsRef = useRef<string[]>(selectedToolIds);
   const activeModeRef = useRef(activeMode);
@@ -2068,6 +2095,10 @@ function ChatPanel({
   useEffect(() => {
     effectiveSelectedCopilotModelIdRef.current = effectiveSelectedCopilotModelId;
   }, [effectiveSelectedCopilotModelId]);
+
+  useEffect(() => {
+    effectiveSelectedCursorModelIdRef.current = effectiveSelectedCursorModelId;
+  }, [effectiveSelectedCursorModelId]);
 
   useEffect(() => {
     selectedAgentIdRef.current = selectedAgentId;
@@ -2508,6 +2539,7 @@ function ChatPanel({
       provider: providerForRequest,
       hasCodiModelsReady: Boolean(activeLocalModel),
       hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+      hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
     });
     if (requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
@@ -2561,8 +2593,18 @@ function ChatPanel({
       return;
     }
 
+    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'cursor' && (!effectiveSelectedCursorModelId || !hasAvailableCursorModels)) {
+      updateMessage(assistantId, {
+        status: 'error',
+        content: cursorState.authenticated
+          ? 'Cursor has no enabled models for this environment. Open Models to refresh or switch to Codi.'
+          : 'Set CURSOR_API_KEY from Models before sending a prompt with Cursor.',
+      });
+      return;
+    }
+
     if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !requestLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP model or a browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -2640,7 +2682,11 @@ function ChatPanel({
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
         agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : providerForRequest === 'planner' ? 'planner' : 'tool-agent',
         agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : providerForRequest === 'planner' ? 'Planner' : 'Tool Agent',
-        modelId: runtimeProviderForRequest === 'ghcp' ? requestGhcpModelId : requestCodiModelId,
+        modelId: runtimeProviderForRequest === 'ghcp'
+          ? requestGhcpModelId
+          : runtimeProviderForRequest === 'cursor'
+            ? effectiveSelectedCursorModelId
+            : requestCodiModelId,
         modelProvider: providerForRequest,
       });
       const processMetaFromStageMeta = (meta?: StageMeta): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
@@ -3645,10 +3691,11 @@ function ChatPanel({
 
         const modelConfig = runtimeProviderForRequest === 'ghcp'
           ? { kind: 'copilot' as const, modelId: requestGhcpModelId, sessionId: activeChatSessionId }
-          : { kind: 'local' as const, modelId: requestLocalModel!.id, task: requestLocalModel!.task };
-        const model = runtimeProviderForRequest === 'ghcp'
-          ? resolveLanguageModel(modelConfig)
-          : new LocalLanguageModel(
+          : runtimeProviderForRequest === 'cursor'
+            ? { kind: 'cursor' as const, modelId: effectiveSelectedCursorModelId, sessionId: activeChatSessionId }
+            : { kind: 'local' as const, modelId: requestLocalModel!.id, task: requestLocalModel!.task };
+        const model = runtimeProviderForRequest === 'codi'
+          ? (new LocalLanguageModel(
               requestLocalModel!.id,
               requestLocalModel!.task,
               {
@@ -3675,10 +3722,12 @@ function ChatPanel({
                 },
                 onPhase: (phase) => noteLocalToolPlanningOutput(activePlanningStage, phase === 'thinking' ? 'thinking' : 'streaming'),
               },
-            ) as unknown as ReturnType<typeof resolveLanguageModel>;
+            ) as unknown as ReturnType<typeof resolveLanguageModel>)
+          : resolveLanguageModel(modelConfig);
         const capabilities = getModelCapabilities(modelConfig, {
           installedModels,
           copilotModels: copilotState.models,
+          cursorModels: cursorState.models,
         });
         const allTools = createDefaultTools({
           appendSharedMessages,
@@ -4347,7 +4396,7 @@ function ChatPanel({
           branchId: entry.branchId ?? `agent:${providerForRequest}`,
           agentId: entry.actorId ?? providerForRequest,
           agentLabel: entry.agentLabel ?? getAgentDisplayName({ provider: providerForRequest }),
-          modelId: entry.modelId ?? (runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : effectiveSelectedModelId),
+          modelId: entry.modelId ?? (runtimeProviderForRequest === 'ghcp' ? effectiveSelectedCopilotModelId : runtimeProviderForRequest === 'cursor' ? effectiveSelectedCursorModelId : effectiveSelectedModelId),
           modelProvider: entry.modelProvider ?? providerForRequest,
           status: 'done',
           ts: entry.realtimeTs,
@@ -4575,6 +4624,8 @@ function ChatPanel({
                   ? 'Tour Guide returned an empty response.'
                 : runtimeProviderForRequest === 'ghcp'
                   ? 'GHCP returned an empty response.'
+                : runtimeProviderForRequest === 'cursor'
+                  ? 'Cursor returned an empty response.'
                 : 'Codi returned an empty response.'
             ),
           }));
@@ -4589,6 +4640,8 @@ function ChatPanel({
                 ? 'Tour Guide returned an empty response.'
               : runtimeProviderForRequest === 'ghcp'
                 ? 'GHCP returned an empty response.'
+              : runtimeProviderForRequest === 'cursor'
+                ? 'Cursor returned an empty response.'
                 : 'Codi returned an empty response.'
           ));
         },
@@ -4607,7 +4660,7 @@ function ChatPanel({
         provider: providerForRequest,
         runtimeProvider: runtimeProviderForRequest,
         model: requestLocalModel,
-        modelId: requestGhcpModelId,
+        modelId: runtimeProviderForRequest === 'cursor' ? effectiveSelectedCursorModelId : requestGhcpModelId,
         sessionId: activeChatSessionId,
         latestUserInput: text,
         messages: nextMessages,
@@ -4627,7 +4680,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, effectiveSelectedCopilotModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, cursorState, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -4954,6 +5007,7 @@ function ChatPanel({
                   <select aria-label="Agent provider" value={selectedProvider} onChange={(event) => setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value as AgentProvider }))} {...panelTitlebarControlProps}>
                     <option value="codi">Codi</option>
                     <option value="ghcp">GHCP</option>
+                    <option value="cursor">Cursor</option>
                     <option value="researcher">Researcher</option>
                     <option value="debugger">Debugger</option>
                     <option value="planner">Planner</option>
@@ -4974,6 +5028,20 @@ function ChatPanel({
                       : (
                         <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
                           {copilotState.authenticated ? 'GHCP models' : 'Sign in'}
+                        </button>
+                      ))
+                  : selectedRuntimeProvider === 'cursor'
+                  ? (hasAvailableCursorModels
+                      ? (
+                        <label className="header-model-selector" {...panelTitlebarControlProps}>
+                          <select aria-label="Cursor model" value={effectiveSelectedCursorModelId} onChange={(event) => setSelectedCursorModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                            {cursorState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                          </select>
+                        </label>
+                      )
+                      : (
+                        <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                          {cursorState.authenticated ? 'Cursor models' : 'Set key'}
                         </button>
                       ))
                   : (hasInstalledModels
@@ -5071,7 +5139,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} criticSettings={trajectoryCriticSettings} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, activeCursorModelName: activeCursorModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -5105,7 +5173,7 @@ function ChatPanel({
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
-                    placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels })}
+                    placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels })}
                     rows={1}
                     onKeyDown={handleChatInputKeyDown}
                   />
@@ -5146,9 +5214,13 @@ function ChatPanel({
                 ? (!hasAvailableCopilotModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
+                : selectedRuntimeProvider === 'cursor'
+                  ? (!hasAvailableCursorModels
+                    ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{cursorState.authenticated ? 'Cursor has no enabled models. Open Models.' : 'Cursor needs CURSOR_API_KEY. Open Models.'}</button>
+                    : null)
                 : selectedProvider === 'tour-guide'
                   ? null
-                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -5311,6 +5383,25 @@ function BenchmarkRoutingSettingsPanel({
     </SettingsSection>
   );
 }
+
+function CursorModelCard({ model }: { model: CursorModelSummary }) {
+  return (
+    <div className="model-card copilot-model-card">
+      <div className="model-card-icon"><Icon name="sparkles" size={15} color="#a78bfa" /></div>
+      <div className="model-card-body">
+        <strong>{model.name}</strong>
+        <div className="copilot-model-meta">
+          <span className="chip mini">{model.id}</span>
+          {typeof model.contextWindow === 'number' ? <span className="chip mini">{model.contextWindow.toLocaleString()} ctx</span> : null}
+          {typeof model.maxOutputTokens === 'number' ? <span className="chip mini">{model.maxOutputTokens.toLocaleString()} out</span> : null}
+        </div>
+        <p>Enabled through the Cursor SDK runtime for this environment.</p>
+      </div>
+      <span className="badge connected">Enabled</span>
+    </div>
+  );
+}
+
 
 function SettingsSection({
   title,
@@ -5805,6 +5896,9 @@ interface SettingsPanelProps {
   copilotState: CopilotRuntimeState;
   isCopilotLoading: boolean;
   onRefreshCopilot: () => void;
+  cursorState: CursorRuntimeState;
+  isCursorLoading: boolean;
+  onRefreshCursor: () => void;
   registryModels: HFModel[];
   installedModels: HFModel[];
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
@@ -5835,11 +5929,12 @@ interface SettingsPanelProps {
   onDesignThemeSettingsChange: (settings: DesignThemeSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
   const copilotReady = hasGhcpAccess(copilotState);
+  const cursorReady = hasCursorAccess(cursorState);
   // Recommended = seed models not yet installed, only shown when no filter active
   const recommended = !isFiltering ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
   const recommendedIds = new Set(recommended.map((m) => m.id));
@@ -5857,7 +5952,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
           <h2>Settings</h2>
           <p className="muted">Manage GHCP availability and browser-runnable ONNX local models.</p>
         </div>
-        <span className="badge">{copilotState.models.length} GHCP · {installedModels.length} Codi</span>
+        <span className="badge">{copilotState.models.length} GHCP · {cursorState.models.length} Cursor · {installedModels.length} Codi</span>
       </div>
 
       <SettingsSection title="Providers">
@@ -5876,7 +5971,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
               <>
                 <div className="provider-actions">
                   <a className="secondary-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Copilot</a>
-                  <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                  <button type="button" className="secondary-button" aria-label="Refresh GitHub Copilot status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
                 </div>
                 <label className="provider-command-field">
                   <span>Run this in the dev container</span>
@@ -5885,12 +5980,44 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
               </>
             ) : !copilotReady ? (
               <div className="provider-actions">
-                <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                <button type="button" className="secondary-button" aria-label="Refresh GitHub Copilot status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
               </div>
             ) : (
               <div className="provider-actions">
                 <span className="badge connected">GHCP available</span>
-                <button type="button" className="secondary-button" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                <button type="button" className="secondary-button" aria-label="Refresh GitHub Copilot status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
+            )}
+          </article>
+          <article className="provider-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>Cursor</strong>
+                <p>Uses the Cursor SDK with CURSOR_API_KEY to expose Cursor as a first-class chat agent provider.</p>
+              </div>
+              <span className={`badge${cursorReady ? ' connected' : ''}`}>{isCursorLoading ? 'Checking...' : (cursorReady ? 'Cursor ready' : (cursorState.authenticated ? 'Signed in' : 'API key required'))}</span>
+            </div>
+            {cursorState.statusMessage ? <p className="muted">{cursorState.statusMessage}</p> : null}
+            {cursorState.error ? <p className="file-editor-error">{cursorState.error}</p> : null}
+            {!cursorReady && !cursorState.authenticated ? (
+              <>
+                <div className="provider-actions">
+                  <a className="secondary-button" href={cursorState.signInDocsUrl} target="_blank" rel="noreferrer">Cursor SDK docs</a>
+                  <button type="button" className="secondary-button" aria-label="Refresh Cursor status" onClick={onRefreshCursor} disabled={isCursorLoading}>{isCursorLoading ? 'Checking...' : 'Refresh status'}</button>
+                </div>
+                <label className="provider-command-field">
+                  <span>Configure the dev server environment</span>
+                  <input aria-label="Cursor setup command" value={cursorState.signInCommand} readOnly />
+                </label>
+              </>
+            ) : !cursorReady ? (
+              <div className="provider-actions">
+                <button type="button" className="secondary-button" aria-label="Refresh Cursor status" onClick={onRefreshCursor} disabled={isCursorLoading}>{isCursorLoading ? 'Checking...' : 'Refresh status'}</button>
+              </div>
+            ) : (
+              <div className="provider-actions">
+                <span className="badge connected">Cursor available</span>
+                <button type="button" className="secondary-button" aria-label="Refresh Cursor status" onClick={onRefreshCursor} disabled={isCursorLoading}>{isCursorLoading ? 'Checking...' : 'Refresh status'}</button>
               </div>
             )}
           </article>
@@ -5928,6 +6055,14 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
         <SettingsSection title={`GitHub Copilot models (${copilotState.models.length})`} defaultOpen={false} scrollBody>
           {copilotState.models.map((model) => (
             <CopilotModelCard key={model.id} model={model} />
+          ))}
+        </SettingsSection>
+      )}
+
+      {cursorState.models.length > 0 && (
+        <SettingsSection title={`Cursor models (${cursorState.models.length})`} defaultOpen={false} scrollBody>
+          {cursorState.models.map((model) => (
+            <CursorModelCard key={model.id} model={model} />
           ))}
         </SettingsSection>
       )}
@@ -7253,7 +7388,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'researcher', 'debugger', 'planner', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'researcher', 'debugger', 'planner', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -7341,6 +7476,8 @@ function AgentBrowserApp() {
   const [negativeRubricTechniques, setNegativeRubricTechniques] = useState<string[]>(() => evaluationAgentRegistry.listNegativeRubricTechniques());
   const [copilotState, setCopilotState] = useState<CopilotRuntimeState>(EMPTY_COPILOT_STATE);
   const [isCopilotStateLoading, setIsCopilotStateLoading] = useState(true);
+  const [cursorState, setCursorState] = useState<CursorRuntimeState>(EMPTY_CURSOR_STATE);
+  const [isCursorStateLoading, setIsCursorStateLoading] = useState(true);
   const benchmarkRoutingBaseCandidates = useMemo(
     () => buildBenchmarkRoutingCandidates({ copilotModels: copilotState.models, installedModels }),
     [copilotState.models, installedModels],
@@ -7780,6 +7917,31 @@ function AgentBrowserApp() {
   useEffect(() => {
     void refreshCopilotState(false);
   }, [refreshCopilotState]);
+
+  const refreshCursorState = useCallback(async (showErrors = false) => {
+    setIsCursorStateLoading(true);
+    try {
+      const state = await fetchCursorState();
+      setCursorState(state);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') return;
+      const message = error instanceof Error ? error.message : 'Failed to check Cursor status.';
+      setCursorState({
+        ...EMPTY_CURSOR_STATE,
+        error: message,
+      });
+      if (showErrors) {
+        setToast({ msg: message, type: 'warning' });
+      }
+    } finally {
+      setIsCursorStateLoading(false);
+    }
+  }, [setToast]);
+
+  useEffect(() => {
+    void refreshCursorState(false);
+  }, [refreshCursorState]);
 
   useEffect(() => {
     if (!benchmarkRoutingSettings.enabled || benchmarkRoutingBaseCandidates.length === 0) return;
@@ -8244,10 +8406,14 @@ function AgentBrowserApp() {
       activePanel,
       activeWorkspace: activeWorkspace.name,
       openTab: openBrowserTabs[0]?.name ?? null,
-      defaultProvider: getDefaultAgentProvider({ installedModels, copilotState }),
+      defaultProvider: getDefaultAgentProvider({ installedModels, copilotState, cursorState }),
       copilot: {
         authenticated: copilotState.authenticated,
         models: copilotState.models.map((model) => model.id),
+      },
+      cursor: {
+        authenticated: cursorState.authenticated,
+        models: cursorState.models.map((model) => model.id),
       },
       installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
       tabsInWorkspace: countTabs(activeWorkspace),
@@ -8257,7 +8423,7 @@ function AgentBrowserApp() {
       plugins: activeWorkspaceCapabilities.plugins.map((plugin) => plugin.directory),
       hooks: activeWorkspaceCapabilities.hooks.map((hook) => hook.name),
     },
-  }, [activePanel, activeWorkspace, activeWorkspaceCapabilities, activeWorkspaceFiles, copilotState, installedModels, openBrowserTabs]);
+  }, [activePanel, activeWorkspace, activeWorkspaceCapabilities, activeWorkspaceFiles, copilotState, cursorState, installedModels, openBrowserTabs]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -10330,6 +10496,9 @@ function AgentBrowserApp() {
         copilotState={copilotState}
         isCopilotLoading={isCopilotStateLoading}
         onRefreshCopilot={() => void refreshCopilotState(true)}
+        cursorState={cursorState}
+        isCursorLoading={isCursorStateLoading}
+        onRefreshCursor={() => void refreshCursorState(true)}
         registryModels={registryModels}
         installedModels={installedModels}
         benchmarkRoutingSettings={benchmarkRoutingSettings}
@@ -10575,6 +10744,7 @@ function AgentBrowserApp() {
                 key={panel.id}
                 installedModels={installedModels}
                 copilotState={copilotState}
+                cursorState={cursorState}
                 pendingSearch={pendingSearch}
                 onSearchConsumed={() => setPendingSearch(null)}
                 onToast={setToast}

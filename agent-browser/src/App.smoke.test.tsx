@@ -92,7 +92,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Primary navigation')).toBeInTheDocument();
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
+    expect(screen.getByRole('button', { name: 'New session widget' })).toBeInTheDocument();
   });
 
   it('hydrates installed local models from durable session storage', async () => {

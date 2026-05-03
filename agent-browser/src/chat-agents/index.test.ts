@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CopilotRuntimeState } from '../services/copilotApi';
+import type { CursorRuntimeState } from '../services/cursorApi';
 import type { HFModel } from '../types';
 import {
   getAgentDisplayName,
@@ -18,6 +19,17 @@ function createCopilotState(overrides: Partial<CopilotRuntimeState> = {}): Copil
     models: [],
     signInCommand: 'copilot login',
     signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+    ...overrides,
+  };
+}
+
+function createCursorState(overrides: Partial<CursorRuntimeState> = {}): CursorRuntimeState {
+  return {
+    available: true,
+    authenticated: false,
+    models: [],
+    signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
+    signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
     ...overrides,
   };
 }
@@ -59,6 +71,22 @@ describe('getDefaultAgentProvider', () => {
     expect(provider).toBe('ghcp');
   });
 
+  it('falls back to Cursor before GHCP when no local models are installed and Cursor is ready', () => {
+    const provider = getDefaultAgentProvider({
+      installedModels: [],
+      copilotState: createCopilotState({
+        authenticated: true,
+        models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true }],
+      }),
+      cursorState: createCursorState({
+        authenticated: true,
+        models: [{ id: 'composer-2', name: 'Composer 2' }],
+      }),
+    });
+
+    expect(provider).toBe('cursor');
+  });
+
   it('falls back to Codi when no agent is ready', () => {
     const provider = getDefaultAgentProvider({
       installedModels: [],
@@ -75,6 +103,8 @@ describe('agent helpers', () => {
     expect(getAgentDisplayName({ provider: 'codi' })).toBe('Codi: Codi');
     expect(getAgentDisplayName({ provider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('GHCP: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'ghcp' })).toBe('GHCP: Copilot');
+    expect(getAgentDisplayName({ provider: 'cursor', activeCursorModelName: 'Composer 2' })).toBe('Cursor: Composer 2');
+    expect(getAgentDisplayName({ provider: 'cursor' })).toBe('Cursor: Cursor');
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Researcher: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'codi', activeCodiModelName: 'Qwen' })).toBe('Researcher: Qwen');
     expect(getAgentDisplayName({ provider: 'debugger', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Debugger: GPT-4.1');
@@ -85,10 +115,14 @@ describe('agent helpers', () => {
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Install a Codi model to start chatting');
     expect(getAgentInputPlaceholder({ provider: 'ghcp', hasCodiModelsReady: false, hasGhcpModelsReady: true })).toBe('Ask GHCP…');
     expect(getAgentInputPlaceholder({ provider: 'ghcp', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP to start chatting');
+    expect(getAgentInputPlaceholder({ provider: 'cursor', hasCodiModelsReady: false, hasGhcpModelsReady: false, hasCursorModelsReady: true })).toBe('Ask Cursor…');
+    expect(getAgentInputPlaceholder({ provider: 'cursor', hasCodiModelsReady: false, hasGhcpModelsReady: false, hasCursorModelsReady: false })).toBe('Sign in to Cursor to start chatting');
     expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: true })).toBe('Ask Researcher…');
-    expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or install a Codi model to research');
+    expect(getAgentInputPlaceholder({ provider: 'researcher', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to research');
     expect(getAgentInputPlaceholder({ provider: 'debugger', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Debugger…');
+    expect(getAgentInputPlaceholder({ provider: 'debugger', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to debug');
     expect(getAgentInputPlaceholder({ provider: 'planner', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Planner…');
+    expect(getAgentInputPlaceholder({ provider: 'planner', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to plan');
     expect(getAgentInputPlaceholder({ provider: 'tour-guide', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Ask Tour Guide…');
   });
 
@@ -117,6 +151,12 @@ describe('agent helpers', () => {
       copilotState: createCopilotState({ authenticated: true, models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true }] }),
     })).toBe('1 GHCP models enabled');
     expect(getAgentProviderSummary({
+      provider: 'cursor',
+      installedModels: [],
+      copilotState: createCopilotState(),
+      cursorState: createCursorState({ authenticated: true, models: [{ id: 'composer-2', name: 'Composer 2' }] }),
+    })).toBe('1 Cursor models enabled');
+    expect(getAgentProviderSummary({
       provider: 'researcher',
       installedModels: [],
       copilotState: createCopilotState({ authenticated: true, models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true }] }),
@@ -130,7 +170,7 @@ describe('agent helpers', () => {
       provider: 'researcher',
       installedModels: [],
       copilotState: createCopilotState(),
-    })).toBe('Researcher needs GHCP or Codi');
+    })).toBe('Researcher needs GHCP, Cursor, or Codi');
     expect(getAgentProviderSummary({
       provider: 'debugger',
       installedModels,
@@ -152,7 +192,9 @@ describe('agent helpers', () => {
       selectedCodiModelId: 'missing',
       copilotModels: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true }],
       selectedGhcpModelId: 'missing',
-    })).toEqual({ codiModelId: 'onnx-community/Qwen3-0.6B-ONNX', ghcpModelId: 'gpt-4.1' });
+      cursorModels: [{ id: 'composer-2', name: 'Composer 2' }],
+      selectedCursorModelId: 'missing',
+    })).toEqual({ codiModelId: 'onnx-community/Qwen3-0.6B-ONNX', ghcpModelId: 'gpt-4.1', cursorModelId: 'composer-2' });
   });
 
   it('routes research requests to Researcher and resolves its backing runtime', () => {
@@ -161,9 +203,9 @@ describe('agent helpers', () => {
       latestUserInput: 'Research current source quality guidance with citations.',
     })).toBe('researcher');
     expect(resolveAgentProviderForTask({
-      selectedProvider: 'ghcp',
+      selectedProvider: 'cursor',
       latestUserInput: 'Say hello.',
-    })).toBe('ghcp');
+    })).toBe('cursor');
     expect(resolveAgentProviderForTask({
       selectedProvider: 'codi',
       latestUserInput: 'Debug why uploads are failing after release.',
@@ -186,6 +228,12 @@ describe('agent helpers', () => {
       hasCodiModelsReady: true,
       hasGhcpModelsReady: true,
     })).toBe('ghcp');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'researcher',
+      hasCodiModelsReady: true,
+      hasGhcpModelsReady: false,
+      hasCursorModelsReady: true,
+    })).toBe('cursor');
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
       hasCodiModelsReady: true,

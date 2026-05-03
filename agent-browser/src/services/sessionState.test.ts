@@ -40,6 +40,7 @@ describe('STORAGE_KEYS', () => {
       selectedProviderBySession: expect.any(String),
       selectedCodiModelBySession: expect.any(String),
       selectedCopilotModelBySession: expect.any(String),
+      selectedCursorModelBySession: expect.any(String),
       activeWorkspaceId: expect.any(String),
       activePanel: expect.any(String),
       workspaceRoot: expect.any(String),
