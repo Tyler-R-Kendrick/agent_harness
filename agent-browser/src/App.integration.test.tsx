@@ -16,12 +16,15 @@ import {
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
 import { STORAGE_KEYS } from './services/sessionState';
 import type { CopilotRuntimeState } from './services/copilotApi';
+import type { CodexRuntimeState } from './services/codexApi';
 
 const searchBrowserModelsMock = vi.fn();
 const loadModelMock = vi.fn();
 const generateMock = vi.fn();
 const fetchCopilotStateMock = vi.fn();
 const streamCopilotChatMock = vi.fn();
+const fetchCodexStateMock = vi.fn();
+const streamCodexRuntimeChatMock = vi.fn();
 const resolveLanguageModelMock = vi.fn(() => ({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' }));
 const runStagedToolPipelineMock = vi.fn();
 const runParallelDelegationWorkflowMock = vi.fn();
@@ -73,6 +76,11 @@ vi.mock('./services/browserInference', () => ({
 vi.mock('./services/copilotApi', () => ({
   fetchCopilotState: (...args: unknown[]) => fetchCopilotStateMock(...args),
   streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
+}));
+
+vi.mock('./services/codexApi', () => ({
+  fetchCodexState: (...args: unknown[]) => fetchCodexStateMock(...args),
+  streamCodexRuntimeChat: (...args: unknown[]) => streamCodexRuntimeChatMock(...args),
 }));
 
 vi.mock('./services/agentProvider', async (importOriginal) => {
@@ -273,6 +281,17 @@ describe('App', () => {
     ...overrides,
   });
 
+  const createCodexState = (overrides: Partial<CodexRuntimeState> = {}): CodexRuntimeState => ({
+    available: true,
+    authenticated: false,
+    statusMessage: undefined,
+    error: undefined,
+    models: [],
+    signInCommand: 'codex login',
+    signInDocsUrl: 'https://developers.openai.com/codex/auth',
+    ...overrides,
+  });
+
   beforeEach(() => {
     resetDefaultSecretsManagerAgentForTests();
     window.localStorage.clear();
@@ -283,6 +302,8 @@ describe('App', () => {
     generateMock.mockReset();
     fetchCopilotStateMock.mockReset();
     streamCopilotChatMock.mockReset();
+    fetchCodexStateMock.mockReset();
+    streamCodexRuntimeChatMock.mockReset();
     resolveLanguageModelMock.mockReset();
     runStagedToolPipelineMock.mockReset();
     runParallelDelegationWorkflowMock.mockReset();
@@ -291,6 +312,8 @@ describe('App', () => {
     generateMock.mockResolvedValue(undefined);
     fetchCopilotStateMock.mockResolvedValue(createCopilotState());
     streamCopilotChatMock.mockResolvedValue(undefined);
+    fetchCodexStateMock.mockResolvedValue(createCodexState());
+    streamCodexRuntimeChatMock.mockResolvedValue(undefined);
     resolveLanguageModelMock.mockReturnValue({ specificationVersion: 'v3', provider: 'test', modelId: 'test-model' });
     runStagedToolPipelineMock.mockResolvedValue({ text: 'done', steps: 1 });
     runParallelDelegationWorkflowMock.mockResolvedValue({ text: 'done', steps: 4 });
@@ -1492,6 +1515,7 @@ describe('App', () => {
     expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh Cursor status' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Refresh status' }).length).toBeGreaterThanOrEqual(2);
 
     fireEvent.click(providersToggle);
 
@@ -1675,6 +1699,7 @@ styles:
 
     fireEvent.click(screen.getByLabelText('Settings'));
     expect(screen.getByText('1 GHCP · 0 Cursor · 0 Codi')).toBeInTheDocument();
+    expect(screen.getByText('1 GHCP · 0 Codex · 0 Codi')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /GitHub Copilot models \(1\)/i }));
 
     expect(screen.getAllByText('GPT-4.1').length).toBeGreaterThanOrEqual(2);
@@ -1766,6 +1791,7 @@ styles:
     expect(screen.queryByRole('link', { name: 'Sign in to Copilot' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('GitHub Copilot sign-in command')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Refresh status' }).length).toBeGreaterThanOrEqual(2);
   });
 
   it('adds workspace capability files and persists them to local storage', async () => {
@@ -2593,6 +2619,79 @@ styles:
       expect.any(AbortSignal),
     );
     expect(screen.getByText('Copilot response')).toBeInTheDocument();
+  });
+
+  it('streams responses through Codex when it is the selected provider without requiring Codi', async () => {
+    vi.useFakeTimers();
+    fetchCodexStateMock.mockResolvedValue(createCodexState({
+      authenticated: true,
+      version: '0.125.0',
+      models: [{
+        id: 'codex-default',
+        name: 'Codex default',
+        reasoning: true,
+        vision: false,
+      }],
+    }));
+    streamCodexRuntimeChatMock.mockImplementation(async (_request, callbacks) => {
+      callbacks.onReasoning?.('Inspecting workspace instructions');
+      callbacks.onToken?.('Codex response');
+      callbacks.onDone?.('Codex response');
+      return Promise.resolve();
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Agent provider' }), { target: { value: 'codex' } });
+    expect(screen.getByRole('combobox', { name: 'Codex model' })).toHaveValue('codex-default');
+
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the current workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(runStagedToolPipelineMock).not.toHaveBeenCalled();
+    expect(streamCodexRuntimeChatMock).toHaveBeenCalledTimes(1);
+    expect(streamCodexRuntimeChatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'codex-default',
+        prompt: expect.stringContaining('Active workspace: Research'),
+        sessionId: expect.any(String),
+      }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+    );
+    expect(screen.getByText('Codex response')).toBeInTheDocument();
+  });
+
+  it('shows Codex status in Settings', async () => {
+    vi.useFakeTimers();
+    fetchCodexStateMock.mockResolvedValue(createCodexState({
+      authenticated: true,
+      version: '0.125.0',
+      statusMessage: 'Codex CLI 0.125.0 available.',
+      models: [{ id: 'codex-default', name: 'Codex default', reasoning: true, vision: false }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getAllByText('Codex').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Codex ready')).toBeInTheDocument();
+    expect(screen.getByText('Codex CLI 0.125.0 available.')).toBeInTheDocument();
   });
 
   it('reuses the same GHCP session id across multiple sends in one chat session', async () => {
