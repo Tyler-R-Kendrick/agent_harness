@@ -63,24 +63,24 @@ function nextGeneratedId(spec: HarnessAppSpec, baseId: string): string {
 }
 
 function titleFromPrompt(prompt: string): string {
-  if (/\bbrowser|page|tab/i.test(prompt)) return 'Browser status';
-  if (/\bsession|agent|terminal/i.test(prompt)) return 'Session overview';
-  if (/\bfile|workspace file/i.test(prompt)) return 'Workspace files';
-  return 'Generated widget';
+  if (/\bstorage|asset|artifact|file|workspace file/i.test(prompt)) return 'Session storage';
+  if (/\bruntime|tool|cwd|model|provider/i.test(prompt)) return 'Runtime context';
+  if (/\bactivity|history|handoff|transcript/i.test(prompt)) return 'Session activity';
+  return 'Session summary';
 }
 
 function typeFromPrompt(prompt: string): HarnessElement['type'] {
-  if (/\bbrowser|page|tab/i.test(prompt)) return 'BrowserPageList';
-  if (/\bsession|agent|terminal/i.test(prompt)) return 'SessionList';
-  if (/\bfile|workspace file/i.test(prompt)) return 'FileList';
-  return 'WorkspaceSummary';
+  if (/\bstorage|asset|artifact|file|workspace file/i.test(prompt)) return 'SessionStorageAssets';
+  if (/\bruntime|tool|cwd|model|provider/i.test(prompt)) return 'SessionRuntime';
+  if (/\bactivity|history|handoff|transcript/i.test(prompt)) return 'SessionActivity';
+  return 'SessionConversationSummary';
 }
 
 function generatedBaseId(prompt: string): string {
-  if (/\bbrowser|page|tab/i.test(prompt)) return 'generated-browser-status-widget';
-  if (/\bsession|agent|terminal/i.test(prompt)) return 'generated-session-overview-widget';
-  if (/\bfile|workspace file/i.test(prompt)) return 'generated-file-list-widget';
-  return 'generated-workspace-summary-widget';
+  if (/\bstorage|asset|artifact|file|workspace file/i.test(prompt)) return 'generated-session-storage-widget';
+  if (/\bruntime|tool|cwd|model|provider/i.test(prompt)) return 'generated-runtime-context-widget';
+  if (/\bactivity|history|handoff|transcript/i.test(prompt)) return 'generated-session-activity-widget';
+  return 'generated-session-summary-widget';
 }
 
 function addGeneratedDashboardWidget(spec: HarnessAppSpec, prompt: string): HarnessAppSpec {
@@ -92,6 +92,7 @@ function addGeneratedDashboardWidget(spec: HarnessAppSpec, prompt: string): Harn
     editable: true,
     props: {
       title: titleFromPrompt(prompt),
+      sessionId: 'active',
       emptyLabel: 'Nothing to show yet',
     },
   };

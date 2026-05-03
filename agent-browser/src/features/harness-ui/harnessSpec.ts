@@ -35,6 +35,21 @@ function element(
   };
 }
 
+function sessionWidgetProps(
+  title: string,
+  position: { col: number; row: number },
+  size: { cols: number; rows: number },
+  extra: Record<string, JsonValue> = {},
+) {
+  return {
+    title,
+    sessionId: 'active',
+    position,
+    size,
+    ...extra,
+  };
+}
+
 function withRevision(spec: HarnessAppSpec, revision = spec.metadata.revision + 1): HarnessAppSpec {
   return {
     ...spec,
@@ -145,42 +160,40 @@ export function createDefaultHarnessAppSpec({
         {
           slot: 'dashboard.canvas',
           children: [
-            'workspace-summary-widget',
-            'session-list-widget',
-            'browser-pages-widget',
-            'files-widget',
-            'harness-inspector-widget',
+            'conversation-summary-widget',
+            'session-storage-widget',
+            'session-activity-widget',
+            'runtime-context-widget',
           ],
         },
       ),
-      'workspace-summary-widget': element(
-        'workspace-summary-widget',
-        'WorkspaceSummary',
-        { title: 'Workspace summary', metric: 'Live harness state' },
+      'conversation-summary-widget': element(
+        'conversation-summary-widget',
+        'SessionConversationSummary',
+        sessionWidgetProps(
+          'Conversation summary',
+          { col: -7, row: -2 },
+          { cols: 5, rows: 3 },
+          { summary: 'Default conversation summary' },
+        ),
         { slot: 'dashboard.canvas' },
       ),
-      'session-list-widget': element(
-        'session-list-widget',
-        'SessionList',
-        { title: 'Sessions', emptyLabel: 'No sessions open' },
+      'session-storage-widget': element(
+        'session-storage-widget',
+        'SessionStorageAssets',
+        sessionWidgetProps('Session storage', { col: -2, row: -2 }, { cols: 4, rows: 3 }, { emptyLabel: 'No session assets yet' }),
         { slot: 'dashboard.canvas' },
       ),
-      'browser-pages-widget': element(
-        'browser-pages-widget',
-        'BrowserPageList',
-        { title: 'Browser pages', emptyLabel: 'No pages open' },
+      'session-activity-widget': element(
+        'session-activity-widget',
+        'SessionActivity',
+        sessionWidgetProps('Session activity', { col: -7, row: 1 }, { cols: 5, rows: 3 }, { emptyLabel: 'No chat history yet' }),
         { slot: 'dashboard.canvas' },
       ),
-      'files-widget': element(
-        'files-widget',
-        'FileList',
-        { title: 'Workspace files', emptyLabel: 'No files yet' },
-        { slot: 'dashboard.canvas' },
-      ),
-      'harness-inspector-widget': element(
-        'harness-inspector-widget',
-        'HarnessInspector',
-        { title: 'Customize harness' },
+      'runtime-context-widget': element(
+        'runtime-context-widget',
+        'SessionRuntime',
+        sessionWidgetProps('Runtime context', { col: -2, row: 1 }, { cols: 4, rows: 2 }),
         { slot: 'dashboard.canvas' },
       ),
       'browser-page-panel': element(

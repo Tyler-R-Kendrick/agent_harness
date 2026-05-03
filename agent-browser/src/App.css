@@ -2256,13 +2256,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   overflow: hidden;
 }
 .harness-widget-header {
-  min-height: 36px;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 8px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.harness-widget-title-group {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
 }
 .harness-widget-header h3 {
   margin: 0;
@@ -2273,6 +2278,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   white-space: nowrap;
   font-size: 12px;
   font-weight: 600;
+}
+.harness-widget-session-select {
+  width: min(188px, 100%);
+  min-width: 0;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 4px;
+  background: rgba(8, 13, 18, 0.78);
+  color: #cbd5e1;
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 3px 18px 3px 6px;
+}
+.harness-widget-session-select:disabled {
+  opacity: 0.72;
+}
+.harness-widget-controls {
+  display: grid;
+  grid-template-columns: repeat(7, 24px);
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.harness-widget-tool-button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.5);
+  color: #bfdbfe;
+  padding: 0;
+  cursor: pointer;
+}
+.harness-widget-tool-button:hover:not(:disabled),
+.harness-widget-tool-button:focus-visible {
+  border-color: rgba(125, 211, 252, 0.45);
+  background: rgba(14, 116, 144, 0.22);
+  color: #e0f2fe;
+}
+.harness-widget-tool-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 .harness-widget-badge {
   flex: 0 0 auto;
@@ -2288,9 +2335,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   overflow: auto;
   padding: 10px;
 }
+.harness-widget-body--minimized {
+  display: none;
+}
 .harness-widget-rendered,
 .harness-render-block {
   min-height: 0;
+}
+.harness-widget-summary {
+  margin: 8px 0;
+  color: #d1d5db;
+  font-size: 12px;
+  line-height: 1.45;
 }
 .harness-widget-kicker {
   margin: 0 0 8px;
@@ -2328,6 +2384,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #e5e7eb;
   font-size: 12px;
 }
+.harness-widget-list li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .harness-widget-list small {
   overflow: hidden;
   color: var(--text-muted);
@@ -2348,7 +2410,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .harness-add-widget-card {
   position: absolute;
   left: 0;
-  top: 410px;
+  top: 590px;
   width: 318px;
   min-height: 136px;
   overflow: hidden;
@@ -3704,8 +3766,11 @@ kbd {
     --harness-cell: 60px;
     min-width: 860px;
   }
+  .harness-widget-controls {
+    grid-template-columns: repeat(4, 24px);
+  }
   .harness-add-widget-card {
-    top: 350px;
+    top: 520px;
     width: 286px;
   }
   .shared-console-body {

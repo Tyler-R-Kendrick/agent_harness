@@ -1,9 +1,18 @@
 import type { ReactNode } from 'react';
-import type { HarnessAppSpec, HarnessElement } from './types';
+import type { HarnessAppSpec, HarnessElement, SessionWidgetAsset, SessionWidgetMessage } from './types';
 
 export type HarnessSessionSummary = {
   id: string;
   name: string;
+  isOpen?: boolean;
+  messages?: SessionWidgetMessage[];
+  assets?: SessionWidgetAsset[];
+  mode?: 'agent' | 'terminal';
+  provider?: string | null;
+  modelId?: string | null;
+  agentId?: string | null;
+  toolIds?: readonly string[];
+  cwd?: string | null;
 };
 
 export type HarnessBrowserPageSummary = {
@@ -34,7 +43,7 @@ function plural(count: number, singular: string, pluralLabel = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralLabel}`;
 }
 
-function renderList<T>(items: T[], emptyLabel: string, renderItem: (item: T) => ReactNode) {
+function renderList<T>(items: T[], emptyLabel: string, renderItem: (item: T, index: number) => ReactNode) {
   if (!items.length) {
     return <p className="harness-widget-empty">{emptyLabel}</p>;
   }
@@ -46,47 +55,128 @@ function readStringProp(element: HarnessElement, propName: string, fallback = ''
   return typeof value === 'string' ? value : fallback;
 }
 
+function resolveWidgetSession(element: HarnessElement, context: HarnessRenderContext): HarnessSessionSummary | null {
+  const requestedSessionId = readStringProp(element, 'sessionId', 'active');
+  if (requestedSessionId && requestedSessionId !== 'active') {
+    const requestedSession = context.sessions.find((session) => session.id === requestedSessionId);
+    if (requestedSession) return requestedSession;
+  }
+  return context.sessions.find((session) => session.isOpen) ?? context.sessions[0] ?? null;
+}
+
+function conversationMessages(session: HarnessSessionSummary): SessionWidgetMessage[] {
+  return (session.messages ?? []).filter((message) => message.role !== 'system' && message.content.trim());
+}
+
+function roleLabel(role: SessionWidgetMessage['role']) {
+  if (role === 'assistant') return 'Assistant';
+  if (role === 'user') return 'User';
+  return 'System';
+}
+
+function buildDefaultConversationSummary(session: HarnessSessionSummary): string {
+  const messages = conversationMessages(session);
+  const latest = messages.at(-1);
+  if (!latest) return 'No conversation yet.';
+  const roles = [...new Set(messages.map((message) => roleLabel(message.role).toLowerCase()))].join(' and ');
+  return `${plural(messages.length, 'conversation message')} across ${roles}. Last turn: ${roleLabel(latest.role).toLowerCase()}.`;
+}
+
+function renderSessionMissing() {
+  return <p className="harness-widget-empty">No session selected</p>;
+}
+
+function renderSessionMessageList(session: HarnessSessionSummary, emptyLabel: string, limit = 4) {
+  const messages = conversationMessages(session).slice(-limit);
+  return renderList(
+    messages,
+    emptyLabel,
+    (message, index) => <li key={`${message.role}-${index}`}>{roleLabel(message.role)} message {index + 1}</li>,
+  );
+}
+
+function renderConversationSummary(element: HarnessElement, context: HarnessRenderContext) {
+  const session = resolveWidgetSession(element, context);
+  if (!session) return renderSessionMissing();
+  const messages = conversationMessages(session);
+  const assets = session.assets ?? [];
+  const summaryLabel = readStringProp(element, 'summary', 'Default summary');
+  return (
+    <div className="harness-render-block harness-session-summary">
+      <p className="harness-widget-kicker">Session: {session.name}</p>
+      <div className="harness-metric-row">
+        <span>{plural(messages.length, 'message')}</span>
+        <span>{session.isOpen ? 'Open' : 'Stored'}</span>
+        <span>{plural(assets.length, 'asset')}</span>
+      </div>
+      <p className="harness-widget-summary">{summaryLabel}: {buildDefaultConversationSummary(session)}</p>
+      {renderSessionMessageList(session, 'No conversation yet', 2)}
+    </div>
+  );
+}
+
+function renderSessionAssets(element: HarnessElement, context: HarnessRenderContext) {
+  const session = resolveWidgetSession(element, context);
+  if (!session) return renderSessionMissing();
+  return (
+    <div className="harness-render-block harness-session-assets">
+      <p className="harness-widget-kicker">Session: {session.name}</p>
+      {renderList(
+        session.assets ?? [],
+        readStringProp(element, 'emptyLabel', 'No session assets yet'),
+        (asset) => (
+          <li key={asset.path}>
+            <span>{asset.path}</span>
+            <small>{asset.isRoot ? 'drive root' : asset.kind ?? 'asset'}</small>
+          </li>
+        ),
+      )}
+    </div>
+  );
+}
+
+function renderSessionActivity(element: HarnessElement, context: HarnessRenderContext) {
+  const session = resolveWidgetSession(element, context);
+  if (!session) return renderSessionMissing();
+  return (
+    <div className="harness-render-block harness-session-activity">
+      <p className="harness-widget-kicker">Session: {session.name}</p>
+      {renderSessionMessageList(session, readStringProp(element, 'emptyLabel', 'No chat history yet'))}
+    </div>
+  );
+}
+
+function renderSessionRuntime(context: HarnessRenderContext, element: HarnessElement) {
+  const session = resolveWidgetSession(element, context);
+  if (!session) return renderSessionMissing();
+  const toolCount = session.toolIds?.length ?? 0;
+  return (
+    <div className="harness-render-block">
+      <p className="harness-widget-kicker">Session: {session.name}</p>
+      <div className="harness-metric-row">
+        <span>{session.mode ?? 'agent'}</span>
+        <span>{plural(toolCount, 'tool')}</span>
+        <span>{session.provider ?? 'local'}</span>
+      </div>
+      <p className="harness-widget-summary">{session.cwd ?? 'No session cwd recorded'}</p>
+    </div>
+  );
+}
+
 function renderElement(element: HarnessElement, context: HarnessRenderContext, children: ReactNode) {
   switch (element.type) {
     case 'WorkspaceSummary':
-      return (
-        <div className="harness-render-block">
-          <p className="harness-widget-kicker">{context.workspaceName}</p>
-          <div className="harness-metric-row">
-            <span>{plural(context.sessions.length, 'session')}</span>
-            <span>{plural(context.browserPages.length, 'page')}</span>
-            <span>{plural(context.files.length, 'file')}</span>
-          </div>
-        </div>
-      );
+    case 'SessionConversationSummary':
+      return renderConversationSummary(element, context);
     case 'SessionList':
-      return renderList(
-        context.sessions,
-        readStringProp(element, 'emptyLabel', 'No sessions open'),
-        (session) => <li key={session.id}>Session: {session.name}</li>,
-      );
+    case 'SessionActivity':
+      return renderSessionActivity(element, context);
     case 'BrowserPageList':
-      return renderList(
-        context.browserPages,
-        readStringProp(element, 'emptyLabel', 'No pages open'),
-        (page) => (
-          <li key={page.id}>
-            <span>Page: {page.title}</span>
-            {page.url ? <small>{page.url}</small> : null}
-          </li>
-        ),
-      );
     case 'FileList':
-      return renderList(
-        context.files,
-        readStringProp(element, 'emptyLabel', 'No files yet'),
-        (file) => (
-          <li key={file.path}>
-            <span>File: {file.path}</span>
-            {file.kind ? <small>{file.kind}</small> : null}
-          </li>
-        ),
-      );
+    case 'SessionStorageAssets':
+      return renderSessionAssets(element, context);
+    case 'SessionRuntime':
+      return renderSessionRuntime(context, element);
     case 'HarnessInspector':
       return (
         <div className="harness-render-block">

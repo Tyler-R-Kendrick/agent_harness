@@ -93,3 +93,15 @@ export type WidgetLayout = {
   renderedSizes: Record<string, WidgetSize>;
   minimizedMap: Record<string, boolean>;
 };
+
+export type SessionWidgetMessage = {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  status?: string | null;
+};
+
+export type SessionWidgetAsset = {
+  path: string;
+  kind?: string;
+  isRoot?: boolean;
+};

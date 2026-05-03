@@ -24,7 +24,7 @@ describe('harness regeneration', () => {
     expect(JSON.stringify(result.spec)).not.toContain('freeform-css');
   });
 
-  it('adds generated dashboard widgets as catalog elements instead of arbitrary code', () => {
+  it('adds generated session dashboard widgets as catalog elements instead of arbitrary code', () => {
     const spec = createDefaultHarnessAppSpec({
       workspaceId: 'ws-build',
       workspaceName: 'Build',
@@ -32,18 +32,18 @@ describe('harness regeneration', () => {
 
     const result = regenerateHarnessAppSpec({
       spec,
-      prompt: 'Add a browser status widget to the dashboard.',
+      prompt: 'Add a session summary widget to the dashboard.',
       workspaceId: 'ws-build',
       workspaceName: 'Build',
     });
     const dashboardChildren = result.spec.elements['main-dashboard'].children ?? [];
-    const generatedId = dashboardChildren.find((id) => id.startsWith('generated-browser-status-widget-'));
+    const generatedId = dashboardChildren.find((id) => id.startsWith('generated-session-summary-widget-'));
 
     expect(generatedId).toBeTruthy();
     expect(result.spec.elements[generatedId!]).toMatchObject({
-      type: 'BrowserPageList',
+      type: 'SessionConversationSummary',
       slot: 'dashboard.canvas',
-      props: expect.objectContaining({ title: 'Browser status' }),
+      props: expect.objectContaining({ title: 'Session summary', sessionId: 'active' }),
     });
     expect(result.spec.metadata.revision).toBe(2);
   });
@@ -55,7 +55,7 @@ describe('harness regeneration', () => {
     });
     const generated = regenerateHarnessAppSpec({
       spec,
-      prompt: 'Add a browser status widget.',
+      prompt: 'Add a session summary widget.',
       workspaceId: 'ws-build',
       workspaceName: 'Build',
     }).spec;
