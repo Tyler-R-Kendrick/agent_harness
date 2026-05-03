@@ -13,6 +13,7 @@ import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dn
 import { CSS } from '@dnd-kit/utilities';
 import type { ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import { listDesignMdThemeOptions, renderDesignMdCss, type DesignMdCssRenderResult } from 'harness-core';
 import {
   ArrowLeft,
   ArrowRight,
@@ -108,6 +109,7 @@ import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipe
 import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
 import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
 import { InlineProcess, ProcessPanel } from './features/process';
+import { DesignerPanel } from './features/designer/DesignerPanel';
 import {
   createWebMcpToolBridge,
   registerWorkspaceTools,
@@ -268,7 +270,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'history' | 'extensions' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'designer' | 'history' | 'extensions' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -299,9 +301,32 @@ function areSessionRuntimeSnapshotsEqual(left: SessionMcpRuntimeState | undefine
 
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
+const DESIGN_THEME_SETTINGS_STORAGE_KEY = 'agent-browser.design-theme-settings';
+const DESIGN_SHELL_VARIABLES = new Set([
+  '--app-bg',
+  '--panel-bg',
+  '--panel-bg-elevated',
+  '--panel-bg-soft',
+  '--panel-border',
+  '--panel-border-strong',
+  '--text-soft',
+  '--text-muted',
+  '--accent',
+  '--accent-strong',
+]);
 
 type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
 const pendingSecretRequestResolvers = new Map<string, (result: SecretRequestCreatedResult) => void>();
+
+type DesignThemeSettings = {
+  themeId: string;
+  applyToShell: boolean;
+};
+
+const DEFAULT_DESIGN_THEME_SETTINGS: DesignThemeSettings = {
+  themeId: 'default',
+  applyToShell: false,
+};
 
 type UserElicitationEventDetail = {
   requestId: string;
@@ -416,13 +441,15 @@ const PRIMARY_NAV = [
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
 ] as const;
+const DESIGNER_NAV = ['designer', 'sparkles', 'Designer'] as const;
 const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'history', 'extensions', 'settings', 'account', 'designer'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
+  designer: { label: 'Designer', icon: 'sparkles' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
   settings: { label: 'Settings', icon: 'settings' },
@@ -465,7 +492,7 @@ const WORKSPACE_SHORTCUT_GROUPS = [
   {
     title: 'Panels',
     items: [
-      { keys: 'Alt+1-5', description: 'Switch sidebar panel' },
+      { keys: 'Alt+1-6', description: 'Switch sidebar panel' },
       { keys: 'Ctrl/Cmd+`', description: 'Toggle chat / terminal' },
     ],
   },
@@ -5377,7 +5404,129 @@ function formatSecretUpdated(value: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: { copilotState: CopilotRuntimeState; isCopilotLoading: boolean; onRefreshCopilot: () => void; registryModels: HFModel[]; installedModels: HFModel[]; task: string; loadingModelId: string | null; onTaskChange: (task: string) => void; onSearch: (query: string) => void; onInstall: (model: HFModel) => Promise<void>; onDelete: (id: string) => void; evaluationAgents: CustomEvaluationAgent[]; negativeRubricTechniques: string[]; onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void; onResetEvaluationAgents: () => void; onResetNegativeRubric: () => void; secretRecords: SecretRecord[]; secretSettings: SecretManagementSettings; onSaveSecret: (input: { name: string; value: string }) => Promise<string>; onDeleteSecret: (idOrRef: string) => Promise<void>; onSecretSettingsChange: (settings: SecretManagementSettings) => void }) {
+function ClaudeDesignSettings({
+  workspaceFiles,
+  settings,
+  renderedCss,
+  onSettingsChange,
+}: {
+  workspaceFiles: WorkspaceFile[];
+  settings: DesignThemeSettings;
+  renderedCss: DesignMdCssRenderResult | null;
+  onSettingsChange: (settings: DesignThemeSettings) => void;
+}) {
+  const designDocument = useMemo(
+    () => workspaceFiles.find((file) => /(^|\/)DESIGN\.md$/i.test(file.path)) ?? null,
+    [workspaceFiles],
+  );
+  const themeOptions = useMemo(
+    () => designDocument ? listDesignMdThemeOptions(designDocument) : [{ id: 'default', label: 'Default' }],
+    [designDocument],
+  );
+  const selectedThemeId = themeOptions.some((option) => option.id === settings.themeId)
+    ? settings.themeId
+    : 'default';
+  const previewCss = useMemo(() => {
+    if (!designDocument) return null;
+    if (renderedCss && selectedThemeId === settings.themeId) return renderedCss;
+    return renderDesignMdCss(designDocument, { themeId: selectedThemeId });
+  }, [designDocument, renderedCss, selectedThemeId, settings.themeId]);
+  const shellVariables = Object.entries(previewCss?.variables ?? {});
+
+  return (
+    <SettingsSection title="Claude Design">
+      <div className="claude-design-settings">
+        <div className="claude-design-status">
+          <div>
+            <strong>{designDocument ? designDocument.path : 'No DESIGN.md found'}</strong>
+            <p className="muted">Use DESIGN.md themes as swappable tokens for widgets and the Agent Browser shell.</p>
+          </div>
+          <span className={`badge${designDocument ? ' connected' : ''}`}>{designDocument ? `${themeOptions.length} theme${themeOptions.length === 1 ? '' : 's'}` : 'Add DESIGN.md'}</span>
+        </div>
+
+        {designDocument ? (
+          <>
+            <label className="design-setting-field">
+              <span>Theme</span>
+              <select
+                aria-label="Claude Design theme"
+                value={selectedThemeId}
+                onChange={(event) => onSettingsChange({ ...settings, themeId: event.target.value })}
+              >
+                {themeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Apply Claude Design theme to Agent Browser"
+                checked={settings.applyToShell}
+                onChange={(event) => onSettingsChange({ ...settings, applyToShell: event.target.checked })}
+              />
+              <span>Apply theme to Agent Browser shell</span>
+            </label>
+            {shellVariables.length ? (
+              <div className="design-token-grid" aria-label="Agent Browser shell variables">
+                {shellVariables.map(([name, value]) => (
+                  <span key={name} className="design-token-chip">
+                    <span className="design-swatch" style={{ background: value }} />
+                    <code>{name}</code>
+                  </span>
+                ))}
+              </div>
+            ) : <p className="muted">No agentBrowser styles are defined yet.</p>}
+            {previewCss?.diagnostics.length ? (
+              <ul className="design-diagnostics">
+                {previewCss.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
+              </ul>
+            ) : null}
+            <textarea
+              className="design-css-preview"
+              aria-label="Generated Claude Design CSS"
+              value={previewCss?.css ?? ''}
+              readOnly
+              rows={8}
+            />
+          </>
+        ) : (
+          <p className="muted">Create a DESIGN.md file with colors, themes, and styles.agentBrowser mappings to enable live shell theming.</p>
+        )}
+      </div>
+    </SettingsSection>
+  );
+}
+
+interface SettingsPanelProps {
+  copilotState: CopilotRuntimeState;
+  isCopilotLoading: boolean;
+  onRefreshCopilot: () => void;
+  registryModels: HFModel[];
+  installedModels: HFModel[];
+  task: string;
+  loadingModelId: string | null;
+  onTaskChange: (task: string) => void;
+  onSearch: (query: string) => void;
+  onInstall: (model: HFModel) => Promise<void>;
+  onDelete: (id: string) => void;
+  evaluationAgents: CustomEvaluationAgent[];
+  negativeRubricTechniques: string[];
+  onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
+  onResetEvaluationAgents: () => void;
+  onResetNegativeRubric: () => void;
+  secretRecords: SecretRecord[];
+  secretSettings: SecretManagementSettings;
+  onSaveSecret: (input: { name: string; value: string }) => Promise<string>;
+  onDeleteSecret: (idOrRef: string) => Promise<void>;
+  onSecretSettingsChange: (settings: SecretManagementSettings) => void;
+  workspaceFiles: WorkspaceFile[];
+  designThemeSettings: DesignThemeSettings;
+  designCss: DesignMdCssRenderResult | null;
+  onDesignThemeSettingsChange: (settings: DesignThemeSettings) => void;
+}
+
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, workspaceFiles, designThemeSettings, designCss, onDesignThemeSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -5439,6 +5588,13 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, regis
           </article>
         </div>
       </SettingsSection>
+
+      <ClaudeDesignSettings
+        workspaceFiles={workspaceFiles}
+        settings={designThemeSettings}
+        renderedCss={designCss}
+        onSettingsChange={onDesignThemeSettingsChange}
+      />
 
       <SecretsSettings
         records={secretRecords}
@@ -6786,6 +6942,15 @@ function isAgentProviderRecord(value: unknown): value is Record<string, AgentPro
   );
 }
 
+function isDesignThemeSettings(value: unknown): value is DesignThemeSettings {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && typeof (value as DesignThemeSettings).themeId === 'string'
+    && typeof (value as DesignThemeSettings).applyToShell === 'boolean'
+  );
+}
+
 const sessionStorageBackend = typeof window !== 'undefined' ? window.sessionStorage : null;
 const localStorageBackend = typeof window !== 'undefined' ? window.localStorage : null;
 
@@ -6811,6 +6976,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.locationContext,
     isBrowserLocationContext,
     DEFAULT_BROWSER_LOCATION_CONTEXT,
+  );
+  const [designThemeSettings, setDesignThemeSettings] = useStoredState(
+    localStorageBackend,
+    DESIGN_THEME_SETTINGS_STORAGE_KEY,
+    isDesignThemeSettings,
+    DEFAULT_DESIGN_THEME_SETTINGS,
   );
   const secretsManager = useMemo(() => getDefaultSecretsManagerAgent(), []);
   const [secretSettings, setSecretSettings] = useStoredState(
@@ -6845,6 +7016,7 @@ function AgentBrowserApp() {
   const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
+  const appliedDesignShellVariablesRef = useRef<string[]>([]);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
   const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
     localStorageBackend,
@@ -7080,7 +7252,43 @@ function AgentBrowserApp() {
     () => ({ summary: restoreActiveHarnessSpec() }),
     [restoreActiveHarnessSpec],
   );
+  const activeDesignDocument = useMemo(
+    () => activeWorkspaceFiles.find((file) => /(^|\/)DESIGN\.md$/i.test(file.path)) ?? null,
+    [activeWorkspaceFiles],
+  );
+  const activeDesignCss = useMemo(
+    () => activeDesignDocument ? renderDesignMdCss(activeDesignDocument, { themeId: designThemeSettings.themeId }) : null,
+    [activeDesignDocument, designThemeSettings.themeId],
+  );
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const rootStyle = document.documentElement.style;
+    const clearAppliedVariables = () => {
+      for (const name of appliedDesignShellVariablesRef.current) {
+        rootStyle.removeProperty(name);
+      }
+      appliedDesignShellVariablesRef.current = [];
+    };
+
+    clearAppliedVariables();
+
+    if (!designThemeSettings.applyToShell || !activeDesignCss) {
+      return clearAppliedVariables;
+    }
+
+    const appliedNames: string[] = [];
+    for (const [name, value] of Object.entries(activeDesignCss.variables)) {
+      if (!DESIGN_SHELL_VARIABLES.has(name)) continue;
+      rootStyle.setProperty(name, value);
+      appliedNames.push(name);
+    }
+    appliedDesignShellVariablesRef.current = appliedNames;
+
+    return clearAppliedVariables;
+  }, [activeDesignCss, designThemeSettings.applyToShell]);
+
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
 
@@ -7687,7 +7895,7 @@ function AgentBrowserApp() {
         jumpToWorkspaceByIndex(Number(event.key) - 1);
         return;
       }
-      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-5]$/.test(event.key)) {
+      if (event.altKey && !event.ctrlKey && !event.metaKey && /^[1-6]$/.test(event.key)) {
         event.preventDefault();
         const targetPanel = PANEL_SHORTCUT_ORDER[Number(event.key) - 1];
         if (targetPanel) switchSidebarPanel(targetPanel);
@@ -9654,9 +9862,50 @@ function AgentBrowserApp() {
         </div>
       );
     }
+    if (activePanel === 'designer') {
+      return (
+        <section className="panel-scroll designer-sidebar-summary">
+          <h2>Designer</h2>
+          <p className="muted">Create Claude Design-style projects, design systems, files, sketches, comments, exports, and DESIGN.md token packs.</p>
+          <div className="designer-sidebar-list">
+            <span>DESIGN.md source</span>
+            <span>Token theme swap</span>
+            <span>Share/export handoff</span>
+          </div>
+        </section>
+      );
+    }
     if (activePanel === 'history') return <HistoryPanel />;
     if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
-    if (activePanel === 'settings') return <SettingsPanel copilotState={copilotState} isCopilotLoading={isCopilotStateLoading} onRefreshCopilot={() => void refreshCopilotState(true)} registryModels={registryModels} installedModels={installedModels} task={registryTask} loadingModelId={loadingModelId} onTaskChange={setRegistryTask} onSearch={setRegistryQuery} onInstall={installModel} onDelete={deleteModel} evaluationAgents={evaluationAgents} negativeRubricTechniques={negativeRubricTechniques} onSaveEvaluationAgents={saveEvaluationAgents} onResetEvaluationAgents={resetEvaluationAgents} onResetNegativeRubric={resetNegativeRubric} secretRecords={secretRecords} secretSettings={secretSettings} onSaveSecret={saveManualSecret} onDeleteSecret={deleteManualSecret} onSecretSettingsChange={updateSecretSettings} />;
+    if (activePanel === 'settings') return (
+      <SettingsPanel
+        copilotState={copilotState}
+        isCopilotLoading={isCopilotStateLoading}
+        onRefreshCopilot={() => void refreshCopilotState(true)}
+        registryModels={registryModels}
+        installedModels={installedModels}
+        task={registryTask}
+        loadingModelId={loadingModelId}
+        onTaskChange={setRegistryTask}
+        onSearch={setRegistryQuery}
+        onInstall={installModel}
+        onDelete={deleteModel}
+        evaluationAgents={evaluationAgents}
+        negativeRubricTechniques={negativeRubricTechniques}
+        onSaveEvaluationAgents={saveEvaluationAgents}
+        onResetEvaluationAgents={resetEvaluationAgents}
+        onResetNegativeRubric={resetNegativeRubric}
+        secretRecords={secretRecords}
+        secretSettings={secretSettings}
+        onSaveSecret={saveManualSecret}
+        onDeleteSecret={deleteManualSecret}
+        onSecretSettingsChange={updateSecretSettings}
+        workspaceFiles={activeWorkspaceFiles}
+        designThemeSettings={designThemeSettings}
+        designCss={activeDesignCss}
+        onDesignThemeSettingsChange={setDesignThemeSettings}
+      />
+    );
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
   }
 
@@ -9665,6 +9914,7 @@ function AgentBrowserApp() {
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+          <button type="button" className={`activity-button ${activePanel === DESIGNER_NAV[0] ? 'active' : ''}`} onClick={() => switchSidebarPanel(DESIGNER_NAV[0])} aria-label={DESIGNER_NAV[2]} title={`${DESIGNER_NAV[2]} (Alt+6)`}><Icon name={DESIGNER_NAV[1]} size={16} color={activePanel === DESIGNER_NAV[0] ? '#7dd3fc' : '#71717a'} /></button>
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">
@@ -9725,6 +9975,21 @@ function AgentBrowserApp() {
       ) : null}
       <main className="content-area">
         {(() => {
+          if (activePanel === 'designer') {
+            return (
+              <DesignerPanel
+                workspaceName={activeWorkspace.name}
+                workspaceFiles={activeWorkspaceFiles}
+                designCss={activeDesignCss}
+                designThemeSettings={designThemeSettings}
+                onDesignThemeSettingsChange={setDesignThemeSettings}
+                onWorkspaceFilesChange={(nextFiles) => setWorkspaceFilesByWorkspace((current) => ({
+                  ...current,
+                  [activeWorkspaceId]: nextFiles,
+                }))}
+              />
+            );
+          }
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {
               const existing = current[activeWorkspaceId] ?? [];
