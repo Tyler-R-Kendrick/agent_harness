@@ -1,5 +1,9 @@
 import type { ToolDescriptor, ToolGroupDescriptor } from '../tools';
 import { isSelfReflectionTaskText } from './selfReflection';
+import {
+  buildSketchOfThoughtExpertAgentPrompt,
+  resolveSaeMappingsForModel,
+} from 'harness-core';
 
 export type AgentScenario =
   | 'general-chat'
@@ -241,17 +245,73 @@ export function buildAgentSystemPrompt({
   goal,
   scenario,
   constraints,
+  agentKind,
+  modelId,
 }: {
   workspaceName?: string;
   goal: string;
   scenario: AgentScenario;
   constraints?: string[];
+  agentKind?: string;
+  modelId?: string;
 }): string {
+  const expertGuidance = shouldApplyExpertGuidance(scenario)
+    ? buildExpertAgentGuidance({
+      agentKind: agentKind ?? scenario,
+      goal,
+      modelId,
+    })
+    : '';
+
   return composeAgentPrompt({
     persona: buildPersonaTemplate(),
     alignment: buildAlignmentTemplate({ workspaceName, goal, constraints }),
-    scenario: buildScenarioGuidance(scenario),
+    scenario: [buildScenarioGuidance(scenario), expertGuidance].filter(Boolean).join('\n\n'),
   });
+}
+
+function shouldApplyExpertGuidance(scenario: AgentScenario): boolean {
+  return scenario === 'self-reflection'
+    || scenario === 'memory-recall'
+    || scenario === 'research'
+    || scenario === 'coding'
+    || scenario === 'harness-control';
+}
+
+function buildExpertAgentGuidance({
+  agentKind,
+  goal,
+  modelId,
+}: {
+  agentKind: string;
+  goal: string;
+  modelId?: string;
+}): string {
+  const saeMappings = resolveSaeMappingsForModel(modelId);
+  const lines = [
+    buildSketchOfThoughtExpertAgentPrompt({
+      topic: goal,
+      topicDescription: `Agent kind: ${agentKind}`,
+      expertLexiconSummary: expertLexiconSummaryForAgent(agentKind, saeMappings.length > 0),
+    }),
+  ];
+
+  if (saeMappings.length > 0) {
+    lines.push([
+      '## SAE Mapping',
+      ...saeMappings.map((mapping) =>
+        `${mapping.baseModelId} -> ${mapping.saeRepositoryId} (${mapping.hookPoint}, topK ${mapping.topK}, width ${mapping.saeWidth})`,
+      ),
+    ].join('\n'));
+  }
+
+  return lines.join('\n\n');
+}
+
+function expertLexiconSummaryForAgent(agentKind: string, hasSaeMapping: boolean): string {
+  const common = 'Use compact task, evidence, risk, decision, and verification notation.';
+  const sae = hasSaeMapping ? 'Use SAE, residual stream, hook point, top-k, width, and model family shorthand.' : '';
+  return [common, `Agent focus: ${agentKind}.`, sae].filter(Boolean).join(' ');
 }
 
 export function buildToolInstructionsTemplate({

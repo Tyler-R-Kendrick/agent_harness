@@ -28,6 +28,7 @@ export function buildGhcpPrompt({
   latestUserInput,
   loopMessages,
   systemPrompt,
+  modelId,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
@@ -35,6 +36,7 @@ export function buildGhcpPrompt({
   latestUserInput: string;
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   systemPrompt?: string;
+  modelId?: string;
 }): string {
   const transcript = loopMessages
     ? loopMessages
@@ -53,6 +55,7 @@ export function buildGhcpPrompt({
       goal: 'Help the user in the active workspace with concise, grounded collaboration.',
       scenario,
       constraints: ['Use the transcript and latest user request to stay grounded in the current workspace context.'],
+      modelId,
     }),
     '## Workspace Context',
     workspacePromptContext,
@@ -139,7 +142,7 @@ function createGhcpInferenceClient(
           {
             modelId,
             sessionId,
-            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages, systemPrompt }),
+            prompt: buildGhcpPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages, systemPrompt, modelId }),
           },
           {
             onToken: filteredOnToken,

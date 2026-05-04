@@ -249,6 +249,7 @@ async function runDirectChat(
       workspaceName: options.workspaceName,
       goal: 'Answer the request directly without tools.',
       scenario: resolveAgentScenario(transcript),
+      modelId: modelMeta(options.model).modelId,
     }),
     '## Workspace Context',
     fitTextToTokenBudget(options.instructions, budget.maxInputTokens),

@@ -156,8 +156,10 @@ export function buildPlannerOperatingInstructions(): string {
 
 export function buildPlannerSystemPrompt({
   workspaceName,
+  modelId,
 }: {
   workspaceName?: string;
+  modelId?: string;
 }): string {
   return [
     buildAgentSystemPrompt({
@@ -169,6 +171,8 @@ export function buildPlannerSystemPrompt({
         'Treat local task state, ProcessLog, AgentBus, subagent activity, and cross-device session observations as first-class planning inputs.',
         'Use external task managers only when configured or explicitly requested.',
       ],
+      agentKind: 'planner',
+      modelId,
     }),
     '## Planner Operating Instructions',
     buildPlannerOperatingInstructions(),
@@ -231,7 +235,7 @@ export async function streamPlannerChat(
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const systemPrompt = buildPlannerSystemPrompt({ workspaceName });
+  const systemPrompt = buildPlannerSystemPrompt({ workspaceName, modelId: runtimeProvider === 'codi' ? model?.id : modelId });
 
   if (runtimeProvider === 'ghcp') {
     if (!modelId || !sessionId) {

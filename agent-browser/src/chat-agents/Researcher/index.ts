@@ -101,8 +101,10 @@ export function buildResearcherOperatingInstructions(): string {
 
 export function buildResearcherSystemPrompt({
   workspaceName,
+  modelId,
 }: {
   workspaceName?: string;
+  modelId?: string;
 }): string {
   return [
     buildAgentSystemPrompt({
@@ -113,6 +115,8 @@ export function buildResearcherSystemPrompt({
         'Use only the tools that are currently available for this task; do not assume search, scraping, curl, browser-use, or MCP tools exist.',
         'Persist reusable research output under `.research/<task-id>/research.md` when the task produces reusable findings.',
       ],
+      agentKind: 'researcher',
+      modelId,
     }),
     '## Researcher Operating Instructions',
     buildResearcherOperatingInstructions(),
@@ -169,7 +173,7 @@ export async function streamResearcherChat(
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const systemPrompt = buildResearcherSystemPrompt({ workspaceName });
+  const systemPrompt = buildResearcherSystemPrompt({ workspaceName, modelId: runtimeProvider === 'codi' ? model?.id : modelId });
 
   if (runtimeProvider === 'ghcp') {
     if (!modelId || !sessionId) {

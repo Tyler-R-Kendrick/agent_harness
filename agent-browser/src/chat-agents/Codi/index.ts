@@ -32,12 +32,14 @@ export function buildCodiPrompt({
   messages,
   loopMessages,
   systemPrompt,
+  modelId,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
   messages: ChatMessage[];
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   systemPrompt?: string;
+  modelId?: string;
 }): Array<{ role: string; content: string }> {
   const aiMessages = loopMessages
     ? loopMessages.map((message, index) => ({
@@ -56,6 +58,7 @@ export function buildCodiPrompt({
       workspaceName,
       goal: 'Help the user in the active workspace with concise, grounded collaboration.',
       scenario,
+      modelId,
     }),
     '## Workspace Context',
   ].join('\n\n');
@@ -96,7 +99,7 @@ function createCodiInferenceClient(
 ): IInferenceClient {
   return {
     async infer(busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
-      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages, systemPrompt });
+      const prompt = buildCodiPrompt({ workspaceName, workspacePromptContext, messages, loopMessages: busMessages, systemPrompt, modelId: model.id });
       let tokenBuffer = '';
       let inReasoning = false;
       const reasoningSplitter = createReasoningStepSplitter({
