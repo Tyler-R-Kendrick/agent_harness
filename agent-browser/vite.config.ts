@@ -104,6 +104,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../ext/symphony/src/index.ts'),
       },
       {
+        find: '@agent-harness/ext-workflow-canvas',
+        replacement: path.resolve(__dirname, '../ext/workflow-canvas/src/index.ts'),
+      },
+      {
         find: '@agent-harness/ext-local-model-connector',
         replacement: path.resolve(__dirname, '../ext/local-model-connector/src/index.ts'),
       },

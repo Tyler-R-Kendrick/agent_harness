@@ -69,8 +69,7 @@
         "path": "./workflow-canvas"
       },
       "categories": ["workflow", "automation", "creative-canvas"],
-      "keywords": ["cncf", "serverless-workflow", "n8n", "higgsfield", "canvas", "orchestration"],
-      "default": true
+      "keywords": ["cncf", "serverless-workflow", "n8n", "higgsfield", "canvas", "orchestration"]
     },
     {
       "id": "agent-harness.ext.artifacts",

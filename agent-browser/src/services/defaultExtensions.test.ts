@@ -46,11 +46,16 @@ describe('default extensions', () => {
 
   it('loads only marketplace extensions selected for installation', async () => {
     const runtime = await createDefaultExtensionRuntime([], {
-      installedExtensionIds: ['agent-harness.ext.symphony', 'agent-harness.ext.artifacts'],
+      installedExtensionIds: [
+        'agent-harness.ext.symphony',
+        'agent-harness.ext.workflow-canvas',
+        'agent-harness.ext.artifacts',
+      ],
     });
 
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.symphony',
+      'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
