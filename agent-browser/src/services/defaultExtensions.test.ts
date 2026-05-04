@@ -57,7 +57,6 @@ describe('default extensions', () => {
       'symphony',
       'workflow-canvas',
       'artifacts',
-      'local-model-connector',
     ]);
     expect(runtime.hooks.map((hook) => hook.id)).toEqual([
       'symphony.workflow-md',

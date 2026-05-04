@@ -386,14 +386,15 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     expect(screen.getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();
-    expect(screen.getByText('5 available')).toBeInTheDocument();
+    expect(screen.getByText('6 available')).toBeInTheDocument();
     expect(screen.getByText('0 installed')).toBeInTheDocument();
     expect(screen.getByText('Agent skills')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
     expect(screen.getByText('DESIGN.md design tokens')).toBeInTheDocument();
     expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
     expect(screen.getByText('Artifacts')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(5);
+    expect(screen.getByText('Local Model Connector')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(6);
     expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
