@@ -33,12 +33,12 @@ export async function saveSettings(
 
 export async function getSettings(storage: ChromeStorageAreaLike): Promise<ExtensionResult<LocalModelSettingsResponse>> {
   const result = await storage.get(SETTINGS_KEY);
-  const stored = isStoredSettings(result[SETTINGS_KEY]) ? result[SETTINGS_KEY] : {};
+  const stored = normalizeStoredSettings(result[SETTINGS_KEY]);
   return ok({
     ...(stored.providerId ? { providerId: stored.providerId } : {}),
     ...(stored.baseUrl ? { baseUrl: stored.baseUrl } : {}),
     ...(stored.selectedModel ? { selectedModel: stored.selectedModel } : {}),
-    hasStoredApiKey: Boolean(stored.apiKey),
+    hasStoredApiKey: typeof stored.apiKey === 'string' && stored.apiKey.length > 0,
   });
 }
 
@@ -47,6 +47,23 @@ export async function clearSettings(storage: ChromeStorageAreaLike): Promise<Ext
   return ok({ cleared: true });
 }
 
-function isStoredSettings(value: unknown): value is StoredSettings {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function normalizeStoredSettings(value: unknown): StoredSettings {
+  if (typeof value !== 'object' || value === null) {
+    return {};
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    ...storedString(record, 'providerId'),
+    ...storedString(record, 'baseUrl'),
+    ...storedString(record, 'selectedModel'),
+    ...storedString(record, 'apiKey'),
+  };
+}
+
+function storedString<TKey extends keyof StoredSettings>(
+  record: Record<string, unknown>,
+  key: TKey,
+): Pick<StoredSettings, TKey> | Record<string, never> {
+  const value = record[key];
+  return typeof value === 'string' && value.length > 0 ? { [key]: value } as Pick<StoredSettings, TKey> : {};
 }
