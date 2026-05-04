@@ -4,8 +4,8 @@ Reusable TypeScript agent-loop primitives for `agent_harness`.
 
 The package follows the parts of Pi's agent core that are useful outside a TUI:
 typed messages, lifecycle events, stateful queues, awaited subscribers, a
-low-level loop runner, and an XState-backed LogAct workflow used by Agent
-Browser.
+low-level loop runner, and an event-driven XState actor kernel that extension
+packages can use to define orchestration workflows.
 
 ## Package boundary
 
@@ -27,12 +27,12 @@ Consumers should use the root package export for core APIs and load optional
 plugin packages through their manifests so internal module layout can change
 without breaking package users.
 
-The workflow surface formulates a serializable machine definition whose named
-actors cover the driver, voters, decider, executor, and completion checker.
-`WorkflowAgentBus` is the local write-ahead bus wrapper for the XState workflow
-event stream and records `ActorMessageEvent` entries with session and actor
-metadata. The first implementation is local-session only, with the public bus
-and session types shaped for shared or remote stores later.
+The event-loop surface formulates a serializable workflow definition whose
+states publish registered events. Registered actors handle those events, and
+registered publishers receive the workflow, state, xstate snapshot, actor, and
+dispatch lifecycle events. States can invoke actors serially or in parallel, and
+actor context includes `parentActorId` plus `runSubagent()` so future extension
+packages can layer subagent orchestration without changing the core loop.
 
 ## Storage-backed artifacts
 
@@ -165,11 +165,14 @@ Pi can be normalized with `importExternalPluginManifest` and
 
 ## Optional constrained decoding
 
-`harness-core` can pass optional constrained-decoding requests through the
-LogAct driver inference client:
+`harness-core` defines constrained-decoding requests that model providers and
+workflow extensions can pass through their inference clients. For example,
+`@agent-harness/logact-loop` can pass a JSON Schema constraint through its
+driver client:
 
 ```ts
-import { constrainToJsonSchema, runLogActAgentLoop } from 'harness-core';
+import { constrainToJsonSchema } from 'harness-core';
+import { runLogActAgentLoop } from '@agent-harness/logact-loop';
 
 await runLogActAgentLoop({
   inferenceClient,
