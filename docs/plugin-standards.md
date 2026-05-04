@@ -70,6 +70,69 @@ manifests:
 This mirrors marketplace-style discovery: the catalog describes what can be
 installed, while the plugin manifest describes what will be loaded.
 
+## Renderer and pane contributions
+
+Plugins may contribute custom renderers and pane items, similar to editor
+extension contribution points. A renderer declares which target it can handle
+and which component module the host should load:
+
+```json
+{
+  "capabilities": [
+    { "kind": "renderer", "id": "media.pdf" },
+    { "kind": "pane-item", "id": "design-md.designer-pane" }
+  ],
+  "renderers": [{
+    "id": "media.pdf",
+    "label": "PDF viewer",
+    "target": {
+      "kind": "file",
+      "fileExtensions": [".pdf"],
+      "mimeTypes": ["application/pdf"]
+    },
+    "component": { "module": "./src/PdfRenderer.tsx", "export": "PdfRenderer" }
+  }],
+  "paneItems": [{
+    "id": "design-md.designer-pane",
+    "label": "Designer",
+    "rendererId": "design-md.designer",
+    "preferredLocation": "side",
+    "when": { "kind": "file", "fileNames": ["DESIGN.md"] },
+    "component": { "module": "./src/DesignerPane.tsx", "export": "DesignerPane" }
+  }]
+}
+```
+
+Targets support `fileNames`, `fileExtensions`, `mimeTypes` including wildcards
+such as `audio/*`, `artifactKinds`, `messageTypes`, and `workspaceItemTypes`.
+Runtime plugins can also register renderers directly through
+`context.renderers`, which is useful for programmatic contributions such as an
+audio visualizer or a generated artifact viewer.
+
+## External plugin formats
+
+Agent Harness can import plugin manifests from adjacent agent ecosystems into
+the same manifest model:
+
+- GitHub Copilot CLI plugins: `plugin.json` from `.plugin/`, the repository
+  root, `.github/plugin/`, or `.claude-plugin/`; components include agents,
+  skills, commands, hooks, MCP servers, and LSP servers. Marketplace manifests
+  can come from `marketplace.json`, `.plugin/marketplace.json`,
+  `.github/plugin/marketplace.json`, or `.claude-plugin/marketplace.json`.
+- Claude Code plugins: `.claude-plugin/plugin.json` plus conventional root
+  component directories for skills, commands, agents, output styles, themes,
+  monitors, hooks, MCP servers, LSP servers, `bin/`, and `settings.json`.
+  Marketplace sources support relative paths, GitHub repos, git URLs,
+  git-subdir entries, npm packages, refs, SHAs, and strict mode.
+- Pi packages: `package.json` with a `pi` manifest, or conventional
+  `extensions/`, `skills/`, `prompts/`, and `themes/` directories. Pi extension
+  packages are treated as runtime extensions and renderer-capable because Pi
+  extensions can register custom UI and message renderers.
+
+Use `importExternalPluginManifest` and
+`importExternalPluginMarketplaceManifest` from `harness-core` to normalize those
+formats before presenting them to a host installer or loader.
+
 ## Events and hooks
 
 Plugins may define custom events with `type: "plugin"`. Hosts should derive hook

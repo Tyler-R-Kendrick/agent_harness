@@ -253,6 +253,15 @@ export {
   type InferenceMessagesPayload,
 } from './plugins.js';
 export {
+  RendererRegistry,
+  type HarnessPaneItemDefinition,
+  type HarnessRendererComponent,
+  type HarnessRendererDefinition,
+  type HarnessRendererTarget,
+  type HarnessRendererTargetInput,
+  type HarnessRendererTargetKind,
+} from './renderers.js';
+export {
   HARNESS_PLUGIN_MANIFEST_FILENAME,
   HARNESS_PLUGIN_MANIFEST_SCHEMA_VERSION,
   HARNESS_PLUGIN_MARKETPLACE_MANIFEST_FILENAME,
@@ -263,10 +272,21 @@ export {
   validateHarnessPluginManifest,
   validateHarnessPluginMarketplaceManifest,
   type HarnessManifestValidationResult,
+  type HarnessPluginComponentContributions,
+  type HarnessPluginComponentRef,
   type HarnessPluginCapabilityKind,
   type HarnessPluginManifest,
   type HarnessPluginMarketplaceManifest,
+  type HarnessPluginSourceFormat,
 } from './pluginManifest.js';
+export {
+  EXTERNAL_PLUGIN_MANIFEST_LOCATIONS,
+  importExternalPluginManifest,
+  importExternalPluginMarketplaceManifest,
+  type ExternalPluginEcosystem,
+  type ImportExternalPluginManifestOptions,
+  type ImportExternalPluginMarketplaceManifestOptions,
+} from './pluginCompatibility.js';
 export {
   ToolRegistry,
   createPromptTemplateTool,

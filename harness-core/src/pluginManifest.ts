@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 import { hookPointForEvent, type HarnessHookEventDescriptor } from './hooks.js';
+import type {
+  HarnessPaneItemDefinition,
+  HarnessRendererDefinition,
+} from './renderers.js';
 
 export const HARNESS_PLUGIN_MANIFEST_FILENAME = 'agent-harness.plugin.json';
 export const HARNESS_PLUGIN_MARKETPLACE_MANIFEST_FILENAME = 'agent-harness.marketplace.json';
@@ -10,30 +14,65 @@ export type HarnessPluginCapabilityKind =
   | 'tool'
   | 'command'
   | 'hook'
+  | 'skill'
   | 'memory'
   | 'artifact'
   | 'setting'
+  | 'mcp-server'
+  | 'lsp-server'
   | 'model-provider'
   | 'chat-agent'
+  | 'output-style'
+  | 'theme'
+  | 'monitor'
+  | 'prompt'
+  | 'extension'
+  | 'renderer'
+  | 'pane-item'
   | 'asset'
   | 'event';
+
+export type HarnessPluginSourceFormat = 'agent-harness' | 'github-copilot' | 'claude-code' | 'pi';
+
+export type HarnessPluginComponentRef = string | { inline: unknown };
+
+export interface HarnessPluginComponentContributions {
+  agents?: HarnessPluginComponentRef[];
+  skills?: HarnessPluginComponentRef[];
+  commands?: HarnessPluginComponentRef[];
+  hooks?: HarnessPluginComponentRef[];
+  mcpServers?: HarnessPluginComponentRef[];
+  lspServers?: HarnessPluginComponentRef[];
+  outputStyles?: HarnessPluginComponentRef[];
+  themes?: HarnessPluginComponentRef[];
+  monitors?: HarnessPluginComponentRef[];
+  extensions?: HarnessPluginComponentRef[];
+  prompts?: HarnessPluginComponentRef[];
+  bins?: HarnessPluginComponentRef[];
+  settings?: HarnessPluginComponentRef[];
+}
 
 export interface HarnessPluginManifest {
   schemaVersion: typeof HARNESS_PLUGIN_MANIFEST_SCHEMA_VERSION;
   id: string;
+  sourceFormat?: HarnessPluginSourceFormat;
   name: string;
   version: string;
   description: string;
-  entrypoint: {
+  entrypoint?: {
     module: string;
     export?: string;
   };
+  components?: HarnessPluginComponentContributions;
+  metadata?: Record<string, unknown>;
   capabilities?: Array<{
     kind: HarnessPluginCapabilityKind;
     id: string;
     event?: HarnessHookEventDescriptor;
     description?: string;
   }>;
+  renderers?: HarnessRendererDefinition[];
+  paneItems?: HarnessPaneItemDefinition[];
   events?: Array<HarnessHookEventDescriptor & { description?: string }>;
   assets?: Array<{
     kind: 'example' | 'runtime' | 'documentation' | 'fixture';
@@ -63,17 +102,32 @@ export interface HarnessPluginMarketplaceManifest {
     name: string;
     version: string;
     description: string;
-    manifest: string;
+    manifest?: string;
+    sourceFormat?: HarnessPluginSourceFormat;
     source: {
-      type: 'local' | 'git' | 'npm' | 'url';
+      type: 'local' | 'git' | 'github' | 'git-subdir' | 'npm' | 'url';
       path?: string;
       url?: string;
+      repo?: string;
       package?: string;
+      version?: string;
+      registry?: string;
       ref?: string;
+      sha?: string;
     };
+    components?: HarnessPluginComponentContributions;
+    capabilities?: Array<{
+      kind: HarnessPluginCapabilityKind;
+      id: string;
+      event?: HarnessHookEventDescriptor;
+      description?: string;
+    }>;
+    strict?: boolean;
+    metadata?: Record<string, unknown>;
     categories?: string[];
     keywords?: string[];
   }>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface HarnessManifestValidationResult {
@@ -85,16 +139,29 @@ const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)
 const EVENT_NAME_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const EXPORT_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const RELATIVE_PACKAGE_PATH_PATTERN = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$)).+/;
+const SAFE_COMPONENT_PATH_PATTERN = /^(?!\/|[A-Za-z]:)(?!.*(?:^|[\\/])\.\.(?:[\\/]|$)).+/;
+const FILE_EXTENSION_PATTERN = /^\.[A-Za-z0-9][A-Za-z0-9.+_-]*$/;
+const MIME_TYPE_PATTERN = /^[a-z0-9.+-]+\/(?:[a-z0-9.+-]+|\*)$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 const CAPABILITY_KINDS = new Set<HarnessPluginCapabilityKind>([
   'tool',
   'command',
   'hook',
+  'skill',
   'memory',
   'artifact',
   'setting',
+  'mcp-server',
+  'lsp-server',
   'model-provider',
   'chat-agent',
+  'output-style',
+  'theme',
+  'monitor',
+  'prompt',
+  'extension',
+  'renderer',
+  'pane-item',
   'asset',
   'event',
 ]);
@@ -119,9 +186,72 @@ const capabilitySchema = z.object({
   }
 });
 
+const sourceFormatSchema = z.enum(['agent-harness', 'github-copilot', 'claude-code', 'pi']);
+
+const componentRefSchema = z.union([
+  z.string().regex(SAFE_COMPONENT_PATH_PATTERN, 'Component paths must stay inside the plugin package.'),
+  z.object({ inline: z.unknown() }),
+]);
+
+const componentsSchema = z.object({
+  agents: z.array(componentRefSchema).optional(),
+  skills: z.array(componentRefSchema).optional(),
+  commands: z.array(componentRefSchema).optional(),
+  hooks: z.array(componentRefSchema).optional(),
+  mcpServers: z.array(componentRefSchema).optional(),
+  lspServers: z.array(componentRefSchema).optional(),
+  outputStyles: z.array(componentRefSchema).optional(),
+  themes: z.array(componentRefSchema).optional(),
+  monitors: z.array(componentRefSchema).optional(),
+  extensions: z.array(componentRefSchema).optional(),
+  prompts: z.array(componentRefSchema).optional(),
+  bins: z.array(componentRefSchema).optional(),
+  settings: z.array(componentRefSchema).optional(),
+}).optional();
+
+const rendererComponentSchema = z.object({
+  module: z.string().regex(
+    RELATIVE_PACKAGE_PATH_PATTERN,
+    'Renderer modules must be relative paths inside the plugin package.',
+  ),
+  export: z.string().regex(EXPORT_NAME_PATTERN, 'Renderer exports must be JavaScript export names.').optional(),
+});
+
+const rendererTargetSchema = z.object({
+  kind: z.enum(['file', 'artifact', 'message', 'workspace-item']),
+  fileNames: z.array(z.string().min(1)).optional(),
+  fileExtensions: z.array(z.string().regex(FILE_EXTENSION_PATTERN, 'File extensions must include a leading dot.')).optional(),
+  mimeTypes: z.array(z.string().regex(MIME_TYPE_PATTERN, 'MIME types must use type/subtype or type/*.')).optional(),
+  artifactKinds: z.array(z.string().regex(EVENT_NAME_PATTERN)).optional(),
+  messageTypes: z.array(z.string().regex(EVENT_NAME_PATTERN)).optional(),
+  workspaceItemTypes: z.array(z.string().regex(EVENT_NAME_PATTERN)).optional(),
+});
+
+const paneItemSchema = z.object({
+  id: z.string().regex(EVENT_NAME_PATTERN, 'Pane item ids must be lowercase dot- or kebab-case.'),
+  label: z.string().min(1, 'Pane item label is required.'),
+  description: z.string().optional(),
+  rendererId: z.string().regex(EVENT_NAME_PATTERN).optional(),
+  preferredLocation: z.enum(['main', 'side', 'bottom', 'modal']).optional(),
+  when: rendererTargetSchema,
+  component: rendererComponentSchema.optional(),
+  priority: z.number().optional(),
+});
+
+const rendererSchema = z.object({
+  id: z.string().regex(EVENT_NAME_PATTERN, 'Renderer ids must be lowercase dot- or kebab-case.'),
+  label: z.string().min(1, 'Renderer label is required.'),
+  description: z.string().optional(),
+  target: rendererTargetSchema,
+  component: rendererComponentSchema,
+  paneItem: paneItemSchema.optional(),
+  priority: z.number().optional(),
+});
+
 const pluginManifestSchema = z.object({
   schemaVersion: z.literal(HARNESS_PLUGIN_MANIFEST_SCHEMA_VERSION),
   id: z.string().regex(PLUGIN_ID_PATTERN, 'Plugin id must use reverse-DNS lowercase segments.'),
+  sourceFormat: sourceFormatSchema.optional(),
   name: z.string().min(1, 'Plugin name is required.'),
   version: z.string().regex(SEMVER_PATTERN, 'Plugin version must be a semver string.'),
   description: z.string().min(1, 'Plugin description is required.'),
@@ -131,8 +261,12 @@ const pluginManifestSchema = z.object({
       'Entrypoint module must be a relative path inside the plugin package.',
     ),
     export: z.string().regex(EXPORT_NAME_PATTERN, 'Entrypoint export must be a JavaScript export name.').optional(),
-  }),
+  }).optional(),
+  components: componentsSchema,
+  metadata: z.record(z.string(), z.unknown()).optional(),
   capabilities: z.array(capabilitySchema).optional(),
+  renderers: z.array(rendererSchema).optional(),
+  paneItems: z.array(paneItemSchema).optional(),
   events: z.array(hookEventSchema.extend({ description: z.string().optional() })).optional(),
   assets: z.array(z.object({
     kind: z.enum(['example', 'runtime', 'documentation', 'fixture']),
@@ -148,6 +282,14 @@ const pluginManifestSchema = z.object({
     harnessCore: z.string().optional(),
     agentBrowser: z.string().optional(),
   }).optional(),
+}).superRefine((value, context) => {
+  if ((value.sourceFormat === undefined || value.sourceFormat === 'agent-harness') && !value.entrypoint) {
+    context.addIssue({
+      code: 'custom',
+      path: ['entrypoint'],
+      message: 'Harness plugin manifests require an entrypoint unless they import an external plugin format.',
+    });
+  }
 });
 
 const marketplaceManifestSchema = z.object({
@@ -162,20 +304,37 @@ const marketplaceManifestSchema = z.object({
     name: z.string().min(1, 'Plugin name is required.'),
     version: z.string().regex(SEMVER_PATTERN, 'Plugin version must be a semver string.'),
     description: z.string().min(1, 'Plugin description is required.'),
-    manifest: z.string().endsWith(
-      HARNESS_PLUGIN_MANIFEST_FILENAME,
-      `Marketplace plugin entries must reference ${HARNESS_PLUGIN_MANIFEST_FILENAME} manifests.`,
-    ),
+    manifest: z.string().optional(),
+    sourceFormat: sourceFormatSchema.optional(),
     source: z.object({
-      type: z.enum(['local', 'git', 'npm', 'url']),
+      type: z.enum(['local', 'git', 'github', 'git-subdir', 'npm', 'url']),
       path: z.string().optional(),
       url: z.string().optional(),
+      repo: z.string().optional(),
       package: z.string().optional(),
+      version: z.string().optional(),
+      registry: z.string().optional(),
       ref: z.string().optional(),
+      sha: z.string().optional(),
     }),
+    components: componentsSchema,
+    capabilities: z.array(capabilitySchema).optional(),
+    strict: z.boolean().optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
     categories: z.array(z.string()).optional(),
     keywords: z.array(z.string()).optional(),
+  }).superRefine((value, context) => {
+    if (value.sourceFormat === undefined || value.sourceFormat === 'agent-harness') {
+      if (!value.manifest?.endsWith(HARNESS_PLUGIN_MANIFEST_FILENAME)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['manifest'],
+          message: `Marketplace plugin entries must reference ${HARNESS_PLUGIN_MANIFEST_FILENAME} manifests.`,
+        });
+      }
+    }
   })),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export function validateHarnessPluginManifest(value: unknown): HarnessManifestValidationResult {
