@@ -39,7 +39,16 @@ export interface ChatCompletionMessage {
   content: string | unknown[];
 }
 
+export type JsonValue =
+  | null
+  | string
+  | number
+  | boolean
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 export interface ChatCompletionRequestBody {
+  [key: string]: unknown;
   model: string;
   messages: ChatCompletionMessage[];
   temperature?: number;

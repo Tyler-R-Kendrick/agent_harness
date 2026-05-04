@@ -47,7 +47,11 @@ describe('PWA local model extension client', () => {
       expect(message).toMatchObject({
         type: 'chatCompletion',
         baseUrl: 'http://localhost:1234/v1',
-        body: { model: 'llama', stream: false },
+        body: {
+          model: 'llama',
+          sae: { adapter: 'sparse-autoencoder', scope: 'mistral-tool-use' },
+          stream: false,
+        },
       });
       callback({ ok: true, data: { choices: [{ message: { content: 'hi' } }] } });
     });
@@ -58,6 +62,7 @@ describe('PWA local model extension client', () => {
       baseUrl: 'http://localhost:1234/v1',
       model: 'llama',
       messages: [{ role: 'user', content: 'hello' }],
+      extraBody: { sae: { adapter: 'sparse-autoencoder', scope: 'mistral-tool-use' } },
     })).resolves.toEqual({ choices: [{ message: { content: 'hi' } }] });
   });
 
@@ -82,11 +87,19 @@ describe('PWA local model extension client', () => {
       baseUrl: 'http://127.0.0.1:11434/v1',
       model: 'llama',
       messages: [{ role: 'user', content: 'hello' }],
+      extraBody: { sae: { adapter: 'sparse-autoencoder', scope: 'deepseek-planning' } },
       onToken: (token) => tokens.push(token),
       onDone: done,
     });
 
-    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'streamChatCompletion', requestId: expect.any(String) }));
+    expect(postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'streamChatCompletion',
+      requestId: expect.any(String),
+      body: expect.objectContaining({
+        sae: { adapter: 'sparse-autoencoder', scope: 'deepseek-planning' },
+        stream: true,
+      }),
+    }));
     messageListener?.({ type: 'start', requestId: String(postMessage.mock.calls[0][0].requestId) });
     messageListener?.({ type: 'token', requestId: String(postMessage.mock.calls[0][0].requestId), token: 'hi' });
     messageListener?.({ type: 'done', requestId: String(postMessage.mock.calls[0][0].requestId) });

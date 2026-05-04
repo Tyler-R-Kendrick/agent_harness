@@ -95,6 +95,14 @@ POST /v1/embeddings
 POST /v1/completions
 ```
 
+Runtime-specific chat completion fields are preserved as JSON pass-through
+fields after the connector validates the standard OpenAI-compatible body. Use
+that for runtime-supported features such as sparse-autoencoder activation
+controls, adapters, or sampling knobs without tying the connector to one model
+family. For example, a runtime that supports SAE can receive an `sae` object for
+Qwen, DeepSeek, Mistral, or any other compatible model; unsupported runtimes are
+expected to reject or ignore those fields.
+
 Provider presets:
 
 ```text
