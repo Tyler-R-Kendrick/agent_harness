@@ -22,12 +22,7 @@ beforeEach(() => {
   pipelineMock.mockReset();
   postMessageSpy.mockReset();
   textStreamerMock.mockClear();
-  if (!globalThis.navigator) {
-    vi.stubGlobal('navigator', {});
-  }
-  if ('gpu' in globalThis.navigator) {
-    delete (globalThis.navigator as Navigator & { gpu?: unknown }).gpu;
-  }
+  vi.stubGlobal('navigator', {});
   vi.resetModules();
   transformerEnv.useBrowserCache = true;
   transformerEnv.backends.onnx.wasm.proxy = false;
