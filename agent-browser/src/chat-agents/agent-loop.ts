@@ -3,7 +3,7 @@ import {
   wrapCompletionCheckerWithCallbacks,
   wrapVoterWithCallbacks,
   type LogActAgentLoopOptions,
-} from 'harness-core';
+} from '@agent-harness/logact-loop';
 import type { AgentStreamCallbacks } from './types';
 
 export type AgentLoopOptions = LogActAgentLoopOptions;

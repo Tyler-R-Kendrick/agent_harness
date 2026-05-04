@@ -29,6 +29,9 @@ export {
 } from './storage.js';
 export {
   HarnessAgent,
+  createActorMessageEvent,
+  normalizeSession,
+  resolveDefaultMessageActor,
   runHarnessLoop,
   type HarnessAgentOptions,
   type HarnessAgentState,
@@ -98,6 +101,7 @@ export {
   type SketchOfThoughtExpertAgentOptions,
   type SketchOfThoughtParadigm,
 } from './expertAgents.js';
+export { buildSketchOfThoughtConstrainedDecoding } from './sketchOfThought.js';
 export {
   resolveSaeMappingsForModel,
   type SaeMapping,
@@ -160,8 +164,8 @@ export {
   AGENT_LOOP_HOOK_EVENTS,
   HarnessHookPolicyError,
   HookRegistry,
-  LLM_HOOK_EVENTS,
   LOGACT_AGENT_LOOP_HOOK_EVENTS,
+  LLM_HOOK_EVENTS,
   createCodeHook,
   createInferenceHook,
   createSemanticHook,
@@ -184,6 +188,24 @@ export {
   type HarnessHookRunner,
   type HarnessSemanticHook,
 } from './hooks.js';
+export {
+  AgentLoopActorRegistry,
+  AgentLoopEventPublisherRegistry,
+  runAgentEventLoop,
+  type AgentEventLoopOptions,
+  type AgentEventLoopResult,
+  type AgentLoopActor,
+  type AgentLoopActorContext,
+  type AgentLoopActorMode,
+  type AgentLoopActorResult,
+  type AgentLoopDispatchEvent,
+  type AgentLoopEvent,
+  type AgentLoopEventPublisher,
+  type AgentLoopEventPublisherContext,
+  type SerializableAgentLoopDefinition,
+  type SerializableAgentLoopEventInvocation,
+  type SerializableAgentLoopStateDefinition,
+} from './eventLoop.js';
 export {
   WorkflowAgentBus,
   createLogActWorkflowDefinition,

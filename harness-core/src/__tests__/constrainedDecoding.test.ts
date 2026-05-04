@@ -14,7 +14,6 @@ import {
   decodeConstrainedOutputWithHooks,
   guidanceConnectionString,
   resolveGuidanceTsGrammar,
-  runLogActAgentLoop,
   toGuidanceTsGrammar,
   type CoreInferenceOptions,
 } from '../index.js';
@@ -364,22 +363,3 @@ describe('constrained output decoding', () => {
   });
 });
 
-describe('runLogActAgentLoop constrained decoding', () => {
-  it('passes optional constrained decoding through to the inference client', async () => {
-    const seenOptions: CoreInferenceOptions[] = [];
-    const constrainedDecoding = constrainToJsonSchema({ type: 'object' });
-
-    await runLogActAgentLoop({
-      inferenceClient: {
-        async infer(_messages, options) {
-          seenOptions.push(options ?? {});
-          return '';
-        },
-      },
-      messages: [{ content: 'decide' }],
-      constrainedDecoding,
-    }, {});
-
-    expect(seenOptions).toEqual([{ constrainedDecoding }]);
-  });
-});
