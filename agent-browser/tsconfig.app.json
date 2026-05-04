@@ -18,6 +18,9 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
+      "@agent-harness/ext-agent-skills": ["../ext/agent-skills/src/index.ts"],
+      "@agent-harness/ext-agents-md": ["../ext/agents-md/src/index.ts"],
+      "@agent-harness/ext-design-md": ["../ext/design-md/src/index.ts"],
       "inbrowser-use": ["../lib/inbrowser-use/src/index.ts"],
       "logact": ["../lib/logact/src/index.ts"],
       "harness-core": ["../harness-core/src/index.ts"],

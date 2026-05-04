@@ -3,6 +3,7 @@ import { CommandRegistry } from './commands.js';
 import { createDefaultCommandRegistry } from './defaultCommands.js';
 import { HookRegistry } from './hooks.js';
 import { MemoryRegistry, type MemoryMessage } from './memory.js';
+import { RendererRegistry } from './renderers.js';
 import { type HarnessStorage, type HarnessStorageSource, resolveHarnessStorage } from './storage.js';
 import { ToolRegistry } from './tools.js';
 
@@ -16,6 +17,7 @@ export interface HarnessExtensionContext<
   memory: MemoryRegistry<TMessage>;
   storage: HarnessStorage;
   artifacts: ArtifactRegistry;
+  renderers: RendererRegistry;
   plugins: PluginRegistry<TMessage, THookPayload>;
 }
 
@@ -80,6 +82,7 @@ export function createHarnessExtensionContext<
     memory: new MemoryRegistry<TMessage>(),
     storage,
     artifacts: options.artifacts ?? new ArtifactRegistry({ storage }),
+    renderers: new RendererRegistry(),
   } as Omit<HarnessExtensionContext<TMessage, THookPayload>, 'plugins'> & {
     plugins?: PluginRegistry<TMessage, THookPayload>;
   };

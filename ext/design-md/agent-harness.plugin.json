@@ -18,6 +18,47 @@
       "kind": "tool",
       "id": "design-md.apply",
       "description": "Applies DESIGN.md tokens through plugin-selected providers."
+    },
+    {
+      "kind": "renderer",
+      "id": "design-md.designer",
+      "description": "Renders DESIGN.md workspaces in the Agent Browser Designer surface."
+    },
+    {
+      "kind": "pane-item",
+      "id": "design-md.designer-pane",
+      "description": "Adds the Designer pane item when DESIGN.md is selected."
+    }
+  ],
+  "renderers": [
+    {
+      "id": "design-md.designer",
+      "label": "Designer",
+      "description": "Interactive DESIGN.md design-system renderer and review workspace.",
+      "target": {
+        "kind": "file",
+        "fileNames": ["DESIGN.md"],
+        "mimeTypes": ["text/markdown"]
+      },
+      "component": {
+        "module": "./examples/agent-browser-designer/DesignerPanel.tsx",
+        "export": "DesignerPanel"
+      },
+      "paneItem": {
+        "id": "design-md.designer-pane",
+        "label": "Designer",
+        "description": "Open DESIGN.md in the Designer pane.",
+        "rendererId": "design-md.designer",
+        "preferredLocation": "side",
+        "when": {
+          "kind": "file",
+          "fileNames": ["DESIGN.md"]
+        },
+        "component": {
+          "module": "./examples/agent-browser-designer/DesignerPanel.tsx",
+          "export": "DesignerPanel"
+        }
+      }
     }
   ],
   "assets": [

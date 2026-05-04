@@ -182,6 +182,12 @@ import {
   WORKSPACE_FILES_STORAGE_KEY,
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
+import {
+  DEFAULT_EXTENSION_MANIFESTS,
+  createDefaultExtensionRuntime,
+  summarizeDefaultExtensionRuntime,
+  type DefaultExtensionRuntime,
+} from './services/defaultExtensions';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import {
   DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
@@ -217,12 +223,6 @@ import {
   saveJson,
   useStoredState,
 } from './services/sessionState';
-import {
-  DEFAULT_TRAJECTORY_CRITIC_SETTINGS,
-  isTrajectoryCriticSettings,
-  normalizeTrajectoryCriticSettings,
-  type TrajectoryCriticSettings,
-} from './services/trajectoryCritic';
 import {
   buildPullRequestReview,
   createSamplePullRequestReviewInput,
@@ -1789,6 +1789,7 @@ function ChatPanel({
   workspaceName,
   workspaceFiles,
   workspaceCapabilities,
+  defaultExtensions,
   evaluationAgents,
   negativeRubricTechniques,
   onNegativeRubricTechnique,
@@ -1809,7 +1810,6 @@ function ChatPanel({
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
   secretSettings,
-  trajectoryCriticSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
   dragHandleProps,
@@ -1824,6 +1824,7 @@ function ChatPanel({
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
   workspaceCapabilities: WorkspaceCapabilities;
+  defaultExtensions: DefaultExtensionRuntime | null;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onNegativeRubricTechnique: (technique: string) => void;
@@ -1844,7 +1845,6 @@ function ChatPanel({
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   secretSettings: SecretManagementSettings;
-  trajectoryCriticSettings: TrajectoryCriticSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
   dragHandleProps?: PanelDragHandleProps;
@@ -2066,7 +2066,10 @@ function ChatPanel({
     ))
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState, cursorState, codexState });
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
+  const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
+  const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -5152,7 +5155,7 @@ function ChatPanel({
       <div className="shared-console-body">
         <div className="shared-console-main">
           {!showBash && activeActivityMessage ? (
-            <ProcessPanel message={activeActivityMessage} criticSettings={trajectoryCriticSettings} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+            <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, activeCursorModelName: activeCursorModel?.name, activeCodexModelName: activeCodexModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
@@ -5778,64 +5781,6 @@ function formatSecretUpdated(value: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-function TrajectoryCriticSettingsPanel({
-  settings,
-  onSettingsChange,
-}: {
-  settings: TrajectoryCriticSettings;
-  onSettingsChange: (settings: TrajectoryCriticSettings) => void;
-}) {
-  const updateSettings = (next: Partial<TrajectoryCriticSettings>) => {
-    onSettingsChange(normalizeTrajectoryCriticSettings({ ...settings, ...next }));
-  };
-  const updateThreshold = (key: keyof Pick<TrajectoryCriticSettings, 'stopThreshold' | 'branchThreshold' | 'retryThreshold' | 'humanReviewThreshold'>, value: string) => {
-    const parsed = Number.parseFloat(value);
-    updateSettings({ [key]: Number.isFinite(parsed) ? parsed : settings[key] });
-  };
-  const fields: Array<{
-    key: keyof Pick<TrajectoryCriticSettings, 'stopThreshold' | 'branchThreshold' | 'retryThreshold' | 'humanReviewThreshold'>;
-    label: string;
-  }> = [
-    { key: 'stopThreshold', label: 'Stop' },
-    { key: 'branchThreshold', label: 'Branch' },
-    { key: 'retryThreshold', label: 'Retry' },
-    { key: 'humanReviewThreshold', label: 'Human review' },
-  ];
-
-  return (
-    <SettingsSection title="Trajectory critic">
-      <div className="trajectory-settings">
-        <label className="secret-toggle-row">
-          <input
-            type="checkbox"
-            checked={settings.enabled}
-            aria-label={settings.enabled ? 'Disable trajectory critic' : 'Enable trajectory critic'}
-            onChange={(event) => updateSettings({ enabled: event.target.checked })}
-          />
-          <span><strong>Runtime trajectory scoring</strong><small>Score process traces before a low-confidence run burns more time.</small></span>
-        </label>
-        <div className="trajectory-threshold-grid">
-          {fields.map((field) => (
-            <label key={field.key} className="provider-command-field">
-              <span>{field.label}</span>
-              <input
-                aria-label={`${field.label} threshold`}
-                type="number"
-                min="0"
-                max="1"
-                step="0.01"
-                value={settings[field.key]}
-                onChange={(event) => updateThreshold(field.key, event.target.value)}
-              />
-            </label>
-          ))}
-        </div>
-        <p className="muted">Actions escalate as confidence falls: human review, retry, branch, then stop.</p>
-      </div>
-    </SettingsSection>
-  );
-}
-
 interface SettingsPanelProps {
   copilotState: CopilotRuntimeState;
   isCopilotLoading: boolean;
@@ -5868,11 +5813,9 @@ interface SettingsPanelProps {
   onSaveSecret: (input: { name: string; value: string }) => Promise<string>;
   onDeleteSecret: (idOrRef: string) => Promise<void>;
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
-  trajectoryCriticSettings: TrajectoryCriticSettings;
-  onTrajectoryCriticSettingsChange: (settings: TrajectoryCriticSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -6015,11 +5958,6 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         onSettingsChange={onSecretSettingsChange}
       />
 
-      <TrajectoryCriticSettingsPanel
-        settings={trajectoryCriticSettings}
-        onSettingsChange={onTrajectoryCriticSettingsChange}
-      />
-
       {copilotState.models.length > 0 && (
         <SettingsSection title={`GitHub Copilot models (${copilotState.models.length})`} defaultOpen={false} scrollBody>
           {copilotState.models.map((model) => (
@@ -6126,31 +6064,12 @@ function HistoryPanel() {
   );
 }
 
-interface MarketplaceExtension {
-  id: string;
-  name: string;
-  author: string;
-  description: string;
-  iconColor: string;
-  iconLetter: string;
-  stars: number;
-  users: string;
-  installed: boolean;
-  category: string;
+function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
+  if (extensionId.endsWith('.agent-skills')) return 'sparkles';
+  if (extensionId.endsWith('.agents-md')) return 'file';
+  if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
+  return 'puzzle';
 }
-
-const MARKETPLACE_ITEMS: MarketplaceExtension[] = [
-  { id: 'ublock', name: 'uBlock Origin', author: 'Raymond Hill', description: 'An efficient wide-spectrum content blocker for Chromium and Firefox.', iconColor: '#800000', iconLetter: 'uB', stars: 5, users: '10M+', installed: true, category: 'Privacy' },
-  { id: 'dark-reader', name: 'Dark Reader', author: 'Dark Reader Ltd', description: 'Dark mode for every website. Take care of your eyes, use Dark Reader for night and daily browsing.', iconColor: '#1a1a2e', iconLetter: 'DR', stars: 4, users: '5M+', installed: true, category: 'Productivity' },
-  { id: 'mcp-bridge', name: 'MCP Bridge', author: 'Anthropic', description: 'Connect to Model Context Protocol servers for tool-augmented AI interactions.', iconColor: '#d97706', iconLetter: 'MC', stars: 4, users: '50K+', installed: false, category: 'AI' },
-  { id: '1password', name: '1Password', author: 'AgileBits', description: 'The best way to experience 1Password in your browser. Easily sign in, generate passwords, and autofill forms.', iconColor: '#0572ec', iconLetter: '1P', stars: 5, users: '2M+', installed: false, category: 'Privacy' },
-  { id: 'react-devtools', name: 'React DevTools', author: 'Meta', description: 'Adds React debugging tools to the browser DevTools. Inspect the component hierarchy and props.', iconColor: '#61dafb', iconLetter: 'Re', stars: 4, users: '3M+', installed: true, category: 'Developer' },
-  { id: 'copilot', name: 'GitHub Copilot', author: 'GitHub', description: 'AI pair programmer that helps you write code faster with autocomplete-style suggestions.', iconColor: '#238636', iconLetter: 'GH', stars: 5, users: '1M+', installed: false, category: 'AI' },
-  { id: 'bitwarden', name: 'Bitwarden', author: 'Bitwarden Inc', description: 'A secure and free password manager for all of your devices.', iconColor: '#175DDC', iconLetter: 'Bw', stars: 4, users: '1M+', installed: false, category: 'Privacy' },
-  { id: 'grammarly', name: 'Grammarly', author: 'Grammarly Inc', description: 'Improve your writing with AI-powered grammar checking, spell checking, and style suggestions.', iconColor: '#15c39a', iconLetter: 'Gr', stars: 4, users: '10M+', installed: false, category: 'Productivity' },
-  { id: 'json-viewer', name: 'JSON Viewer', author: 'nicedoc.io', description: 'Beautify and format JSON data in the browser with syntax highlighting and tree view.', iconColor: '#f59e0b', iconLetter: 'JS', stars: 4, users: '500K+', installed: true, category: 'Developer' },
-  { id: 'vimium', name: 'Vimium', author: 'Phil Crosby', description: 'The Hacker\'s browser. Navigate the web without a mouse using Vim-like keybindings.', iconColor: '#4ade80', iconLetter: 'Vi', stars: 5, users: '800K+', installed: false, category: 'Tools' },
-];
 
 function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
   try {
@@ -6164,57 +6083,62 @@ function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; d
   }
 }
 
-function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: string; capabilities: WorkspaceCapabilities }) {
+function ExtensionsPanel({
+  workspaceName,
+  capabilities,
+  defaultExtensions,
+}: {
+  workspaceName: string;
+  capabilities: WorkspaceCapabilities;
+  defaultExtensions: DefaultExtensionRuntime | null;
+}) {
   const [search, setSearch] = useState('');
-  const [installedExtensions, setInstalledExtensions] = useState<Set<string>>(() => new Set(MARKETPLACE_ITEMS.filter((e) => e.installed).map((e) => e.id)));
+  const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
+  const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
 
-  const filtered = MARKETPLACE_ITEMS.filter((ext) => {
+  const filtered = repoExtensions.filter((extension) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return ext.name.toLowerCase().includes(q) || ext.description.toLowerCase().includes(q) || ext.author.toLowerCase().includes(q);
+    return [
+      extension.manifest.name,
+      extension.manifest.description,
+      extension.marketplace.source.path ?? '',
+      ...(extension.marketplace.categories ?? []),
+      ...(extension.marketplace.keywords ?? []),
+    ].some((value) => value.toLowerCase().includes(q));
   });
-
-  const toggleInstall = (id: string) => {
-    setInstalledExtensions((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <div className="panel-topbar extensions-topbar">
-        <h2>Marketplace</h2>
-        <span className="badge">{installedExtensions.size} installed</span>
+        <h2>Extensions</h2>
+        <span className="badge">{defaultExtensionSummary.pluginCount} loaded</span>
       </div>
       <div className="extensions-search shared-input-shell">
         <Icon name="search" size={13} color="#7d8594" />
         <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
       </div>
       <div className="extensions-list">
-        {filtered.map((ext) => {
-          const isInstalled = installedExtensions.has(ext.id);
-          return (
-            <article key={ext.id} className="marketplace-card">
-              <div className="marketplace-card-icon" style={{ background: ext.iconColor }}>
-                <span>{ext.iconLetter}</span>
+        {filtered.map((extension) => (
+          <article key={extension.manifest.id} className="marketplace-card">
+            <div className="marketplace-card-icon">
+              <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
+            </div>
+            <div className="marketplace-card-body">
+              <strong>{extension.manifest.name}</strong>
+              <span className="marketplace-card-author">
+                {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
+              </span>
+              <p className="marketplace-card-desc">{extension.manifest.description}</p>
+              <div className="marketplace-card-meta">
+                {(extension.manifest.capabilities ?? []).map((capability) => (
+                  <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
+                ))}
               </div>
-              <div className="marketplace-card-body">
-                <strong>{ext.name}</strong>
-                <span className="marketplace-card-author">{ext.author}</span>
-                <p className="marketplace-card-desc">{ext.description}</p>
-                <div className="marketplace-card-meta">
-                  <span className="marketplace-stars">{'★'.repeat(ext.stars)}{'☆'.repeat(5 - ext.stars)}</span>
-                  <span className="muted">{ext.users}</span>
-                </div>
-              </div>
-              <button type="button" className={`marketplace-install-btn ${isInstalled ? 'installed' : ''}`} onClick={() => toggleInstall(ext.id)}>
-                {isInstalled ? 'Installed' : 'Add'}
-              </button>
-            </article>
-          );
-        })}
+            </div>
+            <span className="badge">Loaded</span>
+          </article>
+        ))}
         {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
       </div>
       {capabilities.plugins.length > 0 && (
@@ -7386,12 +7310,6 @@ function AgentBrowserApp() {
     isSecretManagementSettings,
     DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   );
-  const [trajectoryCriticSettings, setTrajectoryCriticSettings] = useStoredState(
-    localStorageBackend,
-    STORAGE_KEYS.trajectoryCriticSettings,
-    isTrajectoryCriticSettings,
-    DEFAULT_TRAJECTORY_CRITIC_SETTINGS,
-  );
   const [secretRecords, setSecretRecords] = useState<SecretRecord[]>([]);
   const evaluationAgentRegistry = useMemo(
     () => createEvaluationAgentRegistry(localStorageBackend, activeWorkspaceId),
@@ -7500,12 +7418,6 @@ function AgentBrowserApp() {
       saveJson(localStorageBackend, STORAGE_KEYS.secretManagementSettings, next);
     }
   }, [setSecretSettings]);
-  const updateTrajectoryCriticSettings = useCallback((next: TrajectoryCriticSettings) => {
-    setTrajectoryCriticSettings(next);
-    if (localStorageBackend) {
-      saveJson(localStorageBackend, STORAGE_KEYS.trajectoryCriticSettings, next);
-    }
-  }, [setTrajectoryCriticSettings]);
   const webMcpModelContext = useMemo(
     () => installModelContext(typeof window === 'undefined' ? undefined : window) ?? new ModelContext(),
     [],
@@ -7614,6 +7526,21 @@ function AgentBrowserApp() {
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
+  const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void createDefaultExtensionRuntime(activeWorkspaceFiles)
+      .then((runtime) => {
+        if (mounted) setDefaultExtensionRuntime(runtime);
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load default extensions', error);
+        if (mounted) setDefaultExtensionRuntime(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeWorkspaceFiles]);
   const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
     workspaceId: activeWorkspaceId,
     workspaceName: activeWorkspace.name,
@@ -10368,7 +10295,13 @@ function AgentBrowserApp() {
       );
     }
     if (activePanel === 'history') return <HistoryPanel />;
-    if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
+    if (activePanel === 'extensions') return (
+      <ExtensionsPanel
+        workspaceName={activeWorkspace.name}
+        capabilities={activeWorkspaceCapabilities}
+        defaultExtensions={defaultExtensionRuntime}
+      />
+    );
     if (activePanel === 'settings') return (
       <SettingsPanel
         copilotState={copilotState}
@@ -10402,8 +10335,6 @@ function AgentBrowserApp() {
         onSaveSecret={saveManualSecret}
         onDeleteSecret={deleteManualSecret}
         onSecretSettingsChange={updateSecretSettings}
-        trajectoryCriticSettings={trajectoryCriticSettings}
-        onTrajectoryCriticSettingsChange={updateTrajectoryCriticSettings}
       />
     );
     return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
@@ -10601,6 +10532,7 @@ function AgentBrowserApp() {
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
                 workspaceCapabilities={activeWorkspaceCapabilities}
+                defaultExtensions={defaultExtensionRuntime}
                 evaluationAgents={evaluationAgents}
                 negativeRubricTechniques={negativeRubricTechniques}
                 onNegativeRubricTechnique={addNegativeRubricTechnique}
@@ -10633,7 +10565,6 @@ function AgentBrowserApp() {
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 secretSettings={secretSettings}
-                trajectoryCriticSettings={trajectoryCriticSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}
                 dragHandleProps={dragHandleProps}

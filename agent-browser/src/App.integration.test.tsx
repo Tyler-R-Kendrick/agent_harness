@@ -371,8 +371,26 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     expect(screen.getByText('symphony')).toBeInTheDocument();
-    expect(screen.getByText('Symphony workflow orchestration')).toBeInTheDocument();
+    expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
+  });
+
+  it('loads repo default extensions into the Extensions panel', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+
+    expect(screen.getByRole('heading', { name: 'Extensions' })).toBeInTheDocument();
+    expect(screen.getByText('4 loaded')).toBeInTheDocument();
+    expect(screen.getByText('Agent skills')).toBeInTheDocument();
+    expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
+    expect(screen.getByText('DESIGN.md design tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
+    expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
   it('customizes and persists the generated harness app spec from the dashboard', async () => {

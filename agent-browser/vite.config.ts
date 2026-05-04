@@ -84,6 +84,18 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../harness-core/src/index.ts'),
       },
       {
+        find: '@agent-harness/ext-agent-skills',
+        replacement: path.resolve(__dirname, '../ext/agent-skills/src/index.ts'),
+      },
+      {
+        find: '@agent-harness/ext-agents-md',
+        replacement: path.resolve(__dirname, '../ext/agents-md/src/index.ts'),
+      },
+      {
+        find: '@agent-harness/ext-design-md',
+        replacement: path.resolve(__dirname, '../ext/design-md/src/index.ts'),
+      },
+      {
         find: 'ralph-loop',
         replacement: path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
       },
