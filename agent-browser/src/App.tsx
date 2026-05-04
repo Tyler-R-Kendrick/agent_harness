@@ -6179,19 +6179,6 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   return 'puzzle';
 }
 
-const MARKETPLACE_ITEMS: MarketplaceExtension[] = [
-  { id: 'ublock', name: 'uBlock Origin', author: 'Raymond Hill', description: 'An efficient wide-spectrum content blocker for Chromium and Firefox.', iconColor: '#800000', iconLetter: 'uB', stars: 5, users: '10M+', installed: true, category: 'Privacy' },
-  { id: 'dark-reader', name: 'Dark Reader', author: 'Dark Reader Ltd', description: 'Dark mode for every website. Take care of your eyes, use Dark Reader for night and daily browsing.', iconColor: '#1a1a2e', iconLetter: 'DR', stars: 4, users: '5M+', installed: true, category: 'Productivity' },
-  { id: 'mcp-bridge', name: 'MCP Bridge', author: 'Anthropic', description: 'Connect to Model Context Protocol servers for tool-augmented AI interactions.', iconColor: '#d97706', iconLetter: 'MC', stars: 4, users: '50K+', installed: false, category: 'AI' },
-  { id: '1password', name: '1Password', author: 'AgileBits', description: 'The best way to experience 1Password in your browser. Easily sign in, generate passwords, and autofill forms.', iconColor: '#0572ec', iconLetter: '1P', stars: 5, users: '2M+', installed: false, category: 'Privacy' },
-  { id: 'react-devtools', name: 'React DevTools', author: 'Meta', description: 'Adds React debugging tools to the browser DevTools. Inspect the component hierarchy and props.', iconColor: '#61dafb', iconLetter: 'Re', stars: 4, users: '3M+', installed: true, category: 'Developer' },
-  { id: 'copilot', name: 'GitHub Copilot', author: 'GitHub', description: 'AI pair programmer that helps you write code faster with autocomplete-style suggestions.', iconColor: '#238636', iconLetter: 'GH', stars: 5, users: '1M+', installed: false, category: 'AI' },
-  { id: 'bitwarden', name: 'Bitwarden', author: 'Bitwarden Inc', description: 'A secure and free password manager for all of your devices.', iconColor: '#175DDC', iconLetter: 'Bw', stars: 4, users: '1M+', installed: false, category: 'Privacy' },
-  { id: 'grammarly', name: 'Grammarly', author: 'Grammarly Inc', description: 'Improve your writing with AI-powered grammar checking, spell checking, and style suggestions.', iconColor: '#15c39a', iconLetter: 'Gr', stars: 4, users: '10M+', installed: false, category: 'Productivity' },
-  { id: 'json-viewer', name: 'JSON Viewer', author: 'nicedoc.io', description: 'Beautify and format JSON data in the browser with syntax highlighting and tree view.', iconColor: '#f59e0b', iconLetter: 'JS', stars: 4, users: '500K+', installed: true, category: 'Developer' },
-  { id: 'vimium', name: 'Vimium', author: 'Phil Crosby', description: 'The Hacker\'s browser. Navigate the web without a mouse using Vim-like keybindings.', iconColor: '#4ade80', iconLetter: 'Vi', stars: 5, users: '800K+', installed: false, category: 'Tools' },
-];
-
 function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
   try {
     const manifest = JSON.parse(plugin.content) as Record<string, unknown>;
@@ -6247,7 +6234,9 @@ function ExtensionsPanel({
             </div>
             <div className="marketplace-card-body">
               <strong>{extension.manifest.name}</strong>
-              <span className="marketplace-card-author">{extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.manifest.id}</span>
+              <span className="marketplace-card-author">
+                {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
+              </span>
               <p className="marketplace-card-desc">{extension.manifest.description}</p>
               <div className="marketplace-card-meta">
                 {(extension.manifest.capabilities ?? []).map((capability) => (
@@ -8212,32 +8201,6 @@ function AgentBrowserApp() {
     setToast({ msg: 'New session created', type: 'success' });
     return createdSession;
   }, [setToast, switchWorkspace]);
-
-  const dispatchSymphonyTaskToSession = useCallback((task: SymphonyTask) => {
-    const session = addSessionToWorkspace(activeWorkspaceId, task.identifier);
-    return {
-      sessionId: session?.id,
-      sessionName: session?.name ?? task.identifier,
-      workspacePath: activeWorkspace.name,
-    };
-  }, [activeWorkspace.name, activeWorkspaceId, addSessionToWorkspace]);
-
-  const openSymphonySession = useCallback((sessionId: string) => {
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      return {
-        ...current,
-        [activeWorkspaceId]: {
-          ...existing,
-          activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
-          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
-            ? existing.mountedSessionFsIds
-            : [...existing.mountedSessionFsIds, sessionId],
-        },
-      };
-    });
-    switchSidebarPanel('workspaces');
-  }, [activeWorkspace, activeWorkspaceId, setWorkspaceViewStateByWorkspace, switchSidebarPanel]);
 
   const openArtifactPanel = useCallback((artifactId: string, filePath: string | null = null, workspaceId = activeWorkspaceId) => {
     const workspace = getWorkspace(root, workspaceId);

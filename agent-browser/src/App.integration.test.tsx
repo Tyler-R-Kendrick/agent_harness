@@ -371,7 +371,7 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     expect(screen.getByText('symphony')).toBeInTheDocument();
-    expect(screen.getByText('Symphony workflow orchestration')).toBeInTheDocument();
+    expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
     expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
   });
 
@@ -385,10 +385,12 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     expect(screen.getByRole('heading', { name: 'Extensions' })).toBeInTheDocument();
-    expect(screen.getByText('3 loaded')).toBeInTheDocument();
+    expect(screen.getByText('5 loaded')).toBeInTheDocument();
     expect(screen.getByText('Agent skills')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
     expect(screen.getByText('DESIGN.md design tokens')).toBeInTheDocument();
+    expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
+    expect(screen.getByText('Artifacts')).toBeInTheDocument();
     expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
