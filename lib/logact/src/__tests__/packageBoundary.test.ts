@@ -13,9 +13,11 @@ describe('package boundaries', () => {
     expect(Object.keys(publicApi).sort()).toEqual([
       'AllowlistVoter',
       'ClassicVoter',
+      'GitAgentBus',
       'InMemoryAgentBus',
       'LLMPassiveVoter',
       'LogActAgent',
+      'MockGitRepository',
       'PayloadType',
       'QuorumPolicy',
       'buildExecutionSummary',

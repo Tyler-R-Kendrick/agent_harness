@@ -5,11 +5,6 @@ import { ProcessGraph } from './ProcessGraph';
 import { ProcessDrilldown } from './ProcessDrilldown';
 import { formatOperationDuration } from '../operation-pane';
 import type { ProcessEntry, ProcessEntryKind } from '../../services/processLog';
-import {
-  evaluateTrajectory,
-  type TrajectoryCriticAction,
-  type TrajectoryCriticSettings,
-} from '../../services/trajectoryCritic';
 
 /**
  * Derives ProcessEntry rows from legacy ChatMessage fields so the unified
@@ -81,11 +76,9 @@ function deriveLegacyEntries(message: ChatMessage): ProcessEntry[] {
 export function ProcessPanel({
   message,
   onClose,
-  criticSettings,
 }: {
   message: ChatMessage;
   onClose: () => void;
-  criticSettings?: TrajectoryCriticSettings;
 }) {
   const entries = useMemo<ProcessEntry[]>(() => {
     if (message.processEntries?.length) return message.processEntries;
@@ -107,11 +100,6 @@ export function ProcessPanel({
   const headerSubtitle = entries.length
     ? `${entries.length} event${entries.length === 1 ? '' : 's'}${duration ? ` · ${formatOperationDuration(duration)}` : ''}`
     : 'No events';
-  const critic = useMemo(
-    () => evaluateTrajectory({ entries, message, settings: criticSettings }),
-    [criticSettings, entries, message],
-  );
-
   return (
     <>
       <aside className="op-pane pg-panel" aria-label="Process graph">
@@ -129,25 +117,6 @@ export function ProcessPanel({
             <span className="pg-panel-subtitle">{headerSubtitle}</span>
           </div>
         </header>
-        <section className="trajectory-critic" aria-label="Trajectory critic">
-          <div className="trajectory-critic-main">
-            <span className={`trajectory-critic-action trajectory-critic-action-${critic.action}`}>
-              {formatCriticAction(critic.action)}
-            </span>
-            <span className="trajectory-critic-score">{Math.round(critic.score * 100)}%</span>
-            <p>{critic.summary}</p>
-          </div>
-          {critic.reasons.length ? (
-            <ul className="trajectory-critic-reasons">
-              {critic.reasons.slice(0, 3).map((reason) => (
-                <li key={reason.code} data-kind={reason.kind}>
-                  <span>{reason.label}</span>
-                  <span>{reason.kind === 'confidence' ? '+' : '-'}{Math.round(reason.weight * 100)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
         <div className="pg-panel-body">
           <ProcessGraph
             entries={entries}
@@ -167,13 +136,4 @@ export function ProcessPanel({
       ) : null}
     </>
   );
-}
-
-function formatCriticAction(action: TrajectoryCriticAction): string {
-  switch (action) {
-    case 'human-review':
-      return 'Human review';
-    default:
-      return action.charAt(0).toUpperCase() + action.slice(1);
-  }
 }
