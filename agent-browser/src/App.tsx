@@ -98,6 +98,7 @@ import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-a
 import { useCopilotReadable } from './services/copilotRuntimeBridge';
 import { executeCliCommand } from './tools/cli/exec';
 import { COPILOT_RUNTIME_ENABLED } from './config';
+import { LocalModelSettings } from './local-model-extension/LocalModelSettings';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
 import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPanel';
@@ -6050,6 +6051,12 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         </div>
       </SettingsSection>
 
+      <SettingsSection title="Local OpenAI-compatible endpoint" defaultOpen={false}>
+        <article className="provider-card">
+          <LocalModelSettings />
+        </article>
+      </SettingsSection>
+
       <BenchmarkRoutingSettingsPanel
         settings={benchmarkRoutingSettings}
         candidates={benchmarkRoutingCandidates}
@@ -6176,6 +6183,7 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.agents-md')) return 'file';
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
   if (extensionId.endsWith('.artifacts')) return 'layers';
+  if (extensionId.endsWith('.local-model-connector')) return 'cpu';
   return 'puzzle';
 }
 
@@ -6235,6 +6243,7 @@ function ExtensionsPanel({
             <div className="marketplace-card-body">
               <strong>{extension.manifest.name}</strong>
               <span className="marketplace-card-author">
+                {extension.manifest.id.endsWith('.local-model-connector') ? 'Download/load unpacked: ' : ''}
                 {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
               </span>
               <p className="marketplace-card-desc">{extension.manifest.description}</p>
@@ -6244,7 +6253,9 @@ function ExtensionsPanel({
                 ))}
               </div>
             </div>
-            <span className="badge">Loaded</span>
+            <span className={`badge${extension.manifest.id.endsWith('.local-model-connector') ? ' connected' : ''}`}>
+              {extension.manifest.id.endsWith('.local-model-connector') ? 'Download' : 'Loaded'}
+            </span>
           </article>
         ))}
         {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}

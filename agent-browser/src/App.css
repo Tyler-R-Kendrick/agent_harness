@@ -2300,7 +2300,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 11px;
   color: var(--text-soft);
 }
-.provider-command-field input {
+.provider-command-field input,
+.provider-command-field select,
+.provider-command-field textarea {
   width: 100%;
   padding: 8px 10px;
   border-radius: 4px;
@@ -2310,6 +2312,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #d7dde5;
   font-family: 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
+}
+.provider-command-field select {
+  min-height: 34px;
+}
+.provider-command-field textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+.local-model-extension-settings {
+  display: grid;
+  gap: 10px;
+}
+.local-model-extension-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.local-model-persist-key {
+  align-items: flex-start;
+  font-size: 12px;
+}
+@media (max-width: 860px) {
+  .local-model-extension-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .copilot-model-card {
   align-items: start;

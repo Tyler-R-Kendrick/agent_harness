@@ -15,6 +15,7 @@ describe('default extensions', () => {
       'agent-harness.ext.design-md',
       'agent-harness.ext.symphony',
       'agent-harness.ext.artifacts',
+      'agent-harness.ext.local-model-connector',
     ]);
 
     const runtime = await createDefaultExtensionRuntime([]);
@@ -25,6 +26,7 @@ describe('default extensions', () => {
       'DESIGN.md design tokens',
       'Symphony workflow orchestration',
       'Artifacts',
+      'Local Model Connector',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
       'agent-skills',
@@ -32,6 +34,7 @@ describe('default extensions', () => {
       'design-md',
       'symphony',
       'artifacts',
+      'local-model-connector',
     ]);
     expect(runtime.hooks.map((hook) => hook.id)).toEqual([
       'agents-md',
@@ -46,5 +49,17 @@ describe('default extensions', () => {
       'artifacts.read',
       'artifacts.update',
     ]));
+    expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.local-model-connector'))
+      .toMatchObject({
+        marketplace: {
+          source: { path: './local-model-connector/dist' },
+          categories: expect.arrayContaining(['browser-extension']),
+        },
+        manifest: {
+          capabilities: expect.arrayContaining([
+            expect.objectContaining({ kind: 'asset', id: 'local-model-connector-extension' }),
+          ]),
+        },
+      });
   });
 });
