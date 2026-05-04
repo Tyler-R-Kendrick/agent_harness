@@ -191,6 +191,19 @@ export {
   type WorkflowMessage,
 } from './workflow.js';
 export {
+  createTrajectoryCriticVoter,
+  runGitWorkSaga,
+  type GitWorkCommitContent,
+  type GitWorkExecutionResult,
+  type GitWorkExecutionSummary,
+  type GitWorkExecutor,
+  type GitWorkItem,
+  type GitWorkRubberDuck,
+  type GitWorkSagaOptions,
+  type GitWorkSagaResult,
+  type GitWorkVoter,
+} from './gitWorkSaga.js';
+export {
   DEFAULT_SECRET_MANAGEMENT_SETTINGS,
   SECRET_REF_PREFIX,
   MemorySecretStore,

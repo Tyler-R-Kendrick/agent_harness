@@ -4,7 +4,7 @@ import type { ChatMessage } from '../../types';
 import { ProcessPanel } from './ProcessPanel';
 
 describe('ProcessPanel', () => {
-  it('renders a trajectory critic verdict for recoverable tool failures', () => {
+  it('renders the process graph without a browser trajectory critic verdict', () => {
     const message: ChatMessage = {
       id: 'message-1',
       role: 'assistant',
@@ -25,8 +25,8 @@ describe('ProcessPanel', () => {
 
     render(<ProcessPanel message={message} onClose={vi.fn()} />);
 
-    expect(screen.getByLabelText('Trajectory critic')).toBeInTheDocument();
-    expect(screen.getByText('Retry')).toBeInTheDocument();
-    expect(screen.getByText('Tool error')).toBeInTheDocument();
+    expect(screen.getByLabelText('Process graph')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Trajectory critic')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tool error')).not.toBeInTheDocument();
   });
 });
