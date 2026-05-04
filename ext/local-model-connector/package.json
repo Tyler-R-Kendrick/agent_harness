@@ -12,6 +12,7 @@
     "scripts/**",
     "src/**/*.ts",
     "dist/**",
+    "!dist/**/*.map",
     "!src/**/*.test.ts",
     "!src/__tests__/**"
   ],
