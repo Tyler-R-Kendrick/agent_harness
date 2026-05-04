@@ -13,6 +13,7 @@ describe('default extensions', () => {
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md',
+      'agent-harness.ext.symphony',
       'agent-harness.ext.artifacts',
     ]);
 
@@ -22,17 +23,20 @@ describe('default extensions', () => {
       'Agent skills',
       'AGENTS.md workspace instructions',
       'DESIGN.md design tokens',
+      'Symphony workflow orchestration',
       'Artifacts',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
       'agent-skills',
       'agents-md',
       'design-md',
+      'symphony',
       'artifacts',
     ]);
     expect(runtime.hooks.map((hook) => hook.id)).toEqual([
       'agents-md',
       'design-md.semantic-guidance',
+      'symphony.workflow-md',
     ]);
     expect(runtime.commands.some((command) => command.id === 'agent-skills')).toBe(true);
     expect(runtime.tools.map((tool) => tool.id)).toContain('design-md.apply');

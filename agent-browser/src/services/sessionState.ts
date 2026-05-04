@@ -30,7 +30,6 @@ export const STORAGE_KEYS = {
   artifactsByWorkspace: 'agent-browser.artifacts-by-workspace',
   artifactContextBySession: 'agent-browser.artifact-context-by-session',
   harnessSpecsByWorkspace: 'agent-browser.harness-specs-by-workspace',
-  symphonyBoardsByWorkspace: 'agent-browser.symphony-boards-by-workspace',
   browserNotificationSettings: 'agent-browser.browser-notification-settings',
   benchmarkModelRoutingSettings: 'agent-browser.benchmark-model-routing-settings',
   benchmarkEvidenceState: 'agent-browser.benchmark-evidence-state',

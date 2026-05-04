@@ -100,15 +100,7 @@ import { executeCliCommand } from './tools/cli/exec';
 import { COPILOT_RUNTIME_ENABLED } from './config';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
-import { SymphonyPanel, SymphonySidebar } from './features/symphony/SymphonyPanel';
 import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPanel';
-import {
-  createDefaultSymphonyBoardState,
-  isSymphonyBoardRecord,
-  selectSymphonyTask,
-  type SymphonyBoardState,
-  type SymphonyTask,
-} from './features/symphony/symphonyBoard';
 // Unified per-turn process visualization surfaced via InlineProcess and
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
@@ -319,13 +311,13 @@ import {
 import type { HarnessAppSpec, HarnessElementPatch, JsonValue } from './features/harness-ui/types';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
-import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, SearchTurnContext, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind } from './types';
+import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, SearchTurnContext, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspacePlugin } from './types';
 import type { CliHistoryEntry } from './tools/types';
 import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'symphony' | 'review' | 'history' | 'extensions' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'review' | 'history' | 'extensions' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -486,7 +478,6 @@ const PANEL_MIN_HEIGHT_PX = 240;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
-  ['symphony', 'clipboard', 'Symphony'],
   ['review', 'gitPullRequest', 'Review'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
@@ -495,10 +486,9 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
-  symphony: { label: 'Symphony', icon: 'clipboard' },
   review: { label: 'Review', icon: 'gitPullRequest' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
@@ -6189,6 +6179,18 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   return 'puzzle';
 }
 
+function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
+  try {
+    const manifest = JSON.parse(plugin.content) as Record<string, unknown>;
+    return {
+      name: typeof manifest.name === 'string' ? manifest.name : plugin.directory,
+      description: typeof manifest.description === 'string' ? manifest.description : plugin.path,
+    };
+  } catch {
+    return { name: plugin.directory, description: plugin.path };
+  }
+}
+
 function ExtensionsPanel({
   workspaceName,
   capabilities,
@@ -6232,7 +6234,9 @@ function ExtensionsPanel({
             </div>
             <div className="marketplace-card-body">
               <strong>{extension.manifest.name}</strong>
-              <span className="marketplace-card-author">{extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.manifest.id}</span>
+              <span className="marketplace-card-author">
+                {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
+              </span>
               <p className="marketplace-card-desc">{extension.manifest.description}</p>
               <div className="marketplace-card-meta">
                 {(extension.manifest.capabilities ?? []).map((capability) => (
@@ -6251,15 +6255,19 @@ function ExtensionsPanel({
             <span>Workspace plugins</span>
             <span className="muted">{workspaceName}</span>
           </div>
-          {capabilities.plugins.map((plugin) => (
-            <div key={plugin.path} className="list-card extension-card">
-              <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
-              <div className="extension-content">
-                <div className="extension-title-row"><h3>{plugin.directory}</h3><span className="badge">{plugin.manifestName}</span></div>
-                <p>{plugin.path}</p>
+          {capabilities.plugins.map((plugin) => {
+            const display = parseWorkspacePluginDisplay(plugin);
+            return (
+              <div key={plugin.path} className="list-card extension-card">
+                <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
+                <div className="extension-content">
+                  <div className="extension-title-row"><h3>{plugin.directory}</h3><span className="badge">{plugin.manifestName}</span></div>
+                  <p>{display.name}</p>
+                  <p className="muted">{display.description}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
@@ -7342,7 +7350,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'review', 'history', 'extensions', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -7485,12 +7493,6 @@ function AgentBrowserApp() {
     isHarnessAppSpecRecord,
     {},
   );
-  const [symphonyBoardsByWorkspace, setSymphonyBoardsByWorkspace] = useStoredState<Record<string, SymphonyBoardState>>(
-    localStorageBackend,
-    STORAGE_KEYS.symphonyBoardsByWorkspace,
-    isSymphonyBoardRecord,
-    {},
-  );
   const [terminalFsPathsBySession, setTerminalFsPathsBySession] = useState<Record<string, string[]>>({});
   const [terminalFsFileContentsBySession, setTerminalFsFileContentsBySession] = useState<Record<string, Record<string, string>>>({});
   const bashBySessionRef = useRef<Record<string, Bash>>({});
@@ -7594,16 +7596,6 @@ function AgentBrowserApp() {
   }, []);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
-  const activeSymphonyBoard = useMemo(
-    () => symphonyBoardsByWorkspace[activeWorkspaceId] ?? createDefaultSymphonyBoardState(activeWorkspace.name),
-    [activeWorkspace.name, activeWorkspaceId, symphonyBoardsByWorkspace],
-  );
-  const updateActiveSymphonyBoard = useCallback((nextBoard: SymphonyBoardState) => {
-    setSymphonyBoardsByWorkspace((current) => ({
-      ...current,
-      [activeWorkspaceId]: nextBoard,
-    }));
-  }, [activeWorkspaceId, setSymphonyBoardsByWorkspace]);
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
   const activeWorkspaceViewState: WorkspaceViewState = activeWorkspace.type === 'workspace'
     ? normalizeWorkspaceViewEntry(activeWorkspace, workspaceViewStateByWorkspace[activeWorkspaceId])
@@ -8210,32 +8202,6 @@ function AgentBrowserApp() {
     return createdSession;
   }, [setToast, switchWorkspace]);
 
-  const dispatchSymphonyTaskToSession = useCallback((task: SymphonyTask) => {
-    const session = addSessionToWorkspace(activeWorkspaceId, task.identifier);
-    return {
-      sessionId: session?.id,
-      sessionName: session?.name ?? task.identifier,
-      workspacePath: activeWorkspace.name,
-    };
-  }, [activeWorkspace.name, activeWorkspaceId, addSessionToWorkspace]);
-
-  const openSymphonySession = useCallback((sessionId: string) => {
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      return {
-        ...current,
-        [activeWorkspaceId]: {
-          ...existing,
-          activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
-          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
-            ? existing.mountedSessionFsIds
-            : [...existing.mountedSessionFsIds, sessionId],
-        },
-      };
-    });
-    switchSidebarPanel('workspaces');
-  }, [activeWorkspace, activeWorkspaceId, setWorkspaceViewStateByWorkspace, switchSidebarPanel]);
-
   const openArtifactPanel = useCallback((artifactId: string, filePath: string | null = null, workspaceId = activeWorkspaceId) => {
     const workspace = getWorkspace(root, workspaceId);
     if (!workspace) return;
@@ -8317,7 +8283,6 @@ function AgentBrowserApp() {
     URL.revokeObjectURL(href);
     setToast({ msg: `Downloaded ${payload.fileName}`, type: 'success' });
   }, [activeArtifacts, setToast]);
-
   const addBrowserTabToWorkspace = useCallback((workspaceId: string) => {
     setNewTabWorkspaceId(workspaceId);
   }, []);
@@ -10701,15 +10666,6 @@ function AgentBrowserApp() {
         </div>
       );
     }
-    if (activePanel === 'symphony') {
-      return (
-        <SymphonySidebar
-          board={activeSymphonyBoard}
-          workspaceName={activeWorkspace.name}
-          onSelectTask={(taskId) => updateActiveSymphonyBoard(selectSymphonyTask(activeSymphonyBoard, taskId))}
-        />
-      );
-    }
     if (activePanel === 'review') {
       return (
         <PullRequestReviewPanel
@@ -10829,18 +10785,6 @@ function AgentBrowserApp() {
       ) : null}
       <main className="content-area">
         {(() => {
-          if (activePanel === 'symphony') {
-            return (
-              <SymphonyPanel
-                board={activeSymphonyBoard}
-                workspaceName={activeWorkspace.name}
-                sessions={activeWorkspaceSessions}
-                onBoardChange={updateActiveSymphonyBoard}
-                onDispatchTask={dispatchSymphonyTaskToSession}
-                onOpenSession={openSymphonySession}
-              />
-            );
-          }
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {
               const existing = current[activeWorkspaceId] ?? [];

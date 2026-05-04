@@ -3,8 +3,8 @@ import { tool } from 'ai';
 import { z } from 'zod/v4';
 
 // Mock AI SDK generateText so we don't hit a real LLM
-vi.mock('ai', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('ai')>();
+vi.mock('ai', async (importOriginal: () => Promise<typeof import('ai')>) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     generateText: vi.fn(),

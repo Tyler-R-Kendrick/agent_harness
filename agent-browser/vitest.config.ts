@@ -1,6 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const alias = {
   '@agent-harness/ext-agent-skills': path.resolve(__dirname, '../ext/agent-skills/src/index.ts'),

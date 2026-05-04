@@ -126,6 +126,7 @@ export interface HarnessPluginMarketplaceManifest {
     metadata?: Record<string, unknown>;
     categories?: string[];
     keywords?: string[];
+    default?: boolean;
   }>;
   metadata?: Record<string, unknown>;
 }
@@ -323,6 +324,7 @@ const marketplaceManifestSchema = z.object({
     metadata: z.record(z.string(), z.unknown()).optional(),
     categories: z.array(z.string()).optional(),
     keywords: z.array(z.string()).optional(),
+    default: z.boolean().optional(),
   }).superRefine((value, context) => {
     if (value.sourceFormat === undefined || value.sourceFormat === 'agent-harness') {
       if (!value.manifest?.endsWith(HARNESS_PLUGIN_MANIFEST_FILENAME)) {

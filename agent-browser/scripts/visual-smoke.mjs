@@ -125,25 +125,13 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await benchmarkObjective.scrollIntoViewIfNeeded();
-    await page.getByRole('button', { name: 'Symphony' }).click();
-    const symphonyBoard = page.getByRole('region', { name: 'Symphony task board' });
-    await expect(symphonyBoard).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('button', { name: 'MT-891 Summarize feedback from Slack channels' })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await expect(symphonyBoard.getByText('In Progress')).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Create Symphony task' }).click();
-    await page.getByLabel('Symphony task title').fill('Visual smoke multi-agent task');
-    await page.getByLabel('Symphony task brief').fill('Confirm Symphony board accepts new work.');
-    await page.getByRole('button', { name: 'Save Symphony task' }).click();
-    await expect(page.getByRole('button', { name: 'MT-892 Visual smoke multi-agent task' })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await page.getByRole('button', { name: 'Dispatch agent for MT-892' }).click();
-    await expect(page.getByRole('list', { name: 'In Progress tasks' }).getByText('MT-892')).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await expect(page.getByRole('complementary', { name: 'Symphony task inspector' })).toContainText('Agent running');
+    await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Extensions' }).click();
+    await expect(page.getByRole('heading', { name: 'Extensions' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Workspace plugins')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('heading', { name: 'symphony' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Symphony workflow orchestration').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('region', { name: 'Symphony task board' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Review', exact: true }).click();
     const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });
     await expect(reviewPanel).toBeVisible({ timeout: shellTimeoutMs });

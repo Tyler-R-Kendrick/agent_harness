@@ -3,7 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { SymphonyPanel } from './SymphonyPanel';
-import { createDefaultSymphonyBoardState, type SymphonyBoardState } from './symphonyBoard';
+import { createDefaultSymphonyBoardState, type SymphonyBoardState } from '../../src/board.js';
 
 function StatefulSymphonyPanel({
   initialBoard = createDefaultSymphonyBoardState('Melbourne Transit App'),
