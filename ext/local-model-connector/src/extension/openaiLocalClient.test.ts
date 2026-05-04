@@ -34,6 +34,7 @@ describe('local OpenAI-compatible client', () => {
       body: {
         model: 'local-model',
         messages: [{ role: 'user', content: 'hello' }],
+        sae: { adapter: 'sparse-autoencoder', scope: 'deepseek-debugging', strength: 0.2 },
         stream: true,
       },
     });
@@ -42,7 +43,11 @@ describe('local OpenAI-compatible client', () => {
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('http://localhost:1234/v1/chat/completions');
     expect(init.credentials).toBe('omit');
-    expect(JSON.parse(String(init.body))).toMatchObject({ model: 'local-model', stream: false });
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: 'local-model',
+      sae: { adapter: 'sparse-autoencoder', scope: 'deepseek-debugging', strength: 0.2 },
+      stream: false,
+    });
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 

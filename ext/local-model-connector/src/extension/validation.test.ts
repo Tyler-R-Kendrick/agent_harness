@@ -96,12 +96,24 @@ describe('local model connector validation', () => {
       temperature: 0.2,
       max_tokens: 32,
       stream: true,
+      sae: {
+        adapter: 'sparse-autoencoder',
+        scope: 'mistral-tool-use',
+        strength: 0.35,
+        featureIds: [12, 42],
+      },
     })).toEqual({
       model: 'llama',
       messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }] }],
       temperature: 0.2,
       max_tokens: 32,
       stream: true,
+      sae: {
+        adapter: 'sparse-autoencoder',
+        scope: 'mistral-tool-use',
+        strength: 0.35,
+        featureIds: [12, 42],
+      },
     });
     for (const body of [
       null,
@@ -111,6 +123,9 @@ describe('local model connector validation', () => {
       { model: 'llama', messages: [{ role: 'user', content: 123 }] },
       { model: 'llama', messages: [{ role: 'user', content: 'hello' }], temperature: Number.NaN },
       { model: 'llama', messages: [{ role: 'user', content: 'hello' }], max_tokens: -1 },
+      { model: 'llama', messages: [{ role: 'user', content: 'hello' }], sae: { strength: Number.NaN } },
+      { model: 'llama', messages: [{ role: 'user', content: 'hello' }], sae: { callback: () => undefined } },
+      { model: 'llama', messages: [{ role: 'user', content: 'hello' }], constructor: 'not-allowed' },
     ]) {
       expect(() => assertChatCompletionBody(body), JSON.stringify(body)).toThrow();
     }

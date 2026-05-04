@@ -20,11 +20,21 @@ describe('streaming chat completions', () => {
     await streamChatCompletion({
       requestId: 'req-1',
       baseUrl: 'http://127.0.0.1:11434/v1',
-      body: { model: 'llama', messages: [{ role: 'user', content: 'hello' }], stream: true },
+      body: {
+        model: 'llama',
+        messages: [{ role: 'user', content: 'hello' }],
+        sae: { adapter: 'sparse-autoencoder', scope: 'mistral-editing' },
+        stream: true,
+      },
       fetchImpl,
       emit: (event) => events.push(event),
     });
 
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      sae: { adapter: 'sparse-autoencoder', scope: 'mistral-editing' },
+      stream: true,
+    });
     expect(events).toEqual([
       { type: 'start', requestId: 'req-1' },
       { type: 'token', requestId: 'req-1', token: 'ok', raw: { choices: [{ delta: { content: 'ok' } }] } },

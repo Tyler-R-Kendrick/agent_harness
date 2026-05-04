@@ -89,18 +89,13 @@ export async function runLocalChatCompletionViaExtension(args: {
   messages: Array<{ role: string; content: unknown }>;
   temperature?: number;
   maxTokens?: number;
+  extraBody?: Record<string, unknown>;
 } & LocalModelExtensionClientOptions): Promise<unknown> {
   return sendExtensionMessage({
     type: 'chatCompletion',
     baseUrl: args.baseUrl,
     apiKey: args.apiKey,
-    body: {
-      model: args.model,
-      messages: args.messages,
-      ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
-      ...(args.maxTokens !== undefined ? { max_tokens: args.maxTokens } : {}),
-      stream: false,
-    },
+    body: buildChatCompletionBody(args, false),
   }, args);
 }
 
@@ -142,6 +137,7 @@ export function streamLocalChatCompletionViaExtension(args: {
   messages: Array<{ role: string; content: unknown }>;
   temperature?: number;
   maxTokens?: number;
+  extraBody?: Record<string, unknown>;
   onStart?: () => void;
   onToken: (token: string) => void;
   onDone?: () => void;
@@ -181,13 +177,7 @@ export function streamLocalChatCompletionViaExtension(args: {
     requestId,
     baseUrl: args.baseUrl,
     apiKey: args.apiKey,
-    body: {
-      model: args.model,
-      messages: args.messages,
-      ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
-      ...(args.maxTokens !== undefined ? { max_tokens: args.maxTokens } : {}),
-      stream: true,
-    },
+    body: buildChatCompletionBody(args, true),
   });
   return {
     cancel() {
@@ -233,6 +223,26 @@ function unwrapExtensionResult<T>(value: unknown): T {
 
 function getChromeRuntime(): ChromeRuntimeLike | undefined {
   return globalThis.chrome?.runtime;
+}
+
+function buildChatCompletionBody(
+  args: {
+    model: string;
+    messages: Array<{ role: string; content: unknown }>;
+    temperature?: number;
+    maxTokens?: number;
+    extraBody?: Record<string, unknown>;
+  },
+  stream: boolean,
+) {
+  return {
+    ...(args.extraBody ?? {}),
+    model: args.model,
+    messages: args.messages,
+    ...(args.temperature !== undefined ? { temperature: args.temperature } : {}),
+    ...(args.maxTokens !== undefined ? { max_tokens: args.maxTokens } : {}),
+    stream,
+  };
 }
 
 function resolveExtensionId(extensionId?: string): string {

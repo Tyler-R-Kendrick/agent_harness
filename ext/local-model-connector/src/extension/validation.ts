@@ -1,6 +1,7 @@
 import {
   ConnectorError,
   type ChatCompletionRequestBody,
+  type JsonValue,
   type LocalModelSettings,
 } from './types';
 
@@ -17,6 +18,8 @@ export const DEFAULT_TIMEOUT_MS = 60_000;
 
 const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost']);
 const MESSAGE_ROLES = new Set(['system', 'user', 'assistant', 'tool']);
+const STANDARD_CHAT_COMPLETION_FIELDS = new Set(['model', 'messages', 'temperature', 'max_tokens', 'stream']);
+const FORBIDDEN_RUNTIME_EXTENSION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export function trimTrailingSlash(value: string): string {
   let next = value;
@@ -155,6 +158,7 @@ export function assertChatCompletionBody(value: unknown): ChatCompletionRequestB
   if (value.stream !== undefined) {
     body.stream = Boolean(value.stream);
   }
+  Object.assign(body, sanitizeRuntimeExtensionFields(value));
   assertPayloadSize(body);
   return body;
 }
@@ -182,6 +186,49 @@ export function sanitizeSettings(value: unknown): LocalModelSettings {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sanitizeRuntimeExtensionFields(value: Record<string, unknown>): Record<string, JsonValue> {
+  const fields: Record<string, JsonValue> = {};
+  for (const [key, rawValue] of Object.entries(value)) {
+    if (STANDARD_CHAT_COMPLETION_FIELDS.has(key)) {
+      continue;
+    }
+    assertRuntimeExtensionKey(key);
+    fields[key] = sanitizeJsonValue(rawValue);
+  }
+  return fields;
+}
+
+function assertRuntimeExtensionKey(key: string): void {
+  if (
+    !key
+    || key.length > 128
+    || FORBIDDEN_RUNTIME_EXTENSION_KEYS.has(key)
+  ) {
+    throw new ConnectorError('Runtime extension field name is not allowed.', 'INVALID_REQUEST');
+  }
+}
+
+function sanitizeJsonValue(value: unknown): JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeJsonValue(entry));
+  }
+  if (isRecord(value)) {
+    const record: Record<string, JsonValue> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      assertRuntimeExtensionKey(key);
+      record[key] = sanitizeJsonValue(entry);
+    }
+    return record;
+  }
+  throw new ConnectorError('Runtime extension fields must be JSON-compatible.', 'INVALID_REQUEST');
 }
 
 function parseUrl(value: string, message: string): URL {
