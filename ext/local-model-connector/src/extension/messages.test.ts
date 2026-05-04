@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createExternalMessageHandler, registerStreamPort, type ChromeSender } from './messages';
+import { SETTINGS_KEY } from './storage';
 
 const sender: ChromeSender = {
   origin: 'https://app.example.com',
@@ -164,6 +165,32 @@ describe('external message handling', () => {
       data: { hasStoredApiKey: false },
     });
     await expect(handler({ type: 'saveSettings', settings: { persistApiKey: false } }, sender)).resolves.toEqual({ ok: true, data: { saved: true } });
+  });
+
+  it('ignores corrupted stored settings fields when reading settings', async () => {
+    const storage = fakeStorage();
+    await storage.set({
+      [SETTINGS_KEY]: {
+        providerId: 123,
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        selectedModel: '',
+        apiKey: true,
+      },
+    });
+    const handler = createExternalMessageHandler({
+      allowedSenderPatterns: ['https://app.example.com/*'],
+      permissions: fakePermissions(),
+      storage,
+      fetchImpl: vi.fn(),
+    });
+
+    await expect(handler({ type: 'getSettings' }, sender)).resolves.toEqual({
+      ok: true,
+      data: {
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        hasStoredApiKey: false,
+      },
+    });
   });
 
   it('handles streaming runtime ports with sender, payload, permission, and success paths', async () => {
