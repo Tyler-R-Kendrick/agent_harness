@@ -156,6 +156,13 @@ Custom events use the same hook-point mapping as built-in events. For example,
 `createPluginHookPoint('agent-harness.ext.example', 'before-run')` resolves to
 `plugin:agent-harness.ext.example.before-run`.
 
+Plugins may also declare `renderers` and `paneItems`, or register them at
+runtime through `context.renderers`. Hosts can use these contributions for file
+and artifact surfaces such as PDF viewers, audio visualizers, and the DESIGN.md
+Designer pane. External plugin bundles from GitHub Copilot CLI, Claude Code, and
+Pi can be normalized with `importExternalPluginManifest` and
+`importExternalPluginMarketplaceManifest` before installation.
+
 ## Optional constrained decoding
 
 `harness-core` can pass optional constrained-decoding requests through the

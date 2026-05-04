@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -92,7 +94,71 @@ describe('plugin manifest standards', () => {
     expect(parseHarnessPluginManifest(pluginManifest)).toEqual(pluginManifest);
   });
 
+  it('validates renderer and pane-item contributions in plugin manifests', () => {
+    const manifest = {
+      ...pluginManifest,
+      capabilities: [
+        ...pluginManifest.capabilities,
+        { kind: 'renderer', id: 'media.pdf' },
+        { kind: 'pane-item', id: 'design-md.designer-pane' },
+      ],
+      renderers: [{
+        id: 'media.pdf',
+        label: 'PDF viewer',
+        target: {
+          kind: 'file',
+          fileExtensions: ['.pdf'],
+          mimeTypes: ['application/pdf'],
+        },
+        component: {
+          module: './src/PdfRenderer.tsx',
+          export: 'PdfRenderer',
+        },
+      }],
+      paneItems: [{
+        id: 'design-md.designer-pane',
+        label: 'Designer',
+        rendererId: 'design-md.designer',
+        preferredLocation: 'side',
+        when: {
+          kind: 'file',
+          fileNames: ['DESIGN.md'],
+        },
+        component: {
+          module: './src/DesignerPane.tsx',
+          export: 'DesignerPane',
+        },
+      }],
+    };
+
+    expect(validateHarnessPluginManifest(manifest)).toEqual({ success: true, issues: [] });
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{ ...manifest.renderers[0], component: { module: '../PdfRenderer.tsx' } }],
+    }).issues).toContain('Renderer modules must be relative paths inside the plugin package.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        target: { kind: 'file', fileExtensions: ['pdf'] },
+      }],
+    }).issues).toContain('File extensions must include a leading dot.');
+  });
+
+  it('keeps the DESIGN.md example renderer manifest valid', () => {
+    const manifest = JSON.parse(readFileSync(
+      new URL('../../../ext/design-md/agent-harness.plugin.json', import.meta.url),
+      'utf8',
+    ));
+
+    expect(validateHarnessPluginManifest(manifest)).toEqual({ success: true, issues: [] });
+  });
+
   it('rejects built-in feature shortcuts and unsafe entrypoints in plugin manifests', () => {
+    expect(validateHarnessPluginManifest({
+      ...pluginManifest,
+      entrypoint: undefined,
+    }).issues).toContain('Harness plugin manifests require an entrypoint unless they import an external plugin format.');
     expect(validateHarnessPluginManifest({
       ...pluginManifest,
       id: 'AGENTS.md',
