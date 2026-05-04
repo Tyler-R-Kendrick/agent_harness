@@ -6,9 +6,12 @@ import type {
   IVoter,
   QuorumPolicy,
 } from 'logact';
-import type { ConstrainedDecoding, CoreInferenceClient } from './constrainedDecoding.js';
-import type { AgentSessionRef } from './agent.js';
-import type { HookRegistry } from './hooks.js';
+import type {
+  AgentSessionRef,
+  ConstrainedDecoding,
+  CoreInferenceClient,
+  HookRegistry,
+} from 'harness-core';
 
 export type CoreStepStatus = 'active' | 'done';
 

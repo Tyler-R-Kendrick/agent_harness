@@ -1,4 +1,3 @@
-import { createActor, fromPromise, setup } from 'xstate';
 import { InMemoryAgentBus, QuorumPolicy, evaluateQuorum } from 'logact';
 import type {
   CompletionPayload,
@@ -15,22 +14,25 @@ import type {
 } from 'logact';
 import { PayloadType } from 'logact';
 import {
+  AgentLoopActorRegistry,
+  AgentLoopEventPublisherRegistry,
+  LLM_HOOK_EVENTS,
   createActorMessageEvent,
   normalizeSession,
+  runAgentEventLoop,
+  withAgentBusHooks,
   type ActorMessageEvent,
   type ActorRef,
+  type AgentLoopEvent,
   type AgentSessionRef,
-} from './agent.js';
-import { withAgentBusHooks } from './agentBus.js';
+  type HarnessHookEventDescriptor,
+  type HookRegistry,
+  type SerializableAgentLoopDefinition,
+} from 'harness-core';
 import { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 import { wrapVoterWithCallbacks } from './chat-agents/voter.js';
-import type { CoreInferenceClient } from './constrainedDecoding.js';
-import {
-  LLM_HOOK_EVENTS,
-  LOGACT_AGENT_LOOP_HOOK_EVENTS,
-  type HarnessHookEventDescriptor,
-  HookRegistry,
-} from './hooks.js';
+import type { CoreInferenceClient } from 'harness-core';
+import { LOGACT_AGENT_LOOP_HOOK_EVENTS } from './hooks.js';
 import type { CoreAgentLoopCallbacks, LogActAgentLoopOptions } from './logactLoopTypes.js';
 
 export { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
@@ -140,15 +142,12 @@ export interface WorkflowMessage {
   timestamp: number;
 }
 
-export interface LogActWorkflowDefinition {
-  id: string;
-  initial: string;
+export interface LogActWorkflowDefinition extends SerializableAgentLoopDefinition {
   context: {
     session: AgentSessionRef;
     voterIds: string[];
     maxTurns: number;
   };
-  states: Record<string, unknown>;
 }
 
 export interface LogActWorkflowDefinitionOptions {
@@ -172,56 +171,32 @@ export function createLogActWorkflowDefinition(
     },
     states: {
       awaitingTrigger: {
-        invoke: {
-          src: 'waitForTriggerAgent',
-          onDone: { target: 'inferring', actions: ['captureTrigger'] },
-          onError: { target: 'done' },
-        },
+        events: [{ type: 'logact.trigger', actorIds: ['waitForTriggerAgent'] }],
+        on: { 'logact.trigger.ready': 'inferring' },
       },
       inferring: {
-        invoke: {
-          src: 'driverAgent',
-          onDone: [
-            { guard: 'isTerminalInference', target: 'done' },
-            { target: 'voting', actions: ['captureIntent'] },
-          ],
-          onError: { target: 'done' },
-        },
+        events: [{ type: 'logact.driver', actorIds: ['driverAgent'] }],
+        on: { 'logact.driver.terminal': 'done', 'logact.intent.created': 'voting' },
       },
       voting: {
-        invoke: {
-          src: 'voterAgents',
-          onDone: { target: 'deciding', actions: ['captureVotes'] },
-          onError: { target: 'done' },
-        },
+        events: [{ type: 'logact.voters', actorIds: ['voterAgents'], mode: 'parallel' }],
+        on: { 'logact.votes.created': 'deciding' },
       },
       deciding: {
-        invoke: {
-          src: 'deciderAgent',
-          onDone: [
-            { guard: 'isCommitDecision', target: 'executing', actions: ['captureDecision'] },
-            { guard: 'shouldContinueAfterDecision', target: 'awaitingTrigger', actions: ['captureDecision'] },
-            { target: 'done', actions: ['captureDecision'] },
-          ],
-          onError: { target: 'done' },
+        events: [{ type: 'logact.decider', actorIds: ['deciderAgent'] }],
+        on: {
+          'logact.decision.commit': 'executing',
+          'logact.decision.continue': 'awaitingTrigger',
+          'logact.decision.done': 'done',
         },
       },
       executing: {
-        invoke: {
-          src: 'executorAgent',
-          onDone: { target: 'checkingCompletion', actions: ['captureResult'] },
-          onError: { target: 'done' },
-        },
+        events: [{ type: 'logact.executor', actorIds: ['executorAgent'] }],
+        on: { 'logact.result.created': 'checkingCompletion' },
       },
       checkingCompletion: {
-        invoke: {
-          src: 'completionCheckerAgent',
-          onDone: [
-            { guard: 'isWorkflowDone', target: 'done', actions: ['captureCompletion'] },
-            { target: 'awaitingTrigger', actions: ['captureCompletion'] },
-          ],
-          onError: { target: 'done' },
-        },
+        events: [{ type: 'logact.completion', actorIds: ['completionCheckerAgent'] }],
+        on: { 'logact.completion.done': 'done', 'logact.completion.continue': 'awaitingTrigger' },
       },
       done: { type: 'final' },
     },
@@ -339,55 +314,102 @@ async function runWorkflowMachine(
   runtime: WorkflowRuntime,
   bus: IAgentBus,
 ): Promise<void> {
-  const machine = createLogActWorkflowMachine(definition, runtime);
-  const actor = createActor(machine);
-  const done = new Promise<void>((resolve) => {
-    actor.subscribe((snapshot) => {
-      if (bus instanceof WorkflowAgentBus) {
-        bus.recordWorkflowSnapshot(snapshot.value, snapshot.status);
-      }
-      if (snapshot.status === 'done' || snapshot.status === 'error') {
-        resolve();
-      }
-    });
-  });
-
-  if (bus instanceof WorkflowAgentBus) {
-    bus.sendWorkflowEvent({ type: 'START', workflowId: definition.id });
-  }
+  const actors = createLogActActorRegistry(runtime);
+  const publishers = createLogActWorkflowPublishers(bus);
   await runLogActHook(runtime.hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.workflowStart, { definition });
-  actor.start();
-  await done;
+  await runAgentEventLoop(definition, {
+    actors,
+    publishers,
+    runId: definition.context.session.id,
+    maxTransitions: definition.context.maxTurns * 6 + 2,
+  });
 }
 
-function createLogActWorkflowMachine(
-  definition: LogActWorkflowDefinition,
-  runtime: WorkflowRuntime,
-) {
-  return setup({
-    actions: {
-      captureTrigger: () => undefined,
-      captureIntent: () => undefined,
-      captureVotes: () => undefined,
-      captureDecision: () => undefined,
-      captureResult: () => undefined,
-      captureCompletion: () => undefined,
+function createLogActActorRegistry(runtime: WorkflowRuntime): AgentLoopActorRegistry {
+  const actors = new AgentLoopActorRegistry();
+  actors.register({
+    id: 'waitForTriggerAgent',
+    event: 'logact.trigger',
+    run: async () => {
+      const entries = await waitForTrigger(runtime);
+      return { event: { type: 'logact.trigger.ready' }, output: entries };
     },
-    guards: {
-      isTerminalInference: ({ event }) => eventHasOutput(event, 'terminal', true),
-      isCommitDecision: ({ event }) => eventHasOutput(event, 'decision', 'commit'),
-      shouldContinueAfterDecision: ({ event }) => eventHasOutput(event, 'shouldContinue', true),
-      isWorkflowDone: ({ event }) => eventHasOutput(event, 'done', true),
+  });
+  actors.register({
+    id: 'driverAgent',
+    event: 'logact.driver',
+    run: async () => {
+      const result = await runDriverAgent(runtime);
+      return {
+        event: { type: result.terminal ? 'logact.driver.terminal' : 'logact.intent.created' },
+        output: result,
+      };
     },
-    actors: {
-      waitForTriggerAgent: fromPromise(async () => waitForTrigger(runtime)),
-      driverAgent: fromPromise(async () => runDriverAgent(runtime)),
-      voterAgents: fromPromise(async () => runVoterAgents(runtime)),
-      deciderAgent: fromPromise(async () => runDeciderAgent(runtime)),
-      executorAgent: fromPromise(async () => runExecutorAgent(runtime)),
-      completionCheckerAgent: fromPromise(async () => runCompletionCheckerAgent(runtime)),
+  });
+  actors.register({
+    id: 'voterAgents',
+    event: 'logact.voters',
+    run: async () => ({
+      event: { type: 'logact.votes.created' },
+      output: await runVoterAgents(runtime),
+    }),
+  });
+  actors.register({
+    id: 'deciderAgent',
+    event: 'logact.decider',
+    run: async () => {
+      const result = await runDeciderAgent(runtime);
+      const type = result.decision === 'commit'
+        ? 'logact.decision.commit'
+        : result.shouldContinue
+          ? 'logact.decision.continue'
+          : 'logact.decision.done';
+      return { event: { type }, output: result };
     },
-  }).createMachine(definition as never);
+  });
+  actors.register({
+    id: 'executorAgent',
+    event: 'logact.executor',
+    run: async () => ({
+      event: { type: 'logact.result.created' },
+      output: await runExecutorAgent(runtime),
+    }),
+  });
+  actors.register({
+    id: 'completionCheckerAgent',
+    event: 'logact.completion',
+    run: async () => {
+      const result = await runCompletionCheckerAgent(runtime);
+      return {
+        event: { type: result.done ? 'logact.completion.done' : 'logact.completion.continue' },
+        output: result,
+      };
+    },
+  });
+  return actors;
+}
+
+function createLogActWorkflowPublishers(bus: IAgentBus): AgentLoopEventPublisherRegistry {
+  const publishers = new AgentLoopEventPublisherRegistry();
+  if (bus instanceof WorkflowAgentBus) {
+    publishers.register({
+      id: 'workflow-agent-bus',
+      publish: (event) => publishWorkflowEventToBus(bus, event),
+    });
+  }
+  return publishers;
+}
+
+function publishWorkflowEventToBus(bus: WorkflowAgentBus, event: AgentLoopEvent): void {
+  if (event.type === 'agent-loop.workflow.started') {
+    bus.sendWorkflowEvent({ type: 'START', workflowId: event.workflowId, runId: event.runId });
+  }
+  if (event.type === 'agent-loop.state.entered' && event.state) {
+    bus.recordWorkflowSnapshot(event.state, 'active');
+  }
+  if (event.type === 'agent-loop.workflow.completed') {
+    bus.recordWorkflowSnapshot((event.payload as { state: unknown }).state, 'done');
+  }
 }
 
 async function waitForTrigger(runtime: WorkflowRuntime): Promise<Entry[]> {
@@ -677,12 +699,4 @@ function actorFromPayload(payload: Payload, session: AgentSessionRef): ActorRef 
     role: payload.meta?.actorRole ?? 'agent',
     sessionId: session.id,
   };
-}
-
-function eventHasOutput(event: unknown, key: string, value: unknown): boolean {
-  return typeof event === 'object'
-    && event !== null
-    && 'output' in event
-    && typeof (event as { output?: unknown }).output === 'object'
-    && (event as { output?: Record<string, unknown> }).output?.[key] === value;
 }

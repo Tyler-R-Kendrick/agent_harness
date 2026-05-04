@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryAgentBus, PayloadType, QuorumPolicy, type IntentPayload } from 'logact';
+import { constrainToJsonSchema, type CoreInferenceOptions } from 'harness-core';
 import {
   WorkflowAgentBus,
   createLogActWorkflowDefinition,
@@ -161,6 +162,24 @@ describe('logact loop callback wrappers', () => {
     expect(callbacks.onIterationStepUpdate).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ done: false }));
     expect(callbacks.onIterationStepUpdate).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: 'Error: judge offline' }));
   });
+
+  it('passes optional constrained decoding through to the inference client', async () => {
+    const seenOptions: CoreInferenceOptions[] = [];
+    const constrainedDecoding = constrainToJsonSchema({ type: 'object' });
+
+    await runLogActAgentLoop({
+      inferenceClient: {
+        async infer(_messages, options) {
+          seenOptions.push(options ?? {});
+          return '';
+        },
+      },
+      messages: [{ content: 'decide' }],
+      constrainedDecoding,
+    }, {});
+
+    expect(seenOptions).toEqual([{ constrainedDecoding }]);
+  });
 });
 
 describe('runLogActAgentLoop', () => {
@@ -186,12 +205,12 @@ describe('runLogActAgentLoop', () => {
         maxTurns: 2,
       },
       states: {
-        awaitingTrigger: { invoke: { src: 'waitForTriggerAgent' } },
-        inferring: { invoke: { src: 'driverAgent' } },
-        voting: { invoke: { src: 'voterAgents' } },
-        deciding: { invoke: { src: 'deciderAgent' } },
-        executing: { invoke: { src: 'executorAgent' } },
-        checkingCompletion: { invoke: { src: 'completionCheckerAgent' } },
+        awaitingTrigger: { events: [{ type: 'logact.trigger', actorIds: ['waitForTriggerAgent'] }] },
+        inferring: { events: [{ type: 'logact.driver', actorIds: ['driverAgent'] }] },
+        voting: { events: [{ type: 'logact.voters', actorIds: ['voterAgents'], mode: 'parallel' }] },
+        deciding: { events: [{ type: 'logact.decider', actorIds: ['deciderAgent'] }] },
+        executing: { events: [{ type: 'logact.executor', actorIds: ['executorAgent'] }] },
+        checkingCompletion: { events: [{ type: 'logact.completion', actorIds: ['completionCheckerAgent'] }] },
         done: { type: 'final' },
       },
     });
