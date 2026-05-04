@@ -27,7 +27,6 @@ export function buildVitestCoverageArgs(
     : ['--reporter=dot'];
   return [
     'run',
-    '--configLoader=native',
     '--coverage',
     '--coverage.processingConcurrency=1',
     '--coverage.reporter=text-summary',
@@ -46,7 +45,6 @@ export function buildVitestCoverageArgs(
 export function buildAppTestArgs() {
   return [
     'run',
-    '--configLoader=native',
     '--no-file-parallelism',
     '--maxWorkers=1',
     '--pool=forks',

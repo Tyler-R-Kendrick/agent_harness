@@ -227,7 +227,7 @@ export function SharedChatModal({
     publishApi();
   }
 
-  async function buildSession(args: { role: 'owner' | 'contributor'; identity: StoredDeviceIdentity; ownerDeviceId: string; ownerPublicKey: JsonWebKey; expiresAt: number; peer?: DeviceRecord }): Promise<SessionState> {
+  async function buildSession(args: { role: 'owner' | 'contributor'; identity: StoredDeviceIdentity; ownerDeviceId: string; ownerPublicKey: JsonWebKey; expiresAt: number; peer?: DeviceRecord; protocolSessionId?: string }): Promise<SessionState> {
     const local: DeviceRecord = {
       deviceId: args.identity.deviceId,
       label: args.identity.label,
@@ -252,7 +252,7 @@ export function SharedChatModal({
     if (args.peer) devices[args.peer.deviceId] = args.peer;
     return {
       version: 1,
-      sessionId,
+      sessionId: args.protocolSessionId ?? sessionId,
       localDeviceId: args.identity.deviceId,
       ownerDeviceId: args.ownerDeviceId,
       peerDeviceId: args.peer?.deviceId,
@@ -354,7 +354,7 @@ export function SharedChatModal({
       setQrDataUrl(await renderQrDataUrl(encodedAnswer));
       setExpiresAt(expiry);
       setPeerLabel(invite.ownerLabel);
-      sessionRef.current = await buildSession({ role: 'contributor', identity, ownerDeviceId: invite.ownerDeviceId, ownerPublicKey: invite.ownerPublicKey, expiresAt: expiry });
+      sessionRef.current = await buildSession({ role: 'contributor', identity, ownerDeviceId: invite.ownerDeviceId, ownerPublicKey: invite.ownerPublicKey, expiresAt: expiry, protocolSessionId: invite.sessionId });
       pairingContextRef.current = {
         ownerDeviceId: invite.ownerDeviceId,
         joiningDeviceId: identity.deviceId,

@@ -169,7 +169,6 @@ async function main() {
     coverageRunner.buildVitestCoverageArgs(['--reporter=dot'], '../output/coverage/agent-browser-test'),
     [
       'run',
-      '--configLoader=native',
       '--coverage',
       '--coverage.processingConcurrency=1',
       '--coverage.reporter=text-summary',
@@ -189,7 +188,6 @@ async function main() {
     coverageRunner.buildVitestCoverageArgs([], '../output/coverage/agent-browser-test', ['src/services/workspaceFiles.test.ts']),
     [
       'run',
-      '--configLoader=native',
       '--coverage',
       '--coverage.processingConcurrency=1',
       '--coverage.reporter=text-summary',
@@ -215,7 +213,6 @@ async function main() {
     coverageRunner.buildAppTestArgs(),
     [
       'run',
-      '--configLoader=native',
       '--no-file-parallelism',
       '--maxWorkers=1',
       '--pool=forks',
