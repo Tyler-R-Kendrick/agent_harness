@@ -33,6 +33,7 @@ export const STORAGE_KEYS = {
   browserNotificationSettings: 'agent-browser.browser-notification-settings',
   benchmarkModelRoutingSettings: 'agent-browser.benchmark-model-routing-settings',
   benchmarkEvidenceState: 'agent-browser.benchmark-evidence-state',
+  adversaryToolReviewSettings: 'agent-browser.adversary-tool-review-settings',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
   // sessionStorage — per-tab, refresh-only
