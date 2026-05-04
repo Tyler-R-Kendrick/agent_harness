@@ -1,28 +1,28 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-03
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-04
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
 
 ### 2. Persistent memory plus project instructions
 - Common pattern: harnesses retain repo, workflow, and user preferences across runs.
-- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Devin Knowledge with folders, triggers, macros, and suggestions, Hermes persistent memory, Codex skills/team config, Cursor project rules plus memories plus `AGENTS.md` and commands, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
+- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Devin Knowledge with folders, triggers, macros, and suggestions, Gemini CLI layered `GEMINI.md` plus imports plus Auto Memory review inbox, Hermes persistent memory, Codex skills/team config, Cursor project rules plus memories plus `AGENTS.md` and commands, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
 - Why it matters: repeated steering is turning into the main productivity tax.
 - One-shot build instruction:
   - Add layered memory with explicit scopes (`workspace`, `project`, `user`, `agent`) and clear precedence, plus a memory inspector/editor so users can see, edit, import, disable, and diff what the harness has learned.
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -57,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -127,7 +127,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 18. Embeddable agent runtimes and protocol surfaces
 - Common pattern: some harnesses are no longer just end-user apps and are instead exposing stable runtime layers other products can embed directly.
-- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, Goose desktop plus CLI plus API plus ACP server and ACP provider bridge, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
+- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, Gemini CLI headless mode plus JSON and streaming automation surfaces, Goose desktop plus CLI plus API plus ACP server and ACP provider bridge, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
 - Why it matters: product teams increasingly want the same agent core available in the terminal, in the browser, in IDEs, and inside orchestrators without re-implementing session, transport, and tool behavior each time.
 - One-shot build instruction:
   - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
@@ -209,6 +209,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add an adversary-style runtime reviewer for browser-agent tool calls that scores each planned action against user intent, recent context, and policy, then allows, blocks, or escalates the action with inspectable rationale and a fail-safe operator experience.
 
+### 30. Chaptered session structure and automatic context compression
+- Common pattern: some harnesses are starting to actively restructure and compress long-running sessions instead of leaving transcript growth and narrative coherence entirely to the model.
+- Seen in: Gemini CLI `Chapters Narrative Flow`, `Context Compression Service`, and the follow-on `ContextManager` work called out in the April and May 2026 changelogs.
+- Why it matters: long browser and coding sessions eventually become hard to navigate, expensive to continue, and easy to derail unless the harness manages session structure and context budget explicitly.
+- One-shot build instruction:
+  - Add chaptered session structure and automatic context compression for browser-agent runs so long tasks are grouped into navigable sections, summaries stay inspectable and linked to the full trace, and the harness can keep working coherently without dragging the full raw transcript forward forever.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -234,3 +241,4 @@ Method: current-product research from first-party product pages, help centers, d
 21. Build review-native PR understanding for browser-agent changes.
 22. Add built-in local inference for browser-agent sessions.
 23. Add adversary-style tool-call review for browser-agent actions.
+24. Add chaptered sessions and automatic context compression for browser-agent runs.
