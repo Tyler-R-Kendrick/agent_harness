@@ -53,9 +53,29 @@ describe('browser inference runtime helpers', () => {
   it('formats structured non-streaming pipeline results into readable text', async () => {
     const { formatBrowserInferenceResult } = await import('./browserInferenceRuntime');
 
-    expect(formatBrowserInferenceResult([{ label: 'POSITIVE', score: 0.9123 }])).toBe('POSITIVE (91.2%)');
+    expect(formatBrowserInferenceResult([{ label: 'POSITIVE', score: 0.9123 }])).toBe('POSITIVE (91%)');
     expect(formatBrowserInferenceResult([{ summary_text: 'Short summary' }])).toBe('Short summary');
     expect(formatBrowserInferenceResult({ answer: 'The answer', score: 0.77 })).toBe('The answer');
+  });
+
+  it('nests enable_thinking under tokenizer_encode_kwargs and removes it from top-level options', async () => {
+    const { buildPipelineRunOptions } = await import('./browserInferenceRuntime');
+
+    const tokenizer = { name: 'tokenizer' };
+    const options = buildPipelineRunOptions('text-generation', { enable_thinking: false, top_k: 20 }, tokenizer as never, vi.fn());
+
+    expect(options).toMatchObject({ top_k: 20, tokenizer_encode_kwargs: { enable_thinking: false } });
+    expect(options).not.toHaveProperty('enable_thinking');
+  });
+
+  it('omits tokenizer_encode_kwargs when enable_thinking is not provided', async () => {
+    const { buildPipelineRunOptions } = await import('./browserInferenceRuntime');
+
+    const tokenizer = { name: 'tokenizer' };
+    const options = buildPipelineRunOptions('text-generation', { top_k: 20 }, tokenizer as never, vi.fn());
+
+    expect(options).toMatchObject({ top_k: 20 });
+    expect(options).not.toHaveProperty('tokenizer_encode_kwargs');
   });
 
   it('buildPipelineLoadOptions does not include a device or dtype key — Transformers.js auto-selects both', async () => {

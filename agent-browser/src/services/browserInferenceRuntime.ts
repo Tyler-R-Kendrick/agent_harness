@@ -192,13 +192,16 @@ export function buildPipelineRunOptions(
     throw new Error('Text generation pipeline requires a tokenizer for Transformers v4 streaming. Ensure the pipeline is initialized with a valid tokenizer.');
   }
 
+  const { enable_thinking, ...restOptions } = options ?? {};
+
   return {
     max_new_tokens: 256,
     temperature: 0.7,
     do_sample: true,
     top_p: 0.9,
     return_full_text: false,
-    ...(options ?? {}),
+    ...restOptions,
+    ...(typeof enable_thinking === 'boolean' ? { tokenizer_encode_kwargs: { enable_thinking } } : {}),
     streamer: new TextStreamer(tokenizer, {
       skip_prompt: true,
       skip_special_tokens: true,
@@ -229,7 +232,7 @@ export function formatBrowserInferenceResult(result: unknown): string {
   }
 
   if (isRecord(result)) {
-    for (const key of ['generated_text', 'summary_text', 'answer', 'text']) {
+    for (const key of ['generated_text', 'translation_text', 'summary_text', 'answer', 'text']) {
       const value = result[key];
       if (typeof value === 'string' && value.trim()) {
         return value.trim();
@@ -237,7 +240,7 @@ export function formatBrowserInferenceResult(result: unknown): string {
     }
 
     if (typeof result.label === 'string') {
-      const score = typeof result.score === 'number' ? ` (${(result.score * 100).toFixed(1)}%)` : '';
+      const score = typeof result.score === 'number' ? ` (${Math.round(result.score * 100)}%)` : '';
       return `${result.label}${score}`;
     }
 
