@@ -474,6 +474,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .trajectory-threshold-grid input {
   min-width: 0;
 }
+.adversary-review-settings {
+  display: grid;
+  gap: 10px;
+}
+.adversary-review-rules textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(7, 10, 16, 0.72);
+  color: #f3f4f6;
+  padding: 8px;
+  line-height: 1.45;
+}
 .secrets-table {
   display: grid;
   overflow: hidden;

@@ -11,6 +11,12 @@ import {
   validationContractToCriteria,
   type ConstraintEvaluationCandidate,
 } from './constraintCompiler';
+import {
+  DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
+  reviewAdversaryToolAction,
+  type AdversaryToolReviewResult,
+  type AdversaryToolReviewSettings,
+} from './adversaryToolReview';
 import type { BusEntryStep, ValidationContract, VoterStep } from '../types';
 import type { ToolDescriptor } from '../tools';
 import type { ToolPlan } from '../tool-agents/tool-agent';
@@ -55,6 +61,7 @@ export interface RunLogActActorWorkflowOptions {
   maxExecutionAttempts?: number;
   verificationCriteria?: string[];
   validationContract?: ValidationContract;
+  adversaryToolReviewSettings?: AdversaryToolReviewSettings;
   onExecutorStart?: (summary: string) => void;
   selectTools?: (context: {
     task: string;
@@ -166,6 +173,14 @@ const ACTOR_META: Record<string, AgentBusPayloadMeta> = {
     branchId: 'agent:adversary-driver',
     agentLabel: 'Adversary Driver',
     modelProvider: 'logact',
+  },
+  'adversary-tool-review': {
+    actorId: 'adversary-tool-review',
+    actorRole: 'voter',
+    parentActorId: 'execute-plan',
+    branchId: 'agent:judge-decider',
+    agentLabel: 'Adversary Tool Review',
+    modelProvider: 'deterministic',
   },
   'judge-decider': {
     actorId: 'judge-decider',
@@ -442,6 +457,21 @@ export async function runLogActActorWorkflow(
       action: selected.action,
       meta: actorMeta('execute-plan', selected.passIndex, { toolPolicy: selectedTools.toolPolicy }),
     });
+
+    const adversaryReview = await runAdversaryToolReviewGate(
+      bus,
+      task,
+      selected.action,
+      selectedTools.toolPolicy.allowedToolIds,
+      capturedBusEntries,
+      options.adversaryToolReviewSettings,
+      selected.passIndex,
+      executePlanIntentId,
+      callbacks,
+    );
+    if (adversaryReview) {
+      return adversaryReview;
+    }
 
     const result = await runExecutorAttempt(options, {
       action: selected.action,
@@ -1578,6 +1608,99 @@ function buildToolPolicy(plan: ToolPlan, selectedDescriptors: ToolDescriptor[]):
     allowedToolIds,
     assignments,
   };
+}
+
+async function runAdversaryToolReviewGate(
+  bus: IAgentBus,
+  task: string,
+  action: string,
+  allowedToolIds: string[],
+  capturedBusEntries: BusEntryStep[],
+  settings: AdversaryToolReviewSettings | undefined,
+  passIndex: number,
+  executePlanIntentId: string,
+  callbacks: LogActActorWorkflowCallbacks,
+): Promise<AgentRunResult | null> {
+  const reviewSettings = settings ?? DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS;
+  if (!reviewSettings.enabled) return null;
+
+  const result = reviewAdversaryToolAction({
+    task,
+    action,
+    allowedToolIds,
+    recentContext: capturedBusEntries.slice(-10).map((entry) => `${entry.summary}\n${entry.detail}`),
+    settings: reviewSettings,
+  });
+  const stepId = `adversary-tool-review-${executePlanIntentId}`;
+  callbacks.onVoterStep?.({
+    id: stepId,
+    kind: 'agent',
+    title: 'Adversary Tool Review',
+    voterId: 'adversary-tool-review',
+    startedAt: Date.now(),
+    status: 'active',
+  });
+  await bus.append({
+    type: PayloadType.Policy,
+    target: 'adversary-tool-review',
+    value: {
+      type: 'adversary-tool-review',
+      intentId: executePlanIntentId,
+      ...result,
+    },
+    meta: actorMeta('adversary-tool-review', passIndex, {
+      parentActorId: 'execute-plan',
+    }),
+  });
+  callbacks.onVoterStepUpdate?.(stepId, {
+    approve: result.decision === 'allow',
+    body: formatAdversaryReviewBody(result),
+    thought: formatAdversaryReviewThought(result),
+    status: 'done',
+    endedAt: Date.now(),
+  });
+  callbacks.onVoterStepEnd?.(stepId);
+
+  if (result.decision === 'allow') return null;
+
+  const text = result.decision === 'block'
+    ? `Adversary tool review blocked the action before execution: ${result.summary}`
+    : `Adversary tool review requires operator approval before execution: ${result.summary}`;
+  await bus.append({
+    type: PayloadType.Abort,
+    intentId: executePlanIntentId,
+    reason: text,
+    meta: actorMeta('adversary-tool-review', passIndex, {
+      parentActorId: 'execute-plan',
+    }),
+  });
+  return {
+    text,
+    steps: 0,
+    blocked: true,
+    ...(result.decision === 'escalate' ? { needsUserInput: true } : {}),
+    ...(result.decision === 'block' ? { failed: true, error: text } : {}),
+  };
+}
+
+function formatAdversaryReviewBody(result: AdversaryToolReviewResult): string {
+  switch (result.decision) {
+    case 'allow':
+      return 'Allowed action.';
+    case 'block':
+      return 'Blocked action before execution.';
+    case 'escalate':
+      return 'Requires operator approval.';
+  }
+}
+
+function formatAdversaryReviewThought(result: AdversaryToolReviewResult): string {
+  return [
+    `Decision: ${result.decision}`,
+    `Severity: ${result.severity}`,
+    `Rules: ${result.matchedRules.join(', ') || '(none)'}`,
+    ...result.rationale.map((line) => `- ${line}`),
+  ].join('\n');
 }
 
 function buildJudgeRubric(negativeTechniques: string[], customRubricCriteria: string[]): string[] {

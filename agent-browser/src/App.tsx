@@ -131,6 +131,11 @@ import {
   type BenchmarkRoutingSettings,
   type BenchmarkTaskClassId,
 } from './services/benchmarkModelRouting';
+import {
+  DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
+  isAdversaryToolReviewSettings,
+  type AdversaryToolReviewSettings,
+} from './services/adversaryToolReview';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
@@ -1914,6 +1919,7 @@ function ChatPanel({
   setBrowserLocationContext,
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
+  adversaryToolReviewSettings,
   secretSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
@@ -1951,6 +1957,7 @@ function ChatPanel({
   setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
+  adversaryToolReviewSettings: AdversaryToolReviewSettings;
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
@@ -4167,6 +4174,7 @@ function ChatPanel({
               signal: controller.signal,
               evaluationAgents,
               negativeRubricTechniques,
+              adversaryToolReviewSettings,
               onNegativeRubricTechnique,
               onGeneratedTool: (file) => onWorkspaceFileUpsert({
                 path: file.path,
@@ -4805,7 +4813,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, cursorState, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, cursorState, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -5515,6 +5523,65 @@ function BenchmarkRoutingSettingsPanel({
   );
 }
 
+function AdversaryToolReviewSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: AdversaryToolReviewSettings;
+  onChange: (settings: AdversaryToolReviewSettings) => void;
+}) {
+  const rulesText = settings.customRules.join('\n');
+  const setRules = (value: string) => {
+    onChange({
+      ...settings,
+      customRules: value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+    });
+  };
+
+  return (
+    <SettingsSection title="Adversary tool review" defaultOpen={false}>
+      <div className="adversary-review-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable adversary tool-call review"
+              checked={settings.enabled}
+              onChange={(event) => onChange({ ...settings, enabled: event.target.checked })}
+            />
+            <span>
+              <strong>Review tool actions before execution</strong>
+              <small>Compare committed LogAct actions against the user task, recent context, and tool policy.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Strictly block high-risk reviewed actions"
+              checked={settings.strictMode}
+              onChange={(event) => onChange({ ...settings, strictMode: event.target.checked })}
+            />
+            <span>
+              <strong>Strict blocking</strong>
+              <small>Block high-risk drift immediately instead of pausing for operator approval.</small>
+            </span>
+          </label>
+        </div>
+        <label className="provider-command-field adversary-review-rules">
+          <span>Custom rules</span>
+          <textarea
+            aria-label="Adversary review custom rules"
+            value={rulesText}
+            onChange={(event) => setRules(event.target.value)}
+            placeholder="One rule per line"
+            rows={4}
+          />
+        </label>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function CursorModelCard({ model }: { model: CursorModelSummary }) {
   return (
     <div className="model-card copilot-model-card">
@@ -5904,6 +5971,7 @@ interface SettingsPanelProps {
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
+  adversaryToolReviewSettings: AdversaryToolReviewSettings;
   task: string;
   loadingModelId: string | null;
   onTaskChange: (task: string) => void;
@@ -5911,6 +5979,7 @@ interface SettingsPanelProps {
   onInstall: (model: HFModel) => Promise<void>;
   onDelete: (id: string) => void;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
+  onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
@@ -5923,7 +5992,7 @@ interface SettingsPanelProps {
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, adversaryToolReviewSettings, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, onAdversaryToolReviewSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -6062,6 +6131,11 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         candidates={benchmarkRoutingCandidates}
         evidenceState={benchmarkEvidenceState}
         onChange={onBenchmarkRoutingSettingsChange}
+      />
+
+      <AdversaryToolReviewSettingsPanel
+        settings={adversaryToolReviewSettings}
+        onChange={onAdversaryToolReviewSettingsChange}
       />
 
       <SecretsSettings
@@ -7423,6 +7497,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.benchmarkEvidenceState,
     isBenchmarkEvidenceDiscoveryState,
     DEFAULT_BENCHMARK_EVIDENCE_STATE,
+  );
+  const [adversaryToolReviewSettings, setAdversaryToolReviewSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.adversaryToolReviewSettings,
+    isAdversaryToolReviewSettings,
+    DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
   );
   const [browserLocationContext, setBrowserLocationContext] = useStoredState(
     localStorageBackend,
@@ -10709,6 +10789,7 @@ function AgentBrowserApp() {
         benchmarkRoutingSettings={benchmarkRoutingSettings}
         benchmarkRoutingCandidates={benchmarkRoutingCandidates}
         benchmarkEvidenceState={benchmarkEvidenceState}
+        adversaryToolReviewSettings={adversaryToolReviewSettings}
         task={registryTask}
         loadingModelId={loadingModelId}
         onTaskChange={setRegistryTask}
@@ -10716,6 +10797,7 @@ function AgentBrowserApp() {
         onInstall={installModel}
         onDelete={deleteModel}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
+        onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
         onSaveEvaluationAgents={saveEvaluationAgents}
@@ -10978,6 +11060,7 @@ function AgentBrowserApp() {
                 setBrowserLocationContext={setBrowserLocationContext}
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
+                adversaryToolReviewSettings={adversaryToolReviewSettings}
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}

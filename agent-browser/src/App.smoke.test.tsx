@@ -137,4 +137,21 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
   });
+
+  it('renders adversary tool review controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Adversary tool review')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Adversary tool review' }));
+    expect(screen.getByLabelText('Enable adversary tool-call review')).toBeInTheDocument();
+    expect(screen.getByLabelText('Strictly block high-risk reviewed actions')).toBeInTheDocument();
+    expect(screen.getByLabelText('Adversary review custom rules')).toBeInTheDocument();
+  });
 });
