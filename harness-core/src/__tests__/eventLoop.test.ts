@@ -96,7 +96,7 @@ describe('agent event loop', () => {
   it('supports parallel event actors and parent metadata for future subagents', async () => {
     const events: AgentLoopEvent[] = [];
     const publishers = new AgentLoopEventPublisherRegistry();
-    publishers.register({ id: 'collector', publish: (event) => events.push(event) });
+    publishers.register({ id: 'collector', publish: (event) => { events.push(event); } });
     const actors = new AgentLoopActorRegistry();
     const calls: string[] = [];
 
@@ -155,7 +155,7 @@ describe('agent event loop', () => {
     const events: AgentLoopEvent[] = [];
     const signal = new AbortController().signal;
     const publishers = new AgentLoopEventPublisherRegistry();
-    publishers.register({ id: 'collector', publish: (event) => events.push(event) });
+    publishers.register({ id: 'collector', publish: (event) => { events.push(event); } });
     const actors = new AgentLoopActorRegistry();
 
     actors.register({
@@ -199,7 +199,7 @@ describe('agent event loop', () => {
   it('publishes actor failure events, including unknown subagent failures', async () => {
     const events: AgentLoopEvent[] = [];
     const publishers = new AgentLoopEventPublisherRegistry();
-    publishers.register({ id: 'collector', publish: (event) => events.push(event) });
+    publishers.register({ id: 'collector', publish: (event) => { events.push(event); } });
     const actors = new AgentLoopActorRegistry();
     actors.register({
       id: 'parent',
@@ -296,5 +296,94 @@ describe('agent event loop', () => {
         running: { events: [{ type: 'loop.tick' }], on: { 'loop.exit': 'running' } },
       },
     }, { actors, maxTransitions: 1 })).rejects.toThrow(/exceeded 1 transition/i);
+  });
+
+  it('publishes agent-loop.workflow.failed before rethrowing when a state actor throws', async () => {
+    const events: AgentLoopEvent[] = [];
+    const publishers = new AgentLoopEventPublisherRegistry();
+    publishers.register({ id: 'collector', publish: (event) => { events.push(event); } });
+    const actors = new AgentLoopActorRegistry();
+    actors.register({
+      id: 'throwing-agent',
+      event: 'loop.tick',
+      run: () => { throw new Error('actor blew up'); },
+    });
+
+    await expect(runAgentEventLoop({
+      id: 'throwing-loop',
+      initial: 'running',
+      states: {
+        running: { events: [{ type: 'loop.tick' }], on: { 'loop.exit': 'done' } },
+        done: { type: 'final' },
+      },
+    }, { actors, publishers })).rejects.toThrow('actor blew up');
+
+    expect(events).toContainEqual(expect.objectContaining({ type: 'agent-loop.workflow.failed' }));
+  });
+
+  it('stops executing subsequent invocations once the first dispatch event is found', async () => {
+    const sideEffects: string[] = [];
+    const actors = new AgentLoopActorRegistry();
+    actors.register({
+      id: 'first-agent',
+      event: 'loop.first',
+      run: () => {
+        sideEffects.push('first');
+        return { event: { type: 'loop.exit' } };
+      },
+    });
+    actors.register({
+      id: 'second-agent',
+      event: 'loop.second',
+      run: () => {
+        sideEffects.push('second');
+        return { event: { type: 'loop.ignored' } };
+      },
+    });
+
+    const result = await runAgentEventLoop({
+      id: 'multi-invocation-loop',
+      initial: 'running',
+      states: {
+        running: {
+          events: [
+            { type: 'loop.first', actorIds: ['first-agent'] },
+            { type: 'loop.second', actorIds: ['second-agent'] },
+          ],
+          on: { 'loop.exit': 'done' },
+        },
+        done: { type: 'final' },
+      },
+    }, { actors });
+
+    expect(result.finalState).toBe('done');
+    expect(sideEffects).toEqual(['first']);
+    expect(sideEffects).not.toContain('second');
+  });
+
+  it('throws when multiple parallel actors return conflicting dispatch events', async () => {
+    const actors = new AgentLoopActorRegistry();
+    actors.register({
+      id: 'actor-a',
+      event: 'loop.race',
+      run: () => ({ event: { type: 'loop.exit-a' } }),
+    });
+    actors.register({
+      id: 'actor-b',
+      event: 'loop.race',
+      run: () => ({ event: { type: 'loop.exit-b' } }),
+    });
+
+    await expect(runAgentEventLoop({
+      id: 'conflict-loop',
+      initial: 'running',
+      states: {
+        running: {
+          events: [{ type: 'loop.race', actorIds: ['actor-a', 'actor-b'], mode: 'parallel' }],
+          on: { 'loop.exit-a': 'done' },
+        },
+        done: { type: 'final' },
+      },
+    }, { actors })).rejects.toThrow(/conflicting events in parallel/i);
   });
 });

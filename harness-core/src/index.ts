@@ -164,6 +164,7 @@ export {
   AGENT_LOOP_HOOK_EVENTS,
   HarnessHookPolicyError,
   HookRegistry,
+  LOGACT_AGENT_LOOP_HOOK_EVENTS,
   LLM_HOOK_EVENTS,
   createCodeHook,
   createInferenceHook,
@@ -205,6 +206,23 @@ export {
   type SerializableAgentLoopEventInvocation,
   type SerializableAgentLoopStateDefinition,
 } from './eventLoop.js';
+export {
+  WorkflowAgentBus,
+  createLogActWorkflowDefinition,
+  runLogActAgentLoop,
+  wrapCompletionCheckerWithCallbacks,
+  wrapVoterWithCallbacks,
+  type CoreAgentLoopCallbacks,
+  type CoreIterationStep,
+  type CoreStepStatus,
+  type CoreVoterStep,
+  type LogActWorkflowDefinition,
+  type LogActWorkflowDefinitionOptions,
+  type LogActAgentLoopOptions,
+  type WorkflowEvent,
+  type WorkflowAgentBusOptions,
+  type WorkflowMessage,
+} from './workflow.js';
 export {
   createTrajectoryCriticVoter,
   runGitWorkSaga,

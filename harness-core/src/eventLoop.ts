@@ -213,7 +213,14 @@ export async function runAgentEventLoop(
     }
 
     await publishRuntimeEvent(runtime, 'agent-loop.state.entered', undefined, { state: stateName });
-    const { dispatch } = await runStateActor(runtime, stateName, state);
+    let stateResult: StateActorOutput;
+    try {
+      stateResult = await runStateActor(runtime, stateName, state);
+    } catch (error) {
+      await publishRuntimeEvent(runtime, 'agent-loop.workflow.failed', { state: stateName, error });
+      throw error;
+    }
+    const { dispatch } = stateResult;
     if (!dispatch) {
       await publishRuntimeEvent(runtime, 'agent-loop.workflow.failed', { state: stateName });
       throw new Error(`No event dispatched from workflow state: ${stateName}`);
@@ -298,7 +305,10 @@ async function runStateEvents(
     const result = invocation.mode === 'parallel'
       ? await runParallelEventInvocation(runtime, stateName, invocation)
       : await runSerialEventInvocation(runtime, stateName, invocation);
-    dispatch ??= result.dispatch;
+    if (result.dispatch) {
+      dispatch = result.dispatch;
+      break;
+    }
   }
   return dispatch ? { dispatch } : {};
 }
@@ -312,7 +322,14 @@ async function runSerialEventInvocation(
   let dispatch: AgentLoopDispatchEvent | undefined;
   for (const actor of resolveInvocationActors(runtime.actors, invocation)) {
     const result = await runRegisteredActor(runtime, stateName, invocation, actor);
-    dispatch ??= result.event;
+    if (result.event) {
+      if (dispatch) {
+        throw new Error(
+          `Multiple actors dispatched events for event "${invocation.type}": "${dispatch.type}" and "${result.event.type}". Only one actor may dispatch per invocation.`,
+        );
+      }
+      dispatch = result.event;
+    }
   }
   return dispatch ? { dispatch } : {};
 }
@@ -325,7 +342,14 @@ async function runParallelEventInvocation(
   await publishRuntimeEvent(runtime, invocation.type, invocation.input, { state: stateName });
   const results = await Promise.all(resolveInvocationActors(runtime.actors, invocation)
     .map((actor) => runRegisteredActor(runtime, stateName, invocation, actor)));
-  const dispatch = results.find((result) => result.event)?.event;
+  const dispatches = results.filter((result) => result.event);
+  if (dispatches.length > 1) {
+    const types = dispatches.map((d) => `"${d.event!.type}"`).join(', ');
+    throw new Error(
+      `Multiple actors dispatched conflicting events in parallel for event "${invocation.type}": ${types}`,
+    );
+  }
+  const dispatch = dispatches[0]?.event;
   return dispatch ? { dispatch } : {};
 }
 

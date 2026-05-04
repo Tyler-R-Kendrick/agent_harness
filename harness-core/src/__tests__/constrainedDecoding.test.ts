@@ -15,6 +15,7 @@ import {
   guidanceConnectionString,
   resolveGuidanceTsGrammar,
   toGuidanceTsGrammar,
+  type CoreInferenceOptions,
 } from '../index.js';
 
 interface GuidanceRequest {
