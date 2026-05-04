@@ -411,6 +411,18 @@ test('captures the chat panel with composer', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/chat-composer.png', fullPage: true });
 });
 
+test('captures the secure shared chat QR pairing dialog', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+  await page.getByLabel('Add session to Research').click();
+  await page.getByRole('button', { name: 'Share chat session' }).click();
+  await expect(page.getByRole('dialog', { name: 'Share chat session' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Start shared session/ })).toBeVisible();
+  await expect(page.getByText(/QR is untrusted signaling/i)).toBeVisible();
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/shared-chat-pairing.png', fullPage: true });
+});
+
 test('captures the stop-response state in chat', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.route(/browserInference\.worker/, async (route) => {
@@ -1847,4 +1859,3 @@ test('title bar controls remain clickable while split panels are draggable', asy
 
   assertNoRuntimeErrors();
 });
-
