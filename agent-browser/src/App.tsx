@@ -86,6 +86,7 @@ import {
   buildResearcherToolInstructions,
   hasCodiModels,
   hasCursorAccess,
+  hasCodexAccess,
   hasGhcpAccess,
   resolveAgentModelIds,
   resolveRuntimeAgentProvider,
@@ -113,6 +114,7 @@ import { MarkdownContent } from './utils/MarkdownContent';
 import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
+import { fetchCodexState, type CodexModelSummary, type CodexRuntimeState } from './services/codexApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import {
   BENCHMARK_TASK_CLASSES,
@@ -188,6 +190,12 @@ import {
   WORKSPACE_FILES_STORAGE_KEY,
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
+import {
+  DEFAULT_EXTENSION_MANIFESTS,
+  createDefaultExtensionRuntime,
+  summarizeDefaultExtensionRuntime,
+  type DefaultExtensionRuntime,
+} from './services/defaultExtensions';
 import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import {
   DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
@@ -455,6 +463,14 @@ const EMPTY_CURSOR_STATE: CursorRuntimeState = {
   models: [],
   signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
   signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
+};
+
+const EMPTY_CODEX_STATE: CodexRuntimeState = {
+  available: false,
+  authenticated: false,
+  models: [],
+  signInCommand: 'codex login',
+  signInDocsUrl: 'https://developers.openai.com/codex/auth',
 };
 
 const NEW_TAB_NAME_LENGTH = 32;
@@ -1782,12 +1798,14 @@ function ChatPanel({
   installedModels,
   copilotState,
   cursorState,
+  codexState,
   pendingSearch,
   onSearchConsumed,
   onToast,
   workspaceName,
   workspaceFiles,
   workspaceCapabilities,
+  defaultExtensions,
   evaluationAgents,
   negativeRubricTechniques,
   onNegativeRubricTechnique,
@@ -1816,12 +1834,14 @@ function ChatPanel({
   installedModels: HFModel[];
   copilotState: CopilotRuntimeState;
   cursorState: CursorRuntimeState;
+  codexState: CodexRuntimeState;
   pendingSearch: string | null;
   onSearchConsumed: () => void;
   onToast: (toast: Exclude<ToastState, null>) => void;
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
   workspaceCapabilities: WorkspaceCapabilities;
+  defaultExtensions: DefaultExtensionRuntime | null;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onNegativeRubricTechnique: (technique: string) => void;
@@ -1890,6 +1910,12 @@ function ChatPanel({
     isStringRecord,
     {},
   );
+  const [selectedCodexModelBySession, setSelectedCodexModelBySession] = useStoredState<Record<string, string>>(
+    sessionStorageBackend,
+    STORAGE_KEYS.selectedCodexModelBySession,
+    isStringRecord,
+    {},
+  );
   const [selectedToolIdsBySession, setSelectedToolIdsBySession] = useState<Record<string, string[]>>({});
   const [webMcpToolVersion, setWebMcpToolVersion] = useState(0);
   const [bashHistoryBySession, setBashHistoryBySession] = useState<Record<string, BashEntry[]>>({});
@@ -1952,25 +1978,36 @@ function ChatPanel({
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
   const selectedCopilotModelId = selectedCopilotModelBySession[activeChatSessionId] ?? '';
   const selectedCursorModelId = selectedCursorModelBySession[activeChatSessionId] ?? '';
-  const { codiModelId: effectiveSelectedModelId, ghcpModelId: effectiveSelectedCopilotModelId, cursorModelId: effectiveSelectedCursorModelId } = resolveAgentModelIds({
+  const selectedCodexModelId = selectedCodexModelBySession[activeChatSessionId] ?? '';
+  const {
+    codiModelId: effectiveSelectedModelId,
+    ghcpModelId: effectiveSelectedCopilotModelId,
+    cursorModelId: effectiveSelectedCursorModelId,
+    codexModelId: effectiveSelectedCodexModelId,
+  } = resolveAgentModelIds({
     installedModels,
     selectedCodiModelId: selectedModelId,
     copilotModels: copilotState.models,
     selectedGhcpModelId: selectedCopilotModelId,
     cursorModels: cursorState.models,
     selectedCursorModelId,
+    codexModels: codexState.models,
+    selectedCodexModelId,
   });
   const activeLocalModel = installedModels.find((model) => model.id === effectiveSelectedModelId);
   const activeCopilotModel = copilotState.models.find((model) => model.id === effectiveSelectedCopilotModelId);
   const activeCursorModel = cursorState.models.find((model) => model.id === effectiveSelectedCursorModelId);
+  const activeCodexModel = codexState.models.find((model) => model.id === effectiveSelectedCodexModelId);
   const hasInstalledModels = hasCodiModels(installedModels);
   const hasAvailableCopilotModels = hasGhcpAccess(copilotState);
   const hasAvailableCursorModels = hasCursorAccess(cursorState);
+  const hasAvailableCodexModels = hasCodexAccess(codexState);
   const selectedRuntimeProvider = resolveRuntimeAgentProvider({
     provider: selectedProvider,
     hasCodiModelsReady: Boolean(activeLocalModel),
     hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
     hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
+    hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
   });
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
@@ -2039,19 +2076,24 @@ function ChatPanel({
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
+    || (selectedProvider === 'codex' && Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels)
     || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
     ))
   );
-  const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState, cursorState });
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${workspaceCapabilities.plugins.length} plugins · ${workspaceCapabilities.hooks.length} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState, cursorState, codexState });
+  const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
+  const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
+  const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
   const effectiveSelectedCopilotModelIdRef = useRef(effectiveSelectedCopilotModelId);
   const effectiveSelectedCursorModelIdRef = useRef(effectiveSelectedCursorModelId);
+  const effectiveSelectedCodexModelIdRef = useRef(effectiveSelectedCodexModelId);
   const selectedToolIdsRef = useRef<string[]>(selectedToolIds);
   const activeModeRef = useRef(activeMode);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -2073,6 +2115,10 @@ function ChatPanel({
   useEffect(() => {
     effectiveSelectedCursorModelIdRef.current = effectiveSelectedCursorModelId;
   }, [effectiveSelectedCursorModelId]);
+
+  useEffect(() => {
+    effectiveSelectedCodexModelIdRef.current = effectiveSelectedCodexModelId;
+  }, [effectiveSelectedCodexModelId]);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -2510,6 +2556,7 @@ function ChatPanel({
       hasCodiModelsReady: Boolean(activeLocalModel),
       hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
+      hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
     if (requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
@@ -2573,12 +2620,22 @@ function ChatPanel({
       return;
     }
 
+    if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codex' && (!effectiveSelectedCodexModelId || !hasAvailableCodexModels)) {
+      updateMessage(assistantId, {
+        status: 'error',
+        content: codexState.authenticated
+          ? 'Codex has no enabled models for this environment. Open Models to refresh or switch providers.'
+          : 'Sign in to Codex from Models before sending a prompt.',
+      });
+      return;
+    }
+
     if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !requestLocalModel) {
       updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
-    if (toolsEnabled && providerForRequest !== 'tour-guide') {
+    if (toolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
       if (!activeSessionId) {
         updateMessage(assistantId, { status: 'error', content: 'Open or create a session before enabling tools.' });
         return;
@@ -4596,6 +4653,8 @@ function ChatPanel({
                   ? 'GHCP returned an empty response.'
                 : runtimeProviderForRequest === 'cursor'
                   ? 'Cursor returned an empty response.'
+                : runtimeProviderForRequest === 'codex'
+                  ? 'Codex returned an empty response.'
                 : 'Codi returned an empty response.'
             ),
           }));
@@ -4612,6 +4671,8 @@ function ChatPanel({
                 ? 'GHCP returned an empty response.'
               : runtimeProviderForRequest === 'cursor'
                 ? 'Cursor returned an empty response.'
+              : runtimeProviderForRequest === 'codex'
+                ? 'Codex returned an empty response.'
                 : 'Codi returned an empty response.'
           ));
         },
@@ -4630,7 +4691,11 @@ function ChatPanel({
         provider: providerForRequest,
         runtimeProvider: runtimeProviderForRequest,
         model: requestLocalModel,
-        modelId: runtimeProviderForRequest === 'cursor' ? effectiveSelectedCursorModelId : requestGhcpModelId,
+        modelId: runtimeProviderForRequest === 'cursor'
+          ? effectiveSelectedCursorModelId
+          : runtimeProviderForRequest === 'codex'
+            ? effectiveSelectedCodexModelId
+            : requestGhcpModelId,
         sessionId: activeChatSessionId,
         latestUserInput: text,
         messages: nextMessages,
@@ -4803,6 +4868,10 @@ function ChatPanel({
     modelId: (
       selectedProviderRef.current === 'ghcp'
         ? effectiveSelectedCopilotModelIdRef.current
+        : selectedProviderRef.current === 'cursor'
+          ? effectiveSelectedCursorModelIdRef.current
+        : selectedProviderRef.current === 'codex'
+          ? effectiveSelectedCodexModelIdRef.current
         : effectiveSelectedModelIdRef.current
     ) || null,
     agentId: null,
@@ -4825,6 +4894,8 @@ function ChatPanel({
     activeSessionId,
     cwdBySession,
     effectiveSelectedCopilotModelId,
+    effectiveSelectedCursorModelId,
+    effectiveSelectedCodexModelId,
     effectiveSelectedModelId,
     getSessionRuntimeState,
     messages,
@@ -4859,6 +4930,12 @@ function ChatPanel({
       if (resolvedProvider === 'ghcp') {
         effectiveSelectedCopilotModelIdRef.current = nextModelId;
         setSelectedCopilotModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
+      } else if (resolvedProvider === 'cursor') {
+        effectiveSelectedCursorModelIdRef.current = nextModelId;
+        setSelectedCursorModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
+      } else if (resolvedProvider === 'codex') {
+        effectiveSelectedCodexModelIdRef.current = nextModelId;
+        setSelectedCodexModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
       } else {
         effectiveSelectedModelIdRef.current = nextModelId;
         setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
@@ -4971,6 +5048,7 @@ function ChatPanel({
                     <option value="codi">Codi</option>
                     <option value="ghcp">GHCP</option>
                     <option value="cursor">Cursor</option>
+                    <option value="codex">Codex</option>
                     <option value="researcher">Researcher</option>
                     <option value="debugger">Debugger</option>
                     <option value="planner">Planner</option>
@@ -4980,44 +5058,58 @@ function ChatPanel({
                 {selectedProvider === 'tour-guide'
                   ? null
                   : selectedRuntimeProvider === 'ghcp'
-                  ? (hasAvailableCopilotModels
-                      ? (
-                        <label className="header-model-selector" {...panelTitlebarControlProps}>
-                          <select aria-label="GHCP model" value={effectiveSelectedCopilotModelId} onChange={(event) => setSelectedCopilotModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
-                            {copilotState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-                          </select>
-                        </label>
-                      )
-                      : (
-                        <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
-                          {copilotState.authenticated ? 'GHCP models' : 'Sign in'}
-                        </button>
-                      ))
-                  : selectedRuntimeProvider === 'cursor'
-                  ? (hasAvailableCursorModels
-                      ? (
-                        <label className="header-model-selector" {...panelTitlebarControlProps}>
-                          <select aria-label="Cursor model" value={effectiveSelectedCursorModelId} onChange={(event) => setSelectedCursorModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
-                            {cursorState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-                          </select>
-                        </label>
-                      )
-                      : (
-                        <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
-                          {cursorState.authenticated ? 'Cursor models' : 'Set key'}
-                        </button>
-                      ))
-                  : (hasInstalledModels
-                      ? (
-                        <label className="header-model-selector" {...panelTitlebarControlProps}>
-                          <select aria-label="Codi model" value={effectiveSelectedModelId} onChange={(event) => setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
-                            {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-                          </select>
-                        </label>
-                      )
-                      : (
-                        <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
-                      ))}
+                    ? (hasAvailableCopilotModels
+                        ? (
+                          <label className="header-model-selector" {...panelTitlebarControlProps}>
+                            <select aria-label="GHCP model" value={effectiveSelectedCopilotModelId} onChange={(event) => setSelectedCopilotModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                              {copilotState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                            </select>
+                          </label>
+                        )
+                        : (
+                          <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                            {copilotState.authenticated ? 'GHCP models' : 'Sign in'}
+                          </button>
+                        ))
+                    : selectedRuntimeProvider === 'cursor'
+                      ? (hasAvailableCursorModels
+                          ? (
+                            <label className="header-model-selector" {...panelTitlebarControlProps}>
+                              <select aria-label="Cursor model" value={effectiveSelectedCursorModelId} onChange={(event) => setSelectedCursorModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                                {cursorState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                              </select>
+                            </label>
+                          )
+                          : (
+                            <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                              {cursorState.authenticated ? 'Cursor models' : 'Set key'}
+                            </button>
+                          ))
+                      : selectedRuntimeProvider === 'codex'
+                        ? (hasAvailableCodexModels
+                            ? (
+                              <label className="header-model-selector" {...panelTitlebarControlProps}>
+                                <select aria-label="Codex model" value={effectiveSelectedCodexModelId} onChange={(event) => setSelectedCodexModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                                  {codexState.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                                </select>
+                              </label>
+                            )
+                            : (
+                              <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                                {codexState.authenticated ? 'Codex models' : 'Sign in'}
+                              </button>
+                            ))
+                        : (hasInstalledModels
+                            ? (
+                              <label className="header-model-selector" {...panelTitlebarControlProps}>
+                                <select aria-label="Codi model" value={effectiveSelectedModelId} onChange={(event) => setSelectedModelBySession((current) => ({ ...current, [activeChatSessionId]: event.target.value }))} {...panelTitlebarControlProps}>
+                                  {installedModels.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                                </select>
+                              </label>
+                            )
+                            : (
+                              <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
+                            ))}
                 <BenchmarkRouteBadge route={currentBenchmarkRoute} />
                 <ToolsPicker
                   descriptors={toolDescriptors}
@@ -5084,7 +5176,7 @@ function ChatPanel({
             <ProcessPanel message={activeActivityMessage} criticSettings={trajectoryCriticSettings} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, activeCursorModelName: activeCursorModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, activeCursorModelName: activeCursorModel?.name, activeCodexModelName: activeCodexModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -5118,7 +5210,7 @@ function ChatPanel({
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
-                    placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels })}
+                    placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels, hasCodexModelsReady: hasAvailableCodexModels })}
                     rows={1}
                     onKeyDown={handleChatInputKeyDown}
                   />
@@ -5163,6 +5255,10 @@ function ChatPanel({
                   ? (!hasAvailableCursorModels
                     ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{cursorState.authenticated ? 'Cursor has no enabled models. Open Models.' : 'Cursor needs CURSOR_API_KEY. Open Models.'}</button>
                     : null)
+                : selectedRuntimeProvider === 'codex'
+                  ? (!hasAvailableCodexModels
+                      ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{codexState.authenticated ? 'Codex has no enabled models. Open Models.' : 'Codex needs sign-in. Open Models.'}</button>
+                      : null)
                 : selectedProvider === 'tour-guide'
                   ? null
                   : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
@@ -5341,6 +5437,24 @@ function CursorModelCard({ model }: { model: CursorModelSummary }) {
           {typeof model.maxOutputTokens === 'number' ? <span className="chip mini">{model.maxOutputTokens.toLocaleString()} out</span> : null}
         </div>
         <p>Enabled through the Cursor SDK runtime for this environment.</p>
+      </div>
+      <span className="badge connected">Enabled</span>
+    </div>
+  );
+}
+
+function CodexModelCard({ model }: { model: CodexModelSummary }) {
+  return (
+    <div className="model-card copilot-model-card">
+      <div className="model-card-icon"><Icon name="terminal" size={15} color="#86efac" /></div>
+      <div className="model-card-body">
+        <strong>{model.name}</strong>
+        <div className="copilot-model-meta">
+          <span className="chip mini">{model.id}</span>
+          {model.reasoning ? <span className="chip mini">Reasoning</span> : null}
+          {model.vision ? <span className="chip mini">Vision</span> : null}
+        </div>
+        <p>Runs through the local Codex CLI configuration.</p>
       </div>
       <span className="badge connected">Enabled</span>
     </div>
@@ -5750,6 +5864,9 @@ interface SettingsPanelProps {
   cursorState: CursorRuntimeState;
   isCursorLoading: boolean;
   onRefreshCursor: () => void;
+  codexState: CodexRuntimeState;
+  isCodexLoading: boolean;
+  onRefreshCodex: () => void;
   registryModels: HFModel[];
   installedModels: HFModel[];
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
@@ -5776,12 +5893,13 @@ interface SettingsPanelProps {
   onTrajectoryCriticSettingsChange: (settings: TrajectoryCriticSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange, trajectoryCriticSettings, onTrajectoryCriticSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
   const copilotReady = hasGhcpAccess(copilotState);
   const cursorReady = hasCursorAccess(cursorState);
+  const codexReady = hasCodexAccess(codexState);
   // Recommended = seed models not yet installed, only shown when no filter active
   const recommended = !isFiltering ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
   const recommendedIds = new Set(recommended.map((m) => m.id));
@@ -5799,7 +5917,7 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
           <h2>Settings</h2>
           <p className="muted">Manage GHCP availability and browser-runnable ONNX local models.</p>
         </div>
-        <span className="badge">{copilotState.models.length} GHCP · {cursorState.models.length} Cursor · {installedModels.length} Codi</span>
+        <span className="badge">{copilotState.models.length} GHCP · {cursorState.models.length} Cursor · {codexState.models.length} Codex · {installedModels.length} Codi</span>
       </div>
 
       <SettingsSection title="Providers">
@@ -5868,6 +5986,38 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
               </div>
             )}
           </article>
+          <article className="provider-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>Codex</strong>
+                <p>Checks for ambient Codex CLI auth in this environment and exposes it as the Codex chat agent when available.</p>
+              </div>
+              <span className={`badge${codexReady ? ' connected' : ''}`}>{isCodexLoading ? 'Checking…' : (codexReady ? 'Codex ready' : (codexState.authenticated ? 'Signed in' : 'Sign-in required'))}</span>
+            </div>
+            {codexState.statusMessage ? <p className="muted">{codexState.statusMessage}</p> : null}
+            {codexState.error ? <p className="file-editor-error">{codexState.error}</p> : null}
+            {!codexReady && !codexState.authenticated ? (
+              <>
+                <div className="provider-actions">
+                  <a className="secondary-button" href={codexState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Codex</a>
+                  <button type="button" className="secondary-button" onClick={onRefreshCodex} disabled={isCodexLoading}>{isCodexLoading ? 'Checking…' : 'Refresh status'}</button>
+                </div>
+                <label className="provider-command-field">
+                  <span>Run this in the dev container</span>
+                  <input aria-label="Codex sign-in command" value={codexState.signInCommand} readOnly />
+                </label>
+              </>
+            ) : !codexReady ? (
+              <div className="provider-actions">
+                <button type="button" className="secondary-button" onClick={onRefreshCodex} disabled={isCodexLoading}>{isCodexLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
+            ) : (
+              <div className="provider-actions">
+                <span className="badge connected">Codex available</span>
+                <button type="button" className="secondary-button" onClick={onRefreshCodex} disabled={isCodexLoading}>{isCodexLoading ? 'Checking…' : 'Refresh status'}</button>
+              </div>
+            )}
+          </article>
         </div>
       </SettingsSection>
 
@@ -5903,6 +6053,14 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         <SettingsSection title={`Cursor models (${cursorState.models.length})`} defaultOpen={false} scrollBody>
           {cursorState.models.map((model) => (
             <CursorModelCard key={model.id} model={model} />
+          ))}
+        </SettingsSection>
+      )}
+
+      {codexState.models.length > 0 && (
+        <SettingsSection title={`Codex models (${codexState.models.length})`} defaultOpen={false} scrollBody>
+          {codexState.models.map((model) => (
+            <CodexModelCard key={model.id} model={model} />
           ))}
         </SettingsSection>
       )}
@@ -5989,83 +6147,67 @@ function HistoryPanel() {
   );
 }
 
-interface MarketplaceExtension {
-  id: string;
-  name: string;
-  author: string;
-  description: string;
-  iconColor: string;
-  iconLetter: string;
-  stars: number;
-  users: string;
-  installed: boolean;
-  category: string;
+function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
+  if (extensionId.endsWith('.agent-skills')) return 'sparkles';
+  if (extensionId.endsWith('.agents-md')) return 'file';
+  if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
+  return 'puzzle';
 }
 
-const MARKETPLACE_ITEMS: MarketplaceExtension[] = [
-  { id: 'ublock', name: 'uBlock Origin', author: 'Raymond Hill', description: 'An efficient wide-spectrum content blocker for Chromium and Firefox.', iconColor: '#800000', iconLetter: 'uB', stars: 5, users: '10M+', installed: true, category: 'Privacy' },
-  { id: 'dark-reader', name: 'Dark Reader', author: 'Dark Reader Ltd', description: 'Dark mode for every website. Take care of your eyes, use Dark Reader for night and daily browsing.', iconColor: '#1a1a2e', iconLetter: 'DR', stars: 4, users: '5M+', installed: true, category: 'Productivity' },
-  { id: 'mcp-bridge', name: 'MCP Bridge', author: 'Anthropic', description: 'Connect to Model Context Protocol servers for tool-augmented AI interactions.', iconColor: '#d97706', iconLetter: 'MC', stars: 4, users: '50K+', installed: false, category: 'AI' },
-  { id: '1password', name: '1Password', author: 'AgileBits', description: 'The best way to experience 1Password in your browser. Easily sign in, generate passwords, and autofill forms.', iconColor: '#0572ec', iconLetter: '1P', stars: 5, users: '2M+', installed: false, category: 'Privacy' },
-  { id: 'react-devtools', name: 'React DevTools', author: 'Meta', description: 'Adds React debugging tools to the browser DevTools. Inspect the component hierarchy and props.', iconColor: '#61dafb', iconLetter: 'Re', stars: 4, users: '3M+', installed: true, category: 'Developer' },
-  { id: 'copilot', name: 'GitHub Copilot', author: 'GitHub', description: 'AI pair programmer that helps you write code faster with autocomplete-style suggestions.', iconColor: '#238636', iconLetter: 'GH', stars: 5, users: '1M+', installed: false, category: 'AI' },
-  { id: 'bitwarden', name: 'Bitwarden', author: 'Bitwarden Inc', description: 'A secure and free password manager for all of your devices.', iconColor: '#175DDC', iconLetter: 'Bw', stars: 4, users: '1M+', installed: false, category: 'Privacy' },
-  { id: 'grammarly', name: 'Grammarly', author: 'Grammarly Inc', description: 'Improve your writing with AI-powered grammar checking, spell checking, and style suggestions.', iconColor: '#15c39a', iconLetter: 'Gr', stars: 4, users: '10M+', installed: false, category: 'Productivity' },
-  { id: 'json-viewer', name: 'JSON Viewer', author: 'nicedoc.io', description: 'Beautify and format JSON data in the browser with syntax highlighting and tree view.', iconColor: '#f59e0b', iconLetter: 'JS', stars: 4, users: '500K+', installed: true, category: 'Developer' },
-  { id: 'vimium', name: 'Vimium', author: 'Phil Crosby', description: 'The Hacker\'s browser. Navigate the web without a mouse using Vim-like keybindings.', iconColor: '#4ade80', iconLetter: 'Vi', stars: 5, users: '800K+', installed: false, category: 'Tools' },
-];
-
-function ExtensionsPanel({ workspaceName, capabilities }: { workspaceName: string; capabilities: WorkspaceCapabilities }) {
+function ExtensionsPanel({
+  workspaceName,
+  capabilities,
+  defaultExtensions,
+}: {
+  workspaceName: string;
+  capabilities: WorkspaceCapabilities;
+  defaultExtensions: DefaultExtensionRuntime | null;
+}) {
   const [search, setSearch] = useState('');
-  const [installedExtensions, setInstalledExtensions] = useState<Set<string>>(() => new Set(MARKETPLACE_ITEMS.filter((e) => e.installed).map((e) => e.id)));
+  const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
+  const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
 
-  const filtered = MARKETPLACE_ITEMS.filter((ext) => {
+  const filtered = repoExtensions.filter((extension) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return ext.name.toLowerCase().includes(q) || ext.description.toLowerCase().includes(q) || ext.author.toLowerCase().includes(q);
+    return [
+      extension.manifest.name,
+      extension.manifest.description,
+      extension.marketplace.source.path ?? '',
+      ...(extension.marketplace.categories ?? []),
+      ...(extension.marketplace.keywords ?? []),
+    ].some((value) => value.toLowerCase().includes(q));
   });
-
-  const toggleInstall = (id: string) => {
-    setInstalledExtensions((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <div className="panel-topbar extensions-topbar">
-        <h2>Marketplace</h2>
-        <span className="badge">{installedExtensions.size} installed</span>
+        <h2>Extensions</h2>
+        <span className="badge">{defaultExtensionSummary.pluginCount} loaded</span>
       </div>
       <div className="extensions-search shared-input-shell">
         <Icon name="search" size={13} color="#7d8594" />
         <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
       </div>
       <div className="extensions-list">
-        {filtered.map((ext) => {
-          const isInstalled = installedExtensions.has(ext.id);
-          return (
-            <article key={ext.id} className="marketplace-card">
-              <div className="marketplace-card-icon" style={{ background: ext.iconColor }}>
-                <span>{ext.iconLetter}</span>
+        {filtered.map((extension) => (
+          <article key={extension.manifest.id} className="marketplace-card">
+            <div className="marketplace-card-icon">
+              <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
+            </div>
+            <div className="marketplace-card-body">
+              <strong>{extension.manifest.name}</strong>
+              <span className="marketplace-card-author">{extension.marketplace.source.path ?? extension.manifest.entrypoint.module}</span>
+              <p className="marketplace-card-desc">{extension.manifest.description}</p>
+              <div className="marketplace-card-meta">
+                {(extension.manifest.capabilities ?? []).map((capability) => (
+                  <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
+                ))}
               </div>
-              <div className="marketplace-card-body">
-                <strong>{ext.name}</strong>
-                <span className="marketplace-card-author">{ext.author}</span>
-                <p className="marketplace-card-desc">{ext.description}</p>
-                <div className="marketplace-card-meta">
-                  <span className="marketplace-stars">{'★'.repeat(ext.stars)}{'☆'.repeat(5 - ext.stars)}</span>
-                  <span className="muted">{ext.users}</span>
-                </div>
-              </div>
-              <button type="button" className={`marketplace-install-btn ${isInstalled ? 'installed' : ''}`} onClick={() => toggleInstall(ext.id)}>
-                {isInstalled ? 'Installed' : 'Add'}
-              </button>
-            </article>
-          );
-        })}
+            </div>
+            <span className="badge">Loaded</span>
+          </article>
+        ))}
         {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
       </div>
       {capabilities.plugins.length > 0 && (
@@ -7175,7 +7317,7 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'researcher', 'debugger', 'planner', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -7250,6 +7392,8 @@ function AgentBrowserApp() {
   const [isCopilotStateLoading, setIsCopilotStateLoading] = useState(true);
   const [cursorState, setCursorState] = useState<CursorRuntimeState>(EMPTY_CURSOR_STATE);
   const [isCursorStateLoading, setIsCursorStateLoading] = useState(true);
+  const [codexState, setCodexState] = useState<CodexRuntimeState>(EMPTY_CODEX_STATE);
+  const [isCodexStateLoading, setIsCodexStateLoading] = useState(true);
   const benchmarkRoutingBaseCandidates = useMemo(
     () => buildBenchmarkRoutingCandidates({ copilotModels: copilotState.models, installedModels }),
     [copilotState.models, installedModels],
@@ -7475,6 +7619,21 @@ function AgentBrowserApp() {
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
+  const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void createDefaultExtensionRuntime(activeWorkspaceFiles)
+      .then((runtime) => {
+        if (mounted) setDefaultExtensionRuntime(runtime);
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load default extensions', error);
+        if (mounted) setDefaultExtensionRuntime(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeWorkspaceFiles]);
   const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
     workspaceId: activeWorkspaceId,
     workspaceName: activeWorkspace.name,
@@ -7680,9 +7839,34 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
+  const refreshCodexState = useCallback(async (showErrors = false) => {
+    setIsCodexStateLoading(true);
+    try {
+      const state = await fetchCodexState();
+      setCodexState(state);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') return;
+      const message = error instanceof Error ? error.message : 'Failed to check Codex status.';
+      setCodexState({
+        ...EMPTY_CODEX_STATE,
+        error: message,
+      });
+      if (showErrors) {
+        setToast({ msg: message, type: 'warning' });
+      }
+    } finally {
+      setIsCodexStateLoading(false);
+    }
+  }, [setToast]);
+
   useEffect(() => {
     void refreshCursorState(false);
   }, [refreshCursorState]);
+
+  useEffect(() => {
+    void refreshCodexState(false);
+  }, [refreshCodexState]);
 
   useEffect(() => {
     if (!benchmarkRoutingSettings.enabled || benchmarkRoutingBaseCandidates.length === 0) return;
@@ -10239,7 +10423,13 @@ function AgentBrowserApp() {
       );
     }
     if (activePanel === 'history') return <HistoryPanel />;
-    if (activePanel === 'extensions') return <ExtensionsPanel workspaceName={activeWorkspace.name} capabilities={activeWorkspaceCapabilities} />;
+    if (activePanel === 'extensions') return (
+      <ExtensionsPanel
+        workspaceName={activeWorkspace.name}
+        capabilities={activeWorkspaceCapabilities}
+        defaultExtensions={defaultExtensionRuntime}
+      />
+    );
     if (activePanel === 'settings') return (
       <SettingsPanel
         copilotState={copilotState}
@@ -10248,6 +10438,9 @@ function AgentBrowserApp() {
         cursorState={cursorState}
         isCursorLoading={isCursorStateLoading}
         onRefreshCursor={() => void refreshCursorState(true)}
+        codexState={codexState}
+        isCodexLoading={isCodexStateLoading}
+        onRefreshCodex={() => void refreshCodexState(true)}
         registryModels={registryModels}
         installedModels={installedModels}
         benchmarkRoutingSettings={benchmarkRoutingSettings}
@@ -10474,12 +10667,14 @@ function AgentBrowserApp() {
                 installedModels={installedModels}
                 copilotState={copilotState}
                 cursorState={cursorState}
+                codexState={codexState}
                 pendingSearch={pendingSearch}
                 onSearchConsumed={() => setPendingSearch(null)}
                 onToast={setToast}
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
                 workspaceCapabilities={activeWorkspaceCapabilities}
+                defaultExtensions={defaultExtensionRuntime}
                 evaluationAgents={evaluationAgents}
                 negativeRubricTechniques={negativeRubricTechniques}
                 onNegativeRubricTechnique={addNegativeRubricTechnique}

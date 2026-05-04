@@ -1,10 +1,12 @@
 import type { IVoter } from 'logact';
 import type { CopilotRuntimeState } from '../services/copilotApi';
 import type { CursorRuntimeState } from '../services/cursorApi';
+import type { CodexRuntimeState } from '../services/codexApi';
 import type { ChatMessage, HFModel } from '../types';
 import type { AgentStreamCallbacks } from './types';
 import { getDefaultSecretsManagerAgent, type SecretManagementSettings, type SecretsManagerAgent } from './Secrets';
 import { CODI_LABEL, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+import { CODEX_LABEL, hasCodexAccess, resolveCodexModelId, streamCodexChat } from './Codex';
 import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 import { CURSOR_LABEL, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
@@ -15,6 +17,7 @@ import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '..
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
 
 export { CODI_LABEL, buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
+export { CODEX_LABEL, buildCodexPrompt, hasCodexAccess, resolveCodexModelId, streamCodexChat } from './Codex';
 export {
   buildDebuggerOperatingInstructions,
   buildDebuggerSystemPrompt,
@@ -204,6 +207,23 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'codex') {
+    if (!options.modelId || !options.sessionId) {
+      throw new Error('Codex chat requires a modelId and sessionId.');
+    }
+
+    await streamCodexChat({
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'researcher') {
     await streamResearcherChat({
       runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
@@ -292,12 +312,14 @@ export function getAgentDisplayName({
   activeCodiModelName,
   activeGhcpModelName,
   activeCursorModelName,
+  activeCodexModelName,
   researcherRuntimeProvider,
 }: {
   provider: AgentProvider;
   activeCodiModelName?: string;
   activeGhcpModelName?: string;
   activeCursorModelName?: string;
+  activeCodexModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
   if (provider === 'researcher' || provider === 'debugger' || provider === 'planner') {
@@ -315,6 +337,7 @@ export function getAgentDisplayName({
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
   if (provider === 'cursor') return `${CURSOR_LABEL}: ${activeCursorModelName ?? 'Cursor'}`;
+  if (provider === 'codex') return `${CODEX_LABEL}: ${activeCodexModelName ?? 'Codex default'}`;
   return provider === 'ghcp'
     ? `${GHCP_LABEL}: ${activeGhcpModelName ?? 'Copilot'}`
     : `${CODI_LABEL}: ${activeCodiModelName ?? 'Codi'}`;
@@ -325,17 +348,22 @@ export function getAgentInputPlaceholder({
   hasCodiModelsReady,
   hasGhcpModelsReady,
   hasCursorModelsReady = false,
+  hasCodexModelsReady = false,
 }: {
   provider: AgentProvider;
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
   hasCursorModelsReady?: boolean;
+  hasCodexModelsReady?: boolean;
 }): string {
   if (provider === 'ghcp') {
     return hasGhcpModelsReady ? 'Ask GHCP…' : 'Sign in to GHCP to start chatting';
   }
   if (provider === 'cursor') {
     return hasCursorModelsReady ? 'Ask Cursor…' : 'Sign in to Cursor to start chatting';
+  }
+  if (provider === 'codex') {
+    return hasCodexModelsReady ? 'Ask Codex…' : 'Sign in to Codex to start chatting';
   }
   if (provider === 'researcher') {
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
@@ -363,11 +391,13 @@ export function getAgentProviderSummary({
   installedModels,
   copilotState,
   cursorState,
+  codexState,
 }: {
   provider: AgentProvider;
   installedModels: HFModel[];
   copilotState: CopilotRuntimeState;
   cursorState?: CursorRuntimeState;
+  codexState?: CodexRuntimeState;
 }): string {
   if (provider === 'ghcp') {
     return hasGhcpAccess(copilotState)
@@ -379,6 +409,11 @@ export function getAgentProviderSummary({
     return hasCursorAccess(cursorState)
       ? `${cursorState.models.length} Cursor models enabled`
       : (cursorState.authenticated ? 'Cursor has no enabled models' : 'Cursor sign-in required');
+  }
+  if (provider === 'codex') {
+    return codexState && hasCodexAccess(codexState)
+      ? `${codexState.models.length} Codex models enabled`
+      : (codexState?.authenticated ? 'Codex has no enabled models' : 'Codex sign-in required');
   }
   if (provider === 'researcher') {
     if (hasGhcpAccess(copilotState)) {
@@ -437,15 +472,18 @@ export function resolveRuntimeAgentProvider({
   hasCodiModelsReady,
   hasGhcpModelsReady,
   hasCursorModelsReady = false,
+  hasCodexModelsReady = false,
 }: {
   provider: AgentProvider;
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
   hasCursorModelsReady?: boolean;
+  hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
   if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
+  void hasCodexModelsReady;
   return hasCodiModelsReady ? 'codi' : 'ghcp';
 }
 
@@ -456,6 +494,8 @@ export function resolveAgentModelIds({
   selectedGhcpModelId,
   cursorModels = [],
   selectedCursorModelId = '',
+  codexModels = [],
+  selectedCodexModelId = '',
 }: {
   installedModels: HFModel[];
   selectedCodiModelId: string;
@@ -463,10 +503,13 @@ export function resolveAgentModelIds({
   selectedGhcpModelId: string;
   cursorModels?: CursorRuntimeState['models'];
   selectedCursorModelId?: string;
+  codexModels?: CodexRuntimeState['models'];
+  selectedCodexModelId?: string;
 }) {
   return {
     codiModelId: resolveCodiModelId(installedModels, selectedCodiModelId),
     ghcpModelId: resolveGhcpModelId(copilotModels, selectedGhcpModelId),
     cursorModelId: resolveCursorModelId(cursorModels, selectedCursorModelId),
+    codexModelId: resolveCodexModelId(codexModels, selectedCodexModelId),
   };
 }

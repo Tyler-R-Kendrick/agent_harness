@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createCopilotApiMiddleware } from './server/copilotMiddleware';
 import { createCursorApiMiddleware } from './server/cursorMiddleware';
+import { createCodexApiMiddleware } from './server/codexMiddleware';
 import { createSearchApiMiddleware, createWebPageApiMiddleware } from './server/searchMiddleware';
 
 // just-bash/browser imports gunzipSync from node:zlib for gzip/gunzip/zcat.
@@ -34,12 +35,14 @@ const copilotApiPlugin: Plugin = {
   configureServer(server) {
     server.middlewares.use(createCopilotApiMiddleware());
     server.middlewares.use(createCursorApiMiddleware());
+    server.middlewares.use(createCodexApiMiddleware());
     server.middlewares.use(createSearchApiMiddleware());
     server.middlewares.use(createWebPageApiMiddleware());
   },
   configurePreviewServer(server) {
     server.middlewares.use(createCopilotApiMiddleware());
     server.middlewares.use(createCursorApiMiddleware());
+    server.middlewares.use(createCodexApiMiddleware());
     server.middlewares.use(createSearchApiMiddleware());
     server.middlewares.use(createWebPageApiMiddleware());
   },
@@ -81,6 +84,18 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../harness-core/src/index.ts'),
       },
       {
+        find: '@agent-harness/ext-agent-skills',
+        replacement: path.resolve(__dirname, '../ext/agent-skills/src/index.ts'),
+      },
+      {
+        find: '@agent-harness/ext-agents-md',
+        replacement: path.resolve(__dirname, '../ext/agents-md/src/index.ts'),
+      },
+      {
+        find: '@agent-harness/ext-design-md',
+        replacement: path.resolve(__dirname, '../ext/design-md/src/index.ts'),
+      },
+      {
         find: 'ralph-loop',
         replacement: path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
       },
@@ -109,7 +124,7 @@ export default defineConfig({
   build: {
     target: 'es2020',
     sourcemap: true,
-    chunkSizeWarningLimit: 3200,
+    chunkSizeWarningLimit: 9000,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),

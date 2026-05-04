@@ -64,13 +64,31 @@ async function main() {
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');
+  const rootPackage = JSON.parse(packageJson);
+  assert.ok(rootPackage.workspaces.includes('ext/*'));
+  assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
+  assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
+  assert.equal(rootPackage.scripts['test:extensions'], 'node scripts/run-extension-workspaces.mjs test');
+  assert.equal(rootPackage.scripts['test:coverage:extensions'], 'node scripts/run-extension-workspaces.mjs test:coverage');
   assert.match(packageJson, /"verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
   assert.match(packageJson, /"check:generated-files": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
+  for (const extensionPackagePath of [
+    'ext/agent-skills/package.json',
+    'ext/agents-md/package.json',
+    'ext/design-md/package.json',
+  ]) {
+    const extensionPackage = JSON.parse(await readScript(extensionPackagePath));
+    assert.equal(extensionPackage.scripts.lint, 'tsc -p tsconfig.json --noEmit');
+    assert.equal(extensionPackage.scripts.build, 'tsc -p tsconfig.json --noEmit');
+    assert.match(extensionPackage.scripts.test, /vitest run/);
+    assert.match(extensionPackage.scripts['test:coverage'], /vitest run --coverage/);
+  }
   const generatedFilesWrapper = await readScript('scripts/check-generated-files-clean.ps1');
   assert.match(generatedFilesWrapper, /codex-git\.ps1'\) ls-files/);
   assert.match(generatedFilesWrapper, /check-generated-files-clean\.mjs'\) --stdin-lines/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
+  assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
   const previewExtensionPackageJson = JSON.parse(
     await readScript('tools/agent-browser-preview-extension/extension/package.json'),
   );
@@ -113,7 +131,36 @@ async function main() {
   const coverageRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href
   );
+  const extensionRunner = await import(
+    pathToFileURL(path.resolve(repoRoot, 'scripts/run-extension-workspaces.mjs')).href
+  );
+  const extensionFixture = await mkdtemp(path.join(tmpdir(), 'extension-workspaces-'));
+  await mkdir(path.join(extensionFixture, 'ext', 'alpha'), { recursive: true });
+  await mkdir(path.join(extensionFixture, 'ext', 'not-a-package'), { recursive: true });
+  await mkdir(path.join(extensionFixture, 'ext', 'beta'), { recursive: true });
+  await writeJson(path.join(extensionFixture, 'ext', 'alpha', 'package.json'), {
+    name: '@agent-harness/ext-alpha',
+    scripts: { test: 'vitest run' },
+  });
+  await writeJson(path.join(extensionFixture, 'ext', 'beta', 'package.json'), {
+    name: '@agent-harness/ext-beta',
+    scripts: { test: 'vitest run' },
+  });
+  assert.deepEqual(await extensionRunner.discoverExtensionWorkspaces(extensionFixture), [
+    { name: '@agent-harness/ext-alpha', directory: path.join(extensionFixture, 'ext', 'alpha') },
+    { name: '@agent-harness/ext-beta', directory: path.join(extensionFixture, 'ext', 'beta') },
+  ]);
+  assert.deepEqual(extensionRunner.buildWorkspaceScriptArgs('@agent-harness/ext-alpha', 'test:coverage'), [
+    '--workspace',
+    '@agent-harness/ext-alpha',
+    'run',
+    'test:coverage',
+  ]);
+  assert.throws(() => extensionRunner.normalizeRequestedScripts([]), /At least one extension script/);
+  assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
+  assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
+  assert.match(coverageRunnerScript, /runVitestCommandsConcurrently/);
   assert.match(coverageRunnerScript, /runVitestCommandWithRetry/);
   assert.match(coverageRunnerScript, /retrying once/);
   assert.deepEqual(
@@ -185,7 +232,9 @@ async function main() {
     [['a.test.ts', 'b.test.ts', 'c.test.ts'], ['d.test.ts']],
   );
   const coverageFileFixture = await mkdtemp(path.join(tmpdir(), 'agent-browser-coverage-files-'));
+  await mkdir(path.join(coverageFileFixture, 'evals', 'search'), { recursive: true });
   await mkdir(path.join(coverageFileFixture, 'src', 'services'), { recursive: true });
+  await writeFile(path.join(coverageFileFixture, 'evals', 'search', 'agentvWorkflowGate.test.ts'), '');
   await writeFile(path.join(coverageFileFixture, 'src', 'App.integration.test.tsx'), '');
   await writeFile(path.join(coverageFileFixture, 'src', 'App.smoke.test.tsx'), '');
   await writeFile(path.join(coverageFileFixture, 'src', 'services', 'cursorApi.test.ts'), '');
@@ -232,15 +281,27 @@ async function main() {
   const sourceHygieneIndex = verifyScript.indexOf("Label = 'source-hygiene'");
   const validateEvalsIndex = verifyScript.indexOf("Label = 'validate-evals'");
   const testScriptsIndex = verifyScript.indexOf("Label = 'test-scripts'");
+  const evalWorkflowsIndex = verifyScript.indexOf("Label = 'eval-workflows'");
+  const extensionLintIndex = verifyScript.indexOf("Label = 'extension-lint'");
+  const extensionCoverageIndex = verifyScript.indexOf("Label = 'extension-coverage'");
+  const extensionBuildIndex = verifyScript.indexOf("Label = 'extension-build'");
   const lintIndex = verifyScript.indexOf("Label = 'lint'");
   const buildIndex = verifyScript.indexOf("Label = 'build'");
   assert.notEqual(sourceHygieneIndex, -1);
   assert.notEqual(validateEvalsIndex, -1);
   assert.notEqual(testScriptsIndex, -1);
+  assert.notEqual(evalWorkflowsIndex, -1);
+  assert.notEqual(extensionLintIndex, -1);
+  assert.notEqual(extensionCoverageIndex, -1);
+  assert.notEqual(extensionBuildIndex, -1);
   assert.notEqual(lintIndex, -1);
   assert.notEqual(buildIndex, -1);
   assert.ok(sourceHygieneIndex < validateEvalsIndex);
-  assert.ok(testScriptsIndex < lintIndex);
+  assert.ok(testScriptsIndex < evalWorkflowsIndex);
+  assert.ok(evalWorkflowsIndex < extensionLintIndex);
+  assert.ok(extensionLintIndex < extensionCoverageIndex);
+  assert.ok(extensionCoverageIndex < extensionBuildIndex);
+  assert.ok(extensionBuildIndex < lintIndex);
   assert.ok(lintIndex < buildIndex);
   assert.match(verifyScript, /npm warn/i);
   assert.match(verifyScript, /vite:reporter/i);
@@ -248,6 +309,9 @@ async function main() {
   assert.match(verifyScript, /\[System\.IO\.Path\]::GetTempFileName\(\)/);
   assert.match(verifyScript, /Tee-Object -FilePath \$outputFile/);
   assert.match(verifyScript, /Get-Content -LiteralPath \$outputFile -Raw/);
+  assert.match(verifyScript, /\$maxAttempts = 2/);
+  assert.match(verifyScript, /retrying once/);
+  assert.match(verifyScript, /verify:agent-browser starting/);
 
   const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'search-eval-target-bin-'));
   await writeJson(path.join(fixtureRoot, 'package.json'), { name: 'fixture-app', private: true });
