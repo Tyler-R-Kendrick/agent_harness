@@ -41,6 +41,8 @@ export const DEFAULT_TRAJECTORY_CRITIC_SETTINGS: TrajectoryCriticSettings = {
 };
 
 const ERROR_TERMS = /\b(error|failed|failure|exception|timeout|denied|rejected)\b/i;
+const ZERO_PROBLEM_COUNTER_TERMS = /\b(?:0|zero)\s+(?:errors?|fail(?:ed|ures?)|exceptions?|timeouts?|denials?|rejections?)\b/gi;
+const NEGATED_PROBLEM_TERMS = /\b(?:no|without)\s+(?:errors?|failures?|failed(?:\s+\w+)?|exceptions?|timeouts?|denials?|rejections?)\b/gi;
 
 export function isTrajectoryCriticSettings(value: unknown): value is TrajectoryCriticSettings {
   if (!isRecord(value)) return false;
@@ -185,7 +187,10 @@ function reason(
 }
 
 function entryHasErrorText(entry: ProcessEntry): boolean {
-  return ERROR_TERMS.test(`${entry.summary}\n${entry.transcript ?? ''}`);
+  const text = `${entry.summary}\n${entry.transcript ?? ''}`
+    .replace(ZERO_PROBLEM_COUNTER_TERMS, '')
+    .replace(NEGATED_PROBLEM_TERMS, '');
+  return ERROR_TERMS.test(text);
 }
 
 function voteApproves(entry: ProcessEntry): boolean {
