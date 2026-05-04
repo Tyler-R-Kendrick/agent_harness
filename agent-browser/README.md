@@ -79,3 +79,17 @@ If the helper extension was installed during the current session, reload the VS 
 - If the preview did not open automatically, run the `Agent Harness: Open Agent Browser Preview` command.
 - If the forwarded preview URL fails in Codespaces, run `../skills/agent-harness-context/scripts/codespaces-uri.sh --public --check 5174` and retry the preview.
 - If you want to start or debug the dev server manually, use `.vscode/launch.json`.
+
+## Security Model
+
+Shared chat uses QR codes only as untrusted signaling transport. Trust comes from locally generated WebCrypto ECDSA P-256 device identities, a user-confirmed pairing code derived from both device public keys and both SDP hashes, and signed append-only session events.
+
+WebRTC encrypts the peer-to-peer DataChannel transport, but transport encryption is not treated as authorization. Every durable chat/control event is signed by the sending device and the receiver validates schema, session id, membership, monotonic sequence number, replay status, timestamp skew, payload limits, and signature before rendering or mutating session state. Pairing must be explicitly confirmed before durable chat events are accepted.
+
+The QR invite/answer payloads can be substituted, replayed, or tampered with by an attacker. Answer payloads are signed, invite/answer SDP bodies are hashed, and the pairing code confirmation step is what detects QR substitution before the peer is approved.
+
+Private signing keys are generated as non-extractable `CryptoKey` objects. The app attempts to store them in IndexedDB and falls back to memory-only keys with a warning if the browser cannot persist non-extractable keys. Private key material is never stored in localStorage.
+
+Session end is a signed control event that closes the local connection, but it cannot retract messages already delivered to another device. This MVP supports only two devices, uses STUN-only WebRTC, and can fail on restrictive networks without TURN. QR pairing requires physical access to both devices.
+
+XSS is the primary web-app compromise risk: if the origin is compromised, malicious JavaScript can invoke browser-held signing keys even when they are non-extractable. Production deployments must bundle scripts, avoid third-party runtime scripts, render chat text as text rather than HTML, and use the checked-in `public/_headers` CSP, referrer, content-type, and permissions policies or equivalent hosting configuration.

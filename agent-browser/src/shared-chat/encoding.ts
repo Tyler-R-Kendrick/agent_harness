@@ -49,11 +49,15 @@ async function streamToBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8A
   return output;
 }
 
+function asBlobPart(value: Uint8Array): BlobPart {
+  return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+}
+
 export async function deflateBytes(value: Uint8Array): Promise<Uint8Array> {
   if (typeof CompressionStream === 'undefined') {
     return value;
   }
-  const stream = new Blob([value]).stream().pipeThrough(new CompressionStream('deflate'));
+  const stream = new Blob([asBlobPart(value)]).stream().pipeThrough(new CompressionStream('deflate'));
   return streamToBytes(stream as ReadableStream<Uint8Array>);
 }
 
@@ -61,7 +65,7 @@ export async function inflateBytes(value: Uint8Array): Promise<Uint8Array> {
   if (typeof DecompressionStream === 'undefined') {
     return value;
   }
-  const stream = new Blob([value]).stream().pipeThrough(new DecompressionStream('deflate'));
+  const stream = new Blob([asBlobPart(value)]).stream().pipeThrough(new DecompressionStream('deflate'));
   return streamToBytes(stream as ReadableStream<Uint8Array>);
 }
 

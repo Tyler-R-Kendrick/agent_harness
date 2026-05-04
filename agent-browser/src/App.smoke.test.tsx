@@ -96,6 +96,22 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('tree', { name: 'Workspace tree' })).toBeInTheDocument();
   });
 
+  it('opens the secure shared chat QR pairing dialog from the chat header', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+    fireEvent.click(screen.getByRole('button', { name: 'Share chat session' }));
+
+    expect(screen.getByRole('dialog', { name: 'Share chat session' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start shared session/ })).toBeInTheDocument();
+    expect(screen.getByText(/QR is untrusted signaling/i)).toBeInTheDocument();
+  });
+
   it('hydrates installed local models from durable session storage', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(

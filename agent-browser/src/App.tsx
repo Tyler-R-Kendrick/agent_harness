@@ -106,6 +106,7 @@ import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPa
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
 import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
+import { SharedChatModal, type SharedChatApi } from './shared-chat/SharedChatModal';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
 import { fetchCodexState, type CodexModelSummary, type CodexRuntimeState } from './services/codexApi';
@@ -2021,11 +2022,14 @@ function ChatPanel({
   const [activeGenerationSessionId, setActiveGenerationSessionId] = useState<string | null>(null);
   const [activeActivityBySession, setActiveActivityBySession] = useState<Record<string, ActivitySelection | null>>({});
   const [pendingMcpMessage, setPendingMcpMessage] = useState<string | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [sharedChatApi, setSharedChatApi] = useState<SharedChatApi | null>(null);
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
   const terminalInputRef = useRef<HTMLInputElement | null>(null);
   const messagesRef = useRef<ChatMessage[]>([]);
+  const sharedChatApiRef = useRef<SharedChatApi | null>(null);
   const consumedPendingSearchRef = useRef<string | null>(null);
   const browserNotificationApi = useMemo(
     () => createBrowserNotificationApi(typeof window !== 'undefined' ? window.Notification : undefined),
@@ -2395,6 +2399,29 @@ function ChatPanel({
     });
   }
 
+  const handleSharedChatApiChange = useCallback((api: SharedChatApi | null) => {
+    sharedChatApiRef.current = api;
+    setSharedChatApi(api);
+  }, []);
+
+  const appendSharedChatStatus = useCallback((text: string) => {
+    appendSharedMessages([{
+      id: createUniqueId(),
+      role: 'system',
+      status: 'complete',
+      content: text,
+    }]);
+  }, [appendSharedMessages]);
+
+  const appendRemoteSharedChatMessage = useCallback((text: string, peerLabel: string) => {
+    appendSharedMessages([{
+      id: createUniqueId(),
+      role: 'user',
+      status: 'complete',
+      content: `Shared from ${peerLabel}:\n${text}`,
+    }]);
+  }, [appendSharedMessages]);
+
   const appendElicitationCard = useCallback((detail: UserElicitationEventDetail) => {
     const card: NonNullable<ChatMessage['cards']>[number] = {
       app: 'Elicitation',
@@ -2690,6 +2717,11 @@ function ChatPanel({
     const nextMessages = appendPendingLocalTurn(messagesRef.current, text, { userId, assistantId });
     messagesRef.current = nextMessages;
     setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
+    if (sharedChatApiRef.current?.confirmed) {
+      void sharedChatApiRef.current.sendText(trimmedText).catch(() => {
+        onToast({ msg: 'Failed to send shared chat event', type: 'error' });
+      });
+    }
     setInput('');
     resetActiveInputHistoryCursor();
 
@@ -5259,6 +5291,17 @@ function ChatPanel({
             </>
           ) : null}
           <div className="chat-mode-controls">
+            <button
+              type="button"
+              className={`mode-tab mode-action mode-tab-icon${sharedChatApi?.active ? ' active' : ''}`}
+              aria-label="Share chat session"
+              title="Share chat session"
+              data-tooltip={sharedChatApi?.confirmed ? 'Shared session active' : 'Share'}
+              onClick={() => setShareDialogOpen(true)}
+              {...panelTitlebarControlProps}
+            >
+              <Share2 size={13} />
+            </button>
             <div className="chat-mode-tabs" role="tablist" aria-label="Panel mode">
               <button type="button" role="tab" aria-selected={!showBash} aria-label="Chat mode" title="Chat mode" data-tooltip="Chat" className={`mode-tab mode-tab-icon ${!showBash ? 'active' : ''}`} onClick={() => onSwitchMode('agent')} {...panelTitlebarControlProps}><Icon name="sparkles" size={14} /></button>
               <button type="button" role="tab" aria-selected={showBash} aria-label="Terminal mode" title="Terminal mode" data-tooltip="Terminal" className={`mode-tab mode-tab-icon ${showBash ? 'active' : ''}`} onClick={() => onSwitchMode('terminal')} {...panelTitlebarControlProps}><Icon name="terminal" size={14} /></button>
@@ -5268,10 +5311,28 @@ function ChatPanel({
           <button type="button" className="icon-button panel-close-button" aria-label={showBash ? 'Close terminal panel' : 'Close chat panel'} onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
         </div>
       </header>
+      <SharedChatModal
+        open={shareDialogOpen}
+        sessionId={activeChatSessionId}
+        workspaceName={workspaceName}
+        onClose={() => setShareDialogOpen(false)}
+        onApiChange={handleSharedChatApiChange}
+        onRemoteMessage={appendRemoteSharedChatMessage}
+        onStatusMessage={appendSharedChatStatus}
+        onToast={(msg, type) => onToast({ msg, type })}
+        onCopyToClipboard={onCopyToClipboard}
+      />
       <div className="shared-console-body">
         <div className="shared-console-main">
           {!showBash && activeActivityMessage ? (
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
+          ) : null}
+          {!showBash && sharedChatApi?.active ? (
+            <div className="shared-chat-active-banner">
+              <span>Shared session active</span>
+              <strong>{sharedChatApi.confirmed ? 'Pairing confirmed' : 'Pairing pending'}</strong>
+              <button type="button" className="secondary-button" onClick={() => void sharedChatApi.endSession()}>End session</button>
+            </div>
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, activeCursorModelName: activeCursorModel?.name, activeCodexModelName: activeCodexModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
