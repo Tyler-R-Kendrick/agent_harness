@@ -32,7 +32,7 @@ import {
 import { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 import { wrapVoterWithCallbacks } from './chat-agents/voter.js';
 import type { CoreInferenceClient } from 'harness-core';
-import { buildSketchOfThoughtExpertAgentPrompt } from 'harness-core';
+import { buildSketchOfThoughtConstrainedDecoding, buildSketchOfThoughtExpertAgentPrompt } from 'harness-core';
 import { LOGACT_AGENT_LOOP_HOOK_EVENTS } from './hooks.js';
 import type { CoreAgentLoopCallbacks, LogActAgentLoopOptions } from './logactLoopTypes.js';
 
@@ -314,13 +314,6 @@ function createRuntime(options: {
     intentIndex: 0,
     currentVotes: [],
   };
-}
-
-async function buildSketchOfThoughtConstrainedDecoding(
-  sketchOfThought: NonNullable<LogActAgentLoopOptions['sketchOfThought']>,
-) {
-  const sketchModule = await import(/* @vite-ignore */ './sketchOfThought.js');
-  return sketchModule.buildSketchOfThoughtConstrainedDecoding(sketchOfThought);
 }
 
 async function runWorkflowMachine(

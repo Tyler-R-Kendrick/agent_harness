@@ -101,6 +101,7 @@ export {
   type SketchOfThoughtExpertAgentOptions,
   type SketchOfThoughtParadigm,
 } from './expertAgents.js';
+export { buildSketchOfThoughtConstrainedDecoding } from './sketchOfThought.js';
 export {
   resolveSaeMappingsForModel,
   type SaeMapping,
