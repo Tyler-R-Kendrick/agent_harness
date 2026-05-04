@@ -15,6 +15,8 @@ import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, Workspace
 export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
 export const WORKSPACE_FILE_STORAGE_DEBOUNCE_MS = 120;
 
+const DEFAULT_SYMPHONY_PLUGIN_PATH = '.agents/plugins/symphony/agent-harness.plugin.json';
+
 function slugify(value: string) {
   return value
     .trim()
@@ -30,7 +32,43 @@ function nowIso() {
 export function createDefaultWorkspaceFiles(updatedAt = nowIso()): WorkspaceFile[] {
   return [
     ...createDefaultWorkspaceMemoryFiles(updatedAt),
+    createDefaultSymphonyPluginManifest(updatedAt),
   ];
+}
+
+export function createDefaultSymphonyPluginManifest(updatedAt = nowIso()): WorkspaceFile {
+  return {
+    path: DEFAULT_SYMPHONY_PLUGIN_PATH,
+    updatedAt,
+    content: [
+      '{',
+      '  "schemaVersion": 1,',
+      '  "id": "agent-harness.ext.symphony",',
+      '  "name": "Symphony workflow orchestration",',
+      '  "version": "0.1.0",',
+      '  "description": "Loads WORKFLOW.md assets and optional Symphony orchestration examples as a runtime extension.",',
+      '  "entrypoint": {',
+      '    "module": "./src/index.ts",',
+      '    "export": "createSymphonyPlugin"',
+      '  },',
+      '  "capabilities": [',
+      '    {',
+      '      "kind": "hook",',
+      '      "id": "symphony.workflow-md",',
+      '      "description": "Prepends selected WORKFLOW.md orchestration guidance before model inference."',
+      '    }',
+      '  ]',
+      '}',
+    ].join('\n'),
+  };
+}
+
+export function mergeDefaultWorkspaceFiles(files: WorkspaceFile[], updatedAt = nowIso()): WorkspaceFile[] {
+  const withMemory = mergeDefaultWorkspaceMemoryFiles(files);
+  const hasDefaultSymphonyPlugin = withMemory.some((file) => file.path === DEFAULT_SYMPHONY_PLUGIN_PATH);
+  return hasDefaultSymphonyPlugin
+    ? withMemory
+    : [...withMemory, createDefaultSymphonyPluginManifest(updatedAt)];
 }
 
 export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''): WorkspaceFile {
@@ -158,7 +196,7 @@ export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, Works
         && typeof entry.content === 'string'
         && typeof entry.updatedAt === 'string'
       ));
-      return [workspaceId, mergeDefaultWorkspaceMemoryFiles(storedFiles)];
+      return [workspaceId, mergeDefaultWorkspaceFiles(storedFiles)];
     }));
   } catch {
     return fallback;

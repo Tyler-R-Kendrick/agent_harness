@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.symphony",
+  "name": "Symphony workflow orchestration",
+  "version": "0.1.0",
+  "description": "Loads WORKFLOW.md assets and optional Symphony orchestration examples as a runtime extension.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createSymphonyPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "hook",
+      "id": "symphony.workflow-md",
+      "event": {
+        "type": "plugin",
+        "name": "agent-harness.ext.symphony.before-llm-messages"
+      },
+      "description": "Prepends selected WORKFLOW.md orchestration guidance before model inference."
+    },
+    {
+      "kind": "asset",
+      "id": "symphony.board",
+      "description": "Provides the extracted Symphony board model and example Agent Browser surface."
+    }
+  ],
+  "events": [
+    {
+      "type": "plugin",
+      "name": "agent-harness.ext.symphony.before-llm-messages",
+      "description": "Runs before LLM message preparation when the Symphony plugin is loaded."
+    }
+  ],
+  "assets": [
+    {
+      "kind": "example",
+      "path": "./examples/agent-browser-symphony",
+      "description": "Former Agent Browser Symphony task-board surface."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read",
+      "reason": "Reads selected WORKFLOW.md files and plugin-owned workspace assets."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

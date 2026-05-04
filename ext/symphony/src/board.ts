@@ -272,7 +272,7 @@ export function moveSymphonyTask(
       agent: nextAgent,
       updatedAt: now,
       activity: [
-        activity(`${task.id}-move-${now}`, lane === 'merging' ? 'merge' : 'status', `Moved to ${LANE_TITLES.get(lane) ?? lane}`, `Status changed from ${LANE_TITLES.get(task.lane) ?? task.lane}.`, now),
+        activity(`${task.id}-move-${now}`, lane === 'merging' ? 'merge' : 'status', `Moved to ${LANE_TITLES.get(lane)!}`, `Status changed from ${LANE_TITLES.get(task.lane)!}.`, now),
         ...task.activity,
       ],
     };

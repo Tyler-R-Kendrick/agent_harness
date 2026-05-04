@@ -37,7 +37,7 @@ import {
   type SymphonyLaneDefinition,
   type SymphonyLaneId,
   type SymphonyTask,
-} from './symphonyBoard';
+} from '../../src/board.js';
 
 export interface SymphonyPanelSession {
   id: string;

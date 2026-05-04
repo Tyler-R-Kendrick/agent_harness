@@ -62,13 +62,17 @@ manifests:
     "version": "0.1.0",
     "description": "Registers one optional harness feature.",
     "manifest": "./example/agent-harness.plugin.json",
-    "source": { "type": "local", "path": "./example" }
+    "source": { "type": "local", "path": "./example" },
+    "default": true
   }]
 }
 ```
 
 This mirrors marketplace-style discovery: the catalog describes what can be
 installed, while the plugin manifest describes what will be loaded.
+Plugins marked `default: true` are intended for hosts to preinstall in new
+workspace state while still loading through the plugin system rather than as
+compiled-in product panels.
 
 ## Renderer and pane contributions
 
@@ -151,3 +155,5 @@ plugin id to avoid collisions.
 - `ext/agent-skills`: optional `.agents/skills/*/SKILL.md` loader.
 - `ext/agents-md`: optional `AGENTS.md` prompt-context loader.
 - `ext/design-md`: optional `DESIGN.md` guidance and token tooling.
+- `ext/symphony`: default `WORKFLOW.md` prompt-context loader with optional
+  Symphony orchestration examples.
