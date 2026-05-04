@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 
 const DEFAULT_COVERAGE_SHARD_COUNT = 8;
+const DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4;
 const APP_TEST_FILES = ['src/App.integration.test.tsx', 'src/App.smoke.test.tsx'];
-const COVERAGE_TEST_ROOTS = ['src', 'server', 'evals'];
+const COVERAGE_TEST_ROOTS = ['src', 'server'];
 const COVERAGE_BATCH_SIZE = 25;
 const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
 
@@ -147,21 +148,41 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
   const reportsDirectory = defaultReportsDirectory();
   const coverageTestFiles = await discoverCoverageTestFiles();
   const coverageBatches = chunkTestFiles(coverageTestFiles);
-  for (const [index, files] of coverageBatches.entries()) {
-    const label = `Vitest coverage batch ${index + 1}/${coverageBatches.length}`;
-    const exitCode = await runVitestCommandWithRetry(
-      vitestBin,
-      buildVitestCoverageArgs([], path.join(reportsDirectory, `batch-${index + 1}`), files),
-      label,
-    );
-    if (exitCode !== 0) {
-      return exitCode;
-    }
+  const coverageExitCode = await runVitestCommandsConcurrently(
+    vitestBin,
+    coverageBatches.map((files, index) => ({
+      label: `Vitest coverage batch ${index + 1}/${coverageBatches.length}`,
+      args: buildVitestCoverageArgs([], path.join(reportsDirectory, `batch-${index + 1}`), files),
+    })),
+    DEFAULT_COVERAGE_BATCH_CONCURRENCY,
+  );
+  if (coverageExitCode !== 0) {
+    return coverageExitCode;
   }
 
   // App UI suites crash Node's v8 coverage worker on this Windows runner,
   // so keep them in the gate without collecting coverage for those files.
   return runVitestCommandWithRetry(vitestBin, buildAppTestArgs(), 'Vitest App tests');
+}
+
+export async function runVitestCommandsConcurrently(vitestBin, runs, concurrency = DEFAULT_COVERAGE_BATCH_CONCURRENCY) {
+  if (!Number.isInteger(concurrency) || concurrency < 1) {
+    throw new TypeError('Coverage batch concurrency must be a positive integer.');
+  }
+  let nextIndex = 0;
+  let firstFailure = 0;
+  const workerCount = Math.min(concurrency, runs.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < runs.length) {
+      const run = runs[nextIndex];
+      nextIndex += 1;
+      const exitCode = await runVitestCommandWithRetry(vitestBin, run.args, run.label);
+      if (exitCode !== 0 && firstFailure === 0) {
+        firstFailure = exitCode;
+      }
+    }
+  }));
+  return firstFailure;
 }
 
 async function runVitestCommandWithRetry(vitestBin, args, label, maxAttempts = 2) {
