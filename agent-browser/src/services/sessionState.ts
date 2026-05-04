@@ -13,6 +13,12 @@ import type { WorkspaceViewState } from './workspaceTree';
 import { assertHarnessElementAllowedByCatalog } from '../features/harness-ui/harnessCatalog';
 import type { HarnessAppSpec, HarnessElement } from '../features/harness-ui/types';
 import type { ChatMessage, NodeKind, NodeType, TreeNode } from '../types';
+import { isArtifactPanelSelection } from './artifacts';
+
+export {
+  isArtifactContextBySession,
+  isArtifactsByWorkspace,
+} from './artifacts';
 
 export const STORAGE_KEYS = {
   // localStorage — durable
@@ -21,6 +27,8 @@ export const STORAGE_KEYS = {
   workspaceViewStateByWorkspace: 'agent-browser.workspace-view-state-by-workspace',
   chatMessagesBySession: 'agent-browser.chat-messages-by-session',
   chatHistoryBySession: 'agent-browser.chat-history-by-session',
+  artifactsByWorkspace: 'agent-browser.artifacts-by-workspace',
+  artifactContextBySession: 'agent-browser.artifact-context-by-session',
   harnessSpecsByWorkspace: 'agent-browser.harness-specs-by-workspace',
   symphonyBoardsByWorkspace: 'agent-browser.symphony-boards-by-workspace',
   browserNotificationSettings: 'agent-browser.browser-notification-settings',
@@ -230,6 +238,9 @@ export function isTreeNode(value: unknown): value is TreeNode {
     && isOptionalString(node.color)
     && isOptionalString(node.filePath)
     && isOptionalBoolean(node.isReference)
+    && isOptionalString(node.artifactId)
+    && isOptionalString(node.artifactFilePath)
+    && isOptionalString(node.artifactReferenceId)
     && isOptionalBoolean(node.muted)
     && (node.children === undefined || (Array.isArray(node.children) && node.children.every(isTreeNode)))
   );
@@ -245,6 +256,7 @@ function isWorkspaceViewState(value: unknown): value is WorkspaceViewState {
     && isStringArray(value.activeSessionIds)
     && isStringArray(value.mountedSessionFsIds)
     && isStringArray(value.panelOrder)
+    && (value.activeArtifactPanel === undefined || value.activeArtifactPanel === null || isArtifactPanelSelection(value.activeArtifactPanel))
   );
 }
 

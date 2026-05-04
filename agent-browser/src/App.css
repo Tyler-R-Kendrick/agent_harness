@@ -2547,6 +2547,44 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #fca5a5;
   font-size: 11px;
 }
+.artifact-viewer-body {
+  padding-top: 0;
+}
+.artifact-file-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.artifact-file-tab {
+  min-height: 28px;
+  max-width: 220px;
+  padding: 0 9px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  color: #94a3b8;
+  font-family: 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artifact-file-tab.active {
+  border-color: rgba(125, 211, 252, 0.42);
+  background: rgba(14, 99, 156, 0.18);
+  color: #dbeafe;
+}
+.artifact-preview-frame {
+  flex: 1;
+  min-height: 240px;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: #ffffff;
+}
+.artifact-source-field {
+  border-radius: 8px;
+}
 .closed-panels-placeholder {
   height: 100%;
   display: grid;
@@ -3146,6 +3184,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .browser-split-view .panel-drag-cell .page-overlay,
 .browser-split-view .panel-drag-cell .chat-panel,
 .browser-split-view .panel-drag-cell .file-editor-panel,
+.browser-split-view .panel-drag-cell .artifact-viewer-panel,
 .browser-split-view .panel-drag-cell .harness-dashboard-panel {
   flex: 1;
   min-height: 0;
@@ -3193,6 +3232,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .browser-split-view > .page-overlay:last-child,
 .browser-split-view > .chat-panel:last-child,
 .browser-split-view > .file-editor-panel:last-child,
+.browser-split-view > .artifact-viewer-panel:last-child,
 .browser-split-view > .harness-dashboard-panel:last-child {
   border-right: none;
 }

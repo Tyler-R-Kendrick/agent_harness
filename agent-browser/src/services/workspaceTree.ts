@@ -1,5 +1,6 @@
 import { createUniqueId } from '../utils/uniqueId';
 import type { NodeKind, TreeNode } from '../types';
+import type { ArtifactPanelSelection } from './artifacts';
 
 export type FlatTreeItem = { node: TreeNode; depth: number };
 
@@ -11,6 +12,7 @@ export type WorkspaceViewState = {
   activeSessionIds: string[];
   mountedSessionFsIds: string[];
   panelOrder: string[];
+  activeArtifactPanel?: ArtifactPanelSelection | null;
 };
 
 export const WORKSPACE_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#a78bfa', '#fb7185'] as const;
@@ -237,6 +239,7 @@ export function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewStat
     activeSessionIds: [],
     mountedSessionFsIds: sessionIds,
     panelOrder: [],
+    activeArtifactPanel: null,
   };
 }
 
@@ -263,6 +266,7 @@ export function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: Workspa
     activeSessionIds,
     mountedSessionFsIds,
     panelOrder: (base.panelOrder ?? []).filter((id) => typeof id === 'string' && id.trim().length > 0),
+    activeArtifactPanel: normalizeArtifactPanelSelection(base.activeArtifactPanel),
   };
 }
 
@@ -285,7 +289,23 @@ export function workspaceViewStateEquals(left: WorkspaceViewState, right: Worksp
     && left.mountedSessionFsIds.length === right.mountedSessionFsIds.length
     && left.mountedSessionFsIds.every((id, index) => id === right.mountedSessionFsIds[index])
     && left.panelOrder.length === right.panelOrder.length
-    && left.panelOrder.every((id, index) => id === right.panelOrder[index]);
+    && left.panelOrder.every((id, index) => id === right.panelOrder[index])
+    && artifactPanelSelectionEquals(left.activeArtifactPanel ?? null, right.activeArtifactPanel ?? null);
+}
+
+function normalizeArtifactPanelSelection(value: unknown): ArtifactPanelSelection | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Partial<ArtifactPanelSelection>;
+  if (typeof candidate.artifactId !== 'string') return null;
+  return {
+    artifactId: candidate.artifactId,
+    filePath: typeof candidate.filePath === 'string' ? candidate.filePath : null,
+  };
+}
+
+function artifactPanelSelectionEquals(left: ArtifactPanelSelection | null, right: ArtifactPanelSelection | null): boolean {
+  if (left === null || right === null) return left === right;
+  return left.artifactId === right.artifactId && (left.filePath ?? null) === (right.filePath ?? null);
 }
 
 export function renderPaneIdForNode(node: TreeNode): string | null {

@@ -595,10 +595,12 @@ export function normalizeSessionFsMutationResult(
 export function normalizeWorktreeItems(items: readonly WorkspaceMcpWorktreeItem[]) {
   const priority: Record<WorkspaceMcpWorktreeItemType, number> = {
     'workspace-file': 0,
-    'browser-page': 1,
-    session: 2,
-    'session-fs-entry': 3,
-    clipboard: 4,
+    artifact: 1,
+    'artifact-file': 2,
+    'browser-page': 3,
+    session: 4,
+    'session-fs-entry': 5,
+    clipboard: 6,
   };
 
   return [...items].sort((left, right) => {

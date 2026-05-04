@@ -19,6 +19,7 @@ export type ToolGroup =
   | 'sessions-worktree-mcp'
   | 'files-worktree-mcp'
   | 'clipboard-worktree-mcp'
+  | 'artifacts-mcp'
   | 'user-context-mcp'
   | 'secrets-mcp'
   | 'web-search-mcp';
@@ -51,6 +52,7 @@ const TOOL_GROUP_DESCRIPTIONS: Readonly<Record<ToolGroup, string>> = {
   'sessions-worktree-mcp': 'Session management, agent switching, and conversation control tools.',
   'files-worktree-mcp': 'Workspace and session filesystem tools for reading and editing files.',
   'clipboard-worktree-mcp': 'Clipboard inspection and restore tools.',
+  'artifacts-mcp': 'Artifact tools for standalone, versioned, downloadable workspace outputs.',
   'user-context-mcp': 'User context tools for app memory, browser location, and eliciting missing data.',
   'secrets-mcp': 'Secret request tools that return secret-ref handles without exposing raw values.',
   'web-search-mcp': 'Web search tools for current external facts, source snippets, and local recommendations.',

@@ -25,6 +25,7 @@ import {
   Clipboard,
   Copy,
   Cpu,
+  Download,
   File,
   Folder,
   FolderInput,
@@ -196,7 +197,15 @@ import {
   summarizeDefaultExtensionRuntime,
   type DefaultExtensionRuntime,
 } from './services/defaultExtensions';
-import { buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import { buildArtifactDriveNodes, buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import {
+  buildArtifactPromptContext,
+  createArtifact,
+  createArtifactDownloadPayload,
+  updateArtifactFiles,
+  type AgentArtifact,
+  type ArtifactFile,
+} from './services/artifacts';
 import {
   DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
   buildChatCompletionNotification,
@@ -220,6 +229,8 @@ import {
 } from './services/browserLocation';
 import {
   STORAGE_KEYS,
+  isArtifactContextBySession,
+  isArtifactsByWorkspace,
   isChatMessagesBySession,
   isHarnessAppSpecRecord,
   isString,
@@ -319,7 +330,8 @@ type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
 type FilePanel = { type: 'file'; file: WorkspaceFile };
-type Panel = DashboardPanel | BrowserPanel | SessionPanel | FilePanel;
+type ArtifactPanel = { type: 'artifact'; artifact: AgentArtifact; file: ArtifactFile | null };
+type Panel = DashboardPanel | BrowserPanel | SessionPanel | FilePanel | ArtifactPanel;
 type PanelDragHandleProps = React.HTMLAttributes<HTMLElement>;
 type SessionMcpRuntimeState = {
   mode: 'agent' | 'terminal';
@@ -576,6 +588,7 @@ const icons = {
   folderOpen: FolderOpen,
   hardDrive: HardDrive,
   file: File,
+  download: Download,
   link: Link,
   x: X,
   send: SendHorizontal,
@@ -1371,6 +1384,95 @@ function FileEditorPanel({
   );
 }
 
+function isPreviewableArtifactFile(file: ArtifactFile | null): boolean {
+  if (!file) return false;
+  const mediaType = file.mediaType?.toLowerCase() ?? '';
+  const path = file.path.toLowerCase();
+  return mediaType === 'text/html' || mediaType === 'image/svg+xml' || path.endsWith('.html') || path.endsWith('.htm') || path.endsWith('.svg');
+}
+
+function ArtifactViewerPanel({
+  artifact,
+  file,
+  onSelectFile,
+  onDownload,
+  onAttach,
+  onOpenSession,
+  onClose,
+  dragHandleProps,
+}: {
+  artifact: AgentArtifact;
+  file: ArtifactFile | null;
+  onSelectFile: (filePath: string) => void;
+  onDownload: () => void;
+  onAttach: () => void;
+  onOpenSession: () => void;
+  onClose: () => void;
+  dragHandleProps?: PanelDragHandleProps;
+}) {
+  const canPreview = isPreviewableArtifactFile(file);
+  return (
+    <section className="file-editor-panel artifact-viewer-panel" aria-label="Artifact viewer">
+      <header className={`file-editor-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
+        <div className="file-editor-heading panel-titlebar-heading">
+          <Icon name="layers" size={14} color="#a5b4fc" />
+          <span className="file-editor-title">{artifact.title}</span>
+        </div>
+        <button type="button" className="icon-button panel-close-button" aria-label="Close artifact" onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+      </header>
+      <div className="file-editor-body artifact-viewer-body">
+        <div className="file-editor-chrome">
+          <div className="file-editor-pathbar file-editor-path-display shared-input-shell">
+            <Icon name="file" size={12} color="#7d8590" />
+            <span className="file-editor-path-text">{file ? `//artifacts/${artifact.id}/${file.path}` : `//artifacts/${artifact.id}`}</span>
+          </div>
+          <div className="file-editor-toolbar">
+            <button type="button" className="file-editor-action" aria-label="Download artifact" title="Download artifact" onClick={onDownload}><Icon name="download" size={14} /></button>
+            <button type="button" className="file-editor-action" aria-label="Attach artifact to session" title="Attach artifact to session" onClick={onAttach}><Icon name="link" size={14} /></button>
+            <button type="button" className="file-editor-action" aria-label="Open session with artifact" title="Open session with artifact" onClick={onOpenSession}><Icon name="messageSquare" size={14} /></button>
+          </div>
+        </div>
+        {artifact.files.length > 1 ? (
+          <div className="artifact-file-tabs" role="tablist" aria-label="Artifact files">
+            {artifact.files.map((artifactFile) => (
+              <button
+                key={artifactFile.path}
+                type="button"
+                role="tab"
+                aria-selected={artifactFile.path === file?.path}
+                className={`artifact-file-tab${artifactFile.path === file?.path ? ' active' : ''}`}
+                onClick={() => onSelectFile(artifactFile.path)}
+              >
+                {artifactFile.path}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {file ? (
+          canPreview ? (
+            <iframe
+              className="artifact-preview-frame"
+              title={`${artifact.title}: ${file.path}`}
+              sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+              srcDoc={file.content}
+            />
+          ) : (
+            <label className="file-editor-field file-editor-content-field artifact-source-field">
+              <span className="sr-only">Artifact content</span>
+              <textarea aria-label="Artifact content" value={file.content} readOnly />
+            </label>
+          )
+        ) : (
+          <div className="page-empty">
+            <Icon name="layers" size={32} color="#3f3f46" />
+            <span>Artifact unavailable</span>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ClosedPanelsPlaceholder({ workspaceName, onNewSession }: { workspaceName: string; onNewSession: () => void }) {
   return (
     <section className="closed-panels-placeholder" aria-label="No panels open">
@@ -1798,6 +1900,8 @@ function ChatPanel({
   onToast,
   workspaceName,
   workspaceFiles,
+  artifactPromptContext,
+  attachedArtifactCount,
   workspaceCapabilities,
   defaultExtensions,
   evaluationAgents,
@@ -1833,6 +1937,8 @@ function ChatPanel({
   onToast: (toast: Exclude<ToastState, null>) => void;
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
+  artifactPromptContext?: string;
+  attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
   evaluationAgents: CustomEvaluationAgent[];
@@ -1961,9 +2067,10 @@ function ChatPanel({
   const workspacePromptContext = useMemo(
     () => [
       buildWorkspacePromptContext(workspaceFiles),
+      artifactPromptContext,
       locationPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [locationPromptContext, workspaceFiles],
+    [artifactPromptContext, locationPromptContext, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -2079,7 +2186,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -6078,6 +6185,7 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.agent-skills')) return 'sparkles';
   if (extensionId.endsWith('.agents-md')) return 'file';
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
+  if (extensionId.endsWith('.artifacts')) return 'layers';
   return 'puzzle';
 }
 
@@ -6124,7 +6232,7 @@ function ExtensionsPanel({
             </div>
             <div className="marketplace-card-body">
               <strong>{extension.manifest.name}</strong>
-              <span className="marketplace-card-author">{extension.marketplace.source.path ?? extension.manifest.entrypoint.module}</span>
+              <span className="marketplace-card-author">{extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.manifest.id}</span>
               <p className="marketplace-card-desc">{extension.manifest.description}</p>
               <div className="marketplace-card-meta">
                 {(extension.manifest.capabilities ?? []).map((capability) => (
@@ -7039,7 +7147,7 @@ function inferSessionFsEntryKind(paths: readonly string[], path: string): 'file'
   return /\.[^/]+$/.test(normalizedPath) ? 'file' : 'folder';
 }
 
-function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, activeSessionIds, editingFilePath, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onOpenFile, onAddFile, onAddAgent, onAddBrowserTab, onNodeContextMenu, items }: { root: TreeNode; workspaceByNodeId: Map<string, string>; activeWorkspaceId: string; openTabIds: string[]; activeSessionIds: string[]; editingFilePath: string | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string, multi?: boolean) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; onAddBrowserTab: (workspaceId: string) => void; onNodeContextMenu: (x: number, y: number, node: TreeNode) => void; items: FlatTreeItem[] }) {
+function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, activeSessionIds, editingFilePath, activeArtifactPanel, cursorId, selectedIds, onCursorChange, onToggleFolder, onOpenTab, onOpenFile, onAddFile, onAddAgent, onAddBrowserTab, onNodeContextMenu, items }: { root: TreeNode; workspaceByNodeId: Map<string, string>; activeWorkspaceId: string; openTabIds: string[]; activeSessionIds: string[]; editingFilePath: string | null; activeArtifactPanel?: { artifactId: string; filePath?: string | null } | null; cursorId: string | null; selectedIds: string[]; onCursorChange: (id: string) => void; onToggleFolder: (id: string) => void; onOpenTab: (id: string, multi?: boolean) => void; onOpenFile: (id: string) => void; onAddFile: (workspaceId: string) => void; onAddAgent: (workspaceId: string) => void; onAddBrowserTab: (workspaceId: string) => void; onNodeContextMenu: (x: number, y: number, node: TreeNode) => void; items: FlatTreeItem[] }) {
   return (
     <div className="tree-panel" role="tree" aria-label="Workspace tree">
       {items.map(({ node, depth }) => {
@@ -7048,20 +7156,27 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
         const isFile = node.type === 'file';
         const isActiveWs = isWorkspace && node.id === activeWorkspaceId;
         const isEditingFile = isFile && node.filePath === editingFilePath;
+        const isArtifactNode = Boolean(node.artifactId || node.artifactReferenceId);
+        const nodeArtifactId = node.artifactReferenceId ?? node.artifactId;
+        const isActiveArtifact = Boolean(
+          nodeArtifactId
+          && activeArtifactPanel?.artifactId === nodeArtifactId
+          && (!node.artifactFilePath || activeArtifactPanel.filePath === node.artifactFilePath),
+        );
         const isSelected = selectedIds.includes(node.id);
         const isCursor = cursorId === node.id;
         const tabOpacity = node.type === 'tab' ? (node.memoryTier === 'cold' ? 0.5 : node.memoryTier === 'cool' ? 0.65 : 0.9) : undefined;
         const workspaceParentId = workspaceByNodeId.get(node.id);
         const workspaceParent = workspaceParentId ? getWorkspace(root, workspaceParentId) : null;
         const isVfsNode = node.id.startsWith('vfs:') && !node.nodeKind;
-        const hasContextMenu = node.type === 'tab' || isVfsNode || isFile;
+        const hasContextMenu = node.type === 'tab' || isVfsNode || isFile || isArtifactNode;
         const openEllipsis = (e: React.MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
           const rect = e.currentTarget.getBoundingClientRect();
           onNodeContextMenu(rect.right, rect.bottom, node);
         };
         return (
-          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
+          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile || isActiveArtifact ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
             onContextMenu={hasContextMenu ? (e) => { e.preventDefault(); onNodeContextMenu(e.clientX, e.clientY, node); } : undefined}
           >
             <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
@@ -7113,6 +7228,7 @@ function Toast({ toast }: { toast: ToastState }) {
 function panelKey(panel: Panel): string {
   if (panel.type === 'dashboard') return `dashboard:${panel.workspaceId}`;
   if (panel.type === 'file') return `file:${panel.file.path}`;
+  if (panel.type === 'artifact') return `artifact:${panel.artifact.id}:${panel.file?.path ?? ''}`;
   if (panel.type === 'browser') return `browser:${panel.tab.id}`;
   return `session:${panel.id}`;
 }
@@ -7345,6 +7461,18 @@ function AgentBrowserApp() {
   const slideTimeoutRef = useRef<number>(0);
   const omnibarRef = useRef<HTMLInputElement | null>(null);
   const [workspaceFilesByWorkspace, setWorkspaceFilesByWorkspace] = useState<Record<string, WorkspaceFile[]>>(() => loadWorkspaceFiles([...INITIAL_WORKSPACE_IDS]));
+  const [artifactsByWorkspace, setArtifactsByWorkspace] = useStoredState<Record<string, AgentArtifact[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.artifactsByWorkspace,
+    isArtifactsByWorkspace,
+    {},
+  );
+  const [artifactContextBySession, setArtifactContextBySession] = useStoredState<Record<string, string[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.artifactContextBySession,
+    isArtifactContextBySession,
+    {},
+  );
   const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
     localStorageBackend,
     STORAGE_KEYS.workspaceViewStateByWorkspace,
@@ -7486,6 +7614,7 @@ function AgentBrowserApp() {
         activeMode: 'agent',
         activeSessionIds: [],
         mountedSessionFsIds: [],
+        activeArtifactPanel: null,
         panelOrder: [],
       };
   const activeSessionMode = activeWorkspaceViewState.activeMode;
@@ -7533,6 +7662,14 @@ function AgentBrowserApp() {
     .filter((tab): tab is TreeNode => !!tab && tab.type === 'tab' && (tab.nodeKind ?? 'browser') === 'browser');
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
+  const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? [];
+  const activeArtifactPanelSelection = activeWorkspaceViewState.activeArtifactPanel ?? null;
+  const activeArtifactPanelArtifact = activeArtifactPanelSelection
+    ? activeArtifacts.find((artifact) => artifact.id === activeArtifactPanelSelection.artifactId) ?? null
+    : null;
+  const activeArtifactPanelFile = activeArtifactPanelArtifact
+    ? activeArtifactPanelArtifact.files.find((file) => file.path === activeArtifactPanelSelection?.filePath) ?? activeArtifactPanelArtifact.files[0] ?? null
+    : null;
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
   useEffect(() => {
@@ -7619,7 +7756,7 @@ function AgentBrowserApp() {
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
-    const hasActiveRenderPane = Boolean(editingFile || openBrowserTabs.length || activeSessionIds.length);
+    const hasActiveRenderPane = Boolean(editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
 
     if (activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane) {
       panes.push({
@@ -7637,6 +7774,21 @@ function AgentBrowserApp() {
         itemId: editingFile.path,
         label: editingFile.path,
         path: editingFile.path,
+      });
+    }
+
+    if (activeArtifactPanelArtifact) {
+      const path = activeArtifactPanelFile
+        ? `//artifacts/${activeArtifactPanelArtifact.id}/${activeArtifactPanelFile.path}`
+        : `//artifacts/${activeArtifactPanelArtifact.id}`;
+      panes.push({
+        id: `artifact:${activeArtifactPanelArtifact.id}:${activeArtifactPanelFile?.path ?? ''}`,
+        paneType: 'artifact',
+        itemId: activeArtifactPanelArtifact.id,
+        artifactId: activeArtifactPanelArtifact.id,
+        artifactFilePath: activeArtifactPanelFile?.path,
+        label: activeArtifactPanelArtifact.title,
+        path,
       });
     }
 
@@ -7663,6 +7815,8 @@ function AgentBrowserApp() {
     return orderRenderPanes(panes, activeWorkspaceViewState.panelOrder ?? []);
   }, [
     activeSessionIds,
+    activeArtifactPanelArtifact,
+    activeArtifactPanelFile,
     activeWorkspace.name,
     activeWorkspaceSessions,
     activeWorkspaceId,
@@ -7844,6 +7998,7 @@ function AgentBrowserApp() {
         const normalizedWorkspace = ensureWorkspaceCategories(ws);
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
         const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
+        const artifactNodes = buildArtifactDriveNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? []);
         const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
         const mountedSessionIds = normalizeWorkspaceViewEntry(normalizedWorkspace, workspaceViewStateByWorkspace[ws.id]).mountedSessionFsIds;
         const terminalFsNodes: TreeNode[] = (sessionCategory?.children ?? [])
@@ -7858,13 +8013,13 @@ function AgentBrowserApp() {
             children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? [], terminalFsFileContentsBySession[terminalNode.id]),
           }));
         const nextChildren = (normalizedWorkspace.children ?? []).map((child) => child.nodeKind === 'files'
-          ? { ...child, children: [...fileNodes, ...terminalFsNodes] }
+          ? { ...child, children: [...artifactNodes, ...fileNodes, ...terminalFsNodes] }
           : child);
         return { ...normalizedWorkspace, children: nextChildren };
       });
       return { ...current, children: updated };
     });
-  }, [terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
+  }, [artifactsByWorkspace, terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
 
   // ── System clipboard detection ────────────────────────────────────────────
   useEffect(() => {
@@ -8035,6 +8190,7 @@ function AgentBrowserApp() {
         activeMode: 'agent' as const,
         activeSessionIds: [],
         mountedSessionFsIds: [],
+        activeArtifactPanel: null,
         panelOrder: [],
       };
       return {
@@ -8079,6 +8235,88 @@ function AgentBrowserApp() {
     });
     switchSidebarPanel('workspaces');
   }, [activeWorkspace, activeWorkspaceId, setWorkspaceViewStateByWorkspace, switchSidebarPanel]);
+
+  const openArtifactPanel = useCallback((artifactId: string, filePath: string | null = null, workspaceId = activeWorkspaceId) => {
+    const workspace = getWorkspace(root, workspaceId);
+    if (!workspace) return;
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[workspaceId] ?? createWorkspaceViewEntry(workspace);
+      return {
+        ...current,
+        [workspaceId]: {
+          ...existing,
+          activeArtifactPanel: { artifactId, filePath },
+        },
+      };
+    });
+    switchWorkspace(workspaceId);
+  }, [activeWorkspaceId, root, setWorkspaceViewStateByWorkspace, switchWorkspace]);
+
+  const closeActiveArtifactPanel = useCallback(() => {
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      const paneId = activeArtifactPanelArtifact
+        ? `artifact:${activeArtifactPanelArtifact.id}:${activeArtifactPanelFile?.path ?? ''}`
+        : null;
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          activeArtifactPanel: null,
+          panelOrder: paneId ? existing.panelOrder.filter((id) => id !== paneId) : existing.panelOrder,
+        },
+      };
+    });
+  }, [activeArtifactPanelArtifact, activeArtifactPanelFile, activeWorkspace, activeWorkspaceId, setWorkspaceViewStateByWorkspace]);
+
+  const attachArtifactToSession = useCallback((artifactId: string, sessionId?: string) => {
+    const artifact = activeArtifacts.find((candidate) => candidate.id === artifactId);
+    const targetSessionId = sessionId ?? activeSessionIds[0] ?? addSessionToWorkspace(activeWorkspaceId, artifact ? `Artifact: ${artifact.title}` : undefined)?.id;
+    if (!targetSessionId) {
+      setToast({ msg: 'Create a session before attaching an artifact', type: 'error' });
+      return;
+    }
+    setArtifactContextBySession((current) => {
+      const existing = current[targetSessionId] ?? [];
+      if (existing.includes(artifactId)) return current;
+      return { ...current, [targetSessionId]: [...existing, artifactId] };
+    });
+    setToast({ msg: `Attached ${artifact?.title ?? artifactId}`, type: 'success' });
+  }, [activeArtifacts, activeSessionIds, activeWorkspaceId, addSessionToWorkspace, setArtifactContextBySession, setToast]);
+
+  const openSessionWithArtifact = useCallback((artifactId: string) => {
+    const artifact = activeArtifacts.find((candidate) => candidate.id === artifactId);
+    const session = addSessionToWorkspace(activeWorkspaceId, artifact ? `Artifact: ${artifact.title}` : undefined);
+    if (!session) {
+      setToast({ msg: 'Unable to create artifact session', type: 'error' });
+      return;
+    }
+    setArtifactContextBySession((current) => ({
+      ...current,
+      [session.id]: [...new Set([...(current[session.id] ?? []), artifactId])],
+    }));
+    setToast({ msg: `Opened ${artifact?.title ?? artifactId} in a new session`, type: 'success' });
+  }, [activeArtifacts, activeWorkspaceId, addSessionToWorkspace, setArtifactContextBySession, setToast]);
+
+  const downloadArtifact = useCallback((artifactId: string) => {
+    const artifact = activeArtifacts.find((candidate) => candidate.id === artifactId);
+    if (!artifact) {
+      setToast({ msg: 'Artifact unavailable', type: 'error' });
+      return;
+    }
+    const payload = createArtifactDownloadPayload(artifact);
+    const blobPart = typeof payload.data === 'string' ? payload.data : payload.data.slice().buffer as ArrayBuffer;
+    const blob = new Blob([blobPart], { type: payload.mediaType });
+    const href = URL.createObjectURL(blob);
+    const linkElement = document.createElement('a');
+    linkElement.href = href;
+    linkElement.download = payload.fileName;
+    document.body.appendChild(linkElement);
+    linkElement.click();
+    linkElement.remove();
+    URL.revokeObjectURL(href);
+    setToast({ msg: `Downloaded ${payload.fileName}`, type: 'success' });
+  }, [activeArtifacts, setToast]);
 
   const addBrowserTabToWorkspace = useCallback((workspaceId: string) => {
     setNewTabWorkspaceId(workspaceId);
@@ -8258,13 +8496,14 @@ function AgentBrowserApp() {
       installedModels: installedModels.map((model) => ({ id: model.id, task: model.task })),
       tabsInWorkspace: countTabs(activeWorkspace),
       workspaceFiles: activeWorkspaceFiles.map((file) => file.path),
+      artifacts: activeArtifacts.map((artifact) => ({ id: artifact.id, title: artifact.title, files: artifact.files.map((file) => file.path) })),
       capabilityFiles: activeWorkspaceFiles
         .filter((file) => file.path.startsWith('.agents/') || file.path.startsWith('.memory/'))
         .map((file) => file.path),
       plugins: activeWorkspaceCapabilities.plugins.map((plugin) => plugin.directory),
       hooks: activeWorkspaceCapabilities.hooks.map((hook) => hook.name),
     },
-  }, [activePanel, activeWorkspace, activeWorkspaceCapabilities, activeWorkspaceFiles, copilotState, cursorState, installedModels, openBrowserTabs]);
+  }, [activeArtifacts, activePanel, activeWorkspace, activeWorkspaceCapabilities, activeWorkspaceFiles, copilotState, cursorState, installedModels, openBrowserTabs]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -8813,6 +9052,23 @@ function AgentBrowserApp() {
     };
   }
 
+  function buildArtifactContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    const artifactId = node.artifactReferenceId ?? node.artifactId ?? '';
+    return {
+      topButtons: [
+        { icon: Download, label: 'Download', onClick: () => downloadArtifact(artifactId) },
+        { icon: Link, label: 'Attach', onClick: () => attachArtifactToSession(artifactId) },
+        { icon: MessageSquare, label: 'New Session', onClick: () => openSessionWithArtifact(artifactId) },
+      ],
+      entries: [
+        { label: 'Open', onClick: () => openArtifactPanel(artifactId, node.artifactFilePath ?? null, findWorkspaceForNode(root, node.id)?.id ?? activeWorkspaceId) },
+        { label: 'History', onClick: () => setHistoryNode(node) },
+        'separator',
+        { label: 'Properties', onClick: () => setPropertiesNode(node) },
+      ],
+    };
+  }
+
   function buildClipboardContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
     return {
       topButtons: [],
@@ -8842,6 +9098,10 @@ function AgentBrowserApp() {
     }
     if (node.nodeKind === 'session') {
       setContextMenu({ x, y, itemId: node.id, itemType: 'session', ...buildSessionContextMenu(node) });
+      return;
+    }
+    if (node.artifactId || node.artifactReferenceId) {
+      setContextMenu({ x, y, itemId: node.id, itemType: node.artifactFilePath ? 'artifact-file' : 'artifact', ...buildArtifactContextMenu(node) });
       return;
     }
     if (node.type === 'file') {
@@ -8885,6 +9145,19 @@ function AgentBrowserApp() {
         modifiedAt: now,
         accessedAt: now,
         identityPermissions: defaultPermissionsFor(['Share', 'Rename', 'Remove']),
+      };
+    }
+    if (node.artifactId || node.artifactReferenceId) {
+      const artifactId = node.artifactReferenceId ?? node.artifactId ?? '';
+      const artifact = activeArtifacts.find((candidate) => candidate.id === artifactId);
+      const file = artifact?.files.find((candidate) => candidate.path === node.artifactFilePath);
+      return {
+        location: node.artifactFilePath ? `//artifacts/${artifactId}/${node.artifactFilePath}` : `//artifacts/${artifactId}`,
+        sizeLabel: file ? `${file.content.length} bytes` : artifact ? `${artifact.files.length} files` : 'N/A',
+        createdAt: artifact ? Date.parse(artifact.createdAt) : now,
+        modifiedAt: artifact ? Date.parse(artifact.updatedAt) : now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor(['Open', 'Download', 'Attach', 'New Session', 'History']),
       };
     }
     // VFS node — use node.name which may be '//session-1-fs' or sub-path name
@@ -8999,6 +9272,13 @@ function AgentBrowserApp() {
       delete bashBySessionRef.current[nodeId];
       removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, nodeId);
       removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatHistoryBySession, isStringArrayRecord, nodeId);
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.artifactContextBySession, isArtifactContextBySession, nodeId);
+      setArtifactContextBySession((current) => {
+        if (!(nodeId in current)) return current;
+        const next = { ...current };
+        delete next[nodeId];
+        return next;
+      });
       setTerminalFsPathsBySession((current) => {
         if (!(nodeId in current)) return current;
         const next = { ...current };
@@ -9092,6 +9372,14 @@ function AgentBrowserApp() {
 
   function handleOpenFileNode(nodeId: string) {
     const node = findNode(root, nodeId);
+    if (node?.artifactReferenceId || node?.artifactId) {
+      const artifactId = node.artifactReferenceId ?? node.artifactId;
+      const workspace = findWorkspaceForNode(root, nodeId);
+      if (artifactId && workspace) {
+        openArtifactPanel(artifactId, node.artifactFilePath ?? null, workspace.id);
+      }
+      return;
+    }
     if (node?.filePath) {
       // Switch to the workspace that owns this file
       const workspace = findWorkspaceForNode(root, nodeId);
@@ -9313,6 +9601,52 @@ function AgentBrowserApp() {
         : { ...current, [activeWorkspaceId]: { ...existing, activeSessionIds: nextIds } };
     });
   }, [activeWorkspace, activeWorkspaceId]);
+
+  const createArtifactFromMcp = useCallback(async (input: {
+    id?: string;
+    title?: string;
+    description?: string;
+    kind?: string;
+    sourceSessionId?: string;
+    references?: readonly string[];
+    files: readonly ArtifactFile[];
+  }) => {
+    const artifact = createArtifact(input, { idFactory: createUniqueId });
+    setArtifactsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: [
+        artifact,
+        ...(current[activeWorkspaceId] ?? []).filter((candidate) => candidate.id !== artifact.id),
+      ],
+    }));
+    openArtifactPanel(artifact.id, artifact.files[0]?.path ?? null, activeWorkspaceId);
+    setToast({ msg: `Created artifact ${artifact.title}`, type: 'success' });
+    return artifact;
+  }, [activeWorkspaceId, openArtifactPanel, setArtifactsByWorkspace, setToast]);
+
+  const updateArtifactFromMcp = useCallback(async (artifactId: string, input: {
+    title?: string;
+    description?: string;
+    kind?: string;
+    references?: readonly string[];
+    files: readonly ArtifactFile[];
+  }) => {
+    const existingArtifact = activeArtifacts.find((candidate) => candidate.id === artifactId);
+    if (!existingArtifact) {
+      throw new DOMException(`Artifact "${artifactId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+    const updatedArtifact = updateArtifactFiles(existingArtifact, input, { idFactory: createUniqueId });
+    setArtifactsByWorkspace((current) => {
+      const artifacts = current[activeWorkspaceId] ?? [];
+      return {
+        ...current,
+        [activeWorkspaceId]: artifacts.map((candidate) => candidate.id === artifactId ? updatedArtifact : candidate),
+      };
+    });
+    openArtifactPanel(updatedArtifact.id, updatedArtifact.files[0]?.path ?? null, activeWorkspaceId);
+    setToast({ msg: `Updated artifact ${updatedArtifact.title}`, type: 'success' });
+    return updatedArtifact;
+  }, [activeArtifacts, activeWorkspace.name, activeWorkspaceId, openArtifactPanel, setArtifactsByWorkspace, setToast]);
 
   const createWorkspaceFileFromMcp = useCallback(async ({ path, content }: { path: string; content: string }) => {
     const nextFile: WorkspaceFile = {
@@ -9783,9 +10117,13 @@ function AgentBrowserApp() {
       });
       return { paneId, closed: true };
     }
+    if (paneId.startsWith('artifact:')) {
+      closeActiveArtifactPanel();
+      return { paneId, closed: true };
+    }
 
     throw new DOMException(`Render pane "${paneId}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
-  }, [activeWorkspace, activeWorkspaceId, closeSessionFromMcp, handleRemoveFileNode, readBrowserPageFromWorkspace]);
+  }, [activeWorkspace, activeWorkspaceId, closeActiveArtifactPanel, closeSessionFromMcp, handleRemoveFileNode, readBrowserPageFromWorkspace]);
 
   const moveRenderPaneFromMcp = useCallback(async ({ paneId, toIndex }: { paneId: string; toIndex: number }) => {
     let nextOrder = activeRenderPanes.map((pane) => pane.id);
@@ -9976,6 +10314,16 @@ function AgentBrowserApp() {
           { id: 'history', label: 'History' },
           { id: 'properties', label: 'Properties' },
         ];
+      case 'artifact':
+      case 'artifact-file':
+        return [
+          { id: 'open', label: 'Open' },
+          { id: 'download', label: 'Download' },
+          { id: 'attach', label: 'Attach' },
+          { id: 'new_session', label: 'New Session' },
+          { id: 'history', label: 'History' },
+          { id: 'properties', label: 'Properties' },
+        ];
       case 'session-fs-entry': {
         const vfsArgs = parseVfsNodeId(itemId);
         if (!vfsArgs) {
@@ -10069,6 +10417,27 @@ function AgentBrowserApp() {
       return { itemId, itemType, actionId, ok: true };
     }
 
+    if ((itemType === 'artifact' || itemType === 'artifact-file') && node) {
+      const artifactId = node.artifactReferenceId ?? node.artifactId;
+      if (!artifactId) {
+        throw new DOMException(`Artifact item "${itemId}" is not available.`, 'NotFoundError');
+      }
+      if (actionId === 'open') {
+        openArtifactPanel(artifactId, node.artifactFilePath ?? null, findWorkspaceForNode(root, node.id)?.id ?? activeWorkspaceId);
+      } else if (actionId === 'download') {
+        downloadArtifact(artifactId);
+      } else if (actionId === 'attach') {
+        attachArtifactToSession(artifactId);
+      } else if (actionId === 'new_session') {
+        openSessionWithArtifact(artifactId);
+      } else if (actionId === 'history') {
+        setHistoryNode(node);
+      } else if (actionId === 'properties') {
+        setPropertiesNode(node);
+      }
+      return { itemId, itemType, actionId, ok: true };
+    }
+
     if (itemType === 'session-fs-entry') {
       const vfsArgs = parseVfsNodeId(itemId);
       if (!vfsArgs) {
@@ -10119,8 +10488,11 @@ function AgentBrowserApp() {
     throw new DOMException(`Worktree item "${itemType}:${itemId}" is not available.`, 'NotFoundError');
   }, [
     activeWorkspace,
+    activeWorkspaceId,
+    attachArtifactToSession,
     createSessionFsEntryFromMcp,
     deleteSessionFsEntryFromMcp,
+    downloadArtifact,
     handleBookmarkTab,
     handleCopyUri,
     handleFileDuplicate,
@@ -10129,6 +10501,8 @@ function AgentBrowserApp() {
     handleMuteTab,
     handleRemoveFileNode,
     handleShareSession,
+    openArtifactPanel,
+    openSessionWithArtifact,
     renameSessionFsEntryFromMcp,
     renameSessionNodeById,
     root,
@@ -10144,6 +10518,7 @@ function AgentBrowserApp() {
     registerWorkspaceTools(webMcpModelContext, {
       workspaceName: activeWorkspace.name,
       workspaceFiles: activeWorkspaceFiles,
+      artifacts: activeArtifacts,
       browserPages: activeBrowserPages,
       renderPanes: activeRenderPanes,
       harnessElements: activeHarnessElements,
@@ -10207,6 +10582,8 @@ function AgentBrowserApp() {
       onCreateSession: createSessionFromMcp,
       onWriteSession: writeSessionFromMcp,
       onCreateWorkspaceFile: createWorkspaceFileFromMcp,
+      onCreateArtifact: createArtifactFromMcp,
+      onUpdateArtifact: updateArtifactFromMcp,
       onWriteWorkspaceFile: writeWorkspaceFileFromMcp,
       onDeleteWorkspaceFile: deleteWorkspaceFileFromMcp,
       onMoveWorkspaceFile: moveWorkspaceFileFromMcp,
@@ -10240,6 +10617,7 @@ function AgentBrowserApp() {
     activeWorkspaceFiles,
     activeWorkspaceSessions,
     activeWorktreeItems,
+    activeArtifacts,
     browserLocationContext,
     activeClipboardEntries,
     activeRenderPanes,
@@ -10247,6 +10625,7 @@ function AgentBrowserApp() {
     activeHarnessElements,
     closeSessionFromMcp,
     createBrowserPageFromMcp,
+    createArtifactFromMcp,
     createSessionFromMcp,
     createSessionFsEntryFromMcp,
     createWorkspaceFileFromMcp,
@@ -10284,6 +10663,7 @@ function AgentBrowserApp() {
     restoreClipboardEntryFromMcp,
     restoreHarnessFromMcp,
     unmountSessionDriveFromMcp,
+    updateArtifactFromMcp,
     writeSessionFsFileFromMcp,
     symlinkWorkspaceFileFromMcp,
     writeWorkspaceFileFromMcp,
@@ -10301,6 +10681,7 @@ function AgentBrowserApp() {
             openTabIds={activeWorkspaceViewState.openTabIds}
             activeSessionIds={activeWorkspaceViewState.activeSessionIds}
             editingFilePath={activeWorkspaceViewState.editingFilePath}
+            activeArtifactPanel={activeWorkspaceViewState.activeArtifactPanel}
             cursorId={cursorId}
             selectedIds={selectedIds}
             items={visibleItems}
@@ -10492,12 +10873,18 @@ function AgentBrowserApp() {
             },
           }));
           const panelEntries: Array<[string, Panel]> = [];
-          const hasActivePanel = Boolean(editingFile || openBrowserTabs.length || activeSessionIds.length);
+          const hasActivePanel = Boolean(editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
           if (activeWorkspaceViewState.dashboardOpen && !hasActivePanel) {
             panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
           }
           if (editingFile) {
             panelEntries.push([`file:${editingFile.path}`, { type: 'file', file: editingFile }]);
+          }
+          if (activeArtifactPanelArtifact) {
+            panelEntries.push([
+              `artifact:${activeArtifactPanelArtifact.id}:${activeArtifactPanelFile?.path ?? ''}`,
+              { type: 'artifact', artifact: activeArtifactPanelArtifact, file: activeArtifactPanelFile },
+            ]);
           }
           panelEntries.push(
             ...openBrowserTabs.map((tab): [string, Panel] => [`browser:${tab.id}`, { type: 'browser', tab }]),
@@ -10574,6 +10961,21 @@ function AgentBrowserApp() {
                 />
               );
             }
+            if (panel.type === 'artifact') {
+              return (
+                <ArtifactViewerPanel
+                  key={`${panel.artifact.id}:${panel.file?.path ?? ''}`}
+                  artifact={panel.artifact}
+                  file={panel.file}
+                  onSelectFile={(filePath) => openArtifactPanel(panel.artifact.id, filePath)}
+                  onDownload={() => downloadArtifact(panel.artifact.id)}
+                  onAttach={() => attachArtifactToSession(panel.artifact.id)}
+                  onOpenSession={() => openSessionWithArtifact(panel.artifact.id)}
+                  onClose={closeActiveArtifactPanel}
+                  dragHandleProps={dragHandleProps}
+                />
+              );
+            }
             return (
               <ChatPanel
                 key={panel.id}
@@ -10586,6 +10988,8 @@ function AgentBrowserApp() {
                 onToast={setToast}
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
+                artifactPromptContext={buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? [])}
+                attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
                 defaultExtensions={defaultExtensionRuntime}
                 evaluationAgents={evaluationAgents}

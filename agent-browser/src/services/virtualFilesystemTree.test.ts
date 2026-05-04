@@ -1,12 +1,77 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceFile } from '../types';
 import {
+  ARTIFACTS_DRIVE_NAME,
   WORKSPACE_DRIVE_NAME,
+  buildArtifactDriveNodes,
   buildMountedTerminalDriveNodes,
   buildWorkspaceCapabilityDriveNodes,
 } from './virtualFilesystemTree';
+import { createArtifact } from './artifacts';
 
 describe('virtualFilesystemTree', () => {
+  it('mounts artifacts as their own special drive with files and references', () => {
+    const styleguide = createArtifact({
+      id: 'artifact-styleguide',
+      title: 'Style guide',
+      files: [{ path: 'tokens.css', mediaType: 'text/css', content: ':root {}' }],
+    }, { now: () => '2026-05-03T12:00:00.000Z' });
+    const dashboard = createArtifact({
+      id: 'artifact-dashboard',
+      title: 'Launch dashboard',
+      references: [styleguide.id],
+      files: [
+        { path: 'index.html', mediaType: 'text/html', content: '<main></main>' },
+        { path: 'src/app.js', mediaType: 'text/javascript', content: 'console.log("launch")' },
+      ],
+    }, { now: () => '2026-05-03T12:00:00.000Z' });
+
+    const drives = buildArtifactDriveNodes('artifact:ws-build', [dashboard, styleguide]);
+
+    expect(drives).toHaveLength(1);
+    expect(drives[0]).toMatchObject({
+      id: 'artifact:ws-build:drive:artifacts',
+      name: ARTIFACTS_DRIVE_NAME,
+      type: 'folder',
+      isDrive: true,
+      expanded: false,
+    });
+    expect(drives[0].children).toEqual([
+      expect.objectContaining({
+        id: 'artifact:ws-build:artifact:artifact-dashboard',
+        name: 'Launch dashboard',
+        artifactId: 'artifact-dashboard',
+        children: [
+          expect.objectContaining({ name: 'References', type: 'folder' }),
+          expect.objectContaining({
+            name: 'src',
+            type: 'folder',
+            children: [
+              expect.objectContaining({ name: 'app.js', type: 'file', artifactId: 'artifact-dashboard', artifactFilePath: 'src/app.js' }),
+            ],
+          }),
+          expect.objectContaining({ name: 'index.html', type: 'file', artifactId: 'artifact-dashboard', artifactFilePath: 'index.html' }),
+        ],
+      }),
+      expect.objectContaining({
+        id: 'artifact:ws-build:artifact:artifact-styleguide',
+        name: 'Style guide',
+      }),
+    ]);
+    expect(drives[0].children?.[0].children?.[0]).toEqual(expect.objectContaining({
+      name: 'References',
+      children: [
+        expect.objectContaining({
+          name: 'Style guide',
+          type: 'file',
+          artifactId: 'artifact-styleguide',
+          artifactReferenceId: 'artifact-styleguide',
+          isReference: true,
+        }),
+      ],
+    }));
+  });
+
   it('keeps hidden workspace folders under //workspace while mounting non-hidden top-level directories as separate drives', () => {
     const files: WorkspaceFile[] = [
       { path: 'AGENTS.md', content: '# Rules', updatedAt: '2026-04-15T00:00:00.000Z' },

@@ -1,9 +1,12 @@
 import type { TreeNode, WorkspaceFile } from '../types';
+import { ARTIFACTS_DRIVE_NAME, type AgentArtifact } from './artifacts';
 
 export const WORKSPACE_DRIVE_NAME = '//workspace';
+export { ARTIFACTS_DRIVE_NAME } from './artifacts';
 
 type TerminalBranchNode = TreeNode & { children: TreeNode[] };
 type WorkspaceBranchNode = TreeNode & { children: TreeNode[] };
+type ArtifactBranchNode = TreeNode & { children: TreeNode[] };
 
 function createFolderNode(id: string, name: string, isDrive = false): TreeNode {
   return {
@@ -90,6 +93,22 @@ function appendWorkspacePath(parent: WorkspaceBranchNode, idPrefix: string, part
   }
 }
 
+function appendArtifactPath(parent: ArtifactBranchNode, idPrefix: string, artifactId: string, parts: string[], filePath: string): void {
+  let cursor = parent;
+  for (const [index, part] of parts.entries()) {
+    const nodeId = `${idPrefix}:file:${parts.slice(0, index + 1).join('/')}`;
+    const isLeaf = index === parts.length - 1;
+    if (isLeaf) {
+      cursor.children = [
+        ...(cursor.children ?? []),
+        { id: nodeId, name: part, type: 'file', artifactId, artifactFilePath: filePath },
+      ];
+      return;
+    }
+    cursor = ensureChildFolder(cursor, nodeId, part) as ArtifactBranchNode;
+  }
+}
+
 function sortTreeNodes(nodes: TreeNode[] | undefined): TreeNode[] {
   const children = (nodes ?? []).map((node) => node.children?.length
     ? { ...node, children: sortTreeNodes(node.children) }
@@ -128,6 +147,49 @@ export function buildWorkspaceCapabilityDriveNodes(prefix: string, files: Worksp
       .map((drive) => ({ ...drive, children: sortTreeNodes(drive.children) }))
       .sort((left, right) => left.name.localeCompare(right.name)),
   ];
+}
+
+export function buildArtifactDriveNodes(prefix: string, artifacts: readonly AgentArtifact[]): TreeNode[] {
+  const artifactDrive = createFolderNode(`${prefix}:drive:artifacts`, ARTIFACTS_DRIVE_NAME, true);
+  const byId = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+
+  for (const artifact of [...artifacts].sort((left, right) => left.title.localeCompare(right.title))) {
+    const artifactNode = createFolderNode(`${prefix}:artifact:${artifact.id}`, artifact.title || artifact.id);
+    artifactNode.artifactId = artifact.id;
+
+    if (artifact.references.length) {
+      const referencesNode = createFolderNode(`${prefix}:artifact:${artifact.id}:references`, 'References');
+      referencesNode.artifactId = artifact.id;
+      referencesNode.children = artifact.references
+        .map((referenceId) => ({
+          id: `${prefix}:artifact:${artifact.id}:reference:${referenceId}`,
+          name: byId.get(referenceId)?.title ?? referenceId,
+          type: 'file' as const,
+          artifactId: referenceId,
+          artifactReferenceId: referenceId,
+          isReference: true,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name));
+      artifactNode.children = [...(artifactNode.children ?? []), referencesNode];
+    }
+
+    for (const file of artifact.files) {
+      appendArtifactPath(
+        artifactNode as ArtifactBranchNode,
+        `${prefix}:artifact:${artifact.id}`,
+        artifact.id,
+        file.path.split('/').filter(Boolean),
+        file.path,
+      );
+    }
+
+    artifactDrive.children = [
+      ...(artifactDrive.children ?? []),
+      { ...artifactNode, children: sortTreeNodes(artifactNode.children) },
+    ];
+  }
+
+  return [{ ...artifactDrive, children: sortTreeNodes(artifactDrive.children) }];
 }
 
 export function buildMountedTerminalDriveNodes(

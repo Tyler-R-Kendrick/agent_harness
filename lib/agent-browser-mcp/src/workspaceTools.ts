@@ -1,5 +1,6 @@
 import { ModelContext } from '@agent-harness/webmcp';
 
+import { registerArtifactTools } from './artifactTools';
 import { registerBrowserPageSurface } from './browserPageTools';
 import { registerClipboardTools } from './clipboardTools';
 import { registerFilesystemTools } from './filesystemTools';
@@ -22,6 +23,7 @@ export {
   toWorkspaceFileUri,
 } from './workspaceToolShared';
 export { registerBrowserPageSurface } from './browserPageTools';
+export { registerArtifactTools } from './artifactTools';
 export { registerClipboardTools } from './clipboardTools';
 export { registerFilesystemTools } from './filesystemTools';
 export { registerHarnessUiTools } from './harnessUiTools';
@@ -45,6 +47,7 @@ export function registerWorkspaceTools(modelContext: ModelContext, options: Regi
   registerWorkspaceSessionTools(modelContext, options);
   registerWorktreeContextTools(modelContext, options);
   registerRendererViewportTools(modelContext, options);
+  registerArtifactTools(modelContext, options);
   registerHarnessUiTools(modelContext, options);
   registerClipboardTools(modelContext, options);
   registerUserContextTools(modelContext, options);
