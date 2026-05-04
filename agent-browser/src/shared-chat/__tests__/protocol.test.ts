@@ -15,6 +15,7 @@ import {
   parseAnswerPayload,
   parseInvitePayload,
   parseSignedSessionEvent,
+  secureRandomToken,
   sha256Base64Url,
   signAnswerPayload,
   signCanonicalJson,
@@ -79,6 +80,11 @@ describe('shared chat crypto and protocol', () => {
     expect([...base64UrlDecode(base64UrlEncode(bytes))]).toEqual([...bytes]);
     const sdp = 'v=0\no=- 46117317 2 IN IP4 127.0.0.1\ns=agent-browser\n';
     expect(await decompressSdp(await compressSdp(sdp))).toBe(sdp);
+  });
+
+  it('generates prefixed secure random tokens for identifiers', () => {
+    expect(secureRandomToken('evt')).toMatch(/^evt-[A-Za-z0-9_-]+/u);
+    expect(secureRandomToken()).not.toBe(secureRandomToken());
   });
 
   it('hashes, signs, verifies, and rejects tampering', async () => {

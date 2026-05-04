@@ -1,6 +1,6 @@
 import { get, set, del } from 'idb-keyval';
 import { exportPublicKeyJwk, generateDeviceSigningKey } from './crypto';
-import { base64UrlEncode } from './encoding';
+import { secureRandomToken } from './random';
 
 export type StoredDeviceIdentity = {
   deviceId: string;
@@ -15,10 +15,7 @@ const DEVICE_KEY = 'agent-browser.shared-chat.device-identity.v1';
 let memoryIdentity: StoredDeviceIdentity | null = null;
 
 function randomId(prefix: string): string {
-  if (crypto.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return `${prefix}-${base64UrlEncode(bytes)}`;
+  return secureRandomToken(prefix);
 }
 
 function isStoredDeviceIdentity(value: unknown): value is StoredDeviceIdentity {
@@ -26,6 +23,7 @@ function isStoredDeviceIdentity(value: unknown): value is StoredDeviceIdentity {
     && typeof value === 'object'
     && typeof (value as StoredDeviceIdentity).deviceId === 'string'
     && typeof (value as StoredDeviceIdentity).label === 'string'
+    && ((value as StoredDeviceIdentity).persistence === 'indexeddb' || (value as StoredDeviceIdentity).persistence === 'memory')
     && Boolean((value as StoredDeviceIdentity).publicKeyJwk)
     && Boolean((value as StoredDeviceIdentity).privateKey);
 }

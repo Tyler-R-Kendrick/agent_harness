@@ -5,6 +5,7 @@ export * from './events';
 export * from './limits';
 export * from './pairing';
 export * from './qr';
+export * from './random';
 export * from './rateLimit';
 export * from './safeText';
 export * from './schemas';

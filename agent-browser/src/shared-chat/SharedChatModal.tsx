@@ -17,6 +17,7 @@ import {
   parseInvitePayload,
   renderQrDataUrl,
   sanitizeChatText,
+  secureRandomToken,
   signAnswerPayload,
   validateInboundEvent,
   verifyAnswerPayload,
@@ -27,15 +28,6 @@ import {
   type SharedDataChannels,
   type StoredDeviceIdentity,
 } from '.';
-
-function secureNonce(): string {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
-}
 
 type BarcodeDetectorShape = {
   detect(source: CanvasImageSource): Promise<Array<{ rawValue?: string }>>;
@@ -306,7 +298,7 @@ export function SharedChatModal({
         offer: compressedOffer,
         offerHash: await hashSdp(localSdp),
         expiresAt: expiry,
-        nonce: secureNonce(),
+        nonce: secureRandomToken(),
       };
       const encoded = await encodePayload(payload);
       setInviteCode(encoded);
@@ -355,9 +347,10 @@ export function SharedChatModal({
         answer: await compressSdp(answerSdp),
         answerHash: await hashSdp(answerSdp),
         expiresAt: expiry,
-        nonce: secureNonce(),
+        nonce: secureRandomToken(),
       };
-      const signed = await signAnswerPayload(identity.privateKey!, unsigned);
+      if (!identity.privateKey) throw new Error('Device signing key is unavailable. Re-pair this device.');
+      const signed = await signAnswerPayload(identity.privateKey, unsigned);
       const encodedAnswer = await encodePayload(signed);
       setAnswerCode(encodedAnswer);
       setQrDataUrl(await renderQrDataUrl(encodedAnswer));
@@ -511,7 +504,9 @@ function NativeQrScanner({ active, onScan, onError }: { active: boolean; onScan:
     let cancelled = false;
     let stream: MediaStream | null = null;
     let frame = 0;
-    const BarcodeDetectorCtor = (window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
+    const BarcodeDetectorCtor = 'BarcodeDetector' in window
+      ? (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector
+      : undefined;
     if (!BarcodeDetectorCtor || !navigator.mediaDevices?.getUserMedia) {
       onError();
       return undefined;

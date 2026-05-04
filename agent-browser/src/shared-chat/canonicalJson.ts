@@ -14,7 +14,7 @@ function serialize(value: unknown): string {
     return `[${value.map((entry) => serialize(entry)).join(',')}]`;
   }
   const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort((left, right) => left.localeCompare(right));
+  const keys = Object.keys(record).sort();
   return `{${keys.map((key) => `${JSON.stringify(key)}:${serialize(record[key])}`).join(',')}}`;
 }
 
