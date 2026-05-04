@@ -73,6 +73,7 @@ export interface HarnessPluginMarketplaceManifest {
     };
     categories?: string[];
     keywords?: string[];
+    default?: boolean;
   }>;
 }
 
@@ -175,6 +176,7 @@ const marketplaceManifestSchema = z.object({
     }),
     categories: z.array(z.string()).optional(),
     keywords: z.array(z.string()).optional(),
+    default: z.boolean().optional(),
   })),
 });
 

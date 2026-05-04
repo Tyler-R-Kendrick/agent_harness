@@ -44,6 +44,20 @@
       },
       "categories": ["design", "workspace-context"],
       "keywords": ["design-md", "tokens", "css"]
+    },
+    {
+      "id": "agent-harness.ext.symphony",
+      "name": "Symphony workflow orchestration",
+      "version": "0.1.0",
+      "description": "Loads WORKFLOW.md assets and optional Symphony orchestration examples as a runtime extension.",
+      "manifest": "./symphony/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./symphony"
+      },
+      "categories": ["workflow", "workspace-context"],
+      "keywords": ["symphony", "workflow-md", "orchestration"],
+      "default": true
     }
   ]
 }

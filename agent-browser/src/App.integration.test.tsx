@@ -83,8 +83,8 @@ vi.mock('./services/codexApi', () => ({
   streamCodexRuntimeChat: (...args: unknown[]) => streamCodexRuntimeChatMock(...args),
 }));
 
-vi.mock('./services/agentProvider', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./services/agentProvider')>();
+vi.mock('./services/agentProvider', async (importOriginal: () => Promise<typeof import('./services/agentProvider')>) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     resolveLanguageModel: (config: unknown) => (resolveLanguageModelMock as (config: unknown) => unknown)(config),
@@ -95,8 +95,8 @@ vi.mock('./services/stagedToolPipeline', () => ({
   runStagedToolPipeline: (options: unknown, callbacks: unknown) => runStagedToolPipelineMock(options, callbacks),
 }));
 
-vi.mock('./services/parallelDelegationWorkflow', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./services/parallelDelegationWorkflow')>();
+vi.mock('./services/parallelDelegationWorkflow', async (importOriginal: () => Promise<typeof import('./services/parallelDelegationWorkflow')>) => {
+  const actual = await importOriginal();
   return {
     ...actual,
     runParallelDelegationWorkflow: (options: unknown, callbacks: unknown) => runParallelDelegationWorkflowMock(options, callbacks),
@@ -359,19 +359,20 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
-  it('exposes the Symphony task board from primary navigation', async () => {
+  it('loads Symphony as a default plugin instead of a hardcoded primary panel', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Symphony'));
+    expect(screen.queryByLabelText('Symphony')).not.toBeInTheDocument();
 
-    const board = screen.getByRole('region', { name: 'Symphony task board' });
-    expect(board).toBeInTheDocument();
-    expect(within(board).getByText('MT-891')).toBeInTheDocument();
-    expect(within(board).getAllByText('Human Review').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByLabelText('Extensions'));
+
+    expect(screen.getByText('symphony')).toBeInTheDocument();
+    expect(screen.getByText('Symphony workflow orchestration')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
   });
 
   it('customizes and persists the generated harness app spec from the dashboard', async () => {

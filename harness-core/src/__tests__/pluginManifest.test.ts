@@ -75,6 +75,7 @@ const marketplaceManifest = {
       },
       categories: ['workspace-context'],
       keywords: ['agents-md', 'instructions'],
+      default: false,
     },
   ],
 };
@@ -114,6 +115,10 @@ describe('plugin manifest standards', () => {
   it('validates marketplace manifests that point at plugin manifests', () => {
     expect(validateHarnessPluginMarketplaceManifest(marketplaceManifest)).toEqual({ success: true, issues: [] });
     expect(parseHarnessPluginMarketplaceManifest(marketplaceManifest)).toEqual(marketplaceManifest);
+    expect(validateHarnessPluginMarketplaceManifest({
+      ...marketplaceManifest,
+      plugins: [{ ...marketplaceManifest.plugins[0], default: true }],
+    })).toEqual({ success: true, issues: [] });
     expect(validateHarnessPluginMarketplaceManifest({
       ...marketplaceManifest,
       plugins: [{ ...marketplaceManifest.plugins[0], manifest: './agents-md/package.json' }],

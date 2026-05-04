@@ -26,7 +26,7 @@ describe('workspaceFiles', () => {
     expect(memory.path).toBe('.memory/project.memory.md');
   });
 
-  it('creates default workspace memory files', () => {
+  it('creates default workspace memory files and the default Symphony plugin manifest', () => {
     const files = createDefaultWorkspaceFiles('2026-04-20T00:00:00.000Z');
 
     expect(files).toEqual(expect.arrayContaining([
@@ -35,6 +35,11 @@ describe('workspaceFiles', () => {
       expect.objectContaining({ path: '.memory/project.memory.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
       expect.objectContaining({ path: '.memory/workspace.memory.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
       expect.objectContaining({ path: '.memory/session.memory.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
+      expect.objectContaining({
+        path: '.agents/plugins/symphony/agent-harness.plugin.json',
+        content: expect.stringContaining('"id": "agent-harness.ext.symphony"'),
+        updatedAt: '2026-04-20T00:00:00.000Z',
+      }),
     ]));
   });
 
@@ -102,7 +107,10 @@ describe('workspaceFiles', () => {
     expect(files).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: expect.stringContaining('.agents/skills/') }),
     ]));
-    expect(files).toHaveLength(5);
+    expect(files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
+    ]));
+    expect(files).toHaveLength(6);
   });
 
   it('loads only generic defaults when storage is empty', () => {
@@ -112,11 +120,12 @@ describe('workspaceFiles', () => {
 
     expect(loaded['ws-research']).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: '.memory/MEMORY.md' }),
+      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
     expect(loaded['ws-research']).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: expect.stringContaining('.agents/skills/') }),
     ]));
-    expect(loaded['ws-research']).toHaveLength(5);
+    expect(loaded['ws-research']).toHaveLength(6);
   });
 
   it('preserves stored optional plugin-owned files without adding bundled skills', () => {
@@ -140,11 +149,12 @@ describe('workspaceFiles', () => {
       expect.objectContaining({ path: '.memory/MEMORY.md', content: '# Custom Memory\n\n- Keep this user fact' }),
       expect.objectContaining({ path: '.memory/user.memory.md' }),
       expect.objectContaining({ path: '.memory/session.memory.md' }),
+      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
     expect(loaded['ws-research']).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md' }),
     ]));
-    expect(loaded['ws-research']).toHaveLength(7);
+    expect(loaded['ws-research']).toHaveLength(8);
   });
 
   it('upserts and removes workspace files by path', () => {
