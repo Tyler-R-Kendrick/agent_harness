@@ -14,11 +14,13 @@ import {
 } from 'harness-core';
 import { createAgentSkillsPlugin } from '@agent-harness/ext-agent-skills';
 import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
+import { createArtifactsPlugin } from '@agent-harness/ext-artifacts';
 import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
 import agentSkillsManifestSource from '../../../ext/agent-skills/agent-harness.plugin.json';
 import agentsMdManifestSource from '../../../ext/agents-md/agent-harness.plugin.json';
+import artifactsManifestSource from '../../../ext/artifacts/agent-harness.plugin.json';
 import designMdManifestSource from '../../../ext/design-md/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
@@ -47,6 +49,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.agent-skills', parseHarnessPluginManifest(agentSkillsManifestSource)],
   ['agent-harness.ext.agents-md', parseHarnessPluginManifest(agentsMdManifestSource)],
   ['agent-harness.ext.design-md', parseHarnessPluginManifest(designMdManifestSource)],
+  ['agent-harness.ext.artifacts', parseHarnessPluginManifest(artifactsManifestSource)],
 ]);
 
 export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
@@ -77,6 +80,7 @@ export async function createDefaultExtensionRuntime(
     }),
     createAgentsMdHookPlugin(workspaceFiles),
     createDesignMdPlugin({ documents: designDocuments }),
+    createArtifactsPlugin(),
   ]);
 
   return {

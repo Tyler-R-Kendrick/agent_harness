@@ -30,12 +30,16 @@ describe('workspaceMcpWorktree', () => {
     const browserNode = { id: 'page-1', type: 'tab', nodeKind: 'browser', name: 'Docs', url: 'https://example.com' };
     const sessionNode = { id: 'session-1', type: 'tab', nodeKind: 'session', name: 'Session 1' };
     const fileNode = { id: 'file-1', type: 'file', name: 'AGENTS.md', filePath: 'AGENTS.md' };
+    const artifactNode = { id: 'artifact-1', type: 'folder', name: 'Launch dashboard', artifactId: 'artifact-dashboard' };
+    const artifactFileNode = { id: 'artifact-file-1', type: 'file', name: 'index.html', artifactId: 'artifact-dashboard', artifactFilePath: 'index.html' };
     const vfsNode = { id: 'vfs:session-1:/workspace', type: 'folder', name: '/workspace' };
     const clipboardNode = { id: 'clipboard-1', type: 'tab', nodeKind: 'clipboard', name: 'Clipboard' };
 
     expect(getWorktreeItemTypeForNode(browserNode as never)).toBe('browser-page');
     expect(getWorktreeItemTypeForNode(sessionNode as never)).toBe('session');
     expect(getWorktreeItemTypeForNode(fileNode as never)).toBe('workspace-file');
+    expect(getWorktreeItemTypeForNode(artifactNode as never)).toBe('artifact');
+    expect(getWorktreeItemTypeForNode(artifactFileNode as never)).toBe('artifact-file');
     expect(getWorktreeItemTypeForNode(vfsNode as never)).toBe('session-fs-entry');
     expect(getWorktreeItemTypeForNode(clipboardNode as never)).toBe('clipboard');
 
@@ -44,6 +48,8 @@ describe('workspaceMcpWorktree', () => {
         { node: browserNode as never },
         { node: sessionNode as never },
         { node: fileNode as never },
+        { node: artifactNode as never },
+        { node: artifactFileNode as never },
         { node: vfsNode as never },
         { node: clipboardNode as never },
       ],
@@ -54,6 +60,8 @@ describe('workspaceMcpWorktree', () => {
       { id: 'page-1', itemType: 'browser-page', label: 'Docs', url: 'https://example.com' },
       { id: 'session-1', itemType: 'session', label: 'Session 1' },
       { id: 'file-1', itemType: 'workspace-file', label: 'AGENTS.md', path: 'AGENTS.md' },
+      { id: 'artifact-1', itemType: 'artifact', label: 'Launch dashboard', artifactId: 'artifact-dashboard' },
+      { id: 'artifact-file-1', itemType: 'artifact-file', label: 'index.html', artifactId: 'artifact-dashboard', path: '//artifacts/artifact-dashboard/index.html', artifactFilePath: 'index.html' },
       { id: 'vfs:session-1:/workspace', itemType: 'session-fs-entry', label: '/workspace', path: '/workspace', sessionId: 'session-1' },
       { id: 'clipboard-1', itemType: 'clipboard', label: 'Clipboard' },
     ]);

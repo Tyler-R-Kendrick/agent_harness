@@ -62,6 +62,11 @@ const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGro
   list_clipboard_history: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
   read_clipboard_entry: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
   restore_clipboard_entry: { subGroup: 'clipboard-worktree-mcp', subGroupLabel: 'Clipboard' },
+  // Artifacts
+  list_artifacts: { subGroup: 'artifacts-mcp', subGroupLabel: 'Artifacts' },
+  read_artifact: { subGroup: 'artifacts-mcp', subGroupLabel: 'Artifacts' },
+  create_artifact: { subGroup: 'artifacts-mcp', subGroupLabel: 'Artifacts' },
+  update_artifact: { subGroup: 'artifacts-mcp', subGroupLabel: 'Artifacts' },
   // User context
   recall_user_context: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
   read_browser_location: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },

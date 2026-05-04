@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.artifacts",
+  "name": "Artifacts",
+  "version": "0.1.0",
+  "description": "Adds Claude-style artifacts as standalone, versioned, downloadable context objects.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createArtifactsPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "artifact",
+      "id": "artifacts",
+      "description": "Stores multi-file artifacts with artifact-to-artifact references."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.create",
+      "description": "Creates a stored artifact bundle."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.list",
+      "description": "Lists stored artifact bundles."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.read",
+      "description": "Reads a stored artifact bundle."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.update",
+      "description": "Updates a stored artifact bundle while preserving version history."
+    },
+    {
+      "kind": "command",
+      "id": "artifacts.new",
+      "description": "Starts an artifact drafting prompt."
+    }
+  ],
+  "renderers": [
+    {
+      "id": "artifacts.default",
+      "label": "Artifact viewer",
+      "description": "Default renderer for bundled artifacts.",
+      "target": {
+        "kind": "artifact",
+        "artifactKinds": ["bundle", "html", "markdown", "code", "document"]
+      },
+      "component": {
+        "module": "./src/index.ts",
+        "export": "ArtifactRenderer"
+      }
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Creates, reads, and updates standalone artifact bundles."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

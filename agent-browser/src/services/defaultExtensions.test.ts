@@ -13,6 +13,7 @@ describe('default extensions', () => {
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md',
+      'agent-harness.ext.artifacts',
     ]);
 
     const runtime = await createDefaultExtensionRuntime([]);
@@ -21,11 +22,13 @@ describe('default extensions', () => {
       'Agent skills',
       'AGENTS.md workspace instructions',
       'DESIGN.md design tokens',
+      'Artifacts',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
       'agent-skills',
       'agents-md',
       'design-md',
+      'artifacts',
     ]);
     expect(runtime.hooks.map((hook) => hook.id)).toEqual([
       'agents-md',
@@ -33,5 +36,11 @@ describe('default extensions', () => {
     ]);
     expect(runtime.commands.some((command) => command.id === 'agent-skills')).toBe(true);
     expect(runtime.tools.map((tool) => tool.id)).toContain('design-md.apply');
+    expect(runtime.tools.map((tool) => tool.id)).toEqual(expect.arrayContaining([
+      'artifacts.create',
+      'artifacts.list',
+      'artifacts.read',
+      'artifacts.update',
+    ]));
   });
 });

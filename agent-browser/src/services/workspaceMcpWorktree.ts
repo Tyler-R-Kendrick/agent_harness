@@ -7,11 +7,13 @@ import type {
 } from 'agent-browser-mcp';
 
 import type { TreeNode } from '../types';
+import { ARTIFACTS_DRIVE_NAME } from './artifacts';
 
 export interface WorkspaceViewStateSnapshot {
   openTabIds: string[];
   editingFilePath: string | null;
   activeSessionIds: string[];
+  activeArtifactPanel?: { artifactId: string; filePath?: string | null } | null;
 }
 
 export interface WorkspaceContextMenuState<TEntry = unknown, TTopButton = unknown> {
@@ -60,6 +62,12 @@ export function getWorktreeItemTypeForNode(node: TreeNode): WorkspaceMcpWorktree
   if (node.type === 'file' && node.filePath) {
     return 'workspace-file';
   }
+  if (node.type === 'file' && node.artifactId && node.artifactFilePath) {
+    return 'artifact-file';
+  }
+  if (node.artifactId || node.artifactReferenceId) {
+    return 'artifact';
+  }
   if (node.type === 'tab' && node.nodeKind === 'clipboard') {
     return 'clipboard';
   }
@@ -93,6 +101,24 @@ export function buildActiveWorktreeItems(args: {
     if (node.type === 'file' && node.filePath) {
       return [{ id: node.id, itemType: 'workspace-file' as const, label: node.name, path: node.filePath }];
     }
+    if (node.type === 'file' && node.artifactId && node.artifactFilePath) {
+      return [{
+        id: node.id,
+        itemType: 'artifact-file' as const,
+        label: node.name,
+        artifactId: node.artifactId,
+        artifactFilePath: node.artifactFilePath,
+        path: `${ARTIFACTS_DRIVE_NAME}/${node.artifactId}/${node.artifactFilePath}`,
+      }];
+    }
+    if (node.artifactId || node.artifactReferenceId) {
+      return [{
+        id: node.id,
+        itemType: 'artifact' as const,
+        label: node.name,
+        artifactId: node.artifactReferenceId ?? node.artifactId,
+      }];
+    }
     if (node.type === 'tab' && node.nodeKind === 'clipboard') {
       return [{ id: node.id, itemType: 'clipboard' as const, label: node.name }];
     }
@@ -125,6 +151,25 @@ export function readWorktreeRenderPaneState(
         itemType: item.itemType,
         isOpen: typeof item.path === 'string' && viewState.editingFilePath === item.path,
         supported: typeof item.path === 'string',
+      };
+    case 'artifact':
+      return {
+        itemId: item.id,
+        itemType: item.itemType,
+        isOpen: typeof item.artifactId === 'string'
+          && viewState.activeArtifactPanel?.artifactId === item.artifactId
+          && !viewState.activeArtifactPanel.filePath,
+        supported: typeof item.artifactId === 'string',
+      };
+    case 'artifact-file':
+      return {
+        itemId: item.id,
+        itemType: item.itemType,
+        isOpen: typeof item.artifactId === 'string'
+          && typeof item.artifactFilePath === 'string'
+          && viewState.activeArtifactPanel?.artifactId === item.artifactId
+          && viewState.activeArtifactPanel.filePath === item.artifactFilePath,
+        supported: typeof item.artifactId === 'string' && typeof item.artifactFilePath === 'string',
       };
     default:
       return {
@@ -192,6 +237,36 @@ export function toggleWorktreeRenderPaneState<TViewState extends WorkspaceViewSt
           itemType: item.itemType,
           isOpen: nextPath === item.path,
           supported: typeof item.path === 'string',
+        },
+      };
+    }
+    case 'artifact': {
+      const nextPanel = currentState.isOpen ? null : { artifactId: item.artifactId!, filePath: null };
+      return {
+        nextViewState: {
+          ...viewState,
+          activeArtifactPanel: nextPanel,
+        },
+        state: {
+          itemId: item.id,
+          itemType: item.itemType,
+          isOpen: !currentState.isOpen,
+          supported: true,
+        },
+      };
+    }
+    case 'artifact-file': {
+      const nextPanel = currentState.isOpen ? null : { artifactId: item.artifactId!, filePath: item.artifactFilePath ?? null };
+      return {
+        nextViewState: {
+          ...viewState,
+          activeArtifactPanel: nextPanel,
+        },
+        state: {
+          itemId: item.id,
+          itemType: item.itemType,
+          isOpen: !currentState.isOpen,
+          supported: true,
         },
       };
     }
