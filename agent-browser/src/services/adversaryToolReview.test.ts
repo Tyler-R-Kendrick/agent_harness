@@ -36,6 +36,27 @@ describe('reviewAdversaryToolAction', () => {
     });
   });
 
+  it('escalates unassigned tools declared after an earlier allowed tool list', () => {
+    const result = reviewAdversaryToolAction({
+      task: 'Read package.json and click the requested confirmation button',
+      action: [
+        'Use executor tools: read_session_file.',
+        'Read package.json.',
+        'Use executor tools: browser.click.',
+        'Click the requested confirmation button.',
+      ].join('\n'),
+      allowedToolIds: ['read_session_file'],
+      recentContext: ['User asked to read package.json and click the requested confirmation button.'],
+    });
+
+    expect(result).toMatchObject({
+      decision: 'escalate',
+      severity: 'high',
+    });
+    expect(result.matchedRules).toContain('unassigned-tool');
+    expect(result.rationale.join('\n')).toContain('browser.click');
+  });
+
   it('uses default settings when no settings object is provided', () => {
     const result = reviewAdversaryToolAction({
       task: 'Read package.json',

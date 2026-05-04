@@ -189,12 +189,14 @@ export function reviewAdversaryToolAction(input: AdversaryToolReviewInput): Adve
 function extractDeclaredToolIds(action: string): string[] {
   const ids = new Set<string>();
   for (const pattern of TOOL_LIST_PATTERNS) {
-    const match = pattern.exec(action);
-    if (!match) continue;
-    const listSegment = match[1].replace(/\.\s.*$/, '');
-    for (const rawId of listSegment.split(/[,;]/)) {
-      const id = rawId.trim().replace(/^["'`]+|["'`.]+$/g, '');
-      if (id && id !== '(none)') ids.add(id);
+    const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+    const globalPattern = new RegExp(pattern.source, flags);
+    for (const match of action.matchAll(globalPattern)) {
+      const listSegment = (match[1] ?? '').replace(/\.\s.*$/, '');
+      for (const rawId of listSegment.split(/[,;]/)) {
+        const id = rawId.trim().replace(/^["'`]+|["'`.]+$/g, '');
+        if (id && id !== '(none)') ids.add(id);
+      }
     }
   }
   for (const match of action.matchAll(/<tool_call>\s*\{[\s\S]*?"tool"\s*:\s*"([^"]+)"/gi)) {
