@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "agent-browser",
+    "ext/*",
     "harness-core",
     "lib/*"
   ],
@@ -10,6 +11,10 @@
     "dev:agent-browser": "npm --workspace agent-browser run dev",
     "postinstall": "node scripts/run-package-bin.mjs patch-package",
     "check:generated-files": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-generated-files-clean.ps1",
+    "lint:extensions": "node scripts/run-extension-workspaces.mjs lint",
+    "build:extensions": "node scripts/run-extension-workspaces.mjs build",
+    "test:extensions": "node scripts/run-extension-workspaces.mjs test",
+    "test:coverage:extensions": "node scripts/run-extension-workspaces.mjs test:coverage",
     "verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",
     "test:agent-browser": "npm --workspace agent-browser run test",
     "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage",

@@ -374,6 +374,23 @@ describe('App', () => {
     expect(within(board).getAllByText('Human Review').length).toBeGreaterThan(0);
   });
 
+  it('loads repo default extensions into the Extensions panel', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+
+    expect(screen.getByRole('heading', { name: 'Extensions' })).toBeInTheDocument();
+    expect(screen.getByText('3 loaded')).toBeInTheDocument();
+    expect(screen.getByText('Agent skills')).toBeInTheDocument();
+    expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
+    expect(screen.getByText('DESIGN.md design tokens')).toBeInTheDocument();
+    expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
+  });
+
   it('customizes and persists the generated harness app spec from the dashboard', async () => {
     vi.useFakeTimers();
     render(<App />);

@@ -30,6 +30,9 @@
     "visual:smoke": "node scripts/visual-smoke.mjs"
   },
   "dependencies": {
+    "@agent-harness/ext-agent-skills": "0.1.0",
+    "@agent-harness/ext-agents-md": "0.1.0",
+    "@agent-harness/ext-design-md": "0.1.0",
     "@ai-sdk/openai-compatible": "^1.0.15",
     "@ai-sdk/provider": "^3.0.8",
     "@ai-sdk/provider-utils": "^4.0.23",
