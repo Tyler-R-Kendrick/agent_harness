@@ -18,6 +18,7 @@ import { createArtifactsPlugin } from '@agent-harness/ext-artifacts';
 import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
 import { createSymphonyPlugin } from '@agent-harness/ext-symphony';
 import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
+import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
 import agentSkillsManifestSource from '../../../ext/agent-skills/agent-harness.plugin.json';
@@ -26,6 +27,7 @@ import artifactsManifestSource from '../../../ext/artifacts/agent-harness.plugin
 import designMdManifestSource from '../../../ext/design-md/agent-harness.plugin.json';
 import symphonyManifestSource from '../../../ext/symphony/agent-harness.plugin.json';
 import localModelConnectorManifestSource from '../../../ext/local-model-connector/agent-harness.plugin.json';
+import workflowCanvasManifestSource from '../../../ext/workflow-canvas/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
   marketplace: HarnessPluginMarketplaceManifest['plugins'][number];
@@ -54,6 +56,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.agents-md', parseHarnessPluginManifest(agentsMdManifestSource)],
   ['agent-harness.ext.design-md', parseHarnessPluginManifest(designMdManifestSource)],
   ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
+  ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
   ['agent-harness.ext.artifacts', parseHarnessPluginManifest(artifactsManifestSource)],
   ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
 ]);
@@ -87,6 +90,7 @@ export async function createDefaultExtensionRuntime(
     createAgentsMdHookPlugin(workspaceFiles),
     createDesignMdPlugin({ documents: designDocuments }),
     createSymphonyPlugin(workspaceFiles),
+    createWorkflowCanvasPlugin(),
     createArtifactsPlugin(),
     createLocalModelConnectorPlugin(),
   ]);

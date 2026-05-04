@@ -14,6 +14,7 @@ describe('default extensions', () => {
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md',
       'agent-harness.ext.symphony',
+      'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts',
       'agent-harness.ext.local-model-connector',
     ]);
@@ -25,6 +26,7 @@ describe('default extensions', () => {
       'AGENTS.md workspace instructions',
       'DESIGN.md design tokens',
       'Symphony workflow orchestration',
+      'Workflow canvas orchestration',
       'Artifacts',
       'Local Model Connector',
     ]);
@@ -33,6 +35,7 @@ describe('default extensions', () => {
       'agents-md',
       'design-md',
       'symphony',
+      'workflow-canvas',
       'artifacts',
       'local-model-connector',
     ]);
@@ -44,6 +47,11 @@ describe('default extensions', () => {
     expect(runtime.commands.some((command) => command.id === 'agent-skills')).toBe(true);
     expect(runtime.tools.map((tool) => tool.id)).toContain('design-md.apply');
     expect(runtime.tools.map((tool) => tool.id)).toEqual(expect.arrayContaining([
+      'workflow-canvas.inventory',
+      'workflow-canvas.validate',
+      'workflow-canvas.create',
+      'workflow-canvas.read',
+      'workflow-canvas.export',
       'artifacts.create',
       'artifacts.list',
       'artifacts.read',

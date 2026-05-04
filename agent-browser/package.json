@@ -34,6 +34,7 @@
     "@agent-harness/ext-agents-md": "0.1.0",
     "@agent-harness/ext-artifacts": "0.1.0",
     "@agent-harness/ext-design-md": "0.1.0",
+    "@agent-harness/ext-workflow-canvas": "0.1.0",
     "@agent-harness/ext-symphony": "0.1.0",
     "@agent-harness/ext-local-model-connector": "0.1.0",
     "@ai-sdk/openai-compatible": "^1.0.15",
