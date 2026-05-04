@@ -71,6 +71,19 @@
       },
       "categories": ["workspace-context", "artifacts"],
       "keywords": ["artifacts", "claude-artifacts", "downloads"]
+    },
+    {
+      "id": "agent-harness.ext.local-model-connector",
+      "name": "Local Model Connector",
+      "version": "0.1.0",
+      "description": "Downloadable Chrome/Edge extension that brokers approved PWA requests to localhost OpenAI-compatible model endpoints.",
+      "manifest": "./local-model-connector/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./local-model-connector/dist"
+      },
+      "categories": ["model-provider", "browser-extension"],
+      "keywords": ["local-models", "openai-compatible", "lm-studio", "ollama", "foundry-local", "chrome-extension"]
     }
   ]
 }

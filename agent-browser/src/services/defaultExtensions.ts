@@ -17,6 +17,7 @@ import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
 import { createArtifactsPlugin } from '@agent-harness/ext-artifacts';
 import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
 import { createSymphonyPlugin } from '@agent-harness/ext-symphony';
+import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
 import agentSkillsManifestSource from '../../../ext/agent-skills/agent-harness.plugin.json';
@@ -24,6 +25,7 @@ import agentsMdManifestSource from '../../../ext/agents-md/agent-harness.plugin.
 import artifactsManifestSource from '../../../ext/artifacts/agent-harness.plugin.json';
 import designMdManifestSource from '../../../ext/design-md/agent-harness.plugin.json';
 import symphonyManifestSource from '../../../ext/symphony/agent-harness.plugin.json';
+import localModelConnectorManifestSource from '../../../ext/local-model-connector/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
   marketplace: HarnessPluginMarketplaceManifest['plugins'][number];
@@ -53,6 +55,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.design-md', parseHarnessPluginManifest(designMdManifestSource)],
   ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
   ['agent-harness.ext.artifacts', parseHarnessPluginManifest(artifactsManifestSource)],
+  ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
 ]);
 
 export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
@@ -85,6 +88,7 @@ export async function createDefaultExtensionRuntime(
     createDesignMdPlugin({ documents: designDocuments }),
     createSymphonyPlugin(workspaceFiles),
     createArtifactsPlugin(),
+    createLocalModelConnectorPlugin(),
   ]);
 
   return {
