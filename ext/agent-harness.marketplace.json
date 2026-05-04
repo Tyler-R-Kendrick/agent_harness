@@ -60,6 +60,20 @@
       "default": true
     },
     {
+      "id": "agent-harness.ext.workflow-canvas",
+      "name": "Workflow canvas orchestration",
+      "version": "0.1.0",
+      "description": "Creates CNCF Serverless Workflow-backed canvas artifacts for n8n-class automation and Higgsfield-style creative pipelines.",
+      "manifest": "./workflow-canvas/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./workflow-canvas"
+      },
+      "categories": ["workflow", "automation", "creative-canvas"],
+      "keywords": ["cncf", "serverless-workflow", "n8n", "higgsfield", "canvas", "orchestration"],
+      "default": true
+    },
+    {
       "id": "agent-harness.ext.artifacts",
       "name": "Artifacts",
       "version": "0.1.0",
