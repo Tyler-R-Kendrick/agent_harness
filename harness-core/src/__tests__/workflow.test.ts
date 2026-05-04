@@ -342,6 +342,34 @@ describe('runLogActAgentLoop', () => {
     ]);
   });
 
+  it('injects sketch-of-thought expert prompts and constrained decoding into the XState driver agent', async () => {
+    const bus = new WorkflowAgentBus({ session: { id: 'session-sot' } });
+    const infer = vi.fn().mockResolvedValue('   ');
+
+    await runLogActAgentLoop({
+      inferenceClient: { infer },
+      messages: [{ content: 'triage this patient' }],
+      bus,
+      sketchOfThought: {
+        paradigm: 'expert_lexicons',
+        topic: 'cardiology triage',
+        topicDescription: 'Reason about acute coronary syndrome treatment risk.',
+        expertLexiconSummary: 'Use STEMI, MONA, ASA allergy, contraindication, and risk arrows.',
+        maxTokens: 72,
+      },
+    }, {});
+
+    const [messages, options] = infer.mock.calls[0];
+    expect(messages[0]).toEqual(expect.objectContaining({
+      role: 'system',
+      content: expect.stringContaining('## Sketch-of-Thought Expert Agent'),
+    }));
+    expect(messages[0].content).toContain('cardiology triage');
+    expect(messages[0].content).toContain('Use STEMI, MONA, ASA allergy');
+    expect(messages[0].content).toContain('Expert Lexicons');
+    expect(options.constrainedDecoding).toEqual(expect.objectContaining({ kind: 'toon', maxTokens: 72 }));
+  });
+
   it('records executor agent errors as result payloads', async () => {
     const bus = new WorkflowAgentBus({ session: { id: 'session-executor-error' } });
 

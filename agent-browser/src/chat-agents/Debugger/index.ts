@@ -54,8 +54,10 @@ export function buildDebuggerOperatingInstructions(): string {
 
 export function buildDebuggerSystemPrompt({
   workspaceName,
+  modelId,
 }: {
   workspaceName?: string;
+  modelId?: string;
 }): string {
   return [
     buildAgentSystemPrompt({
@@ -66,6 +68,8 @@ export function buildDebuggerSystemPrompt({
         'Treat debugging as cross-domain: code, data, configuration, dependencies, operations, UX, environment, and process can all be causes.',
         'Keep mitigation, root cause, and verification separate.',
       ],
+      agentKind: 'debugger',
+      modelId,
     }),
     '## Debugger Operating Instructions',
     buildDebuggerOperatingInstructions(),
@@ -122,7 +126,7 @@ export async function streamDebuggerChat(
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const systemPrompt = buildDebuggerSystemPrompt({ workspaceName });
+  const systemPrompt = buildDebuggerSystemPrompt({ workspaceName, modelId: runtimeProvider === 'codi' ? model?.id : modelId });
 
   if (runtimeProvider === 'ghcp') {
     if (!modelId || !sessionId) {

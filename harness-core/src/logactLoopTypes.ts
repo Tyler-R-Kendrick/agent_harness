@@ -9,6 +9,7 @@ import type {
 import type { ConstrainedDecoding, CoreInferenceClient } from './constrainedDecoding.js';
 import type { AgentSessionRef } from './agent.js';
 import type { HookRegistry } from './hooks.js';
+import type { SketchOfThoughtExpertAgentOptions } from './expertAgents.js';
 
 export type CoreStepStatus = 'active' | 'done';
 
@@ -58,6 +59,7 @@ export interface LogActAgentLoopOptions {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   constrainedDecoding?: ConstrainedDecoding;
+  sketchOfThought?: SketchOfThoughtExpertAgentOptions;
   session?: AgentSessionRef;
   hooks?: HookRegistry;
 }

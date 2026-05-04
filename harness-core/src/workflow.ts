@@ -25,6 +25,7 @@ import { withAgentBusHooks } from './agentBus.js';
 import { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 import { wrapVoterWithCallbacks } from './chat-agents/voter.js';
 import type { CoreInferenceClient } from './constrainedDecoding.js';
+import { buildSketchOfThoughtExpertAgentPrompt } from './expertAgents.js';
 import {
   LLM_HOOK_EVENTS,
   LOGACT_AGENT_LOOP_HOOK_EVENTS,
@@ -242,6 +243,7 @@ export async function runLogActAgentLoop(
     executor,
     session,
     constrainedDecoding,
+    sketchOfThought,
     hooks,
   }: LogActAgentLoopOptions,
   callbacks: CoreAgentLoopCallbacks,
@@ -253,10 +255,12 @@ export async function runLogActAgentLoop(
     input: input ?? messages.at(-1)?.content ?? '',
     messages,
   });
-  const driverInferenceClient: CoreInferenceClient = constrainedDecoding
+  const driverConstrainedDecoding = constrainedDecoding
+    ?? (sketchOfThought ? await buildSketchOfThoughtConstrainedDecoding(sketchOfThought) : undefined);
+  const driverInferenceClient: CoreInferenceClient = driverConstrainedDecoding
     ? {
         infer: (inferenceMessages, inferenceOptions) =>
-          inferenceClient.infer(inferenceMessages, { ...inferenceOptions, constrainedDecoding }),
+          inferenceClient.infer(inferenceMessages, { ...inferenceOptions, constrainedDecoding: driverConstrainedDecoding }),
       }
     : inferenceClient;
   const runtime = createRuntime({
@@ -269,6 +273,7 @@ export async function runLogActAgentLoop(
       : undefined,
     executor,
     maxTurns: maxIterations ?? maxTurns,
+    sketchOfThoughtPrompt: sketchOfThought ? buildSketchOfThoughtExpertAgentPrompt(sketchOfThought) : undefined,
     hooks,
   });
   const workflowSession = workflowBus instanceof WorkflowAgentBus
@@ -306,6 +311,7 @@ interface WorkflowRuntime {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   maxTurns: number;
+  sketchOfThoughtPrompt?: string;
   hooks?: HookRegistry;
   cursor: number;
   turnCount: number;
@@ -323,6 +329,7 @@ function createRuntime(options: {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   maxTurns: number;
+  sketchOfThoughtPrompt?: string;
   hooks?: HookRegistry;
 }): WorkflowRuntime {
   return {
@@ -332,6 +339,13 @@ function createRuntime(options: {
     intentIndex: 0,
     currentVotes: [],
   };
+}
+
+async function buildSketchOfThoughtConstrainedDecoding(
+  sketchOfThought: NonNullable<LogActAgentLoopOptions['sketchOfThought']>,
+) {
+  const sketchModule = await import(/* @vite-ignore */ './sketchOfThought.js');
+  return sketchModule.buildSketchOfThoughtConstrainedDecoding(sketchOfThought);
 }
 
 async function runWorkflowMachine(
@@ -412,7 +426,9 @@ async function runDriverAgent(runtime: WorkflowRuntime): Promise<{ terminal: boo
     messages: buildMessages(await readAllEntries(runtime.bus)),
   });
   const llmInputPayload = await runLogActHook(runtime.hooks, LLM_HOOK_EVENTS.input, inputPayload);
-  const messages = llmInputPayload.messages;
+  const messages = runtime.sketchOfThoughtPrompt
+    ? [{ role: 'system' as const, content: runtime.sketchOfThoughtPrompt }, ...llmInputPayload.messages]
+    : llmInputPayload.messages;
   await runtime.bus.append({
     type: PayloadType.InfIn,
     messages,
