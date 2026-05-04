@@ -1,11 +1,15 @@
 import { withoutSignature } from './canonicalJson';
 import { signCanonicalJson } from './crypto';
+import { base64UrlEncode } from './encoding';
 import { parseSignedSessionEvent } from './schemas';
 import { sanitizeChatText } from './safeText';
 import type { SessionState, SignedSessionEvent } from './types';
 
 function randomId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
+  if (crypto.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return `${prefix}-${base64UrlEncode(bytes)}`;
 }
 
 export async function createSignedEvent<TPayload>(args: {

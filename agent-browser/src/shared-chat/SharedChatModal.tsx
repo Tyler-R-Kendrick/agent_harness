@@ -28,6 +28,15 @@ import {
   type StoredDeviceIdentity,
 } from '.';
 
+function secureNonce(): string {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+}
+
 type BarcodeDetectorShape = {
   detect(source: CanvasImageSource): Promise<Array<{ rawValue?: string }>>;
 };
@@ -227,7 +236,7 @@ export function SharedChatModal({
     publishApi();
   }
 
-  async function buildSession(args: { role: 'owner' | 'contributor'; identity: StoredDeviceIdentity; ownerDeviceId: string; ownerPublicKey: JsonWebKey; expiresAt: number; peer?: DeviceRecord; protocolSessionId?: string }): Promise<SessionState> {
+  const buildSession = useCallback(async (args: { role: 'owner' | 'contributor'; identity: StoredDeviceIdentity; ownerDeviceId: string; ownerPublicKey: JsonWebKey; expiresAt: number; peer?: DeviceRecord; protocolSessionId?: string }): Promise<SessionState> => {
     const local: DeviceRecord = {
       deviceId: args.identity.deviceId,
       label: args.identity.label,
@@ -265,7 +274,7 @@ export function SharedChatModal({
       expiresAt: args.expiresAt,
       ended: false,
     };
-  }
+  }, [sessionId]);
 
   const startOwnerInvite = useCallback(async () => {
     setError(null);
@@ -297,7 +306,7 @@ export function SharedChatModal({
         offer: compressedOffer,
         offerHash: await hashSdp(localSdp),
         expiresAt: expiry,
-        nonce: crypto.randomUUID(),
+        nonce: secureNonce(),
       };
       const encoded = await encodePayload(payload);
       setInviteCode(encoded);
@@ -346,7 +355,7 @@ export function SharedChatModal({
         answer: await compressSdp(answerSdp),
         answerHash: await hashSdp(answerSdp),
         expiresAt: expiry,
-        nonce: crypto.randomUUID(),
+        nonce: secureNonce(),
       };
       const signed = await signAnswerPayload(identity.privateKey!, unsigned);
       const encodedAnswer = await encodePayload(signed);
