@@ -359,7 +359,7 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
-  it('loads Symphony as a default plugin instead of a hardcoded primary panel', async () => {
+  it('offers Symphony from the default repo marketplace instead of loading it as a primary panel', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -372,10 +372,11 @@ describe('App', () => {
 
     expect(screen.getByText('symphony')).toBeInTheDocument();
     expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
   });
 
-  it('loads repo default extensions into the Extensions panel', async () => {
+  it('lists repo marketplace extensions as installable without enabling them by default', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -384,14 +385,34 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
-    expect(screen.getByRole('heading', { name: 'Extensions' })).toBeInTheDocument();
-    expect(screen.getByText('5 loaded')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();
+    expect(screen.getByText('5 available')).toBeInTheDocument();
+    expect(screen.getByText('0 installed')).toBeInTheDocument();
     expect(screen.getByText('Agent skills')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
     expect(screen.getByText('DESIGN.md design tokens')).toBeInTheDocument();
     expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
     expect(screen.getByText('Artifacts')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(5);
     expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
+  });
+
+  it('installs a repo marketplace extension on demand', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    fireEvent.click(screen.getByRole('button', { name: 'Install Artifacts' }));
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByText('1 installed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Artifacts installed' })).toBeDisabled();
+    expect(window.localStorage.getItem('agent-browser.installed-default-extension-ids')).toContain('agent-harness.ext.artifacts');
   });
 
   it('customizes and persists the generated harness app spec from the dashboard', async () => {

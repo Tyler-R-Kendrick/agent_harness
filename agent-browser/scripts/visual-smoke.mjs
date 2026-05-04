@@ -130,10 +130,11 @@ async function main() {
     await benchmarkObjective.scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Extensions' }).click();
-    await expect(page.getByRole('heading', { name: 'Extensions' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('Workspace plugins')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('heading', { name: 'symphony' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('5 available')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('0 installed')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Symphony workflow orchestration').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Symphony task board' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Review', exact: true }).click();
     const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });

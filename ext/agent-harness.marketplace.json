@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "name": "Agent Harness extension examples",
+  "name": "Agent Harness default marketplace",
   "publisher": {
     "id": "agent-harness",
     "name": "Agent Harness"
@@ -56,8 +56,7 @@
         "path": "./symphony"
       },
       "categories": ["workflow", "workspace-context"],
-      "keywords": ["symphony", "workflow-md", "orchestration"],
-      "default": true
+      "keywords": ["symphony", "workflow-md", "orchestration"]
     },
     {
       "id": "agent-harness.ext.workflow-canvas",

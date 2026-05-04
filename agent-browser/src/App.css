@@ -3611,6 +3611,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   align-items: center;
   gap: 8px;
 }
+.marketplace-install-button {
+  min-width: 72px;
+  justify-content: center;
+}
 .marketplace-stars {
   color: #d7ba7d;
   letter-spacing: 0.04em;

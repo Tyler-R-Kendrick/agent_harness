@@ -57,6 +57,7 @@ describe('STORAGE_KEYS', () => {
       benchmarkEvidenceState: expect.any(String),
       adversaryToolReviewSettings: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
+      installedDefaultExtensionIds: expect.any(String),
     });
   });
 });
