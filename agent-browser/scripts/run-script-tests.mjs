@@ -61,6 +61,8 @@ async function main() {
   assert.match(visualSmokeScript, /\*\*\/api\/cursor\/status/);
   assert.match(visualSmokeScript, /PR review understanding/);
   assert.match(visualSmokeScript, /TK-47 review-native PR understanding/);
+  assert.match(visualSmokeScript, /Adversary tool review/);
+  assert.match(visualSmokeScript, /Enable adversary tool-call review/);
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');

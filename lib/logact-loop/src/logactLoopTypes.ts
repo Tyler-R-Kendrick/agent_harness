@@ -11,6 +11,7 @@ import type {
   ConstrainedDecoding,
   CoreInferenceClient,
   HookRegistry,
+  SketchOfThoughtExpertAgentOptions,
 } from 'harness-core';
 
 export type CoreStepStatus = 'active' | 'done';
@@ -61,6 +62,7 @@ export interface LogActAgentLoopOptions {
   completionChecker?: ICompletionChecker;
   executor?: IExecutor;
   constrainedDecoding?: ConstrainedDecoding;
+  sketchOfThought?: SketchOfThoughtExpertAgentOptions;
   session?: AgentSessionRef;
   hooks?: HookRegistry;
 }

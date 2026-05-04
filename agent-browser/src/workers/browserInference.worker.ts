@@ -1,10 +1,13 @@
 // TypeScript port of reference_impl/tjs-worker.js
 // Keeps the same message protocol and per-task generate logic as the reference.
 
-import { env, pipeline, TextStreamer } from '@huggingface/transformers';
+import { env, pipeline, type PreTrainedTokenizer } from '@huggingface/transformers';
 import {
   buildPipelineLoadOptions,
+  buildPipelineRunOptions,
   compactPromptForBrowserInference,
+  formatBrowserInferenceResult,
+  isStreamingTask,
   normalizeBrowserInferenceErrorMessage,
 } from '../services/browserInferenceRuntime';
 
@@ -86,72 +89,26 @@ export async function handleMessage(data: WorkerRequest) {
       const pipe = await getPipeline(task, modelId);
       const compactedPrompt = compactPromptForBrowserInference(prompt);
       postMessage({ type: 'phase', id, phase: 'thinking' });
+      postMessage({ type: 'phase', id, phase: 'generating' });
 
-      if (task === 'text-generation') {
-        postMessage({ type: 'phase', id, phase: 'generating' });
-        // pipe.tokenizer is the PreTrainedTokenizer attached by the pipeline; cast required
-        // because the PipelineWithTokenizer type uses `unknown` for compatibility with all pipeline types.
-        const streamer = new TextStreamer(pipe.tokenizer as import('@huggingface/transformers').PreTrainedTokenizer, {
-          skip_prompt: true,
-          skip_special_tokens: true,
-          callback_function: (token: string) => {
-            postMessage({ type: 'token', id, token });
-          },
-        });
-        const result = await pipe(compactedPrompt, {
-          max_new_tokens: (options.max_new_tokens as number) || 256,
-          temperature: (options.temperature as number) || 0.7,
-          do_sample: options.do_sample !== false,
-          top_p: (options.top_p as number) || 0.9,
-          ...(typeof options.top_k === 'number' ? { top_k: options.top_k } : {}),
-          ...(typeof options.min_p === 'number' ? { min_p: options.min_p } : {}),
-          // Transformers.js forwards `tokenizer_encode_kwargs` into
-          // `tokenizer.apply_chat_template(...)`, so Qwen3-style thinking
-          // toggles MUST be nested here — passing `enable_thinking` at the
-          // top level is silently dropped.
-          ...(typeof options.enable_thinking === 'boolean'
-            ? { tokenizer_encode_kwargs: { enable_thinking: options.enable_thinking } }
-            : {}),
-          return_full_text: false,
-          streamer,
-        }) as Array<{ generated_text?: string }>;
-        postMessage({ type: 'done', id, result: { text: result[0]?.generated_text ?? '' } });
-
-      } else if (task === 'text2text-generation' || task === 'translation' || task === 'summarization') {
-        postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(compactedPrompt, { max_new_tokens: (options.max_new_tokens as number) || 256 }) as Array<Record<string, string>>;
-        // Pick the first non-null text field in priority order matching the reference_impl
-        const text = result[0]?.generated_text ?? result[0]?.translation_text ?? result[0]?.summary_text ?? JSON.stringify(result);
-        postMessage({ type: 'token', id, token: text });
-        postMessage({ type: 'done', id, result: { text } });
-
-      } else if (task === 'text-classification' || task === 'sentiment-analysis') {
-        postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(compactedPrompt) as Array<{ label: string; score: number }>;
-        const text = (result || []).map((r) => `${r.label} (${Math.round(r.score * 100)}%)`).join(', ');
-        postMessage({ type: 'token', id, token: text });
-        postMessage({ type: 'done', id, result: { text } });
-
-      } else if (task === 'question-answering') {
-        postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(compactedPrompt) as { answer?: string };
-        const text = result.answer ?? JSON.stringify(result);
-        postMessage({ type: 'token', id, token: text });
-        postMessage({ type: 'done', id, result: { text } });
-
-      } else if (task === 'feature-extraction') {
-        postMessage({ type: 'phase', id, phase: 'generating' });
+      if (task === 'feature-extraction') {
         const result = await pipe(compactedPrompt, { pooling: 'mean', normalize: true }) as { data?: unknown[]; size?: unknown };
         const dim = result?.data?.length ?? result?.size ?? '?';
         const text = `Generated embedding vector (${String(dim)} dimensions).`;
         postMessage({ type: 'token', id, token: text });
         postMessage({ type: 'done', id, result: { text } });
-
       } else {
-        postMessage({ type: 'phase', id, phase: 'generating' });
-        const result = await pipe(compactedPrompt) as unknown;
-        const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-        postMessage({ type: 'token', id, token: text });
+        const runOptions = buildPipelineRunOptions(
+          task, options, (pipe.tokenizer as PreTrainedTokenizer) ?? null,
+          (token) => postMessage({ type: 'token', id, token }),
+        );
+        const result = await pipe(compactedPrompt, runOptions);
+        const text = isStreamingTask(task)
+          ? (result as Array<{ generated_text?: string }>)[0]?.generated_text ?? ''
+          : formatBrowserInferenceResult(result);
+        if (!isStreamingTask(task)) {
+          postMessage({ type: 'token', id, token: text });
+        }
         postMessage({ type: 'done', id, result: { text } });
       }
     }

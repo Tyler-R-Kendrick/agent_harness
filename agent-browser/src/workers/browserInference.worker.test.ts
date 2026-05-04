@@ -14,17 +14,22 @@ const transformerEnv = { useBrowserCache: true, backends: { onnx: { wasm: { prox
 
 vi.stubGlobal('postMessage', postMessageSpy);
 
+async function getHandleMessage() {
+  const mod = await import('./browserInference.worker');
+  return mod.handleMessage;
+}
+
+let handleMessage: Awaited<ReturnType<typeof getHandleMessage>>;
+
 /**
  * Each test resets modules so the worker's internal pipeline cache is cleared and
  * the pipeline mock is rewired through the fresh module graph.
  */
-beforeEach(() => {
+beforeEach(async () => {
   pipelineMock.mockReset();
   postMessageSpy.mockReset();
   textStreamerMock.mockClear();
-  if ('gpu' in globalThis.navigator) {
-    delete (globalThis.navigator as Navigator & { gpu?: unknown }).gpu;
-  }
+  vi.stubGlobal('navigator', {});
   vi.resetModules();
   transformerEnv.useBrowserCache = true;
   transformerEnv.backends.onnx.wasm.proxy = false;
@@ -34,22 +39,29 @@ beforeEach(() => {
     TextStreamer: textStreamerMock,
     env: transformerEnv,
   }));
+  handleMessage = await getHandleMessage();
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function getHandleMessage() {
-  const mod = await import('./browserInference.worker');
-  return mod.handleMessage;
+/** Create a mock text-generation pipe with a stubbed tokenizer. */
+function makePipeWithTokenizer() {
+  const pipe = vi.fn();
+  (pipe as unknown as Record<string, unknown>).tokenizer = { decode: vi.fn() };
+  pipelineMock.mockResolvedValue(pipe);
+  return pipe;
+}
+
+/** All messages posted during the current test. */
+function postedMessages() {
+  return postMessageSpy.mock.calls.map((c) => c[0] as Record<string, unknown>);
 }
 
 describe('browserInference.worker handleMessage (reference_impl action protocol)', () => {
   it('loads gpt-2: calls pipeline and posts done with {loaded:true} — matching reference_impl', async () => {
     pipelineMock.mockResolvedValue(vi.fn());
-
-    const handleMessage = await getHandleMessage();
 
     await handleMessage({ action: 'load', id: 'req-1', task: 'text-generation', modelId: 'openai-community/gpt2' });
 
@@ -58,20 +70,14 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
       'openai-community/gpt2',
       expect.objectContaining({ progress_callback: expect.any(Function) }),
     );
-
-    // reference_impl sends {type:"done", id, result:{loaded:true}} on load complete
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'done', id: 'req-1', result: { loaded: true } }),
     );
-
-    const messages: { type: string }[] = postMessageSpy.mock.calls.map((c) => c[0]);
-    expect(messages.every((m) => m.type !== 'error')).toBe(true);
+    expect(postedMessages().every((m) => m.type !== 'error')).toBe(true);
   });
 
   it('loads without forcing a backend device or dtype so Transformers.js can auto-select', async () => {
     pipelineMock.mockResolvedValue(vi.fn());
-
-    const handleMessage = await getHandleMessage();
 
     await handleMessage({ action: 'load', id: 'req-2', task: 'text-generation', modelId: 'openai-community/gpt2' });
 
@@ -84,12 +90,7 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
 
   it('loads Qwen text-generation with q4 dtype to keep browser memory bounded', async () => {
     pipelineMock.mockResolvedValue(vi.fn());
-    Object.defineProperty(globalThis.navigator, 'gpu', {
-      configurable: true,
-      value: {},
-    });
-
-    const handleMessage = await getHandleMessage();
+    Object.defineProperty(globalThis.navigator, 'gpu', { configurable: true, value: {} });
 
     await handleMessage({ action: 'load', id: 'req-qwen', task: 'text-generation', modelId: 'onnx-community/Qwen3-0.6B-ONNX' });
 
@@ -103,30 +104,20 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
         enableCpuMemArena: false,
         enableMemPattern: false,
         graphOptimizationLevel: 'disabled',
-        extra: {
-          session: {
-            use_ort_model_bytes_directly: '0',
-          },
-        },
+        extra: { session: { use_ort_model_bytes_directly: '0' } },
       },
     });
-    expect(transformerEnv.backends.onnx.wasm).toMatchObject({
-      proxy: true,
-      numThreads: 1,
-    });
+    expect(transformerEnv.backends.onnx.wasm).toMatchObject({ proxy: true, numThreads: 1 });
     expect(transformerEnv.useBrowserCache).toBe(true);
   });
 
   it('posts error:{error} (not msg) when pipeline loading fails — matching reference_impl', async () => {
     pipelineMock.mockRejectedValue(new Error('ONNX file not found'));
 
-    const handleMessage = await getHandleMessage();
-
     await expect(
       handleMessage({ action: 'load', id: 'req-3', task: 'text-generation', modelId: 'openai-community/gpt2' }),
     ).resolves.not.toThrow();
 
-    // reference_impl uses `error` field not `msg`
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'error', id: 'req-3', error: 'ONNX file not found' }),
     );
@@ -144,24 +135,10 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
         }),
     );
 
-    const handleMessage = await getHandleMessage();
+    const loadPromise = handleMessage({ action: 'load', id: 'req-5', task: 'text-generation', modelId: 'openai-community/gpt2' });
 
-    const loadPromise = handleMessage({
-      action: 'load',
-      id: 'req-5',
-      task: 'text-generation',
-      modelId: 'openai-community/gpt2',
-    });
-
-    // Status messages posted during loading
-    const statusMessages = postMessageSpy.mock.calls.map((c) => c[0]).filter((m: { type: string }) => m.type === 'status');
-    expect(statusMessages.length).toBeGreaterThan(0);
-
-    // No 'done' should have been posted yet
-    const doneBeforeResolve = postMessageSpy.mock.calls
-      .map((c) => c[0])
-      .find((m: { type: string }) => m.type === 'done');
-    expect(doneBeforeResolve).toBeUndefined();
+    expect(postedMessages().filter((m) => m.type === 'status').length).toBeGreaterThan(0);
+    expect(postedMessages().find((m) => m.type === 'done')).toBeUndefined();
 
     resolveLoad({ tokenizer: {} });
     await loadPromise;
@@ -174,8 +151,6 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
   it('caches the loaded pipeline so a second load request skips the pipeline() call', async () => {
     pipelineMock.mockResolvedValue(vi.fn());
 
-    const handleMessage = await getHandleMessage();
-
     await handleMessage({ action: 'load', id: 'req-6a', task: 'text-generation', modelId: 'org/cached-model' });
     await handleMessage({ action: 'load', id: 'req-6b', task: 'text-generation', modelId: 'org/cached-model' });
 
@@ -183,12 +158,8 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
   });
 
   it('generate text-generation: sends thinking+generating phases, uses TextStreamer, done with {text}', async () => {
-    const mockTokenizerObj = { decode: vi.fn() };
-    const mockPipe = vi.fn().mockResolvedValue([{ generated_text: 'hello world' }]);
-    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
-    pipelineMock.mockResolvedValue(mockPipe);
-
-    const handleMessage = await getHandleMessage();
+    const mockPipe = makePipeWithTokenizer();
+    mockPipe.mockResolvedValue([{ generated_text: 'hello world' }]);
 
     await handleMessage({
       action: 'generate',
@@ -199,24 +170,17 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
       options: { max_new_tokens: 50 },
     });
 
-    const messages = postMessageSpy.mock.calls.map((c) => c[0] as Record<string, unknown>);
-    const phases = messages.filter((m) => m.type === 'phase').map((m) => m.phase);
-    // reference_impl sends "thinking" then "generating" before inference
+    const phases = postedMessages().filter((m) => m.type === 'phase').map((m) => m.phase);
     expect(phases).toContain('thinking');
     expect(phases).toContain('generating');
-    // done result is {text: "..."} not raw pipeline array
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'done', id: 'gen-1', result: { text: 'hello world' } }),
     );
   });
 
   it('compacts oversized text-generation prompts before calling the pipeline', async () => {
-    const mockTokenizerObj = { decode: vi.fn() };
-    const mockPipe = vi.fn().mockResolvedValue([{ generated_text: 'trimmed' }]);
-    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
-    pipelineMock.mockResolvedValue(mockPipe);
-
-    const handleMessage = await getHandleMessage();
+    const mockPipe = makePipeWithTokenizer();
+    mockPipe.mockResolvedValue([{ generated_text: 'trimmed' }]);
 
     await handleMessage({
       action: 'generate',
@@ -233,19 +197,14 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
     });
 
     const promptArg = mockPipe.mock.calls[0][0] as Array<{ role: string; content: string }>;
-    const totalChars = promptArg.reduce((sum, message) => sum + message.content.length, 0);
-
+    const totalChars = promptArg.reduce((sum, m) => sum + m.content.length, 0);
     expect(totalChars).toBeLessThanOrEqual(12_000);
     expect(promptArg.at(-1)?.content).toContain('latest:');
   });
 
   it('maps ORT integer overflow failures to a clearer local-model error', async () => {
-    const mockTokenizerObj = { decode: vi.fn() };
-    const mockPipe = vi.fn().mockRejectedValue(new Error('failed to call OrtRun(). ERROR_CODE: 1, ERROR_MESSAGE: Integer overflow'));
-    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
-    pipelineMock.mockResolvedValue(mockPipe);
-
-    const handleMessage = await getHandleMessage();
+    const mockPipe = makePipeWithTokenizer();
+    mockPipe.mockRejectedValue(new Error('failed to call OrtRun(). ERROR_CODE: 1, ERROR_MESSAGE: Integer overflow'));
 
     await handleMessage({
       action: 'generate',
@@ -269,8 +228,6 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
     const mockPipe = vi.fn().mockResolvedValue([{ label: 'POSITIVE', score: 0.95 }]);
     pipelineMock.mockResolvedValue(mockPipe);
 
-    const handleMessage = await getHandleMessage();
-
     await handleMessage({
       action: 'generate',
       id: 'gen-2',
@@ -280,8 +237,7 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
       options: {},
     });
 
-    const messages = postMessageSpy.mock.calls.map((c) => c[0] as Record<string, unknown>);
-    const tokenMsg = messages.find((m) => m.type === 'token');
+    const tokenMsg = postedMessages().find((m) => m.type === 'token');
     expect(tokenMsg?.token).toBe('POSITIVE (95%)');
     expect(postMessageSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'done', id: 'gen-2', result: { text: 'POSITIVE (95%)' } }),
@@ -289,12 +245,8 @@ describe('browserInference.worker handleMessage (reference_impl action protocol)
   });
 
   it('forwards enable_thinking, top_k, and min_p options into the text-generation pipe call', async () => {
-    const mockTokenizerObj = { decode: vi.fn() };
-    const mockPipe = vi.fn().mockResolvedValue([{ generated_text: 'ok' }]);
-    (mockPipe as unknown as Record<string, unknown>).tokenizer = mockTokenizerObj;
-    pipelineMock.mockResolvedValue(mockPipe);
-
-    const handleMessage = await getHandleMessage();
+    const mockPipe = makePipeWithTokenizer();
+    mockPipe.mockResolvedValue([{ generated_text: 'ok' }]);
 
     await handleMessage({
       action: 'generate',

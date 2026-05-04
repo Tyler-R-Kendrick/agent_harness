@@ -354,6 +354,7 @@ describe('stagedToolPipeline', () => {
       'voter:teacher',
       'voter:teacher',
       'voter:teacher',
+      'adversary-tool-review',
     ]);
   });
 

@@ -94,6 +94,17 @@ export {
   decodeToonDocument,
   type ToonGrammarBuild,
 } from './toonGrammar.js';
+export {
+  buildSketchOfThoughtExpertAgentPrompt,
+  buildSketchOfThoughtSystemPrompt,
+  resolveSketchOfThoughtParadigm,
+  type SketchOfThoughtExpertAgentOptions,
+  type SketchOfThoughtParadigm,
+} from './expertAgents.js';
+export {
+  resolveSaeMappingsForModel,
+  type SaeMapping,
+} from './saeMapping.js';
 export { PendingMessageQueue, type QueueMode } from './queue.js';
 export {
   buildWorkspacePromptContext,

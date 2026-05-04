@@ -98,6 +98,7 @@ import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-a
 import { useCopilotReadable } from './services/copilotRuntimeBridge';
 import { executeCliCommand } from './tools/cli/exec';
 import { COPILOT_RUNTIME_ENABLED } from './config';
+import { LocalModelSettings } from './local-model-extension/LocalModelSettings';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
 import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPanel';
@@ -130,6 +131,11 @@ import {
   type BenchmarkRoutingSettings,
   type BenchmarkTaskClassId,
 } from './services/benchmarkModelRouting';
+import {
+  DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
+  isAdversaryToolReviewSettings,
+  type AdversaryToolReviewSettings,
+} from './services/adversaryToolReview';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
@@ -1913,6 +1919,7 @@ function ChatPanel({
   setBrowserLocationContext,
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
+  adversaryToolReviewSettings,
   secretSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
@@ -1950,6 +1957,7 @@ function ChatPanel({
   setBrowserLocationContext: React.Dispatch<React.SetStateAction<BrowserLocationContext>>;
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
+  adversaryToolReviewSettings: AdversaryToolReviewSettings;
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
@@ -4166,6 +4174,7 @@ function ChatPanel({
               signal: controller.signal,
               evaluationAgents,
               negativeRubricTechniques,
+              adversaryToolReviewSettings,
               onNegativeRubricTechnique,
               onGeneratedTool: (file) => onWorkspaceFileUpsert({
                 path: file.path,
@@ -4804,7 +4813,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, cursorState, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, cursorState, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -5514,6 +5523,65 @@ function BenchmarkRoutingSettingsPanel({
   );
 }
 
+function AdversaryToolReviewSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: AdversaryToolReviewSettings;
+  onChange: (settings: AdversaryToolReviewSettings) => void;
+}) {
+  const rulesText = settings.customRules.join('\n');
+  const setRules = (value: string) => {
+    onChange({
+      ...settings,
+      customRules: value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean),
+    });
+  };
+
+  return (
+    <SettingsSection title="Adversary tool review" defaultOpen={false}>
+      <div className="adversary-review-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable adversary tool-call review"
+              checked={settings.enabled}
+              onChange={(event) => onChange({ ...settings, enabled: event.target.checked })}
+            />
+            <span>
+              <strong>Review tool actions before execution</strong>
+              <small>Compare committed LogAct actions against the user task, recent context, and tool policy.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Strictly block high-risk reviewed actions"
+              checked={settings.strictMode}
+              onChange={(event) => onChange({ ...settings, strictMode: event.target.checked })}
+            />
+            <span>
+              <strong>Strict blocking</strong>
+              <small>Block high-risk drift immediately instead of pausing for operator approval.</small>
+            </span>
+          </label>
+        </div>
+        <label className="provider-command-field adversary-review-rules">
+          <span>Custom rules</span>
+          <textarea
+            aria-label="Adversary review custom rules"
+            value={rulesText}
+            onChange={(event) => setRules(event.target.value)}
+            placeholder="One rule per line"
+            rows={4}
+          />
+        </label>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function CursorModelCard({ model }: { model: CursorModelSummary }) {
   return (
     <div className="model-card copilot-model-card">
@@ -5903,6 +5971,7 @@ interface SettingsPanelProps {
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
+  adversaryToolReviewSettings: AdversaryToolReviewSettings;
   task: string;
   loadingModelId: string | null;
   onTaskChange: (task: string) => void;
@@ -5910,6 +5979,7 @@ interface SettingsPanelProps {
   onInstall: (model: HFModel) => Promise<void>;
   onDelete: (id: string) => void;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
+  onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
@@ -5922,7 +5992,7 @@ interface SettingsPanelProps {
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
+function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, adversaryToolReviewSettings, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, onAdversaryToolReviewSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -6050,11 +6120,22 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         </div>
       </SettingsSection>
 
+      <SettingsSection title="Local OpenAI-compatible endpoint" defaultOpen={false}>
+        <article className="provider-card">
+          <LocalModelSettings />
+        </article>
+      </SettingsSection>
+
       <BenchmarkRoutingSettingsPanel
         settings={benchmarkRoutingSettings}
         candidates={benchmarkRoutingCandidates}
         evidenceState={benchmarkEvidenceState}
         onChange={onBenchmarkRoutingSettingsChange}
+      />
+
+      <AdversaryToolReviewSettingsPanel
+        settings={adversaryToolReviewSettings}
+        onChange={onAdversaryToolReviewSettingsChange}
       />
 
       <SecretsSettings
@@ -6176,6 +6257,7 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.agents-md')) return 'file';
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
   if (extensionId.endsWith('.artifacts')) return 'layers';
+  if (extensionId.endsWith('.local-model-connector')) return 'cpu';
   return 'puzzle';
 }
 
@@ -6195,14 +6277,19 @@ function ExtensionsPanel({
   workspaceName,
   capabilities,
   defaultExtensions,
+  installedExtensionIds,
+  onInstallExtension,
 }: {
   workspaceName: string;
   capabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
+  installedExtensionIds: string[];
+  onInstallExtension: (extensionId: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
+  const installedExtensionIdSet = new Set(defaultExtensions?.installedExtensionIds ?? installedExtensionIds);
 
   const filtered = repoExtensions.filter((extension) => {
     if (!search) return true;
@@ -6219,34 +6306,48 @@ function ExtensionsPanel({
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <div className="panel-topbar extensions-topbar">
-        <h2>Extensions</h2>
-        <span className="badge">{defaultExtensionSummary.pluginCount} loaded</span>
+        <h2>Marketplace</h2>
+        <span className="badge">{repoExtensions.length} available</span>
+        <span className="badge">{defaultExtensionSummary.pluginCount} installed</span>
       </div>
       <div className="extensions-search shared-input-shell">
         <Icon name="search" size={13} color="#7d8594" />
         <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
       </div>
       <div className="extensions-list">
-        {filtered.map((extension) => (
-          <article key={extension.manifest.id} className="marketplace-card">
-            <div className="marketplace-card-icon">
-              <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
-            </div>
-            <div className="marketplace-card-body">
-              <strong>{extension.manifest.name}</strong>
-              <span className="marketplace-card-author">
-                {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
-              </span>
-              <p className="marketplace-card-desc">{extension.manifest.description}</p>
-              <div className="marketplace-card-meta">
-                {(extension.manifest.capabilities ?? []).map((capability) => (
-                  <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
-                ))}
+        {filtered.map((extension) => {
+          const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
+          const isLocalModelConnector = extension.manifest.id.endsWith('.local-model-connector');
+          return (
+            <article key={extension.manifest.id} className="marketplace-card">
+              <div className="marketplace-card-icon">
+                <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
               </div>
-            </div>
-            <span className="badge">Loaded</span>
-          </article>
-        ))}
+              <div className="marketplace-card-body">
+                <strong>{extension.manifest.name}</strong>
+                <span className="marketplace-card-author">
+                  {isLocalModelConnector ? 'Download/load unpacked: ' : ''}
+                  {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
+                </span>
+                <p className="marketplace-card-desc">{extension.manifest.description}</p>
+                <div className="marketplace-card-meta">
+                  {(extension.manifest.capabilities ?? []).map((capability) => (
+                    <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`secondary-button marketplace-install-button${isLocalModelConnector ? ' connected' : ''}`}
+                disabled={isInstalled}
+                aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+                onClick={() => onInstallExtension(extension.manifest.id)}
+              >
+                {isInstalled ? 'Installed' : isLocalModelConnector ? 'Download' : 'Install'}
+              </button>
+            </article>
+          );
+        })}
         {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
       </div>
       {capabilities.plugins.length > 0 && (
@@ -7368,6 +7469,10 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
 const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
@@ -7401,6 +7506,12 @@ function AgentBrowserApp() {
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useStoredState<HFModel[]>(localStorageBackend, STORAGE_KEYS.installedModels, isHFModelArray, []);
+  const [installedDefaultExtensionIds, setInstalledDefaultExtensionIds] = useStoredState<string[]>(
+    localStorageBackend,
+    STORAGE_KEYS.installedDefaultExtensionIds,
+    isStringArray,
+    [],
+  );
   const [benchmarkRoutingSettings, setBenchmarkRoutingSettings] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.benchmarkModelRoutingSettings,
@@ -7412,6 +7523,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.benchmarkEvidenceState,
     isBenchmarkEvidenceDiscoveryState,
     DEFAULT_BENCHMARK_EVIDENCE_STATE,
+  );
+  const [adversaryToolReviewSettings, setAdversaryToolReviewSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.adversaryToolReviewSettings,
+    isAdversaryToolReviewSettings,
+    DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
   );
   const [browserLocationContext, setBrowserLocationContext] = useStoredState(
     localStorageBackend,
@@ -7664,9 +7781,16 @@ function AgentBrowserApp() {
     : null;
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
+  const installDefaultExtension = useCallback((extensionId: string) => {
+    setInstalledDefaultExtensionIds((current) => (
+      current.includes(extensionId) ? current : [...current, extensionId]
+    ));
+  }, [setInstalledDefaultExtensionIds]);
   useEffect(() => {
     let mounted = true;
-    void createDefaultExtensionRuntime(activeWorkspaceFiles)
+    void createDefaultExtensionRuntime(activeWorkspaceFiles, {
+      installedExtensionIds: installedDefaultExtensionIds,
+    })
       .then((runtime) => {
         if (mounted) setDefaultExtensionRuntime(runtime);
       })
@@ -7677,7 +7801,7 @@ function AgentBrowserApp() {
     return () => {
       mounted = false;
     };
-  }, [activeWorkspaceFiles]);
+  }, [activeWorkspaceFiles, installedDefaultExtensionIds]);
   const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
     workspaceId: activeWorkspaceId,
     workspaceName: activeWorkspace.name,
@@ -10680,6 +10804,8 @@ function AgentBrowserApp() {
         workspaceName={activeWorkspace.name}
         capabilities={activeWorkspaceCapabilities}
         defaultExtensions={defaultExtensionRuntime}
+        installedExtensionIds={installedDefaultExtensionIds}
+        onInstallExtension={installDefaultExtension}
       />
     );
     if (activePanel === 'settings') return (
@@ -10698,6 +10824,7 @@ function AgentBrowserApp() {
         benchmarkRoutingSettings={benchmarkRoutingSettings}
         benchmarkRoutingCandidates={benchmarkRoutingCandidates}
         benchmarkEvidenceState={benchmarkEvidenceState}
+        adversaryToolReviewSettings={adversaryToolReviewSettings}
         task={registryTask}
         loadingModelId={loadingModelId}
         onTaskChange={setRegistryTask}
@@ -10705,6 +10832,7 @@ function AgentBrowserApp() {
         onInstall={installModel}
         onDelete={deleteModel}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
+        onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
         onSaveEvaluationAgents={saveEvaluationAgents}
@@ -10967,6 +11095,7 @@ function AgentBrowserApp() {
                 setBrowserLocationContext={setBrowserLocationContext}
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
+                adversaryToolReviewSettings={adversaryToolReviewSettings}
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}

@@ -8,7 +8,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const alias = {
   '@agent-harness/ext-agent-skills': path.resolve(__dirname, '../ext/agent-skills/src/index.ts'),
   '@agent-harness/ext-agents-md': path.resolve(__dirname, '../ext/agents-md/src/index.ts'),
+  '@agent-harness/ext-artifacts': path.resolve(__dirname, '../ext/artifacts/src/index.ts'),
   '@agent-harness/ext-design-md': path.resolve(__dirname, '../ext/design-md/src/index.ts'),
+  '@agent-harness/ext-symphony': path.resolve(__dirname, '../ext/symphony/src/index.ts'),
+  '@agent-harness/ext-workflow-canvas': path.resolve(__dirname, '../ext/workflow-canvas/src/index.ts'),
+  '@agent-harness/ext-local-model-connector': path.resolve(__dirname, '../ext/local-model-connector/src/index.ts'),
   logact: path.resolve(__dirname, '../lib/logact/src/index.ts'),
   'harness-core': path.resolve(__dirname, '../harness-core/src/index.ts'),
   'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),

@@ -28,6 +28,7 @@ export function buildCursorPrompt({
   latestUserInput,
   loopMessages,
   systemPrompt,
+  modelId,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
@@ -35,6 +36,7 @@ export function buildCursorPrompt({
   latestUserInput: string;
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   systemPrompt?: string;
+  modelId?: string;
 }): string {
   const transcript = loopMessages
     ? loopMessages
@@ -53,6 +55,7 @@ export function buildCursorPrompt({
       goal: 'Help the user in the active workspace through Cursor SDK-backed coding-agent collaboration.',
       scenario,
       constraints: ['Use the transcript and latest user request to stay grounded in the current workspace context.'],
+      modelId,
     }),
     '## Workspace Context',
     workspacePromptContext,
@@ -130,7 +133,7 @@ function createCursorInferenceClient(
           {
             modelId,
             sessionId,
-            prompt: buildCursorPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages, systemPrompt }),
+            prompt: buildCursorPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages: busMessages, systemPrompt, modelId }),
           },
           {
             onToken: filteredOnToken,

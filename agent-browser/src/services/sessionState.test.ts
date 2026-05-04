@@ -55,7 +55,9 @@ describe('STORAGE_KEYS', () => {
       browserNotificationSettings: expect.any(String),
       benchmarkModelRoutingSettings: expect.any(String),
       benchmarkEvidenceState: expect.any(String),
+      adversaryToolReviewSettings: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
+      installedDefaultExtensionIds: expect.any(String),
     });
   });
 });

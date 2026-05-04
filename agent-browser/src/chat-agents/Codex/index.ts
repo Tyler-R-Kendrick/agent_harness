@@ -27,6 +27,7 @@ export function buildCodexPrompt({
   latestUserInput,
   loopMessages,
   systemPrompt,
+  modelId,
 }: {
   workspaceName: string;
   workspacePromptContext: string;
@@ -34,6 +35,7 @@ export function buildCodexPrompt({
   latestUserInput: string;
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   systemPrompt?: string;
+  modelId?: string;
 }): string {
   const transcript = loopMessages
     ? loopMessages
@@ -52,6 +54,7 @@ export function buildCodexPrompt({
       goal: 'Help the user in the active workspace with concise, grounded collaboration.',
       scenario,
       constraints: ['Use the transcript and latest user request to stay grounded in the current workspace context.'],
+      modelId,
     }),
     '## Workspace Context',
     workspacePromptContext,
@@ -90,7 +93,7 @@ function createCodexInferenceClient(
           {
             modelId,
             sessionId,
-            prompt: buildCodexPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages, systemPrompt }),
+            prompt: buildCodexPrompt({ workspaceName, workspacePromptContext, messages, latestUserInput, loopMessages, systemPrompt, modelId }),
           },
           {
             onToken: callbacks.onToken,

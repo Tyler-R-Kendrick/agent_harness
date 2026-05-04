@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.local-model-connector",
+  "name": "Local Model Connector",
+  "version": "0.1.0",
+  "description": "Manifest V3 browser extension that brokers approved PWA requests to loopback OpenAI-compatible model endpoints.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createLocalModelConnectorPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "asset",
+      "id": "local-model-connector-extension",
+      "description": "Loadable Chrome/Edge extension package for local model connectivity."
+    },
+    {
+      "kind": "model-provider",
+      "id": "local-openai-compatible",
+      "description": "Secure PWA-to-extension bridge for localhost OpenAI-compatible chat completions."
+    }
+  ],
+  "assets": [
+    {
+      "kind": "runtime",
+      "path": "./dist",
+      "description": "Built MV3 extension directory to load unpacked in Chrome or Edge."
+    },
+    {
+      "kind": "documentation",
+      "path": "./README.md",
+      "description": "Build, install, PWA configuration, and troubleshooting docs."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "Fetches only user-approved localhost or 127.0.0.1 OpenAI-compatible endpoints."
+    },
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Stores non-sensitive local endpoint preferences and optional user-approved API keys."
+    },
+    {
+      "scope": "browser",
+      "access": "execute",
+      "reason": "Runs as a Manifest V3 extension service worker and receives approved external messages."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

@@ -148,4 +148,25 @@ describe('agentPromptTemplates', () => {
     expect(prompt).toContain('## Goal');
     expect(prompt).toContain('Write code safely.');
   });
+
+  it('adds on-demand sketch-of-thought expert prompts and model SAE metadata to expert scenarios', () => {
+    const prompt = (buildAgentSystemPrompt as unknown as (input: {
+      workspaceName: string;
+      goal: string;
+      scenario: 'research';
+      modelId: string;
+    }) => string)({
+      workspaceName: 'Research',
+      goal: 'Research supported sparse autoencoders.',
+      scenario: 'research',
+      modelId: 'Qwen/Qwen3.5-27B',
+    });
+
+    expect(prompt).toContain('## Sketch-of-Thought Expert Agent');
+    expect(prompt).toContain('Expert Lexicons');
+    expect(prompt).toContain('Research supported sparse autoencoders.');
+    expect(prompt).toContain('No full-sentence chain-of-thought');
+    expect(prompt).toContain('## SAE Mapping');
+    expect(prompt).toContain('Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_100');
+  });
 });

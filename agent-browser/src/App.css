@@ -474,6 +474,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .trajectory-threshold-grid input {
   min-width: 0;
 }
+.adversary-review-settings {
+  display: grid;
+  gap: 10px;
+}
+.adversary-review-rules textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(7, 10, 16, 0.72);
+  color: #f3f4f6;
+  padding: 8px;
+  line-height: 1.45;
+}
 .secrets-table {
   display: grid;
   overflow: hidden;
@@ -2300,7 +2315,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 11px;
   color: var(--text-soft);
 }
-.provider-command-field input {
+.provider-command-field input,
+.provider-command-field select,
+.provider-command-field textarea {
   width: 100%;
   padding: 8px 10px;
   border-radius: 4px;
@@ -2310,6 +2327,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #d7dde5;
   font-family: 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
+}
+.provider-command-field select {
+  min-height: 34px;
+}
+.provider-command-field textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+.local-model-extension-settings {
+  display: grid;
+  gap: 10px;
+}
+.local-model-extension-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.local-model-persist-key {
+  align-items: flex-start;
+  font-size: 12px;
+}
+@media (max-width: 860px) {
+  .local-model-extension-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .copilot-model-card {
   align-items: start;
@@ -3568,6 +3610,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.marketplace-install-button {
+  min-width: 72px;
+  justify-content: center;
 }
 .marketplace-stars {
   color: #d7ba7d;

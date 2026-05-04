@@ -24,6 +24,7 @@ import { runLogActActorWorkflow } from './logactActorWorkflow';
 import type { CustomEvaluationAgent } from './evaluationAgentRegistry';
 import { resolveConversationSearchContext } from './conversationSearchContext';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from './selfReflection';
+import type { AdversaryToolReviewSettings } from './adversaryToolReview';
 
 const CHAT_OUTPUT_TOKENS = 512;
 
@@ -82,6 +83,7 @@ export type StagedToolPipelineOptions = {
   voters?: IVoter[];
   evaluationAgents?: CustomEvaluationAgent[];
   negativeRubricTechniques?: string[];
+  adversaryToolReviewSettings?: AdversaryToolReviewSettings;
   onNegativeRubricTechnique?: (technique: string) => void;
   onGeneratedTool?: (file: GeneratedToolSource) => Promise<void> | void;
 };
@@ -247,6 +249,7 @@ async function runDirectChat(
       workspaceName: options.workspaceName,
       goal: 'Answer the request directly without tools.',
       scenario: resolveAgentScenario(transcript),
+      modelId: modelMeta(options.model).modelId,
     }),
     '## Workspace Context',
     fitTextToTokenBudget(options.instructions, budget.maxInputTokens),
@@ -436,6 +439,7 @@ export async function runStagedToolPipeline(
           };
         },
         negativeRubricTechniques: options.negativeRubricTechniques,
+        adversaryToolReviewSettings: options.adversaryToolReviewSettings,
         customTeacherInstructions: (options.evaluationAgents ?? [])
           .filter((agent) => agent.enabled && agent.kind === 'teacher')
           .map((agent) => agent.instructions),
