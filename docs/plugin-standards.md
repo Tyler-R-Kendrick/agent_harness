@@ -54,7 +54,7 @@ manifests:
 ```json
 {
   "schemaVersion": 1,
-  "name": "Agent Harness extension examples",
+  "name": "Agent Harness default marketplace",
   "publisher": { "id": "agent-harness", "name": "Agent Harness" },
   "plugins": [{
     "id": "agent-harness.ext.example",

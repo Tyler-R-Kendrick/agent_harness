@@ -6277,14 +6277,19 @@ function ExtensionsPanel({
   workspaceName,
   capabilities,
   defaultExtensions,
+  installedExtensionIds,
+  onInstallExtension,
 }: {
   workspaceName: string;
   capabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
+  installedExtensionIds: string[];
+  onInstallExtension: (extensionId: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
+  const installedExtensionIdSet = new Set(defaultExtensions?.installedExtensionIds ?? installedExtensionIds);
 
   const filtered = repoExtensions.filter((extension) => {
     if (!search) return true;
@@ -6301,37 +6306,48 @@ function ExtensionsPanel({
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <div className="panel-topbar extensions-topbar">
-        <h2>Extensions</h2>
-        <span className="badge">{defaultExtensionSummary.pluginCount} loaded</span>
+        <h2>Marketplace</h2>
+        <span className="badge">{repoExtensions.length} available</span>
+        <span className="badge">{defaultExtensionSummary.pluginCount} installed</span>
       </div>
       <div className="extensions-search shared-input-shell">
         <Icon name="search" size={13} color="#7d8594" />
         <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
       </div>
       <div className="extensions-list">
-        {filtered.map((extension) => (
-          <article key={extension.manifest.id} className="marketplace-card">
-            <div className="marketplace-card-icon">
-              <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
-            </div>
-            <div className="marketplace-card-body">
-              <strong>{extension.manifest.name}</strong>
-              <span className="marketplace-card-author">
-                {extension.manifest.id.endsWith('.local-model-connector') ? 'Download/load unpacked: ' : ''}
-                {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
-              </span>
-              <p className="marketplace-card-desc">{extension.manifest.description}</p>
-              <div className="marketplace-card-meta">
-                {(extension.manifest.capabilities ?? []).map((capability) => (
-                  <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
-                ))}
+        {filtered.map((extension) => {
+          const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
+          const isLocalModelConnector = extension.manifest.id.endsWith('.local-model-connector');
+          return (
+            <article key={extension.manifest.id} className="marketplace-card">
+              <div className="marketplace-card-icon">
+                <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
               </div>
-            </div>
-            <span className={`badge${extension.manifest.id.endsWith('.local-model-connector') ? ' connected' : ''}`}>
-              {extension.manifest.id.endsWith('.local-model-connector') ? 'Download' : 'Loaded'}
-            </span>
-          </article>
-        ))}
+              <div className="marketplace-card-body">
+                <strong>{extension.manifest.name}</strong>
+                <span className="marketplace-card-author">
+                  {isLocalModelConnector ? 'Download/load unpacked: ' : ''}
+                  {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
+                </span>
+                <p className="marketplace-card-desc">{extension.manifest.description}</p>
+                <div className="marketplace-card-meta">
+                  {(extension.manifest.capabilities ?? []).map((capability) => (
+                    <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`secondary-button marketplace-install-button${isLocalModelConnector ? ' connected' : ''}`}
+                disabled={isInstalled}
+                aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+                onClick={() => onInstallExtension(extension.manifest.id)}
+              >
+                {isInstalled ? 'Installed' : isLocalModelConnector ? 'Download' : 'Install'}
+              </button>
+            </article>
+          );
+        })}
         {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
       </div>
       {capabilities.plugins.length > 0 && (
@@ -7453,6 +7469,10 @@ function isHFModelArray(value: unknown): value is HFModel[] {
   );
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
 const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
@@ -7486,6 +7506,12 @@ function AgentBrowserApp() {
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
   const [installedModels, setInstalledModels] = useStoredState<HFModel[]>(localStorageBackend, STORAGE_KEYS.installedModels, isHFModelArray, []);
+  const [installedDefaultExtensionIds, setInstalledDefaultExtensionIds] = useStoredState<string[]>(
+    localStorageBackend,
+    STORAGE_KEYS.installedDefaultExtensionIds,
+    isStringArray,
+    [],
+  );
   const [benchmarkRoutingSettings, setBenchmarkRoutingSettings] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.benchmarkModelRoutingSettings,
@@ -7755,9 +7781,16 @@ function AgentBrowserApp() {
     : null;
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
+  const installDefaultExtension = useCallback((extensionId: string) => {
+    setInstalledDefaultExtensionIds((current) => (
+      current.includes(extensionId) ? current : [...current, extensionId]
+    ));
+  }, [setInstalledDefaultExtensionIds]);
   useEffect(() => {
     let mounted = true;
-    void createDefaultExtensionRuntime(activeWorkspaceFiles)
+    void createDefaultExtensionRuntime(activeWorkspaceFiles, {
+      installedExtensionIds: installedDefaultExtensionIds,
+    })
       .then((runtime) => {
         if (mounted) setDefaultExtensionRuntime(runtime);
       })
@@ -7768,7 +7801,7 @@ function AgentBrowserApp() {
     return () => {
       mounted = false;
     };
-  }, [activeWorkspaceFiles]);
+  }, [activeWorkspaceFiles, installedDefaultExtensionIds]);
   const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
     workspaceId: activeWorkspaceId,
     workspaceName: activeWorkspace.name,
@@ -10771,6 +10804,8 @@ function AgentBrowserApp() {
         workspaceName={activeWorkspace.name}
         capabilities={activeWorkspaceCapabilities}
         defaultExtensions={defaultExtensionRuntime}
+        installedExtensionIds={installedDefaultExtensionIds}
+        onInstallExtension={installDefaultExtension}
       />
     );
     if (activePanel === 'settings') return (
