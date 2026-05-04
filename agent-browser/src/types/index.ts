@@ -31,6 +31,9 @@ export interface TreeNode {
   color?: string;
   filePath?: string;
   isReference?: boolean;
+  artifactId?: string;
+  artifactFilePath?: string;
+  artifactReferenceId?: string;
   muted?: boolean;
 }
 

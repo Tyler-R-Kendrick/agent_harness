@@ -2,6 +2,8 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   STORAGE_KEYS,
+  isArtifactContextBySession,
+  isArtifactsByWorkspace,
   isChatMessagesBySession,
   isHarnessAppSpecRecord,
   isStringArrayRecord,
@@ -48,6 +50,8 @@ describe('STORAGE_KEYS', () => {
       workspaceViewStateByWorkspace: expect.any(String),
       chatMessagesBySession: expect.any(String),
       chatHistoryBySession: expect.any(String),
+      artifactsByWorkspace: expect.any(String),
+      artifactContextBySession: expect.any(String),
       browserNotificationSettings: expect.any(String),
       benchmarkModelRoutingSettings: expect.any(String),
       benchmarkEvidenceState: expect.any(String),
@@ -91,6 +95,19 @@ describe('persistent session validators', () => {
       name: 'Root',
       type: 'root',
       children: [{ id: 'child', name: 'Child', type: 'bogus' }],
+    })).toBe(false);
+    expect(isTreeNode({
+      id: 'artifact:file',
+      name: 'index.html',
+      type: 'file',
+      artifactId: 'artifact-1',
+      artifactFilePath: 'index.html',
+    })).toBe(true);
+    expect(isTreeNode({
+      id: 'artifact:file',
+      name: 'index.html',
+      type: 'file',
+      artifactId: 1,
     })).toBe(false);
   });
 
@@ -203,6 +220,44 @@ describe('persistent session validators', () => {
         statusText: 'stopped',
       }],
     })).toBe(true);
+  });
+
+  it('accepts persisted artifact libraries and session attachment records', () => {
+    expect(isArtifactsByWorkspace({
+      'ws-build': [{
+        id: 'artifact-dashboard',
+        title: 'Launch dashboard',
+        kind: 'html',
+        createdAt: '2026-05-03T12:00:00.000Z',
+        updatedAt: '2026-05-03T12:00:00.000Z',
+        references: ['artifact-styleguide'],
+        files: [
+          { path: 'index.html', mediaType: 'text/html', content: '<main>Launch</main>' },
+        ],
+        versions: [],
+      }],
+    })).toBe(true);
+    expect(isArtifactsByWorkspace({
+      'ws-build': [{
+        id: 'artifact-dashboard',
+        title: 'Launch dashboard',
+        createdAt: '2026-05-03T12:00:00.000Z',
+        updatedAt: '2026-05-03T12:00:00.000Z',
+        files: [{ path: '../index.html', content: '<main>Launch</main>' }],
+      }],
+    })).toBe(false);
+    expect(isArtifactsByWorkspace({
+      'ws-build': [{
+        id: 'artifact-dashboard',
+        title: 'Launch dashboard',
+        createdAt: '2026-05-03T12:00:00.000Z',
+        updatedAt: '2026-05-03T12:00:00.000Z',
+        references: [],
+        files: [{ path: 'index.html', content: '<main>Launch</main>' }],
+      }],
+    })).toBe(false);
+    expect(isArtifactContextBySession({ 'session-1': ['artifact-dashboard'] })).toBe(true);
+    expect(isArtifactContextBySession({ 'session-1': [42] })).toBe(false);
   });
 });
 

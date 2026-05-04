@@ -44,6 +44,19 @@
       },
       "categories": ["design", "workspace-context"],
       "keywords": ["design-md", "tokens", "css"]
+    },
+    {
+      "id": "agent-harness.ext.artifacts",
+      "name": "Artifacts",
+      "version": "0.1.0",
+      "description": "Adds Claude-style artifacts as standalone, versioned, downloadable context objects.",
+      "manifest": "./artifacts/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./artifacts"
+      },
+      "categories": ["workspace-context", "artifacts"],
+      "keywords": ["artifacts", "claude-artifacts", "downloads"]
     }
   ]
 }

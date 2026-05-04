@@ -6,9 +6,42 @@ export interface WorkspaceMcpFile {
   updatedAt: string;
 }
 
+export interface WorkspaceMcpArtifactFile {
+  path: string;
+  content: string;
+  mediaType?: string;
+  updatedAt?: string;
+}
+
+export interface WorkspaceMcpArtifact {
+  id: string;
+  title: string;
+  description?: string;
+  kind?: string;
+  sourceSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
+  files: readonly WorkspaceMcpArtifactFile[];
+  references: readonly string[];
+  versions?: readonly unknown[];
+}
+
+export interface WorkspaceMcpWriteArtifactInput {
+  id?: string;
+  title?: string;
+  description?: string;
+  kind?: string;
+  sourceSessionId?: string;
+  references?: readonly string[];
+  files: readonly WorkspaceMcpArtifactFile[];
+}
+
 export interface RegisterWorkspaceFileToolsOptions extends ModelContextRegisterToolOptions {
   workspaceName: string;
   workspaceFiles: readonly WorkspaceMcpFile[];
+  artifacts?: readonly WorkspaceMcpArtifact[];
+  onCreateArtifact?: (input: WorkspaceMcpWriteArtifactInput) => WorkspaceMcpArtifact | Promise<WorkspaceMcpArtifact>;
+  onUpdateArtifact?: (artifactId: string, input: WorkspaceMcpWriteArtifactInput) => WorkspaceMcpArtifact | Promise<WorkspaceMcpArtifact>;
   onOpenFile?: (path: string) => void;
 }
 
@@ -122,6 +155,8 @@ export type WorkspaceMcpWorktreeItemType =
   | 'browser-page'
   | 'session'
   | 'workspace-file'
+  | 'artifact'
+  | 'artifact-file'
   | 'session-fs-entry'
   | 'clipboard';
 
@@ -131,6 +166,8 @@ export interface WorkspaceMcpWorktreeItem {
   label: string;
   path?: string;
   sessionId?: string;
+  artifactId?: string;
+  artifactFilePath?: string;
   url?: string;
 }
 
@@ -154,7 +191,7 @@ export interface WorkspaceMcpWorktreeContextMenuState {
   supported: boolean;
 }
 
-export type WorkspaceMcpRenderPaneType = 'dashboard' | 'browser-page' | 'session' | 'workspace-file';
+export type WorkspaceMcpRenderPaneType = 'dashboard' | 'browser-page' | 'session' | 'workspace-file' | 'artifact';
 
 export interface WorkspaceMcpRenderPane {
   id: string;
@@ -162,6 +199,8 @@ export interface WorkspaceMcpRenderPane {
   itemId: string;
   label: string;
   path?: string;
+  artifactId?: string;
+  artifactFilePath?: string;
   url?: string;
 }
 
