@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
 const alias = {
+  '@agent-harness/ext-agent-skills': path.resolve(__dirname, '../ext/agent-skills/src/index.ts'),
+  '@agent-harness/ext-agents-md': path.resolve(__dirname, '../ext/agents-md/src/index.ts'),
+  '@agent-harness/ext-design-md': path.resolve(__dirname, '../ext/design-md/src/index.ts'),
   logact: path.resolve(__dirname, '../lib/logact/src/index.ts'),
   'harness-core': path.resolve(__dirname, '../harness-core/src/index.ts'),
   'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
