@@ -1,63 +1,54 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-03
-Baseline: `.features/Summary.md` updated from the 2026-05-02 twenty-harness corpus.
-Diff type: additive update after Goose research
+Updated: 2026-05-04
+Baseline: `.features/Summary.md` updated from the 2026-05-03 twenty-one-harness corpus.
+Diff type: additive update after Gemini CLI research
 
 ## Net new normalized features
 
-### Added: Private local inference and offline-first execution
-- Why now: Goose has turned private local inference into a first-class harness feature instead of treating local models as an external integration that users must assemble themselves.
+### Added: Chaptered session structure and automatic context compression
+- Why now: Gemini CLI is treating context bloat and long-session readability as first-class harness problems instead of leaving them to the underlying model.
 - Research delta:
-  - the April 24, 2026 Goose blog says built-in local inference is available directly in the desktop app
-  - Goose uses embedded `llama.cpp`, downloadable GGUF models, and in-process execution instead of requiring Ollama, Docker, or a background server
-  - Goose frames the feature as private-by-default and offline-capable, which makes local execution part of the core harness product story rather than a power-user workaround
+  - the April 2026 Gemini CLI v0.38.0 release notes add `Chapters Narrative Flow`
+  - the same release adds a dedicated `Context Compression Service`
+  - the May 2026 v0.39.0 notes also mention a decoupled `ContextManager`, which shows continuing investment in session shaping and context-budget management
 
-### Added: Context-aware tool-call guardrails with adversary review
-- Why now: Goose is shipping a stronger answer to prompt injection and goal drift than static approval modes by adding a second-pass reviewer at the tool-call boundary.
+### Expanded: Persistent memory plus project instructions
+- Why now: Gemini CLI is turning memory capture into an explicit review loop instead of silent transcript retention.
 - Research delta:
-  - Goose supports four permission modes, but the newer differentiator is Adversary Mode
-  - Adversary Mode checks each planned tool call against the original task, recent messages, and user-defined rules before execution
-  - Goose positions the feature as protection against prompt injection and compromised or misaligned agent behavior, which makes runtime action review a productized safety loop
-
-### Expanded: Parallel agent orchestration
-- Why now: Goose's subagent docs show that orchestration now includes internal workers, external agents like Codex, explicit extension constraints, and parallel execution as normal operation.
-- Research delta:
-  - Goose can autonomously create subagents in autonomous mode
-  - users can request sequential or parallel execution in natural language
-  - Goose documents external subagents, including Codex configured as a delegated worker
+  - Auto Memory extracts candidate memories and reusable skills from prior conversations
+  - new memories land in a user-visible review inbox
+  - layered `GEMINI.md` files with `@import` keep project instructions versioned and composable
 
 ### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Goose makes workflow packaging more launchable through recipes, subrecipes, project-local storage, and deeplink sharing.
+- Why now: Gemini CLI extensions package more of the harness surface than a normal command plugin.
 - Research delta:
-  - Goose recipes package prompts, extensions, and settings together
-  - project-local `.goose/recipes/` storage makes workflows repo-aware
-  - the recipe generator and deeplink flow make those workflows directly shareable and launchable
+  - extensions can carry commands, prompts, tools, hooks, themes, subagents, policy, MCP configuration, and `GEMINI.md` context
+  - the package format supports project and shared installation patterns
+  - governance and delegation can ship inside the same reusable unit as prompts and tools
 
-### Expanded: External tool connectivity and actionability
-- Why now: Goose combines broad MCP reach with smarter install and activation mechanics instead of stopping at basic server compatibility.
+### Expanded: Parallel agent orchestration
+- Why now: Gemini CLI now spans both local specialization and remote delegation instead of treating subagents as an in-process-only idea.
 - Research delta:
-  - Goose advertises 70+ extensions and says arbitrary MCP servers can be added
-  - Goose adds malware checks, smart extension recommendation, and roots-aware workspace mapping
-  - Goose also bridges to ACP clients and ACP providers, widening the range of external agent and tool surfaces it can coordinate
+  - Gemini CLI documents first-class subagents
+  - Remote Agents adds agent-to-agent delegation across a defined protocol boundary
+  - git worktree guidance makes session isolation part of the orchestration story
 
-### Added: Add built-in local inference for browser-agent sessions
-- Why now: `agent-browser` currently assumes hosted-model execution, while Goose shows that private, offline, zero-dependency local execution can be a core harness differentiator for sensitive repositories and unreliable-network workflows.
-- Linear issue title:
-  - `Add built-in local inference for browser-agent sessions`
-- Suggested problem statement:
-  - `agent-browser` lacks a built-in local inference path, so teams that need offline operation, private-by-default execution, or zero external API dependence still have to leave the product surface and assemble separate local-model infrastructure.
-- One-shot instruction for an LLM:
-  - Implement built-in local inference for `agent-browser` so users can download supported local models inside the app, run browser-agent sessions offline or on sensitive codebases without a sidecar server, see capability and hardware constraints clearly, and switch between local and hosted models without changing the rest of the harness workflow.
+### Expanded: Embeddable agent runtimes and protocol surfaces
+- Why now: Gemini CLI is making automation-friendly output part of the product surface instead of forcing consumers to scrape TTY text.
+- Research delta:
+  - headless mode supports non-interactive automation
+  - JSON and streaming output modes make the harness easier to embed in scripts, CI, and control planes
+  - model routing and local router support reinforce the idea that the runtime can be composed into mixed deployment topologies
 
-### Added: Add adversary-style tool-call review for browser-agent actions
-- Why now: `agent-browser` has approvals and validation surfaces, but it still lacks a contextual reviewer that evaluates each browser or tool action against user intent before execution, which Goose now productizes as Adversary Mode.
+### Added: Add chaptered sessions and automatic context compression for browser-agent runs
+- Why now: `agent-browser` has long-running sessions, browser traces, and transcript-heavy workflows, but it still lacks an explicit mechanism for grouping, compressing, and carrying forward long-task context the way Gemini CLI now does.
 - Linear issue title:
-  - `Add adversary-style tool-call review for browser-agent actions`
+  - `Add chaptered sessions and automatic context compression for browser-agent runs`
 - Suggested problem statement:
-  - `agent-browser` can ask for approval, but it does not yet have a contextual second-pass reviewer that can catch prompt injection, unsafe browser actions, or tool-call drift before execution based on the actual task and recent conversation state.
+  - `agent-browser` keeps long browser-agent work in raw transcript form, which makes extended runs harder to navigate, more expensive to continue, and more likely to lose coherence as browser evidence, plans, and retries accumulate.
 - One-shot instruction for an LLM:
-  - Implement an adversary-style runtime reviewer for `agent-browser` that intercepts planned tool and browser actions, compares them against user intent, recent context, and policy, then allows, blocks, or escalates those actions with an inspectable rationale and a fail-safe operator experience.
+  - Implement chaptered session structure and automatic context compression for `agent-browser` so long runs are grouped into navigable sections, summaries are inspectable and linked back to the full trace, and the harness can carry forward compressed context without hiding critical browser evidence or validation results.
 
 ## How to use this file
 
@@ -68,5 +59,4 @@ Diff type: additive update after Goose research
 
 ## Recommended next Linear batch
 
-1. `Add built-in local inference for browser-agent sessions`
-2. `Add adversary-style tool-call review for browser-agent actions`
+1. `Add chaptered sessions and automatic context compression for browser-agent runs`
