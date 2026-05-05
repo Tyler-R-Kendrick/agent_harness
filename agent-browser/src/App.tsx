@@ -7568,6 +7568,7 @@ function AgentBrowserApp() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
   const [collapsed, setCollapsed] = useState(() => isMobileViewport());
+  const sidebarUserOverrideRef = useRef(false);
   const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
@@ -8259,17 +8260,34 @@ function AgentBrowserApp() {
     slideTimeoutRef.current = window.setTimeout(() => setSlideDir(null), 300);
   }, [activeWorkspaceId, root]);
 
+  const setSidebarCollapsed = useCallback((next: boolean | ((current: boolean) => boolean), userInitiated = false) => {
+    if (userInitiated) sidebarUserOverrideRef.current = true;
+    setCollapsed(next);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mobileQuery = window.matchMedia('(max-width: 640px)');
+    const syncCollapsed = (matches: boolean) => {
+      if (!sidebarUserOverrideRef.current) setCollapsed(matches);
+    };
+    syncCollapsed(mobileQuery.matches);
+    const onViewportChange = (event: MediaQueryListEvent) => syncCollapsed(event.matches);
+    mobileQuery.addEventListener('change', onViewportChange);
+    return () => mobileQuery.removeEventListener('change', onViewportChange);
+  }, []);
+
   const switchSidebarPanel = useCallback((panel: SidebarPanel) => {
     setActivePanel(panel);
-    setCollapsed(false);
+    setSidebarCollapsed(false, true);
     setShowWorkspaces(false);
-  }, []);
+  }, [setSidebarCollapsed]);
 
   const openWorkspaceSwitcher = useCallback(() => {
     setActivePanel('workspaces');
-    setCollapsed(false);
+    setSidebarCollapsed(false, true);
     setShowWorkspaces(true);
-  }, []);
+  }, [setSidebarCollapsed]);
 
   const jumpToWorkspaceByIndex = useCallback((index: number) => {
     const workspaces = root.children ?? [];
@@ -10925,7 +10943,7 @@ function AgentBrowserApp() {
         <div className="activity-group">
           {SECONDARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => switchSidebarPanel(id as SidebarPanel)} aria-label={label} title={`${label} (Alt+${PRIMARY_NAV.length + index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
         </div>
-        <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
+        <button type="button" className="activity-button" onClick={() => setSidebarCollapsed((current) => !current, true)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
       {!collapsed ? (
         <aside className="sidebar">

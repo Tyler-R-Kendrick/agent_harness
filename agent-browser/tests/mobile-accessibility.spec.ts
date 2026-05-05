@@ -31,11 +31,6 @@ async function expectNoCriticalA11yViolations(page: Page) {
     const axeApi = (window as typeof window & { axe: typeof axe }).axe;
     return axeApi.run(document, {
       runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa'] },
-      rules: {
-        // Existing dark theme contrast is validated visually; keep this matrix focused
-        // on structural accessibility, labels, navigation, and mobile usability.
-        'color-contrast': { enabled: false },
-      },
     });
   });
 
@@ -156,4 +151,22 @@ test.describe('mobile-first accessibility viewport matrix', () => {
       await expectNoCriticalA11yViolations(page);
     });
   }
+
+  test('sidebar follows viewport breakpoint until the user explicitly toggles it', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockCopilotStatus(page);
+    await page.goto('/');
+
+    await expect(page.locator('aside.sidebar')).toHaveCount(0);
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(page.getByLabel('Workspace tree')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await expect(page.locator('aside.sidebar')).toHaveCount(0);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(page.locator('aside.sidebar')).toHaveCount(0);
+  });
 });
