@@ -2361,6 +2361,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   gap: 10px;
 }
+.local-inference-card {
+  align-items: stretch;
+}
+.local-inference-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.local-inference-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.local-inference-metrics span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.03);
+}
+.local-inference-metrics strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-main);
+  font-size: 13px;
+}
+.local-inference-metrics small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.local-inference-constraints {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .local-model-extension-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2371,6 +2413,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 12px;
 }
 @media (max-width: 860px) {
+  .local-inference-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .local-model-extension-grid {
     grid-template-columns: 1fr;
   }

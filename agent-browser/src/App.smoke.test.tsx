@@ -170,4 +170,37 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Strictly block high-risk reviewed actions')).toBeInTheDocument();
     expect(screen.getByLabelText('Adversary review custom rules')).toBeInTheDocument();
   });
+
+  it('shows built-in local inference readiness in Settings', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      STORAGE_KEYS.installedModels,
+      JSON.stringify([{
+        id: 'onnx-community/Qwen3-0.6B-ONNX',
+        name: 'Qwen3-0.6B-ONNX',
+        author: 'onnx-community',
+        task: 'text-generation',
+        downloads: 5000,
+        likes: 30,
+        tags: ['onnx'],
+        sizeMB: 768,
+        contextWindow: 4096,
+        maxOutputTokens: 512,
+        status: 'installed',
+      }]),
+    );
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('button', { name: 'Built-in local inference' })).toBeInTheDocument();
+    expect(screen.getAllByText('Offline ready').length).toBeGreaterThan(0);
+    expect(screen.getByText('Active local model: Qwen3-0.6B-ONNX')).toBeInTheDocument();
+    expect(screen.getByText(/No localhost sidecar/)).toBeInTheDocument();
+  });
 });
