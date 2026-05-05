@@ -51,6 +51,6 @@ export async function resolveLocalInferenceDaemonDownload(navigatorLike: Navigat
   if (architecture.includes('arm') || /arm64|aarch64/i.test(navigatorLike.userAgent ?? '')) {
     return WINDOWS_ARM64_DAEMON_DOWNLOAD;
   }
-  if (architecture.includes('x86') && bitness !== '64') return WINDOWS_X64_DAEMON_DOWNLOAD;
+  if (architecture.includes('x86') && bitness === '32') return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
   return WINDOWS_X64_DAEMON_DOWNLOAD;
 }

@@ -44,4 +44,18 @@ describe('Windows daemon download detection', () => {
       label: 'Portable Deno source',
     });
   });
+
+  it('falls back to the portable source bundle for unsupported 32-bit Windows navigators', async () => {
+    await expect(resolveLocalInferenceDaemonDownload({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW32)',
+      userAgentData: {
+        platform: 'Windows',
+        getHighEntropyValues: async () => ({ platform: 'Windows', architecture: 'x86', bitness: '32' }),
+      },
+    })).resolves.toEqual({
+      href: '/downloads/agent-harness-local-inference-daemon.zip',
+      fileName: 'agent-harness-local-inference-daemon.zip',
+      label: 'Portable Deno source',
+    });
+  });
 });

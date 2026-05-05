@@ -176,7 +176,7 @@ export async function packageExtensionDownloads(repoRoot = DEFAULT_REPO_ROOT) {
       'dist',
       'agent-harness-local-inference-daemon.zip',
     );
-    await writeFile(daemonExtensionZip, await readFile(daemonPublicZip));
+    await copyFile(daemonPublicZip, daemonExtensionZip);
   }
 
   const connectorPublicZip = downloads.find((download) => download.name === 'local-model-connector-extension')?.outputFile;
@@ -188,7 +188,7 @@ export async function packageExtensionDownloads(repoRoot = DEFAULT_REPO_ROOT) {
       'dist',
       'local-model-connector-extension.zip',
     );
-    await writeFile(connectorExtensionZip, await readFile(connectorPublicZip));
+    await copyFile(connectorPublicZip, connectorExtensionZip);
   }
 
   for (const binaryDownload of buildWindowsDaemonBinaryDownloads(repoRoot)) {

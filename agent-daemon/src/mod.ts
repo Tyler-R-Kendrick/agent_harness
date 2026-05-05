@@ -35,6 +35,7 @@ export async function runService(): Promise<void> {
         await daemon.start();
       }
       reconnectDelay = 1_000;
+      // Keep the daemon process alive until a signal or connection failure stops it.
       await new Promise(() => {});
     } catch (error) {
       console.error('Local inference daemon connection failed:', error);

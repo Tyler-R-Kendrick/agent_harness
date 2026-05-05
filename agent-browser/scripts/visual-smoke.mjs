@@ -51,6 +51,7 @@ async function waitForServer(url, childProcess, timeoutMs = 60_000) {
 async function stopProcess(childProcess) {
   if (childProcess.exitCode !== null) return;
   const stopped = new Promise((resolve) => childProcess.once('exit', resolve));
+  if (childProcess.exitCode !== null) return;
   if (process.platform === 'win32') {
     spawn('taskkill', ['/pid', String(childProcess.pid), '/T', '/F'], { stdio: 'ignore' });
   } else {
