@@ -25,6 +25,7 @@ $warningPatterns = @(
 )
 
 $maxAttempts = 2
+$npmCommand = if ($IsWindows) { 'npm.cmd' } else { 'npm' }
 
 foreach ($step in $steps) {
   Write-Output "verify:agent-browser starting $($step.Label)."
@@ -40,7 +41,7 @@ foreach ($step in $steps) {
 
       $previousErrorActionPreference = $ErrorActionPreference
       $ErrorActionPreference = 'Continue'
-      & npm.cmd @($step.Args) 2>&1 | Tee-Object -FilePath $outputFile
+      & $npmCommand @($step.Args) 2>&1 | Tee-Object -FilePath $outputFile
       $exitCode = $LASTEXITCODE
       $ErrorActionPreference = $previousErrorActionPreference
 

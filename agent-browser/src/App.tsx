@@ -737,6 +737,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
 
+function isMobileViewport(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 640px)').matches;
+}
+
 function useToast() {
   const [toast, setToast] = useState<ToastState>(null);
   useEffect(() => {
@@ -5371,7 +5377,6 @@ function ChatPanel({
                     ref={chatInputRef}
                     aria-label="Chat input"
                     aria-autocomplete="list"
-                    aria-expanded={isSkillAutocompleteOpen}
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
@@ -7435,7 +7440,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
 }
 
 function Toast({ toast }: { toast: ToastState }) {
-  return toast ? <div className={`toast ${toast.type}`}>{toast.msg}</div> : null;
+  return toast ? <div className={`toast ${toast.type}`} role="status" aria-live="polite">{toast.msg}</div> : null;
 }
 
 function panelKey(panel: Panel): string {
@@ -7605,7 +7610,8 @@ function AgentBrowserApp() {
   );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => isMobileViewport());
+  const sidebarUserOverrideRef = useRef(false);
   const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
@@ -8297,17 +8303,41 @@ function AgentBrowserApp() {
     slideTimeoutRef.current = window.setTimeout(() => setSlideDir(null), 300);
   }, [activeWorkspaceId, root]);
 
+  const setSidebarCollapsed = useCallback((next: boolean | ((current: boolean) => boolean), userInitiated = false) => {
+    setCollapsed((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      if (userInitiated) {
+        const responsiveDefaultCollapsed = isMobileViewport();
+        // Keep a manual override only while the user's choice differs from the current responsive default.
+        sidebarUserOverrideRef.current = resolved !== responsiveDefaultCollapsed;
+      }
+      return resolved;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mobileQuery = window.matchMedia('(max-width: 640px)');
+    const syncCollapsed = (matches: boolean) => {
+      if (!sidebarUserOverrideRef.current) setCollapsed(matches);
+    };
+    syncCollapsed(mobileQuery.matches);
+    const onViewportChange = (event: MediaQueryListEvent) => syncCollapsed(event.matches);
+    mobileQuery.addEventListener('change', onViewportChange);
+    return () => mobileQuery.removeEventListener('change', onViewportChange);
+  }, []);
+
   const switchSidebarPanel = useCallback((panel: SidebarPanel) => {
     setActivePanel(panel);
-    setCollapsed(false);
+    setSidebarCollapsed(false, true);
     setShowWorkspaces(false);
-  }, []);
+  }, [setSidebarCollapsed]);
 
   const openWorkspaceSwitcher = useCallback(() => {
     setActivePanel('workspaces');
-    setCollapsed(false);
+    setSidebarCollapsed(false, true);
     setShowWorkspaces(true);
-  }, []);
+  }, [setSidebarCollapsed]);
 
   const jumpToWorkspaceByIndex = useCallback((index: number) => {
     const workspaces = root.children ?? [];
@@ -10954,6 +10984,7 @@ function AgentBrowserApp() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#workspace-content">Skip to workspace content</a>
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
@@ -10962,7 +10993,7 @@ function AgentBrowserApp() {
         <div className="activity-group">
           {SECONDARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => switchSidebarPanel(id as SidebarPanel)} aria-label={label} title={`${label} (Alt+${PRIMARY_NAV.length + index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
         </div>
-        <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
+        <button type="button" className="activity-button" onClick={() => setSidebarCollapsed((current) => !current, true)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
       {!collapsed ? (
         <aside className="sidebar">
@@ -11015,7 +11046,7 @@ function AgentBrowserApp() {
           {renderSidebar()}
         </aside>
       ) : null}
-      <main className="content-area">
+      <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
         {(() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {

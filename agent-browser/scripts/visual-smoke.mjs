@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdir } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
@@ -13,6 +14,7 @@ const outputPath = path.resolve(
   process.env.AGENT_BROWSER_VISUAL_SMOKE_SCREENSHOT
     ?? 'output/playwright/agent-browser-visual-smoke.png',
 );
+const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -49,30 +51,31 @@ async function waitForServer(url, childProcess, timeoutMs = 60_000) {
 }
 
 async function stopProcess(childProcess) {
-  if (childProcess.exitCode !== null) return;
-  const stopped = new Promise((resolve) => childProcess.once('exit', resolve));
-  if (childProcess.exitCode !== null) return;
+  if (childProcess.exitCode !== null || childProcess.killed) return;
   if (process.platform === 'win32') {
     spawn('taskkill', ['/pid', String(childProcess.pid), '/T', '/F'], { stdio: 'ignore' });
-  } else {
+  } else if (childProcess.pid) {
     try {
       process.kill(-childProcess.pid, 'SIGTERM');
     } catch {
       childProcess.kill('SIGTERM');
     }
+  } else {
+    childProcess.kill('SIGTERM');
   }
-  const exited = await Promise.race([
-    stopped.then(() => true),
-    new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
-  ]);
-  if (!exited && process.platform !== 'win32' && childProcess.exitCode === null) {
+  const timeout = new Promise((resolve) => setTimeout(resolve, PROCESS_SHUTDOWN_TIMEOUT_MS, 'timeout'));
+  const result = await Promise.race([once(childProcess, 'close'), timeout]);
+  if (result !== 'timeout') return;
+  if (process.platform !== 'win32' && childProcess.pid) {
     try {
       process.kill(-childProcess.pid, 'SIGKILL');
     } catch {
       childProcess.kill('SIGKILL');
     }
-    await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 1_000))]);
+  } else {
+    childProcess.kill('SIGKILL');
   }
+  await Promise.race([once(childProcess, 'close'), timeout]);
 }
 
 async function main() {
@@ -85,8 +88,9 @@ async function main() {
     {
       cwd: packageRoot,
       env: { ...process.env, FORCE_COLOR: '0' },
-      stdio: ['ignore', 'pipe', 'pipe'],
+      // Non-Windows cleanup sends signals to the process group via a negative PID.
       detached: process.platform !== 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
   server.stdout.on('data', (chunk) => serverOutput.push(String(chunk)));
