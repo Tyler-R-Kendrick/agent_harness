@@ -95,6 +95,13 @@ async function expectMobileTouchTargets(page: Page) {
   expect(tooSmall).toEqual([]);
 }
 
+async function openPrimarySession(page: Page) {
+  const chatPanel = page.getByRole('region', { name: 'Chat panel' });
+  if (await chatPanel.count()) return;
+  await page.getByRole('button', { name: 'Open Session 1' }).click();
+  await expect(chatPanel).toBeVisible();
+}
+
 test.describe('mobile-first accessibility viewport matrix', () => {
   for (const viewport of VIEWPORTS) {
     test(`workspace shell is visible, navigable, and accessible on ${viewport.name}`, async ({ page }) => {
@@ -104,6 +111,7 @@ test.describe('mobile-first accessibility viewport matrix', () => {
 
       await expect(page.getByRole('navigation', { name: 'Primary navigation' })).toBeVisible();
       await expect(page.getByRole('main', { name: 'Workspace content' })).toBeVisible();
+      await openPrimarySession(page);
       await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
       await expect(page.getByLabel('Chat input')).toBeVisible();
       await expect(page.getByRole('button', { name: /sidebar/i })).toBeVisible();

@@ -5369,7 +5369,6 @@ function ChatPanel({
                     ref={chatInputRef}
                     aria-label="Chat input"
                     aria-autocomplete="list"
-                    aria-expanded={isSkillAutocompleteOpen}
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
