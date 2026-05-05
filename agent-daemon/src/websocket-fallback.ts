@@ -3,7 +3,7 @@ import { LocalInferenceController } from './local-inference.ts';
 
 export class WebSocketInferenceDaemon {
   private ws?: WebSocket;
-  private closePromise: Promise<void> = Promise.resolve();
+  private closePromise?: Promise<void>;
   private resolveClose: () => void = () => {};
   private rejectClose: (error: Error) => void = () => {};
 
@@ -39,6 +39,6 @@ export class WebSocketInferenceDaemon {
   }
 
   waitForClose(): Promise<void> {
-    return this.closePromise;
+    return this.closePromise ?? Promise.reject(new Error('Fallback WebSocket has not connected yet.'));
   }
 }

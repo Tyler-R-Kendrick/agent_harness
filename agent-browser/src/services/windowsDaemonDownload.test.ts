@@ -59,17 +59,17 @@ describe('Windows daemon download detection', () => {
     });
   });
 
-  it('falls back to the portable source bundle when high entropy lookup rejects', async () => {
+  it('uses UA heuristics when high entropy lookup rejects', async () => {
     await expect(resolveLocalInferenceDaemonDownload({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW32)',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       userAgentData: {
         platform: 'Windows',
         getHighEntropyValues: async () => { throw new Error('unsupported'); },
       },
     })).resolves.toEqual({
-      href: '/downloads/agent-harness-local-inference-daemon.zip',
-      fileName: 'agent-harness-local-inference-daemon.zip',
-      label: 'Portable Deno source',
+      href: '/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+      fileName: 'agent-harness-local-inference-daemon-windows-x64.exe',
+      label: 'Windows x64',
     });
   });
 
