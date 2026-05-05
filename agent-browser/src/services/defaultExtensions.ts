@@ -29,6 +29,14 @@ import symphonyManifestSource from '../../../ext/symphony/agent-harness.plugin.j
 import localModelConnectorManifestSource from '../../../ext/local-model-connector/agent-harness.plugin.json';
 import localInferenceDaemonManifestSource from '../../../ext/local-inference-daemon/agent-harness.plugin.json';
 import workflowCanvasManifestSource from '../../../ext/workflow-canvas/agent-harness.plugin.json';
+import { createGhcpModelProviderPlugin } from '../../../ext/ghcp-model-provider/src/index.ts';
+import ghcpModelProviderManifestSource from '../../../ext/ghcp-model-provider/agent-harness.plugin.json';
+import { createCursorModelProviderPlugin } from '../../../ext/cursor-model-provider/src/index.ts';
+import cursorModelProviderManifestSource from '../../../ext/cursor-model-provider/agent-harness.plugin.json';
+import { createCodexModelProviderPlugin } from '../../../ext/codex-model-provider/src/index.ts';
+import codexModelProviderManifestSource from '../../../ext/codex-model-provider/agent-harness.plugin.json';
+import { createCodiBrowserModelProviderPlugin } from '../../../ext/codi-browser-model-provider/src/index.ts';
+import codiBrowserModelProviderManifestSource from '../../../ext/codi-browser-model-provider/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
   marketplace: HarnessPluginMarketplaceManifest['plugins'][number];
@@ -65,6 +73,10 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
   ['agent-harness.ext.artifacts', parseHarnessPluginManifest(artifactsManifestSource)],
+  ['agent-harness.ext.ghcp-model-provider', parseHarnessPluginManifest(ghcpModelProviderManifestSource)],
+  ['agent-harness.ext.cursor-model-provider', parseHarnessPluginManifest(cursorModelProviderManifestSource)],
+  ['agent-harness.ext.codex-model-provider', parseHarnessPluginManifest(codexModelProviderManifestSource)],
+  ['agent-harness.ext.codi-browser-model-provider', parseHarnessPluginManifest(codiBrowserModelProviderManifestSource)],
   ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
   ['agent-harness.ext.local-inference-daemon', parseHarnessPluginManifest(localInferenceDaemonManifestSource)],
 ]);
@@ -108,6 +120,10 @@ export async function createDefaultExtensionRuntime(
     ['agent-harness.ext.workflow-canvas', () => createWorkflowCanvasPlugin()],
     ['agent-harness.ext.artifacts', () => createArtifactsPlugin()],
     ['agent-harness.ext.local-model-connector', () => createLocalModelConnectorPlugin()],
+    ['agent-harness.ext.ghcp-model-provider', () => createGhcpModelProviderPlugin()],
+    ['agent-harness.ext.cursor-model-provider', () => createCursorModelProviderPlugin()],
+    ['agent-harness.ext.codex-model-provider', () => createCodexModelProviderPlugin()],
+    ['agent-harness.ext.codi-browser-model-provider', () => createCodiBrowserModelProviderPlugin()],
   ]);
 
   await context.plugins.loadAll(installedExtensionIds.map((extensionId) => pluginFactories.get(extensionId)?.()).filter(isHarnessPlugin));

@@ -36,6 +36,74 @@ export type HarnessPluginSourceFormat = 'agent-harness' | 'github-copilot' | 'cl
 
 export type HarnessPluginComponentRef = string | { inline: unknown };
 
+export type HarnessPluginModelProviderKind =
+  | 'openai-compatible'
+  | 'github-copilot'
+  | 'codex-cli'
+  | 'cursor-sdk'
+  | 'browser-local';
+
+export type HarnessPluginAgentContributionKind =
+  | 'agent-harness'
+  | 'agent-skill'
+  | 'mcp'
+  | 'a2a'
+  | 'claude-code'
+  | 'github-copilot'
+  | 'pi';
+
+export type HarnessPluginToolContributionKind =
+  | 'harness-tool'
+  | 'mcp'
+  | 'agent-skill'
+  | 'a2a'
+  | 'command';
+
+export interface HarnessPluginModelProviderContribution {
+  id: string;
+  label: string;
+  kind: HarnessPluginModelProviderKind;
+  providerIds?: string[];
+  description?: string;
+  source?: string;
+  configuration?: Record<string, unknown>;
+  defaultConfiguration?: unknown;
+}
+
+export interface HarnessPluginHarnessContribution {
+  id: string;
+  label: string;
+  format: HarnessPluginSourceFormat;
+  description?: string;
+  source?: string;
+  configuration?: Record<string, unknown>;
+}
+
+export interface HarnessPluginAgentContribution {
+  id: string;
+  label: string;
+  kind: HarnessPluginAgentContributionKind;
+  description?: string;
+  source?: string;
+  configuration?: Record<string, unknown>;
+}
+
+export interface HarnessPluginToolContribution {
+  id: string;
+  label: string;
+  kind: HarnessPluginToolContributionKind;
+  description?: string;
+  source?: string;
+  configuration?: Record<string, unknown>;
+}
+
+export interface HarnessPluginContributions {
+  modelProviders?: HarnessPluginModelProviderContribution[];
+  harnesses?: HarnessPluginHarnessContribution[];
+  agents?: HarnessPluginAgentContribution[];
+  tools?: HarnessPluginToolContribution[];
+}
+
 export interface HarnessPluginComponentContributions {
   agents?: HarnessPluginComponentRef[];
   skills?: HarnessPluginComponentRef[];
@@ -59,10 +127,12 @@ export interface HarnessPluginManifest {
   name: string;
   version: string;
   description: string;
+  activationEvents?: string[];
   entrypoint?: {
     module: string;
     export?: string;
   };
+  contributes?: HarnessPluginContributions;
   components?: HarnessPluginComponentContributions;
   metadata?: Record<string, unknown>;
   capabilities?: Array<{
@@ -115,6 +185,8 @@ export interface HarnessPluginMarketplaceManifest {
       ref?: string;
       sha?: string;
     };
+    activationEvents?: string[];
+    contributes?: HarnessPluginContributions;
     components?: HarnessPluginComponentContributions;
     capabilities?: Array<{
       kind: HarnessPluginCapabilityKind;
@@ -138,6 +210,7 @@ export interface HarnessManifestValidationResult {
 
 const PLUGIN_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*){2,}$/;
 const EVENT_NAME_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+const ACTIVATION_EVENT_PATTERN = /^(?:\*|[A-Za-z0-9_.:-]+)$/;
 const EXPORT_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const RELATIVE_PACKAGE_PATH_PATTERN = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$)).+/;
 const SAFE_COMPONENT_PATH_PATTERN = /^(?!\/|[A-Za-z]:)(?!.*(?:^|[\\/])\.\.(?:[\\/]|$)).+/;
@@ -193,6 +266,107 @@ const componentRefSchema = z.union([
   z.string().regex(SAFE_COMPONENT_PATH_PATTERN, 'Component paths must stay inside the plugin package.'),
   z.object({ inline: z.unknown() }),
 ]);
+
+const contributionIdSchema = z.string().regex(EVENT_NAME_PATTERN, 'Contribution ids must be lowercase dot- or kebab-case.');
+const contributionSourceSchema = z.string().regex(
+  SAFE_COMPONENT_PATH_PATTERN,
+  'Contribution sources must stay inside the plugin package.',
+);
+
+const MODEL_PROVIDER_KINDS = new Set<HarnessPluginModelProviderKind>([
+  'openai-compatible',
+  'github-copilot',
+  'codex-cli',
+  'cursor-sdk',
+  'browser-local',
+]);
+
+const AGENT_CONTRIBUTION_KINDS = new Set<HarnessPluginAgentContributionKind>([
+  'agent-harness',
+  'agent-skill',
+  'mcp',
+  'a2a',
+  'claude-code',
+  'github-copilot',
+  'pi',
+]);
+
+const TOOL_CONTRIBUTION_KINDS = new Set<HarnessPluginToolContributionKind>([
+  'harness-tool',
+  'mcp',
+  'agent-skill',
+  'a2a',
+  'command',
+]);
+
+const modelProviderContributionSchema = z.object({
+  id: contributionIdSchema,
+  label: z.string().min(1, 'Model provider labels are required.'),
+  kind: z.string(),
+  providerIds: z.array(contributionIdSchema).optional(),
+  description: z.string().optional(),
+  source: contributionSourceSchema.optional(),
+  configuration: z.record(z.string(), z.unknown()).optional(),
+  defaultConfiguration: z.unknown().optional(),
+}).superRefine((value, context) => {
+  if (!MODEL_PROVIDER_KINDS.has(value.kind as HarnessPluginModelProviderKind)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['kind'],
+      message: `Model provider kind "${value.kind}" is not part of the core extension standard.`,
+    });
+  }
+});
+
+const harnessContributionSchema = z.object({
+  id: contributionIdSchema,
+  label: z.string().min(1, 'Harness labels are required.'),
+  format: sourceFormatSchema,
+  description: z.string().optional(),
+  source: contributionSourceSchema.optional(),
+  configuration: z.record(z.string(), z.unknown()).optional(),
+});
+
+const agentContributionSchema = z.object({
+  id: contributionIdSchema,
+  label: z.string().min(1, 'Agent labels are required.'),
+  kind: z.string(),
+  description: z.string().optional(),
+  source: contributionSourceSchema.optional(),
+  configuration: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((value, context) => {
+  if (!AGENT_CONTRIBUTION_KINDS.has(value.kind as HarnessPluginAgentContributionKind)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['kind'],
+      message: `Agent contribution kind "${value.kind}" is not part of the core extension standard.`,
+    });
+  }
+});
+
+const toolContributionSchema = z.object({
+  id: contributionIdSchema,
+  label: z.string().min(1, 'Tool labels are required.'),
+  kind: z.string(),
+  description: z.string().optional(),
+  source: contributionSourceSchema.optional(),
+  configuration: z.record(z.string(), z.unknown()).optional(),
+}).superRefine((value, context) => {
+  if (!TOOL_CONTRIBUTION_KINDS.has(value.kind as HarnessPluginToolContributionKind)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['kind'],
+      message: `Tool contribution kind "${value.kind}" is not part of the core extension standard.`,
+    });
+  }
+});
+
+const contributesSchema = z.object({
+  modelProviders: z.array(modelProviderContributionSchema).optional(),
+  harnesses: z.array(harnessContributionSchema).optional(),
+  agents: z.array(agentContributionSchema).optional(),
+  tools: z.array(toolContributionSchema).optional(),
+}).optional();
 
 const componentsSchema = z.object({
   agents: z.array(componentRefSchema).optional(),
@@ -256,6 +430,9 @@ const pluginManifestSchema = z.object({
   name: z.string().min(1, 'Plugin name is required.'),
   version: z.string().regex(SEMVER_PATTERN, 'Plugin version must be a semver string.'),
   description: z.string().min(1, 'Plugin description is required.'),
+  activationEvents: z.array(
+    z.string().regex(ACTIVATION_EVENT_PATTERN, 'Activation events must use VS Code-style identifiers.'),
+  ).optional(),
   entrypoint: z.object({
     module: z.string().regex(
       RELATIVE_PACKAGE_PATH_PATTERN,
@@ -263,6 +440,7 @@ const pluginManifestSchema = z.object({
     ),
     export: z.string().regex(EXPORT_NAME_PATTERN, 'Entrypoint export must be a JavaScript export name.').optional(),
   }).optional(),
+  contributes: contributesSchema,
   components: componentsSchema,
   metadata: z.record(z.string(), z.unknown()).optional(),
   capabilities: z.array(capabilitySchema).optional(),
@@ -319,6 +497,10 @@ const marketplaceManifestSchema = z.object({
       sha: z.string().optional(),
     }),
     components: componentsSchema,
+    activationEvents: z.array(
+      z.string().regex(ACTIVATION_EVENT_PATTERN, 'Activation events must use VS Code-style identifiers.'),
+    ).optional(),
+    contributes: contributesSchema,
     capabilities: z.array(capabilitySchema).optional(),
     strict: z.boolean().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),

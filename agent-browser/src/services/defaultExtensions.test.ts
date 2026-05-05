@@ -20,6 +20,10 @@ describe('default extensions', () => {
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts',
+      'agent-harness.ext.ghcp-model-provider',
+      'agent-harness.ext.cursor-model-provider',
+      'agent-harness.ext.codex-model-provider',
+      'agent-harness.ext.codi-browser-model-provider',
       'agent-harness.ext.local-model-connector',
       'agent-harness.ext.local-inference-daemon',
     ]);
@@ -35,6 +39,10 @@ describe('default extensions', () => {
       'Symphony workflow orchestration',
       'Workflow canvas orchestration',
       'Artifacts',
+      'GitHub Copilot Models',
+      'Cursor Models',
+      'Codex Models',
+      'Codi Browser Models',
       'Local Model Connector',
       'Local Inference Daemon',
     ]);
@@ -92,6 +100,40 @@ describe('default extensions', () => {
           ]),
         },
       });
+    expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.ghcp-model-provider'))
+      .toMatchObject({
+        marketplace: {
+          categories: expect.arrayContaining(['model-provider']),
+        },
+        manifest: {
+          capabilities: expect.arrayContaining([
+            expect.objectContaining({ kind: 'model-provider', id: 'ghcp' }),
+          ]),
+          contributes: {
+            modelProviders: expect.arrayContaining([
+              expect.objectContaining({
+                id: 'ghcp',
+                kind: 'github-copilot',
+                providerIds: ['ghcp'],
+              }),
+            ]),
+          },
+        },
+      });
+    expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.codex-model-provider'))
+      .toMatchObject({
+        manifest: {
+          contributes: {
+            modelProviders: expect.arrayContaining([
+              expect.objectContaining({
+                id: 'codex',
+                kind: 'codex-cli',
+                providerIds: ['codex'],
+              }),
+            ]),
+          },
+        },
+      });
     expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.local-inference-daemon'))
       .toMatchObject({
         marketplace: {
@@ -110,5 +152,23 @@ describe('default extensions', () => {
           ]),
         },
       });
+  });
+
+  it('loads selected model provider extensions as metadata plugins', async () => {
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: [
+        'agent-harness.ext.ghcp-model-provider',
+        'agent-harness.ext.codex-model-provider',
+      ],
+    });
+
+    expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.ghcp-model-provider',
+      'agent-harness.ext.codex-model-provider',
+    ]);
+    expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
+      'ghcp-model-provider',
+      'codex-model-provider',
+    ]);
   });
 });

@@ -321,9 +321,17 @@ export {
   type HarnessPluginComponentContributions,
   type HarnessPluginComponentRef,
   type HarnessPluginCapabilityKind,
+  type HarnessPluginAgentContribution,
+  type HarnessPluginAgentContributionKind,
+  type HarnessPluginContributions,
+  type HarnessPluginHarnessContribution,
   type HarnessPluginManifest,
   type HarnessPluginMarketplaceManifest,
+  type HarnessPluginModelProviderContribution,
+  type HarnessPluginModelProviderKind,
   type HarnessPluginSourceFormat,
+  type HarnessPluginToolContribution,
+  type HarnessPluginToolContributionKind,
 } from './pluginManifest.js';
 export {
   EXTERNAL_PLUGIN_MANIFEST_LOCATIONS,

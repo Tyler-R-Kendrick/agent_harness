@@ -32,7 +32,11 @@
     "@tootallnate/once": "3.0.1",
     "sqlite3": "6.0.1",
     "tar": "7.5.13",
-    "undici": "7.25.0"
+    "undici": "7.25.0",
+    "ip-address": "10.2.0",
+    "express-rate-limit": {
+      "ip-address": "10.2.0"
+    }
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "0.91.1",

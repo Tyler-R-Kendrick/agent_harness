@@ -85,6 +85,58 @@
       "keywords": ["artifacts", "claude-artifacts", "downloads"]
     },
     {
+      "id": "agent-harness.ext.ghcp-model-provider",
+      "name": "GitHub Copilot Models",
+      "version": "0.1.0",
+      "description": "Adds GitHub Copilot as an installable model-provider extension for GHCP chat agents.",
+      "manifest": "./ghcp-model-provider/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./ghcp-model-provider"
+      },
+      "categories": ["model-provider", "chat-agent"],
+      "keywords": ["ghcp", "github-copilot", "models", "provider"]
+    },
+    {
+      "id": "agent-harness.ext.cursor-model-provider",
+      "name": "Cursor Models",
+      "version": "0.1.0",
+      "description": "Adds Cursor SDK models as an installable model-provider extension.",
+      "manifest": "./cursor-model-provider/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./cursor-model-provider"
+      },
+      "categories": ["model-provider", "chat-agent"],
+      "keywords": ["cursor", "models", "provider", "sdk"]
+    },
+    {
+      "id": "agent-harness.ext.codex-model-provider",
+      "name": "Codex Models",
+      "version": "0.1.0",
+      "description": "Adds Codex CLI-backed models as an installable model-provider extension.",
+      "manifest": "./codex-model-provider/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./codex-model-provider"
+      },
+      "categories": ["model-provider", "chat-agent"],
+      "keywords": ["codex", "openai", "models", "provider"]
+    },
+    {
+      "id": "agent-harness.ext.codi-browser-model-provider",
+      "name": "Codi Browser Models",
+      "version": "0.1.0",
+      "description": "Adds browser-runnable Transformers.js and ONNX models as an installable local model-provider extension.",
+      "manifest": "./codi-browser-model-provider/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./codi-browser-model-provider"
+      },
+      "categories": ["model-provider", "browser-local"],
+      "keywords": ["codi", "hugging-face", "transformers-js", "onnx", "local-models"]
+    },
+    {
       "id": "agent-harness.ext.local-model-connector",
       "name": "Local Model Connector",
       "version": "0.1.0",

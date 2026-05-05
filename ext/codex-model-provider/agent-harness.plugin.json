@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.codex-model-provider",
+  "name": "Codex Models",
+  "version": "0.1.0",
+  "description": "Adds Codex CLI-backed models as an installable model-provider extension.",
+  "activationEvents": ["onModelProvider:codex"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createCodexModelProviderPlugin"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "codex",
+        "label": "Codex",
+        "kind": "codex-cli",
+        "providerIds": ["codex"],
+        "description": "Uses ambient Codex CLI auth and model discovery from the host environment.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "cliPath": {
+              "type": "string",
+              "default": "codex"
+            },
+            "preferredModelId": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "codex",
+      "description": "Codex CLI language models."
+    },
+    {
+      "kind": "chat-agent",
+      "id": "codex",
+      "description": "Codex chat-agent runtime."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "shell",
+      "access": "execute",
+      "reason": "Invokes the Codex CLI status and chat commands from the host environment."
+    },
+    {
+      "scope": "secrets",
+      "access": "read",
+      "reason": "Reads ambient Codex authentication state managed by the CLI."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

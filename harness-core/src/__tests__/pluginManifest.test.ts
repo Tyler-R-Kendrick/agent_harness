@@ -146,6 +146,121 @@ describe('plugin manifest standards', () => {
     }).issues).toContain('File extensions must include a leading dot.');
   });
 
+  it('validates VS Code-style activation events and contribution points for provider extensions', () => {
+    const manifest = {
+      ...pluginManifest,
+      id: 'agent-harness.ext.model-providers',
+      sourceFormat: 'agent-harness',
+      activationEvents: [
+        'onStartupFinished',
+        'onModelProvider:ghcp',
+        'onHarness:claude-code',
+      ],
+      contributes: {
+        modelProviders: [
+          {
+            id: 'ghcp',
+            label: 'GitHub Copilot',
+            kind: 'github-copilot',
+            providerIds: ['ghcp'],
+            configuration: {
+              type: 'object',
+              properties: {
+                authType: { type: 'string', enum: ['oauth', 'pat'] },
+              },
+            },
+          },
+          {
+            id: 'codex',
+            label: 'Codex',
+            kind: 'codex-cli',
+            providerIds: ['codex'],
+          },
+        ],
+        harnesses: [
+          {
+            id: 'claude-code',
+            label: 'Claude Code',
+            format: 'claude-code',
+            source: './harnesses/claude-code.json',
+          },
+          {
+            id: 'github-copilot',
+            label: 'GitHub Copilot',
+            format: 'github-copilot',
+            source: './harnesses/copilot.json',
+          },
+          {
+            id: 'pi',
+            label: 'Pi',
+            format: 'pi',
+            source: './harnesses/pi.json',
+          },
+        ],
+        agents: [
+          {
+            id: 'agent-skills',
+            label: 'Agent skills',
+            kind: 'agent-skill',
+            source: './skills',
+          },
+          {
+            id: 'agent-to-agent',
+            label: 'A2A agents',
+            kind: 'a2a',
+            source: './a2a/agents.json',
+          },
+        ],
+        tools: [
+          {
+            id: 'workspace-mcp',
+            label: 'Workspace MCP',
+            kind: 'mcp',
+            source: './mcp/workspace.json',
+          },
+        ],
+      },
+      capabilities: [
+        ...pluginManifest.capabilities,
+        { kind: 'model-provider', id: 'ghcp' },
+        { kind: 'model-provider', id: 'codex' },
+        { kind: 'chat-agent', id: 'agent-skills' },
+        { kind: 'tool', id: 'workspace-mcp' },
+      ],
+    };
+
+    expect(validateHarnessPluginManifest(manifest)).toEqual({ success: true, issues: [] });
+    expect(parseHarnessPluginManifest(manifest)).toEqual(manifest);
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        ...manifest.contributes,
+        modelProviders: [{ ...manifest.contributes.modelProviders[0], kind: 'unsupported' }],
+      },
+    }).issues).toContain('Model provider kind "unsupported" is not part of the core extension standard.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        ...manifest.contributes,
+        agents: [{ ...manifest.contributes.agents[0], kind: 'unsupported' }],
+      },
+    }).issues).toContain('Agent contribution kind "unsupported" is not part of the core extension standard.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        ...manifest.contributes,
+        tools: [{ ...manifest.contributes.tools[0], kind: 'unsupported' }],
+      },
+    }).issues).toContain('Tool contribution kind "unsupported" is not part of the core extension standard.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        ...manifest.contributes,
+        tools: [{ ...manifest.contributes.tools[0], source: '../workspace.json' }],
+      },
+    }).issues).toContain('Contribution sources must stay inside the plugin package.');
+  });
+
   it('keeps the DESIGN.md example renderer manifest valid', () => {
     const manifest = JSON.parse(readFileSync(
       new URL('../../../ext/design-md/agent-harness.plugin.json', import.meta.url),
