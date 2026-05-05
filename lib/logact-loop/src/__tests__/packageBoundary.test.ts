@@ -19,6 +19,16 @@ function readText(path: string): string {
   return readFileSync(join(packageRoot, path), 'utf8');
 }
 
+function collectRootExports(source: string): string[] {
+  return Array.from(
+    source.matchAll(/^\s*export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+['"][^'"]+['"];?/gm),
+    (match) => match[1]
+      .split(',')
+      .map((name) => name.trim().split(/\s+as\s+/).pop() ?? '')
+      .filter(Boolean),
+  ).flat().sort();
+}
+
 describe('logact-loop package boundary', () => {
   test('publishes a single root TypeScript entry point', () => {
     const packageJson = readPackageJson();
@@ -34,13 +44,24 @@ describe('logact-loop package boundary', () => {
     const indexSource = readText('src/index.ts');
 
     expect(indexSource).not.toMatch(/export\s+\*\s+from/);
-    expect(indexSource).toContain('LOGACT_AGENT_LOOP_HOOK_EVENTS');
-    expect(indexSource).toContain('WorkflowAgentBus');
-    expect(indexSource).toContain('createLogActWorkflowDefinition');
-    expect(indexSource).toContain('runLogActAgentLoop');
-    expect(indexSource).toContain('wrapCompletionCheckerWithCallbacks');
-    expect(indexSource).toContain('wrapVoterWithCallbacks');
-    expect(indexSource).toContain('LogActAgentLoopOptions');
+    expect(collectRootExports(indexSource)).toEqual([
+      'CoreAgentLoopCallbacks',
+      'CoreIterationStep',
+      'CoreStepStatus',
+      'CoreVoterStep',
+      'LOGACT_AGENT_LOOP_HOOK_EVENTS',
+      'LogActAgentLoopOptions',
+      'WorkflowAgentBus',
+      'createLogActWorkflowDefinition',
+      'runLogActAgentLoop',
+      'type LogActWorkflowDefinition',
+      'type LogActWorkflowDefinitionOptions',
+      'type WorkflowAgentBusOptions',
+      'type WorkflowEvent',
+      'type WorkflowMessage',
+      'wrapCompletionCheckerWithCallbacks',
+      'wrapVoterWithCallbacks',
+    ]);
   });
 
   test('keeps the publish allowlist limited to runtime TypeScript sources and README', () => {
@@ -49,6 +70,7 @@ describe('logact-loop package boundary', () => {
     expect(packageJson.files).toEqual([
       'README.md',
       'src/**/*.ts',
+      '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
   });
@@ -61,5 +83,7 @@ describe('logact-loop package boundary', () => {
     expect(readme).toContain('The package exposes one stable public import path: `@agent-harness/logact-loop`.');
     expect(readme).toContain('Deep imports from `@agent-harness/logact-loop/src/*` are internal');
     expect(readme).toContain('implementation details.');
+    expect(readme).toContain('Published artifacts are intentionally limited to this README');
+    expect(readme).toContain('Tests and local package configuration stay');
   });
 });
