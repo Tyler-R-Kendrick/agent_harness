@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,6 +18,21 @@ export function buildDownloadPackages(repoRoot = DEFAULT_REPO_ROOT) {
       name: 'agent-harness-local-inference-daemon',
       sourceDirectory: path.join(repoRoot, 'agent-daemon'),
       outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon.zip'),
+    },
+  ];
+}
+
+export function buildWindowsDaemonBinaryDownloads(repoRoot = DEFAULT_REPO_ROOT) {
+  return [
+    {
+      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+    },
+    {
+      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
+      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
+      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
     },
   ];
 }
@@ -174,6 +189,16 @@ export async function packageExtensionDownloads(repoRoot = DEFAULT_REPO_ROOT) {
       'local-model-connector-extension.zip',
     );
     await writeFile(connectorExtensionZip, await readFile(connectorPublicZip));
+  }
+
+  for (const binaryDownload of buildWindowsDaemonBinaryDownloads(repoRoot)) {
+    try {
+      await stat(binaryDownload.sourceFile);
+    } catch {
+      continue;
+    }
+    await copyFile(binaryDownload.sourceFile, binaryDownload.publicFile);
+    await copyFile(binaryDownload.sourceFile, binaryDownload.extensionFile);
   }
 }
 

@@ -401,7 +401,7 @@ describe('App', () => {
       'href',
       '/downloads/local-model-connector-extension.zip',
     );
-    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon for Portable Deno source' })).toHaveAttribute(
       'href',
       '/downloads/agent-harness-local-inference-daemon.zip',
     );

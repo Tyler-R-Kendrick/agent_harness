@@ -91,8 +91,8 @@ async function main() {
   assert.match(generatedFilesWrapper, /check-generated-files-clean\.mjs'\) --stdin-lines/);
   const daemonBuildWorkflow = await readScript('.github/workflows/daemon-build.yml');
   assert.match(daemonBuildWorkflow, /denoland\/setup-deno@v2/);
-  assert.match(daemonBuildWorkflow, /target:\s*x86_64-pc-windows-msvc/);
-  assert.match(daemonBuildWorkflow, /target:\s*aarch64-pc-windows-msvc/);
+  assert.match(daemonBuildWorkflow, /--target x86_64-pc-windows-msvc/);
+  assert.match(daemonBuildWorkflow, /--target aarch64-pc-windows-msvc/);
   assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-x64\.exe/);
   assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-arm64\.exe/);
   assert.match(daemonBuildWorkflow, /actions\/upload-artifact@v4/);
@@ -157,6 +157,18 @@ async function main() {
       name: 'agent-harness-local-inference-daemon',
       sourceDirectory: path.join(repoRoot, 'agent-daemon'),
       outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon.zip'),
+    },
+  ]);
+  assert.deepEqual(extensionDownloadsPackager.buildWindowsDaemonBinaryDownloads(repoRoot), [
+    {
+      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+    },
+    {
+      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
+      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
+      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
     },
   ]);
   assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');

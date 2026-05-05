@@ -1,7 +1,9 @@
 {
   "tasks": {
     "dev": "deno run --allow-net --allow-env --allow-sys src/mod.ts",
-    "compile:windows": "deno compile --allow-net --allow-env --allow-sys --target x86_64-pc-windows-msvc --output dist/agent-harness-local-inference-daemon.exe src/mod.ts",
+    "compile:windows": "deno task compile:windows:x64",
+    "compile:windows:x64": "deno compile --allow-net --allow-env --allow-sys --target x86_64-pc-windows-msvc --output dist/agent-harness-local-inference-daemon-windows-x64.exe src/mod.ts",
+    "compile:windows:arm64": "deno compile --allow-net --allow-env --allow-sys --target aarch64-pc-windows-msvc --output dist/agent-harness-local-inference-daemon-windows-arm64.exe src/mod.ts",
     "compile:linux": "deno compile --allow-net --allow-env --allow-sys --target x86_64-unknown-linux-gnu --output dist/agent-harness-local-inference-daemon src/mod.ts",
     "compile:macos:x64": "deno compile --allow-net --allow-env --allow-sys --target x86_64-apple-darwin --output dist/agent-harness-local-inference-daemon-macos-x64 src/mod.ts",
     "compile:macos:arm64": "deno compile --allow-net --allow-env --allow-sys --target aarch64-apple-darwin --output dist/agent-harness-local-inference-daemon-macos-arm64 src/mod.ts",
