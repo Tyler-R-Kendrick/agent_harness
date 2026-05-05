@@ -57,19 +57,30 @@ export interface WorkflowAgentBusOptions {
 }
 
 export class WorkflowAgentBus implements IAgentBus {
-  private readonly bus: IAgentBus;
+  private bus: IAgentBus;
   private readonly sessionRef: AgentSessionRef;
   private readonly actorMessages: Array<ActorMessageEvent<WorkflowMessage, 'actor.message'>> = [];
   private readonly workflowEvents: WorkflowEvent[] = [];
+  private readonly appliedHooks = new Set<HookRegistry>();
 
   constructor(options: WorkflowAgentBusOptions = {}) {
-    const bus = options.bus ?? new InMemoryAgentBus();
-    this.bus = options.hooks ? withAgentBusHooks(bus, options.hooks) : bus;
+    this.bus = options.bus ?? new InMemoryAgentBus();
     this.sessionRef = normalizeSession(options.session);
+    if (options.hooks) {
+      this.withHooks(options.hooks);
+    }
   }
 
   get session(): AgentSessionRef {
     return this.sessionRef;
+  }
+
+  withHooks(hooks: HookRegistry): this {
+    if (!this.appliedHooks.has(hooks)) {
+      this.bus = withAgentBusHooks(this.bus, hooks);
+      this.appliedHooks.add(hooks);
+    }
+    return this;
   }
 
   async append(payload: Payload): Promise<number> {
@@ -223,9 +234,11 @@ export async function runLogActAgentLoop(
   }: LogActAgentLoopOptions,
   callbacks: CoreAgentLoopCallbacks,
 ): Promise<void> {
-  const workflowBus = bus
-    ? hooks ? withAgentBusHooks(bus, hooks) : bus
-    : new WorkflowAgentBus({ session, hooks });
+  const workflowBus = bus instanceof WorkflowAgentBus
+    ? (hooks ? bus.withHooks(hooks) : bus)
+    : bus
+      ? hooks ? withAgentBusHooks(bus, hooks) : bus
+      : new WorkflowAgentBus({ session, hooks });
   await runLogActHook(hooks, LOGACT_AGENT_LOOP_HOOK_EVENTS.loopStart, {
     input: input ?? messages.at(-1)?.content ?? '',
     messages,
