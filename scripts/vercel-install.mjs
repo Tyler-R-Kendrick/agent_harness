@@ -25,13 +25,21 @@ export async function getCachedInstallArtifactPaths(rootDir = process.cwd()) {
     path.join(rootDir, 'node_modules'),
     path.join(rootDir, 'agent-browser', 'package-lock.json'),
     path.join(rootDir, 'agent-browser', 'node_modules'),
+    path.join(rootDir, 'harness-core', 'node_modules'),
   ];
 
+  await appendNestedWorkspaceNodeModules(paths, rootDir, 'lib');
+  await appendNestedWorkspaceNodeModules(paths, rootDir, 'ext');
+
+  return paths;
+}
+
+async function appendNestedWorkspaceNodeModules(paths, rootDir, workspaceRoot) {
   try {
-    const libEntries = await readdir(path.join(rootDir, 'lib'), { withFileTypes: true });
-    for (const entry of libEntries) {
+    const entries = await readdir(path.join(rootDir, workspaceRoot), { withFileTypes: true });
+    for (const entry of entries) {
       if (entry.isDirectory()) {
-        paths.push(path.join(rootDir, 'lib', entry.name, 'node_modules'));
+        paths.push(path.join(rootDir, workspaceRoot, entry.name, 'node_modules'));
       }
     }
   } catch (error) {
@@ -39,8 +47,6 @@ export async function getCachedInstallArtifactPaths(rootDir = process.cwd()) {
       throw error;
     }
   }
-
-  return paths;
 }
 
 export async function removeCachedInstallArtifacts(rootDir = process.cwd()) {

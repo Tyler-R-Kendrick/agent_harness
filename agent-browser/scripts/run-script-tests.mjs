@@ -128,9 +128,13 @@ async function main() {
   const workspaceLockfile = path.join(lockfileFixture, 'agent-browser', 'package-lock.json');
   const rootNodeModules = path.join(lockfileFixture, 'node_modules');
   const workspaceNodeModules = path.join(lockfileFixture, 'agent-browser', 'node_modules');
+  const harnessCoreNodeModules = path.join(lockfileFixture, 'harness-core', 'node_modules');
+  const extensionNodeModules = path.join(lockfileFixture, 'ext', 'local-model-connector', 'node_modules');
   await mkdir(path.dirname(workspaceLockfile), { recursive: true });
   await mkdir(rootNodeModules);
   await mkdir(workspaceNodeModules);
+  await mkdir(harnessCoreNodeModules, { recursive: true });
+  await mkdir(extensionNodeModules, { recursive: true });
   await writeFile(rootLockfile, '{}');
   await writeFile(workspaceLockfile, '{}');
   await vercelInstall.removeCachedLockfiles(lockfileFixture);
@@ -138,6 +142,8 @@ async function main() {
   await assert.rejects(() => readFile(workspaceLockfile), { code: 'ENOENT' });
   await assert.rejects(() => stat(rootNodeModules), { code: 'ENOENT' });
   await assert.rejects(() => stat(workspaceNodeModules), { code: 'ENOENT' });
+  await assert.rejects(() => stat(harnessCoreNodeModules), { code: 'ENOENT' });
+  await assert.rejects(() => stat(extensionNodeModules), { code: 'ENOENT' });
   await vercelInstall.removeCachedLockfiles(lockfileFixture);
 
   const coverageRunner = await import(
