@@ -159,6 +159,7 @@ import {
   type WorkspaceMcpSessionState,
   type WorkspaceMcpElicitationField,
   type WorkspaceMcpSecretRequestResult,
+  type WorkspaceMcpWorktreeItemType,
   type WorkspaceMcpWorktreeItem,
   type WorkspaceMcpWriteSessionInput,
 } from 'agent-browser-mcp';
@@ -1243,10 +1244,18 @@ function ChatMessageView({
   );
 }
 
-function PageOverlay({ tab, onClose, dragHandleProps }: { tab: TreeNode; onClose: () => void; dragHandleProps?: PanelDragHandleProps }) {
+function PageOverlay({ tab, onClose, onContextMenu, dragHandleProps }: { tab: TreeNode; onClose: () => void; onContextMenu?: (x: number, y: number) => void; dragHandleProps?: PanelDragHandleProps }) {
   const src = tab.url ?? '';
   return (
-    <section className="page-overlay" aria-label="Page overlay">
+    <section
+      className="page-overlay"
+      aria-label="Page overlay"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu?.(event.clientX, event.clientY);
+      }}
+    >
       <header className={`page-tab-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
         <div className="panel-titlebar-heading">
           <Favicon url={tab.url} size={13} />
@@ -6923,6 +6932,45 @@ type ContextMenuTopButton = { icon: LucideIcon; label: string } & (
   | { subMenu: ContextMenuEntry[]; onClick?: never; splitOptions?: never }
   | { onClick: () => void; splitOptions: ContextMenuSplitOption[]; subMenu?: never }
 );
+type AppContextMenuItemType = WorkspaceMcpWorktreeItemType | 'workspace' | 'workspace-section' | 'app-shell';
+type AppContextMenuState = Omit<WorkspaceContextMenuState<ContextMenuEntry, ContextMenuTopButton>, 'itemType'> & {
+  itemType: AppContextMenuItemType;
+};
+
+const WORKTREE_CONTEXT_MENU_ITEM_TYPES = new Set<string>([
+  'browser-page',
+  'session',
+  'workspace-file',
+  'artifact',
+  'artifact-file',
+  'session-fs-entry',
+  'clipboard',
+]);
+
+function hasWorkspaceSectionContextMenu(node: TreeNode) {
+  return node.type === 'folder' && (
+    node.nodeKind === 'browser'
+    || node.nodeKind === 'session'
+    || node.nodeKind === 'files'
+  );
+}
+
+function hasNodeContextMenu(node: TreeNode) {
+  const isVfsNode = node.id.startsWith('vfs:') && !node.nodeKind;
+  const isArtifactNode = Boolean(node.artifactId || node.artifactReferenceId);
+  return node.type === 'workspace'
+    || node.type === 'tab'
+    || node.type === 'file'
+    || isVfsNode
+    || isArtifactNode
+    || hasWorkspaceSectionContextMenu(node);
+}
+
+function isWorktreeContextMenuState(
+  menu: AppContextMenuState | null,
+): menu is WorkspaceContextMenuState<ContextMenuEntry, ContextMenuTopButton> {
+  return Boolean(menu && WORKTREE_CONTEXT_MENU_ITEM_TYPES.has(menu.itemType));
+}
 
 type FileOpKind = 'move' | 'symlink' | 'duplicate';
 type PickerRow = { name: string; isUp: boolean };
@@ -7374,7 +7422,6 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
         const isFile = node.type === 'file';
         const isActiveWs = isWorkspace && node.id === activeWorkspaceId;
         const isEditingFile = isFile && node.filePath === editingFilePath;
-        const isArtifactNode = Boolean(node.artifactId || node.artifactReferenceId);
         const nodeArtifactId = node.artifactReferenceId ?? node.artifactId;
         const isActiveArtifact = Boolean(
           nodeArtifactId
@@ -7386,8 +7433,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
         const tabOpacity = node.type === 'tab' ? (node.memoryTier === 'cold' ? 0.5 : node.memoryTier === 'cool' ? 0.65 : 0.9) : undefined;
         const workspaceParentId = workspaceByNodeId.get(node.id);
         const workspaceParent = workspaceParentId ? getWorkspace(root, workspaceParentId) : null;
-        const isVfsNode = node.id.startsWith('vfs:') && !node.nodeKind;
-        const hasContextMenu = node.type === 'tab' || isVfsNode || isFile || isArtifactNode;
+        const hasContextMenu = hasNodeContextMenu(node);
         const openEllipsis = (e: React.MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
           const rect = e.currentTarget.getBoundingClientRect();
@@ -7395,7 +7441,11 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
         };
         return (
           <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile || isActiveArtifact ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
-            onContextMenu={hasContextMenu ? (e) => { e.preventDefault(); onNodeContextMenu(e.clientX, e.clientY, node); } : undefined}
+            onContextMenu={hasContextMenu ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onNodeContextMenu(e.clientX, e.clientY, node);
+            } : undefined}
           >
             <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
               {isFile ? (
@@ -7728,7 +7778,7 @@ function AgentBrowserApp() {
   const [addSessionFsName, setAddSessionFsName] = useState('');
   const [renameSessionFsMenu, setRenameSessionFsMenu] = useState<{ sessionId: string; path: string } | null>(null);
   const [renameSessionFsName, setRenameSessionFsName] = useState('');
-  const [contextMenu, setContextMenu] = useState<WorkspaceContextMenuState<ContextMenuEntry, ContextMenuTopButton> | null>(null);
+  const [contextMenu, setContextMenu] = useState<AppContextMenuState | null>(null);
   const [renamingSessionNodeId, setRenamingSessionNodeId] = useState<string | null>(null);
   const [sessionRenameDraft, setSessionRenameDraft] = useState('');
   // ── Properties / History ──────────────────────────────────────────────────
@@ -7753,6 +7803,15 @@ function AgentBrowserApp() {
     if (initialRootRef.current?.children) seedBrowserTabs(initialRootRef.current.children);
     return initial;
   });
+
+  useEffect(() => {
+    function suppressNativeContextMenu(event: MouseEvent) {
+      event.preventDefault();
+    }
+    document.addEventListener('contextmenu', suppressNativeContextMenu, { capture: true });
+    return () => document.removeEventListener('contextmenu', suppressNativeContextMenu, { capture: true });
+  }, []);
+
   const refreshSecretRecords = useCallback(async () => {
     setSecretRecords(await secretsManager.listSecrets());
   }, [secretsManager]);
@@ -9303,7 +9362,88 @@ function AgentBrowserApp() {
     };
   }
 
+  function openWorkspaceFileMenu(workspaceId: string) {
+    setAddFileName('');
+    setShowAddFileMenu(workspaceId);
+  }
+
+  function buildAppContextMenu(): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    return {
+      topButtons: [
+        { icon: Globe, label: 'New tab', onClick: () => addBrowserTabToWorkspace(activeWorkspaceId) },
+        { icon: MessageSquare, label: 'New session', onClick: () => addSessionToWorkspace(activeWorkspaceId) },
+        { icon: File, label: 'Add file', onClick: () => openWorkspaceFileMenu(activeWorkspaceId) },
+        { icon: Layers3, label: 'Workspaces', onClick: openWorkspaceSwitcher },
+      ],
+      entries: [
+        { label: 'Properties', onClick: () => setPropertiesNode(activeWorkspace) },
+      ],
+    };
+  }
+
+  function buildWorkspaceContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
+    const entries: ContextMenuEntry[] = [];
+    if (node.id !== activeWorkspaceId) {
+      entries.push({ label: 'Switch workspace', onClick: () => switchWorkspace(node.id) });
+    }
+    entries.push(
+      { label: 'Workspaces', onClick: openWorkspaceSwitcher },
+      'separator',
+      { label: 'Properties', onClick: () => setPropertiesNode(node) },
+    );
+    return {
+      topButtons: [
+        { icon: Globe, label: 'New tab', onClick: () => addBrowserTabToWorkspace(node.id) },
+        { icon: MessageSquare, label: 'New session', onClick: () => addSessionToWorkspace(node.id) },
+        { icon: File, label: 'Add file', onClick: () => openWorkspaceFileMenu(node.id) },
+        { icon: Pencil, label: 'Rename', onClick: () => openRenameWorkspace(node.id) },
+      ],
+      entries,
+    };
+  }
+
+  function buildWorkspaceSectionContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } | null {
+    const workspace = findWorkspaceForNode(root, node.id) ?? activeWorkspace;
+    const entries: ContextMenuEntry[] = [{ label: 'Properties', onClick: () => setPropertiesNode(node) }];
+    if (node.nodeKind === 'browser') {
+      return {
+        topButtons: [
+          { icon: Globe, label: 'New tab', onClick: () => addBrowserTabToWorkspace(workspace.id) },
+        ],
+        entries,
+      };
+    }
+    if (node.nodeKind === 'session') {
+      return {
+        topButtons: [
+          { icon: MessageSquare, label: 'New session', onClick: () => addSessionToWorkspace(workspace.id) },
+        ],
+        entries,
+      };
+    }
+    if (node.nodeKind === 'files') {
+      return {
+        topButtons: [
+          { icon: File, label: 'Add file', onClick: () => openWorkspaceFileMenu(workspace.id) },
+        ],
+        entries,
+      };
+    }
+    return null;
+  }
+
   function openContextMenuForNode(x: number, y: number, node: TreeNode) {
+    if (node.type === 'workspace') {
+      setContextMenu({ x, y, itemId: node.id, itemType: 'workspace', ...buildWorkspaceContextMenu(node) });
+      return;
+    }
+    if (hasWorkspaceSectionContextMenu(node)) {
+      const sectionMenu = buildWorkspaceSectionContextMenu(node);
+      if (sectionMenu) {
+        setContextMenu({ x, y, itemId: node.id, itemType: 'workspace-section', ...sectionMenu });
+      }
+      return;
+    }
     if (node.id.startsWith('vfs:') && !node.nodeKind) {
       const vfsArgs = parseVfsNodeId(node.id);
       if (vfsArgs) {
@@ -9336,6 +9476,19 @@ function AgentBrowserApp() {
     openContextMenuForNode(x, y, node);
   }
 
+  function handleAppContextMenu(event: React.MouseEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.ctx-menu')) return;
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      itemId: activeWorkspaceId,
+      itemType: 'app-shell',
+      ...buildAppContextMenu(),
+    });
+  }
+
   // ── Properties ─────────────────────────────────────────────────────────────
 
   function buildNodeMetadata(node: TreeNode): NodeMetadata {
@@ -9350,7 +9503,32 @@ function AgentBrowserApp() {
         identityPermissions: defaultPermissionsFor(['Read', 'Write', 'History', 'Restore']),
       };
     }
-    if (node.nodeKind === 'browser') {
+    if (node.type === 'workspace') {
+      return {
+        location: 'Workspace',
+        sizeLabel: `${countTabs(node)} pages`,
+        createdAt: now,
+        modifiedAt: now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor(['New tab', 'New session', 'Add file', 'Rename']),
+      };
+    }
+    if (hasWorkspaceSectionContextMenu(node)) {
+      const permissions = node.nodeKind === 'browser'
+        ? ['New tab']
+        : node.nodeKind === 'session'
+          ? ['New session']
+          : ['Add file'];
+      return {
+        location: `${node.name} section`,
+        sizeLabel: `${node.children?.length ?? 0} items`,
+        createdAt: now,
+        modifiedAt: now,
+        accessedAt: now,
+        identityPermissions: defaultPermissionsFor([...permissions, 'Properties']),
+      };
+    }
+    if (node.type === 'tab' && node.nodeKind === 'browser') {
       return {
         location: node.url ?? '(no URL)',
         sizeLabel: `${node.memoryMB ?? 0} MB`,
@@ -9360,7 +9538,7 @@ function AgentBrowserApp() {
         identityPermissions: defaultPermissionsFor(['Bookmark', 'Mute', 'Copy URI', 'Close']),
       };
     }
-    if (node.nodeKind === 'session') {
+    if (node.type === 'tab' && node.nodeKind === 'session') {
       return {
         location: node.filePath ?? node.id,
         sizeLabel: 'N/A',
@@ -10468,7 +10646,10 @@ function AgentBrowserApp() {
     itemType: WorkspaceMcpWorktreeItem['itemType'];
   }) => {
     const item = findActiveWorktreeItem(itemId, itemType);
-    return item ? readWorktreeContextMenuState({ itemId, itemType }, contextMenu) : null;
+    return item ? readWorktreeContextMenuState(
+      { itemId, itemType },
+      isWorktreeContextMenuState(contextMenu) ? contextMenu : null,
+    ) : null;
   }, [contextMenu, findActiveWorktreeItem]);
 
   const toggleWorktreeContextMenuFromMcp = useCallback(async ({
@@ -10483,7 +10664,10 @@ function AgentBrowserApp() {
       throw new DOMException(`Worktree item "${itemType}:${itemId}" is not available.`, 'NotFoundError');
     }
 
-    const currentState = readWorktreeContextMenuState({ itemId, itemType }, contextMenu);
+    const currentState = readWorktreeContextMenuState(
+      { itemId, itemType },
+      isWorktreeContextMenuState(contextMenu) ? contextMenu : null,
+    );
     if (currentState.isOpen) {
       setContextMenu(null);
       return { ...currentState, isOpen: false };
@@ -10983,7 +11167,7 @@ function AgentBrowserApp() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" onContextMenu={handleAppContextMenu}>
       <a className="skip-link" href="#workspace-content">Skip to workspace content</a>
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
@@ -11158,6 +11342,7 @@ function AgentBrowserApp() {
                   key={panel.tab.id}
                   tab={panel.tab}
                   dragHandleProps={dragHandleProps}
+                  onContextMenu={(x, y) => openContextMenuForNode(x, y, panel.tab)}
                   onClose={() => setWorkspaceViewStateByWorkspace((current) => ({
                     ...current,
                     [activeWorkspaceId]: {
