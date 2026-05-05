@@ -7,12 +7,17 @@ import { SignalingClient } from './signaling-client.ts';
 export class WebRTCInferenceDaemon {
   private readonly peerConnection: RTCPeerConnection;
   private dataChannel?: RTCDataChannel;
+  private closePromise: Promise<void>;
+  private resolveClose: () => void = () => {};
 
   constructor(
     private readonly config: DaemonConfig,
     private readonly signaling: SignalingClient,
     private readonly inference: LocalInferenceController,
   ) {
+    this.closePromise = new Promise((resolve) => {
+      this.resolveClose = resolve;
+    });
     this.peerConnection = new RTCPeerConnection({
       iceServers: [
         ...config.stunServers.map((url) => ({ urls: url })),
@@ -40,6 +45,11 @@ export class WebRTCInferenceDaemon {
     this.dataChannel?.close();
     this.peerConnection.close();
     this.signaling.close();
+    this.resolveClose();
+  }
+
+  waitForClose(): Promise<void> {
+    return this.closePromise;
   }
 
   private setupPeerConnection(): void {
@@ -51,6 +61,11 @@ export class WebRTCInferenceDaemon {
     this.peerConnection.ondatachannel = (event) => {
       this.dataChannel = event.channel;
       this.setupDataChannel(event.channel);
+    };
+    this.peerConnection.onconnectionstatechange = () => {
+      if (['closed', 'disconnected', 'failed'].includes(this.peerConnection.connectionState)) {
+        this.resolveClose();
+      }
     };
   }
 
@@ -71,7 +86,10 @@ export class WebRTCInferenceDaemon {
 
   private setupDataChannel(channel: RTCDataChannel): void {
     channel.onopen = () => console.log('Local inference data channel opened.');
-    channel.onclose = () => console.log('Local inference data channel closed.');
+    channel.onclose = () => {
+      console.log('Local inference data channel closed.');
+      this.resolveClose();
+    };
     channel.onmessage = async (event) => {
       const response = await this.inference.handleMessage(String(event.data));
       channel.send(JSON.stringify(response));

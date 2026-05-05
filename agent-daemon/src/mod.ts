@@ -6,6 +6,17 @@ import { WebSocketInferenceDaemon } from './websocket-fallback.ts';
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
 
+function addShutdownListeners(shutdown: () => void): void {
+  const signals = Deno.build.os === 'windows' ? ['SIGINT', 'SIGBREAK'] : ['SIGINT', 'SIGTERM'];
+  for (const signal of signals) {
+    try {
+      Deno.addSignalListener(signal as Deno.Signal, shutdown);
+    } catch (error) {
+      console.warn(`Could not register ${signal} shutdown listener:`, error);
+    }
+  }
+}
+
 export async function runService(): Promise<void> {
   let reconnectDelay = 1_000;
   let currentDaemon: { close(): void } | undefined;
@@ -15,8 +26,7 @@ export async function runService(): Promise<void> {
     currentDaemon?.close();
     Deno.exit(0);
   };
-  Deno.addSignalListener('SIGINT', shutdown);
-  Deno.addSignalListener('SIGTERM', shutdown);
+  addShutdownListeners(shutdown);
 
   while (true) {
     const config = loadConfig();
@@ -28,15 +38,14 @@ export async function runService(): Promise<void> {
         const daemon = new WebSocketInferenceDaemon(config, inference);
         currentDaemon = daemon;
         await daemon.connect();
+        await daemon.waitForClose();
       } else {
         const signaling = new SignalingClient(config.signalingUrl, config.peerId);
         const daemon = new WebRTCInferenceDaemon(config, signaling, inference);
         currentDaemon = daemon;
         await daemon.start();
+        await daemon.waitForClose();
       }
-      reconnectDelay = 1_000;
-      // Keep the daemon process alive until a signal or connection failure stops it.
-      await new Promise(() => {});
     } catch (error) {
       console.error('Local inference daemon connection failed:', error);
       currentDaemon?.close();

@@ -1,8 +1,22 @@
 import { Service } from '@cross/service';
 
-const executable = Deno.build.os === 'windows'
-  ? 'dist\\agent-harness-local-inference-daemon.exe'
-  : './dist/agent-harness-local-inference-daemon';
+function resolveExecutable(): string {
+  if (Deno.build.os === 'windows') {
+    return Deno.build.arch === 'aarch64'
+      ? 'dist\\agent-harness-local-inference-daemon-windows-arm64.exe'
+      : 'dist\\agent-harness-local-inference-daemon-windows-x64.exe';
+  }
+
+  if (Deno.build.os === 'darwin') {
+    return Deno.build.arch === 'aarch64'
+      ? './dist/agent-harness-local-inference-daemon-macos-arm64'
+      : './dist/agent-harness-local-inference-daemon-macos-x64';
+  }
+
+  return './dist/agent-harness-local-inference-daemon';
+}
+
+const executable = resolveExecutable();
 
 const service = new Service({
   name: 'AgentHarnessLocalInferenceDaemon',

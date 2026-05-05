@@ -58,4 +58,28 @@ describe('Windows daemon download detection', () => {
       label: 'Portable Deno source',
     });
   });
+
+  it('falls back to the portable source bundle when high entropy lookup rejects', async () => {
+    await expect(resolveLocalInferenceDaemonDownload({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW32)',
+      userAgentData: {
+        platform: 'Windows',
+        getHighEntropyValues: async () => { throw new Error('unsupported'); },
+      },
+    })).resolves.toEqual({
+      href: '/downloads/agent-harness-local-inference-daemon.zip',
+      fileName: 'agent-harness-local-inference-daemon.zip',
+      label: 'Portable Deno source',
+    });
+  });
+
+  it('falls back to the portable source bundle for 32-bit Windows without UA-CH', async () => {
+    await expect(resolveLocalInferenceDaemonDownload({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win32; x86)',
+    })).resolves.toEqual({
+      href: '/downloads/agent-harness-local-inference-daemon.zip',
+      fileName: 'agent-harness-local-inference-daemon.zip',
+      label: 'Portable Deno source',
+    });
+  });
 });

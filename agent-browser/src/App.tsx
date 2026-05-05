@@ -6378,6 +6378,8 @@ function ExtensionsPanel({
     let active = true;
     resolveLocalInferenceDaemonDownload(window.navigator).then((download) => {
       if (active) setDaemonDownload(download);
+    }).catch(() => {
+      if (active) setDaemonDownload(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
     });
     return () => { active = false; };
   }, []);

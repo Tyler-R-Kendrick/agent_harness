@@ -147,6 +147,8 @@ async function main() {
   const extensionDownloadsPackager = await import(
     pathToFileURL(path.resolve(repoRoot, 'scripts/package-extension-downloads.mjs')).href
   );
+  const extensionDownloadsScript = await readScript('scripts/package-extension-downloads.mjs');
+  assert.match(extensionDownloadsScript, /pathToFileURL\(path\.resolve\(process\.argv\[1\]\)\)\.href/);
   assert.deepEqual(extensionDownloadsPackager.buildDownloadPackages(repoRoot), [
     {
       name: 'local-model-connector-extension',

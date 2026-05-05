@@ -19,8 +19,10 @@ interface RTCDataChannel {
 }
 
 interface RTCPeerConnection {
+  connectionState: string;
   onicecandidate: ((event: RTCPeerConnectionIceEvent) => void) | null;
   ondatachannel: ((event: RTCDataChannelEvent) => void) | null;
+  onconnectionstatechange: (() => void) | null;
   createDataChannel(label: string, options?: { ordered?: boolean }): RTCDataChannel;
   createOffer(): Promise<{ type: 'offer'; sdp?: string }>;
   createAnswer(): Promise<{ type: 'answer'; sdp?: string }>;

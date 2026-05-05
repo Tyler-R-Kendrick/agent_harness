@@ -17,7 +17,11 @@ export class SignalingClient {
         resolve();
       };
       ws.onerror = () => reject(new Error('Signaling WebSocket failed to connect.'));
-      ws.onmessage = (event) => this.handleMessage(String(event.data));
+      ws.onmessage = (event) => {
+        void this.handleMessage(String(event.data)).catch((error) => {
+          console.warn('Ignoring malformed signaling message:', error);
+        });
+      };
     });
   }
 

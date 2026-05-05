@@ -2,13 +2,15 @@ export interface NavigatorLike {
   userAgent?: string;
   userAgentData?: {
     platform?: string;
-    getHighEntropyValues?: (hints: string[]) => Promise<{
-      platform?: string;
-      architecture?: string;
-      bitness?: string;
-      wow64?: boolean;
-    }>;
+    getHighEntropyValues?: (hints: string[]) => Promise<NavigatorHighEntropyValues>;
   };
+}
+
+interface NavigatorHighEntropyValues {
+  platform?: string;
+  architecture?: string;
+  bitness?: string;
+  wow64?: boolean;
 }
 
 export interface DaemonDownloadChoice {
@@ -39,18 +41,25 @@ export async function resolveLocalInferenceDaemonDownload(navigatorLike: Navigat
   const platform = navigatorLike.userAgentData?.platform ?? navigatorLike.userAgent ?? '';
   if (!/windows/i.test(platform)) return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
 
-  const highEntropy = await navigatorLike.userAgentData?.getHighEntropyValues?.([
-    'architecture',
-    'bitness',
-    'platform',
-    'platformVersion',
-    'wow64',
-  ]);
+  let highEntropy: NavigatorHighEntropyValues | undefined;
+  try {
+    highEntropy = await navigatorLike.userAgentData?.getHighEntropyValues?.([
+      'architecture',
+      'bitness',
+      'platform',
+      'platformVersion',
+      'wow64',
+    ]);
+  } catch {
+    highEntropy = undefined;
+  }
   const architecture = highEntropy?.architecture?.toLowerCase() ?? navigatorLike.userAgent?.toLowerCase() ?? '';
   const bitness = highEntropy?.bitness ?? '';
+  if (bitness === '32' || /\b(?:wow32|win32|i386|i686|x86)\b/i.test(navigatorLike.userAgent ?? '')) {
+    return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
+  }
   if (architecture.includes('arm') || /arm64|aarch64/i.test(navigatorLike.userAgent ?? '')) {
     return WINDOWS_ARM64_DAEMON_DOWNLOAD;
   }
-  if (architecture.includes('x86') && bitness === '32') return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
   return WINDOWS_X64_DAEMON_DOWNLOAD;
 }
