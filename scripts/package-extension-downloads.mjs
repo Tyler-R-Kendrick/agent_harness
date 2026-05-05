@@ -36,6 +36,7 @@ async function collectFiles(sourceDirectory, rootName, currentDirectory = source
       if (entry.name === 'dist') continue;
       files.push(...await collectFiles(sourceDirectory, rootName, absolutePath));
     } else if (entry.isFile()) {
+      if (entry.name.endsWith('.zip')) continue;
       const entryPath = normalizeZipEntryPath(rootName, relativePath);
       files.push({ entryPath, absolutePath });
     }

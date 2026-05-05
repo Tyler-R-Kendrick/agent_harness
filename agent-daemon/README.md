@@ -25,6 +25,20 @@ deno task compile:macos:x64
 deno task compile:macos:arm64
 ```
 
+## Package for Agent Browser
+
+From the repository root:
+
+```bash
+npm run build:extension-downloads
+```
+
+The browser-visible daemon package is written to:
+
+```text
+agent-browser/public/downloads/agent-harness-local-inference-daemon.zip
+```
+
 ## Install as a service
 
 Run with Administrator or sudo privileges:

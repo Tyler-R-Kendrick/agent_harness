@@ -26,6 +26,18 @@ The loadable extension is written to:
 ext/local-model-connector/dist
 ```
 
+Build the Agent Browser downloadable extension zip:
+
+```bash
+npm run build:extension-downloads
+```
+
+The browser-visible package is written to:
+
+```text
+agent-browser/public/downloads/local-model-connector-extension.zip
+```
+
 Load it in Chrome or Edge:
 
 1. Open `chrome://extensions` or `edge://extensions`.
