@@ -120,6 +120,50 @@ describe('registerArtifactTools', () => {
     }));
   });
 
+  it('accepts artifact_id aliases from local model tool calls', async () => {
+    const modelContext = new ModelContext();
+    const updateArtifact = vi.fn(async (artifactId, input) => ({
+      id: artifactId,
+      title: 'Updated',
+      createdAt: '2026-05-03T00:00:00.000Z',
+      updatedAt: '2026-05-03T00:01:00.000Z',
+      files: input.files,
+      references: input.references,
+    }));
+    registerArtifactTools(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      artifacts: [{
+        id: 'artifact-created',
+        title: 'Created',
+        createdAt: '2026-05-03T00:00:00.000Z',
+        updatedAt: '2026-05-03T00:00:00.000Z',
+        files: [{ path: 'image.svg', content: '<svg />', mediaType: 'image/svg+xml' }],
+        references: [],
+      }],
+      onUpdateArtifact: updateArtifact,
+    });
+    const tool = createWebMcpTool(modelContext);
+
+    await expect(tool.execute({
+      tool: 'read_artifact',
+      args: { artifact_id: 'artifact-created' },
+    })).resolves.toMatchObject({
+      id: 'artifact-created',
+      files: [{ path: 'image.svg' }],
+    });
+    await expect(tool.execute({
+      tool: 'update_artifact',
+      args: {
+        artifact_id: 'artifact-created',
+        files: [{ path: 'image.svg', content: '<svg><title>Updated</title></svg>' }],
+      },
+    })).resolves.toMatchObject({ id: 'artifact-created', title: 'Updated' });
+    expect(updateArtifact).toHaveBeenCalledWith('artifact-created', expect.objectContaining({
+      files: [{ path: 'image.svg', content: '<svg><title>Updated</title></svg>' }],
+    }));
+  });
+
   it('rejects malformed artifact tool inputs', async () => {
     const modelContext = new ModelContext();
     registerArtifactTools(modelContext, {

@@ -113,6 +113,12 @@ const LOCATION_CONTEXT_TOOL_ORDER = [
   'webmcp:elicit_user_input',
 ] as const;
 
+const ARTIFACT_CREATE_TOOL_IDS = [
+  'webmcp:create_artifact',
+  'artifacts.create',
+  'create_artifact',
+] as const;
+
 function messageContentToText(content: ModelMessage['content']): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return JSON.stringify(content);
@@ -177,6 +183,9 @@ export function findTool(runtime: ToolAgentRuntime, query: string, limit = 5): T
 }
 
 export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, maxTools = 4): ToolPlan {
+  const artifactPlan = createArtifactGenerationPlan(runtime, goal);
+  if (artifactPlan) return artifactPlan;
+
   const ranked = findTool(runtime, goal, maxTools);
   const availableTools = listTools(runtime);
   const searchToolIds = isWebSearchGoal(goal)
@@ -210,6 +219,186 @@ export function createStaticToolPlan(runtime: ToolAgentRuntime, goal: string, ma
       executor: selectedToolIds,
     },
   };
+}
+
+function createArtifactGenerationPlan(runtime: ToolAgentRuntime, goal: string): ToolPlan | null {
+  if (!isArtifactGenerationGoal(goal)) return null;
+  const createTool = ARTIFACT_CREATE_TOOL_IDS
+    .map((toolId) => allDescriptors(runtime).find((descriptor) => descriptor.id === toolId))
+    .find((descriptor): descriptor is ToolDescriptor => Boolean(descriptor));
+  if (!createTool) return null;
+  const inputTemplate = buildArtifactCreateInput(goal);
+  return {
+    version: 1,
+    goal,
+    selectedToolIds: [createTool.id],
+    steps: [{
+      id: 'create-artifact',
+      kind: 'call-tool',
+      toolId: createTool.id,
+      inputTemplate,
+      saveAs: 'artifact',
+    }],
+    createdToolFiles: [],
+    actorToolAssignments: {
+      'tool-agent': [createTool.id],
+      'student-driver': [createTool.id],
+      'voter:teacher': [createTool.id],
+      'adversary-driver': [createTool.id],
+      'judge-decider': [createTool.id],
+      executor: [createTool.id],
+    },
+  };
+}
+
+function isArtifactGenerationGoal(goal: string): boolean {
+  const lowered = goal.toLowerCase();
+  const wantsCreation = /\b(create|generate|make|build|write|produce|draft|render|export)\b/.test(lowered);
+  if (!wantsCreation) return false;
+  return /\bartifacts?\b/.test(lowered)
+    || /\b(pdf|image|svg|png|jpg|jpeg|widget|canvas widget|design\.md|agents\.md|agent skill|agent-skill|skill\.md|docx|word document|pptx|powerpoint|slide deck)\b/.test(lowered);
+}
+
+function buildArtifactCreateInput(goal: string): Record<string, unknown> {
+  const kind = inferArtifactKind(goal);
+  const title = titleForArtifactGoal(goal, kind);
+  const id = `artifact-${kind}-${normalizeGeneratedId(title)}`;
+  return {
+    id,
+    title,
+    kind,
+    references: [],
+    files: filesForArtifactKind(kind, title, goal),
+  };
+}
+
+function inferArtifactKind(goal: string): string {
+  const lowered = goal.toLowerCase();
+  if (/\b(pdf)\b/.test(lowered)) return 'pdf';
+  if (/\b(docx|word document)\b/.test(lowered)) return 'docx';
+  if (/\b(pptx|powerpoint|slide deck)\b/.test(lowered)) return 'pptx';
+  if (/\b(canvas widget|widget)\b/.test(lowered)) return 'canvas-widget';
+  if (/\b(agent skill|agent-skill|skill\.md)\b/.test(lowered)) return 'agent-skill';
+  if (/\bagents\.md\b/.test(lowered)) return 'agents-md';
+  if (/\bdesign\.md\b/.test(lowered)) return 'design-md';
+  if (/\b(image|svg|png|jpg|jpeg)\b/.test(lowered)) return 'image';
+  return 'bundle';
+}
+
+function titleForArtifactGoal(goal: string, kind: string): string {
+  const compact = goal
+    .replace(/\b(create|generate|make|build|write|produce|draft|render|export)\b/ig, '')
+    .replace(/\bas an?\s+artifacts?\b/ig, '')
+    .replace(/\bartifacts?\b/ig, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!?]+$/g, '');
+  if (compact.length >= 4) return compact.slice(0, 80);
+  return ({
+    pdf: 'Generated PDF',
+    docx: 'Generated DOCX',
+    pptx: 'Generated PPTX',
+    image: 'Generated image',
+    'canvas-widget': 'Canvas widget',
+    'design-md': 'DESIGN.md',
+    'agents-md': 'AGENTS.md',
+    'agent-skill': 'Agent skill',
+    bundle: 'Generated artifact',
+  } as Record<string, string>)[kind] ?? 'Generated artifact';
+}
+
+function filesForArtifactKind(kind: string, title: string, goal: string): Array<{ path: string; content: string; mediaType: string }> {
+  const safeTitle = title || 'Generated artifact';
+  switch (kind) {
+    case 'pdf':
+      return [{
+        path: 'document.pdf',
+        mediaType: 'application/pdf',
+        content: `%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Count 1 >> endobj\n%% ${safeTitle}\n%%EOF\n`,
+      }];
+    case 'docx':
+      return [{
+        path: 'document.docx',
+        mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        content: `DOCX package placeholder\nTitle: ${safeTitle}\nRequest: ${goal}\n`,
+      }];
+    case 'pptx':
+      return [{
+        path: 'deck.pptx',
+        mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        content: `PPTX package placeholder\nTitle: ${safeTitle}\nSlide 1: ${goal}\n`,
+      }];
+    case 'canvas-widget':
+      return [
+        {
+          path: 'canvas-widget/widget.json',
+          mediaType: 'application/json',
+          content: JSON.stringify({ type: 'canvas-widget', title: safeTitle, prompt: goal, nodes: [], edges: [] }, null, 2),
+        },
+        {
+          path: 'canvas-widget/index.html',
+          mediaType: 'text/html',
+          content: `<section aria-label="Canvas widget"><h1>${escapeHtml(safeTitle)}</h1><p>Interactive canvas widget artifact.</p></section>`,
+        },
+      ];
+    case 'agent-skill':
+      return [
+        {
+          path: 'skills/generated-skill/SKILL.md',
+          mediaType: 'text/markdown',
+          content: `---\nname: generated-skill\ndescription: ${safeTitle}\n---\n\n# ${safeTitle}\n\nUse this skill to satisfy: ${goal}\n`,
+        },
+        {
+          path: 'skills/generated-skill/references/README.md',
+          mediaType: 'text/markdown',
+          content: `# References\n\n- Source request: ${goal}\n`,
+        },
+        {
+          path: 'skills/generated-skill/scripts/verify.ts',
+          mediaType: 'text/typescript',
+          content: 'export function verifySkill(): boolean {\n  return true;\n}\n',
+        },
+        {
+          path: 'skills/generated-skill/evals/evals.json',
+          mediaType: 'application/json',
+          content: JSON.stringify({ evals: [{ name: 'generated-skill-smoke', input: goal }] }, null, 2),
+        },
+      ];
+    case 'agents-md':
+      return [{
+        path: 'AGENTS.md',
+        mediaType: 'text/markdown',
+        content: `# Agent Instructions\n\n- User request: ${goal}\n- Keep changes grounded, tested, and workspace-scoped.\n`,
+      }];
+    case 'design-md':
+      return [{
+        path: 'DESIGN.md',
+        mediaType: 'text/markdown',
+        content: `# Design\n\n## Goal\n${goal}\n\n## Tokens\n- Surface: workspace\n- Artifact: ${safeTitle}\n`,
+      }];
+    case 'image':
+      return [{
+        path: 'image.svg',
+        mediaType: 'image/svg+xml',
+        content: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="${escapeHtml(safeTitle)}"><rect width="640" height="360" fill="#111827"/><circle cx="500" cy="88" r="54" fill="#8b5cf6"/><text x="48" y="190" fill="#f8fafc" font-family="Inter, sans-serif" font-size="38">${escapeHtml(safeTitle)}</text><text x="48" y="240" fill="#c4b5fd" font-family="Inter, sans-serif" font-size="20">Generated artifact image</text></svg>`,
+      }];
+    default:
+      return [{
+        path: 'artifact.md',
+        mediaType: 'text/markdown',
+        content: `# ${safeTitle}\n\nGenerated for: ${goal}\n`,
+      }];
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char] ?? char));
 }
 
 function isLocationDependentGoal(goal: string): boolean {

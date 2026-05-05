@@ -132,6 +132,60 @@ describe('runConfiguredExecutorAgent', () => {
     });
   });
 
+  it('summarizes deterministic artifact plan outputs with //artifacts locations', async () => {
+    const artifactDescriptor: ToolDescriptor = {
+      id: 'webmcp:create_artifact',
+      label: 'Create artifact',
+      description: 'Create a standalone artifact with one or more files mounted under //artifacts.',
+      group: 'built-in',
+      groupLabel: 'Built-In',
+      subGroup: 'artifacts-mcp',
+      subGroupLabel: 'Artifacts',
+    };
+    const createArtifact = vi.fn(async () => ({
+      id: 'artifact-image-launch-badge',
+      title: 'Launch badge',
+      kind: 'image',
+      files: [{ path: 'image.svg', content: '<svg />', mediaType: 'image/svg+xml' }],
+      references: [],
+    }));
+    const artifactPlan: ToolPlan = {
+      version: 1,
+      goal: 'create an image as an artifact',
+      selectedToolIds: ['webmcp:create_artifact'],
+      createdToolFiles: [],
+      steps: [{
+        id: 'create-artifact',
+        kind: 'call-tool',
+        toolId: 'webmcp:create_artifact',
+        inputTemplate: {
+          title: 'Launch badge',
+          kind: 'image',
+          files: [{ path: 'image.svg', content: '<svg />', mediaType: 'image/svg+xml' }],
+        },
+        saveAs: 'artifact',
+      }],
+    };
+    const onDone = vi.fn();
+
+    const result = await runConfiguredExecutorAgent({
+      ...baseOptions(),
+      tools: { 'webmcp:create_artifact': { execute: createArtifact } } as unknown as ToolSet,
+      toolDescriptors: [artifactDescriptor],
+      runtime: {
+        tools: { 'webmcp:create_artifact': { execute: createArtifact } } as unknown as ToolSet,
+        descriptors: [artifactDescriptor],
+      },
+    }, artifactPlan, [artifactDescriptor], { 'webmcp:create_artifact': { execute: createArtifact } } as unknown as ToolSet, { onDone });
+
+    expect(result).toMatchObject({
+      text: expect.stringContaining('Created artifact Launch badge at //artifacts/artifact-image-launch-badge.'),
+      steps: 1,
+    });
+    expect(result.text).toContain('//artifacts/artifact-image-launch-badge/image.svg');
+    expect(onDone).toHaveBeenCalledWith(result.text);
+  });
+
   it('pauses location-dependent execution with user elicitation after memory and browser location are unavailable', async () => {
     runToolAgentMock.mockResolvedValue({ text: 'model should not run before elicitation', steps: 1 });
     const toolCalls: string[] = [];
