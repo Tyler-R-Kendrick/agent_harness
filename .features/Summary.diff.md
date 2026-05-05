@@ -1,54 +1,62 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-04
-Baseline: `.features/Summary.md` updated from the 2026-05-03 twenty-one-harness corpus.
-Diff type: additive update after Gemini CLI research
+Updated: 2026-05-05
+Baseline: `.features/Summary.md` refreshed from the 2026-05-04 twenty-two-harness corpus.
+Diff type: additive update after GitHub Copilot refresh research
 
 ## Net new normalized features
 
-### Added: Chaptered session structure and automatic context compression
-- Why now: Gemini CLI is treating context bloat and long-session readability as first-class harness problems instead of leaving them to the underlying model.
+### Added: Policy-governed partner-agent control planes
+- Why now: GitHub Copilot is no longer just shipping its own cloud agent. It now hosts Claude and Codex inside the same task surface, with shared governance and a growing model picker.
 - Research delta:
-  - the April 2026 Gemini CLI v0.38.0 release notes add `Chapters Narrative Flow`
-  - the same release adds a dedicated `Context Compression Service`
-  - the May 2026 v0.39.0 notes also mention a decoupled `ContextManager`, which shows continuing investment in session shaping and context-budget management
-
-### Expanded: Persistent memory plus project instructions
-- Why now: Gemini CLI is turning memory capture into an explicit review loop instead of silent transcript retention.
-- Research delta:
-  - Auto Memory extracts candidate memories and reusable skills from prior conversations
-  - new memories land in a user-visible review inbox
-  - layered `GEMINI.md` files with `@import` keep project instructions versioned and composable
-
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Gemini CLI extensions package more of the harness surface than a normal command plugin.
-- Research delta:
-  - extensions can carry commands, prompts, tools, hooks, themes, subagents, policy, MCP configuration, and `GEMINI.md` context
-  - the package format supports project and shared installation patterns
-  - governance and delegation can ship inside the same reusable unit as prompts and tools
+  - GitHub Docs now document third-party agents for Claude and Codex alongside Copilot cloud agent
+  - the same GitHub task surfaces now support partner agents across the agents tab, issues, pull requests, GitHub Mobile, and VS Code
+  - the April 14, 2026 changelog adds per-agent model selection on github.com for Claude and Codex
+  - GitHub applies the same security protections and policy controls to partner agents as it does to its own cloud agent
 
 ### Expanded: Parallel agent orchestration
-- Why now: Gemini CLI now spans both local specialization and remote delegation instead of treating subagents as an in-process-only idea.
+- Why now: GitHub Copilot now treats specialization as part of the orchestration layer, not just as separate named prompts.
 - Research delta:
-  - Gemini CLI documents first-class subagents
-  - Remote Agents adds agent-to-agent delegation across a defined protocol boundary
-  - git worktree guidance makes session isolation part of the orchestration story
+  - custom agent profiles can run as subagents with separate context windows
+  - subagent work can run in parallel
+  - third-party agents further broaden GitHub's multi-agent execution model
 
-### Expanded: Embeddable agent runtimes and protocol surfaces
-- Why now: Gemini CLI is making automation-friendly output part of the product surface instead of forcing consumers to scrape TTY text.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: GitHub Copilot now exposes both lightweight and heavier-weight reusable packaging surfaces instead of only custom instructions.
 - Research delta:
-  - headless mode supports non-interactive automation
-  - JSON and streaming output modes make the harness easier to embed in scripts, CI, and control planes
-  - model routing and local router support reinforce the idea that the runtime can be composed into mixed deployment topologies
+  - prompt files package reusable workspace prompts in Markdown
+  - Agent Skills package instructions, scripts, and resources
+  - Copilot can reuse existing `.claude/skills` repositories instead of forcing a new skill format
 
-### Added: Add chaptered sessions and automatic context compression for browser-agent runs
-- Why now: `agent-browser` has long-running sessions, browser traces, and transcript-heavy workflows, but it still lacks an explicit mechanism for grouping, compressing, and carrying forward long-task context the way Gemini CLI now does.
+### Expanded: Multi-surface continuity
+- Why now: GitHub now gives cloud-agent sessions a broader control surface than the original terminal-plus-GitHub story.
+- Research delta:
+  - session tracking now spans the agents tab, GitHub CLI, Raycast, VS Code, JetBrains, Eclipse, and GitHub Mobile
+  - users can inspect session logs and steer running tasks from those surfaces
+  - GitHub is explicitly turning session continuity into a cross-client product feature
+
+### Expanded: Persistent memory plus project instructions
+- Why now: GitHub is broadening grounded context from private setup into reusable, shareable artifacts.
+- Research delta:
+  - Spaces can now be shared publicly or individually
+  - files can be added to Spaces directly from the github.com code viewer
+  - GitHub is preserving RBAC while making context packs easier to publish and reuse
+
+### Expanded: Background execution without stealing focus
+- Why now: Copilot is pushing agent execution closer to the cursor instead of forcing every autonomous flow into a dedicated side panel.
+- Research delta:
+  - agent mode in IDEs now spans richer inline/editor-native flows
+  - April 24, 2026 JetBrains notes add inline agent mode in public preview
+  - the same update adds global auto-approve and granular defaults for commands and file edits
+
+### Added: Add a policy-governed partner-agent control plane and model picker
+- Why now: `agent-browser` already has its own harness and orchestration surfaces, but it cannot yet host multiple agent backends behind one shared session, governance, and review workflow the way GitHub Copilot now can.
 - Linear issue title:
-  - `Add chaptered sessions and automatic context compression for browser-agent runs`
+  - `Add a policy-governed partner-agent control plane and model picker`
 - Suggested problem statement:
-  - `agent-browser` keeps long browser-agent work in raw transcript form, which makes extended runs harder to navigate, more expensive to continue, and more likely to lose coherence as browser evidence, plans, and retries accumulate.
+  - `agent-browser` can run its own agent stack, but it lacks a shared control plane for switching or delegating across multiple agent backends while keeping one consistent policy, review, and audit model for browser-agent tasks.
 - One-shot instruction for an LLM:
-  - Implement chaptered session structure and automatic context compression for `agent-browser` so long runs are grouped into navigable sections, summaries are inspectable and linked back to the full trace, and the harness can carry forward compressed context without hiding critical browser evidence or validation results.
+  - Implement a partner-agent control plane for `agent-browser` that can host multiple agent backends behind one session UX, unify permissions and audit logging, preserve the same issue, diff, and review workflow regardless of backend, and expose per-agent model selection without fragmenting run history or browser evidence.
 
 ## How to use this file
 
@@ -59,4 +67,4 @@ Diff type: additive update after Gemini CLI research
 
 ## Recommended next Linear batch
 
-1. `Add chaptered sessions and automatic context compression for browser-agent runs`
+1. `Add a policy-governed partner-agent control plane and model picker`
