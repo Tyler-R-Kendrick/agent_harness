@@ -95,6 +95,8 @@ async function main() {
   assert.match(daemonBuildWorkflow, /--target aarch64-pc-windows-msvc/);
   assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-x64\.exe/);
   assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-arm64\.exe/);
+  assert.doesNotMatch(daemonBuildWorkflow, /cache: npm/);
+  assert.match(daemonBuildWorkflow, /npm install --package-lock=false/);
   assert.match(daemonBuildWorkflow, /actions\/upload-artifact@v4/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
