@@ -54,6 +54,19 @@ function getTreeItemByText(text: string): HTMLElement {
   return treeItem;
 }
 
+function dispatchCancelableContextMenu(target: Element, init: MouseEventInit = {}) {
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    button: 2,
+    clientX: 80,
+    clientY: 96,
+    ...init,
+  });
+  fireEvent(target, event);
+  return event;
+}
+
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
@@ -5456,6 +5469,42 @@ styles:
   });
 
   // ── Session FS context menu ──────────────────────────────────────
+
+  it('right-clicking workspace content opens an app context menu and suppresses the native browser menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const event = dispatchCancelableContextMenu(screen.getByRole('main', { name: 'Workspace content' }));
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New tab' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New session' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Add file' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Workspaces' })).toBeInTheDocument();
+  });
+
+  it('right-clicking a Browser section opens section actions and suppresses the native browser menu', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const browserSection = screen.getByRole('button', { name: 'Browser' }).closest('[role="treeitem"]')!;
+    const event = dispatchCancelableContextMenu(browserSection);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(screen.getByRole('menu', { name: 'Context menu' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'New tab' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Properties' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'New session' })).not.toBeInTheDocument();
+  });
 
   it('right-clicking a session FS drive node opens the context menu with a New toolbar button; clicking New shows scaffold options', async () => {
     vi.useFakeTimers();
