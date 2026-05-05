@@ -38,12 +38,14 @@ export async function runService(): Promise<void> {
         const daemon = new WebSocketInferenceDaemon(config, inference);
         currentDaemon = daemon;
         await daemon.connect();
+        reconnectDelay = 1_000;
         await daemon.waitForClose();
       } else {
         const signaling = new SignalingClient(config.signalingUrl, config.peerId);
         const daemon = new WebRTCInferenceDaemon(config, signaling, inference);
         currentDaemon = daemon;
         await daemon.start();
+        reconnectDelay = 1_000;
         await daemon.waitForClose();
       }
     } catch (error) {

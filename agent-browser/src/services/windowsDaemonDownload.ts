@@ -55,7 +55,7 @@ export async function resolveLocalInferenceDaemonDownload(navigatorLike: Navigat
   }
   const architecture = highEntropy?.architecture?.toLowerCase() ?? navigatorLike.userAgent?.toLowerCase() ?? '';
   const bitness = highEntropy?.bitness ?? '';
-  if (bitness === '32' || /\b(?:wow32|win32|i386|i686)\b/i.test(navigatorLike.userAgent ?? '')) {
+  if (bitness === '32' || /\b(?:win32|i386|i686)\b/i.test(navigatorLike.userAgent ?? '')) {
     return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
   }
   if (architecture.includes('arm') || /arm64|aarch64/i.test(navigatorLike.userAgent ?? '')) {
