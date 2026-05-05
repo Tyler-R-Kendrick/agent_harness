@@ -336,7 +336,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'review' | 'history' | 'extensions' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'review' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -500,17 +500,19 @@ const PRIMARY_NAV = [
   ['review', 'gitPullRequest', 'Review'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
+  ['models', 'cpu', 'Models'],
 ] as const;
 const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
   review: { label: 'Review', icon: 'gitPullRequest' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
+  models: { label: 'Models', icon: 'cpu' },
   settings: { label: 'Settings', icon: 'settings' },
   account: { label: 'Account', icon: 'user' },
 };
@@ -1955,7 +1957,7 @@ function ChatPanel({
   onNewSession,
   onClose,
   onTerminalFsPathsChanged,
-  onOpenSettings,
+  onOpenModels,
   onWorkspaceFileUpsert,
   onCopyToClipboard,
   onSecretRecordsChanged,
@@ -1993,7 +1995,7 @@ function ChatPanel({
   onNewSession: () => void;
   onClose: () => void;
   onTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
-  onOpenSettings: () => void;
+  onOpenModels: () => void;
   onWorkspaceFileUpsert: (file: WorkspaceFile) => void;
   onCopyToClipboard: (text: string, label: string) => Promise<void>;
   onSecretRecordsChanged?: () => void | Promise<void>;
@@ -5242,7 +5244,7 @@ function ChatPanel({
                           </label>
                         )
                         : (
-                          <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                          <button type="button" className="header-model-selector install-model-btn" onClick={onOpenModels} {...panelTitlebarControlProps}>
                             {copilotState.authenticated ? 'GHCP models' : 'Sign in'}
                           </button>
                         ))
@@ -5256,7 +5258,7 @@ function ChatPanel({
                             </label>
                           )
                           : (
-                            <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                            <button type="button" className="header-model-selector install-model-btn" onClick={onOpenModels} {...panelTitlebarControlProps}>
                               {cursorState.authenticated ? 'Cursor models' : 'Set key'}
                             </button>
                           ))
@@ -5270,7 +5272,7 @@ function ChatPanel({
                               </label>
                             )
                             : (
-                              <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>
+                              <button type="button" className="header-model-selector install-model-btn" onClick={onOpenModels} {...panelTitlebarControlProps}>
                                 {codexState.authenticated ? 'Codex models' : 'Sign in'}
                               </button>
                             ))
@@ -5283,7 +5285,7 @@ function ChatPanel({
                               </label>
                             )
                             : (
-                              <button type="button" className="header-model-selector install-model-btn" onClick={onOpenSettings} {...panelTitlebarControlProps}>Install model</button>
+                              <button type="button" className="header-model-selector install-model-btn" onClick={onOpenModels} {...panelTitlebarControlProps}>Install model</button>
                             ))}
                 <BenchmarkRouteBadge route={currentBenchmarkRoute} />
                 <ToolsPicker
@@ -5452,19 +5454,19 @@ function ChatPanel({
               </div>
               {selectedRuntimeProvider === 'ghcp'
                 ? (!hasAvailableCopilotModels
-                    ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
+                    ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{copilotState.authenticated ? 'GHCP has no enabled models. Open Models.' : 'GHCP needs sign-in. Open Models.'}</button>
                     : null)
                 : selectedRuntimeProvider === 'cursor'
                   ? (!hasAvailableCursorModels
-                    ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{cursorState.authenticated ? 'Cursor has no enabled models. Open Models.' : 'Cursor needs CURSOR_API_KEY. Open Models.'}</button>
+                    ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{cursorState.authenticated ? 'Cursor has no enabled models. Open Models.' : 'Cursor needs CURSOR_API_KEY. Open Models.'}</button>
                     : null)
                 : selectedRuntimeProvider === 'codex'
                   ? (!hasAvailableCodexModels
-                      ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{codexState.authenticated ? 'Codex has no enabled models. Open Models.' : 'Codex needs sign-in. Open Models.'}</button>
+                      ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{codexState.authenticated ? 'Codex has no enabled models. Open Models.' : 'Codex needs sign-in. Open Models.'}</button>
                       : null)
                 : selectedProvider === 'tour-guide'
                   ? null
-                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenSettings}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -6177,7 +6179,7 @@ function formatSecretUpdated(value: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-interface SettingsPanelProps {
+interface ModelsPanelProps {
   copilotState: CopilotRuntimeState;
   isCopilotLoading: boolean;
   onRefreshCopilot: () => void;
@@ -6189,16 +6191,19 @@ interface SettingsPanelProps {
   onRefreshCodex: () => void;
   registryModels: HFModel[];
   installedModels: HFModel[];
-  benchmarkRoutingSettings: BenchmarkRoutingSettings;
-  benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
-  benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
-  adversaryToolReviewSettings: AdversaryToolReviewSettings;
   task: string;
   loadingModelId: string | null;
   onTaskChange: (task: string) => void;
   onSearch: (query: string) => void;
   onInstall: (model: HFModel) => Promise<void>;
   onDelete: (id: string) => void;
+}
+
+interface SettingsPanelProps {
+  benchmarkRoutingSettings: BenchmarkRoutingSettings;
+  benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
+  benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
+  adversaryToolReviewSettings: AdversaryToolReviewSettings;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
@@ -6246,7 +6251,7 @@ function LocalInferenceReadinessCard({ readiness }: { readiness: LocalInferenceR
   );
 }
 
-function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, adversaryToolReviewSettings, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, onAdversaryToolReviewSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
+function ModelsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete }: ModelsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
   const isFiltering = Boolean(searchQuery || task);
@@ -6271,11 +6276,11 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
   }
 
   return (
-    <section className="panel-scroll settings-panel" aria-label="Settings">
+    <section className="panel-scroll settings-panel" aria-label="Models">
       <div className="panel-topbar">
         <div className="settings-heading">
-          <h2>Settings</h2>
-          <p className="muted">Manage GHCP availability and browser-runnable ONNX local models.</p>
+          <h2>Models</h2>
+          <p className="muted">Install and configure model provider extensions for chat agents.</p>
         </div>
       </div>
 
@@ -6423,26 +6428,6 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
         </article>
       </SettingsSection>
 
-      <BenchmarkRoutingSettingsPanel
-        settings={benchmarkRoutingSettings}
-        candidates={benchmarkRoutingCandidates}
-        evidenceState={benchmarkEvidenceState}
-        onChange={onBenchmarkRoutingSettingsChange}
-      />
-
-      <AdversaryToolReviewSettingsPanel
-        settings={adversaryToolReviewSettings}
-        onChange={onAdversaryToolReviewSettingsChange}
-      />
-
-      <SecretsSettings
-        records={secretRecords}
-        settings={secretSettings}
-        onSaveSecret={onSaveSecret}
-        onDeleteSecret={onDeleteSecret}
-        onSettingsChange={onSecretSettingsChange}
-      />
-
       {copilotState.models.length > 0 && (
         <SettingsSection title={`GitHub Copilot models (${copilotState.models.length})`} defaultOpen={false} scrollBody>
           {copilotState.models.map((model) => (
@@ -6466,14 +6451,6 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
           ))}
         </SettingsSection>
       )}
-
-      <EvaluationAgentsSettings
-        agents={evaluationAgents}
-        negativeRubricTechniques={negativeRubricTechniques}
-        onSaveAgents={onSaveEvaluationAgents}
-        onResetAgents={onResetEvaluationAgents}
-        onResetNegativeRubric={onResetNegativeRubric}
-      />
 
       <SettingsSection title="Local models" scrollBody bodyClassName="local-models-body">
         <div className="local-model-controls">
@@ -6523,6 +6500,65 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
   );
 }
 
+function SettingsPanel({
+  benchmarkRoutingSettings,
+  benchmarkRoutingCandidates,
+  benchmarkEvidenceState,
+  adversaryToolReviewSettings,
+  onBenchmarkRoutingSettingsChange,
+  onAdversaryToolReviewSettingsChange,
+  evaluationAgents,
+  negativeRubricTechniques,
+  onSaveEvaluationAgents,
+  onResetEvaluationAgents,
+  onResetNegativeRubric,
+  secretRecords,
+  secretSettings,
+  onSaveSecret,
+  onDeleteSecret,
+  onSecretSettingsChange,
+}: SettingsPanelProps) {
+  return (
+    <section className="panel-scroll settings-panel" aria-label="Settings">
+      <div className="panel-topbar">
+        <div className="settings-heading">
+          <h2>Settings</h2>
+          <p className="muted">Tune routing, review, secrets, and evaluation behavior.</p>
+        </div>
+        <span className="badge">{evaluationAgents.length} eval agents · {secretRecords.length} secrets</span>
+      </div>
+
+      <BenchmarkRoutingSettingsPanel
+        settings={benchmarkRoutingSettings}
+        candidates={benchmarkRoutingCandidates}
+        evidenceState={benchmarkEvidenceState}
+        onChange={onBenchmarkRoutingSettingsChange}
+      />
+
+      <AdversaryToolReviewSettingsPanel
+        settings={adversaryToolReviewSettings}
+        onChange={onAdversaryToolReviewSettingsChange}
+      />
+
+      <SecretsSettings
+        records={secretRecords}
+        settings={secretSettings}
+        onSaveSecret={onSaveSecret}
+        onDeleteSecret={onDeleteSecret}
+        onSettingsChange={onSecretSettingsChange}
+      />
+
+      <EvaluationAgentsSettings
+        agents={evaluationAgents}
+        negativeRubricTechniques={negativeRubricTechniques}
+        onSaveAgents={onSaveEvaluationAgents}
+        onResetAgents={onResetEvaluationAgents}
+        onResetNegativeRubric={onResetNegativeRubric}
+      />
+    </section>
+  );
+}
+
 function HistoryPanel() {
   return (
     <section className="panel-scroll history-panel" aria-label="History">
@@ -6554,6 +6590,7 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.agents-md')) return 'file';
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
   if (extensionId.endsWith('.artifacts')) return 'layers';
+  if (extensionId.endsWith('-model-provider')) return 'cpu';
   if (extensionId.endsWith('.local-model-connector')) return 'cpu';
   if (extensionId.endsWith('.local-inference-daemon')) return 'terminal';
   return 'puzzle';
@@ -7824,7 +7861,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'models', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -11340,8 +11377,8 @@ function AgentBrowserApp() {
         onInstallExtension={installDefaultExtension}
       />
     );
-    if (activePanel === 'settings') return (
-      <SettingsPanel
+    if (activePanel === 'models') return (
+      <ModelsPanel
         copilotState={copilotState}
         isCopilotLoading={isCopilotStateLoading}
         onRefreshCopilot={() => void refreshCopilotState(true)}
@@ -11353,16 +11390,20 @@ function AgentBrowserApp() {
         onRefreshCodex={() => void refreshCodexState(true)}
         registryModels={registryModels}
         installedModels={installedModels}
-        benchmarkRoutingSettings={benchmarkRoutingSettings}
-        benchmarkRoutingCandidates={benchmarkRoutingCandidates}
-        benchmarkEvidenceState={benchmarkEvidenceState}
-        adversaryToolReviewSettings={adversaryToolReviewSettings}
         task={registryTask}
         loadingModelId={loadingModelId}
         onTaskChange={setRegistryTask}
         onSearch={setRegistryQuery}
         onInstall={installModel}
         onDelete={deleteModel}
+      />
+    );
+    if (activePanel === 'settings') return (
+      <SettingsPanel
+        benchmarkRoutingSettings={benchmarkRoutingSettings}
+        benchmarkRoutingCandidates={benchmarkRoutingCandidates}
+        benchmarkEvidenceState={benchmarkEvidenceState}
+        adversaryToolReviewSettings={adversaryToolReviewSettings}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         evaluationAgents={evaluationAgents}
@@ -11616,7 +11657,7 @@ function AgentBrowserApp() {
                   };
                 })}
                 onTerminalFsPathsChanged={handleTerminalFsPathsChanged}
-                onOpenSettings={() => switchSidebarPanel('settings')}
+                onOpenModels={() => switchSidebarPanel('models')}
                 onWorkspaceFileUpsert={(nextFile) => setWorkspaceFilesByWorkspace((current) => ({
                   ...current,
                   [activeWorkspaceId]: upsertWorkspaceFile(current[activeWorkspaceId] ?? [], nextFile),

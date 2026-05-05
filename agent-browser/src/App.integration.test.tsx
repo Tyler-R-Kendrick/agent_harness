@@ -270,14 +270,19 @@ describe('App', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
   };
 
+  const openDefaultSession = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+  };
+
   const installLocalModel = async () => {
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await flushAsyncUpdates();
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
+    openDefaultSession();
   };
 
   const createCopilotState = (overrides: Partial<CopilotRuntimeState> = {}): CopilotRuntimeState => ({
@@ -359,6 +364,7 @@ describe('App', () => {
     expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
     expect(within(dashboard).queryByText('Page: Hugging Face')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
+    openDefaultSession();
     expect(screen.getByRole('tab', { name: 'Chat mode' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Terminal mode' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
@@ -398,7 +404,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
-    expect(screen.getByRole('button', { name: /Marketplace \(8\)/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /Marketplace \(12\)/ })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('0 installed')).toBeInTheDocument();
     expect(screen.getByText('Agent skills')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
@@ -406,9 +412,13 @@ describe('App', () => {
     expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
     expect(screen.getByText('Workflow canvas orchestration')).toBeInTheDocument();
     expect(screen.getByText('Artifacts')).toBeInTheDocument();
+    expect(screen.getByText('GitHub Copilot Models')).toBeInTheDocument();
+    expect(screen.getByText('Cursor Models')).toBeInTheDocument();
+    expect(screen.getByText('Codex Models')).toBeInTheDocument();
+    expect(screen.getByText('Codi Browser Models')).toBeInTheDocument();
     expect(screen.getByText('Local Model Connector')).toBeInTheDocument();
     expect(screen.getByText('Local Inference Daemon')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(6);
+    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(10);
     expect(screen.getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',
       '/downloads/local-model-connector-extension.zip',
@@ -1690,6 +1700,7 @@ describe('App', () => {
     });
 
     expect(screen.getByLabelText('Settings')).toBeInTheDocument();
+    expect(screen.getByLabelText('Models')).toBeInTheDocument();
     expect(screen.getByLabelText('History')).toBeInTheDocument();
   });
 
@@ -1705,7 +1716,47 @@ describe('App', () => {
     expect(screen.queryByRole('heading', { name: 'Claude Design' })).not.toBeInTheDocument();
   });
 
-  it('renders settings as a collapsible settings surface', async () => {
+  it('renders model providers in a dedicated Models sidepanel instead of Settings', async () => {
+    vi.useFakeTimers();
+    fetchCopilotStateMock.mockResolvedValue(createCopilotState({
+      authenticated: true,
+      login: 'octocat',
+      models: [{
+        id: 'gpt-4.1',
+        name: 'GPT-4.1',
+        reasoning: true,
+        vision: true,
+      }],
+    }));
+    fetchCodexStateMock.mockResolvedValue(createCodexState({
+      authenticated: true,
+      statusMessage: 'Codex CLI 0.125.0 available.',
+      models: [{ id: 'codex-default', name: 'Codex default', reasoning: true, vision: false }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Models'));
+
+    expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Providers/i })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('GitHub Copilot')).toBeInTheDocument();
+    expect(screen.getByLabelText('Codex ready')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Local models/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Providers/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Hugging Face search')).not.toBeInTheDocument();
+  });
+
+  it('renders models as a collapsible provider surface', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
       authenticated: true,
@@ -1725,9 +1776,9 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
 
     const providersToggle = screen.getByRole('button', { name: /Providers/i });
     expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
@@ -1740,6 +1791,7 @@ describe('App', () => {
     expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('button', { name: 'Refresh GitHub Copilot status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh Cursor status' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Refresh Codex status' })).not.toBeInTheDocument();
   });
 
   it('does not apply DESIGN.md themes from settings by default', async () => {
@@ -1885,12 +1937,14 @@ styles:
       await Promise.resolve();
     });
 
+    openDefaultSession();
+
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp');
     expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
     expect(screen.getByLabelText('Chat input')).toHaveAttribute('placeholder', 'Ask GHCP…');
   });
 
-  it('shows normalized GHCP models in settings and provider controls', async () => {
+  it('shows normalized GHCP models in Models and provider controls', async () => {
     vi.useFakeTimers();
     fetchCopilotStateMock.mockResolvedValue(createCopilotState({
       authenticated: true,
@@ -1912,10 +1966,12 @@ styles:
       await Promise.resolve();
     });
 
+    openDefaultSession();
+
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp');
     expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     expect(screen.getByLabelText('GitHub Copilot ready')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /GitHub Copilot models \(1\)/i }));
 
@@ -1953,7 +2009,7 @@ styles:
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
@@ -1962,13 +2018,14 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
+    openDefaultSession();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
     expect(screen.getByRole('combobox', { name: 'Codi model' })).toHaveValue('hf-test-model');
     expect(screen.getByLabelText('Chat input')).toHaveAttribute('placeholder', 'Ask Codi…');
   });
 
-  it('shows the Copilot sign-in path in settings without making it the default provider', async () => {
+  it('shows the Copilot sign-in path in Models without making it the default provider', async () => {
     vi.useFakeTimers();
     render(<App />);
 
@@ -1977,9 +2034,11 @@ styles:
       await Promise.resolve();
     });
 
+    openDefaultSession();
+
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getByRole('link', { name: 'Open GitHub Copilot sign-in docs' })).toHaveAttribute('href', 'https://docs.github.com/copilot/how-tos/copilot-cli');
     expect(screen.getByLabelText('GitHub Copilot sign-in command')).toHaveValue('copilot login');
@@ -2001,7 +2060,7 @@ styles:
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getByLabelText('GitHub Copilot signed in')).toBeInTheDocument();
     expect(screen.getByText('Failed to list GitHub Copilot models: models.list failed')).toBeInTheDocument();
@@ -2117,8 +2176,8 @@ styles:
     fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
 
-    // Navigate to settings and install the model
-    fireEvent.click(screen.getByLabelText('Settings'));
+    // Navigate to Models and install the model
+    fireEvent.click(screen.getByLabelText('Models'));
     // Registry section is collapsed by default — expand it first
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
@@ -2489,13 +2548,16 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
       await Promise.resolve();
     });
+
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+    openDefaultSession();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
 
@@ -2541,13 +2603,16 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
       await Promise.resolve();
     });
+
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+    openDefaultSession();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
 
@@ -2605,7 +2670,7 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
@@ -2613,8 +2678,9 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
     fireEvent.click(screen.getByLabelText('Workspaces'));
+    openDefaultSession();
+    disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Write a long answer.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -2864,6 +2930,8 @@ styles:
       await Promise.resolve();
     });
 
+    openDefaultSession();
+
     fireEvent.change(screen.getByRole('combobox', { name: 'Agent provider' }), { target: { value: 'codex' } });
     expect(screen.getByRole('combobox', { name: 'Codex model' })).toHaveValue('codex-default');
 
@@ -2888,7 +2956,7 @@ styles:
     expect(screen.getByText('Codex response')).toBeInTheDocument();
   });
 
-  it('shows Codex status in Settings', async () => {
+  it('shows Codex status in Models', async () => {
     vi.useFakeTimers();
     fetchCodexStateMock.mockResolvedValue(createCodexState({
       authenticated: true,
@@ -2904,7 +2972,7 @@ styles:
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getAllByText('Codex').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByLabelText('Codex ready')).toBeInTheDocument();
@@ -2980,6 +3048,8 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+
+    openDefaultSession();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp');
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Check the terminal.' } });
@@ -4804,17 +4874,17 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.keyDown(window, { key: '6', altKey: true });
+    fireEvent.keyDown(window, { key: '5', altKey: true });
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '3', altKey: true });
+    fireEvent.keyDown(window, { key: '2', altKey: true });
     expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '4', altKey: true });
+    fireEvent.keyDown(window, { key: '3', altKey: true });
     expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '8', altKey: true });
-    expect(screen.getByRole('region', { name: 'Designer' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '7', altKey: true });
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });
     expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
@@ -4869,7 +4939,7 @@ styles:
     expect(getTabbableTreeLabels()[0]).toContain('Hugging Face');
   });
 
-  it('debounces settings searches and aborts the previous request on query changes', async () => {
+  it('debounces model searches and aborts the previous request on query changes', async () => {
     vi.useFakeTimers();
     render(<App />);
 
@@ -4877,7 +4947,7 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     const input = screen.getByLabelText('Hugging Face search');
     const firstSignal = searchBrowserModelsMock.mock.calls[0][3] as AbortSignal;
 
@@ -4904,7 +4974,7 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
     const generationChip = screen.getByRole('button', { name: 'Text Generation' });
     const classificationChip = screen.getByRole('button', { name: 'Classification' });
@@ -4960,7 +5030,7 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     // Registry section is collapsed by default — expand it first
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     const button = screen.getByRole('button', { name: /Test Model/i });
@@ -5004,7 +5074,7 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
@@ -5040,7 +5110,7 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
     // Registry section is collapsed by default — expand it first
     fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
     const button = screen.getByRole('button', { name: /Test Model/i });
@@ -5056,21 +5126,23 @@ styles:
     expect(errorSpy).toHaveBeenCalledWith('Failed to install model hf-test-model', expect.any(Error));
   });
 
-  it('clicking Install model button opens the settings panel', async () => {
+  it('clicking Install model button opens the Models panel', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    // Settings panel should not be visible initially
+    // Models panel should not be visible initially
     expect(screen.queryByLabelText('Settings')).not.toBeNull();
     expect(screen.queryByLabelText('Hugging Face search')).not.toBeInTheDocument();
+
+    openDefaultSession();
 
     // Click the Install model button in the chat header
     fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
 
-    // The settings panel (model registry) should now be open
+    // The Models panel (model registry) should now be open
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
   });
 

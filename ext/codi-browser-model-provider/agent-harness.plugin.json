@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.codi-browser-model-provider",
+  "name": "Codi Browser Models",
+  "version": "0.1.0",
+  "description": "Adds browser-runnable Transformers.js and ONNX models as an installable local model-provider extension.",
+  "activationEvents": ["onModelProvider:codi"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createCodiBrowserModelProviderPlugin"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "codi",
+        "label": "Codi",
+        "kind": "browser-local",
+        "providerIds": ["codi"],
+        "description": "Uses browser inference for installed Hugging Face Transformers.js-compatible local models.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "registry": {
+              "type": "string",
+              "default": "hugging-face"
+            },
+            "preferredTask": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "codi",
+      "description": "Browser-local language models."
+    },
+    {
+      "kind": "chat-agent",
+      "id": "codi",
+      "description": "Codi local chat-agent runtime."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Stores installed browser model selections and model metadata."
+    },
+    {
+      "scope": "network",
+      "access": "read",
+      "reason": "Searches the Hugging Face model registry for browser-runnable models."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

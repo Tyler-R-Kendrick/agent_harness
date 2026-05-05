@@ -135,7 +135,7 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getByLabelText('Qwen3-0.6B-ONNX installed')).toBeInTheDocument();
     expect(screen.getAllByText(/Qwen3-0\.6B-ONNX/i).length).toBeGreaterThan(0);
@@ -171,7 +171,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Adversary review custom rules')).toBeInTheDocument();
   });
 
-  it('shows built-in local inference readiness in Settings', async () => {
+  it('shows built-in local inference readiness in Models', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
       STORAGE_KEYS.installedModels,
@@ -196,7 +196,7 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getByRole('button', { name: 'Built-in local inference' })).toBeInTheDocument();
     expect(screen.getAllByText('Offline ready').length).toBeGreaterThan(0);

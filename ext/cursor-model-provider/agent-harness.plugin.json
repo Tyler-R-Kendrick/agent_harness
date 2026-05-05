@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.cursor-model-provider",
+  "name": "Cursor Models",
+  "version": "0.1.0",
+  "description": "Adds Cursor SDK models as an installable model-provider extension.",
+  "activationEvents": ["onModelProvider:cursor"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createCursorModelProviderPlugin"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "cursor",
+        "label": "Cursor",
+        "kind": "cursor-sdk",
+        "providerIds": ["cursor"],
+        "description": "Uses CURSOR_API_KEY in the dev-server environment to expose Cursor models.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "apiKeyEnvVar": {
+              "type": "string",
+              "default": "CURSOR_API_KEY"
+            },
+            "preferredModelId": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "cursor",
+      "description": "Cursor SDK language models."
+    },
+    {
+      "kind": "chat-agent",
+      "id": "cursor",
+      "description": "Cursor chat-agent runtime."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "Streams chat requests through the Cursor SDK when configured."
+    },
+    {
+      "scope": "secrets",
+      "access": "read",
+      "reason": "Reads the configured Cursor API key from the host environment."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

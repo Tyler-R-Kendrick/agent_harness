@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.ghcp-model-provider",
+  "name": "GitHub Copilot Models",
+  "version": "0.1.0",
+  "description": "Adds GitHub Copilot as an installable model-provider extension for GHCP chat agents.",
+  "activationEvents": ["onModelProvider:ghcp"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createGhcpModelProviderPlugin"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "ghcp",
+        "label": "GitHub Copilot",
+        "kind": "github-copilot",
+        "providerIds": ["ghcp"],
+        "description": "Uses ambient GitHub Copilot auth and model discovery from the host environment.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "authType": {
+              "type": "string",
+              "enum": ["oauth", "pat"]
+            },
+            "preferredModelId": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "ghcp",
+      "description": "GitHub Copilot language models."
+    },
+    {
+      "kind": "chat-agent",
+      "id": "ghcp",
+      "description": "GHCP chat-agent runtime."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "Streams chat requests through GitHub Copilot when the user is authenticated."
+    },
+    {
+      "scope": "secrets",
+      "access": "read",
+      "reason": "Reads ambient Copilot authentication state exposed by the host."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

@@ -137,13 +137,15 @@ async function main() {
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('tree', { name: 'Workspace tree' })).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Settings' }).click();
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Models' }).click();
+    await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Cursor', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('button', { name: 'Built-in local inference' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(page.getByText(/No localhost sidecar/)).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Settings' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');
@@ -157,7 +159,7 @@ async function main() {
     await benchmarkObjective.scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Extensions' }).click();
-    await expect(page.getByRole('button', { name: /Marketplace \(8\)/ })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: /Marketplace \(12\)/ })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('0 installed')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Symphony workflow orchestration').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({ timeout: shellTimeoutMs });
