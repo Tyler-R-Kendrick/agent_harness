@@ -18,10 +18,32 @@
 
 * { box-sizing: border-box; }
 button, input, textarea, select { font: inherit; }
-button { cursor: pointer; }
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
   outline: 1px solid rgba(14, 99, 156, 0.95);
   outline-offset: -1px;
+}
+.skip-link {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  z-index: 10000;
+  transform: translateY(calc(-100% - 16px));
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  background: #0d1117;
+  color: #e5f2ff;
+  text-decoration: none;
+  transition: transform .14s ease;
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid rgba(125, 211, 252, 0.9);
+  outline-offset: 2px;
 }
 .shared-input-shell {
   display: flex;
@@ -60,6 +82,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   grid-template-columns: 48px minmax(248px, 280px) 1fr;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--app-bg);
 }
@@ -4353,6 +4376,260 @@ kbd {
   }
   .shared-console-body {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-width: 320px;
+    overflow: hidden;
+  }
+
+  .content-area {
+    grid-row: 1;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .activity-bar {
+    grid-row: 2;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2px;
+    min-height: calc(56px + env(safe-area-inset-bottom));
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    border-top: 1px solid var(--panel-border);
+    border-right: 0;
+    z-index: 7;
+  }
+
+  .activity-group {
+    flex: 1;
+    flex-direction: row;
+    justify-content: space-around;
+    min-width: 0;
+  }
+
+  .activity-spacer {
+    display: none;
+  }
+
+  .activity-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .activity-button.active::before {
+    left: 10px;
+    right: 10px;
+    top: auto;
+    bottom: -6px;
+    width: auto;
+    height: 2px;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: auto max(8px, env(safe-area-inset-right)) calc(64px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-height: min(72dvh, 560px);
+    height: auto;
+    z-index: 6;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 18px;
+    box-shadow: 0 -16px 48px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 12px;
+  }
+
+  .sidebar-content,
+  .panel-scroll {
+    padding: 12px;
+    overscroll-behavior: contain;
+  }
+
+  .workspace-nav-row .icon-button,
+  .workspace-toggle-pill,
+  .workspace-hotkey-button,
+  .icon-button,
+  .mode-tab,
+  .mode-action,
+  .secondary-button,
+  .primary-button,
+  .activity-inline-button,
+  .file-editor-action,
+  .message-action-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .workspace-nav-row .icon-button,
+  .workspace-toggle-pill,
+  .workspace-hotkey-button,
+  .panel-close-button,
+  .file-editor-action {
+    width: 44px;
+    height: 44px;
+  }
+
+  .workspace-omnibar-shell,
+  .shared-input-shell,
+  .file-editor-pathbar {
+    min-height: 44px;
+  }
+
+  .tree-row,
+  .tree-button {
+    min-height: 44px;
+  }
+
+  .tree-button {
+    font-size: 14px;
+    gap: 8px;
+  }
+
+  .tree-row {
+    border-radius: 10px;
+  }
+
+  .tree-row-ellipsis {
+    opacity: 1;
+  }
+
+  .chat-header,
+  .page-toolbar,
+  .modal-header,
+  .panel-titlebar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    min-height: 56px;
+    padding: 10px 12px;
+  }
+
+  .chat-title-row,
+  .chat-header-controls,
+  .chat-mode-controls,
+  .panel-titlebar-actions,
+  .file-editor-toolbar,
+  .provider-actions,
+  .extensions-topbar,
+  .secrets-toolbar,
+  .workspace-status-row {
+    flex-wrap: wrap;
+  }
+
+  .chat-heading,
+  .chat-title-row,
+  .benchmark-route-badge,
+  .model-pill {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .message-list {
+    padding: 12px;
+  }
+
+  .message {
+    max-width: 100%;
+  }
+
+  .chat-compose,
+  .just-bash-compose {
+    padding: 10px max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .browser-split-view {
+    flex-direction: column;
+  }
+
+  .browser-split-view .panel-drag-cell,
+  .browser-split-view > .page-overlay,
+  .browser-split-view > .chat-panel,
+  .browser-split-view > .file-editor-panel,
+  .browser-split-view > .harness-dashboard-panel {
+    min-width: 0;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .panel-hidden-notice {
+    right: 8px;
+    left: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    max-width: none;
+  }
+
+  .file-editor-body {
+    padding: 0 12px 12px;
+  }
+
+  .file-editor-chrome {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-backdrop,
+  .ws-overlay-backdrop {
+    padding: max(12px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    place-items: end center;
+    align-items: center;
+    justify-content: flex-end;
+    overscroll-behavior: contain;
+  }
+
+  .modal-card,
+  .modal-card.compact,
+  .workspace-switcher-card,
+  .shortcuts-card,
+  .file-op-picker {
+    width: 100%;
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    border-radius: 18px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .workspace-card-button {
+    min-height: 56px;
+    padding: 10px 12px;
+  }
+
+  .workspace-switcher-actions,
+  .workspace-switcher-shortcuts,
+  .ws-overlay-hints {
+    display: none;
+  }
+
+  .shortcut-groups {
+    padding: 0 12px 12px;
+  }
+
+  .shortcut-list li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .marketplace-card,
+  .extension-card,
+  .model-card,
+  .provider-card-header,
+  .claude-design-status,
+  .pr-review-readiness {
+    grid-template-columns: 1fr;
+  }
+
+  .marketplace-install-button,
+  .install-model-btn {
+    width: 100%;
+    min-height: 44px;
   }
 }
 

@@ -731,6 +731,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
 
+function isMobileViewport(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+}
+
 function useToast() {
   const [toast, setToast] = useState<ToastState>(null);
   useEffect(() => {
@@ -7392,7 +7396,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
 }
 
 function Toast({ toast }: { toast: ToastState }) {
-  return toast ? <div className={`toast ${toast.type}`}>{toast.msg}</div> : null;
+  return toast ? <div className={`toast ${toast.type}`} role="status" aria-live="polite">{toast.msg}</div> : null;
 }
 
 function panelKey(panel: Panel): string {
@@ -7562,7 +7566,7 @@ function AgentBrowserApp() {
   );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => isMobileViewport());
   const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
@@ -10911,6 +10915,7 @@ function AgentBrowserApp() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#workspace-content">Skip to workspace content</a>
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
@@ -10972,7 +10977,7 @@ function AgentBrowserApp() {
           {renderSidebar()}
         </aside>
       ) : null}
-      <main className="content-area">
+      <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
         {(() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {

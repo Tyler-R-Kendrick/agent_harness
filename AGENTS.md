@@ -23,6 +23,7 @@ Always use TDD with code coverage metrics to ensure 100% coverage.
 When the user criticizes runtime agent behavior, treat the supplied runtime context as reproduction evidence. Capture the exact request, response, chat history, tool trajectory, AgentBus/process entries, screenshots, and any other provided artifacts as explicit regression tests or eval fixtures in the relevant test/eval matrix before or while fixing the behavior. Preserve the failing output shape where practical, assert the desired behavior, and assert that the criticized bad output or tool path does not recur.
 Use Playwright to visually validate your work in the browser afterwards.
 Take screenshots of the outcomes and put them into your PR description so we can view the outcomes that you believe are successful.
+When modifying visual elements, design mobile-first and accessibility-first. Preserve usability at phone, tablet, and desktop widths; keep controls visible, keyboard/screen-reader navigable, touch-friendly, and covered by Playwright viewport-matrix tests.
 
 For `agent-browser` chat agents, implement first-class agents under `agent-browser/src/chat-agents/<AgentName>/` and wire them through the chat-agent provider/routing layer. Do not add product chat agents as default workspace `.agents/<name>/AGENTS.md` files; those workspace files are user/project instructions, not Agent Browser's internal agent implementation surface.
 
