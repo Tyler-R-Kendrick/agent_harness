@@ -732,7 +732,9 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function isMobileViewport(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 640px)').matches;
 }
 
 function useToast() {
