@@ -153,8 +153,7 @@ async function main() {
     await benchmarkObjective.scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Extensions' }).click();
-    await expect(page.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('8 available')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: /Marketplace \(8\)/ })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('0 installed')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Symphony workflow orchestration').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({ timeout: shellTimeoutMs });

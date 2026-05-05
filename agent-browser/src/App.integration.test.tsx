@@ -385,8 +385,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
-    expect(screen.getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();
-    expect(screen.getByText('8 available')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Marketplace \(8\)/ })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('0 installed')).toBeInTheDocument();
     expect(screen.getByText('Agent skills')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
@@ -1721,7 +1720,7 @@ describe('App', () => {
     expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh Cursor status' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Refresh status' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole('button', { name: /Refresh .* status/i }).length).toBeGreaterThanOrEqual(3);
 
     fireEvent.click(providersToggle);
 
@@ -1904,8 +1903,7 @@ styles:
     expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    expect(screen.getByText('1 GHCP · 0 Cursor · 0 Codi')).toBeInTheDocument();
-    expect(screen.getByText('1 GHCP · 0 Codex · 0 Codi')).toBeInTheDocument();
+    expect(screen.getByLabelText('GitHub Copilot ready')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /GitHub Copilot models \(1\)/i }));
 
     expect(screen.getAllByText('GPT-4.1').length).toBeGreaterThanOrEqual(2);
@@ -1970,7 +1968,7 @@ styles:
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
-    expect(screen.getByRole('link', { name: 'Sign in to Copilot' })).toHaveAttribute('href', 'https://docs.github.com/copilot/how-tos/copilot-cli');
+    expect(screen.getByRole('link', { name: 'Open GitHub Copilot sign-in docs' })).toHaveAttribute('href', 'https://docs.github.com/copilot/how-tos/copilot-cli');
     expect(screen.getByLabelText('GitHub Copilot sign-in command')).toHaveValue('copilot login');
   });
 
@@ -1992,12 +1990,12 @@ styles:
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
-    expect(screen.getByText('Signed in')).toBeInTheDocument();
+    expect(screen.getByLabelText('GitHub Copilot signed in')).toBeInTheDocument();
     expect(screen.getByText('Failed to list GitHub Copilot models: models.list failed')).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Sign in to Copilot' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open GitHub Copilot sign-in docs' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('GitHub Copilot sign-in command')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Refresh status' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole('button', { name: /Refresh .* status/i }).length).toBeGreaterThanOrEqual(3);
   });
 
   it('adds workspace capability files and persists them to local storage', async () => {
@@ -2896,7 +2894,7 @@ styles:
     fireEvent.click(screen.getByLabelText('Settings'));
 
     expect(screen.getAllByText('Codex').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('Codex ready')).toBeInTheDocument();
+    expect(screen.getByLabelText('Codex ready')).toBeInTheDocument();
     expect(screen.getByText('Codex CLI 0.125.0 available.')).toBeInTheDocument();
   });
 

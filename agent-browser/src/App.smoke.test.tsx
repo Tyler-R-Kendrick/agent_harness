@@ -137,7 +137,7 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
-    expect(screen.getAllByText('Installed').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Qwen3-0.6B-ONNX installed')).toBeInTheDocument();
     expect(screen.getAllByText(/Qwen3-0\.6B-ONNX/i).length).toBeGreaterThan(0);
   });
 

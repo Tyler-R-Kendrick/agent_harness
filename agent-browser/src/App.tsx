@@ -606,6 +606,7 @@ const icons = {
   sparkles: Sparkles,
   plus: Plus,
   cpu: Cpu,
+  pencil: Pencil,
   chevronDown: ChevronDown,
   chevronRight: ChevronRight,
   terminal: Terminal,
@@ -623,6 +624,24 @@ const mockHistory: HistorySession[] = [
 function Icon({ name, size = 16, color = 'currentColor', className = '' }: { name: keyof typeof icons; size?: number; color?: string; className?: string }) {
   const IconComponent: LucideIcon = icons[name];
   return <IconComponent size={size} color={color} className={className} aria-hidden="true" strokeWidth={1.8} data-icon={name} />;
+}
+
+function StatusIndicator({
+  active = false,
+  warning = false,
+  label,
+}: {
+  active?: boolean;
+  warning?: boolean;
+  label: string;
+}) {
+  return (
+    <span
+      className={`status-indicator${active ? ' is-active' : ''}${warning ? ' is-warning' : ''}`}
+      aria-label={label}
+      title={label}
+    />
+  );
 }
 
 function Favicon({ url, size = 14 }: { url?: string; size?: number }) {
@@ -5452,13 +5471,30 @@ function ModelCard({ model, isInstalled, isLoading, onInstall, onDelete }: { mod
         <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes{model.sizeMB > 0 ? ` · ${model.sizeMB >= 1000 ? (model.sizeMB / 1000).toFixed(1) + 'GB' : model.sizeMB + 'MB'}` : ''}</small>
       </div>
       {isInstalled ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-          <span className="badge connected">Installed</span>
-          {onDelete && <button type="button" className="secondary-button" style={{ fontSize: 10 }} onClick={onDelete}>Remove</button>}
+        <div className="model-card-actions">
+          <StatusIndicator active label={`${model.name} installed`} />
+          {onDelete && (
+            <button
+              type="button"
+              className="sidebar-icon-button"
+              aria-label={`Remove ${model.name}`}
+              title={`Remove ${model.name}`}
+              onClick={onDelete}
+            >
+              <Icon name="trash" size={13} />
+            </button>
+          )}
         </div>
       ) : (
-        <button type="button" className="secondary-button" aria-label={`${model.name} ${isLoading ? 'Loading' : 'Load'}`} onClick={onInstall} disabled={isLoading}>
-          {isLoading ? 'Loading…' : 'Load'}
+        <button
+          type="button"
+          className="sidebar-icon-button"
+          aria-label={`${model.name} ${isLoading ? 'Loading' : 'Load'}`}
+          title={`${isLoading ? 'Loading' : 'Load'} ${model.name}`}
+          onClick={onInstall}
+          disabled={isLoading}
+        >
+          <Icon name={isLoading ? 'loader' : 'download'} size={13} className={isLoading ? 'spin' : ''} />
         </button>
       )}
     </div>
@@ -5479,7 +5515,7 @@ function CopilotModelCard({ model }: { model: CopilotModelSummary }) {
         </div>
         <p>{model.policyState ? `Policy: ${model.policyState}` : 'Enabled for this Copilot account.'}</p>
       </div>
-      <span className="badge connected">Enabled</span>
+      <StatusIndicator active label={`${model.name} enabled`} />
     </div>
   );
 }
@@ -5540,7 +5576,16 @@ function BenchmarkRoutingSettingsPanel({
           </label>
         </div>
         <div className="benchmark-evidence-status">
-          <span className={`badge${evidenceState.records.length ? ' connected' : ''}`}>
+          <StatusIndicator
+            active={evidenceState.records.length > 0}
+            warning={evidenceState.status === 'refreshing'}
+            label={evidenceState.status === 'refreshing'
+              ? 'Refreshing benchmark evidence'
+              : evidenceState.records.length
+                ? `${evidenceState.records.length} benchmark source${evidenceState.records.length === 1 ? '' : 's'}`
+                : 'Using fallback benchmark priors'}
+          />
+          <span>
             {evidenceState.status === 'refreshing'
               ? 'Refreshing evidence'
               : evidenceState.records.length
@@ -5566,7 +5611,9 @@ function BenchmarkRoutingSettingsPanel({
                     <strong>{taskClass.label}</strong>
                     <p>{taskClass.description}</p>
                   </div>
-                  <span className={`badge${route ? ' connected' : ''}`}>{route ? `${Math.round(route.score)}` : 'No route'}</span>
+                  <span className={`score-mark${route ? ' is-active' : ''}`} title={route ? `Score ${Math.round(route.score)}` : 'No route'}>
+                    {route ? `${Math.round(route.score)}` : '--'}
+                  </span>
                 </div>
                 <label className="provider-command-field">
                   <span>Model route</span>
@@ -5667,7 +5714,7 @@ function CursorModelCard({ model }: { model: CursorModelSummary }) {
         </div>
         <p>Enabled through the Cursor SDK runtime for this environment.</p>
       </div>
-      <span className="badge connected">Enabled</span>
+      <StatusIndicator active label={`${model.name} enabled`} />
     </div>
   );
 }
@@ -5685,7 +5732,7 @@ function CodexModelCard({ model }: { model: CodexModelSummary }) {
         </div>
         <p>Runs through the local Codex CLI configuration.</p>
       </div>
-      <span className="badge connected">Enabled</span>
+      <StatusIndicator active label={`${model.name} enabled`} />
     </div>
   );
 }
@@ -5710,13 +5757,17 @@ function SettingsSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const expanded = forceOpen || open;
-  const bodyClassNames = [scrollBody ? 'section-scroll-body' : 'settings-section-body', bodyClassName].filter(Boolean).join(' ');
+  const bodyClassNames = [
+    'sidebar-section-body',
+    scrollBody ? 'section-scroll-body' : 'settings-section-body',
+    bodyClassName,
+  ].filter(Boolean).join(' ');
 
   return (
-    <section className={`model-section collapsible-section settings-section${className ? ` ${className}` : ''}`}>
+    <section className={`model-section collapsible-section sidebar-section settings-section${scrollBody ? ' settings-section--scroll' : ''}${className ? ` ${className}` : ''}`}>
       <button
         type="button"
-        className="panel-section-header section-toggle"
+        className="panel-section-header sidebar-section-toggle section-toggle"
         aria-expanded={expanded}
         onClick={() => {
           if (!forceOpen) {
@@ -5728,7 +5779,63 @@ function SettingsSection({
         <span>{title}</span>
         <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={12} color="#94a3b8" />
       </button>
-      {expanded ? <div className={bodyClassNames}>{children}</div> : null}
+      {expanded ? (
+        <div
+          className={bodyClassNames}
+          tabIndex={scrollBody ? 0 : undefined}
+          aria-label={scrollBody ? `${title} contents` : undefined}
+        >
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SidebarSection({
+  title,
+  summary,
+  defaultOpen = true,
+  scrollBody = false,
+  className,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  scrollBody?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyClassNames = [
+    'sidebar-section-body',
+    scrollBody ? 'sidebar-section-body--scroll' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <section className={`sidebar-section${className ? ` ${className}` : ''}`}>
+      <button
+        type="button"
+        className="panel-section-header sidebar-section-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{title}</span>
+        <span className="sidebar-section-toggle-meta">
+          {summary ? <span className="sidebar-section-summary">{summary}</span> : null}
+          <Icon name={open ? 'chevronDown' : 'chevronRight'} size={12} color="#94a3b8" />
+        </span>
+      </button>
+      {open ? (
+        <div
+          className={bodyClassNames}
+          tabIndex={scrollBody ? 0 : undefined}
+          aria-label={scrollBody ? `${title} contents` : undefined}
+        >
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -5824,13 +5931,21 @@ function EvaluationAgentsSettings({
               <strong>Custom voters and judges</strong>
               <p>Teachers steer student candidates. Judge configs extend rubrics and eval checks.</p>
             </div>
-            <span className="badge">{negativeRubricTechniques.length} hardened</span>
+            <StatusIndicator active={negativeRubricTechniques.length > 0} label={`${negativeRubricTechniques.length} rubric hardening rules`} />
           </div>
           <div className="provider-actions">
-            <button type="button" className="secondary-button" onClick={exportAgents}>Export evaluation agents JSON</button>
-            <button type="button" className="secondary-button" onClick={importAgents}>Import evaluation agents JSON</button>
-            <button type="button" className="secondary-button" onClick={onResetAgents}>Reset evaluation agents</button>
-            <button type="button" className="secondary-button" onClick={onResetNegativeRubric}>Reset rubric hardening</button>
+            <button type="button" className="sidebar-icon-button" aria-label="Export evaluation agents JSON" title="Export evaluation agents JSON" onClick={exportAgents}>
+              <Icon name="download" size={13} />
+            </button>
+            <button type="button" className="sidebar-icon-button" aria-label="Import evaluation agents JSON" title="Import evaluation agents JSON" onClick={importAgents}>
+              <Icon name="save" size={13} />
+            </button>
+            <button type="button" className="sidebar-icon-button" aria-label="Reset evaluation agents" title="Reset evaluation agents" onClick={onResetAgents}>
+              <Icon name="refresh" size={13} />
+            </button>
+            <button type="button" className="sidebar-icon-button" aria-label="Reset rubric hardening" title="Reset rubric hardening" onClick={onResetNegativeRubric}>
+              <Icon name="x" size={13} />
+            </button>
           </div>
           <label className="provider-command-field">
             <span>Evaluation agents JSON</span>
@@ -5867,8 +5982,12 @@ function EvaluationAgentsSettings({
             </label>
           ) : null}
           <div className="provider-actions">
-            <button type="button" className="secondary-button" onClick={saveAgent}>Save evaluation agent</button>
-            <button type="button" className="secondary-button" onClick={resetForm}>Clear form</button>
+            <button type="button" className="sidebar-icon-button" aria-label="Save evaluation agent" title="Save evaluation agent" onClick={saveAgent}>
+              <Icon name="save" size={13} />
+            </button>
+            <button type="button" className="sidebar-icon-button" aria-label="Clear evaluation agent form" title="Clear form" onClick={resetForm}>
+              <Icon name="x" size={13} />
+            </button>
           </div>
         </article>
 
@@ -5879,13 +5998,21 @@ function EvaluationAgentsSettings({
                 <strong>{agent.name}</strong>
                 <p>{agent.kind === 'teacher' ? 'Teacher voter' : 'Judge rubric'} · {agent.enabled ? 'enabled' : 'disabled'}</p>
               </div>
-              <span className={`badge${agent.enabled ? ' connected' : ''}`}>{agent.enabled ? 'Enabled' : 'Disabled'}</span>
+              <StatusIndicator active={agent.enabled} label={`${agent.name} ${agent.enabled ? 'enabled' : 'disabled'}`} />
             </div>
             <p className="muted">{agent.instructions}</p>
             <div className="provider-actions">
-              <button type="button" className="secondary-button" onClick={() => editAgent(agent)}>Edit {agent.name}</button>
-              <button type="button" className="secondary-button" onClick={() => toggleAgent(agent)}>
-                {agent.enabled ? 'Disable' : 'Enable'} {agent.name}
+              <button type="button" className="sidebar-icon-button" aria-label={`Edit ${agent.name}`} title={`Edit ${agent.name}`} onClick={() => editAgent(agent)}>
+                <Icon name="pencil" size={13} />
+              </button>
+              <button
+                type="button"
+                className="sidebar-icon-button"
+                aria-label={`${agent.enabled ? 'Disable' : 'Enable'} ${agent.name}`}
+                title={`${agent.enabled ? 'Disable' : 'Enable'} ${agent.name}`}
+                onClick={() => toggleAgent(agent)}
+              >
+                <Icon name={agent.enabled ? 'x' : 'plus'} size={13} />
               </button>
             </div>
           </article>
@@ -5935,7 +6062,7 @@ function SecretsSettings({
           <strong>Secret refs</strong>
           <p className="muted">Store values locally and expose only secret-ref handles to chat agents and tools.</p>
         </div>
-        <span className={`badge${settings.enabled ? ' connected' : ''}`}>{settings.enabled ? 'Redaction on' : 'Redaction off'}</span>
+        <StatusIndicator active={settings.enabled} label={settings.enabled ? 'Secret redaction on' : 'Secret redaction off'} />
       </div>
       <form className="secrets-form" onSubmit={(event) => void handleSubmit(event)}>
         <label className="provider-command-field">
@@ -5946,8 +6073,14 @@ function SecretsSettings({
           <span>Secret value</span>
           <input aria-label="Secret value" type="password" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Value is never shown again" autoComplete="off" />
         </label>
-        <button type="submit" className="secondary-button secrets-add-button" disabled={isSaving || !name.trim() || !value}>
-          {isSaving ? 'Adding…' : 'Add secret'}
+        <button
+          type="submit"
+          className="sidebar-icon-button secrets-add-button"
+          aria-label={isSaving ? 'Adding secret' : 'Add secret'}
+          title={isSaving ? 'Adding secret' : 'Add secret'}
+          disabled={isSaving || !name.trim() || !value}
+        >
+          <Icon name={isSaving ? 'loader' : 'plus'} size={13} className={isSaving ? 'spin' : ''} />
         </button>
       </form>
       <div className="secret-settings-grid">
@@ -6012,7 +6145,9 @@ function SecretsSettings({
             <code className="secret-ref" role="cell">{secretRefForId(record.id)}</code>
             <span className="secret-updated" role="cell">{formatSecretUpdated(record.updatedAt)}</span>
             <span role="cell">
-              <button type="button" className="secondary-button danger-button btn-xs" aria-label={`Delete secret ${record.label}`} onClick={() => void onDeleteSecret(record.id)}>Delete</button>
+              <button type="button" className="sidebar-icon-button danger-button" aria-label={`Delete secret ${record.label}`} title={`Delete ${record.label}`} onClick={() => void onDeleteSecret(record.id)}>
+                <Icon name="trash" size={13} />
+              </button>
             </span>
           </div>
         ))}
@@ -6088,10 +6223,9 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
           <h2>Settings</h2>
           <p className="muted">Manage GHCP availability and browser-runnable ONNX local models.</p>
         </div>
-        <span className="badge">{copilotState.models.length} GHCP · {cursorState.models.length} Cursor · {codexState.models.length} Codex · {installedModels.length} Codi</span>
       </div>
 
-      <SettingsSection title="Providers">
+      <SettingsSection title="Providers" scrollBody>
         <div className="provider-list">
           <article className="provider-card">
             <div className="provider-card-header">
@@ -6099,15 +6233,23 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
                 <strong>GitHub Copilot</strong>
                 <p>Checks for ambient GitHub Copilot auth in this environment and exposes it as the GHCP chat agent when enabled models are available.</p>
               </div>
-              <span className={`badge${copilotReady ? ' connected' : ''}`}>{isCopilotLoading ? 'Checking…' : (copilotReady ? 'GHCP ready' : (copilotState.authenticated ? 'Signed in' : 'Sign-in required'))}</span>
+              <StatusIndicator
+                active={copilotReady}
+                warning={isCopilotLoading}
+                label={isCopilotLoading ? 'Checking GitHub Copilot' : (copilotReady ? 'GitHub Copilot ready' : (copilotState.authenticated ? 'GitHub Copilot signed in' : 'GitHub Copilot sign-in required'))}
+              />
             </div>
             {copilotState.statusMessage ? <p className="muted">{copilotState.statusMessage}</p> : null}
             {copilotState.error ? <p className="file-editor-error">{copilotState.error}</p> : null}
             {!copilotReady && !copilotState.authenticated ? (
               <>
                 <div className="provider-actions">
-                  <a className="secondary-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Copilot</a>
-                  <button type="button" className="secondary-button" aria-label="Refresh GitHub Copilot status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                  <a className="sidebar-icon-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer" aria-label="Open GitHub Copilot sign-in docs" title="Open sign-in docs">
+                    <Icon name="keyRound" size={13} />
+                  </a>
+                  <button type="button" className="sidebar-icon-button" aria-label="Refresh GitHub Copilot status" title="Refresh status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>
+                    <Icon name={isCopilotLoading ? 'loader' : 'refresh'} size={13} className={isCopilotLoading ? 'spin' : ''} />
+                  </button>
                 </div>
                 <label className="provider-command-field">
                   <span>Run this in the dev container</span>
@@ -6116,12 +6258,15 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
               </>
             ) : !copilotReady ? (
               <div className="provider-actions">
-                <button type="button" className="secondary-button" aria-label="Refresh GitHub Copilot status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                <button type="button" className="sidebar-icon-button" aria-label="Refresh GitHub Copilot status" title="Refresh status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>
+                  <Icon name={isCopilotLoading ? 'loader' : 'refresh'} size={13} className={isCopilotLoading ? 'spin' : ''} />
+                </button>
               </div>
             ) : (
               <div className="provider-actions">
-                <span className="badge connected">GHCP available</span>
-                <button type="button" className="secondary-button" aria-label="Refresh GitHub Copilot status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>{isCopilotLoading ? 'Checking…' : 'Refresh status'}</button>
+                <button type="button" className="sidebar-icon-button" aria-label="Refresh GitHub Copilot status" title="Refresh status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>
+                  <Icon name={isCopilotLoading ? 'loader' : 'refresh'} size={13} className={isCopilotLoading ? 'spin' : ''} />
+                </button>
               </div>
             )}
           </article>
@@ -6131,15 +6276,23 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
                 <strong>Cursor</strong>
                 <p>Uses the Cursor SDK with CURSOR_API_KEY to expose Cursor as a first-class chat agent provider.</p>
               </div>
-              <span className={`badge${cursorReady ? ' connected' : ''}`}>{isCursorLoading ? 'Checking...' : (cursorReady ? 'Cursor ready' : (cursorState.authenticated ? 'Signed in' : 'API key required'))}</span>
+              <StatusIndicator
+                active={cursorReady}
+                warning={isCursorLoading}
+                label={isCursorLoading ? 'Checking Cursor' : (cursorReady ? 'Cursor ready' : (cursorState.authenticated ? 'Cursor signed in' : 'Cursor API key required'))}
+              />
             </div>
             {cursorState.statusMessage ? <p className="muted">{cursorState.statusMessage}</p> : null}
             {cursorState.error ? <p className="file-editor-error">{cursorState.error}</p> : null}
             {!cursorReady && !cursorState.authenticated ? (
               <>
                 <div className="provider-actions">
-                  <a className="secondary-button" href={cursorState.signInDocsUrl} target="_blank" rel="noreferrer">Cursor SDK docs</a>
-                  <button type="button" className="secondary-button" aria-label="Refresh Cursor status" onClick={onRefreshCursor} disabled={isCursorLoading}>{isCursorLoading ? 'Checking...' : 'Refresh status'}</button>
+                  <a className="sidebar-icon-button" href={cursorState.signInDocsUrl} target="_blank" rel="noreferrer" aria-label="Open Cursor SDK docs" title="Open Cursor SDK docs">
+                    <Icon name="link" size={13} />
+                  </a>
+                  <button type="button" className="sidebar-icon-button" aria-label="Refresh Cursor status" title="Refresh status" onClick={onRefreshCursor} disabled={isCursorLoading}>
+                    <Icon name={isCursorLoading ? 'loader' : 'refresh'} size={13} className={isCursorLoading ? 'spin' : ''} />
+                  </button>
                 </div>
                 <label className="provider-command-field">
                   <span>Configure the dev server environment</span>
@@ -6148,12 +6301,15 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
               </>
             ) : !cursorReady ? (
               <div className="provider-actions">
-                <button type="button" className="secondary-button" aria-label="Refresh Cursor status" onClick={onRefreshCursor} disabled={isCursorLoading}>{isCursorLoading ? 'Checking...' : 'Refresh status'}</button>
+                <button type="button" className="sidebar-icon-button" aria-label="Refresh Cursor status" title="Refresh status" onClick={onRefreshCursor} disabled={isCursorLoading}>
+                  <Icon name={isCursorLoading ? 'loader' : 'refresh'} size={13} className={isCursorLoading ? 'spin' : ''} />
+                </button>
               </div>
             ) : (
               <div className="provider-actions">
-                <span className="badge connected">Cursor available</span>
-                <button type="button" className="secondary-button" aria-label="Refresh Cursor status" onClick={onRefreshCursor} disabled={isCursorLoading}>{isCursorLoading ? 'Checking...' : 'Refresh status'}</button>
+                <button type="button" className="sidebar-icon-button" aria-label="Refresh Cursor status" title="Refresh status" onClick={onRefreshCursor} disabled={isCursorLoading}>
+                  <Icon name={isCursorLoading ? 'loader' : 'refresh'} size={13} className={isCursorLoading ? 'spin' : ''} />
+                </button>
               </div>
             )}
           </article>
@@ -6163,15 +6319,23 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
                 <strong>Codex</strong>
                 <p>Checks for ambient Codex CLI auth in this environment and exposes it as the Codex chat agent when available.</p>
               </div>
-              <span className={`badge${codexReady ? ' connected' : ''}`}>{isCodexLoading ? 'Checking…' : (codexReady ? 'Codex ready' : (codexState.authenticated ? 'Signed in' : 'Sign-in required'))}</span>
+              <StatusIndicator
+                active={codexReady}
+                warning={isCodexLoading}
+                label={isCodexLoading ? 'Checking Codex' : (codexReady ? 'Codex ready' : (codexState.authenticated ? 'Codex signed in' : 'Codex sign-in required'))}
+              />
             </div>
             {codexState.statusMessage ? <p className="muted">{codexState.statusMessage}</p> : null}
             {codexState.error ? <p className="file-editor-error">{codexState.error}</p> : null}
             {!codexReady && !codexState.authenticated ? (
               <>
                 <div className="provider-actions">
-                  <a className="secondary-button" href={codexState.signInDocsUrl} target="_blank" rel="noreferrer">Sign in to Codex</a>
-                  <button type="button" className="secondary-button" onClick={onRefreshCodex} disabled={isCodexLoading}>{isCodexLoading ? 'Checking…' : 'Refresh status'}</button>
+                  <a className="sidebar-icon-button" href={codexState.signInDocsUrl} target="_blank" rel="noreferrer" aria-label="Open Codex sign-in docs" title="Open sign-in docs">
+                    <Icon name="keyRound" size={13} />
+                  </a>
+                  <button type="button" className="sidebar-icon-button" aria-label="Refresh Codex status" title="Refresh status" onClick={onRefreshCodex} disabled={isCodexLoading}>
+                    <Icon name={isCodexLoading ? 'loader' : 'refresh'} size={13} className={isCodexLoading ? 'spin' : ''} />
+                  </button>
                 </div>
                 <label className="provider-command-field">
                   <span>Run this in the dev container</span>
@@ -6180,12 +6344,15 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
               </>
             ) : !codexReady ? (
               <div className="provider-actions">
-                <button type="button" className="secondary-button" onClick={onRefreshCodex} disabled={isCodexLoading}>{isCodexLoading ? 'Checking…' : 'Refresh status'}</button>
+                <button type="button" className="sidebar-icon-button" aria-label="Refresh Codex status" title="Refresh status" onClick={onRefreshCodex} disabled={isCodexLoading}>
+                  <Icon name={isCodexLoading ? 'loader' : 'refresh'} size={13} className={isCodexLoading ? 'spin' : ''} />
+                </button>
               </div>
             ) : (
               <div className="provider-actions">
-                <span className="badge connected">Codex available</span>
-                <button type="button" className="secondary-button" onClick={onRefreshCodex} disabled={isCodexLoading}>{isCodexLoading ? 'Checking…' : 'Refresh status'}</button>
+                <button type="button" className="sidebar-icon-button" aria-label="Refresh Codex status" title="Refresh status" onClick={onRefreshCodex} disabled={isCodexLoading}>
+                  <Icon name={isCodexLoading ? 'loader' : 'refresh'} size={13} className={isCodexLoading ? 'spin' : ''} />
+                </button>
               </div>
             )}
           </article>
@@ -6302,24 +6469,24 @@ function HistoryPanel() {
   return (
     <section className="panel-scroll history-panel" aria-label="History">
       <div className="panel-topbar">
-        <h2>Recent activity</h2>
-        <span className="badge">{mockHistory.length} sessions</span>
+        <h2>History</h2>
       </div>
-      <div className="history-list">
-        {mockHistory.map((session) => (
-          <article key={session.id} className="list-card history-card">
-            <div className="history-card-header">
-              <div>
-                <h3>{session.title}</h3>
-                <p className="muted">{session.date}</p>
+      <SidebarSection title={`Recent activity (${mockHistory.length})`} scrollBody>
+        <div className="history-list">
+          {mockHistory.map((session) => (
+            <article key={session.id} className="list-card history-card">
+              <div className="history-card-header">
+                <div>
+                  <h3>{session.title}</h3>
+                  <p className="muted">{session.date} · {session.events.length} events</p>
+                </div>
               </div>
-              <span className="badge">{session.events.length} events</span>
-            </div>
-            <p className="history-preview">{session.preview}</p>
-            <ul className="history-events">{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul>
-          </article>
-        ))}
-      </div>
+              <p className="history-preview">{session.preview}</p>
+              <ul className="history-events">{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
     </section>
   );
 }
@@ -6404,81 +6571,79 @@ function ExtensionsPanel({
   return (
     <section className="panel-scroll extensions-panel" aria-label="Extensions">
       <div className="panel-topbar extensions-topbar">
-        <h2>Marketplace</h2>
-        <span className="badge">{repoExtensions.length} available</span>
-        <span className="badge">{defaultExtensionSummary.pluginCount} installed</span>
+        <h2>Extensions</h2>
       </div>
       <div className="extensions-search shared-input-shell">
         <Icon name="search" size={13} color="#7d8594" />
         <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
       </div>
-      <div className="extensions-list">
-        {filtered.map((extension) => {
-          const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
-          const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
-          return (
-            <article key={extension.manifest.id} className="marketplace-card">
-              <div className="marketplace-card-icon">
-                <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
-              </div>
-              <div className="marketplace-card-body">
-                <strong>{extension.manifest.name}</strong>
-                <span className="marketplace-card-author">
-                  {download ? 'Download/install: ' : ''}
-                  {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
-                </span>
-                <p className="marketplace-card-desc">{extension.manifest.description}</p>
-                <div className="marketplace-card-meta">
-                  {(extension.manifest.capabilities ?? []).map((capability) => (
-                    <span key={`${extension.manifest.id}:${capability.kind}:${capability.id}`} className="badge">{capability.kind}</span>
-                  ))}
-                </div>
-              </div>
-              {download ? (
-                <a
-                  className="secondary-button marketplace-install-button marketplace-download-link"
-                  href={download.href}
-                  download={download.fileName}
-                  aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
-                >
-                  Download
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  className="secondary-button marketplace-install-button"
-                  disabled={isInstalled}
-                  aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-                  onClick={() => onInstallExtension(extension.manifest.id)}
-                >
-                  {isInstalled ? 'Installed' : 'Install'}
-                </button>
-              )}
-            </article>
-          );
-        })}
-        {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
-      </div>
-      {capabilities.plugins.length > 0 && (
-        <div className="workspace-plugins-section">
-          <div className="panel-section-header">
-            <span>Workspace plugins</span>
-            <span className="muted">{workspaceName}</span>
-          </div>
-          {capabilities.plugins.map((plugin) => {
-            const display = parseWorkspacePluginDisplay(plugin);
+      <SidebarSection
+        title={`Marketplace (${filtered.length})`}
+        summary={`${defaultExtensionSummary.pluginCount} installed`}
+        scrollBody
+      >
+        <div className="extensions-list">
+          {filtered.map((extension) => {
+            const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
+            const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
             return (
-              <div key={plugin.path} className="list-card extension-card">
-                <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
-                <div className="extension-content">
-                  <div className="extension-title-row"><h3>{plugin.directory}</h3><span className="badge">{plugin.manifestName}</span></div>
-                  <p>{display.name}</p>
-                  <p className="muted">{display.description}</p>
+              <article key={extension.manifest.id} className="marketplace-card">
+                <div className="marketplace-card-icon">
+                  <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
                 </div>
-              </div>
+                <div className="marketplace-card-body">
+                  <strong>{extension.manifest.name}</strong>
+                  <span className="marketplace-card-author">
+                    {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
+                  </span>
+                  <p className="marketplace-card-desc">{extension.manifest.description}</p>
+                </div>
+                {download ? (
+                  <a
+                    className="sidebar-icon-button marketplace-action marketplace-download-link"
+                    href={download.href}
+                    download={download.fileName}
+                    aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
+                    title={`Download ${extension.manifest.name}`}
+                  >
+                    <Icon name="download" size={13} />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="sidebar-icon-button marketplace-action"
+                    disabled={isInstalled}
+                    aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+                    title={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+                    onClick={() => onInstallExtension(extension.manifest.id)}
+                  >
+                    <Icon name={isInstalled ? 'save' : 'plus'} size={13} />
+                  </button>
+                )}
+              </article>
             );
           })}
+          {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
         </div>
+      </SidebarSection>
+      {capabilities.plugins.length > 0 && (
+        <SidebarSection title={`Workspace plugins (${capabilities.plugins.length})`} summary={workspaceName} scrollBody>
+          <div className="workspace-plugins-section">
+            {capabilities.plugins.map((plugin) => {
+              const display = parseWorkspacePluginDisplay(plugin);
+              return (
+                <div key={plugin.path} className="list-card extension-card">
+                  <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
+                  <div className="extension-content">
+                    <div className="extension-title-row"><h3>{plugin.directory}</h3><small>{plugin.manifestName}</small></div>
+                    <p>{display.name}</p>
+                    <p className="muted">{display.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SidebarSection>
       )}
     </section>
   );
