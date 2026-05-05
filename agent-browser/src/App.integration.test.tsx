@@ -417,6 +417,134 @@ describe('App', () => {
     expect(window.localStorage.getItem('agent-browser.installed-default-extension-ids')).toContain('agent-harness.ext.artifacts');
   });
 
+  it.each([
+    {
+      prompt: 'create a PDF as an artifact about onboarding',
+      title: 'Onboarding PDF',
+      kind: 'pdf',
+      path: 'document.pdf',
+      mediaType: 'application/pdf',
+      content: '%PDF-1.4\n%% Onboarding\n%%EOF\n',
+    },
+    {
+      prompt: 'generate an image as an artifact for launch',
+      title: 'Launch image',
+      kind: 'image',
+      path: 'image.svg',
+      mediaType: 'image/svg+xml',
+      content: '<svg xmlns="http://www.w3.org/2000/svg"><title>Launch image</title><rect width="100" height="100" /></svg>',
+    },
+    {
+      prompt: 'build a canvas widget artifact for planning',
+      title: 'Planning canvas widget',
+      kind: 'canvas-widget',
+      path: 'canvas-widget/index.html',
+      mediaType: 'text/html',
+      content: '<section aria-label="Planning canvas widget"><h1>Planning canvas widget</h1></section>',
+    },
+    {
+      prompt: 'write DESIGN.md as an artifact',
+      title: 'DESIGN.md',
+      kind: 'design-md',
+      path: 'DESIGN.md',
+      mediaType: 'text/markdown',
+      content: '# DESIGN.md\n\nDesign tokens and interaction notes.\n',
+    },
+    {
+      prompt: 'write AGENTS.md as an artifact',
+      title: 'AGENTS.md',
+      kind: 'agents-md',
+      path: 'AGENTS.md',
+      mediaType: 'text/markdown',
+      content: '# AGENTS.md\n\nFollow workspace instructions.\n',
+    },
+    {
+      prompt: 'create an agent-skill artifact with SKILL.md references scripts and evals',
+      title: 'Generated skill',
+      kind: 'agent-skill',
+      path: 'skills/generated-skill/SKILL.md',
+      mediaType: 'text/markdown',
+      content: '---\nname: generated-skill\ndescription: Generated skill\n---\n\n# Generated skill\n',
+    },
+    {
+      prompt: 'generate a DOCX artifact for onboarding',
+      title: 'Onboarding DOCX',
+      kind: 'docx',
+      path: 'document.docx',
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      content: 'DOCX package placeholder',
+    },
+    {
+      prompt: 'generate a PPTX artifact for roadmap',
+      title: 'Roadmap PPTX',
+      kind: 'pptx',
+      path: 'deck.pptx',
+      mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      content: 'PPTX package placeholder',
+    },
+  ])('creates and opens a $kind artifact from chat', async (artifactCase) => {
+    vi.useFakeTimers();
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'hf-test-model',
+      name: 'Test Model',
+      author: 'Harness',
+      task: 'text-generation',
+      downloads: 42,
+      likes: 7,
+      tags: ['onnx'],
+      sizeMB: 64,
+      status: 'available',
+    }]);
+    runStagedToolPipelineMock.mockImplementation(async (options, callbacks) => {
+      const createArtifactTool = (options as {
+        tools: Record<string, { execute: (args: unknown) => Promise<unknown> }>;
+      }).tools['webmcp:create_artifact'];
+      const input = {
+        id: `artifact-${artifactCase.kind}`,
+        title: artifactCase.title,
+        kind: artifactCase.kind,
+        files: [{
+          path: artifactCase.path,
+          mediaType: artifactCase.mediaType,
+          content: artifactCase.content,
+        }],
+        references: [],
+      };
+      callbacks.onToolCall?.('webmcp:create_artifact', input, 'tool-create-artifact');
+      const result = await createArtifactTool.execute(input);
+      callbacks.onToolResult?.('webmcp:create_artifact', input, result, false, 'tool-create-artifact');
+      callbacks.onDone?.(`Created artifact ${artifactCase.title} at //artifacts/artifact-${artifactCase.kind}/${artifactCase.path}`);
+      return { text: `Created artifact ${artifactCase.title}`, steps: 1 };
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    await installLocalModel();
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+    await flushAsyncUpdates();
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: artifactCase.prompt },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await flushAsyncUpdates();
+
+    expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
+    expect(screen.getByText(artifactCase.title)).toBeInTheDocument();
+    expect(screen.getByText(`//artifacts/artifact-${artifactCase.kind}/${artifactCase.path}`)).toBeInTheDocument();
+    if (artifactCase.mediaType === 'text/html' || artifactCase.mediaType === 'image/svg+xml') {
+      expect(screen.getByTitle(`${artifactCase.title}: ${artifactCase.path}`)).toBeInTheDocument();
+    } else {
+      expect(screen.getByLabelText('Artifact content')).toHaveValue(artifactCase.content);
+    }
+  });
+
   it('customizes and persists the generated harness app spec from the dashboard', async () => {
     vi.useFakeTimers();
     render(<App />);

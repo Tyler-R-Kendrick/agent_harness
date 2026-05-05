@@ -336,6 +336,11 @@ function inferMediaType(path: string): string {
   if (ext === 'json') return 'application/json';
   if (ext === 'md' || ext === 'markdown') return 'text/markdown';
   if (ext === 'svg') return 'image/svg+xml';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (ext === 'pptx') return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
   return 'text/plain';
 }
 

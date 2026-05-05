@@ -33,6 +33,16 @@ const descriptors: ToolDescriptor[] = [
   },
 ];
 
+const artifactDescriptor: ToolDescriptor = {
+  id: 'webmcp:create_artifact',
+  label: 'Create artifact',
+  description: 'Create a standalone artifact with one or more files mounted under //artifacts.',
+  group: 'built-in',
+  groupLabel: 'Built-In',
+  subGroup: 'artifacts-mcp',
+  subGroupLabel: 'Artifacts',
+};
+
 function runtime(tools: ToolSet = {} as ToolSet): ToolAgentRuntime {
   return { tools, descriptors };
 }
@@ -71,6 +81,90 @@ describe('Tool Agent', () => {
         executor: ['read_session_file'],
       },
     });
+  });
+
+  it.each([
+    ['PDF generation', 'create a PDF as an artifact about onboarding', 'pdf', ['document.pdf']],
+    ['Image generation', 'generate an image as an artifact for a launch badge', 'image', ['image.svg']],
+    ['Widget generation for the canvas widget feature', 'build a canvas widget artifact for project planning', 'canvas-widget', ['canvas-widget/widget.json', 'canvas-widget/index.html']],
+    ['Design.md markdown file generation', 'write DESIGN.md as an artifact', 'design-md', ['DESIGN.md']],
+    ['Agents.md markdown file generation', 'write AGENTS.md as an artifact', 'agents-md', ['AGENTS.md']],
+    ['Agent skill generation', 'create an agent-skill artifact with a SKILL.md, references, scripts, and evals', 'agent-skill', ['skills/generated-skill/SKILL.md', 'skills/generated-skill/references/README.md', 'skills/generated-skill/scripts/verify.ts', 'skills/generated-skill/evals/evals.json']],
+    ['DOCX generation', 'generate a DOCX artifact for the project brief', 'docx', ['document.docx']],
+    ['PPTX generation', 'generate a PPTX artifact for the roadmap deck', 'pptx', ['deck.pptx']],
+  ])('plans deterministic create_artifact execution for %s', (_name, goal, expectedKind, expectedPaths) => {
+    const plan = createStaticToolPlan({
+      tools: { [artifactDescriptor.id]: { execute: vi.fn() } } as unknown as ToolSet,
+      descriptors: [...descriptors, artifactDescriptor],
+    }, goal);
+
+    expect(plan.selectedToolIds).toEqual(['webmcp:create_artifact']);
+    expect(plan.steps).toEqual([
+      expect.objectContaining({
+        id: 'create-artifact',
+        kind: 'call-tool',
+        toolId: 'webmcp:create_artifact',
+        saveAs: 'artifact',
+      }),
+    ]);
+    const input = plan.steps[0]?.kind === 'call-tool' ? plan.steps[0].inputTemplate as {
+      kind: string;
+      files: Array<{ path: string; content: string }>;
+    } : null;
+    expect(input).toMatchObject({ kind: expectedKind });
+    expect(input?.files.map((file) => file.path)).toEqual(expectedPaths);
+    expect(JSON.stringify(input)).not.toContain('movie theaters');
+  });
+
+  it('executes the generated artifact plan through the selected create_artifact tool', async () => {
+    const execute = vi.fn(async (input) => ({
+      id: 'artifact-image-generated-image',
+      title: 'Generated image',
+      kind: 'image',
+      files: (input as { files: unknown[] }).files,
+      references: [],
+    }));
+    const artifactRuntime = {
+      tools: { [artifactDescriptor.id]: { execute } } as unknown as ToolSet,
+      descriptors: [...descriptors, artifactDescriptor],
+    };
+    const plan = createStaticToolPlan(artifactRuntime, 'create an image as an artifact');
+
+    await expect(callToolPlan(artifactRuntime, plan)).resolves.toMatchObject({
+      artifact: {
+        output: {
+          id: 'artifact-image-generated-image',
+          files: [{ path: 'image.svg' }],
+        },
+      },
+    });
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'image',
+      files: [expect.objectContaining({ path: 'image.svg', mediaType: 'image/svg+xml' })],
+    }));
+  });
+
+  it('keeps nearby search planning relevant and does not route search prompts into artifacts', () => {
+    const plan = createStaticToolPlan({
+      tools: { [artifactDescriptor.id]: { execute: vi.fn() } } as unknown as ToolSet,
+      descriptors: [
+        ...descriptors,
+        artifactDescriptor,
+        {
+          id: 'webmcp:search_web',
+          label: 'Search web',
+          description: 'Search the web for external facts and local recommendations.',
+          group: 'built-in',
+          groupLabel: 'Built-In',
+          subGroup: 'web-search-mcp',
+          subGroupLabel: 'Search',
+        },
+      ],
+    }, "what're the best movie theaters near me?");
+
+    expect(plan.selectedToolIds).toContain('webmcp:search_web');
+    expect(plan.selectedToolIds).not.toContain('webmcp:create_artifact');
+    expect(plan.steps).toEqual([]);
   });
 
   it('routes near-me web search through search tools and CLI fallback before eliciting the user', () => {

@@ -65,6 +65,12 @@ export async function runConfiguredExecutorAgent(
       callbacks.onDone?.(blockedResult.text);
       return withToolErrorState(blockedResult, toolErrors);
     }
+    const artifactResult = resultFromArtifactOutputs(outputs);
+    if (artifactResult) {
+      callbacks.onToken?.(artifactResult.text);
+      callbacks.onDone?.(artifactResult.text);
+      return withToolErrorState(artifactResult, toolErrors);
+    }
     const text = JSON.stringify(outputs, null, 2);
     callbacks.onToken?.(text);
     callbacks.onDone?.(text);
@@ -127,6 +133,24 @@ function resultFromNeedsUserInputOutputs(outputs: Record<string, { output?: unkn
   return null;
 }
 
+function resultFromArtifactOutputs(outputs: Record<string, { output?: unknown; error?: string }>): AgentRunResult | null {
+  const artifacts = Object.values(outputs)
+    .map((output) => output.output)
+    .filter(isArtifactLike);
+  if (!artifacts.length) return null;
+  const lines = artifacts.flatMap((artifact) => {
+    const paths = artifact.files.map((file) => `//artifacts/${artifact.id}/${file.path}`);
+    return [
+      `Created artifact ${artifact.title} at //artifacts/${artifact.id}.`,
+      ...paths.map((path) => `- ${path}`),
+    ];
+  });
+  return {
+    text: lines.join('\n'),
+    steps: Math.max(1, Object.keys(outputs).length),
+  };
+}
+
 function resultFromNeedsUserInput(result: unknown, steps: number): AgentRunResult | null {
   if (!isRecord(result) || result.status !== 'needs_user_input') return null;
   const prompt = typeof result.prompt === 'string' && result.prompt.trim()
@@ -139,6 +163,14 @@ function resultFromNeedsUserInput(result: unknown, steps: number): AgentRunResul
     needsUserInput: true,
     elicitation: result,
   };
+}
+
+function isArtifactLike(value: unknown): value is { id: string; title: string; files: Array<{ path: string }> } {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.title === 'string'
+    && Array.isArray(value.files)
+    && value.files.every((file) => isRecord(file) && typeof file.path === 'string');
 }
 
 function buildExecutorMessages(
