@@ -13,6 +13,7 @@ import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dn
 import { CSS } from '@dnd-kit/utilities';
 import type { ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import type { HarnessPluginManifest } from 'harness-core';
 import {
   ArrowLeft,
   ArrowRight,
@@ -6319,7 +6320,16 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
   if (extensionId.endsWith('.artifacts')) return 'layers';
   if (extensionId.endsWith('.local-model-connector')) return 'cpu';
+  if (extensionId.endsWith('.local-inference-daemon')) return 'terminal';
   return 'puzzle';
+}
+
+function getDefaultExtensionDownload(manifest: HarnessPluginManifest): { href: string; fileName: string } | null {
+  const runtimeZip = manifest.assets?.find((asset) => asset.kind === 'runtime' && asset.path.endsWith('.zip'));
+  if (!runtimeZip) return null;
+  const fileName = runtimeZip.path.split('/').pop();
+  if (!fileName) return null;
+  return { href: `/downloads/${fileName}`, fileName };
 }
 
 function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
@@ -6378,7 +6388,7 @@ function ExtensionsPanel({
       <div className="extensions-list">
         {filtered.map((extension) => {
           const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
-          const isLocalModelConnector = extension.manifest.id.endsWith('.local-model-connector');
+          const download = getDefaultExtensionDownload(extension.manifest);
           return (
             <article key={extension.manifest.id} className="marketplace-card">
               <div className="marketplace-card-icon">
@@ -6387,7 +6397,7 @@ function ExtensionsPanel({
               <div className="marketplace-card-body">
                 <strong>{extension.manifest.name}</strong>
                 <span className="marketplace-card-author">
-                  {isLocalModelConnector ? 'Download/load unpacked: ' : ''}
+                  {download ? 'Download/install: ' : ''}
                   {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
                 </span>
                 <p className="marketplace-card-desc">{extension.manifest.description}</p>
@@ -6397,15 +6407,26 @@ function ExtensionsPanel({
                   ))}
                 </div>
               </div>
-              <button
-                type="button"
-                className={`secondary-button marketplace-install-button${isLocalModelConnector ? ' connected' : ''}`}
-                disabled={isInstalled}
-                aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-                onClick={() => onInstallExtension(extension.manifest.id)}
-              >
-                {isInstalled ? 'Installed' : isLocalModelConnector ? 'Download' : 'Install'}
-              </button>
+              {download ? (
+                <a
+                  className="secondary-button marketplace-install-button marketplace-download-link"
+                  href={download.href}
+                  download={download.fileName}
+                  aria-label={`Download ${extension.manifest.name}`}
+                >
+                  Download
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="secondary-button marketplace-install-button"
+                  disabled={isInstalled}
+                  aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+                  onClick={() => onInstallExtension(extension.manifest.id)}
+                >
+                  {isInstalled ? 'Installed' : 'Install'}
+                </button>
+              )}
             </article>
           );
         })}

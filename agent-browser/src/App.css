@@ -3613,6 +3613,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   min-width: 72px;
   justify-content: center;
 }
+.marketplace-download-link {
+  text-decoration: none;
+}
 .marketplace-stars {
   color: #d7ba7d;
   letter-spacing: 0.04em;

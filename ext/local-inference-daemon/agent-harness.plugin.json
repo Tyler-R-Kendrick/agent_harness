@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.local-inference-daemon",
+  "name": "Local Inference Daemon",
+  "version": "0.1.0",
+  "description": "Downloadable Deno background service for WebRTC or WebSocket access to loopback OpenAI-compatible local inference endpoints.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createLocalInferenceDaemonPlugin"
+  },
+  "capabilities": [
+    {
+      "kind": "asset",
+      "id": "local-inference-daemon-service",
+      "description": "Installable Deno service package for Windows, Linux, and macOS local inference."
+    },
+    {
+      "kind": "model-provider",
+      "id": "local-inference-daemon-openai-compatible",
+      "description": "Background bridge for approved local OpenAI-compatible model endpoints."
+    }
+  ],
+  "assets": [
+    {
+      "kind": "runtime",
+      "path": "./dist/agent-harness-local-inference-daemon.zip",
+      "description": "Zipped Deno daemon source, compile tasks, and service installer."
+    },
+    {
+      "kind": "documentation",
+      "path": "./README.md",
+      "description": "Daemon setup, compile, and service installation instructions."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "Maintains WebRTC/WebSocket control channels and fetches user-approved loopback local inference endpoints."
+    },
+    {
+      "scope": "storage",
+      "access": "read",
+      "reason": "Reads daemon configuration from environment variables."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

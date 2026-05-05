@@ -27,6 +27,7 @@ import artifactsManifestSource from '../../../ext/artifacts/agent-harness.plugin
 import designMdManifestSource from '../../../ext/design-md/agent-harness.plugin.json';
 import symphonyManifestSource from '../../../ext/symphony/agent-harness.plugin.json';
 import localModelConnectorManifestSource from '../../../ext/local-model-connector/agent-harness.plugin.json';
+import localInferenceDaemonManifestSource from '../../../ext/local-inference-daemon/agent-harness.plugin.json';
 import workflowCanvasManifestSource from '../../../ext/workflow-canvas/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
@@ -65,6 +66,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
   ['agent-harness.ext.artifacts', parseHarnessPluginManifest(artifactsManifestSource)],
   ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
+  ['agent-harness.ext.local-inference-daemon', parseHarnessPluginManifest(localInferenceDaemonManifestSource)],
 ]);
 
 export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
