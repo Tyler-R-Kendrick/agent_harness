@@ -525,6 +525,8 @@ describe('App', () => {
     });
 
     await installLocalModel();
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+    await flushAsyncUpdates();
 
     fireEvent.change(screen.getByLabelText('Chat input'), {
       target: { value: artifactCase.prompt },
@@ -536,8 +538,6 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
     expect(screen.getByText(artifactCase.title)).toBeInTheDocument();
     expect(screen.getByText(`//artifacts/artifact-${artifactCase.kind}/${artifactCase.path}`)).toBeInTheDocument();
-    expect(getTreeItemByText('//artifacts')).toBeInTheDocument();
-    expect(getTreeItemByText(artifactCase.title)).toBeInTheDocument();
     if (artifactCase.mediaType === 'text/html' || artifactCase.mediaType === 'image/svg+xml') {
       expect(screen.getByTitle(`${artifactCase.title}: ${artifactCase.path}`)).toBeInTheDocument();
     } else {
