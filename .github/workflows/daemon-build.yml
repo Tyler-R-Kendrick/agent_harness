@@ -50,10 +50,6 @@ jobs:
         working-directory: agent-daemon
         run: deno compile --allow-net --allow-env --allow-sys --target x86_64-pc-windows-msvc --output dist/agent-harness-local-inference-daemon-windows-x64.exe src/mod.ts
 
-      - name: Build Windows ARM64 daemon executable
-        working-directory: agent-daemon
-        run: deno compile --allow-net --allow-env --allow-sys --target aarch64-pc-windows-msvc --output dist/agent-harness-local-inference-daemon-windows-arm64.exe src/mod.ts
-
       - name: Package browser downloads with Windows daemon output
         run: npm run build:extension-downloads
 
@@ -63,21 +59,12 @@ jobs:
           if (!(Test-Path agent-daemon/dist/agent-harness-local-inference-daemon-windows-x64.exe)) {
             throw "Missing agent-daemon/dist/agent-harness-local-inference-daemon-windows-x64.exe"
           }
-          if (!(Test-Path agent-daemon/dist/agent-harness-local-inference-daemon-windows-arm64.exe)) {
-            throw "Missing agent-daemon/dist/agent-harness-local-inference-daemon-windows-arm64.exe"
-          }
 
       - name: Upload Windows x64 daemon executable
         uses: actions/upload-artifact@v4
         with:
           name: agent-harness-local-inference-daemon-windows-x64
           path: agent-daemon/dist/agent-harness-local-inference-daemon-windows-x64.exe
-
-      - name: Upload Windows ARM64 daemon executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-harness-local-inference-daemon-windows-arm64
-          path: agent-daemon/dist/agent-harness-local-inference-daemon-windows-arm64.exe
 
       - name: Upload installable daemon download bundle
         uses: actions/upload-artifact@v4

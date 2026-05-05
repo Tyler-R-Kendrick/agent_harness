@@ -21,11 +21,12 @@ deno task dev
 ```bash
 deno task compile:windows
 deno task compile:windows:x64
-deno task compile:windows:arm64
 deno task compile:linux
 deno task compile:macos:x64
 deno task compile:macos:arm64
 ```
+
+Deno does not currently support a Windows ARM64 compile target; use the portable source bundle on Windows ARM64.
 
 ## Package for Agent Browser
 

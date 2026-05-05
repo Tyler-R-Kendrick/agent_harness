@@ -32,11 +32,6 @@
       "description": "Windows x64 daemon executable built by CI/CD."
     },
     {
-      "kind": "runtime",
-      "path": "./dist/agent-harness-local-inference-daemon-windows-arm64.exe",
-      "description": "Windows ARM64 daemon executable built by CI/CD."
-    },
-    {
       "kind": "documentation",
       "path": "./README.md",
       "description": "Daemon setup, compile, and service installation instructions."

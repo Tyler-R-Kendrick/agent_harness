@@ -31,12 +31,6 @@ const WINDOWS_X64_DAEMON_DOWNLOAD: DaemonDownloadChoice = {
   label: 'Windows x64',
 };
 
-const WINDOWS_ARM64_DAEMON_DOWNLOAD: DaemonDownloadChoice = {
-  href: '/downloads/agent-harness-local-inference-daemon-windows-arm64.exe',
-  fileName: 'agent-harness-local-inference-daemon-windows-arm64.exe',
-  label: 'Windows ARM64',
-};
-
 export async function resolveLocalInferenceDaemonDownload(navigatorLike: NavigatorLike): Promise<DaemonDownloadChoice> {
   const platform = navigatorLike.userAgentData?.platform ?? navigatorLike.userAgent ?? '';
   if (!/windows/i.test(platform)) return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
@@ -59,7 +53,7 @@ export async function resolveLocalInferenceDaemonDownload(navigatorLike: Navigat
     return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
   }
   if (architecture.includes('arm') || /arm64|aarch64/i.test(navigatorLike.userAgent ?? '')) {
-    return WINDOWS_ARM64_DAEMON_DOWNLOAD;
+    return PORTABLE_DAEMON_SOURCE_DOWNLOAD;
   }
   return WINDOWS_X64_DAEMON_DOWNLOAD;
 }

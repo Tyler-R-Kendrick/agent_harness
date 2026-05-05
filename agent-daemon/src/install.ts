@@ -2,9 +2,7 @@ import { Service } from '@cross/service';
 
 function resolveExecutable(): string {
   if (Deno.build.os === 'windows') {
-    return Deno.build.arch === 'aarch64'
-      ? 'dist\\agent-harness-local-inference-daemon-windows-arm64.exe'
-      : 'dist\\agent-harness-local-inference-daemon-windows-x64.exe';
+    return 'dist\\agent-harness-local-inference-daemon-windows-x64.exe';
   }
 
   if (Deno.build.os === 'darwin') {

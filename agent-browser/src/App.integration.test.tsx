@@ -408,7 +408,7 @@ describe('App', () => {
     expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
-  it('offers the Windows ARM64 daemon download when browser architecture reports ARM Windows', async () => {
+  it('offers the portable daemon bundle when browser architecture reports ARM Windows', async () => {
     vi.useFakeTimers();
     Object.defineProperty(window.navigator, 'userAgentData', {
       configurable: true,
@@ -428,9 +428,9 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon for Windows ARM64' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon for Portable Deno source' })).toHaveAttribute(
       'href',
-      '/downloads/agent-harness-local-inference-daemon-windows-arm64.exe',
+      '/downloads/agent-harness-local-inference-daemon.zip',
     );
   });
 

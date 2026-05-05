@@ -92,9 +92,9 @@ async function main() {
   const daemonBuildWorkflow = await readScript('.github/workflows/daemon-build.yml');
   assert.match(daemonBuildWorkflow, /denoland\/setup-deno@v2/);
   assert.match(daemonBuildWorkflow, /--target x86_64-pc-windows-msvc/);
-  assert.match(daemonBuildWorkflow, /--target aarch64-pc-windows-msvc/);
+  assert.doesNotMatch(daemonBuildWorkflow, /aarch64-pc-windows-msvc/);
   assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-x64\.exe/);
-  assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-arm64\.exe/);
+  assert.doesNotMatch(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-arm64\.exe/);
   assert.doesNotMatch(daemonBuildWorkflow, /cache: npm/);
   assert.match(daemonBuildWorkflow, /npm install --package-lock=false/);
   assert.match(daemonBuildWorkflow, /actions\/upload-artifact@v4/);
@@ -168,11 +168,6 @@ async function main() {
       sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
       publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
       extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
-    },
-    {
-      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
-      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
-      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-arm64.exe'),
     },
   ]);
   assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');

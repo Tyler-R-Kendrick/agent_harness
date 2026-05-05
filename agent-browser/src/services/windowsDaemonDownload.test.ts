@@ -17,7 +17,7 @@ describe('Windows daemon download detection', () => {
     });
   });
 
-  it('selects the Windows ARM64 daemon executable for arm64 Windows navigators', async () => {
+  it('falls back to the portable source bundle for arm64 Windows navigators', async () => {
     await expect(resolveLocalInferenceDaemonDownload({
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; ARM64)',
       userAgentData: {
@@ -25,9 +25,9 @@ describe('Windows daemon download detection', () => {
         getHighEntropyValues: async () => ({ platform: 'Windows', architecture: 'arm', bitness: '64' }),
       },
     })).resolves.toEqual({
-      href: '/downloads/agent-harness-local-inference-daemon-windows-arm64.exe',
-      fileName: 'agent-harness-local-inference-daemon-windows-arm64.exe',
-      label: 'Windows ARM64',
+      href: '/downloads/agent-harness-local-inference-daemon.zip',
+      fileName: 'agent-harness-local-inference-daemon.zip',
+      label: 'Portable Deno source',
     });
   });
 
