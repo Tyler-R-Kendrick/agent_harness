@@ -117,6 +117,10 @@ async function main() {
     await page.getByRole('button', { name: 'Settings' }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Cursor', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Built-in local inference' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText(/No localhost sidecar/)).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');

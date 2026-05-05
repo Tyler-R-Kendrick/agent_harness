@@ -138,6 +138,11 @@ import {
   type AdversaryToolReviewSettings,
 } from './services/adversaryToolReview';
 import { LocalLanguageModel } from './services/localLanguageModel';
+import {
+  assessLocalInferenceReadiness,
+  getBrowserLocalInferenceHardware,
+  type LocalInferenceReadiness,
+} from './services/localInferenceReadiness';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
 import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
@@ -6053,6 +6058,39 @@ interface SettingsPanelProps {
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
 }
 
+function LocalInferenceReadinessCard({ readiness }: { readiness: LocalInferenceReadiness }) {
+  return (
+    <article className="provider-card local-inference-card">
+      <div className="provider-card-header">
+        <div className="provider-body">
+          <strong>{readiness.title}</strong>
+          <p>{readiness.summary}</p>
+        </div>
+        <span className={`badge${readiness.status === 'ready' ? ' connected' : ''}`}>{readiness.badge}</span>
+      </div>
+      {readiness.activeModelName ? (
+        <p className="muted">Active local model: {readiness.activeModelName}</p>
+      ) : null}
+      <div className="local-inference-badges" aria-label="Local inference properties">
+        {readiness.badges.map((badge) => (
+          <span key={badge} className={`badge${badge === 'Offline ready' ? ' connected' : ''}`}>{badge}</span>
+        ))}
+      </div>
+      <div className="local-inference-metrics" role="list" aria-label="Local inference hardware and model constraints">
+        {readiness.metrics.map((metric) => (
+          <span key={metric.label} role="listitem">
+            <strong>{metric.value}</strong>
+            <small>{metric.label}</small>
+          </span>
+        ))}
+      </div>
+      <ul className="local-inference-constraints">
+        {readiness.constraints.map((constraint) => <li key={constraint}>{constraint}</li>)}
+      </ul>
+    </article>
+  );
+}
+
 function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, benchmarkRoutingSettings, benchmarkRoutingCandidates, benchmarkEvidenceState, adversaryToolReviewSettings, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete, onBenchmarkRoutingSettingsChange, onAdversaryToolReviewSettingsChange, evaluationAgents, negativeRubricTechniques, onSaveEvaluationAgents, onResetEvaluationAgents, onResetNegativeRubric, secretRecords, secretSettings, onSaveSecret, onDeleteSecret, onSecretSettingsChange }: SettingsPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const installedIds = new Set(installedModels.map((m) => m.id));
@@ -6060,6 +6098,13 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
   const copilotReady = hasGhcpAccess(copilotState);
   const cursorReady = hasCursorAccess(cursorState);
   const codexReady = hasCodexAccess(codexState);
+  const localInferenceReadiness = useMemo(
+    () => assessLocalInferenceReadiness({
+      installedModels,
+      hardware: getBrowserLocalInferenceHardware(typeof navigator === 'undefined' ? null : navigator),
+    }),
+    [installedModels],
+  );
   // Recommended = seed models not yet installed, only shown when no filter active
   const recommended = !isFiltering ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
   const recommendedIds = new Set(recommended.map((m) => m.id));
@@ -6179,6 +6224,10 @@ function SettingsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, curso
             )}
           </article>
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Built-in local inference">
+        <LocalInferenceReadinessCard readiness={localInferenceReadiness} />
       </SettingsSection>
 
       <SettingsSection title="Local OpenAI-compatible endpoint" defaultOpen={false}>
