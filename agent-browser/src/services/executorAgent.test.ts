@@ -170,8 +170,6 @@ describe('runConfiguredExecutorAgent', () => {
 
     const result = await runConfiguredExecutorAgent({
       ...baseOptions(),
-      tools: { 'webmcp:create_artifact': { execute: createArtifact } } as unknown as ToolSet,
-      toolDescriptors: [artifactDescriptor],
       runtime: {
         tools: { 'webmcp:create_artifact': { execute: createArtifact } } as unknown as ToolSet,
         descriptors: [artifactDescriptor],
