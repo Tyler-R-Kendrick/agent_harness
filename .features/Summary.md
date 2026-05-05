@@ -1,14 +1,14 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-04
+Updated: 2026-05-05
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
-Method: current-product research from first-party product pages, help centers, docs, release notes, and official project properties where available.
+Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents and cloud agent, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
@@ -22,7 +22,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents and skills, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -43,7 +43,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
@@ -64,7 +64,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 9. Shared team agents and governance
 - Common pattern: products are moving from personal assistants to organization-shared agents.
-- Seen in: ChatGPT workspace agents, Claude Cowork admin controls and analytics, Cline enterprise-managed skills, Copilot enterprise controls, Codex team-configured skills, Cursor team marketplaces plus team permissions on cloud agents, Space Agent user/group layers with admin control plane and shared customware.
+- Seen in: ChatGPT workspace agents, Claude Cowork admin controls and analytics, Cline enterprise-managed skills, Copilot enterprise controls plus policy-managed third-party agents, Codex team-configured skills, Cursor team marketplaces plus team permissions on cloud agents, Space Agent user/group layers with admin control plane and shared customware.
 - Why it matters: repeated team workflows need ownership, review, and policy controls.
 - One-shot build instruction:
   - Add shared workspace agents with publishing, versioning, approval, RBAC, analytics, and team discovery so repeatable workflows become institutional assets instead of personal prompt lore.
@@ -216,6 +216,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add chaptered session structure and automatic context compression for browser-agent runs so long tasks are grouped into navigable sections, summaries stay inspectable and linked to the full trace, and the harness can keep working coherently without dragging the full raw transcript forward forever.
 
+### 31. Policy-governed partner-agent control planes
+- Common pattern: at least one major platform is turning its primary agent surface into a host for multiple vendors' coding agents under one shared governance, audit, and workflow layer.
+- Seen in: GitHub Copilot third-party agents for Claude and Codex, the shared agents tab and issue/PR/mobile/VS Code entry points, and per-agent model selection on github.com.
+- Why it matters: once teams want multiple agent vendors, the durable product advantage shifts toward unified policy, review, cost control, and workflow continuity rather than toward any single built-in model.
+- One-shot build instruction:
+  - Add a partner-agent control plane for browser-agent work that can host multiple internal or external agent backends behind one session UX, unify permissions and audit logging, expose per-agent model selection, and preserve the same issue, diff, and review workflow regardless of which agent executes the task.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -242,3 +249,4 @@ Method: current-product research from first-party product pages, help centers, d
 22. Add built-in local inference for browser-agent sessions.
 23. Add adversary-style tool-call review for browser-agent actions.
 24. Add chaptered sessions and automatic context compression for browser-agent runs.
+25. Add a policy-governed partner-agent control plane and model picker.
