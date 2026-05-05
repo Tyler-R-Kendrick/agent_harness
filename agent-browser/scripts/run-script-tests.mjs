@@ -70,6 +70,7 @@ async function main() {
   assert.ok(rootPackage.workspaces.includes('ext/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
+  assert.equal(rootPackage.scripts['build:extension-downloads'], 'node scripts/package-extension-downloads.mjs');
   assert.equal(rootPackage.scripts['test:extensions'], 'node scripts/run-extension-workspaces.mjs test');
   assert.equal(rootPackage.scripts['test:coverage:extensions'], 'node scripts/run-extension-workspaces.mjs test:coverage');
   assert.match(packageJson, /"verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
@@ -136,6 +137,22 @@ async function main() {
   const extensionRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'scripts/run-extension-workspaces.mjs')).href
   );
+  const extensionDownloadsPackager = await import(
+    pathToFileURL(path.resolve(repoRoot, 'scripts/package-extension-downloads.mjs')).href
+  );
+  assert.deepEqual(extensionDownloadsPackager.buildDownloadPackages(repoRoot), [
+    {
+      name: 'local-model-connector-extension',
+      sourceDirectory: path.join(repoRoot, 'ext', 'local-model-connector', 'dist'),
+      outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'local-model-connector-extension.zip'),
+    },
+    {
+      name: 'agent-harness-local-inference-daemon',
+      sourceDirectory: path.join(repoRoot, 'agent-daemon'),
+      outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon.zip'),
+    },
+  ]);
+  assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');
   const extensionFixture = await mkdtemp(path.join(tmpdir(), 'extension-workspaces-'));
   await mkdir(path.join(extensionFixture, 'ext', 'alpha'), { recursive: true });
   await mkdir(path.join(extensionFixture, 'ext', 'not-a-package'), { recursive: true });

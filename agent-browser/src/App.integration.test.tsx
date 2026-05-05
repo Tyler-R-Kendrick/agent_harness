@@ -386,7 +386,7 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     expect(screen.getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();
-    expect(screen.getByText('7 available')).toBeInTheDocument();
+    expect(screen.getByText('8 available')).toBeInTheDocument();
     expect(screen.getByText('0 installed')).toBeInTheDocument();
     expect(screen.getByText('Agent skills')).toBeInTheDocument();
     expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
@@ -395,7 +395,16 @@ describe('App', () => {
     expect(screen.getByText('Workflow canvas orchestration')).toBeInTheDocument();
     expect(screen.getByText('Artifacts')).toBeInTheDocument();
     expect(screen.getByText('Local Model Connector')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(7);
+    expect(screen.getByText('Local Inference Daemon')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(6);
+    expect(screen.getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
+      'href',
+      '/downloads/local-model-connector-extension.zip',
+    );
+    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon' })).toHaveAttribute(
+      'href',
+      '/downloads/agent-harness-local-inference-daemon.zip',
+    );
     expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
