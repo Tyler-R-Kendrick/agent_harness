@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryAgentBus, PayloadType, QuorumPolicy, type IntentPayload } from 'logact';
-import { constrainToJsonSchema, type CoreInferenceOptions } from 'harness-core';
+import {
+  AGENT_BUS_HOOK_EVENTS,
+  HookRegistry,
+  constrainToJsonSchema,
+  createCodeHook,
+  type CoreInferenceOptions,
+} from 'harness-core';
 import {
   WorkflowAgentBus,
   createLogActWorkflowDefinition,
@@ -233,6 +239,75 @@ describe('runLogActAgentLoop', () => {
         message: expect.objectContaining({ role: 'assistant', content: 'assistant reply' }),
       }),
     ]);
+  });
+
+  it('does not double-wrap the same hooks registry on a workflow bus', async () => {
+    const hooks = new HookRegistry();
+    const appendObserver = vi.fn();
+    const bus = new WorkflowAgentBus({ session: { id: 'session-hooked-once' } });
+
+    hooks.registerMiddleware(createCodeHook<{ entryPayload: { type: PayloadType } }>({
+      id: 'observe-single-hook-wrap',
+      event: AGENT_BUS_HOOK_EVENTS.append,
+      run: ({ payload }) => {
+        appendObserver(payload.entryPayload.type);
+      },
+    }));
+
+    bus.withHooks(hooks).withHooks(hooks);
+    await bus.append({ type: PayloadType.Mail, from: 'user', content: 'hello once' });
+
+    expect(appendObserver).toHaveBeenCalledTimes(1);
+    expect(appendObserver).toHaveBeenCalledWith(PayloadType.Mail);
+  });
+
+  it('preserves WorkflowAgentBus telemetry when hooks are supplied at loop runtime', async () => {
+    const hooks = new HookRegistry();
+    const appendPayloadTypes: PayloadType[] = [];
+    const bus = new WorkflowAgentBus({ session: { id: 'session-hooked-workflow-bus' } });
+
+    hooks.registerMiddleware(createCodeHook<{ entryPayload: { type: PayloadType } }>({
+      id: 'observe-existing-workflow-bus-appends',
+      event: AGENT_BUS_HOOK_EVENTS.append,
+      run: ({ payload }) => {
+        appendPayloadTypes.push(payload.entryPayload.type);
+      },
+    }));
+
+    await runLogActAgentLoop({
+      inferenceClient: { infer: vi.fn().mockResolvedValue('   ') },
+      messages: [{ content: 'observe workflow telemetry' }],
+      bus,
+      hooks,
+      maxTurns: 1,
+    }, {});
+
+    expect(appendPayloadTypes).toEqual([
+      PayloadType.Mail,
+      PayloadType.InfIn,
+    ]);
+    expect(bus.readWorkflowEvents()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'xstate.event',
+        sessionId: 'session-hooked-workflow-bus',
+        event: expect.objectContaining({
+          type: 'START',
+          runId: 'session-hooked-workflow-bus',
+        }),
+      }),
+      expect.objectContaining({
+        type: 'xstate.snapshot',
+        sessionId: 'session-hooked-workflow-bus',
+        value: 'inferring',
+        status: 'active',
+      }),
+      expect.objectContaining({
+        type: 'xstate.snapshot',
+        sessionId: 'session-hooked-workflow-bus',
+        value: 'done',
+        status: 'done',
+      }),
+    ]));
   });
 
   it('runs the shared LogAct loop with default input, voters, and completion callbacks', async () => {
