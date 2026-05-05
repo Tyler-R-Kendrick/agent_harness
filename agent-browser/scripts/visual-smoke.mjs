@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdir } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
@@ -48,13 +49,32 @@ async function waitForServer(url, childProcess, timeoutMs = 60_000) {
   throw new Error(`Timed out waiting for ${url}.`);
 }
 
-function stopProcess(childProcess) {
+async function stopProcess(childProcess) {
   if (childProcess.exitCode !== null || childProcess.killed) return;
   if (process.platform === 'win32') {
     spawn('taskkill', ['/pid', String(childProcess.pid), '/T', '/F'], { stdio: 'ignore' });
-    return;
+  } else if (childProcess.pid) {
+    try {
+      process.kill(-childProcess.pid, 'SIGTERM');
+    } catch {
+      childProcess.kill('SIGTERM');
+    }
+  } else {
+    childProcess.kill('SIGTERM');
   }
-  childProcess.kill('SIGTERM');
+  const timeout = new Promise((resolve) => setTimeout(resolve, 5_000, 'timeout'));
+  const result = await Promise.race([once(childProcess, 'close'), timeout]);
+  if (result !== 'timeout') return;
+  if (process.platform !== 'win32' && childProcess.pid) {
+    try {
+      process.kill(-childProcess.pid, 'SIGKILL');
+    } catch {
+      childProcess.kill('SIGKILL');
+    }
+  } else {
+    childProcess.kill('SIGKILL');
+  }
+  await Promise.race([once(childProcess, 'close'), timeout]);
 }
 
 async function main() {
@@ -67,6 +87,7 @@ async function main() {
     {
       cwd: packageRoot,
       env: { ...process.env, FORCE_COLOR: '0' },
+      detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
@@ -154,7 +175,7 @@ async function main() {
     throw error;
   } finally {
     await browser?.close();
-    stopProcess(server);
+    await stopProcess(server);
   }
 }
 
