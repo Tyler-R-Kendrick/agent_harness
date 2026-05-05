@@ -1,3 +1,5 @@
+/// <reference path="./webrtc-types.d.ts" />
+
 import type { DaemonConfig } from './config.ts';
 import { LocalInferenceController } from './local-inference.ts';
 import { SignalingClient } from './signaling-client.ts';

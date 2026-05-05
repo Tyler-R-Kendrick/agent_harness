@@ -1,0 +1,74 @@
+name: Daemon Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/daemon-build.yml
+      - agent-daemon/**
+      - ext/local-inference-daemon/**
+      - scripts/package-extension-downloads.mjs
+      - package.json
+      - package-lock.json
+  pull_request:
+    paths:
+      - .github/workflows/daemon-build.yml
+      - agent-daemon/**
+      - ext/local-inference-daemon/**
+      - scripts/package-extension-downloads.mjs
+      - package.json
+      - package-lock.json
+
+jobs:
+  windows-daemon:
+    name: Build Windows daemon output
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Check daemon TypeScript
+        working-directory: agent-daemon
+        run: deno check src/mod.ts
+
+      - name: Build Windows daemon executable
+        working-directory: agent-daemon
+        run: deno task compile:windows
+
+      - name: Package browser downloads with Windows daemon output
+        run: npm run build:extension-downloads
+
+      - name: Verify Windows daemon executable exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path agent-daemon/dist/agent-harness-local-inference-daemon.exe)) {
+            throw "Missing agent-daemon/dist/agent-harness-local-inference-daemon.exe"
+          }
+
+      - name: Upload Windows daemon executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-harness-local-inference-daemon-windows
+          path: agent-daemon/dist/agent-harness-local-inference-daemon.exe
+
+      - name: Upload installable daemon download bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-harness-local-inference-daemon-download
+          path: agent-browser/public/downloads/agent-harness-local-inference-daemon.zip

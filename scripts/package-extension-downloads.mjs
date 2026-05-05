@@ -33,7 +33,6 @@ async function collectFiles(sourceDirectory, rootName, currentDirectory = source
     const absolutePath = path.join(currentDirectory, entry.name);
     const relativePath = path.relative(sourceDirectory, absolutePath);
     if (entry.isDirectory()) {
-      if (entry.name === 'dist') continue;
       files.push(...await collectFiles(sourceDirectory, rootName, absolutePath));
     } else if (entry.isFile()) {
       if (entry.name.endsWith('.zip')) continue;
