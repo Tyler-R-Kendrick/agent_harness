@@ -14,6 +14,7 @@ const outputPath = path.resolve(
   process.env.AGENT_BROWSER_VISUAL_SMOKE_SCREENSHOT
     ?? 'output/playwright/agent-browser-visual-smoke.png',
 );
+const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -62,7 +63,7 @@ async function stopProcess(childProcess) {
   } else {
     childProcess.kill('SIGTERM');
   }
-  const timeout = new Promise((resolve) => setTimeout(resolve, 5_000, 'timeout'));
+  const timeout = new Promise((resolve) => setTimeout(resolve, PROCESS_SHUTDOWN_TIMEOUT_MS, 'timeout'));
   const result = await Promise.race([once(childProcess, 'close'), timeout]);
   if (result !== 'timeout') return;
   if (process.platform !== 'win32' && childProcess.pid) {

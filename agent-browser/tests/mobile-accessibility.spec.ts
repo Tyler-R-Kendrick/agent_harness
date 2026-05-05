@@ -168,5 +168,10 @@ test.describe('mobile-first accessibility viewport matrix', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.setViewportSize({ width: 768, height: 1024 });
     await expect(page.locator('aside.sidebar')).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Expand sidebar' }).click();
+    await expect(page.getByLabel('Workspace tree')).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator('aside.sidebar')).toHaveCount(0);
   });
 });

@@ -8261,8 +8261,11 @@ function AgentBrowserApp() {
   }, [activeWorkspaceId, root]);
 
   const setSidebarCollapsed = useCallback((next: boolean | ((current: boolean) => boolean), userInitiated = false) => {
-    if (userInitiated) sidebarUserOverrideRef.current = true;
-    setCollapsed(next);
+    setCollapsed((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      if (userInitiated) sidebarUserOverrideRef.current = resolved !== isMobileViewport();
+      return resolved;
+    });
   }, []);
 
   useEffect(() => {
