@@ -48,13 +48,22 @@ async function waitForServer(url, childProcess, timeoutMs = 60_000) {
   throw new Error(`Timed out waiting for ${url}.`);
 }
 
-function stopProcess(childProcess) {
-  if (childProcess.exitCode !== null || childProcess.killed) return;
+async function stopProcess(childProcess) {
+  if (childProcess.exitCode !== null) return;
+  const stopped = new Promise((resolve) => childProcess.once('exit', resolve));
   if (process.platform === 'win32') {
     spawn('taskkill', ['/pid', String(childProcess.pid), '/T', '/F'], { stdio: 'ignore' });
-    return;
+  } else {
+    process.kill(-childProcess.pid, 'SIGTERM');
   }
-  childProcess.kill('SIGTERM');
+  const exited = await Promise.race([
+    stopped.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
+  ]);
+  if (!exited && process.platform !== 'win32' && childProcess.exitCode === null) {
+    process.kill(-childProcess.pid, 'SIGKILL');
+    await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 1_000))]);
+  }
 }
 
 async function main() {
@@ -68,6 +77,7 @@ async function main() {
       cwd: packageRoot,
       env: { ...process.env, FORCE_COLOR: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: process.platform !== 'win32',
     },
   );
   server.stdout.on('data', (chunk) => serverOutput.push(String(chunk)));
@@ -154,7 +164,7 @@ async function main() {
     throw error;
   } finally {
     await browser?.close();
-    stopProcess(server);
+    await stopProcess(server);
   }
 }
 
