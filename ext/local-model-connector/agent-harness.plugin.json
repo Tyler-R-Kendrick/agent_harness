@@ -27,6 +27,11 @@
       "description": "Built MV3 extension directory to load unpacked in Chrome or Edge."
     },
     {
+      "kind": "runtime",
+      "path": "./dist/local-model-connector-extension.zip",
+      "description": "Zipped MV3 extension package to download and load unpacked in Chrome or Edge."
+    },
+    {
       "kind": "documentation",
       "path": "./README.md",
       "description": "Build, install, PWA configuration, and troubleshooting docs."

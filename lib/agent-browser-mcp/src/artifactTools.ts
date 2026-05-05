@@ -9,6 +9,7 @@ import type {
 
 interface ArtifactIdInput {
   artifactId?: string;
+  artifact_id?: string;
   id?: string;
 }
 
@@ -55,9 +56,10 @@ export function registerArtifactTools(modelContext: ModelContext, options: Regis
       type: 'object',
       properties: {
         artifactId: { type: 'string' },
+        artifact_id: { type: 'string' },
         id: { type: 'string' },
       },
-      anyOf: [{ required: ['artifactId'] }, { required: ['id'] }],
+      anyOf: [{ required: ['artifactId'] }, { required: ['artifact_id'] }, { required: ['id'] }],
       additionalProperties: false,
     },
     execute: async (input: object) => {
@@ -96,6 +98,7 @@ function artifactWriteSchema(requiresArtifactId: boolean) {
     type: 'object',
     properties: {
       artifactId: { type: 'string' },
+      artifact_id: { type: 'string' },
       id: { type: 'string' },
       title: { type: 'string' },
       description: { type: 'string' },
@@ -121,7 +124,7 @@ function artifactWriteSchema(requiresArtifactId: boolean) {
     additionalProperties: false,
   };
   if (requiresArtifactId) {
-    schema.anyOf = [{ required: ['artifactId'] }, { required: ['id'] }];
+    schema.anyOf = [{ required: ['artifactId'] }, { required: ['artifact_id'] }, { required: ['id'] }];
   }
   return schema;
 }
@@ -135,7 +138,7 @@ function readArtifact(artifacts: readonly WorkspaceMcpArtifact[], artifactId: st
 }
 
 function readArtifactId(input: ArtifactIdInput): string {
-  const id = (input.artifactId ?? input.id ?? '').trim();
+  const id = (input.artifactId ?? input.artifact_id ?? input.id ?? '').trim();
   if (!id) {
     throw new TypeError('Artifact id is required.');
   }
@@ -146,6 +149,7 @@ function toArtifactInput(input: RawArtifactInput): WorkspaceMcpWriteArtifactInpu
   return {
     ...(typeof input.id === 'string' && input.id.trim() ? { id: input.id.trim() } : {}),
     ...(typeof input.artifactId === 'string' && input.artifactId.trim() ? { id: input.artifactId.trim() } : {}),
+    ...(typeof input.artifact_id === 'string' && input.artifact_id.trim() ? { id: input.artifact_id.trim() } : {}),
     ...(typeof input.title === 'string' && input.title.trim() ? { title: input.title.trim() } : {}),
     ...(typeof input.description === 'string' ? { description: input.description } : {}),
     ...(typeof input.kind === 'string' && input.kind.trim() ? { kind: input.kind.trim() } : {}),

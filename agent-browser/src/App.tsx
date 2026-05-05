@@ -13,6 +13,7 @@ import { SortableContext, horizontalListSortingStrategy, useSortable } from '@dn
 import { CSS } from '@dnd-kit/utilities';
 import type { ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import type { HarnessPluginManifest } from 'harness-core';
 import {
   ArrowLeft,
   ArrowRight,
@@ -196,6 +197,11 @@ import {
   summarizeDefaultExtensionRuntime,
   type DefaultExtensionRuntime,
 } from './services/defaultExtensions';
+import {
+  PORTABLE_DAEMON_SOURCE_DOWNLOAD,
+  resolveLocalInferenceDaemonDownload,
+  type DaemonDownloadChoice,
+} from './services/windowsDaemonDownload';
 import { buildArtifactDriveNodes, buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import {
   buildArtifactPromptContext,
@@ -729,6 +735,12 @@ function readBrowserLocationFromNavigator(): Promise<BrowserLocationToolResult> 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
+function isMobileViewport(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(max-width: 640px)').matches;
 }
 
 function useToast() {
@@ -5365,7 +5377,6 @@ function ChatPanel({
                     ref={chatInputRef}
                     aria-label="Chat input"
                     aria-autocomplete="list"
-                    aria-expanded={isSkillAutocompleteOpen}
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
@@ -6319,7 +6330,22 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
   if (extensionId.endsWith('.artifacts')) return 'layers';
   if (extensionId.endsWith('.local-model-connector')) return 'cpu';
+  if (extensionId.endsWith('.local-inference-daemon')) return 'terminal';
   return 'puzzle';
+}
+
+function getDefaultExtensionDownload(
+  manifest: HarnessPluginManifest,
+  daemonDownload: DaemonDownloadChoice,
+): (DaemonDownloadChoice & { includeLabelInAria?: boolean }) | null {
+  if (manifest.id === 'agent-harness.ext.local-inference-daemon') {
+    return { ...daemonDownload, includeLabelInAria: true };
+  }
+  const runtimeZip = manifest.assets?.find((asset) => asset.kind === 'runtime' && asset.path.endsWith('.zip'));
+  if (!runtimeZip) return null;
+  const fileName = runtimeZip.path.split('/').pop();
+  if (!fileName) return null;
+  return { href: `/downloads/${fileName}`, fileName, label: 'Download package' };
 }
 
 function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
@@ -6348,9 +6374,20 @@ function ExtensionsPanel({
   onInstallExtension: (extensionId: string) => void;
 }) {
   const [search, setSearch] = useState('');
+  const [daemonDownload, setDaemonDownload] = useState<DaemonDownloadChoice>(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const installedExtensionIdSet = new Set(defaultExtensions?.installedExtensionIds ?? installedExtensionIds);
+
+  useEffect(() => {
+    let active = true;
+    resolveLocalInferenceDaemonDownload(window.navigator).then((download) => {
+      if (active) setDaemonDownload(download);
+    }).catch(() => {
+      if (active) setDaemonDownload(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
+    });
+    return () => { active = false; };
+  }, []);
 
   const filtered = repoExtensions.filter((extension) => {
     if (!search) return true;
@@ -6378,7 +6415,7 @@ function ExtensionsPanel({
       <div className="extensions-list">
         {filtered.map((extension) => {
           const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
-          const isLocalModelConnector = extension.manifest.id.endsWith('.local-model-connector');
+          const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
           return (
             <article key={extension.manifest.id} className="marketplace-card">
               <div className="marketplace-card-icon">
@@ -6387,7 +6424,7 @@ function ExtensionsPanel({
               <div className="marketplace-card-body">
                 <strong>{extension.manifest.name}</strong>
                 <span className="marketplace-card-author">
-                  {isLocalModelConnector ? 'Download/load unpacked: ' : ''}
+                  {download ? 'Download/install: ' : ''}
                   {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
                 </span>
                 <p className="marketplace-card-desc">{extension.manifest.description}</p>
@@ -6397,15 +6434,26 @@ function ExtensionsPanel({
                   ))}
                 </div>
               </div>
-              <button
-                type="button"
-                className={`secondary-button marketplace-install-button${isLocalModelConnector ? ' connected' : ''}`}
-                disabled={isInstalled}
-                aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-                onClick={() => onInstallExtension(extension.manifest.id)}
-              >
-                {isInstalled ? 'Installed' : isLocalModelConnector ? 'Download' : 'Install'}
-              </button>
+              {download ? (
+                <a
+                  className="secondary-button marketplace-install-button marketplace-download-link"
+                  href={download.href}
+                  download={download.fileName}
+                  aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
+                >
+                  Download
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="secondary-button marketplace-install-button"
+                  disabled={isInstalled}
+                  aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+                  onClick={() => onInstallExtension(extension.manifest.id)}
+                >
+                  {isInstalled ? 'Installed' : 'Install'}
+                </button>
+              )}
             </article>
           );
         })}
@@ -7392,7 +7440,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
 }
 
 function Toast({ toast }: { toast: ToastState }) {
-  return toast ? <div className={`toast ${toast.type}`}>{toast.msg}</div> : null;
+  return toast ? <div className={`toast ${toast.type}`} role="status" aria-live="polite">{toast.msg}</div> : null;
 }
 
 function panelKey(panel: Panel): string {
@@ -7562,7 +7610,8 @@ function AgentBrowserApp() {
   );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => isMobileViewport());
+  const sidebarUserOverrideRef = useRef(false);
   const [registryTask, setRegistryTask] = useState('');
   const [registryQuery, setRegistryQuery] = useState('');
   const [registryModels, setRegistryModels] = useState<HFModel[]>([]);
@@ -8254,17 +8303,41 @@ function AgentBrowserApp() {
     slideTimeoutRef.current = window.setTimeout(() => setSlideDir(null), 300);
   }, [activeWorkspaceId, root]);
 
+  const setSidebarCollapsed = useCallback((next: boolean | ((current: boolean) => boolean), userInitiated = false) => {
+    setCollapsed((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      if (userInitiated) {
+        const responsiveDefaultCollapsed = isMobileViewport();
+        // Keep a manual override only while the user's choice differs from the current responsive default.
+        sidebarUserOverrideRef.current = resolved !== responsiveDefaultCollapsed;
+      }
+      return resolved;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mobileQuery = window.matchMedia('(max-width: 640px)');
+    const syncCollapsed = (matches: boolean) => {
+      if (!sidebarUserOverrideRef.current) setCollapsed(matches);
+    };
+    syncCollapsed(mobileQuery.matches);
+    const onViewportChange = (event: MediaQueryListEvent) => syncCollapsed(event.matches);
+    mobileQuery.addEventListener('change', onViewportChange);
+    return () => mobileQuery.removeEventListener('change', onViewportChange);
+  }, []);
+
   const switchSidebarPanel = useCallback((panel: SidebarPanel) => {
     setActivePanel(panel);
-    setCollapsed(false);
+    setSidebarCollapsed(false, true);
     setShowWorkspaces(false);
-  }, []);
+  }, [setSidebarCollapsed]);
 
   const openWorkspaceSwitcher = useCallback(() => {
     setActivePanel('workspaces');
-    setCollapsed(false);
+    setSidebarCollapsed(false, true);
     setShowWorkspaces(true);
-  }, []);
+  }, [setSidebarCollapsed]);
 
   const jumpToWorkspaceByIndex = useCallback((index: number) => {
     const workspaces = root.children ?? [];
@@ -10911,6 +10984,7 @@ function AgentBrowserApp() {
 
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#workspace-content">Skip to workspace content</a>
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
@@ -10919,7 +10993,7 @@ function AgentBrowserApp() {
         <div className="activity-group">
           {SECONDARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => switchSidebarPanel(id as SidebarPanel)} aria-label={label} title={`${label} (Alt+${PRIMARY_NAV.length + index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
         </div>
-        <button type="button" className="activity-button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
+        <button type="button" className="activity-button" onClick={() => setSidebarCollapsed((current) => !current, true)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
       {!collapsed ? (
         <aside className="sidebar">
@@ -10972,7 +11046,7 @@ function AgentBrowserApp() {
           {renderSidebar()}
         </aside>
       ) : null}
-      <main className="content-area">
+      <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
         {(() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {

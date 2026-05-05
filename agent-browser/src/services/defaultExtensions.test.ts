@@ -21,6 +21,7 @@ describe('default extensions', () => {
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts',
       'agent-harness.ext.local-model-connector',
+      'agent-harness.ext.local-inference-daemon',
     ]);
   });
 
@@ -35,6 +36,7 @@ describe('default extensions', () => {
       'Workflow canvas orchestration',
       'Artifacts',
       'Local Model Connector',
+      'Local Inference Daemon',
     ]);
     expect(runtime.installedExtensionIds).toEqual([]);
     expect(runtime.plugins).toEqual([]);
@@ -87,6 +89,24 @@ describe('default extensions', () => {
         manifest: {
           capabilities: expect.arrayContaining([
             expect.objectContaining({ kind: 'asset', id: 'local-model-connector-extension' }),
+          ]),
+        },
+      });
+    expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.local-inference-daemon'))
+      .toMatchObject({
+        marketplace: {
+          source: { path: './local-inference-daemon/dist' },
+          categories: expect.arrayContaining(['model-provider', 'daemon']),
+        },
+        manifest: {
+          capabilities: expect.arrayContaining([
+            expect.objectContaining({ kind: 'asset', id: 'local-inference-daemon-service' }),
+          ]),
+          assets: expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'runtime',
+              path: './dist/agent-harness-local-inference-daemon.zip',
+            }),
           ]),
         },
       });

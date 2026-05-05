@@ -70,10 +70,11 @@ async function main() {
   assert.ok(rootPackage.workspaces.includes('ext/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
+  assert.equal(rootPackage.scripts['build:extension-downloads'], 'node scripts/package-extension-downloads.mjs');
   assert.equal(rootPackage.scripts['test:extensions'], 'node scripts/run-extension-workspaces.mjs test');
   assert.equal(rootPackage.scripts['test:coverage:extensions'], 'node scripts/run-extension-workspaces.mjs test:coverage');
-  assert.match(packageJson, /"verify:agent-browser": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
-  assert.match(packageJson, /"check:generated-files": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
+  assert.match(packageJson, /"verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
+  assert.match(packageJson, /"check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
   for (const extensionPackagePath of [
     'ext/agent-skills/package.json',
     'ext/agents-md/package.json',
@@ -88,6 +89,15 @@ async function main() {
   const generatedFilesWrapper = await readScript('scripts/check-generated-files-clean.ps1');
   assert.match(generatedFilesWrapper, /codex-git\.ps1'\) ls-files/);
   assert.match(generatedFilesWrapper, /check-generated-files-clean\.mjs'\) --stdin-lines/);
+  const daemonBuildWorkflow = await readScript('.github/workflows/daemon-build.yml');
+  assert.match(daemonBuildWorkflow, /denoland\/setup-deno@v2/);
+  assert.match(daemonBuildWorkflow, /--target x86_64-pc-windows-msvc/);
+  assert.doesNotMatch(daemonBuildWorkflow, /aarch64-pc-windows-msvc/);
+  assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-x64\.exe/);
+  assert.doesNotMatch(daemonBuildWorkflow, /agent-harness-local-inference-daemon-windows-arm64\.exe/);
+  assert.doesNotMatch(daemonBuildWorkflow, /cache: npm/);
+  assert.match(daemonBuildWorkflow, /npm install --package-lock=false/);
+  assert.match(daemonBuildWorkflow, /actions\/upload-artifact@v4/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
   assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
@@ -136,6 +146,31 @@ async function main() {
   const extensionRunner = await import(
     pathToFileURL(path.resolve(repoRoot, 'scripts/run-extension-workspaces.mjs')).href
   );
+  const extensionDownloadsPackager = await import(
+    pathToFileURL(path.resolve(repoRoot, 'scripts/package-extension-downloads.mjs')).href
+  );
+  const extensionDownloadsScript = await readScript('scripts/package-extension-downloads.mjs');
+  assert.match(extensionDownloadsScript, /pathToFileURL\(path\.resolve\(process\.argv\[1\]\)\)\.href/);
+  assert.deepEqual(extensionDownloadsPackager.buildDownloadPackages(repoRoot), [
+    {
+      name: 'local-model-connector-extension',
+      sourceDirectory: path.join(repoRoot, 'ext', 'local-model-connector', 'dist'),
+      outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'local-model-connector-extension.zip'),
+    },
+    {
+      name: 'agent-harness-local-inference-daemon',
+      sourceDirectory: path.join(repoRoot, 'agent-daemon'),
+      outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon.zip'),
+    },
+  ]);
+  assert.deepEqual(extensionDownloadsPackager.buildWindowsDaemonBinaryDownloads(repoRoot), [
+    {
+      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+    },
+  ]);
+  assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');
   const extensionFixture = await mkdtemp(path.join(tmpdir(), 'extension-workspaces-'));
   await mkdir(path.join(extensionFixture, 'ext', 'alpha'), { recursive: true });
   await mkdir(path.join(extensionFixture, 'ext', 'not-a-package'), { recursive: true });
