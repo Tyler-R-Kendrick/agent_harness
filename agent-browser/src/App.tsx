@@ -8263,7 +8263,11 @@ function AgentBrowserApp() {
   const setSidebarCollapsed = useCallback((next: boolean | ((current: boolean) => boolean), userInitiated = false) => {
     setCollapsed((current) => {
       const resolved = typeof next === 'function' ? next(current) : next;
-      if (userInitiated) sidebarUserOverrideRef.current = resolved !== isMobileViewport();
+      if (userInitiated) {
+        const responsiveDefaultCollapsed = isMobileViewport();
+        // Keep a manual override only while the user's choice differs from the current responsive default.
+        sidebarUserOverrideRef.current = resolved !== responsiveDefaultCollapsed;
+      }
       return resolved;
     });
   }, []);

@@ -4204,11 +4204,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .ws-card-tab-count {
   font-size: 10.5px;
-  color: var(--text-soft);
+  color: #d1d5db;
 }
 .ws-card-tabs {
   font-size: 10.5px;
-  color: var(--text-muted);
+  color: #d1d5db;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

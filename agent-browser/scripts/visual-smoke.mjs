@@ -88,6 +88,7 @@ async function main() {
     {
       cwd: packageRoot,
       env: { ...process.env, FORCE_COLOR: '0' },
+      // Non-Windows cleanup sends signals to the process group via a negative PID.
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe'],
     },
