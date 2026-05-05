@@ -335,10 +335,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .settings-section {
   display: grid;
 }
+.settings-panel .settings-section {
+  min-height: 30px;
+  overflow: visible;
+}
+.settings-panel .settings-section--scroll {
+  min-height: calc(min(12rem, 34vh) + 30px);
+}
 .settings-section-body {
   display: grid;
   gap: 10px;
   padding: 10px;
+}
+.settings-section-body.sidebar-section-body {
+  overflow: visible;
+}
+.settings-section-body > .provider-list,
+.section-scroll-body > .provider-list {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
 }
 .claude-design-settings {
   display: grid;
@@ -417,9 +435,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .section-scroll-body {
   display: grid;
-  overflow-y: auto;
   min-height: 0;
-  max-height: min(18rem, 42vh);
+  gap: 10px;
+  padding: 10px;
 }
 .settings-section-body > .settings-subsection + .settings-subsection {
   margin-top: 10px;
@@ -449,8 +467,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: rgba(7, 10, 16, 0.72);
 }
 .secrets-add-button {
-  min-height: 34px;
-  white-space: nowrap;
+  align-self: end;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
 }
 .secret-settings-grid {
   display: grid;
@@ -610,6 +630,140 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 6px 8px;
   border-bottom: 1px solid var(--panel-border);
   background: rgba(255,255,255,.02);
+}
+.sidebar-section {
+  display: grid;
+  min-height: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-bg-elevated);
+}
+.sidebar-section + .sidebar-section {
+  margin-top: 10px;
+}
+.sidebar-section-toggle {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  cursor: pointer;
+}
+.sidebar-section-toggle > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-section-toggle-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sidebar-section-summary {
+  max-width: 12ch;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+.sidebar-section-body {
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar-section-body--scroll,
+.section-scroll-body {
+  min-height: min(12rem, 34vh);
+  max-height: min(25rem, 44vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.sidebar-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(12, 15, 21, 0.62);
+  color: #cbd5e1;
+  text-decoration: none;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.sidebar-icon-button:hover:not(:disabled),
+.sidebar-icon-button:focus-visible {
+  border-color: rgba(125, 211, 252, 0.38);
+  background: rgba(14, 116, 144, 0.18);
+  color: #e0f2fe;
+}
+.sidebar-icon-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+.status-indicator {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.48);
+}
+.status-indicator::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+.status-indicator.is-active {
+  border-color: rgba(34, 197, 94, 0.32);
+  background: rgba(34, 197, 94, 0.1);
+}
+.status-indicator.is-active::before {
+  background: #22c55e;
+}
+.status-indicator.is-warning {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.1);
+}
+.status-indicator.is-warning::before {
+  background: #f59e0b;
+}
+.score-mark {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.score-mark.is-active {
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #86efac;
+}
+@media (max-width: 640px) {
+  .sidebar-icon-button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+  .status-indicator {
+    width: 28px;
+    height: 28px;
+  }
 }
 .panel-topbar {
   display: flex;
@@ -2443,6 +2597,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   box-shadow: none;
 }
 .model-card.installed { grid-template-columns: 1fr auto; }
+.model-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
 .model-card-icon {
   width: 24px;
   height: 24px;
@@ -3203,6 +3362,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   justify-content: space-between;
   gap: 10px;
 }
+.extension-title-row small {
+  max-width: 12ch;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .history-list {
   display: grid;
   gap: 0;
@@ -3621,10 +3788,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workspace-plugins-section {
   display: grid;
   gap: 0;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
-  background: var(--panel-bg-elevated);
+  background: transparent;
 }
 .extensions-list > :last-child,
 .workspace-plugins-section > :last-child,
@@ -3667,6 +3834,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 11px;
   color: var(--text-soft);
 }
+.marketplace-card-author,
+.marketplace-card-desc,
+.extension-content p {
+  overflow-wrap: anywhere;
+}
 .marketplace-card-desc {
   margin: 0;
   font-size: 11px;
@@ -3681,6 +3853,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .marketplace-install-button {
   min-width: 72px;
   justify-content: center;
+}
+.marketplace-action {
+  align-self: center;
 }
 .marketplace-download-link {
   text-decoration: none;
