@@ -13,6 +13,7 @@
     "check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-generated-files-clean.ps1",
     "lint:extensions": "node scripts/run-extension-workspaces.mjs lint",
     "build:extensions": "node scripts/run-extension-workspaces.mjs build",
+    "build:extension-downloads": "node scripts/package-extension-downloads.mjs",
     "test:extensions": "node scripts/run-extension-workspaces.mjs test",
     "test:coverage:extensions": "node scripts/run-extension-workspaces.mjs test:coverage",
     "verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",

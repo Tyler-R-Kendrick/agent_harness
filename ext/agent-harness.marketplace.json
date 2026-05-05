@@ -96,6 +96,19 @@
       },
       "categories": ["model-provider", "browser-extension"],
       "keywords": ["local-models", "openai-compatible", "lm-studio", "ollama", "foundry-local", "chrome-extension"]
+    },
+    {
+      "id": "agent-harness.ext.local-inference-daemon",
+      "name": "Local Inference Daemon",
+      "version": "0.1.0",
+      "description": "Downloadable Deno background service for WebRTC or WebSocket access to loopback OpenAI-compatible local inference endpoints.",
+      "manifest": "./local-inference-daemon/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./local-inference-daemon/dist"
+      },
+      "categories": ["model-provider", "daemon", "windows-service", "deno"],
+      "keywords": ["local-models", "openai-compatible", "webrtc", "websocket", "deno", "background-service"]
     }
   ]
 }
