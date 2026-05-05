@@ -89,6 +89,11 @@ async function main() {
   const generatedFilesWrapper = await readScript('scripts/check-generated-files-clean.ps1');
   assert.match(generatedFilesWrapper, /codex-git\.ps1'\) ls-files/);
   assert.match(generatedFilesWrapper, /check-generated-files-clean\.mjs'\) --stdin-lines/);
+  const daemonBuildWorkflow = await readScript('.github/workflows/daemon-build.yml');
+  assert.match(daemonBuildWorkflow, /denoland\/setup-deno@v2/);
+  assert.match(daemonBuildWorkflow, /deno task compile:windows/);
+  assert.match(daemonBuildWorkflow, /agent-harness-local-inference-daemon\.exe/);
+  assert.match(daemonBuildWorkflow, /actions\/upload-artifact@v4/);
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
   assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
