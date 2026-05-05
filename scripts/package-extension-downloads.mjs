@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_REPO_ROOT = path.resolve(__dirname, '..');
-const FIXED_ZIP_TIME = 0;
-const FIXED_ZIP_DATE = 33;
+const DETERMINISTIC_ZIP_DOS_TIME = 0;
+const DETERMINISTIC_ZIP_DOS_DATE = 33;
 
 export function buildDownloadPackages(repoRoot = DEFAULT_REPO_ROOT) {
   return [
@@ -71,8 +71,8 @@ function zipLocalHeader(nameBytes, dataBytes, crc) {
   header.writeUInt16LE(10, 4);
   header.writeUInt16LE(0, 6);
   header.writeUInt16LE(0, 8);
-  header.writeUInt16LE(FIXED_ZIP_TIME, 10);
-  header.writeUInt16LE(FIXED_ZIP_DATE, 12);
+  header.writeUInt16LE(DETERMINISTIC_ZIP_DOS_TIME, 10);
+  header.writeUInt16LE(DETERMINISTIC_ZIP_DOS_DATE, 12);
   header.writeUInt32LE(crc, 14);
   header.writeUInt32LE(dataBytes.length, 18);
   header.writeUInt32LE(dataBytes.length, 22);
@@ -88,8 +88,8 @@ function zipCentralDirectoryHeader(nameBytes, dataBytes, crc, offset) {
   header.writeUInt16LE(10, 6);
   header.writeUInt16LE(0, 8);
   header.writeUInt16LE(0, 10);
-  header.writeUInt16LE(FIXED_ZIP_TIME, 12);
-  header.writeUInt16LE(FIXED_ZIP_DATE, 14);
+  header.writeUInt16LE(DETERMINISTIC_ZIP_DOS_TIME, 12);
+  header.writeUInt16LE(DETERMINISTIC_ZIP_DOS_DATE, 14);
   header.writeUInt32LE(crc, 16);
   header.writeUInt32LE(dataBytes.length, 20);
   header.writeUInt32LE(dataBytes.length, 24);

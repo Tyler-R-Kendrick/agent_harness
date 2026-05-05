@@ -408,6 +408,32 @@ describe('App', () => {
     expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
+  it('offers the Windows ARM64 daemon download when browser architecture reports ARM Windows', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(window.navigator, 'userAgentData', {
+      configurable: true,
+      value: {
+        platform: 'Windows',
+        getHighEntropyValues: vi.fn().mockResolvedValue({ platform: 'Windows', architecture: 'arm', bitness: '64' }),
+      },
+    });
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon for Windows ARM64' })).toHaveAttribute(
+      'href',
+      '/downloads/agent-harness-local-inference-daemon-windows-arm64.exe',
+    );
+  });
+
   it('installs a repo marketplace extension on demand', async () => {
     vi.useFakeTimers();
     render(<App />);

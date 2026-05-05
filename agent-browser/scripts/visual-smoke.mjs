@@ -54,14 +54,22 @@ async function stopProcess(childProcess) {
   if (process.platform === 'win32') {
     spawn('taskkill', ['/pid', String(childProcess.pid), '/T', '/F'], { stdio: 'ignore' });
   } else {
-    process.kill(-childProcess.pid, 'SIGTERM');
+    try {
+      process.kill(-childProcess.pid, 'SIGTERM');
+    } catch {
+      childProcess.kill('SIGTERM');
+    }
   }
   const exited = await Promise.race([
     stopped.then(() => true),
     new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
   ]);
   if (!exited && process.platform !== 'win32' && childProcess.exitCode === null) {
-    process.kill(-childProcess.pid, 'SIGKILL');
+    try {
+      process.kill(-childProcess.pid, 'SIGKILL');
+    } catch {
+      childProcess.kill('SIGKILL');
+    }
     await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 1_000))]);
   }
 }
