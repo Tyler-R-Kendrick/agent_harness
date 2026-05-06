@@ -5,6 +5,7 @@ import { ProcessGraph } from './ProcessGraph';
 import { ProcessDrilldown } from './ProcessDrilldown';
 import { formatOperationDuration } from '../operation-pane';
 import type { ProcessEntry, ProcessEntryKind } from '../../services/processLog';
+import { scoreEvaluationRun, type EvaluationRunScore } from '../../services/evaluationObservability';
 
 /**
  * Derives ProcessEntry rows from legacy ChatMessage fields so the unified
@@ -70,6 +71,60 @@ function deriveLegacyEntries(message: ChatMessage): ProcessEntry[] {
   return entries;
 }
 
+function formatScore(score: number): string {
+  return `${score}%`;
+}
+
+function formatVerdict(verdict: EvaluationRunScore['verdict']): string {
+  switch (verdict) {
+    case 'needs-review':
+      return 'Needs review';
+    case 'passing':
+      return 'Passing';
+    case 'warning':
+      return 'Warning';
+    case 'failing':
+      return 'Failing';
+  }
+}
+
+function EvaluationScoreStrip({ score }: { score: EvaluationRunScore }) {
+  return (
+    <section
+      className={`evaluation-score-strip evaluation-score-strip--${score.verdict}`}
+      aria-label="Evaluation-native observability"
+    >
+      <header className="evaluation-score-header">
+        <div className="evaluation-score-title">
+          <span>Evaluation</span>
+          <strong>{formatScore(score.overallScore)}</strong>
+        </div>
+        <span className="evaluation-score-verdict">{formatVerdict(score.verdict)}</span>
+      </header>
+      <div className="evaluation-score-grid">
+        {score.scorers.map((scorer) => (
+          <div key={scorer.id} className={`evaluation-scorer evaluation-scorer--${scorer.status}`}>
+            <div className="evaluation-scorer-row">
+              <strong>{scorer.label}</strong>
+              <span>{formatScore(scorer.score)}</span>
+            </div>
+            <p>{scorer.summary}</p>
+            <small>{scorer.evidenceEntryIds.length} linked trace row{scorer.evidenceEntryIds.length === 1 ? '' : 's'}</small>
+          </div>
+        ))}
+      </div>
+      <footer className="evaluation-score-meta">
+        <span>
+          Dataset case <code>{score.datasetCase.caseId}</code>
+        </span>
+        <span>
+          Live experiment <code>{score.experiment.experimentId}</code>
+        </span>
+      </footer>
+    </section>
+  );
+}
+
 /**
  * Full-pane overlay rendering the unified ProcessLog graph + drill-down.
  */
@@ -84,6 +139,10 @@ export function ProcessPanel({
     if (message.processEntries?.length) return message.processEntries;
     return deriveLegacyEntries(message);
   }, [message]);
+  const evaluationScore = useMemo(
+    () => scoreEvaluationRun({ message, entries }),
+    [entries, message],
+  );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId
@@ -118,6 +177,7 @@ export function ProcessPanel({
           </div>
         </header>
         <div className="pg-panel-body">
+          <EvaluationScoreStrip score={evaluationScore} />
           <ProcessGraph
             entries={entries}
             selectedEntryId={selectedId ?? undefined}

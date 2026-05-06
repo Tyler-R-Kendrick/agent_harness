@@ -15,6 +15,7 @@ const outputPath = path.resolve(
     ?? 'output/playwright/agent-browser-visual-smoke.png',
 );
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
+const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -133,19 +134,151 @@ async function main() {
     const navigationTimeoutMs = 300_000;
     const shellTimeoutMs = 30_000;
 
+    await page.addInitScript(() => {
+      const workspaceId = 'ws-research';
+      const sessionId = 'visual-eval-session';
+      localStorage.setItem('agent-browser.workspace-root', JSON.stringify({
+        id: 'root',
+        name: 'Root',
+        type: 'root',
+        expanded: true,
+        children: [
+          {
+            id: workspaceId,
+            name: 'Research',
+            type: 'workspace',
+            expanded: true,
+            activeMemory: true,
+            color: '#60a5fa',
+            children: [
+              {
+                id: `${workspaceId}:category:browser`,
+                name: 'Browser',
+                type: 'folder',
+                nodeKind: 'browser',
+                expanded: true,
+                children: [],
+              },
+              {
+                id: `${workspaceId}:category:session`,
+                name: 'Sessions',
+                type: 'folder',
+                nodeKind: 'session',
+                expanded: true,
+                children: [
+                  {
+                    id: sessionId,
+                    name: 'Evaluation session',
+                    type: 'tab',
+                    nodeKind: 'session',
+                    persisted: true,
+                    filePath: `${workspaceId}:session:1`,
+                  },
+                ],
+              },
+              {
+                id: `${workspaceId}:category:files`,
+                name: 'Files',
+                type: 'folder',
+                nodeKind: 'files',
+                expanded: false,
+                children: [],
+              },
+              {
+                id: `${workspaceId}:clipboard`,
+                name: 'Clipboard',
+                type: 'tab',
+                nodeKind: 'clipboard',
+              },
+            ],
+          },
+        ],
+      }));
+      localStorage.setItem('agent-browser.workspace-view-state-by-workspace', JSON.stringify({
+        [workspaceId]: {
+          openTabIds: [],
+          editingFilePath: null,
+          dashboardOpen: true,
+          activeMode: 'agent',
+          activeSessionIds: [],
+          mountedSessionFsIds: [sessionId],
+          panelOrder: [],
+          activeArtifactPanel: null,
+        },
+      }));
+      localStorage.setItem('agent-browser.chat-messages-by-session', JSON.stringify({
+        [sessionId]: [
+          {
+            id: `${sessionId}:system`,
+            role: 'system',
+            status: 'complete',
+            content: 'Agent Browser ready.',
+          },
+          {
+            id: 'visual-eval-assistant',
+            role: 'assistant',
+            status: 'complete',
+            content: 'Captured visual evidence and completed the run.',
+            cards: [{ app: 'Browser evidence', args: { screenshot: 'agent-browser-visual-smoke.png' } }],
+            processEntries: [
+              {
+                id: 'visual-reasoning',
+                position: 0,
+                ts: 1000,
+                endedAt: 1300,
+                kind: 'reasoning',
+                actor: 'planner',
+                summary: 'Planned visual validation',
+                transcript: 'Use the process graph and screenshot evidence.',
+                status: 'done',
+              },
+              {
+                id: 'visual-tool',
+                position: 1,
+                ts: 1400,
+                endedAt: 1800,
+                kind: 'tool-call',
+                actor: 'playwright',
+                summary: 'Capture browser screenshot',
+                payload: { screenshot: 'agent-browser-visual-smoke.png' },
+                status: 'done',
+              },
+            ],
+          },
+        ],
+      }));
+      sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
+      sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
+    });
     await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: navigationTimeoutMs });
     await expect(page).toHaveTitle('Agent Browser');
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('tree', { name: 'Workspace tree' })).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Models' }).click();
+    const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
+    await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
+    await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
+    await page.getByRole('button', { name: /Process.*2 events/ }).click();
+    const evaluationObservability = page.getByLabel('Evaluation-native observability');
+    await expect(evaluationObservability).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(evaluationObservability.getByText('Evaluation', { exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(evaluationObservability.getByText('Live experiment')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(evaluationObservability.getByText('live:visual-eval-assistant')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: evaluationOutputPath, fullPage: true });
+    await page.getByRole('button', { name: 'Back to chat' }).click();
+    await page.getByRole('button', { name: 'Models', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('Cursor', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Providers contents').getByText('Cursor', { exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await expect(page.getByRole('button', { name: 'Built-in local inference' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(page.getByText(/No localhost sidecar/)).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
@@ -167,7 +300,7 @@ async function main() {
     await expect(page.getByLabel('Enable scheduled vulnerability scans')).toBeVisible({ timeout: shellTimeoutMs });
     await benchmarkObjective.scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Extensions' }).click();
+    await page.getByRole('button', { name: 'Extensions', exact: true }).click();
     const installedExtensions = page.getByRole('region', { name: 'Installed extensions' });
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -208,6 +341,7 @@ async function main() {
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
+    console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {
