@@ -14,6 +14,7 @@ const outputPath = path.resolve(
   process.env.AGENT_BROWSER_VISUAL_SMOKE_SCREENSHOT
     ?? 'output/playwright/agent-browser-visual-smoke.png',
 );
+const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -159,11 +160,35 @@ async function main() {
     await benchmarkObjective.scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Extensions' }).click();
-    await expect(page.getByRole('button', { name: /Marketplace \(12\)/ })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('0 installed')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('Symphony workflow orchestration').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({ timeout: shellTimeoutMs });
+    const installedExtensions = page.getByRole('region', { name: 'Installed extensions' });
+    await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(installedExtensions.getByText('0 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
+    await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('12 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByRole('heading', { name: 'Harness extensions' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByRole('heading', { name: 'Daemon extensions' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByRole('heading', { name: 'Provider extensions' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByRole('heading', { name: 'Runtime extensions' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByText('Symphony workflow orchestration').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await expect(page.getByRole('region', { name: 'Symphony task board' })).toHaveCount(0);
+    await page.screenshot({ path: marketplaceOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Review', exact: true }).click();
     const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });
     await expect(reviewPanel).toBeVisible({ timeout: shellTimeoutMs });
@@ -174,6 +199,7 @@ async function main() {
     await expect(reviewPanel).toContainText('Reviewer follow-up', { timeout: shellTimeoutMs });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
+    console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {

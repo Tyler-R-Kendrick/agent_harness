@@ -1,7 +1,7 @@
 {
-  "name": "@agent-harness/ext-workflow-canvas",
+  "name": "@agent-harness/ext-artifacts",
   "version": "0.1.0",
-  "description": "Optional Agent Harness plugin for CNCF Serverless Workflow canvas orchestration.",
+  "description": "Default Agent Harness plugin for Claude-style artifacts.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -19,9 +19,9 @@
   "scripts": {
     "lint": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json --noEmit",
-    "test": "node ../../scripts/run-package-bin.mjs vitest run",
-    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
-    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+    "test": "node ../../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../../scripts/run-package-bin.mjs vitest run --coverage"
   },
   "peerDependencies": {
     "harness-core": "0.1.0"

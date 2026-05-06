@@ -85,31 +85,31 @@ export default defineConfig({
       },
       {
         find: '@agent-harness/ext-agent-skills',
-        replacement: path.resolve(__dirname, '../ext/agent-skills/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/harness/agent-skills/src/index.ts'),
       },
       {
         find: '@agent-harness/ext-agents-md',
-        replacement: path.resolve(__dirname, '../ext/agents-md/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/harness/agents-md/src/index.ts'),
       },
       {
         find: '@agent-harness/ext-artifacts',
-        replacement: path.resolve(__dirname, '../ext/artifacts/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/ide/artifacts/src/index.ts'),
       },
       {
         find: '@agent-harness/ext-design-md',
-        replacement: path.resolve(__dirname, '../ext/design-md/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/ide/design-md/src/index.ts'),
       },
       {
         find: '@agent-harness/ext-symphony',
-        replacement: path.resolve(__dirname, '../ext/symphony/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/runtime/symphony/src/index.ts'),
       },
       {
         find: '@agent-harness/ext-workflow-canvas',
-        replacement: path.resolve(__dirname, '../ext/workflow-canvas/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/ide/workflow-canvas/src/index.ts'),
       },
       {
         find: '@agent-harness/ext-local-model-connector',
-        replacement: path.resolve(__dirname, '../ext/local-model-connector/src/index.ts'),
+        replacement: path.resolve(__dirname, '../ext/provider/local-model-connector/src/index.ts'),
       },
       {
         find: 'ralph-loop',

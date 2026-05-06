@@ -11,12 +11,16 @@
       "name": "Agent skills",
       "version": "0.1.0",
       "description": "Loads selected .agents/skills/*/SKILL.md files as optional tools and commands.",
-      "manifest": "./agent-skills/agent-harness.plugin.json",
+      "manifest": "./harness/agent-skills/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./agent-skills"
+        "path": "./harness/agent-skills"
       },
-      "categories": ["workspace-context"],
+      "categories": ["harness-extension", "workspace-context"],
+      "metadata": {
+        "marketplaceCategory": "harness",
+        "installSurface": "virtual-fs"
+      },
       "keywords": ["skills", "agent-skills"]
     },
     {
@@ -24,12 +28,16 @@
       "name": "AGENTS.md workspace instructions",
       "version": "0.1.0",
       "description": "Loads selected AGENTS.md files as optional prompt-context hooks.",
-      "manifest": "./agents-md/agent-harness.plugin.json",
+      "manifest": "./harness/agents-md/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./agents-md"
+        "path": "./harness/agents-md"
       },
-      "categories": ["workspace-context"],
+      "categories": ["harness-extension", "workspace-context"],
+      "metadata": {
+        "marketplaceCategory": "harness",
+        "installSurface": "virtual-fs"
+      },
       "keywords": ["agents-md", "instructions"]
     },
     {
@@ -37,12 +45,16 @@
       "name": "DESIGN.md design tokens",
       "version": "0.1.0",
       "description": "Loads selected DESIGN.md files as optional design guidance and code-substitution assets.",
-      "manifest": "./design-md/agent-harness.plugin.json",
+      "manifest": "./ide/design-md/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./design-md"
+        "path": "./ide/design-md"
       },
-      "categories": ["design", "workspace-context"],
+      "categories": ["ide-extension", "design", "workspace-context"],
+      "metadata": {
+        "marketplaceCategory": "ide",
+        "activityIcon": "slidersHorizontal"
+      },
       "keywords": ["design-md", "tokens", "css"]
     },
     {
@@ -50,12 +62,16 @@
       "name": "Symphony workflow orchestration",
       "version": "0.1.0",
       "description": "Loads WORKFLOW.md assets and optional Symphony orchestration examples as a runtime extension.",
-      "manifest": "./symphony/agent-harness.plugin.json",
+      "manifest": "./runtime/symphony/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./symphony"
+        "path": "./runtime/symphony"
       },
-      "categories": ["workflow", "workspace-context"],
+      "categories": ["runtime-extension", "workflow", "workspace-context"],
+      "metadata": {
+        "marketplaceCategory": "runtime",
+        "runtimeEvents": ["llm", "agent", "tool"]
+      },
       "keywords": ["symphony", "workflow-md", "orchestration"]
     },
     {
@@ -63,12 +79,16 @@
       "name": "Workflow canvas orchestration",
       "version": "0.1.0",
       "description": "Creates CNCF Serverless Workflow-backed canvas artifacts for n8n-class automation and Higgsfield-style creative pipelines.",
-      "manifest": "./workflow-canvas/agent-harness.plugin.json",
+      "manifest": "./ide/workflow-canvas/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./workflow-canvas"
+        "path": "./ide/workflow-canvas"
       },
-      "categories": ["workflow", "automation", "creative-canvas"],
+      "categories": ["ide-extension", "workflow", "automation", "creative-canvas"],
+      "metadata": {
+        "marketplaceCategory": "ide",
+        "activityIcon": "panes"
+      },
       "keywords": ["cncf", "serverless-workflow", "n8n", "higgsfield", "canvas", "orchestration"]
     },
     {
@@ -76,12 +96,16 @@
       "name": "Artifacts",
       "version": "0.1.0",
       "description": "Adds Claude-style artifacts as standalone, versioned, downloadable context objects.",
-      "manifest": "./artifacts/agent-harness.plugin.json",
+      "manifest": "./ide/artifacts/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./artifacts"
+        "path": "./ide/artifacts"
       },
-      "categories": ["workspace-context", "artifacts"],
+      "categories": ["ide-extension", "workspace-context", "artifacts"],
+      "metadata": {
+        "marketplaceCategory": "ide",
+        "activityIcon": "layers"
+      },
       "keywords": ["artifacts", "claude-artifacts", "downloads"]
     },
     {
@@ -141,12 +165,16 @@
       "name": "Local Model Connector",
       "version": "0.1.0",
       "description": "Downloadable Chrome/Edge extension that brokers approved PWA requests to localhost OpenAI-compatible model endpoints.",
-      "manifest": "./local-model-connector/agent-harness.plugin.json",
+      "manifest": "./provider/local-model-connector/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./local-model-connector/dist"
+        "path": "./provider/local-model-connector/dist"
       },
-      "categories": ["model-provider", "browser-extension"],
+      "categories": ["provider-extension", "model-provider", "browser-extension"],
+      "metadata": {
+        "marketplaceCategory": "provider",
+        "accountConfig": "local-model-connector"
+      },
       "keywords": ["local-models", "openai-compatible", "lm-studio", "ollama", "foundry-local", "chrome-extension"]
     },
     {
@@ -154,12 +182,16 @@
       "name": "Local Inference Daemon",
       "version": "0.1.0",
       "description": "Downloadable Deno background service for WebRTC or WebSocket access to loopback OpenAI-compatible local inference endpoints.",
-      "manifest": "./local-inference-daemon/agent-harness.plugin.json",
+      "manifest": "./daemon/local-inference-daemon/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./local-inference-daemon/dist"
+        "path": "./daemon/local-inference-daemon/dist"
       },
-      "categories": ["model-provider", "daemon", "windows-service", "deno"],
+      "categories": ["daemon-extension", "model-provider", "daemon", "windows-service", "deno"],
+      "metadata": {
+        "marketplaceCategory": "daemon",
+        "externalInstallDetection": "webrtc-peer"
+      },
       "keywords": ["local-models", "openai-compatible", "webrtc", "websocket", "deno", "background-service"]
     }
   ]

@@ -199,8 +199,15 @@ import {
 } from './services/workspaceFiles';
 import {
   DEFAULT_EXTENSION_MANIFESTS,
+  EXTENSION_MARKETPLACE_CATEGORIES,
+  EXTENSION_MARKETPLACE_CATEGORY_LABELS,
+  buildRuntimeExtensionPromptContext,
   createDefaultExtensionRuntime,
+  getExtensionMarketplaceCategory,
+  getInstalledDefaultExtensionDescriptors,
+  groupDefaultExtensionsByMarketplaceCategory,
   summarizeDefaultExtensionRuntime,
+  type DefaultExtensionDescriptor,
   type DefaultExtensionRuntime,
 } from './services/defaultExtensions';
 import {
@@ -208,7 +215,7 @@ import {
   resolveLocalInferenceDaemonDownload,
   type DaemonDownloadChoice,
 } from './services/windowsDaemonDownload';
-import { buildArtifactDriveNodes, buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import { buildArtifactDriveNodes, buildInstalledExtensionDriveNodes, buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import {
   buildArtifactPromptContext,
   createArtifact,
@@ -2113,13 +2120,18 @@ function ChatPanel({
     () => buildBrowserLocationPromptContext(browserLocationContext),
     [browserLocationContext],
   );
+  const runtimeExtensionPromptContext = useMemo(
+    () => buildRuntimeExtensionPromptContext(defaultExtensions),
+    [defaultExtensions],
+  );
   const workspacePromptContext = useMemo(
     () => [
       buildWorkspacePromptContext(workspaceFiles),
       artifactPromptContext,
       locationPromptContext,
+      runtimeExtensionPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [artifactPromptContext, locationPromptContext, workspaceFiles],
+    [artifactPromptContext, locationPromptContext, runtimeExtensionPromptContext, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -2180,6 +2192,7 @@ function ChatPanel({
     settings: benchmarkRoutingSettings,
   });
   const setSelectedToolIdsForActiveSession = useCallback((ids: string[]) => {
+    selectedToolIdsRef.current = ids;
     setSelectedToolIdsBySession((current) => ({ ...current, [activeChatSessionId]: ids }));
   }, [activeChatSessionId]);
   const activeActivitySelection = activeActivityBySession[activeChatSessionId] ?? null;
@@ -2272,7 +2285,7 @@ function ChatPanel({
     activeSessionIdRef.current = activeSessionId;
   }, [activeSessionId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     selectedToolIdsRef.current = selectedToolIds;
   }, [selectedToolIds]);
 
@@ -5489,6 +5502,7 @@ function ModelCard({ model, isInstalled, isLoading, onInstall, onDelete }: { mod
       {isInstalled ? (
         <div className="model-card-actions">
           <StatusIndicator active label={`${model.name} installed`} />
+          <span className="sr-only">Installed</span>
           {onDelete && (
             <button
               type="button"
@@ -5511,6 +5525,7 @@ function ModelCard({ model, isInstalled, isLoading, onInstall, onDelete }: { mod
           disabled={isLoading}
         >
           <Icon name={isLoading ? 'loader' : 'download'} size={13} className={isLoading ? 'spin' : ''} />
+          <span className="sr-only">{isLoading ? 'Loading…' : 'Load'}</span>
         </button>
       )}
     </div>
@@ -6585,7 +6600,15 @@ function HistoryPanel() {
   );
 }
 
-function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
+function isIconName(value: unknown): value is keyof typeof icons {
+  return typeof value === 'string' && value in icons;
+}
+
+function getDefaultExtensionIcon(extension: DefaultExtensionDescriptor | string): keyof typeof icons {
+  const extensionId = typeof extension === 'string' ? extension : extension.manifest.id;
+  if (typeof extension !== 'string' && isIconName(extension.marketplace.metadata?.activityIcon)) {
+    return extension.marketplace.metadata.activityIcon;
+  }
   if (extensionId.endsWith('.agent-skills')) return 'sparkles';
   if (extensionId.endsWith('.agents-md')) return 'file';
   if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
@@ -6594,6 +6617,13 @@ function getDefaultExtensionIcon(extensionId: string): keyof typeof icons {
   if (extensionId.endsWith('.local-model-connector')) return 'cpu';
   if (extensionId.endsWith('.local-inference-daemon')) return 'terminal';
   return 'puzzle';
+}
+
+function getDefaultExtensionSourceLabel(extension: DefaultExtensionDescriptor): string {
+  return extension.marketplace.source.path
+    ?? extension.manifest.entrypoint?.module
+    ?? extension.marketplace.source.package
+    ?? extension.marketplace.id;
 }
 
 function getDefaultExtensionDownload(
@@ -6610,6 +6640,22 @@ function getDefaultExtensionDownload(
   return { href: `/downloads/${fileName}`, fileName, label: 'Download package' };
 }
 
+function useResolvedDaemonDownloadChoice(): DaemonDownloadChoice {
+  const [daemonDownload, setDaemonDownload] = useState<DaemonDownloadChoice>(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
+
+  useEffect(() => {
+    let active = true;
+    resolveLocalInferenceDaemonDownload(window.navigator).then((download) => {
+      if (active) setDaemonDownload(download);
+    }).catch(() => {
+      if (active) setDaemonDownload(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
+    });
+    return () => { active = false; };
+  }, []);
+
+  return daemonDownload;
+}
+
 function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
   try {
     const manifest = JSON.parse(plugin.content) as Record<string, unknown>;
@@ -6622,103 +6668,181 @@ function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; d
   }
 }
 
-function ExtensionsPanel({
-  workspaceName,
-  capabilities,
+function MarketplaceExtensionCard({
+  extension,
+  installedExtensionIdSet,
+  daemonDownload,
+  onInstallExtension,
+}: {
+  extension: DefaultExtensionDescriptor;
+  installedExtensionIdSet: Set<string>;
+  daemonDownload: DaemonDownloadChoice;
+  onInstallExtension: (extensionId: string) => void;
+}) {
+  const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
+  const category = getExtensionMarketplaceCategory(extension);
+  const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
+
+  return (
+    <article className={`marketplace-card marketplace-card--${category}`}>
+      <div className="marketplace-card-icon">
+        <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
+      </div>
+      <div className="marketplace-card-body">
+        <strong>{extension.manifest.name}</strong>
+        <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
+        <p className="marketplace-card-desc">{extension.manifest.description}</p>
+        <div className="marketplace-card-meta">
+          <span>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
+          {category === 'daemon' ? <span>WebRTC peer detection</span> : null}
+          {category === 'provider' ? <span>Account configurable</span> : null}
+        </div>
+      </div>
+      {download ? (
+        <a
+          className="sidebar-icon-button marketplace-action marketplace-download-link"
+          href={download.href}
+          download={download.fileName}
+          aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
+          title={`Download ${extension.manifest.name}`}
+        >
+          <Icon name="download" size={13} />
+        </a>
+      ) : (
+        <button
+          type="button"
+          className="sidebar-icon-button marketplace-action"
+          disabled={isInstalled}
+          aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+          title={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
+          onClick={() => onInstallExtension(extension.manifest.id)}
+        >
+          <Icon name={isInstalled ? 'save' : 'plus'} size={13} />
+        </button>
+      )}
+    </article>
+  );
+}
+
+function MarketplacePanel({
   defaultExtensions,
   installedExtensionIds,
   onInstallExtension,
 }: {
-  workspaceName: string;
-  capabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
   installedExtensionIds: string[];
   onInstallExtension: (extensionId: string) => void;
 }) {
   const [search, setSearch] = useState('');
-  const [daemonDownload, setDaemonDownload] = useState<DaemonDownloadChoice>(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
+  const daemonDownload = useResolvedDaemonDownloadChoice();
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
-  const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const installedExtensionIdSet = new Set(defaultExtensions?.installedExtensionIds ?? installedExtensionIds);
-
-  useEffect(() => {
-    let active = true;
-    resolveLocalInferenceDaemonDownload(window.navigator).then((download) => {
-      if (active) setDaemonDownload(download);
-    }).catch(() => {
-      if (active) setDaemonDownload(PORTABLE_DAEMON_SOURCE_DOWNLOAD);
-    });
-    return () => { active = false; };
-  }, []);
-
-  const filtered = repoExtensions.filter((extension) => {
+  const filtered = useMemo(() => repoExtensions.filter((extension) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return [
       extension.manifest.name,
       extension.manifest.description,
-      extension.marketplace.source.path ?? '',
+      getDefaultExtensionSourceLabel(extension),
+      EXTENSION_MARKETPLACE_CATEGORY_LABELS[getExtensionMarketplaceCategory(extension)],
       ...(extension.marketplace.categories ?? []),
       ...(extension.marketplace.keywords ?? []),
     ].some((value) => value.toLowerCase().includes(q));
-  });
+  }), [repoExtensions, search]);
+  const groups = useMemo(() => groupDefaultExtensionsByMarketplaceCategory(filtered), [filtered]);
 
   return (
-    <section className="panel-scroll extensions-panel" aria-label="Extensions">
-      <div className="panel-topbar extensions-topbar">
-        <h2>Extensions</h2>
+    <section className="panel-scroll marketplace-panel" aria-label="Extension marketplace">
+      <div className="panel-topbar marketplace-topbar">
+        <div>
+          <h2>Marketplace</h2>
+          <p className="muted">{filtered.length} extensions</p>
+        </div>
       </div>
-      <div className="extensions-search shared-input-shell">
+      <label className="extensions-search shared-input-shell marketplace-search">
         <Icon name="search" size={13} color="#7d8594" />
-        <input aria-label="Search extensions" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter extensions" />
+        <input aria-label="Search marketplace" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter marketplace" />
+      </label>
+      <div className="marketplace-category-list">
+        {EXTENSION_MARKETPLACE_CATEGORIES.map((category) => {
+          const extensions = groups[category];
+          return (
+            <section key={category} className="marketplace-category-section" aria-labelledby={`marketplace-${category}-heading`}>
+              <div className="marketplace-category-heading">
+                <h3 id={`marketplace-${category}-heading`}>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</h3>
+                <span className="badge">{extensions.length}</span>
+              </div>
+              <div className="extensions-list marketplace-category-grid">
+                {extensions.map((extension) => (
+                  <MarketplaceExtensionCard
+                    key={extension.manifest.id}
+                    extension={extension}
+                    installedExtensionIdSet={installedExtensionIdSet}
+                    daemonDownload={daemonDownload}
+                    onInstallExtension={onInstallExtension}
+                  />
+                ))}
+                {extensions.length === 0 ? <p className="muted marketplace-empty">No matches in this category.</p> : null}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ExtensionsPanel({
+  workspaceName,
+  capabilities,
+  defaultExtensions,
+  installedExtensionIds,
+}: {
+  workspaceName: string;
+  capabilities: WorkspaceCapabilities;
+  defaultExtensions: DefaultExtensionRuntime | null;
+  installedExtensionIds: string[];
+}) {
+  const installedExtensions = getInstalledDefaultExtensionDescriptors(defaultExtensions, installedExtensionIds);
+  const installedByCategory = groupDefaultExtensionsByMarketplaceCategory(installedExtensions);
+
+  return (
+    <section className="panel-scroll extensions-panel" aria-label="Installed extensions">
+      <div className="panel-topbar extensions-topbar">
+        <div>
+          <h2>Installed extensions</h2>
+          <p className="muted">{installedExtensions.length} installed</p>
+        </div>
       </div>
       <SidebarSection
-        title={`Marketplace (${filtered.length})`}
-        summary={`${defaultExtensionSummary.pluginCount} installed`}
+        title="Installed extensions"
+        summary={`${installedExtensions.length} installed`}
         scrollBody
       >
         <div className="extensions-list">
-          {filtered.map((extension) => {
-            const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
-            const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
+          {installedExtensions.length === 0 ? <p className="muted extension-empty-state">No installed extensions</p> : null}
+          {EXTENSION_MARKETPLACE_CATEGORIES.map((category) => {
+            const extensions = installedByCategory[category];
+            if (!extensions.length) return null;
             return (
-              <article key={extension.manifest.id} className="marketplace-card">
-                <div className="marketplace-card-icon">
-                  <Icon name={getDefaultExtensionIcon(extension.manifest.id)} color="currentColor" />
-                </div>
-                <div className="marketplace-card-body">
-                  <strong>{extension.manifest.name}</strong>
-                  <span className="marketplace-card-author">
-                    {extension.marketplace.source.path ?? extension.manifest.entrypoint?.module ?? extension.marketplace.source.package ?? extension.marketplace.id}
-                  </span>
-                  <p className="marketplace-card-desc">{extension.manifest.description}</p>
-                </div>
-                {download ? (
-                  <a
-                    className="sidebar-icon-button marketplace-action marketplace-download-link"
-                    href={download.href}
-                    download={download.fileName}
-                    aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
-                    title={`Download ${extension.manifest.name}`}
-                  >
-                    <Icon name="download" size={13} />
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    className="sidebar-icon-button marketplace-action"
-                    disabled={isInstalled}
-                    aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-                    title={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-                    onClick={() => onInstallExtension(extension.manifest.id)}
-                  >
-                    <Icon name={isInstalled ? 'save' : 'plus'} size={13} />
-                  </button>
-                )}
-              </article>
+              <div key={category} className="installed-extension-group">
+                <span className="extension-group-label">{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
+                {extensions.map((extension) => (
+                  <article key={extension.manifest.id} className="marketplace-card installed-extension-card">
+                    <div className="marketplace-card-icon">
+                      <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
+                    </div>
+                    <div className="marketplace-card-body">
+                      <strong>{extension.manifest.name}</strong>
+                      <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
+                      <p className="marketplace-card-desc">{extension.manifest.description}</p>
+                    </div>
+                    <span className="badge connected">Installed</span>
+                  </article>
+                ))}
+              </div>
             );
           })}
-          {filtered.length === 0 && <p className="muted">No extensions match your search.</p>}
         </div>
       </SidebarSection>
       {capabilities.plugins.length > 0 && (
@@ -6740,6 +6864,45 @@ function ExtensionsPanel({
           </div>
         </SidebarSection>
       )}
+    </section>
+  );
+}
+
+function AccountPanel({
+  defaultExtensions,
+}: {
+  defaultExtensions: DefaultExtensionRuntime | null;
+}) {
+  const providerExtensions = (defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS)
+    .filter((extension) => getExtensionMarketplaceCategory(extension) === 'provider');
+
+  return (
+    <section className="panel-scroll account-panel" aria-label="Account">
+      <div className="panel-topbar">
+        <div className="settings-heading">
+          <h2>Account</h2>
+          <p className="muted">Provider access and account-scoped extension configuration.</p>
+        </div>
+      </div>
+
+      <SettingsSection title="Provider extensions" scrollBody>
+        <div className="provider-list">
+          {providerExtensions.map((extension) => (
+            <article key={extension.manifest.id} className="provider-card">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{extension.manifest.name}</strong>
+                  <p>{extension.manifest.description}</p>
+                </div>
+                <span className="badge">Provider</span>
+              </div>
+              {extension.manifest.id === 'agent-harness.ext.local-model-connector' ? (
+                <LocalModelSettings />
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </SettingsSection>
     </section>
   );
 }
@@ -8201,6 +8364,14 @@ function AgentBrowserApp() {
     : null;
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
+  const installedDefaultExtensions = useMemo(
+    () => getInstalledDefaultExtensionDescriptors(defaultExtensionRuntime, installedDefaultExtensionIds),
+    [defaultExtensionRuntime, installedDefaultExtensionIds],
+  );
+  const installedIdeExtensions = useMemo(
+    () => installedDefaultExtensions.filter((extension) => getExtensionMarketplaceCategory(extension) === 'ide'),
+    [installedDefaultExtensions],
+  );
   const installDefaultExtension = useCallback((extensionId: string) => {
     setInstalledDefaultExtensionIds((current) => (
       current.includes(extensionId) ? current : [...current, extensionId]
@@ -8289,12 +8460,13 @@ function AgentBrowserApp() {
     [restoreActiveHarnessSpec],
   );
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
+  const hasActiveRenderPane = Boolean(editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
+  const shouldRenderDashboard = activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane;
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
-    const hasActiveRenderPane = Boolean(editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
 
-    if (activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane) {
+    if (shouldRenderDashboard) {
       panes.push({
         id: `dashboard:${activeWorkspaceId}`,
         paneType: 'dashboard',
@@ -8328,16 +8500,6 @@ function AgentBrowserApp() {
       });
     }
 
-    for (const tab of openBrowserTabs) {
-      panes.push({
-        id: `browser:${tab.id}`,
-        paneType: 'browser-page',
-        itemId: tab.id,
-        label: tab.name,
-        url: tab.url ?? '',
-      });
-    }
-
     for (const sessionId of activeSessionIds) {
       const summary = activeWorkspaceSessions.find((session) => session.id === sessionId);
       panes.push({
@@ -8345,6 +8507,16 @@ function AgentBrowserApp() {
         paneType: 'session',
         itemId: sessionId,
         label: summary?.name ?? sessionId,
+      });
+    }
+
+    for (const tab of openBrowserTabs) {
+      panes.push({
+        id: `browser:${tab.id}`,
+        paneType: 'browser-page',
+        itemId: tab.id,
+        label: tab.name,
+        url: tab.url ?? '',
       });
     }
 
@@ -8356,10 +8528,11 @@ function AgentBrowserApp() {
     activeWorkspace.name,
     activeWorkspaceSessions,
     activeWorkspaceId,
-    activeWorkspaceViewState.dashboardOpen,
     activeWorkspaceViewState.panelOrder,
     editingFile,
     openBrowserTabs,
+    activeWorkspaceViewState.dashboardOpen,
+    shouldRenderDashboard,
   ]);
   const activeClipboardEntries = useMemo<WorkspaceMcpClipboardEntry[]>(() => clipboardHistory.map((entry, index) => ({
     id: entry.id,
@@ -8532,7 +8705,21 @@ function AgentBrowserApp() {
       const updated = workspaces.map((ws) => {
         if (ws.type !== 'workspace') return ws;
         const normalizedWorkspace = ensureWorkspaceCategories(ws);
+        const expandedGeneratedNodeIds = new Set<string>();
+        const rememberExpandedNodes = (nodes: TreeNode[] | undefined) => {
+          for (const node of nodes ?? []) {
+            if (node.expanded) expandedGeneratedNodeIds.add(node.id);
+            rememberExpandedNodes(node.children);
+          }
+        };
+        const restoreExpandedNodes = (nodes: TreeNode[]): TreeNode[] => nodes.map((node) => ({
+          ...node,
+          expanded: node.expanded || expandedGeneratedNodeIds.has(node.id),
+          ...(node.children ? { children: restoreExpandedNodes(node.children) } : {}),
+        }));
+        rememberExpandedNodes(getWorkspaceCategory(normalizedWorkspace, 'files')?.children);
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
+        const extensionNodes = buildInstalledExtensionDriveNodes(`extensions:${ws.id}`, installedDefaultExtensions);
         const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
         const artifactNodes = buildArtifactDriveNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? []);
         const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
@@ -8549,13 +8736,13 @@ function AgentBrowserApp() {
             children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? [], terminalFsFileContentsBySession[terminalNode.id]),
           }));
         const nextChildren = (normalizedWorkspace.children ?? []).map((child) => child.nodeKind === 'files'
-          ? { ...child, children: [...artifactNodes, ...fileNodes, ...terminalFsNodes] }
+          ? { ...child, children: restoreExpandedNodes([...extensionNodes, ...artifactNodes, ...fileNodes, ...terminalFsNodes]) }
           : child);
         return { ...normalizedWorkspace, children: nextChildren };
       });
       return { ...current, children: updated };
     });
-  }, [artifactsByWorkspace, terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
+  }, [artifactsByWorkspace, installedDefaultExtensions, terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
 
   // ── System clipboard detection ────────────────────────────────────────────
   useEffect(() => {
@@ -8758,7 +8945,7 @@ function AgentBrowserApp() {
         [workspaceId]: {
           ...existing,
           activeSessionIds: shouldOpen && newSessionId
-            ? [...(existing.activeSessionIds ?? []).filter((id) => id !== newSessionId), newSessionId]
+            ? [newSessionId]
             : existing.activeSessionIds ?? [],
           mountedSessionFsIds: newSessionId && !existing.mountedSessionFsIds.includes(newSessionId)
             ? [...existing.mountedSessionFsIds, newSessionId]
@@ -10060,6 +10247,10 @@ function AgentBrowserApp() {
     const toggleId = (ids: string[]) => ids.includes(nodeId)
       ? ids.filter((id) => id !== nodeId)
       : [...ids, nodeId];
+    const toggleSessionId = (ids: string[]) => {
+      if (!ids.includes(nodeId)) return [...ids, nodeId];
+      return ids.length > 1 ? ids.filter((id) => id !== nodeId) : ids;
+    };
     if ((node.nodeKind ?? 'browser') === 'browser') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
@@ -10075,7 +10266,18 @@ function AgentBrowserApp() {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
+        const activeSessionIds = toggleSessionId(currentIds);
+        return {
+          ...current,
+          [workspace.id]: {
+            ...existing,
+            activeSessionIds,
+            panelOrder: [
+              ...(existing.openTabIds ?? []).map((id) => `browser:${id}`),
+              ...activeSessionIds.map((id) => `session:${id}`),
+            ],
+          },
+        };
       });
       return;
     }
@@ -10083,14 +10285,36 @@ function AgentBrowserApp() {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
+        const activeSessionIds = toggleSessionId(currentIds);
+        return {
+          ...current,
+          [workspace.id]: {
+            ...existing,
+            activeSessionIds,
+            panelOrder: [
+              ...(existing.openTabIds ?? []).map((id) => `browser:${id}`),
+              ...activeSessionIds.map((id) => `session:${id}`),
+            ],
+          },
+        };
       });
     }
     if (node.nodeKind === 'session') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         const currentIds = existing.activeSessionIds ?? [];
-        return { ...current, [workspace.id]: { ...existing, activeSessionIds: toggleId(currentIds) } };
+        const activeSessionIds = toggleSessionId(currentIds);
+        return {
+          ...current,
+          [workspace.id]: {
+            ...existing,
+            activeSessionIds,
+            panelOrder: [
+              ...(existing.openTabIds ?? []).map((id) => `browser:${id}`),
+              ...activeSessionIds.map((id) => `session:${id}`),
+            ],
+          },
+        };
       });
     }
   }
@@ -11374,7 +11598,6 @@ function AgentBrowserApp() {
         capabilities={activeWorkspaceCapabilities}
         defaultExtensions={defaultExtensionRuntime}
         installedExtensionIds={installedDefaultExtensionIds}
-        onInstallExtension={installDefaultExtension}
       />
     );
     if (activePanel === 'models') return (
@@ -11418,7 +11641,7 @@ function AgentBrowserApp() {
         onSecretSettingsChange={updateSecretSettings}
       />
     );
-    return <section className="panel-scroll"><h2>Account</h2><p className="muted">Account policies and audit trails can live here.</p></section>;
+    return <AccountPanel defaultExtensions={defaultExtensionRuntime} />;
   }
 
   return (
@@ -11427,6 +11650,18 @@ function AgentBrowserApp() {
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
           {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+          {installedIdeExtensions.map((extension) => (
+            <button
+              key={extension.manifest.id}
+              type="button"
+              className="activity-button activity-button-extension"
+              onClick={() => switchSidebarPanel('extensions')}
+              aria-label={`${extension.manifest.name} extension`}
+              title={extension.manifest.name}
+            >
+              <Icon name={getDefaultExtensionIcon(extension)} size={16} color="#a7f3d0" />
+            </button>
+          ))}
         </div>
         <div className="activity-spacer" />
         <div className="activity-group">
@@ -11483,10 +11718,16 @@ function AgentBrowserApp() {
             </div>
           </header>
           {renderSidebar()}
-        </aside>
+      </aside>
       ) : null}
       <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
-        {(() => {
+        {activePanel === 'extensions' ? (
+          <MarketplacePanel
+            defaultExtensions={defaultExtensionRuntime}
+            installedExtensionIds={installedDefaultExtensionIds}
+            onInstallExtension={installDefaultExtension}
+          />
+        ) : (() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {
               const existing = current[activeWorkspaceId] ?? [];
@@ -11519,8 +11760,7 @@ function AgentBrowserApp() {
             },
           }));
           const panelEntries: Array<[string, Panel]> = [];
-          const hasActivePanel = Boolean(editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
-          if (activeWorkspaceViewState.dashboardOpen && !hasActivePanel) {
+          if (shouldRenderDashboard) {
             panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
           }
           if (editingFile) {
@@ -11533,8 +11773,8 @@ function AgentBrowserApp() {
             ]);
           }
           panelEntries.push(
-            ...openBrowserTabs.map((tab): [string, Panel] => [`browser:${tab.id}`, { type: 'browser', tab }]),
             ...activeSessionIds.map((id): [string, Panel] => [`session:${id}`, { type: 'session', id }]),
+            ...openBrowserTabs.map((tab): [string, Panel] => [`browser:${tab.id}`, { type: 'browser', tab }]),
           );
           const panelsById = new Map<string, Panel>(panelEntries);
           const allPanels: Panel[] = activeRenderPanes

@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": [
     "agent-browser",
-    "ext/*",
+    "ext/*/*",
     "harness-core",
     "lib/*"
   ],
@@ -30,10 +30,10 @@
     "marked": "18.0.2",
     "protobufjs": "^7.5.5",
     "@tootallnate/once": "3.0.1",
+    "ip-address": "10.2.0",
     "sqlite3": "6.0.1",
     "tar": "7.5.13",
     "undici": "7.25.0",
-    "ip-address": "10.2.0",
     "express-rate-limit": {
       "ip-address": "10.2.0"
     }

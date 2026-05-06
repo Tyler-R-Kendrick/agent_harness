@@ -6,7 +6,7 @@ on:
     paths:
       - .github/workflows/daemon-build.yml
       - agent-daemon/**
-      - ext/local-inference-daemon/**
+      - ext/daemon/local-inference-daemon/**
       - scripts/package-extension-downloads.mjs
       - package.json
       - package-lock.json
@@ -14,7 +14,7 @@ on:
     paths:
       - .github/workflows/daemon-build.yml
       - agent-daemon/**
-      - ext/local-inference-daemon/**
+      - ext/daemon/local-inference-daemon/**
       - scripts/package-extension-downloads.mjs
       - package.json
       - package-lock.json
