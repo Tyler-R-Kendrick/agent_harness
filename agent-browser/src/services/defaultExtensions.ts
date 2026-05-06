@@ -21,14 +21,6 @@ import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-
 import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
-import agentSkillsManifestSource from '../../../ext/agent-skills/agent-harness.plugin.json';
-import agentsMdManifestSource from '../../../ext/agents-md/agent-harness.plugin.json';
-import artifactsManifestSource from '../../../ext/artifacts/agent-harness.plugin.json';
-import designMdManifestSource from '../../../ext/design-md/agent-harness.plugin.json';
-import symphonyManifestSource from '../../../ext/symphony/agent-harness.plugin.json';
-import localModelConnectorManifestSource from '../../../ext/local-model-connector/agent-harness.plugin.json';
-import localInferenceDaemonManifestSource from '../../../ext/local-inference-daemon/agent-harness.plugin.json';
-import workflowCanvasManifestSource from '../../../ext/workflow-canvas/agent-harness.plugin.json';
 import { createGhcpModelProviderPlugin } from '../../../ext/ghcp-model-provider/src/index.ts';
 import ghcpModelProviderManifestSource from '../../../ext/ghcp-model-provider/agent-harness.plugin.json';
 import { createCursorModelProviderPlugin } from '../../../ext/cursor-model-provider/src/index.ts';
@@ -37,6 +29,14 @@ import { createCodexModelProviderPlugin } from '../../../ext/codex-model-provide
 import codexModelProviderManifestSource from '../../../ext/codex-model-provider/agent-harness.plugin.json';
 import { createCodiBrowserModelProviderPlugin } from '../../../ext/codi-browser-model-provider/src/index.ts';
 import codiBrowserModelProviderManifestSource from '../../../ext/codi-browser-model-provider/agent-harness.plugin.json';
+import localInferenceDaemonManifestSource from '../../../ext/daemon/local-inference-daemon/agent-harness.plugin.json';
+import agentSkillsManifestSource from '../../../ext/harness/agent-skills/agent-harness.plugin.json';
+import agentsMdManifestSource from '../../../ext/harness/agents-md/agent-harness.plugin.json';
+import artifactsManifestSource from '../../../ext/ide/artifacts/agent-harness.plugin.json';
+import designMdManifestSource from '../../../ext/ide/design-md/agent-harness.plugin.json';
+import workflowCanvasManifestSource from '../../../ext/ide/workflow-canvas/agent-harness.plugin.json';
+import localModelConnectorManifestSource from '../../../ext/provider/local-model-connector/agent-harness.plugin.json';
+import symphonyManifestSource from '../../../ext/runtime/symphony/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
   marketplace: HarnessPluginMarketplaceManifest['plugins'][number];
@@ -62,6 +62,24 @@ export interface DefaultExtensionRuntime {
 export interface CreateDefaultExtensionRuntimeOptions {
   installedExtensionIds?: readonly string[];
 }
+
+export type ExtensionMarketplaceCategory = 'ide' | 'harness' | 'daemon' | 'provider' | 'runtime';
+
+export const EXTENSION_MARKETPLACE_CATEGORIES: ExtensionMarketplaceCategory[] = [
+  'ide',
+  'harness',
+  'daemon',
+  'provider',
+  'runtime',
+];
+
+export const EXTENSION_MARKETPLACE_CATEGORY_LABELS: Record<ExtensionMarketplaceCategory, string> = {
+  ide: 'IDE extensions',
+  harness: 'Harness extensions',
+  daemon: 'Daemon extensions',
+  provider: 'Provider extensions',
+  runtime: 'Runtime extensions',
+};
 
 export const DEFAULT_EXTENSION_MARKETPLACE = parseHarnessPluginMarketplaceManifest(marketplaceManifestSource);
 export const DEFAULT_EXTENSION_MARKETPLACES: HarnessPluginMarketplaceManifest[] = [DEFAULT_EXTENSION_MARKETPLACE];
@@ -148,11 +166,72 @@ export function summarizeDefaultExtensionRuntime(runtime: DefaultExtensionRuntim
   };
 }
 
+export function getExtensionMarketplaceCategory(extension: DefaultExtensionDescriptor): ExtensionMarketplaceCategory {
+  const metadataCategory = extension.marketplace.metadata?.marketplaceCategory;
+  if (isExtensionMarketplaceCategory(metadataCategory)) return metadataCategory;
+
+  for (const category of extension.marketplace.categories ?? []) {
+    const normalized = category.replace(/-extension$/, '');
+    if (isExtensionMarketplaceCategory(normalized)) return normalized;
+  }
+
+  if (extension.manifest.capabilities?.some((capability) => capability.kind === 'model-provider')) return 'provider';
+  if (extension.manifest.assets?.some((asset) => asset.kind === 'runtime')) return 'daemon';
+  if (extension.manifest.events?.length || extension.manifest.capabilities?.some((capability) => capability.kind === 'event' || capability.kind === 'hook')) return 'runtime';
+  if (extension.manifest.renderers?.length || extension.manifest.paneItems?.length || extension.manifest.capabilities?.some((capability) => capability.kind === 'renderer' || capability.kind === 'pane-item' || capability.kind === 'artifact')) return 'ide';
+  return 'harness';
+}
+
+export function groupDefaultExtensionsByMarketplaceCategory(
+  extensions: readonly DefaultExtensionDescriptor[],
+): Record<ExtensionMarketplaceCategory, DefaultExtensionDescriptor[]> {
+  const groups: Record<ExtensionMarketplaceCategory, DefaultExtensionDescriptor[]> = {
+    ide: [],
+    harness: [],
+    daemon: [],
+    provider: [],
+    runtime: [],
+  };
+
+  for (const extension of extensions) {
+    groups[getExtensionMarketplaceCategory(extension)].push(extension);
+  }
+
+  return groups;
+}
+
+export function getInstalledDefaultExtensionDescriptors(
+  runtime: DefaultExtensionRuntime | null,
+  fallbackInstalledExtensionIds: readonly string[] = [],
+): DefaultExtensionDescriptor[] {
+  const installedIds = new Set(runtime?.installedExtensionIds ?? fallbackInstalledExtensionIds);
+  const extensions = runtime?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
+  return extensions.filter((extension) => installedIds.has(extension.manifest.id));
+}
+
+export function buildRuntimeExtensionPromptContext(runtime: DefaultExtensionRuntime | null): string | null {
+  const runtimeExtensions = getInstalledDefaultExtensionDescriptors(runtime)
+    .filter((extension) => getExtensionMarketplaceCategory(extension) === 'runtime');
+  if (!runtimeExtensions.length) return null;
+
+  const lines = runtimeExtensions.map((extension) => {
+    const eventNames = extension.manifest.events?.map((event) => `${event.type}:${event.name}`) ?? [];
+    const eventSummary = eventNames.length ? ` events ${eventNames.join(', ')}` : ' runtime hooks active';
+    return `- ${extension.manifest.name}: ${extension.manifest.description};${eventSummary}`;
+  });
+
+  return ['Runtime extensions integrated into this inference loop:', ...lines].join('\n');
+}
+
 function selectInstalledDefaultExtensionIds(installedExtensionIds: readonly string[]): string[] {
   const requested = new Set(installedExtensionIds);
   return DEFAULT_EXTENSION_MANIFESTS
     .map((extension) => extension.manifest.id)
     .filter((extensionId) => requested.has(extensionId));
+}
+
+function isExtensionMarketplaceCategory(value: unknown): value is ExtensionMarketplaceCategory {
+  return typeof value === 'string' && (EXTENSION_MARKETPLACE_CATEGORIES as string[]).includes(value);
 }
 
 function isHarnessPlugin(plugin: HarnessPlugin | undefined): plugin is HarnessPlugin {

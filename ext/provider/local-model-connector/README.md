@@ -23,7 +23,7 @@ npm --workspace @agent-harness/ext-local-model-connector run build
 The loadable extension is written to:
 
 ```text
-ext/local-model-connector/dist
+ext/provider/local-model-connector/dist
 ```
 
 Build the Agent Browser downloadable extension zip:
@@ -43,7 +43,7 @@ Load it in Chrome or Edge:
 1. Open `chrome://extensions` or `edge://extensions`.
 2. Enable Developer mode.
 3. Choose **Load unpacked**.
-4. Select `ext/local-model-connector/dist`.
+4. Select `ext/provider/local-model-connector/dist`.
 
 Configure allowed PWA origins at build time:
 

@@ -67,7 +67,7 @@ async function main() {
 
   const packageJson = await readScript('package.json');
   const rootPackage = JSON.parse(packageJson);
-  assert.ok(rootPackage.workspaces.includes('ext/*'));
+  assert.ok(rootPackage.workspaces.includes('ext/*/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
   assert.equal(rootPackage.scripts['build:extension-downloads'], 'node scripts/package-extension-downloads.mjs');
@@ -76,9 +76,9 @@ async function main() {
   assert.match(packageJson, /"verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
   assert.match(packageJson, /"check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
   for (const extensionPackagePath of [
-    'ext/agent-skills/package.json',
-    'ext/agents-md/package.json',
-    'ext/design-md/package.json',
+    'ext/harness/agent-skills/package.json',
+    'ext/harness/agents-md/package.json',
+    'ext/ide/design-md/package.json',
   ]) {
     const extensionPackage = JSON.parse(await readScript(extensionPackagePath));
     assert.equal(extensionPackage.scripts.lint, 'tsc -p tsconfig.json --noEmit');
@@ -129,7 +129,13 @@ async function main() {
   const rootNodeModules = path.join(lockfileFixture, 'node_modules');
   const workspaceNodeModules = path.join(lockfileFixture, 'agent-browser', 'node_modules');
   const harnessCoreNodeModules = path.join(lockfileFixture, 'harness-core', 'node_modules');
-  const extensionNodeModules = path.join(lockfileFixture, 'ext', 'local-model-connector', 'node_modules');
+  const extensionNodeModules = path.join(
+    lockfileFixture,
+    'ext',
+    'provider',
+    'local-model-connector',
+    'node_modules',
+  );
   await mkdir(path.dirname(workspaceLockfile), { recursive: true });
   await mkdir(rootNodeModules);
   await mkdir(workspaceNodeModules);
@@ -137,6 +143,9 @@ async function main() {
   await mkdir(extensionNodeModules, { recursive: true });
   await writeFile(rootLockfile, '{}');
   await writeFile(workspaceLockfile, '{}');
+  await writeJson(path.join(path.dirname(extensionNodeModules), 'package.json'), {
+    name: '@agent-harness/local-model-connector',
+  });
   await vercelInstall.removeCachedLockfiles(lockfileFixture);
   await assert.rejects(() => readFile(rootLockfile), { code: 'ENOENT' });
   await assert.rejects(() => readFile(workspaceLockfile), { code: 'ENOENT' });
@@ -160,7 +169,7 @@ async function main() {
   assert.deepEqual(extensionDownloadsPackager.buildDownloadPackages(repoRoot), [
     {
       name: 'local-model-connector-extension',
-      sourceDirectory: path.join(repoRoot, 'ext', 'local-model-connector', 'dist'),
+      sourceDirectory: path.join(repoRoot, 'ext', 'provider', 'local-model-connector', 'dist'),
       outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'local-model-connector-extension.zip'),
     },
     {
@@ -173,25 +182,32 @@ async function main() {
     {
       sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
       publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
-      extensionFile: path.join(repoRoot, 'ext', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      extensionFile: path.join(
+        repoRoot,
+        'ext',
+        'daemon',
+        'local-inference-daemon',
+        'dist',
+        'agent-harness-local-inference-daemon-windows-x64.exe',
+      ),
     },
   ]);
   assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');
   const extensionFixture = await mkdtemp(path.join(tmpdir(), 'extension-workspaces-'));
-  await mkdir(path.join(extensionFixture, 'ext', 'alpha'), { recursive: true });
-  await mkdir(path.join(extensionFixture, 'ext', 'not-a-package'), { recursive: true });
-  await mkdir(path.join(extensionFixture, 'ext', 'beta'), { recursive: true });
-  await writeJson(path.join(extensionFixture, 'ext', 'alpha', 'package.json'), {
+  await mkdir(path.join(extensionFixture, 'ext', 'ide', 'alpha'), { recursive: true });
+  await mkdir(path.join(extensionFixture, 'ext', 'ide', 'not-a-package'), { recursive: true });
+  await mkdir(path.join(extensionFixture, 'ext', 'runtime', 'beta'), { recursive: true });
+  await writeJson(path.join(extensionFixture, 'ext', 'ide', 'alpha', 'package.json'), {
     name: '@agent-harness/ext-alpha',
     scripts: { test: 'vitest run' },
   });
-  await writeJson(path.join(extensionFixture, 'ext', 'beta', 'package.json'), {
+  await writeJson(path.join(extensionFixture, 'ext', 'runtime', 'beta', 'package.json'), {
     name: '@agent-harness/ext-beta',
     scripts: { test: 'vitest run' },
   });
   assert.deepEqual(await extensionRunner.discoverExtensionWorkspaces(extensionFixture), [
-    { name: '@agent-harness/ext-alpha', directory: path.join(extensionFixture, 'ext', 'alpha') },
-    { name: '@agent-harness/ext-beta', directory: path.join(extensionFixture, 'ext', 'beta') },
+    { name: '@agent-harness/ext-alpha', directory: path.join(extensionFixture, 'ext', 'ide', 'alpha') },
+    { name: '@agent-harness/ext-beta', directory: path.join(extensionFixture, 'ext', 'runtime', 'beta') },
   ]);
   assert.deepEqual(extensionRunner.buildWorkspaceScriptArgs('@agent-harness/ext-alpha', 'test:coverage'), [
     '--workspace',

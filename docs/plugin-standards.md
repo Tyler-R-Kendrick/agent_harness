@@ -9,7 +9,7 @@ DESIGN.md. Those features live in optional plugin projects under `ext/`.
 Each plugin package owns this shape:
 
 ```text
-ext/<plugin-name>/
+ext/<marketplace-category>/<plugin-name>/
   agent-harness.plugin.json
   package.json
   README.md
@@ -20,8 +20,9 @@ ext/<plugin-name>/
     ...
 ```
 
-The root `package.json` workspaces do not include `ext/*`. This keeps examples
-out of the project build while preserving them as installable runtime assets.
+The root `package.json` workspaces include `ext/*/*` so bundled extension
+packages can live under marketplace categories while staying installable runtime
+assets.
 
 ## Plugin manifest
 
@@ -61,8 +62,8 @@ manifests:
     "name": "Example plugin",
     "version": "0.1.0",
     "description": "Registers one optional harness feature.",
-    "manifest": "./example/agent-harness.plugin.json",
-    "source": { "type": "local", "path": "./example" },
+    "manifest": "./harness/example/agent-harness.plugin.json",
+    "source": { "type": "local", "path": "./harness/example" },
     "default": true
   }]
 }
@@ -152,8 +153,8 @@ plugin id to avoid collisions.
 
 ## Current example plugins
 
-- `ext/agent-skills`: optional `.agents/skills/*/SKILL.md` loader.
-- `ext/agents-md`: optional `AGENTS.md` prompt-context loader.
-- `ext/design-md`: optional `DESIGN.md` guidance and token tooling.
-- `ext/symphony`: default `WORKFLOW.md` prompt-context loader with optional
+- `ext/harness/agent-skills`: optional `.agents/skills/*/SKILL.md` loader.
+- `ext/harness/agents-md`: optional `AGENTS.md` prompt-context loader.
+- `ext/ide/design-md`: optional `DESIGN.md` guidance and token tooling.
+- `ext/runtime/symphony`: default `WORKFLOW.md` prompt-context loader with optional
   Symphony orchestration examples.

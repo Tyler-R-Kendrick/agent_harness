@@ -128,17 +128,19 @@ describe('workspaceTree', () => {
     expect(workspaceViewStateEquals(left, { ...left, panelOrder: [] })).toBe(false);
   });
 
-  it('opens the dashboard by default for new workspace view entries', () => {
+  it('opens the dashboard while mounting the first session filesystem by default', () => {
     const workspace = createWorkspaceNode({
       id: 'ws-dashboard',
       name: 'Dashboard',
       color: '#fff',
       browserTabs: [],
     });
+    const firstSessionId = getWorkspaceCategory(workspace, 'session')?.children?.[0]?.id;
 
     expect(createWorkspaceViewEntry(workspace)).toEqual(expect.objectContaining({
       dashboardOpen: true,
       activeSessionIds: [],
+      mountedSessionFsIds: [firstSessionId],
     }));
   });
 });
