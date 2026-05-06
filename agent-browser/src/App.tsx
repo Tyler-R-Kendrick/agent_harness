@@ -94,6 +94,7 @@ import {
   resolveRuntimeAgentProvider,
   streamAgentChat,
   type AgentProvider,
+  type ModelBackedAgentProvider,
 } from './chat-agents';
 import { formatToolArgs, summarizeToolCall, summarizeToolResult } from './chat-agents/toolCallSummary';
 import { useCopilotReadable } from './services/copilotRuntimeBridge';
@@ -138,6 +139,17 @@ import {
   isAdversaryToolReviewSettings,
   type AdversaryToolReviewSettings,
 } from './services/adversaryToolReview';
+import {
+  DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS,
+  buildPartnerAgentControlPlane,
+  buildPartnerAgentPromptContext,
+  createPartnerAgentAuditEntry,
+  isPartnerAgentControlPlaneSettings,
+  type PartnerAgentAuditEntry,
+  type PartnerAgentAuditLevel,
+  type PartnerAgentControlPlane,
+  type PartnerAgentControlPlaneSettings,
+} from './services/partnerAgentControlPlane';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import {
   assessLocalInferenceReadiness,
@@ -1941,6 +1953,25 @@ function getConfiguredBenchmarkIndexUrls(): string[] {
   return Array.from(new Set([...globalUrls, ...envUrls]));
 }
 
+function buildPartnerAgentModelRef(
+  provider: ModelBackedAgentProvider,
+  modelIds: {
+    codiModelId: string;
+    ghcpModelId: string;
+    cursorModelId: string;
+    codexModelId: string;
+  },
+): string {
+  const modelId = provider === 'codi'
+    ? modelIds.codiModelId
+    : provider === 'ghcp'
+      ? modelIds.ghcpModelId
+      : provider === 'cursor'
+        ? modelIds.cursorModelId
+        : modelIds.codexModelId;
+  return modelId ? `${provider}:${modelId}` : '';
+}
+
 function ChatPanel({
   installedModels,
   copilotState,
@@ -1975,6 +2006,8 @@ function ChatPanel({
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
   adversaryToolReviewSettings,
+  partnerAgentControlPlaneSettings,
+  onPartnerAgentAuditEntry,
   secretSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
@@ -2013,6 +2046,8 @@ function ChatPanel({
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
+  partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
+  onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
@@ -2177,6 +2212,36 @@ function ChatPanel({
   );
   const selectedToolIds = selectedToolIdsBySession[activeChatSessionId] ?? toolDescriptors.map((descriptor) => descriptor.id);
   const toolsEnabled = selectedToolIds.length > 0;
+  const selectedPartnerAgentModelRef = buildPartnerAgentModelRef(selectedRuntimeProvider, {
+    codiModelId: effectiveSelectedModelId,
+    ghcpModelId: effectiveSelectedCopilotModelId,
+    cursorModelId: effectiveSelectedCursorModelId,
+    codexModelId: effectiveSelectedCodexModelId,
+  });
+  const partnerAgentControlPlane = useMemo(
+    () => buildPartnerAgentControlPlane({
+      settings: partnerAgentControlPlaneSettings,
+      installedModels,
+      copilotState,
+      cursorState,
+      codexState,
+      selectedProvider,
+      runtimeProvider: selectedRuntimeProvider,
+      selectedModelRef: selectedPartnerAgentModelRef,
+      selectedToolIds,
+    }),
+    [
+      codexState,
+      copilotState,
+      cursorState,
+      installedModels,
+      partnerAgentControlPlaneSettings,
+      selectedPartnerAgentModelRef,
+      selectedProvider,
+      selectedRuntimeProvider,
+      selectedToolIds,
+    ],
+  );
   const compatibleBenchmarkRoutingCandidates = useMemo(
     () => selectCompatibleBenchmarkCandidates(selectedProvider, benchmarkRoutingCandidates),
     [benchmarkRoutingCandidates, selectedProvider],
@@ -2248,7 +2313,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -2823,6 +2888,34 @@ function ChatPanel({
       updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
+
+    const requestPartnerAgentControlPlane = buildPartnerAgentControlPlane({
+      settings: partnerAgentControlPlaneSettings,
+      installedModels,
+      copilotState,
+      cursorState,
+      codexState,
+      selectedProvider: providerForRequest,
+      runtimeProvider: runtimeProviderForRequest,
+      selectedModelRef: buildPartnerAgentModelRef(runtimeProviderForRequest, {
+        codiModelId: requestCodiModelId,
+        ghcpModelId: requestGhcpModelId,
+        cursorModelId: effectiveSelectedCursorModelId,
+        codexModelId: effectiveSelectedCodexModelId,
+      }),
+      selectedToolIds,
+    });
+    const requestPartnerAgentAuditEntry = createPartnerAgentAuditEntry({
+      controlPlane: requestPartnerAgentControlPlane,
+      sessionId: activeChatSessionId,
+    });
+    if (requestPartnerAgentControlPlane.settings.enabled) {
+      onPartnerAgentAuditEntry?.(requestPartnerAgentAuditEntry);
+    }
+    const requestWorkspacePromptContext = [
+      workspacePromptContext,
+      buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
+    ].filter((section): section is string => Boolean(section)).join('\n\n');
 
     if (toolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
       if (!activeSessionId) {
@@ -3962,25 +4055,25 @@ function ChatPanel({
         const toolInstructions = providerForRequest === 'researcher'
           ? buildResearcherToolInstructions({
             workspaceName,
-            workspacePromptContext,
+            workspacePromptContext: requestWorkspacePromptContext,
             descriptors: selectedDescriptors,
             selectedToolIds,
           })
           : providerForRequest === 'debugger'
             ? buildDebuggerToolInstructions({
               workspaceName,
-              workspacePromptContext,
+              workspacePromptContext: requestWorkspacePromptContext,
               descriptors: selectedDescriptors,
               selectedToolIds,
             })
           : providerForRequest === 'planner'
             ? buildPlannerToolInstructions({
               workspaceName,
-              workspacePromptContext,
+              workspacePromptContext: requestWorkspacePromptContext,
               descriptors: selectedDescriptors,
               selectedToolIds,
             })
-          : buildDefaultToolInstructions({ workspaceName, workspacePromptContext, selectedToolIds });
+          : buildDefaultToolInstructions({ workspaceName, workspacePromptContext: requestWorkspacePromptContext, selectedToolIds });
         const inputMessages: ModelMessage[] = nextMessages
           .filter((message) => message.id !== assistantId)
           .flatMap((message) => {
@@ -4890,7 +4983,7 @@ function ChatPanel({
         latestUserInput: text,
         messages: nextMessages,
         workspaceName,
-        workspacePromptContext,
+        workspacePromptContext: requestWorkspacePromptContext,
         voters: codiVoters,
         secretSettings,
       }, streamCallbacks, controller.signal);
@@ -4905,7 +4998,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, copilotState, cursorState, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onTerminalFsPathsChanged, onToast, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -5673,6 +5766,101 @@ function BenchmarkRoutingSettingsPanel({
   );
 }
 
+function PartnerAgentControlPlaneSettingsPanel({
+  settings,
+  controlPlane,
+  latestAuditEntry,
+  onChange,
+}: {
+  settings: PartnerAgentControlPlaneSettings;
+  controlPlane: PartnerAgentControlPlane;
+  latestAuditEntry: PartnerAgentAuditEntry | null;
+  onChange: (settings: PartnerAgentControlPlaneSettings) => void;
+}) {
+  function update<Key extends keyof PartnerAgentControlPlaneSettings>(
+    key: Key,
+    value: PartnerAgentControlPlaneSettings[Key],
+  ) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  return (
+    <SettingsSection title="Partner agent control plane" defaultOpen={false}>
+      <div className="partner-agent-control-plane">
+        <div className="partner-agent-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+              aria-label="Enable partner-agent control plane"
+            />
+            <span>Enable partner-agent control plane</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={settings.requirePolicyReview}
+              onChange={(event) => update('requirePolicyReview', event.target.checked)}
+              aria-label="Require partner-agent policy review"
+            />
+            <span>Require partner-agent policy review</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={settings.preserveEvidence}
+              onChange={(event) => update('preserveEvidence', event.target.checked)}
+              aria-label="Preserve partner-agent evidence"
+            />
+            <span>Preserve partner-agent evidence</span>
+          </label>
+          <label className="provider-command-field partner-agent-audit-select">
+            <span>Audit level</span>
+            <select
+              aria-label="Partner-agent audit level"
+              value={settings.auditLevel}
+              onChange={(event) => update('auditLevel', event.target.value as PartnerAgentAuditLevel)}
+            >
+              <option value="minimal">minimal</option>
+              <option value="standard">standard</option>
+              <option value="strict">strict</option>
+            </select>
+          </label>
+        </div>
+        <article className="provider-card partner-agent-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Unified workflow</strong>
+              <p>{controlPlane.readyAgentCount} of {controlPlane.agentRows.length} agents ready under one policy, review, and evidence model.</p>
+            </div>
+            <span className={`badge${settings.enabled ? ' connected' : ''}`}>{settings.enabled ? 'enabled' : 'off'}</span>
+          </div>
+          <div className="partner-agent-row-list" role="list" aria-label="Partner agent readiness">
+            {controlPlane.agentRows.map((row) => (
+              <div key={row.provider} className="partner-agent-row" role="listitem">
+                <span className={`status-dot ${row.ready ? 'ok' : 'warn'}`} aria-hidden="true" />
+                <div>
+                  <strong>{row.label}</strong>
+                  <small>{row.summary}</small>
+                </div>
+                <span className="badge">{row.kind}</span>
+              </div>
+            ))}
+          </div>
+          {latestAuditEntry ? (
+            <p className="partner-agent-audit-note">
+              Last audit: {latestAuditEntry.provider} via {latestAuditEntry.runtimeProvider} · {latestAuditEntry.policy.auditLevel}
+            </p>
+          ) : (
+            <p className="partner-agent-audit-note">No partner-agent audit entries captured this session.</p>
+          )}
+        </article>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function AdversaryToolReviewSettingsPanel({
   settings,
   onChange,
@@ -6219,8 +6407,12 @@ interface SettingsPanelProps {
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
+  partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
+  partnerAgentControlPlane: PartnerAgentControlPlane;
+  latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
+  onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
@@ -6520,8 +6712,12 @@ function SettingsPanel({
   benchmarkRoutingCandidates,
   benchmarkEvidenceState,
   adversaryToolReviewSettings,
+  partnerAgentControlPlaneSettings,
+  partnerAgentControlPlane,
+  latestPartnerAgentAuditEntry,
   onBenchmarkRoutingSettingsChange,
   onAdversaryToolReviewSettingsChange,
+  onPartnerAgentControlPlaneSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
   onSaveEvaluationAgents,
@@ -6548,6 +6744,13 @@ function SettingsPanel({
         candidates={benchmarkRoutingCandidates}
         evidenceState={benchmarkEvidenceState}
         onChange={onBenchmarkRoutingSettingsChange}
+      />
+
+      <PartnerAgentControlPlaneSettingsPanel
+        settings={partnerAgentControlPlaneSettings}
+        controlPlane={partnerAgentControlPlane}
+        latestAuditEntry={latestPartnerAgentAuditEntry}
+        onChange={onPartnerAgentControlPlaneSettingsChange}
       />
 
       <AdversaryToolReviewSettingsPanel
@@ -8104,6 +8307,13 @@ function AgentBrowserApp() {
     isAdversaryToolReviewSettings,
     DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
   );
+  const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.partnerAgentControlPlaneSettings,
+    isPartnerAgentControlPlaneSettings,
+    DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS,
+  );
+  const [latestPartnerAgentAuditEntry, setLatestPartnerAgentAuditEntry] = useState<PartnerAgentAuditEntry | null>(null);
   const [browserLocationContext, setBrowserLocationContext] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.locationContext,
@@ -8138,6 +8348,37 @@ function AgentBrowserApp() {
     () => mergeDiscoveredBenchmarkEvidence(benchmarkRoutingBaseCandidates, benchmarkEvidenceState.records),
     [benchmarkEvidenceState.records, benchmarkRoutingBaseCandidates],
   );
+  const settingsPartnerAgentControlPlane = useMemo(() => {
+    const selectedProvider = getDefaultAgentProvider({ installedModels, copilotState, cursorState });
+    const selectedIds = resolveAgentModelIds({
+      installedModels,
+      selectedCodiModelId: '',
+      copilotModels: copilotState.models,
+      selectedGhcpModelId: '',
+      cursorModels: cursorState.models,
+      selectedCursorModelId: '',
+      codexModels: codexState.models,
+      selectedCodexModelId: '',
+    });
+    const runtimeProvider = resolveRuntimeAgentProvider({
+      provider: selectedProvider,
+      hasCodiModelsReady: Boolean(selectedIds.codiModelId),
+      hasGhcpModelsReady: hasGhcpAccess(copilotState) && Boolean(selectedIds.ghcpModelId),
+      hasCursorModelsReady: hasCursorAccess(cursorState) && Boolean(selectedIds.cursorModelId),
+      hasCodexModelsReady: hasCodexAccess(codexState) && Boolean(selectedIds.codexModelId),
+    });
+    return buildPartnerAgentControlPlane({
+      settings: partnerAgentControlPlaneSettings,
+      installedModels,
+      copilotState,
+      cursorState,
+      codexState,
+      selectedProvider,
+      runtimeProvider,
+      selectedModelRef: buildPartnerAgentModelRef(runtimeProvider, selectedIds),
+      selectedToolIds: [],
+    });
+  }, [codexState, copilotState, cursorState, installedModels, partnerAgentControlPlaneSettings]);
   const benchmarkRoutingCandidateFingerprint = useMemo(
     () => benchmarkRoutingBaseCandidates.map((candidate) => candidate.ref).sort().join('|'),
     [benchmarkRoutingBaseCandidates],
@@ -11627,8 +11868,12 @@ function AgentBrowserApp() {
         benchmarkRoutingCandidates={benchmarkRoutingCandidates}
         benchmarkEvidenceState={benchmarkEvidenceState}
         adversaryToolReviewSettings={adversaryToolReviewSettings}
+        partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
+        partnerAgentControlPlane={settingsPartnerAgentControlPlane}
+        latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
+        onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
         onSaveEvaluationAgents={saveEvaluationAgents}
@@ -11911,6 +12156,8 @@ function AgentBrowserApp() {
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 adversaryToolReviewSettings={adversaryToolReviewSettings}
+                partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
+                onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}

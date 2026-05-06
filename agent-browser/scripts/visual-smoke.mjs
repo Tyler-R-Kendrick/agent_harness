@@ -154,6 +154,10 @@ async function main() {
     await expect(page.getByText(/Fallback priors|benchmark source|Refreshing evidence/)).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await page.getByRole('button', { name: 'Partner agent control plane' }).click();
+    await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });
+    await expect(page.getByText('Unified workflow')).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });

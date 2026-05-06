@@ -171,6 +171,25 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Adversary review custom rules')).toBeInTheDocument();
   });
 
+  it('renders partner agent control plane controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Partner agent control plane')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Partner agent control plane' }));
+    expect(screen.getByLabelText('Enable partner-agent control plane')).toBeInTheDocument();
+    expect(screen.getByLabelText('Require partner-agent policy review')).toBeInTheDocument();
+    expect(screen.getByLabelText('Preserve partner-agent evidence')).toBeInTheDocument();
+    expect(screen.getByLabelText('Partner-agent audit level')).toHaveValue('standard');
+    expect(screen.getByText('Unified workflow')).toBeInTheDocument();
+  });
+
   it('shows built-in local inference readiness in Models', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
