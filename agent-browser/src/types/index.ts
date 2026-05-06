@@ -352,7 +352,7 @@ export interface BrowserNavHistory {
   currentIndex: number;
 }
 
-export type WorkspaceFileKind = 'tool' | 'plugin' | 'hook' | 'memory';
+export type WorkspaceFileKind = 'tool' | 'plugin' | 'hook' | 'memory' | 'settings';
 
 export interface IntegrationSurface {
   id: string;
@@ -407,6 +407,7 @@ export interface WorkspaceCapabilities {
   plugins: WorkspacePlugin[];
   hooks: WorkspaceHook[];
   memory: WorkspaceFile[];
+  settings: WorkspaceFile[];
 }
 
 export interface BrowserInferenceRequest {

@@ -9,6 +9,7 @@ export type WebMcpToolGroup =
   | 'clipboard-worktree-mcp'
   | 'artifacts-mcp'
   | 'user-context-mcp'
+  | 'settings-mcp'
   | 'secrets-mcp'
   | 'web-search-mcp';
 

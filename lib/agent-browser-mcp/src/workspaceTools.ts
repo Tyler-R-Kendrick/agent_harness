@@ -7,6 +7,7 @@ import { registerFilesystemTools } from './filesystemTools';
 import { registerHarnessUiTools } from './harnessUiTools';
 import { registerRendererViewportTools } from './rendererViewportTools';
 import { registerSearchTools } from './searchTools';
+import { registerSettingsTools } from './settingsTools';
 import { registerUserContextTools } from './userContextTools';
 import { registerWorkspaceIntrospectionTools } from './workspaceIntrospectionTools';
 import { registerWorkspaceFileSurface } from './workspaceFileTools';
@@ -29,6 +30,7 @@ export { registerFilesystemTools } from './filesystemTools';
 export { registerHarnessUiTools } from './harnessUiTools';
 export { registerRendererViewportTools } from './rendererViewportTools';
 export { registerSearchTools } from './searchTools';
+export { registerSettingsTools } from './settingsTools';
 export { registerSessionTools } from './sessionTools';
 export { registerSessionFilesystemTools } from './sessionFilesystemTools';
 export { registerUserContextTools } from './userContextTools';
@@ -51,6 +53,7 @@ export function registerWorkspaceTools(modelContext: ModelContext, options: Regi
   registerHarnessUiTools(modelContext, options);
   registerClipboardTools(modelContext, options);
   registerUserContextTools(modelContext, options);
+  registerSettingsTools(modelContext, options);
   registerSearchTools(modelContext, options);
 }
 

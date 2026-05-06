@@ -72,6 +72,11 @@ const WEBMCP_SUBGROUP_BY_TOOL: Readonly<Record<string, { subGroup: WebMcpToolGro
   read_browser_location: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
   elicit_user_input: { subGroup: 'user-context-mcp', subGroupLabel: 'User Context' },
   request_secret: { subGroup: 'secrets-mcp', subGroupLabel: 'Secrets' },
+  // Settings
+  list_settings_scopes: { subGroup: 'settings-mcp', subGroupLabel: 'Settings' },
+  read_settings: { subGroup: 'settings-mcp', subGroupLabel: 'Settings' },
+  write_settings: { subGroup: 'settings-mcp', subGroupLabel: 'Settings' },
+  update_setting: { subGroup: 'settings-mcp', subGroupLabel: 'Settings' },
   // Search
   search_web: { subGroup: 'web-search-mcp', subGroupLabel: 'Search' },
   read_web_page: { subGroup: 'web-search-mcp', subGroupLabel: 'Search' },

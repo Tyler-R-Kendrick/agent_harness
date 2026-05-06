@@ -5,6 +5,16 @@ import {
   mergeDefaultWorkspaceMemoryFiles,
 } from './workspaceMemory';
 import {
+  buildSettingsPromptContext,
+  createDefaultWorkspaceSettingsFiles,
+  DEFAULT_SETTINGS_JSON,
+  detectWorkspaceSettingsScope,
+  mergeDefaultWorkspaceSettingsFiles,
+  settingsSnapshotsFromWorkspaceFiles,
+  validateWorkspaceSettingsFile,
+} from './settingsFiles';
+import type { SettingsFileSnapshot } from './settingsFiles';
+import {
   detectWorkspaceFileKind as detectCoreWorkspaceFileKind,
   discoverWorkspaceCapabilities as discoverCoreWorkspaceCapabilities,
   validateWorkspaceFile as validateCoreWorkspaceFile,
@@ -32,6 +42,7 @@ function nowIso() {
 export function createDefaultWorkspaceFiles(updatedAt = nowIso()): WorkspaceFile[] {
   return [
     ...createDefaultWorkspaceMemoryFiles(updatedAt),
+    ...createDefaultWorkspaceSettingsFiles(updatedAt),
     createDefaultSymphonyPluginManifest(updatedAt),
   ];
 }
@@ -65,10 +76,11 @@ export function createDefaultSymphonyPluginManifest(updatedAt = nowIso()): Works
 
 export function mergeDefaultWorkspaceFiles(files: WorkspaceFile[], updatedAt = nowIso()): WorkspaceFile[] {
   const withMemory = mergeDefaultWorkspaceMemoryFiles(files);
-  const hasDefaultSymphonyPlugin = withMemory.some((file) => file.path === DEFAULT_SYMPHONY_PLUGIN_PATH);
+  const withSettings = mergeDefaultWorkspaceSettingsFiles(withMemory, updatedAt);
+  const hasDefaultSymphonyPlugin = withSettings.some((file) => file.path === DEFAULT_SYMPHONY_PLUGIN_PATH);
   return hasDefaultSymphonyPlugin
-    ? withMemory
-    : [...withMemory, createDefaultSymphonyPluginManifest(updatedAt)];
+    ? withSettings
+    : [...withSettings, createDefaultSymphonyPluginManifest(updatedAt)];
 }
 
 export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''): WorkspaceFile {
@@ -118,6 +130,14 @@ export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''):
     };
   }
 
+  if (kind === 'settings') {
+    return {
+      path: 'settings.json',
+      updatedAt: nowIso(),
+      content: DEFAULT_SETTINGS_JSON,
+    };
+  }
+
   return {
     path: `.memory/${slug}.memory.md`,
     updatedAt: nowIso(),
@@ -130,6 +150,10 @@ export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''):
 }
 
 export function detectWorkspaceFileKind(path: string): WorkspaceFileKind | null {
+  if (detectWorkspaceSettingsScope(path)) {
+    return 'settings';
+  }
+
   return detectCoreWorkspaceFileKind(path) as WorkspaceFileKind | null;
 }
 
@@ -139,6 +163,10 @@ export function validateWorkspaceFile(file: WorkspaceFile): string | null {
 
   if (kind === 'memory') {
     return detectWorkspaceMemoryScope(file.path) ? null : 'Unsupported memory file path.';
+  }
+
+  if (kind === 'settings') {
+    return validateWorkspaceSettingsFile(file);
   }
 
   return validateCoreWorkspaceFile(file);
@@ -153,18 +181,30 @@ export function discoverWorkspaceCapabilities(files: WorkspaceFile[]): Workspace
     plugins: coreCapabilities.plugins as WorkspacePlugin[],
     hooks: coreCapabilities.hooks as WorkspaceHook[],
     memory: coreCapabilities.memory as WorkspaceFile[],
+    settings: files.filter((file) => Boolean(detectWorkspaceSettingsScope(file.path))),
   };
 }
 
-export function buildWorkspacePromptContext(files: WorkspaceFile[]): string {
+export function buildWorkspacePromptContext(files: WorkspaceFile[], sessionSettingsFiles: readonly SettingsFileSnapshot[] = []): string {
   const capabilities = discoverWorkspaceCapabilities(files);
-  if (!capabilities.tools.length && !capabilities.plugins.length && !capabilities.hooks.length && !capabilities.memory.length) {
+  if (
+    !capabilities.tools.length
+    && !capabilities.plugins.length
+    && !capabilities.hooks.length
+    && !capabilities.memory.length
+    && !capabilities.settings.length
+    && !sessionSettingsFiles.length
+  ) {
     return 'No workspace capability files are currently stored.';
   }
 
   return [
     'Workspace capability files loaded from browser storage:',
     buildWorkspaceMemoryPromptContext(files),
+    buildSettingsPromptContext([
+      ...settingsSnapshotsFromWorkspaceFiles(files),
+      ...sessionSettingsFiles,
+    ]),
     capabilities.tools.length
       ? `Tools:\n${capabilities.tools.map((tool) => `- ${tool.directory} (${tool.path})`).join('\n')}`
       : 'Tools: none',

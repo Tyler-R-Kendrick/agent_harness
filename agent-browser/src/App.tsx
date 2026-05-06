@@ -176,6 +176,7 @@ import {
   type WorkspaceMcpSessionState,
   type WorkspaceMcpElicitationField,
   type WorkspaceMcpSecretRequestResult,
+  type WorkspaceMcpSettingsFile,
   type WorkspaceMcpWorktreeItemType,
   type WorkspaceMcpWorktreeItem,
   type WorkspaceMcpWriteSessionInput,
@@ -209,6 +210,14 @@ import {
   WORKSPACE_FILES_STORAGE_KEY,
   WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
 } from './services/workspaceFiles';
+import {
+  createDefaultSessionWorkspaceFiles,
+  DEFAULT_SETTINGS_JSON,
+  PROJECT_SETTINGS_PATH,
+  SESSION_WORKSPACE_SETTINGS_PATH,
+  settingsSnapshotsFromWorkspaceFiles,
+  USER_SETTINGS_PATH,
+} from './services/settingsFiles';
 import {
   DEFAULT_EXTENSION_MANIFESTS,
   EXTENSION_MARKETPLACE_CATEGORIES,
@@ -1554,6 +1563,13 @@ const BASH_CWD_PLACEHOLDER_FILE = '.keep';
 type BashEntry = CliHistoryEntry;
 type InputHistoryMode = 'chat' | 'terminal';
 
+function createInitialBashFiles(): Record<string, string> {
+  return {
+    [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '',
+    ...createDefaultSessionWorkspaceFiles(BASH_INITIAL_CWD),
+  };
+}
+
 function buildInputHistoryScopeKey(mode: InputHistoryMode, sessionId: string) {
   return `${mode}:${sessionId}`;
 }
@@ -1982,6 +1998,7 @@ function ChatPanel({
   onToast,
   workspaceName,
   workspaceFiles,
+  sessionSettingsContent,
   artifactPromptContext,
   attachedArtifactCount,
   workspaceCapabilities,
@@ -2022,6 +2039,7 @@ function ChatPanel({
   onToast: (toast: Exclude<ToastState, null>) => void;
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
+  sessionSettingsContent?: string | null;
   artifactPromptContext?: string;
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
@@ -2161,12 +2179,18 @@ function ChatPanel({
   );
   const workspacePromptContext = useMemo(
     () => [
-      buildWorkspacePromptContext(workspaceFiles),
+      buildWorkspacePromptContext(workspaceFiles, activeSessionId ? [{
+        scope: 'session',
+        label: `<session> ${activeSessionId}`,
+        sessionId: activeSessionId,
+        path: SESSION_WORKSPACE_SETTINGS_PATH,
+        content: sessionSettingsContent ?? DEFAULT_SETTINGS_JSON,
+      }] : []),
       artifactPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [artifactPromptContext, locationPromptContext, runtimeExtensionPromptContext, workspaceFiles],
+    [activeSessionId, artifactPromptContext, locationPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -2464,10 +2488,12 @@ function ChatPanel({
   const getSessionBash = useCallback((id: string) => {
     const bashSessions = bashBySessionRef.current;
     if (!bashSessions[id]) {
-      bashSessions[id] = new Bash({ cwd: BASH_INITIAL_CWD, files: { [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '' } });
+      const files = createInitialBashFiles();
+      bashSessions[id] = new Bash({ cwd: BASH_INITIAL_CWD, files });
+      onTerminalFsPathsChanged(id, bashSessions[id].fs.getAllPaths());
     }
     return bashSessions[id];
-  }, []);
+  }, [onTerminalFsPathsChanged]);
 
   useEffect(() => {
     if (!activeSessionId) return;
@@ -8795,10 +8821,19 @@ function AgentBrowserApp() {
   const getOrCreateSessionBash = useCallback((sessionId: string) => {
     const bashSessions = bashBySessionRef.current;
     if (!bashSessions[sessionId]) {
+      const files = createInitialBashFiles();
       bashSessions[sessionId] = new Bash({
         cwd: BASH_INITIAL_CWD,
-        files: { [`${BASH_INITIAL_CWD}/${BASH_CWD_PLACEHOLDER_FILE}`]: '' },
+        files,
       });
+      setTerminalFsPathsBySession((current) => ({
+        ...current,
+        [sessionId]: bashSessions[sessionId]!.fs.getAllPaths(),
+      }));
+      setTerminalFsFileContentsBySession((current) => ({
+        ...current,
+        [sessionId]: { ...(current[sessionId] ?? {}), ...files },
+      }));
     }
     return bashSessions[sessionId]!;
   }, []);
@@ -10576,10 +10611,11 @@ function AgentBrowserApp() {
     return buildActiveSessionFilesystemEntries({
       activeSessionIds: activeMountedSessionFsIds,
       terminalFsPathsBySession,
+      terminalFsFileContentsBySession,
       initialCwd: BASH_INITIAL_CWD,
       inferSessionFsEntryKind,
     });
-  }, [activeMountedSessionFsIds, activeWorkspace, terminalFsPathsBySession]);
+  }, [activeMountedSessionFsIds, activeWorkspace, terminalFsFileContentsBySession, terminalFsPathsBySession]);
   const activeSessionAssetsById = useMemo(() => activeSessionFsEntries.reduce<Record<string, Array<{ path: string; kind: string; isRoot?: boolean }>>>((entriesBySession, entry) => {
     const current = entriesBySession[entry.sessionId] ?? [];
     entriesBySession[entry.sessionId] = [
@@ -10935,6 +10971,82 @@ function AgentBrowserApp() {
     }));
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
   }, [getOrCreateSessionBash, handleTerminalFsPathsChanged]);
+
+  const getSettingsFilesFromMcp = useCallback(async (): Promise<WorkspaceMcpSettingsFile[]> => {
+    const workspaceSettings = settingsSnapshotsFromWorkspaceFiles(activeWorkspaceFiles).map((file): WorkspaceMcpSettingsFile => ({
+      scope: file.scope,
+      path: file.path,
+      content: file.content,
+      updatedAt: file.updatedAt,
+    }));
+    const sessionSettings = await Promise.all(activeWorkspaceSessions.map(async (session): Promise<WorkspaceMcpSettingsFile> => {
+      const cachedContent = terminalFsFileContentsBySession[session.id]?.[SESSION_WORKSPACE_SETTINGS_PATH];
+      if (cachedContent !== undefined) {
+        return {
+          scope: 'session',
+          label: `<session> ${session.name}`,
+          sessionId: session.id,
+          path: SESSION_WORKSPACE_SETTINGS_PATH,
+          content: cachedContent,
+        };
+      }
+
+      try {
+        const file = await readSessionFsFileFromMcp({
+          sessionId: session.id,
+          path: SESSION_WORKSPACE_SETTINGS_PATH,
+        });
+        return {
+          scope: 'session',
+          label: `<session> ${session.name}`,
+          sessionId: session.id,
+          path: file.path,
+          content: file.content,
+        };
+      } catch {
+        return {
+          scope: 'session',
+          label: `<session> ${session.name}`,
+          sessionId: session.id,
+          path: SESSION_WORKSPACE_SETTINGS_PATH,
+          content: DEFAULT_SETTINGS_JSON,
+        };
+      }
+    }));
+
+    return [...workspaceSettings, ...sessionSettings];
+  }, [activeWorkspaceFiles, activeWorkspaceSessions, readSessionFsFileFromMcp, terminalFsFileContentsBySession]);
+
+  const writeSettingsFileFromMcp = useCallback(async (input: WorkspaceMcpSettingsFile): Promise<WorkspaceMcpSettingsFile> => {
+    if (input.scope === 'session') {
+      if (!input.sessionId) {
+        throw new TypeError('Session settings writes require a sessionId.');
+      }
+      await writeSessionFsFileFromMcp({
+        sessionId: input.sessionId,
+        path: SESSION_WORKSPACE_SETTINGS_PATH,
+        content: input.content,
+      });
+      return {
+        scope: 'session',
+        label: input.label,
+        sessionId: input.sessionId,
+        path: SESSION_WORKSPACE_SETTINGS_PATH,
+        content: input.content,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    const path = input.scope === 'global' ? USER_SETTINGS_PATH : PROJECT_SETTINGS_PATH;
+    const file = await writeWorkspaceFileFromMcp({ path, content: input.content });
+    return {
+      scope: input.scope,
+      label: input.label,
+      path: file.path,
+      content: file.content,
+      updatedAt: file.updatedAt,
+    };
+  }, [writeSessionFsFileFromMcp, writeWorkspaceFileFromMcp]);
 
   const deleteSessionFsEntryFromMcp = useCallback(async ({ sessionId, path }: { sessionId: string; path: string }) => {
     const bash = getOrCreateSessionBash(sessionId);
@@ -11656,6 +11768,7 @@ function AgentBrowserApp() {
       getUserContextMemory: ({ query, limit }) => searchUserContextMemory(activeWorkspace.name, query, limit),
       getBrowserLocation: () => browserLocationResultFromContext(browserLocationContext)
         ?? readBrowserLocationFromNavigator(),
+      getSettingsFiles: getSettingsFilesFromMcp,
       onElicitUserInput: (input) => {
         const requestId = `elicitation-${createUniqueId()}`;
         const detail: UserElicitationEventDetail = {
@@ -11708,6 +11821,7 @@ function AgentBrowserApp() {
       onCreateArtifact: createArtifactFromMcp,
       onUpdateArtifact: updateArtifactFromMcp,
       onWriteWorkspaceFile: writeWorkspaceFileFromMcp,
+      onWriteSettingsFile: writeSettingsFileFromMcp,
       onDeleteWorkspaceFile: deleteWorkspaceFileFromMcp,
       onMoveWorkspaceFile: moveWorkspaceFileFromMcp,
       onDuplicateWorkspaceFile: duplicateWorkspaceFileFromMcp,
@@ -11757,6 +11871,7 @@ function AgentBrowserApp() {
     deleteWorkspaceFileFromMcp,
     getSessionToolsFromMcp,
     getSessionStateFromMcp,
+    getSettingsFilesFromMcp,
     getWorktreeContextMenuStateFromMcp,
     getWorktreeContextActionsForItem,
     getWorktreeRenderPaneStateFromMcp,
@@ -11788,6 +11903,7 @@ function AgentBrowserApp() {
     unmountSessionDriveFromMcp,
     updateArtifactFromMcp,
     writeSessionFsFileFromMcp,
+    writeSettingsFileFromMcp,
     symlinkWorkspaceFileFromMcp,
     writeWorkspaceFileFromMcp,
   ]);
@@ -12120,6 +12236,7 @@ function AgentBrowserApp() {
                 onToast={setToast}
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
+                sessionSettingsContent={terminalFsFileContentsBySession[panel.id]?.[SESSION_WORKSPACE_SETTINGS_PATH] ?? null}
                 artifactPromptContext={buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? [])}
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
