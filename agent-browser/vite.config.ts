@@ -112,6 +112,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../ext/provider/local-model-connector/src/index.ts'),
       },
       {
+        find: '@agent-harness/agent-sandbox',
+        replacement: path.resolve(__dirname, '../lib/agent-sandbox/src/index.ts'),
+      },
+      {
         find: 'ralph-loop',
         replacement: path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
       },

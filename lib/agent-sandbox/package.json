@@ -1,0 +1,40 @@
+{
+  "name": "@agent-harness/agent-sandbox",
+  "version": "0.1.0",
+  "description": "Capability-based browser agent sandbox provider for generated skill execution",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "README.md",
+    "src/**/*.ts",
+    "!src/__tests__/**"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "dependencies": {
+    "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
+    "quickjs-emscripten": "^0.32.0"
+  },
+  "peerDependencies": {
+    "@webcontainer/api": "^1.6.4"
+  },
+  "peerDependenciesMeta": {
+    "@webcontainer/api": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "@webcontainer/api": "^1.6.4",
+    "jsdom": "^29.0.2",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}
