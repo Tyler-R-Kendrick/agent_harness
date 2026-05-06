@@ -210,6 +210,30 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Vulnerability Scanner')).toBeInTheDocument();
   });
 
+  it('renders scheduled automations in History and Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('History'));
+
+    expect(screen.getByRole('button', { name: 'Scheduled automations' })).toBeInTheDocument();
+    expect(screen.getByText('Daily workspace audit')).toBeInTheDocument();
+    expect(screen.getByText(/review inbox/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: 'Scheduled automations' }));
+
+    expect(screen.getByLabelText('Enable Daily workspace audit')).toBeInTheDocument();
+    expect(screen.getByLabelText('Daily workspace audit cadence')).toHaveValue('daily');
+    expect(screen.getByLabelText('Daily workspace audit retry count')).toHaveValue('1');
+    expect(screen.getByLabelText('Daily workspace audit notification route')).toHaveValue('inbox');
+    expect(screen.getByLabelText('Daily workspace audit review trigger')).toHaveValue('failures');
+  });
+
   it('shows built-in local inference readiness in Models', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(

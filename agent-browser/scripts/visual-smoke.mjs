@@ -269,6 +269,13 @@ async function main() {
     });
     await page.screenshot({ path: evaluationOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Back to chat' }).click();
+    await page.getByRole('button', { name: 'History' }).click();
+    await expect(page.getByRole('heading', { name: 'History' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Scheduled automations' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('Daily workspace audit').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText(/review inbox/i).first()).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Models', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Providers contents').getByText('Cursor', { exact: true })).toBeVisible({
@@ -298,6 +305,13 @@ async function main() {
     await expect(page.getByLabel('Enable security review agents')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable inline PR security review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable scheduled vulnerability scans')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Scheduled automations' }).click();
+    await expect(page.getByLabel('Enable Daily workspace audit')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Daily workspace audit cadence')).toHaveValue('daily', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Daily workspace audit retry count')).toHaveValue('1', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Daily workspace audit notification route')).toHaveValue('inbox', {
+      timeout: shellTimeoutMs,
+    });
     await benchmarkObjective.scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Extensions', exact: true }).click();

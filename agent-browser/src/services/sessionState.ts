@@ -35,6 +35,7 @@ export const STORAGE_KEYS = {
   benchmarkEvidenceState: 'agent-browser.benchmark-evidence-state',
   adversaryToolReviewSettings: 'agent-browser.adversary-tool-review-settings',
   securityReviewAgentSettings: 'agent-browser.security-review-agent-settings',
+  scheduledAutomationsState: 'agent-browser.scheduled-automations-state',
   partnerAgentControlPlaneSettings: 'agent-browser.partner-agent-control-plane-settings',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
