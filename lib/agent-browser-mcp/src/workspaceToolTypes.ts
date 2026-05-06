@@ -6,6 +6,17 @@ export interface WorkspaceMcpFile {
   updatedAt: string;
 }
 
+export type WorkspaceMcpSettingsScope = 'global' | 'project' | 'session';
+
+export interface WorkspaceMcpSettingsFile {
+  scope: WorkspaceMcpSettingsScope;
+  path: string;
+  content: string;
+  label?: string;
+  sessionId?: string;
+  updatedAt?: string;
+}
+
 export interface WorkspaceMcpArtifactFile {
   path: string;
   content: string;
@@ -391,6 +402,7 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
     limit: number;
   }) => Promise<WorkspaceMcpUserContextMemoryResult> | WorkspaceMcpUserContextMemoryResult;
   getBrowserLocation?: () => Promise<WorkspaceMcpBrowserLocationResult> | WorkspaceMcpBrowserLocationResult;
+  getSettingsFiles?: () => Promise<readonly WorkspaceMcpSettingsFile[]> | readonly WorkspaceMcpSettingsFile[];
   onElicitUserInput?: (
     input: WorkspaceMcpElicitationRequest
   ) => Promise<WorkspaceMcpElicitationResult> | WorkspaceMcpElicitationResult;
@@ -418,6 +430,7 @@ export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileTool
   onWriteSession?: (input: WorkspaceMcpWriteSessionInput) => Promise<WorkspaceMcpSessionState | void> | WorkspaceMcpSessionState | void;
   onCreateWorkspaceFile?: (input: { path: string; content: string }) => Promise<WorkspaceMcpFile | void> | WorkspaceMcpFile | void;
   onWriteWorkspaceFile?: (input: { path: string; content: string }) => Promise<WorkspaceMcpFile | void> | WorkspaceMcpFile | void;
+  onWriteSettingsFile?: (input: WorkspaceMcpSettingsFile) => Promise<WorkspaceMcpSettingsFile | void> | WorkspaceMcpSettingsFile | void;
   onDeleteWorkspaceFile?: (input: { path: string }) => Promise<unknown> | unknown;
   onMoveWorkspaceFile?: (input: { path: string; targetPath: string }) => Promise<WorkspaceMcpFile | void> | WorkspaceMcpFile | void;
   onDuplicateWorkspaceFile?: (input: { path: string; targetPath: string }) => Promise<WorkspaceMcpFile | void> | WorkspaceMcpFile | void;

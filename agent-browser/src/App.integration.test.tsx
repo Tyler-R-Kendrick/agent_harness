@@ -699,7 +699,7 @@ describe('App', () => {
     expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-session-summary-widget-'))).toBe(false);
   });
 
-  it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context sub-groups', async () => {
+  it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context/Settings sub-groups', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
@@ -728,9 +728,9 @@ describe('App', () => {
     // CLI is a flat item directly under Built-In (no sub-group)
     expect(screen.getByRole('checkbox', { name: 'CLI' })).toBeInTheDocument();
 
-    // All six surface sub-groups must appear inside the Built-In bucket —
+    // All surface sub-groups must appear inside the Built-In bucket —
     // not as separate top-level groups. Each must have a toggle-all checkbox.
-    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Harness UI', 'Workspace', 'User Context']) {
+    for (const subGroupLabel of ['Browser', 'Sessions', 'Files', 'Clipboard', 'Renderer', 'Harness UI', 'Workspace', 'User Context', 'Settings']) {
       expect(
         screen.getByRole('checkbox', { name: `Toggle all ${subGroupLabel} tools` }),
         `Expected sub-group "${subGroupLabel}" inside Built-In, not as a separate top-level group`,
@@ -987,13 +987,15 @@ describe('App', () => {
       expect.objectContaining({ path: '.memory/project.memory.md', label: 'project.memory.md' }),
       expect.objectContaining({ path: '.memory/workspace.memory.md', label: 'workspace.memory.md' }),
       expect.objectContaining({ path: '.memory/session.memory.md', label: 'session.memory.md' }),
+      expect.objectContaining({ path: 'user/settings.json', label: 'settings.json' }),
+      expect.objectContaining({ path: 'settings.json', label: 'settings.json' }),
       expect.objectContaining({
         path: '.agents/plugins/symphony/agent-harness.plugin.json',
         label: 'agent-harness.plugin.json',
         uri: 'files://workspace/.agents/plugins/symphony/agent-harness.plugin.json',
       }),
     ]));
-    expect((listedFiles as unknown[])).toHaveLength(7);
+    expect((listedFiles as unknown[])).toHaveLength(9);
 
     let fileProperties: unknown;
     await act(async () => {
@@ -1011,6 +1013,82 @@ describe('App', () => {
       uri: 'files://workspace/.agents/plugins/review-tools/agent-harness.plugin.json',
       updatedAt: '2026-04-18T00:00:00.000Z',
       preview: expect.stringContaining('Review helpers.'),
+    }));
+  });
+
+  it('exposes settings.json scopes through WebMCP and updates workspace and session files', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    expect(modelContext).toBeDefined();
+    const webmcpTool = createWebMcpTool(modelContext!);
+
+    let scopes: unknown;
+    await act(async () => {
+      scopes = await webmcpTool.execute?.({
+        tool: 'list_settings_scopes',
+        args: { includeValues: true },
+      }, {} as never);
+    });
+
+    expect(scopes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ scope: 'global', label: 'global(user)', path: 'user/settings.json', values: {} }),
+      expect.objectContaining({ scope: 'project', label: 'project(default workspace)', path: 'settings.json', values: {} }),
+      expect.objectContaining({ scope: 'session', path: '/workspace/settings.json', values: {} }),
+    ]));
+    const sessionScope = (scopes as Array<{ scope: string; sessionId?: string }>).find((scope) => scope.scope === 'session');
+    expect(sessionScope?.sessionId).toEqual(expect.any(String));
+    const sessionId = sessionScope!.sessionId!;
+
+    await act(async () => {
+      await webmcpTool.execute?.({
+        tool: 'write_settings',
+        args: {
+          scope: 'project',
+          values: { 'editor.tabSize': 6 },
+        },
+      }, {} as never);
+      await webmcpTool.execute?.({
+        tool: 'update_setting',
+        args: {
+          scope: 'session',
+          sessionId,
+          key: 'agentBrowser.model',
+          value: 'qwen3',
+        },
+      }, {} as never);
+      await Promise.resolve();
+    });
+
+    await expect(webmcpTool.execute?.({
+      tool: 'read_settings',
+      args: { scope: 'effective' },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      values: {
+        'agentBrowser.model': 'qwen3',
+        'editor.tabSize': 6,
+      },
+      errors: [],
+    }));
+
+    let sessionFile: unknown;
+    await act(async () => {
+      sessionFile = await webmcpTool.execute?.({
+        tool: 'read_filesystem_properties',
+        args: { targetType: 'session-fs-entry', sessionId, path: '/workspace/settings.json' },
+      }, {} as never);
+    });
+
+    expect(sessionFile).toEqual(expect.objectContaining({
+      targetType: 'session-fs-entry',
+      path: '/workspace/settings.json',
+      preview: expect.stringContaining('"agentBrowser.model": "qwen3"'),
     }));
   });
 

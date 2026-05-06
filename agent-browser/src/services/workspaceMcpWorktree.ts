@@ -28,12 +28,14 @@ export interface WorkspaceContextMenuState<TEntry = unknown, TTopButton = unknow
 export function buildActiveSessionFilesystemEntries(args: {
   activeSessionIds: readonly string[];
   terminalFsPathsBySession: Record<string, string[]>;
+  terminalFsFileContentsBySession?: Record<string, Record<string, string>>;
   initialCwd: string;
   inferSessionFsEntryKind: (paths: readonly string[], path: string) => 'file' | 'folder';
 }): WorkspaceMcpSessionFsEntry[] {
   const {
     activeSessionIds,
     terminalFsPathsBySession,
+    terminalFsFileContentsBySession,
     initialCwd,
     inferSessionFsEntryKind,
   } = args;
@@ -45,6 +47,9 @@ export function buildActiveSessionFilesystemEntries(args: {
       path,
       kind: inferSessionFsEntryKind(rawPaths, path),
       isRoot: path === initialCwd,
+      ...(terminalFsFileContentsBySession?.[sessionId]?.[path] !== undefined
+        ? { content: terminalFsFileContentsBySession[sessionId]![path] }
+        : {}),
     }));
   });
 }

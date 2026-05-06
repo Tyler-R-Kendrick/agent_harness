@@ -72,7 +72,7 @@ describe('createWebMcpToolBridge', () => {
     expect(execute).toHaveBeenCalledWith({ text: 'hello' }, expect.any(ModelContextClient));
   });
 
-  it('assigns all six surface sub-groups inside the built-in group — never a separate webmcp group', () => {
+  it('assigns all seven surface sub-groups inside the built-in group — never a separate webmcp group', () => {
     // One representative tool per sub-group category. Tools NOT in the lookup table
     // (e.g. 'echo') must fall back to group:'built-in' with no subGroup.
     const modelContext = new ModelContext();
@@ -83,6 +83,7 @@ describe('createWebMcpToolBridge', () => {
       ['restore_clipboard_entry','clipboard-worktree-mcp','Clipboard'],
       ['list_render_panes',     'renderer-viewport-mcp',  'Renderer'],
       ['list_worktree_items',   'worktree-mcp',           'Workspace'],
+      ['read_settings',         'settings-mcp',           'Settings'],
     ];
 
     for (const [name] of SURFACE_SAMPLES) {

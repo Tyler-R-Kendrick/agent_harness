@@ -90,12 +90,16 @@ describe('workspaceTools', () => {
     ).toEqual([
       { name: 'elicit_user_input', readOnlyHint: false },
       { name: 'list_filesystem_entries', readOnlyHint: true },
+      { name: 'list_settings_scopes', readOnlyHint: true },
       { name: 'read_browser_location', readOnlyHint: true },
       { name: 'read_filesystem_properties', readOnlyHint: true },
+      { name: 'read_settings', readOnlyHint: true },
       { name: 'read_web_page', readOnlyHint: true },
       { name: 'recall_user_context', readOnlyHint: true },
       { name: 'request_secret', readOnlyHint: false },
       { name: 'search_web', readOnlyHint: true },
+      { name: 'update_setting', readOnlyHint: false },
+      { name: 'write_settings', readOnlyHint: false },
     ]);
     expect(getModelContextRegistry(modelContext).has('list_tools')).toBe(false);
     expect(getModelContextRegistry(modelContext).has('list_resources')).toBe(false);
