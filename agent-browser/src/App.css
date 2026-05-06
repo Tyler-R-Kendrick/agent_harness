@@ -2545,6 +2545,41 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 11px;
   line-height: 1.4;
 }
+.scheduled-automations-settings,
+.scheduled-automations-summary {
+  display: grid;
+  gap: 8px;
+}
+.scheduled-automation-card,
+.scheduled-automation-history-card,
+.scheduled-automation-row-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+}
+.scheduled-automation-card .settings-checkbox-row {
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.scheduled-automation-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.scheduled-automation-control-grid select {
+  min-height: 30px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 4px;
+  background: rgba(13,16,22,.92);
+  color: var(--text);
+  padding: 6px 8px;
+}
+@media (max-width: 520px) {
+  .scheduled-automation-control-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .provider-card-header {
   display: flex;
   align-items: flex-start;

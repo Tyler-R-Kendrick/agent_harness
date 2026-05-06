@@ -57,10 +57,12 @@ describe('STORAGE_KEYS', () => {
       benchmarkEvidenceState: expect.any(String),
       adversaryToolReviewSettings: expect.any(String),
       securityReviewAgentSettings: expect.any(String),
+      scheduledAutomationsState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       installedDefaultExtensionIds: expect.any(String),
     });
     expect(STORAGE_KEYS.securityReviewAgentSettings).toBe('agent-browser.security-review-agent-settings');
+    expect(STORAGE_KEYS.scheduledAutomationsState).toBe('agent-browser.scheduled-automations-state');
   });
 });
 

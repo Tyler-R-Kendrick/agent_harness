@@ -67,6 +67,8 @@ async function main() {
   assert.match(visualSmokeScript, /Enable partner-agent control plane/);
   assert.match(visualSmokeScript, /Evaluation-native observability/);
   assert.match(visualSmokeScript, /Live experiment/);
+  assert.match(visualSmokeScript, /Scheduled automations/);
+  assert.match(visualSmokeScript, /Enable Daily workspace audit/);
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');

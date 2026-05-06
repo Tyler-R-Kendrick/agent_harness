@@ -163,6 +163,18 @@ import {
   type PartnerAgentControlPlane,
   type PartnerAgentControlPlaneSettings,
 } from './services/partnerAgentControlPlane';
+import {
+  DEFAULT_SCHEDULED_AUTOMATION_STATE,
+  buildScheduledAutomationInbox,
+  isScheduledAutomationState,
+  projectDueScheduledAutomations,
+  updateScheduledAutomation,
+  type ScheduledAutomation,
+  type ScheduledAutomationCadence,
+  type ScheduledAutomationNotificationRoute,
+  type ScheduledAutomationReviewTrigger,
+  type ScheduledAutomationState,
+} from './services/scheduledAutomations';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import {
   assessLocalInferenceReadiness,
@@ -5925,6 +5937,100 @@ function PartnerAgentControlPlaneSettingsPanel({
   );
 }
 
+function ScheduledAutomationSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: ScheduledAutomationState;
+  onChange: (state: ScheduledAutomationState) => void;
+}) {
+  const updateAutomation = (
+    automation: ScheduledAutomation,
+    patch: Parameters<typeof updateScheduledAutomation>[2],
+  ) => {
+    onChange(updateScheduledAutomation(state, automation.id, patch));
+  };
+
+  return (
+    <SettingsSection title="Scheduled automations" defaultOpen={false}>
+      <div className="scheduled-automations-settings">
+        {state.automations.map((automation) => (
+          <article key={automation.id} className="provider-card scheduled-automation-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>{automation.title}</strong>
+                <p>{automation.prompt}</p>
+              </div>
+              <span className={`badge${automation.enabled ? ' connected' : ''}`}>{automation.enabled ? 'enabled' : 'paused'}</span>
+            </div>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label={`Enable ${automation.title}`}
+                checked={automation.enabled}
+                onChange={(event) => updateAutomation(automation, { enabled: event.target.checked })}
+              />
+              <span>Enable schedule</span>
+            </label>
+            <div className="scheduled-automation-control-grid">
+              <label className="provider-command-field">
+                <span>Cadence</span>
+                <select
+                  aria-label={`${automation.title} cadence`}
+                  value={automation.cadence}
+                  onChange={(event) => updateAutomation(automation, { cadence: event.target.value as ScheduledAutomationCadence })}
+                >
+                  <option value="once">once</option>
+                  <option value="hourly">hourly</option>
+                  <option value="daily">daily</option>
+                  <option value="weekly">weekly</option>
+                </select>
+              </label>
+              <label className="provider-command-field">
+                <span>Retries</span>
+                <select
+                  aria-label={`${automation.title} retry count`}
+                  value={String(automation.retryPolicy.maxRetries)}
+                  onChange={(event) => updateAutomation(automation, { retryPolicy: { maxRetries: Number(event.target.value) } })}
+                >
+                  <option value="0">0</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                </select>
+              </label>
+              <label className="provider-command-field">
+                <span>Notify</span>
+                <select
+                  aria-label={`${automation.title} notification route`}
+                  value={automation.notificationRoute}
+                  onChange={(event) => updateAutomation(automation, { notificationRoute: event.target.value as ScheduledAutomationNotificationRoute })}
+                >
+                  <option value="none">none</option>
+                  <option value="browser">browser</option>
+                  <option value="inbox">inbox</option>
+                </select>
+              </label>
+              <label className="provider-command-field">
+                <span>Review</span>
+                <select
+                  aria-label={`${automation.title} review trigger`}
+                  value={automation.requiresReviewOn}
+                  onChange={(event) => updateAutomation(automation, { requiresReviewOn: event.target.value as ScheduledAutomationReviewTrigger })}
+                >
+                  <option value="never">never</option>
+                  <option value="failures">failures</option>
+                  <option value="always">always</option>
+                </select>
+              </label>
+            </div>
+          </article>
+        ))}
+      </div>
+    </SettingsSection>
+  );
+}
+
 function AdversaryToolReviewSettingsPanel({
   settings,
   onChange,
@@ -6621,12 +6727,14 @@ interface SettingsPanelProps {
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   securityReviewRunPlan: SecurityReviewRunPlan;
+  scheduledAutomationState: ScheduledAutomationState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
+  onScheduledAutomationStateChange: (state: ScheduledAutomationState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
@@ -6929,12 +7037,14 @@ function SettingsPanel({
   adversaryToolReviewSettings,
   securityReviewAgentSettings,
   securityReviewRunPlan,
+  scheduledAutomationState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
   onBenchmarkRoutingSettingsChange,
   onAdversaryToolReviewSettingsChange,
   onSecurityReviewAgentSettingsChange,
+  onScheduledAutomationStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
@@ -6982,6 +7092,11 @@ function SettingsPanel({
         onChange={onSecurityReviewAgentSettingsChange}
       />
 
+      <ScheduledAutomationSettingsPanel
+        state={scheduledAutomationState}
+        onChange={onScheduledAutomationStateChange}
+      />
+
       <SecretsSettings
         records={secretRecords}
         settings={secretSettings}
@@ -7001,12 +7116,55 @@ function SettingsPanel({
   );
 }
 
-function HistoryPanel() {
+function HistoryPanel({ scheduledAutomationState }: { scheduledAutomationState: ScheduledAutomationState }) {
+  const now = new Date('2026-05-06T18:00:00.000Z');
+  const dueAutomations = projectDueScheduledAutomations({ state: scheduledAutomationState, now });
+  const enabledAutomations = scheduledAutomationState.automations.filter((automation) => automation.enabled);
+  const inbox = buildScheduledAutomationInbox(scheduledAutomationState);
+  const latestRun = scheduledAutomationState.runs[0] ?? null;
+  const nextAutomation = enabledAutomations
+    .filter((automation) => automation.nextRunAt)
+    .sort((left, right) => Date.parse(left.nextRunAt ?? '') - Date.parse(right.nextRunAt ?? ''))[0] ?? null;
+
   return (
     <section className="panel-scroll history-panel" aria-label="History">
       <div className="panel-topbar">
         <h2>History</h2>
       </div>
+      <SidebarSection title="Scheduled automations" scrollBody>
+        <div className="scheduled-automations-summary">
+          <article className="list-card history-card scheduled-automation-history-card">
+            <div className="history-card-header">
+              <div>
+                <h3>Scheduled automations</h3>
+                <p className="muted">{enabledAutomations.length} enabled · {dueAutomations.length} due now · {inbox.length} review inbox</p>
+              </div>
+              <span className={`badge${dueAutomations.length > 0 ? ' connected' : ''}`}>{dueAutomations.length > 0 ? 'due' : 'ready'}</span>
+            </div>
+            <p className="history-preview">
+              {nextAutomation?.nextRunAt
+                ? `Next run: ${nextAutomation.title} at ${new Date(nextAutomation.nextRunAt).toLocaleString()}`
+                : 'No enabled scheduled runs.'}
+            </p>
+            <ul className="history-events">
+              <li>Latest evidence: {latestRun?.summary ?? 'No scheduled runs recorded yet'}</li>
+              <li>Notification routes: {scheduledAutomationState.automations.map((automation) => `${automation.title} -> ${automation.notificationRoute}`).join(', ')}</li>
+            </ul>
+          </article>
+          {scheduledAutomationState.automations.map((automation) => (
+            <article key={automation.id} className="list-card history-card scheduled-automation-row-card">
+              <div className="history-card-header">
+                <div>
+                  <h3>{automation.title}</h3>
+                  <p className="muted">{automation.cadence} · {automation.retryPolicy.maxRetries} retries · review {automation.requiresReviewOn}</p>
+                </div>
+                <span className={`badge${automation.enabled ? ' connected' : ''}`}>{automation.enabled ? 'enabled' : 'paused'}</span>
+              </div>
+              <p className="history-preview">{automation.prompt}</p>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
       <SidebarSection title={`Recent activity (${mockHistory.length})`} scrollBody>
         <div className="history-list">
           {mockHistory.map((session) => (
@@ -8536,6 +8694,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.securityReviewAgentSettings,
     isSecurityReviewAgentSettings,
     DEFAULT_SECURITY_REVIEW_AGENT_SETTINGS,
+  );
+  const [scheduledAutomationState, setScheduledAutomationState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.scheduledAutomationsState,
+    isScheduledAutomationState,
+    DEFAULT_SCHEDULED_AUTOMATION_STATE,
   );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
@@ -12159,7 +12323,7 @@ function AgentBrowserApp() {
         />
       );
     }
-    if (activePanel === 'history') return <HistoryPanel />;
+    if (activePanel === 'history') return <HistoryPanel scheduledAutomationState={scheduledAutomationState} />;
     if (activePanel === 'extensions') return (
       <ExtensionsPanel
         workspaceName={activeWorkspace.name}
@@ -12197,12 +12361,14 @@ function AgentBrowserApp() {
         adversaryToolReviewSettings={adversaryToolReviewSettings}
         securityReviewAgentSettings={securityReviewAgentSettings}
         securityReviewRunPlan={settingsSecurityReviewRunPlan}
+        scheduledAutomationState={scheduledAutomationState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
+        onScheduledAutomationStateChange={setScheduledAutomationState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
