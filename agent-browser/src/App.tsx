@@ -86,6 +86,7 @@ import {
   buildDebuggerToolInstructions,
   buildPlannerToolInstructions,
   buildResearcherToolInstructions,
+  buildSecurityReviewToolInstructions,
   hasCodiModels,
   hasCursorAccess,
   hasCodexAccess,
@@ -139,6 +140,18 @@ import {
   isAdversaryToolReviewSettings,
   type AdversaryToolReviewSettings,
 } from './services/adversaryToolReview';
+import {
+  DEFAULT_SECURITY_REVIEW_AGENT_SETTINGS,
+  buildSecurityReviewPromptContext,
+  buildSecurityReviewRunPlan,
+  buildScheduledSecurityScanUpdate,
+  isSecurityReviewAgentSettings,
+  type SecurityReviewAgentSettings,
+  type SecurityReviewCadence,
+  type SecurityReviewRunPlan,
+  type SecurityReviewSeverity,
+  type SecurityReviewToolIntegration,
+} from './services/securityReviewAgents';
 import {
   DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS,
   buildPartnerAgentControlPlane,
@@ -2006,6 +2019,7 @@ function ChatPanel({
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
   adversaryToolReviewSettings,
+  securityReviewAgentSettings,
   partnerAgentControlPlaneSettings,
   onPartnerAgentAuditEntry,
   secretSettings,
@@ -2046,6 +2060,7 @@ function ChatPanel({
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
+  securityReviewAgentSettings: SecurityReviewAgentSettings;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
   secretSettings: SecretManagementSettings;
@@ -2242,6 +2257,13 @@ function ChatPanel({
       selectedToolIds,
     ],
   );
+  const securityReviewRunPlan = useMemo(
+    () => buildSecurityReviewRunPlan({
+      settings: securityReviewAgentSettings,
+      selectedToolIds,
+    }),
+    [securityReviewAgentSettings, selectedToolIds],
+  );
   const compatibleBenchmarkRoutingCandidates = useMemo(
     () => selectCompatibleBenchmarkCandidates(selectedProvider, benchmarkRoutingCandidates),
     [benchmarkRoutingCandidates, selectedProvider],
@@ -2303,7 +2325,7 @@ function ChatPanel({
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
     || (selectedProvider === 'codex' && Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels)
-    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner') && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
@@ -2313,7 +2335,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -2809,7 +2831,7 @@ function ChatPanel({
     });
     if (requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
-      if (providerForRequest === 'planner' || providerForRequest === 'researcher' || providerForRequest === 'debugger') {
+      if (providerForRequest === 'planner' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security') {
         if (routed.provider === 'ghcp') {
           requestGhcpModelId = routed.modelId;
           runtimeProviderForRequest = 'ghcp';
@@ -2885,7 +2907,7 @@ function ChatPanel({
     }
 
     if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !requestLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'security' ? 'Security Review needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -2915,6 +2937,10 @@ function ChatPanel({
     const requestWorkspacePromptContext = [
       workspacePromptContext,
       buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
+      buildSecurityReviewPromptContext(buildSecurityReviewRunPlan({
+        settings: securityReviewAgentSettings,
+        selectedToolIds,
+      })),
     ].filter((section): section is string => Boolean(section)).join('\n\n');
 
     if (toolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
@@ -2936,8 +2962,8 @@ function ChatPanel({
       };
       let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
         ? [createInitialLocalReasoningStep(
-          providerForRequest === 'researcher' ? 'Planning research run' : providerForRequest === 'debugger' ? 'Planning debugging run' : providerForRequest === 'planner' ? 'Planning local task run' : 'Planning tool run',
-          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : providerForRequest === 'debugger' ? 'Debugger is deciding how to inspect symptoms, hypotheses, and evidence.' : providerForRequest === 'planner' ? 'Planner is deciding how to update local tasks, monitor agents, and coordinate handoffs.' : 'Codi is deciding how to use local tools and delegate work.',
+          providerForRequest === 'researcher' ? 'Planning research run' : providerForRequest === 'debugger' ? 'Planning debugging run' : providerForRequest === 'planner' ? 'Planning local task run' : providerForRequest === 'security' ? 'Planning security review' : 'Planning tool run',
+          providerForRequest === 'researcher' ? 'Researcher is deciding how to use local tools and gather evidence.' : providerForRequest === 'debugger' ? 'Debugger is deciding how to inspect symptoms, hypotheses, and evidence.' : providerForRequest === 'planner' ? 'Planner is deciding how to update local tasks, monitor agents, and coordinate handoffs.' : providerForRequest === 'security' ? 'Security Review is deciding how to inspect code, dependencies, tools, and remediation evidence.' : 'Codi is deciding how to use local tools and delegate work.',
         )]
         : [];
       let delegationVoterSteps: VoterStep[] = [];
@@ -2989,8 +3015,8 @@ function ChatPanel({
       const planningStepIdsByStage = new Map<PlanningStageName, string>();
       const planningTokensByStage = new Map<PlanningStageName, string>();
       const currentToolAgentLogMeta = (): Pick<ProcessEntry, 'agentId' | 'agentLabel' | 'modelId' | 'modelProvider'> => ({
-        agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : providerForRequest === 'planner' ? 'planner' : 'tool-agent',
-        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : providerForRequest === 'planner' ? 'Planner' : 'Tool Agent',
+        agentId: providerForRequest === 'researcher' ? 'researcher' : providerForRequest === 'debugger' ? 'debugger' : providerForRequest === 'planner' ? 'planner' : providerForRequest === 'security' ? 'security' : 'tool-agent',
+        agentLabel: providerForRequest === 'researcher' ? 'Researcher' : providerForRequest === 'debugger' ? 'Debugger' : providerForRequest === 'planner' ? 'Planner' : providerForRequest === 'security' ? 'Security Review' : 'Tool Agent',
         modelId: runtimeProviderForRequest === 'ghcp'
           ? requestGhcpModelId
           : runtimeProviderForRequest === 'cursor'
@@ -4073,6 +4099,13 @@ function ChatPanel({
               descriptors: selectedDescriptors,
               selectedToolIds,
             })
+          : providerForRequest === 'security'
+            ? buildSecurityReviewToolInstructions({
+              workspaceName,
+              workspacePromptContext: requestWorkspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+            })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext: requestWorkspacePromptContext, selectedToolIds });
         const inputMessages: ModelMessage[] = nextMessages
           .filter((message) => message.id !== assistantId)
@@ -4557,8 +4590,8 @@ function ChatPanel({
     let thinkingStart = 0;
     let reasoningSteps: ReasoningStep[] = runtimeProviderForRequest === 'codi'
       ? [createInitialLocalReasoningStep(
-        providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : providerForRequest === 'planner' ? 'Analyzing planning request' : 'Analyzing request',
-        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : providerForRequest === 'planner' ? 'Planner is reviewing local tasks, agents, sessions, and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+        providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : providerForRequest === 'planner' ? 'Analyzing planning request' : providerForRequest === 'security' ? 'Analyzing security review' : 'Analyzing request',
+        providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : providerForRequest === 'planner' ? 'Planner is reviewing local tasks, agents, sessions, and workspace context locally.' : providerForRequest === 'security' ? 'Security Review is reviewing the security target, severity threshold, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
       )]
       : [];
     let voterSteps: VoterStep[] = [];
@@ -4581,13 +4614,13 @@ function ChatPanel({
       switch (phase) {
         case 'thinking':
           return {
-            title: providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : providerForRequest === 'planner' ? 'Analyzing planning request' : 'Analyzing request',
-            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : providerForRequest === 'planner' ? 'Planner is reviewing local tasks, agents, sessions, and workspace context locally.' : 'Codi is reviewing the prompt and workspace context locally.',
+            title: providerForRequest === 'researcher' ? 'Analyzing research request' : providerForRequest === 'debugger' ? 'Analyzing debugging request' : providerForRequest === 'planner' ? 'Analyzing planning request' : providerForRequest === 'security' ? 'Analyzing security review' : 'Analyzing request',
+            body: providerForRequest === 'researcher' ? 'Researcher is reviewing the research question and workspace context locally.' : providerForRequest === 'debugger' ? 'Debugger is reviewing the symptom, impact, and available evidence locally.' : providerForRequest === 'planner' ? 'Planner is reviewing local tasks, agents, sessions, and workspace context locally.' : providerForRequest === 'security' ? 'Security Review is reviewing the security target, severity threshold, and available evidence locally.' : 'Codi is reviewing the prompt and workspace context locally.',
           };
         case 'generating':
           return {
-            title: providerForRequest === 'researcher' ? 'Drafting research response' : providerForRequest === 'debugger' ? 'Drafting debugging response' : providerForRequest === 'planner' ? 'Drafting planning response' : 'Drafting response',
-            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : providerForRequest === 'debugger' ? 'Debugger is composing the diagnosis, mitigation, and verification steps.' : providerForRequest === 'planner' ? 'Planner is composing task-board updates, handoffs, and monitoring guidance.' : 'Codi is composing the local response.',
+            title: providerForRequest === 'researcher' ? 'Drafting research response' : providerForRequest === 'debugger' ? 'Drafting debugging response' : providerForRequest === 'planner' ? 'Drafting planning response' : providerForRequest === 'security' ? 'Drafting security review' : 'Drafting response',
+            body: providerForRequest === 'researcher' ? 'Researcher is composing the local evidence-backed response.' : providerForRequest === 'debugger' ? 'Debugger is composing the diagnosis, mitigation, and verification steps.' : providerForRequest === 'planner' ? 'Planner is composing task-board updates, handoffs, and monitoring guidance.' : providerForRequest === 'security' ? 'Security Review is composing severity-tagged findings, remediation, and verification steps.' : 'Codi is composing the local response.',
           };
         default:
           return {
@@ -4930,6 +4963,8 @@ function ChatPanel({
                   ? 'Debugger returned an empty response.'
                 : providerForRequest === 'planner'
                   ? 'Planner returned an empty response.'
+                : providerForRequest === 'security'
+                  ? 'Security Review returned an empty response.'
                 : providerForRequest === 'tour-guide'
                   ? 'Tour Guide returned an empty response.'
                 : runtimeProviderForRequest === 'ghcp'
@@ -4948,6 +4983,8 @@ function ChatPanel({
                 ? 'Debugger returned an empty response.'
               : providerForRequest === 'planner'
                 ? 'Planner returned an empty response.'
+              : providerForRequest === 'security'
+                ? 'Security Review returned an empty response.'
               : providerForRequest === 'tour-guide'
                 ? 'Tour Guide returned an empty response.'
               : runtimeProviderForRequest === 'ghcp'
@@ -4998,7 +5035,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -5335,6 +5372,7 @@ function ChatPanel({
                     <option value="researcher">Researcher</option>
                     <option value="debugger">Debugger</option>
                     <option value="planner">Planner</option>
+                    <option value="security">Security Review</option>
                     <option value="tour-guide">Tour Guide</option>
                   </select>
                 </label>
@@ -5572,7 +5610,7 @@ function ChatPanel({
                       : null)
                 : selectedProvider === 'tour-guide'
                   ? null
-                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -5912,6 +5950,154 @@ function AdversaryToolReviewSettingsPanel({
             value={rulesText}
             onChange={(event) => setRules(event.target.value)}
             placeholder="One rule per line"
+            rows={4}
+          />
+        </label>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function SecurityReviewAgentSettingsPanel({
+  settings,
+  runPlan,
+  onChange,
+}: {
+  settings: SecurityReviewAgentSettings;
+  runPlan: SecurityReviewRunPlan;
+  onChange: (settings: SecurityReviewAgentSettings) => void;
+}) {
+  function update<Key extends keyof SecurityReviewAgentSettings>(
+    key: Key,
+    value: SecurityReviewAgentSettings[Key],
+  ) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  return (
+    <SettingsSection title="Security review agents" defaultOpen={false}>
+      <div className="security-review-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable security review agents"
+              checked={settings.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+            />
+            <span>
+              <strong>Enable security review agents</strong>
+              <small>Route security-sensitive prompts through specialist review and scan instructions.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable inline PR security review"
+              checked={settings.inlinePrReview}
+              onChange={(event) => update('inlinePrReview', event.target.checked)}
+            />
+            <span>
+              <strong>Inline PR review</strong>
+              <small>Emit severity-tagged findings with remediation for pull-request diffs.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable scheduled vulnerability scans"
+              checked={settings.scheduledScans}
+              onChange={(event) => update('scheduledScans', event.target.checked)}
+            />
+            <span>
+              <strong>Scheduled vulnerability scans</strong>
+              <small>Prepare recurring repository scan updates for automation surfaces.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Send security scan updates to Slack"
+              checked={settings.deliveryChannels.slack}
+              onChange={(event) => onChange({
+                ...settings,
+                deliveryChannels: { ...settings.deliveryChannels, slack: event.target.checked },
+              })}
+            />
+            <span>
+              <strong>Slack delivery ready</strong>
+              <small>Include Slack as a configured delivery channel when a connector is available.</small>
+            </span>
+          </label>
+        </div>
+        <div className="security-review-select-grid">
+          <label className="provider-command-field">
+            <span>Cadence</span>
+            <select
+              aria-label="Security scan cadence"
+              value={settings.cadence}
+              onChange={(event) => update('cadence', event.target.value as SecurityReviewCadence)}
+            >
+              <option value="daily">daily</option>
+              <option value="weekly">weekly</option>
+              <option value="monthly">monthly</option>
+            </select>
+          </label>
+          <label className="provider-command-field">
+            <span>Minimum severity</span>
+            <select
+              aria-label="Minimum reported severity"
+              value={settings.severityThreshold}
+              onChange={(event) => update('severityThreshold', event.target.value as SecurityReviewSeverity)}
+            >
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="critical">critical</option>
+            </select>
+          </label>
+          <label className="provider-command-field">
+            <span>Tool integration</span>
+            <select
+              aria-label="Security tool integration"
+              value={settings.toolIntegration}
+              onChange={(event) => update('toolIntegration', event.target.value as SecurityReviewToolIntegration)}
+            >
+              <option value="harness-selected">harness selected</option>
+              <option value="mcp-required">MCP required</option>
+              <option value="manual">manual</option>
+            </select>
+          </label>
+        </div>
+        <article className="provider-card security-review-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Security workflow</strong>
+              <p>{runPlan.agents.length} agents active · {runPlan.securityToolCount} selected tools · {runPlan.deliverySummary}</p>
+            </div>
+            <span className={`badge${runPlan.enabled ? ' connected' : ''}`}>{runPlan.enabled ? 'enabled' : 'off'}</span>
+          </div>
+          <div className="security-review-agent-list" role="list" aria-label="Security review agent readiness">
+            {runPlan.agents.map((agent) => (
+              <div className="partner-agent-row" role="listitem" key={agent.id}>
+                <span className="status-dot ok" aria-hidden="true" />
+                <div>
+                  <strong>{agent.label}</strong>
+                  <small>{agent.summary}</small>
+                </div>
+                <span className="badge">{runPlan.severityThreshold}</span>
+              </div>
+            ))}
+          </div>
+          <p className="partner-agent-audit-note">{buildScheduledSecurityScanUpdate(runPlan).body}</p>
+        </article>
+        <label className="provider-command-field adversary-review-rules">
+          <span>Custom instructions</span>
+          <textarea
+            aria-label="Security review custom instructions"
+            value={settings.customInstructions}
+            onChange={(event) => update('customInstructions', event.target.value)}
+            placeholder="Team-specific security review instructions"
             rows={4}
           />
         </label>
@@ -6407,11 +6593,14 @@ interface SettingsPanelProps {
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
+  securityReviewAgentSettings: SecurityReviewAgentSettings;
+  securityReviewRunPlan: SecurityReviewRunPlan;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
+  onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
@@ -6712,11 +6901,14 @@ function SettingsPanel({
   benchmarkRoutingCandidates,
   benchmarkEvidenceState,
   adversaryToolReviewSettings,
+  securityReviewAgentSettings,
+  securityReviewRunPlan,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
   onBenchmarkRoutingSettingsChange,
   onAdversaryToolReviewSettingsChange,
+  onSecurityReviewAgentSettingsChange,
   onPartnerAgentControlPlaneSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
@@ -6756,6 +6948,12 @@ function SettingsPanel({
       <AdversaryToolReviewSettingsPanel
         settings={adversaryToolReviewSettings}
         onChange={onAdversaryToolReviewSettingsChange}
+      />
+
+      <SecurityReviewAgentSettingsPanel
+        settings={securityReviewAgentSettings}
+        runPlan={securityReviewRunPlan}
+        onChange={onSecurityReviewAgentSettingsChange}
       />
 
       <SecretsSettings
@@ -8249,7 +8447,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -8306,6 +8504,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.adversaryToolReviewSettings,
     isAdversaryToolReviewSettings,
     DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
+  );
+  const [securityReviewAgentSettings, setSecurityReviewAgentSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.securityReviewAgentSettings,
+    isSecurityReviewAgentSettings,
+    DEFAULT_SECURITY_REVIEW_AGENT_SETTINGS,
   );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
@@ -8379,6 +8583,13 @@ function AgentBrowserApp() {
       selectedToolIds: [],
     });
   }, [codexState, copilotState, cursorState, installedModels, partnerAgentControlPlaneSettings]);
+  const settingsSecurityReviewRunPlan = useMemo(
+    () => buildSecurityReviewRunPlan({
+      settings: securityReviewAgentSettings,
+      selectedToolIds: [],
+    }),
+    [securityReviewAgentSettings],
+  );
   const benchmarkRoutingCandidateFingerprint = useMemo(
     () => benchmarkRoutingBaseCandidates.map((candidate) => candidate.ref).sort().join('|'),
     [benchmarkRoutingBaseCandidates],
@@ -11868,11 +12079,14 @@ function AgentBrowserApp() {
         benchmarkRoutingCandidates={benchmarkRoutingCandidates}
         benchmarkEvidenceState={benchmarkEvidenceState}
         adversaryToolReviewSettings={adversaryToolReviewSettings}
+        securityReviewAgentSettings={securityReviewAgentSettings}
+        securityReviewRunPlan={settingsSecurityReviewRunPlan}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
+        onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
@@ -12156,6 +12370,7 @@ function AgentBrowserApp() {
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 adversaryToolReviewSettings={adversaryToolReviewSettings}
+                securityReviewAgentSettings={securityReviewAgentSettings}
                 partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
                 onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}
                 secretSettings={secretSettings}

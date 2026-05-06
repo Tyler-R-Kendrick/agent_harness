@@ -531,6 +531,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 8px;
   line-height: 1.45;
 }
+.security-review-settings {
+  display: grid;
+  gap: 10px;
+}
+.security-review-select-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.security-review-summary-card {
+  display: grid;
+  gap: 10px;
+}
+.security-review-agent-list {
+  display: grid;
+  gap: 6px;
+}
 .secrets-table {
   display: grid;
   overflow: hidden;
@@ -591,6 +608,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (max-width: 860px) {
   .secrets-form,
   .secret-settings-grid,
+  .security-review-select-grid,
   .trajectory-threshold-grid,
   .secrets-row {
     grid-template-columns: 1fr;

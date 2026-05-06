@@ -56,9 +56,11 @@ describe('STORAGE_KEYS', () => {
       benchmarkModelRoutingSettings: expect.any(String),
       benchmarkEvidenceState: expect.any(String),
       adversaryToolReviewSettings: expect.any(String),
+      securityReviewAgentSettings: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       installedDefaultExtensionIds: expect.any(String),
     });
+    expect(STORAGE_KEYS.securityReviewAgentSettings).toBe('agent-browser.security-review-agent-settings');
   });
 });
 
