@@ -1,0 +1,21 @@
+slug: browserbase-stagehand
+name: Browserbase + Stagehand
+vendor: Browserbase
+segment: developer-browser-agent-platform
+product_path: competition/browserbase-stagehand
+design_path: competition/browserbase-stagehand/design
+features_path: competition/browserbase-stagehand/features
+marketing_path: competition/browserbase-stagehand/marketing
+gossip_path: competition/browserbase-stagehand/gossip
+snapshot_date: 2026-05-06
+primary_sources:
+  - https://docs.browserbase.com/welcome/what-is-browserbase
+  - https://docs.browserbase.com/introduction/stagehand
+secondary_sources:
+  - https://github.com/browserbase/stagehand/issues
+  - https://www.reddit.com/r/automation/comments/1sl1um7/browserbase_review_after_running_10k_sessions/
+positioning: "Production platform for browser agents: browsers, search/fetch, identity, model gateway, functions, observability, and Stagehand AI automation."
+customer_model: "Developer SaaS with usage tiers, browser/session usage, enterprise scale, and infrastructure-led sales."
+competitive_threat_level: high
+notes: "Threatens agent-browser if buyers value managed infra, replay, identity, and production scale over local inspectability."
+

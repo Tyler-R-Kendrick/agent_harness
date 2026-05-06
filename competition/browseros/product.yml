@@ -1,0 +1,21 @@
+slug: browseros
+name: BrowserOS
+vendor: BrowserOS
+segment: open-source-ai-browser
+product_path: competition/browseros
+design_path: competition/browseros/design
+features_path: competition/browseros/features
+marketing_path: competition/browseros/marketing
+gossip_path: competition/browseros/gossip
+snapshot_date: 2026-05-06
+primary_sources:
+  - https://browseros.com/
+  - https://github.com/browseros-ai/BrowserOS
+secondary_sources:
+  - https://github.com/browseros-ai/BrowserOS/issues
+  - https://www.ycombinator.com/companies/browseros
+positioning: "Open-source, privacy-first agentic browser with local/BYOK models, MCP integrations, and built-in browser automation tools."
+customer_model: "Free/open-source browser; users pay their own model/API costs or use local models."
+competitive_threat_level: high
+notes: "Closest philosophical competitor if agent-browser emphasizes local-first, open extension surfaces, MCP, and developer control."
+

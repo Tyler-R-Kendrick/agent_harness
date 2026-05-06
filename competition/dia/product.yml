@@ -1,0 +1,20 @@
+slug: dia
+name: Dia
+vendor: The Browser Company / Atlassian
+segment: end-user-ai-browser
+product_path: competition/dia
+design_path: competition/dia/design
+features_path: competition/dia/features
+marketing_path: competition/dia/marketing
+gossip_path: competition/dia/gossip
+snapshot_date: 2026-05-06
+primary_sources:
+  - https://techcrunch.com/2025/06/11/the-browser-company-launches-its-ai-first-browser-dia-in-beta/
+  - https://www.macrumors.com/2025/10/09/ai-browser-dia-launches-publicly-on-mac/
+secondary_sources:
+  - https://techcrunch.com/2025/08/06/the-browser-company-launches-a-20-monthly-subscription-for-its-ai-powered-browser/
+positioning: "A familiar Chromium browser with AI in the URL bar, tab-aware chat, memories, and user-created skills."
+customer_model: "Free tier with AI limits; Pro subscription around $20/month for expanded/unlimited AI usage."
+competitive_threat_level: medium
+notes: "Design-savvy competitor; less direct for developer automation, but strong in browser UX craft."
+

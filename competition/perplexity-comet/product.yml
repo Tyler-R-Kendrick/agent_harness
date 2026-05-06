@@ -1,0 +1,21 @@
+slug: perplexity-comet
+name: Perplexity Comet
+vendor: Perplexity
+segment: end-user-ai-browser
+product_path: competition/perplexity-comet
+design_path: competition/perplexity-comet/design
+features_path: competition/perplexity-comet/features
+marketing_path: competition/perplexity-comet/marketing
+gossip_path: competition/perplexity-comet/gossip
+snapshot_date: 2026-05-06
+primary_sources:
+  - https://www.perplexity.ai/comet
+secondary_sources:
+  - https://techcrunch.com/2025/07/09/perplexity-launches-comet-an-ai-powered-web-browser/
+  - https://brave.com/blog/comet-prompt-injection/
+  - https://www.reddit.com/r/perplexity_ai/comments/1qjajac/is_perplexity_comet_any_good_or_is_it_trash/
+positioning: "A personal AI assistant browser that understands, builds, emails, creates, shops, and delegates routine web work."
+customer_model: "Free browser distribution with Perplexity Pro/Max subscription upsell."
+competitive_threat_level: high
+notes: "Most direct consumer AI-search browser competitor; security criticism is unusually visible."
+
