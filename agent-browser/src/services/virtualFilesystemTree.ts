@@ -1,7 +1,9 @@
 import type { TreeNode, WorkspaceFile } from '../types';
 import { ARTIFACTS_DRIVE_NAME, type AgentArtifact } from './artifacts';
+import { getExtensionMarketplaceCategory, type DefaultExtensionDescriptor } from './defaultExtensions';
 
 export const WORKSPACE_DRIVE_NAME = '//workspace';
+export const EXTENSIONS_DRIVE_NAME = '//extensions';
 export { ARTIFACTS_DRIVE_NAME } from './artifacts';
 
 type TerminalBranchNode = TreeNode & { children: TreeNode[] };
@@ -147,6 +149,40 @@ export function buildWorkspaceCapabilityDriveNodes(prefix: string, files: Worksp
       .map((drive) => ({ ...drive, children: sortTreeNodes(drive.children) }))
       .sort((left, right) => left.name.localeCompare(right.name)),
   ];
+}
+
+export function buildInstalledExtensionDriveNodes(
+  prefix: string,
+  extensions: readonly DefaultExtensionDescriptor[],
+): TreeNode[] {
+  if (!extensions.length) return [];
+
+  const extensionsDrive = createFolderNode(`${prefix}:drive:extensions`, EXTENSIONS_DRIVE_NAME, true);
+  const categoryNodes = new Map<string, WorkspaceBranchNode>();
+
+  for (const extension of [...extensions].sort((left, right) => left.manifest.name.localeCompare(right.manifest.name))) {
+    const category = getExtensionMarketplaceCategory(extension);
+    const categoryId = `${prefix}:extensions:${category}`;
+    const categoryNode = categoryNodes.get(category) ?? createFolderNode(categoryId, category);
+    if (!categoryNodes.has(category)) categoryNodes.set(category, categoryNode as WorkspaceBranchNode);
+
+    const extensionId = `${categoryId}:${extension.manifest.id}`;
+    const extensionNode = createFolderNode(extensionId, extension.manifest.name);
+    extensionNode.children = [
+      {
+        id: `${extensionId}:manifest`,
+        name: 'manifest.json',
+        type: 'file',
+      },
+    ];
+    categoryNode.children = [...(categoryNode.children ?? []), extensionNode];
+  }
+
+  extensionsDrive.children = [...categoryNodes.values()]
+    .map((node) => ({ ...node, children: sortTreeNodes(node.children) }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  return [{ ...extensionsDrive, children: extensionsDrive.children }];
 }
 
 export function buildArtifactDriveNodes(prefix: string, artifacts: readonly AgentArtifact[]): TreeNode[] {

@@ -10,7 +10,7 @@ Each new workspace is pre-seeded only with memory files under `.memory/`.
 - Repo-root [`../skills/`](../skills/) contains the broader bundled skill library used across the repository and by compatible agents outside the browser app.
 - Runtime tests cover the default seeded memory files and generic tool, plugin, and hook manifest handling.
 
-Use the `ext/*` plugin manifests when documenting optional runtime extension behavior. Use the repo-root skill library when documenting reusable checked-in skills for the wider repository.
+Use the categorized `ext/*/*` plugin manifests when documenting optional runtime extension behavior. Use the repo-root skill library when documenting reusable checked-in skills for the wider repository.
 
 ## Commands
 

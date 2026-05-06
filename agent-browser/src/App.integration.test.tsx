@@ -257,17 +257,32 @@ describe('App', () => {
     });
   });
 
-  const disableAllTools = () => {
+  const openDefaultSessionPanel = async () => {
+    if (screen.queryByLabelText('Chat panel')) return;
+    const openSessionButton = screen.queryByRole('button', { name: 'Open Session 1' })
+      ?? screen.queryByRole('button', { name: 'Session 1' });
+    if (!openSessionButton) return;
+    fireEvent.click(openSessionButton);
+    await flushAsyncUpdates();
+  };
+
+  const disableAllTools = async () => {
+    await openDefaultSessionPanel();
     fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
-    for (const toggle of screen.getAllByRole('checkbox').filter((checkbox) => {
-      const label = checkbox.getAttribute('aria-label') ?? '';
-      return label.startsWith('Toggle all ');
-    })) {
-      if ((toggle as HTMLInputElement).checked) {
-        fireEvent.click(toggle);
+    await flushAsyncUpdates();
+    while (true) {
+      const checkedGroupToggle = screen.getAllByRole('checkbox').find((checkbox) => {
+        const label = checkbox.getAttribute('aria-label') ?? '';
+        return label.startsWith('Toggle all ') && (checkbox as HTMLInputElement).checked;
+      });
+      if (!checkedGroupToggle) {
+        break;
       }
+      fireEvent.click(checkedGroupToggle);
+      await flushAsyncUpdates();
     }
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await flushAsyncUpdates();
   };
 
   const openDefaultSession = () => {
@@ -282,7 +297,8 @@ describe('App', () => {
     await flushAsyncUpdates();
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
-    openDefaultSession();
+    await flushAsyncUpdates();
+    await openDefaultSessionPanel();
   };
 
   const createCopilotState = (overrides: Partial<CopilotRuntimeState> = {}): CopilotRuntimeState => ({
@@ -389,13 +405,14 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
-    expect(screen.getByText('symphony')).toBeInTheDocument();
-    expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeInTheDocument();
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    expect(within(marketplace).getByRole('heading', { name: 'Runtime extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByText('Symphony workflow orchestration')).toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
   });
 
-  it('lists repo marketplace extensions as installable without enabling them by default', async () => {
+  it('lists installed extensions in the sidebar and renders the marketplace in the active area', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -404,30 +421,42 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
-    expect(screen.getByRole('button', { name: /Marketplace \(12\)/ })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('0 installed')).toBeInTheDocument();
-    expect(screen.getByText('Agent skills')).toBeInTheDocument();
-    expect(screen.getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
-    expect(screen.getByText('DESIGN.md design tokens')).toBeInTheDocument();
-    expect(screen.getAllByText('Symphony workflow orchestration').length).toBeGreaterThan(0);
-    expect(screen.getByText('Workflow canvas orchestration')).toBeInTheDocument();
-    expect(screen.getByText('Artifacts')).toBeInTheDocument();
-    expect(screen.getByText('GitHub Copilot Models')).toBeInTheDocument();
-    expect(screen.getByText('Cursor Models')).toBeInTheDocument();
-    expect(screen.getByText('Codex Models')).toBeInTheDocument();
-    expect(screen.getByText('Codi Browser Models')).toBeInTheDocument();
-    expect(screen.getByText('Local Model Connector')).toBeInTheDocument();
-    expect(screen.getByText('Local Inference Daemon')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /^Install / })).toHaveLength(10);
-    expect(screen.getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
+    const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
+    expect(within(installedSidebar).getByRole('heading', { name: 'Installed extensions' })).toBeInTheDocument();
+    expect(within(installedSidebar).getAllByText('0 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getByText('No installed extensions')).toBeInTheDocument();
+    expect(within(installedSidebar).queryByText('Local Model Connector')).not.toBeInTheDocument();
+
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    expect(within(marketplace).getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'IDE extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'Harness extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'Daemon extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'Provider extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'Runtime extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByText('Agent skills')).toBeInTheDocument();
+    expect(within(marketplace).getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
+    expect(within(marketplace).getByText('DESIGN.md design tokens')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Symphony workflow orchestration')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Workflow canvas orchestration')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Artifacts')).toBeInTheDocument();
+    expect(within(marketplace).getByText('GitHub Copilot Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Cursor Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Codex Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Codi Browser Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Local Model Connector')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Local Inference Daemon')).toBeInTheDocument();
+    expect(within(marketplace).getByText('12 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(10);
+    expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',
       '/downloads/local-model-connector-extension.zip',
     );
-    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon for Portable Deno source' })).toHaveAttribute(
+    expect(within(marketplace).getByRole('link', { name: 'Download Local Inference Daemon for Portable Deno source' })).toHaveAttribute(
       'href',
       '/downloads/agent-harness-local-inference-daemon.zip',
     );
-    expect(screen.queryByText('uBlock Origin')).not.toBeInTheDocument();
+    expect(within(marketplace).queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
   it('offers the portable daemon bundle when browser architecture reports ARM Windows', async () => {
@@ -464,14 +493,53 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByLabelText('Extensions'));
-    fireEvent.click(screen.getByRole('button', { name: 'Install Artifacts' }));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifacts' }));
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.getByText('1 installed')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Artifacts installed' })).toBeDisabled();
+    const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
+    expect(within(installedSidebar).getAllByText('1 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getByText('Artifacts')).toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Artifacts installed' })).toBeDisabled();
     expect(window.localStorage.getItem('agent-browser.installed-default-extension-ids')).toContain('agent-harness.ext.artifacts');
+  });
+
+  it('renders installed IDE extensions as activity-bar icons', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install DESIGN.md design tokens' }));
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByRole('button', { name: 'DESIGN.md design tokens extension' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Installed extensions' })).getByText('DESIGN.md design tokens')).toBeInTheDocument();
+  });
+
+  it('lists provider extensions from the account menu with local provider configuration', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Account'));
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Provider extensions' })).toBeInTheDocument();
+    expect(screen.getAllByText('Local Model Connector').length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Local model provider')).toBeInTheDocument();
   });
 
   it.each([
@@ -635,6 +703,7 @@ describe('App', () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
+    await openDefaultSessionPanel();
 
     fireEvent.click(screen.getByRole('button', { name: /Configure tools/i }));
     const dialog = screen.getByRole('dialog', { name: 'Tools picker' });
@@ -737,6 +806,7 @@ describe('App', () => {
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     const modelContext = installModelContext(window);
     const webmcpTool = createWebMcpTool(modelContext!);
@@ -785,6 +855,7 @@ describe('App', () => {
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     const modelContext = installModelContext(window);
     const webmcpTool = createWebMcpTool(modelContext!);
@@ -916,8 +987,13 @@ describe('App', () => {
       expect.objectContaining({ path: '.memory/project.memory.md', label: 'project.memory.md' }),
       expect.objectContaining({ path: '.memory/workspace.memory.md', label: 'workspace.memory.md' }),
       expect.objectContaining({ path: '.memory/session.memory.md', label: 'session.memory.md' }),
+      expect.objectContaining({
+        path: '.agents/plugins/symphony/agent-harness.plugin.json',
+        label: 'agent-harness.plugin.json',
+        uri: 'files://workspace/.agents/plugins/symphony/agent-harness.plugin.json',
+      }),
     ]));
-    expect((listedFiles as unknown[])).toHaveLength(6);
+    expect((listedFiles as unknown[])).toHaveLength(7);
 
     let fileProperties: unknown;
     await act(async () => {
@@ -1048,7 +1124,9 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    disableAllTools();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Session 1' }));
+    expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
+    await disableAllTools();
 
     const modelContext = installModelContext(window);
     expect(modelContext).toBeDefined();
@@ -1168,6 +1246,32 @@ describe('App', () => {
     });
     const sessionOne = sessions.find((session) => session.name === 'Session 1');
     expect(sessionOne).toBeDefined();
+
+    let initialAvailableSessionTools: Array<{
+      id: string;
+      selected: boolean;
+    }> = [];
+    await act(async () => {
+      initialAvailableSessionTools = await webmcpTool.execute?.({
+        tool: 'list_session_tools',
+        args: { sessionId: sessionOne!.id },
+      }, {} as never) as Array<{
+        id: string;
+        selected: boolean;
+      }>;
+    });
+    const initiallySelectedNonCliToolIds = initialAvailableSessionTools
+      .filter((descriptor) => descriptor.selected && descriptor.id !== 'cli')
+      .map((descriptor) => descriptor.id);
+    if (initiallySelectedNonCliToolIds.length) {
+      await act(async () => {
+        await webmcpTool.execute?.({
+          tool: 'change_session_tools',
+          args: { sessionId: sessionOne!.id, action: 'deselect', toolIds: initiallySelectedNonCliToolIds },
+        }, {} as never);
+        await Promise.resolve();
+      });
+    }
 
     let initialSessionState: { id: string; name: string; mode: string; provider: string | null; cwd: string | null } | undefined;
     await act(async () => {
@@ -1936,6 +2040,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     openDefaultSession();
 
@@ -1965,6 +2070,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     openDefaultSession();
 
@@ -2018,7 +2124,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
-    openDefaultSession();
+    await openDefaultSessionPanel();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
     expect(screen.getByRole('combobox', { name: 'Codi model' })).toHaveValue('hf-test-model');
@@ -2033,6 +2139,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     openDefaultSession();
 
@@ -2176,24 +2283,13 @@ styles:
     fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
 
-    // Navigate to Models and install the model
-    fireEvent.click(screen.getByLabelText('Models'));
-    // Registry section is collapsed by default — expand it first
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
-
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    disableAllTools();
+    await installLocalModel();
+    await disableAllTools();
     // Send a message
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the workspace rules.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
 
     expect(generateMock).toHaveBeenCalledTimes(1);
     const prompt = generateMock.mock.calls[0][0].prompt as Array<{ role: string; content: string }>;
@@ -2229,7 +2325,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
     await installLocalModel();
-    disableAllTools();
+    await disableAllTools();
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -2268,7 +2364,7 @@ styles:
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
     await installLocalModel();
-    disableAllTools();
+    await disableAllTools();
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Use **bold** and [docs](https://example.test).' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -2302,6 +2398,8 @@ styles:
 
     try {
       render(<App />);
+      await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await openDefaultSessionPanel();
 
       fireEvent.click(screen.getByRole('button', { name: 'Enable browser notifications' }));
 
@@ -2357,6 +2455,7 @@ styles:
     try {
       render(<App />);
       await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+      await openDefaultSessionPanel();
 
       expect(getCurrentPosition).not.toHaveBeenCalled();
 
@@ -2385,7 +2484,7 @@ styles:
       expect(screen.getByText(/location on/i)).toBeInTheDocument();
 
       await installLocalModel();
-      disableAllTools();
+      await disableAllTools();
 
       fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Find dinner nearby.' } });
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -2438,7 +2537,7 @@ styles:
       render(<App />);
       await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
       await installLocalModel();
-      disableAllTools();
+      await disableAllTools();
 
       fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Finish the task.' } });
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -2498,7 +2597,7 @@ styles:
       render(<App />);
       await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
       await installLocalModel();
-      disableAllTools();
+      await disableAllTools();
 
       fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Prepare the patch.' } });
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -2555,6 +2654,8 @@ styles:
     await act(async () => {
       await Promise.resolve();
     });
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+    await openDefaultSessionPanel();
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
     openDefaultSession();
@@ -2610,6 +2711,8 @@ styles:
     await act(async () => {
       await Promise.resolve();
     });
+    fireEvent.click(screen.getByLabelText('Workspaces'));
+    await openDefaultSessionPanel();
 
     fireEvent.click(screen.getByLabelText('Workspaces'));
     openDefaultSession();
@@ -2678,6 +2781,7 @@ styles:
       await Promise.resolve();
     });
 
+    await disableAllTools();
     fireEvent.click(screen.getByLabelText('Workspaces'));
     openDefaultSession();
     disableAllTools();
@@ -2732,7 +2836,7 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
+    await disableAllTools();
 
     const omnibar = screen.getByLabelText('Omnibar');
     fireEvent.change(omnibar, { target: { value: 'browser sandbox constraints' } });
@@ -2756,6 +2860,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     const chatInput = screen.getByLabelText('Chat input');
     fireEvent.change(chatInput, { target: { value: 'Use @create' } });
@@ -2784,7 +2889,7 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
+    await disableAllTools();
     const chatInput = screen.getByLabelText('Chat input') as HTMLTextAreaElement;
 
     fireEvent.change(chatInput, { target: { value: 'First turn.' } });
@@ -2826,6 +2931,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Terminal mode' }));
 
@@ -2883,7 +2989,7 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
+    await disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the current workspace.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -2929,6 +3035,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     openDefaultSession();
 
@@ -3001,7 +3108,7 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
+    await disableAllTools();
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'First turn.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -3048,6 +3155,7 @@ styles:
       vi.advanceTimersByTime(350);
       await Promise.resolve();
     });
+    await openDefaultSessionPanel();
 
     openDefaultSession();
 
@@ -3095,7 +3203,7 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
+    await disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Hello' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -3150,7 +3258,7 @@ styles:
       await Promise.resolve();
     });
 
-    disableAllTools();
+    await disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the architectural shift.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -3208,7 +3316,7 @@ styles:
     });
 
     await installLocalModel();
-    disableAllTools();
+    await disableAllTools();
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Think through this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -3256,7 +3364,7 @@ styles:
     });
 
     await installLocalModel();
-    disableAllTools();
+    await disableAllTools();
 
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Think through this.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -4703,6 +4811,7 @@ styles:
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
+    await openDefaultSessionPanel();
 
     fireEvent.change(screen.getByLabelText('Chat input'), {
       target: {
@@ -4881,9 +4990,12 @@ styles:
     expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '3', altKey: true });
-    expect(screen.getByRole('heading', { name: 'Recent activity' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '7', altKey: true });
+    fireEvent.keyDown(window, { key: '4', altKey: true });
+    expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '6', altKey: true });
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });
@@ -5132,6 +5244,7 @@ styles:
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
+    await openDefaultSessionPanel();
 
     // Models panel should not be visible initially
     expect(screen.queryByLabelText('Settings')).not.toBeNull();
@@ -5443,6 +5556,7 @@ styles:
     vi.useFakeTimers();
     render(<App />);
     await act(async () => { vi.advanceTimersByTime(350); });
+    await openDefaultSessionPanel();
 
     // Step 1: open a terminal session pane
     fireEvent.click(screen.getByRole('tab', { name: 'Terminal mode' }));
@@ -5882,6 +5996,7 @@ styles:
   // ── Session FS rename / delete ────────────────────────────────────
 
   async function ensureFilesExpanded() {
+    await openDefaultSessionPanel();
     if (!screen.queryByRole('button', { name: '//session-1-fs' }) && !screen.queryByRole('button', { name: '//workspace' })) {
       fireEvent.click(screen.getAllByRole('button', { name: 'Files' })[0]);
     }
@@ -6185,7 +6300,7 @@ styles:
     });
 
     expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument();
-    expect(screen.getByText('My Session')).toBeInTheDocument();
+    expect(getTreeItemByText('My Session')).toBeInTheDocument();
   });
 
   it('Enter in session rename input submits the rename', async () => {
@@ -6205,7 +6320,7 @@ styles:
     });
 
     expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument();
-    expect(screen.getByText('Renamed Session')).toBeInTheDocument();
+    expect(getTreeItemByText('Renamed Session')).toBeInTheDocument();
   });
 
   it('Escape in session rename input cancels without renaming', async () => {

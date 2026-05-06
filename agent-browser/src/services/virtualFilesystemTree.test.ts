@@ -4,12 +4,90 @@ import {
   ARTIFACTS_DRIVE_NAME,
   WORKSPACE_DRIVE_NAME,
   buildArtifactDriveNodes,
+  buildInstalledExtensionDriveNodes,
   buildMountedTerminalDriveNodes,
   buildWorkspaceCapabilityDriveNodes,
 } from './virtualFilesystemTree';
 import { createArtifact } from './artifacts';
+import type { DefaultExtensionDescriptor } from './defaultExtensions';
 
 describe('virtualFilesystemTree', () => {
+  it('mounts installed harness extensions as a virtual extensions drive', () => {
+    const extensions = [
+      {
+        marketplace: {
+          id: 'agent-harness.ext.agent-skills',
+          name: 'Agent skills',
+          version: '0.1.0',
+          description: 'Loads skills.',
+          source: { type: 'local', path: './harness/agent-skills' },
+          metadata: { marketplaceCategory: 'harness' },
+        },
+        manifest: {
+          schemaVersion: 1,
+          id: 'agent-harness.ext.agent-skills',
+          name: 'Agent skills',
+          version: '0.1.0',
+          description: 'Loads skills.',
+          entrypoint: { module: './src/index.ts' },
+        },
+      },
+      {
+        marketplace: {
+          id: 'agent-harness.ext.design-md',
+          name: 'DESIGN.md design tokens',
+          version: '0.1.0',
+          description: 'Loads design guidance.',
+          source: { type: 'local', path: './ide/design-md' },
+          metadata: { marketplaceCategory: 'ide' },
+        },
+        manifest: {
+          schemaVersion: 1,
+          id: 'agent-harness.ext.design-md',
+          name: 'DESIGN.md design tokens',
+          version: '0.1.0',
+          description: 'Loads design guidance.',
+          entrypoint: { module: './src/index.ts' },
+        },
+      },
+    ] as DefaultExtensionDescriptor[];
+
+    const drives = buildInstalledExtensionDriveNodes('extensions:ws-build', extensions);
+
+    expect(drives).toEqual([
+      expect.objectContaining({
+        id: 'extensions:ws-build:drive:extensions',
+        name: '//extensions',
+        type: 'folder',
+        isDrive: true,
+        children: [
+          expect.objectContaining({
+            name: 'harness',
+            children: [
+              expect.objectContaining({
+                name: 'Agent skills',
+                children: [
+                  expect.objectContaining({ name: 'manifest.json', type: 'file' }),
+                ],
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            name: 'ide',
+            children: [
+              expect.objectContaining({
+                name: 'DESIGN.md design tokens',
+                children: [
+                  expect.objectContaining({ name: 'manifest.json', type: 'file' }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ]);
+  });
+
   it('mounts artifacts as their own special drive with files and references', () => {
     const styleguide = createArtifact({
       id: 'artifact-styleguide',

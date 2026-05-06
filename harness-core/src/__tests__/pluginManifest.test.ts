@@ -263,7 +263,7 @@ describe('plugin manifest standards', () => {
 
   it('keeps the DESIGN.md example renderer manifest valid', () => {
     const manifest = JSON.parse(readFileSync(
-      new URL('../../../ext/design-md/agent-harness.plugin.json', import.meta.url),
+      new URL('../../../ext/ide/design-md/agent-harness.plugin.json', import.meta.url),
       'utf8',
     ));
 

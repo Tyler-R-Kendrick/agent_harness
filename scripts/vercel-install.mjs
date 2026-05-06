@@ -28,20 +28,45 @@ export async function getCachedInstallArtifactPaths(rootDir = process.cwd()) {
     path.join(rootDir, 'harness-core', 'node_modules'),
   ];
 
-  await appendNestedWorkspaceNodeModules(paths, rootDir, 'lib');
-  await appendNestedWorkspaceNodeModules(paths, rootDir, 'ext');
+  await appendNestedWorkspaceNodeModules(paths, rootDir, 'lib', 1);
+  await appendNestedWorkspaceNodeModules(paths, rootDir, 'ext', 2);
 
   return paths;
 }
 
-async function appendNestedWorkspaceNodeModules(paths, rootDir, workspaceRoot) {
-  try {
-    const entries = await readdir(path.join(rootDir, workspaceRoot), { withFileTypes: true });
+async function appendNestedWorkspaceNodeModules(paths, rootDir, workspaceRoot, maxDepth) {
+  const workspaceDirectory = path.join(rootDir, workspaceRoot);
+
+  async function visit(directory, depth) {
+    let entries;
+
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        return;
+      }
+
+      throw error;
+    }
+
+    if (depth > 0 && entries.some((entry) => entry.isFile() && entry.name === 'package.json')) {
+      paths.push(path.join(directory, 'node_modules'));
+    }
+
+    if (depth >= maxDepth) {
+      return;
+    }
+
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        paths.push(path.join(rootDir, workspaceRoot, entry.name, 'node_modules'));
+      if (entry.isDirectory() && entry.name !== 'node_modules') {
+        await visit(path.join(directory, entry.name), depth + 1);
       }
     }
+  }
+
+  try {
+    await visit(workspaceDirectory, 0);
   } catch (error) {
     if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
       throw error;

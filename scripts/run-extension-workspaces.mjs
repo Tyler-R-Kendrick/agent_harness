@@ -26,21 +26,33 @@ export function buildWorkspaceScriptArgs(workspaceName, scriptName) {
 
 export async function discoverExtensionWorkspaces(repoRoot = repoRootFromScript()) {
   const extensionRoot = path.join(repoRoot, DEFAULT_EXTENSIONS_DIRECTORY);
-  const entries = await readdir(extensionRoot, { withFileTypes: true });
   const workspaces = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const directory = path.join(extensionRoot, entry.name);
+
+  async function visit(directory) {
     try {
       const packageJson = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'));
       if (typeof packageJson.name === 'string') {
         workspaces.push({ name: packageJson.name, directory });
+        return;
       }
     } catch (error) {
       if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
         throw error;
       }
     }
+
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        await visit(path.join(directory, entry.name));
+      }
+    }
+  }
+
+  const entries = await readdir(extensionRoot, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    await visit(path.join(extensionRoot, entry.name));
   }
   return workspaces.sort((left, right) => left.name.localeCompare(right.name));
 }

@@ -90,11 +90,11 @@ The app already has the right extension seams:
 - `ext/agent-harness.marketplace.json` lists installable marketplace entries.
 - `agent-browser/src/services/defaultExtensions.ts` parses marketplace entries and loads default plugin packages.
 - `harness-core` exposes plugins, tools, commands, artifacts, renderers, pane items, storage, and hooks.
-- `ext/symphony` already proves a board model can live as a plugin asset, but it is task-board orchestration, not a general Serverless Workflow DSL or n8n-class workflow canvas.
+- `ext/runtime/symphony` already proves a board model can live as a plugin asset, but it is task-board orchestration, not a general Serverless Workflow DSL or n8n-class workflow canvas.
 
 The new extension should therefore be separate from Symphony:
 
-- Package: `ext/workflow-canvas`
+- Package: `ext/ide/workflow-canvas`
 - Marketplace id: `agent-harness.ext.workflow-canvas`
 - Runtime plugin id: `workflow-canvas`
 - Portable DSL: CNCF Serverless Workflow `dsl: "1.0.0"`

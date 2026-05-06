@@ -5,6 +5,9 @@ import {
   DEFAULT_EXTENSION_MARKETPLACE,
   DEFAULT_EXTENSION_MARKETPLACES,
   createDefaultExtensionRuntime,
+  getExtensionMarketplaceCategory,
+  getInstalledDefaultExtensionDescriptors,
+  groupDefaultExtensionsByMarketplaceCategory,
 } from './defaultExtensions';
 
 describe('default extensions', () => {
@@ -13,6 +16,29 @@ describe('default extensions', () => {
     expect(DEFAULT_EXTENSION_MARKETPLACE.name).toBe('Agent Harness default marketplace');
     expect(DEFAULT_EXTENSION_MARKETPLACES).toEqual([DEFAULT_EXTENSION_MARKETPLACE]);
     expect(DEFAULT_EXTENSION_MARKETPLACE.plugins.some((plugin) => plugin.default === true)).toBe(false);
+    const grouped = groupDefaultExtensionsByMarketplaceCategory(DEFAULT_EXTENSION_MANIFESTS);
+    expect(grouped.ide).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-md' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts' }) }),
+    ]));
+    expect(grouped.harness).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.agent-skills' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.agents-md' }) }),
+    ]));
+    expect(grouped.daemon).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.local-inference-daemon' }) }),
+    ]));
+    expect(grouped.provider).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.ghcp-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.cursor-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.codex-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.codi-browser-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.local-model-connector' }) }),
+    ]));
+    expect(grouped.runtime).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.symphony' }) }),
+    ]));
     expect(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id)).toEqual([
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
@@ -91,8 +117,9 @@ describe('default extensions', () => {
     expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.local-model-connector'))
       .toMatchObject({
         marketplace: {
-          source: { path: './local-model-connector/dist' },
-          categories: expect.arrayContaining(['browser-extension']),
+          manifest: './provider/local-model-connector/agent-harness.plugin.json',
+          source: { path: './provider/local-model-connector/dist' },
+          categories: expect.arrayContaining(['provider-extension']),
         },
         manifest: {
           capabilities: expect.arrayContaining([
@@ -137,8 +164,12 @@ describe('default extensions', () => {
     expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.local-inference-daemon'))
       .toMatchObject({
         marketplace: {
-          source: { path: './local-inference-daemon/dist' },
-          categories: expect.arrayContaining(['model-provider', 'daemon']),
+          manifest: './daemon/local-inference-daemon/agent-harness.plugin.json',
+          source: { path: './daemon/local-inference-daemon/dist' },
+          categories: expect.arrayContaining(['daemon-extension']),
+          metadata: expect.objectContaining({
+            externalInstallDetection: 'webrtc-peer',
+          }),
         },
         manifest: {
           capabilities: expect.arrayContaining([
@@ -169,6 +200,29 @@ describe('default extensions', () => {
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
       'ghcp-model-provider',
       'codex-model-provider',
+    ]);
+  });
+
+  it('lists installed descriptors and keeps their marketplace categories', async () => {
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: [
+        'agent-harness.ext.design-md',
+        'agent-harness.ext.agents-md',
+        'agent-harness.ext.symphony',
+      ],
+    });
+
+    const installed = getInstalledDefaultExtensionDescriptors(runtime);
+
+    expect(installed.map((extension) => extension.manifest.id)).toEqual([
+      'agent-harness.ext.agents-md',
+      'agent-harness.ext.design-md',
+      'agent-harness.ext.symphony',
+    ]);
+    expect(installed.map(getExtensionMarketplaceCategory)).toEqual([
+      'harness',
+      'ide',
+      'runtime',
     ]);
   });
 });
