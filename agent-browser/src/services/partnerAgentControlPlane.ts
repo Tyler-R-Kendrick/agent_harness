@@ -103,7 +103,7 @@ export function isPartnerAgentControlPlaneSettings(value: unknown): value is Par
 export function buildPartnerAgentControlPlane(
   input: BuildPartnerAgentControlPlaneInput,
 ): PartnerAgentControlPlane {
-  const settings = input.settings ?? DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS;
+  const settings = { ...(input.settings ?? DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS) };
   const localModels = input.installedModels.filter((model) => model.status === undefined || model.status === 'installed');
   const modelOptions = [
     ...toModelOptions('codi', localModels),

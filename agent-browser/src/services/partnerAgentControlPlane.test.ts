@@ -5,6 +5,7 @@ import {
   buildPartnerAgentPromptContext,
   createPartnerAgentAuditEntry,
   isPartnerAgentControlPlaneSettings,
+  type PartnerAgentControlPlaneSettings,
 } from './partnerAgentControlPlane';
 
 describe('partnerAgentControlPlane', () => {
@@ -96,5 +97,52 @@ describe('partnerAgentControlPlane', () => {
     });
 
     expect(buildPartnerAgentPromptContext(plane)).toBe('');
+  });
+
+  it('keeps control-plane settings snapshots isolated from callers and defaults', () => {
+    const customSettings: PartnerAgentControlPlaneSettings = {
+      ...DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS,
+      auditLevel: 'strict',
+    };
+    const customPlane = buildPartnerAgentControlPlane({
+      settings: customSettings,
+      installedModels: [],
+      copilotState: { authenticated: false, models: [] },
+      cursorState: { authenticated: false, models: [] },
+      codexState: { authenticated: false, models: [] },
+      selectedProvider: 'codi',
+      runtimeProvider: 'codi',
+      selectedModelRef: '',
+      selectedToolIds: [],
+    });
+
+    customSettings.auditLevel = 'minimal';
+    expect(customPlane.settings.auditLevel).toBe('strict');
+
+    const defaultPlane = buildPartnerAgentControlPlane({
+      installedModels: [],
+      copilotState: { authenticated: false, models: [] },
+      cursorState: { authenticated: false, models: [] },
+      codexState: { authenticated: false, models: [] },
+      selectedProvider: 'codi',
+      runtimeProvider: 'codi',
+      selectedModelRef: '',
+      selectedToolIds: [],
+    });
+
+    defaultPlane.settings.enabled = false;
+    const nextDefaultPlane = buildPartnerAgentControlPlane({
+      installedModels: [],
+      copilotState: { authenticated: false, models: [] },
+      cursorState: { authenticated: false, models: [] },
+      codexState: { authenticated: false, models: [] },
+      selectedProvider: 'codi',
+      runtimeProvider: 'codi',
+      selectedModelRef: '',
+      selectedToolIds: [],
+    });
+
+    expect(DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS.enabled).toBe(true);
+    expect(nextDefaultPlane.settings.enabled).toBe(true);
   });
 });
