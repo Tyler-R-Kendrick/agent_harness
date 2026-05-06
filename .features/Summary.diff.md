@@ -1,62 +1,42 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-05
+Updated: 2026-05-06
 Baseline: `.features/Summary.md` refreshed from the 2026-05-04 twenty-two-harness corpus.
-Diff type: additive update after GitHub Copilot refresh research
+Diff type: additive update after Cursor refresh research
 
 ## Net new normalized features
 
-### Added: Policy-governed partner-agent control planes
-- Why now: GitHub Copilot is no longer just shipping its own cloud agent. It now hosts Claude and Codex inside the same task surface, with shared governance and a growing model picker.
+### Added: Enterprise model governance and spend-aware operations
+- Why now: Cursor is showing that once harnesses span local chats, cloud agents, automations, and reviewer agents, admins need policy and budget controls that work across all of them.
 - Research delta:
-  - GitHub Docs now document third-party agents for Claude and Codex alongside Copilot cloud agent
-  - the same GitHub task surfaces now support partner agents across the agents tab, issues, pull requests, GitHub Mobile, and VS Code
-  - the April 14, 2026 changelog adds per-agent model selection on github.com for Claude and Codex
-  - GitHub applies the same security protections and policy controls to partner agents as it does to its own cloud agent
+  - Cursor's May 4, 2026 changelog adds provider-level and model-level allow or block lists
+  - admins can default-block newly released providers or model versions
+  - soft spend limits now trigger automatic alerts at 50%, 80%, and 100%
+  - usage analytics can now be broken down by user and by surface, including clients, Cloud Agents, automations, Bugbot, and Security Review
 
-### Expanded: Parallel agent orchestration
-- Why now: GitHub Copilot now treats specialization as part of the orchestration layer, not just as separate named prompts.
+### Added: Always-on specialist security review agents
+- Why now: Cursor has turned security-specific reviewer agents into a first-class part of the harness instead of leaving this work to generic coding agents or separate security tools.
 - Research delta:
-  - custom agent profiles can run as subagents with separate context windows
-  - subagent work can run in parallel
-  - third-party agents further broaden GitHub's multi-agent execution model
+  - Cursor Security Review adds `Security Reviewer` for inline PR review and `Vulnerability Scanner` for scheduled repo scans
+  - the reviewer explicitly checks auth regressions, privacy/data handling, prompt injection, and unsafe agent auto-approvals
+  - findings include inline severity and remediation guidance
+  - teams can wire in existing SAST, SCA, and secret scanners via MCP and send scan updates to Slack
 
 ### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: GitHub Copilot now exposes both lightweight and heavier-weight reusable packaging surfaces instead of only custom instructions.
+- Why now: Cursor is tightening the governance side of its plugin platform, not only the rendering side.
 - Research delta:
-  - prompt files package reusable workspace prompts in Markdown
-  - Agent Skills package instructions, scripts, and resources
-  - Copilot can reuse existing `.claude/skills` repositories instead of forcing a new skill format
+  - team marketplaces can now be created without first connecting a repository
+  - first-party plugins now support explicit `Default Off`, `Default On`, and `Required` install behavior
+  - the governed package surface spans MCP servers, skills, subagents, rules, and hooks
 
-### Expanded: Multi-surface continuity
-- Why now: GitHub now gives cloud-agent sessions a broader control surface than the original terminal-plus-GitHub story.
-- Research delta:
-  - session tracking now spans the agents tab, GitHub CLI, Raycast, VS Code, JetBrains, Eclipse, and GitHub Mobile
-  - users can inspect session logs and steer running tasks from those surfaces
-  - GitHub is explicitly turning session continuity into a cross-client product feature
-
-### Expanded: Persistent memory plus project instructions
-- Why now: GitHub is broadening grounded context from private setup into reusable, shareable artifacts.
-- Research delta:
-  - Spaces can now be shared publicly or individually
-  - files can be added to Spaces directly from the github.com code viewer
-  - GitHub is preserving RBAC while making context packs easier to publish and reuse
-
-### Expanded: Background execution without stealing focus
-- Why now: Copilot is pushing agent execution closer to the cursor instead of forcing every autonomous flow into a dedicated side panel.
-- Research delta:
-  - agent mode in IDEs now spans richer inline/editor-native flows
-  - April 24, 2026 JetBrains notes add inline agent mode in public preview
-  - the same update adds global auto-approve and granular defaults for commands and file edits
-
-### Added: Add a policy-governed partner-agent control plane and model picker
-- Why now: `agent-browser` already has its own harness and orchestration surfaces, but it cannot yet host multiple agent backends behind one shared session, governance, and review workflow the way GitHub Copilot now can.
+### Added: Add security review agents and scheduled vulnerability scans
+- Why now: `agent-browser` already has review and automation ambitions, but it does not yet have specialized continuous security agents that can review diffs and run scheduled repo scans inside the same harness and governance layer.
 - Linear issue title:
-  - `Add a policy-governed partner-agent control plane and model picker`
+  - `Add security review agents and scheduled vulnerability scans`
 - Suggested problem statement:
-  - `agent-browser` can run its own agent stack, but it lacks a shared control plane for switching or delegating across multiple agent backends while keeping one consistent policy, review, and audit model for browser-agent tasks.
+  - `agent-browser` can run browser-capable agents and validation flows, but it lacks specialized security reviewers that can continuously inspect pull requests, run scheduled vulnerability scans, and surface severity-tagged findings in the same operational workflow.
 - One-shot instruction for an LLM:
-  - Implement a partner-agent control plane for `agent-browser` that can host multiple agent backends behind one session UX, unify permissions and audit logging, preserve the same issue, diff, and review workflow regardless of backend, and expose per-agent model selection without fragmenting run history or browser evidence.
+  - Implement specialized security review agents for `agent-browser` that can inspect pull-request diffs and scheduled repository state, emit inline severity-tagged findings with remediation guidance, integrate existing security tools through the harness tool layer, and deliver scheduled scan updates through the same automation and review surfaces already used for browser-agent work.
 
 ## How to use this file
 
@@ -67,4 +47,4 @@ Diff type: additive update after GitHub Copilot refresh research
 
 ## Recommended next Linear batch
 
-1. `Add a policy-governed partner-agent control plane and model picker`
+1. `Add security review agents and scheduled vulnerability scans`
