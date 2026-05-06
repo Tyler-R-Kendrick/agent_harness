@@ -3063,6 +3063,54 @@ styles:
     expect(screen.getByText('Codex response')).toBeInTheDocument();
   });
 
+  it('adds partner agent control plane audit context to direct partner-agent prompts', async () => {
+    vi.useFakeTimers();
+    fetchCodexStateMock.mockResolvedValue(createCodexState({
+      authenticated: true,
+      version: '0.125.0',
+      models: [{
+        id: 'codex-default',
+        name: 'Codex default',
+        reasoning: true,
+        vision: false,
+      }],
+    }));
+    streamCodexRuntimeChatMock.mockImplementation(async (_request, callbacks) => {
+      callbacks.onToken?.('Codex response');
+      callbacks.onDone?.('Codex response');
+      return Promise.resolve();
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    openDefaultSession();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Agent provider' }), { target: { value: 'codex' } });
+    disableAllTools();
+    fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the current workspace.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(streamCodexRuntimeChatMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'codex-default',
+        prompt: expect.stringContaining('Partner agent control plane: enabled'),
+      }),
+      expect.any(Object),
+      expect.any(AbortSignal),
+    );
+    expect(streamCodexRuntimeChatMock.mock.calls[0][0].prompt).toContain('Selected model ref: codex:codex-default');
+    expect(streamCodexRuntimeChatMock.mock.calls[0][0].prompt).toContain('Unified workflow: issue, diff, review, browser evidence, and AgentBus traces stay attached to one session.');
+  });
+
   it('shows Codex status in Models', async () => {
     vi.useFakeTimers();
     fetchCodexStateMock.mockResolvedValue(createCodexState({
