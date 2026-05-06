@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-05
+Updated: 2026-05-06
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -223,6 +223,20 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add a partner-agent control plane for browser-agent work that can host multiple internal or external agent backends behind one session UX, unify permissions and audit logging, expose per-agent model selection, and preserve the same issue, diff, and review workflow regardless of which agent executes the task.
 
+### 32. Enterprise model governance and spend-aware operations
+- Common pattern: agent platforms are starting to expose org-level controls over which models can run, how budget is enforced, and how usage is analyzed across the growing set of agent surfaces.
+- Seen in: Cursor provider/model allow and block lists, default blocking of new model versions, soft spend limits with alerts, and per-surface usage analytics across clients, Cloud Agents, automations, Bugbot, and Security Review.
+- Why it matters: once a harness spans foreground chats, background agents, automations, and reviewers, enterprise rollout depends on policy and spend controls that work across all of them.
+- One-shot build instruction:
+  - Add enterprise governance for browser-agent models with provider/model policy controls, soft and hard spend budgets, progressive usage alerts, and analytics broken down by user, agent surface, and automation type.
+
+### 33. Always-on specialist security review agents
+- Common pattern: coding harnesses are starting to ship dedicated security agents that review PRs and run scheduled scans as first-class product surfaces instead of relying only on generic coding agents or external scanners.
+- Seen in: Cursor Security Review with `Security Reviewer` inline PR comments, `Vulnerability Scanner` scheduled scans, Slack delivery, and MCP-based customization for existing security tools.
+- Why it matters: specialized reviewer agents let teams operationalize security checks inside the same control plane already used for coding, orchestration, and policy.
+- One-shot build instruction:
+  - Build specialized browser-agent security reviewers that can inspect diffs and scheduled repo state, leave inline severity-tagged findings with remediation, integrate external security tools, and deliver scan updates through the team channels already used for automation.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -250,3 +264,5 @@ Method: current-product research from first-party product pages, help centers, d
 23. Add adversary-style tool-call review for browser-agent actions.
 24. Add chaptered sessions and automatic context compression for browser-agent runs.
 25. Add a policy-governed partner-agent control plane and model picker.
+26. Add enterprise model governance, spend limits, and per-surface usage analytics.
+27. Add specialized security review agents and scheduled vulnerability scans.
