@@ -10,3 +10,20 @@ import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
 
 await context.plugins.load(createAgentsMdHookPlugin(files));
 ```
+
+## Package Boundary
+
+Use the package root for the stable plugin factory import:
+
+```ts
+import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
+```
+
+Hosts that need plugin metadata should use the manifest export:
+
+```ts
+import manifest from '@agent-harness/ext-agents-md/manifest';
+```
+
+Do not deep-import files under `src/`; those modules are implementation details
+for the root entry point.
