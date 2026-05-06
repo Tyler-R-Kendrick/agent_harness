@@ -533,7 +533,7 @@ describe('registerSessionFilesystemTools', () => {
     expect(getModelContextRegistry(modelContext).list()).toHaveLength(0);
   });
 
-  it('renames a root-level entry using newName (covers parent === "/" branch)', async () => {
+  it('renames a root-level entry with newName without duplicating the parent slash', async () => {
     const modelContext = new ModelContext();
     const onRenameSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
@@ -542,7 +542,6 @@ describe('registerSessionFilesystemTools', () => {
       onRenameSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
-    // /readme.md → parentPath returns '/' → parent === '/' → newPath = '/README.md'
     const result = await tool.execute?.({
       tool: 'rename_session_filesystem_entry',
       args: { sessionId: 'session-1', path: '/readme.md', newName: 'README.md' },
@@ -550,7 +549,7 @@ describe('registerSessionFilesystemTools', () => {
     expect(result).toMatchObject({ sessionId: 'session-1', path: '/README.md' });
   });
 
-  it('renames the root folder using newName (covers parentPath null ?? "/" branch)', async () => {
+  it('renames the root folder with newName as a root-level path', async () => {
     const modelContext = new ModelContext();
     const onRenameSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
@@ -559,7 +558,6 @@ describe('registerSessionFilesystemTools', () => {
       onRenameSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
-    // path='/' → parentPath('/') returns null → null ?? '/' = '/' → newPath = '/root-renamed'
     const result = await tool.execute?.({
       tool: 'rename_session_filesystem_entry',
       args: { sessionId: 'session-1', path: '/', newName: 'root-renamed' },
@@ -567,101 +565,112 @@ describe('registerSessionFilesystemTools', () => {
     expect(result).toMatchObject({ sessionId: 'session-1', path: '/root-renamed' });
   });
 
-  it('covers ?? fallback in scaffold when sessionId and basePath are absent (throws for empty path)', async () => {
+  it('rejects scaffolding without a target path before invoking the scaffold callback', async () => {
     const modelContext = new ModelContext();
+    const onScaffoldSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onScaffoldSessionFsEntry: vi.fn(async () => undefined),
+      onScaffoldSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
-    // Missing sessionId and basePath trigger `?? ''` branches; empty basePath throws from normalizeSessionFsPath
     await expect(
       tool.execute?.({ tool: 'scaffold_session_filesystem_entry', args: {} }, {} as never),
-    ).rejects.toThrow();
+    ).rejects.toThrow('Session filesystem input must include a path.');
+    expect(onScaffoldSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers ?? fallback in rename when sessionId/path are absent (throws for empty path)', async () => {
+  it('rejects rename without a source path before invoking the rename callback', async () => {
     const modelContext = new ModelContext();
+    const onRenameSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onRenameSessionFsEntry: vi.fn(async () => undefined),
+      onRenameSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
-    // Missing sessionId/path triggers `?? ''` branches; empty path throws from normalizeSessionFsPath
     await expect(
       tool.execute?.({ tool: 'rename_session_filesystem_entry', args: {} }, {} as never),
-    ).rejects.toThrow();
+    ).rejects.toThrow('Session filesystem input must include a path.');
+    expect(onRenameSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers ?? fallback in write_session_file when sessionId/path/content are absent (throws for empty path)', async () => {
+  it('rejects write without a path before invoking the write callback', async () => {
     const modelContext = new ModelContext();
+    const onWriteSessionFsFile = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onWriteSessionFsFile: vi.fn(async () => undefined),
+      onWriteSessionFsFile,
     });
     const tool = createWebMcpTool(modelContext);
     await expect(
       tool.execute?.({ tool: 'write_session_file', args: {} }, {} as never),
-    ).rejects.toThrow();
+    ).rejects.toThrow('Session filesystem input must include a path.');
+    expect(onWriteSessionFsFile).not.toHaveBeenCalled();
   });
 
-  it('covers ?? fallback in delete_session_filesystem_entry when sessionId/path are absent (throws for empty path)', async () => {
+  it('rejects delete without a path before invoking the delete callback', async () => {
     const modelContext = new ModelContext();
+    const onDeleteSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onDeleteSessionFsEntry: vi.fn(async () => undefined),
+      onDeleteSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
     await expect(
       tool.execute?.({ tool: 'delete_session_filesystem_entry', args: {} }, {} as never),
-    ).rejects.toThrow();
+    ).rejects.toThrow('Session filesystem input must include a path.');
+    expect(onDeleteSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers newName ?? fallback when renamed entry has no newName provided', async () => {
+  it('rejects rename without a destination before invoking the rename callback', async () => {
     const modelContext = new ModelContext();
+    const onRenameSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onRenameSessionFsEntry: vi.fn(async () => undefined),
+      onRenameSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
-    // Provide valid sessionId/path but omit both newPath and newName → triggers newName ?? '' fallback → throws
     await expect(
       tool.execute?.({ tool: 'rename_session_filesystem_entry', args: { sessionId: 'session-1', path: '/readme.md' } }, {} as never),
     ).rejects.toThrow('newPath or newName');
+    expect(onRenameSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers path ?? fallback in create_session_file when path is absent (throws for empty path)', async () => {
+  it('rejects file creation without a path before invoking the create callback', async () => {
     const modelContext = new ModelContext();
+    const onCreateSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onCreateSessionFsEntry: vi.fn(async () => undefined),
+      onCreateSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
     await expect(
       tool.execute?.({ tool: 'create_session_file', args: { sessionId: 'session-1' } }, {} as never),
-    ).rejects.toThrow();
+    ).rejects.toThrow('Session filesystem input must include a path.');
+    expect(onCreateSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers ?? fallbacks in create_session_folder when sessionId/path are absent (throws for empty path)', async () => {
+  it('rejects folder creation without a path before invoking the create callback', async () => {
     const modelContext = new ModelContext();
+    const onCreateSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onCreateSessionFsEntry: vi.fn(async () => undefined),
+      onCreateSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
     await expect(
       tool.execute?.({ tool: 'create_session_folder', args: {} }, {} as never),
-    ).rejects.toThrow();
+    ).rejects.toThrow('Session filesystem input must include a path.');
+    expect(onCreateSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers content ?? fallback in write_session_file when content is absent (writes empty string)', async () => {
+  it('writes empty string content when a caller omits optional file content', async () => {
     const modelContext = new ModelContext();
     const onWriteSessionFsFile = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
@@ -678,46 +687,22 @@ describe('registerSessionFilesystemTools', () => {
     expect(onWriteSessionFsFile).toHaveBeenCalledWith({ sessionId: 'session-1', path: '/readme.md', content: '' });
   });
 
-  it('covers sessionId ?? fallback in create_session_file when sessionId is absent (throws for empty sessionId/path)', async () => {
+  it('rejects file creation without a sessionId before invoking the create callback', async () => {
     const modelContext = new ModelContext();
+    const onCreateSessionFsEntry = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
       workspaceName: 'Research',
       sessionFsEntries: SESSION_FS_ENTRIES,
-      onCreateSessionFsEntry: vi.fn(async () => undefined),
+      onCreateSessionFsEntry,
     });
     const tool = createWebMcpTool(modelContext);
     await expect(
-      tool.execute?.({ tool: 'create_session_file', args: {} }, {} as never),
-    ).rejects.toThrow();
+      tool.execute?.({ tool: 'create_session_file', args: { path: '/new.md' } }, {} as never),
+    ).rejects.toThrow('Session filesystem input must include a sessionId.');
+    expect(onCreateSessionFsEntry).not.toHaveBeenCalled();
   });
 
-  it('covers sessionId ?? fallback in mount_session_drive when sessionId is absent (throws TypeError)', async () => {
-    const modelContext = new ModelContext();
-    registerSessionFilesystemTools(modelContext, {
-      workspaceName: 'Research',
-      sessionDrives: SESSION_DRIVES,
-      onMountSessionDrive: vi.fn(async () => undefined),
-    });
-    const tool = createWebMcpTool(modelContext);
-    await expect(
-      tool.execute?.({ tool: 'mount_session_drive', args: {} }, {} as never),
-    ).rejects.toThrow(TypeError);
-  });
-
-  it('covers sessionId ?? fallback in unmount_session_drive when sessionId is absent (throws TypeError)', async () => {
-    const modelContext = new ModelContext();
-    registerSessionFilesystemTools(modelContext, {
-      workspaceName: 'Research',
-      sessionDrives: SESSION_DRIVES,
-      onUnmountSessionDrive: vi.fn(async () => undefined),
-    });
-    const tool = createWebMcpTool(modelContext);
-    await expect(
-      tool.execute?.({ tool: 'unmount_session_drive', args: {} }, {} as never),
-    ).rejects.toThrow(TypeError);
-  });
-
-  it('covers drive?.label ?? sessionId fallback when mounted sessionId is not in sessionDrives', async () => {
+  it('rejects mount without a sessionId before invoking the mount callback', async () => {
     const modelContext = new ModelContext();
     const onMountSessionDrive = vi.fn(async () => undefined);
     registerSessionFilesystemTools(modelContext, {
@@ -726,7 +711,36 @@ describe('registerSessionFilesystemTools', () => {
       onMountSessionDrive,
     });
     const tool = createWebMcpTool(modelContext);
-    // 'session-99' is not in SESSION_DRIVES, so drive?.label is undefined → falls back to sessionId
+    await expect(
+      tool.execute?.({ tool: 'mount_session_drive', args: {} }, {} as never),
+    ).rejects.toThrow('Mounting a session drive requires a sessionId.');
+    expect(onMountSessionDrive).not.toHaveBeenCalled();
+  });
+
+  it('rejects unmount without a sessionId before invoking the unmount callback', async () => {
+    const modelContext = new ModelContext();
+    const onUnmountSessionDrive = vi.fn(async () => undefined);
+    registerSessionFilesystemTools(modelContext, {
+      workspaceName: 'Research',
+      sessionDrives: SESSION_DRIVES,
+      onUnmountSessionDrive,
+    });
+    const tool = createWebMcpTool(modelContext);
+    await expect(
+      tool.execute?.({ tool: 'unmount_session_drive', args: {} }, {} as never),
+    ).rejects.toThrow('Unmounting a session drive requires a sessionId.');
+    expect(onUnmountSessionDrive).not.toHaveBeenCalled();
+  });
+
+  it('uses the sessionId as the mount label when the drive is not pre-listed', async () => {
+    const modelContext = new ModelContext();
+    const onMountSessionDrive = vi.fn(async () => undefined);
+    registerSessionFilesystemTools(modelContext, {
+      workspaceName: 'Research',
+      sessionDrives: SESSION_DRIVES,
+      onMountSessionDrive,
+    });
+    const tool = createWebMcpTool(modelContext);
     const result = await tool.execute?.({
       tool: 'mount_session_drive',
       args: { sessionId: 'session-99' },
