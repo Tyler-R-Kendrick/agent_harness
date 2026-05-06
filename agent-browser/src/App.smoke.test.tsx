@@ -190,6 +190,26 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Unified workflow')).toBeInTheDocument();
   });
 
+  it('renders security review agent controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Security review agents')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Security review agents' }));
+    expect(screen.getByLabelText('Enable security review agents')).toBeInTheDocument();
+    expect(screen.getByLabelText('Enable inline PR security review')).toBeInTheDocument();
+    expect(screen.getByLabelText('Enable scheduled vulnerability scans')).toBeInTheDocument();
+    expect(screen.getByLabelText('Security scan cadence')).toHaveValue('weekly');
+    expect(screen.getByLabelText('Minimum reported severity')).toHaveValue('medium');
+    expect(screen.getByText('Vulnerability Scanner')).toBeInTheDocument();
+  });
+
   it('shows built-in local inference readiness in Models', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(

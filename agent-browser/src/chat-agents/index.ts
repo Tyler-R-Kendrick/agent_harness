@@ -12,6 +12,7 @@ import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from '.
 import { CURSOR_LABEL, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
 import { isPlannerTaskText, PLANNER_LABEL, streamPlannerChat } from './Planner';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
+import { isSecurityReviewTaskText, SECURITY_REVIEW_LABEL, streamSecurityReviewChat } from './Security';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
@@ -28,6 +29,14 @@ export {
 } from './Debugger';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 export { CURSOR_LABEL, buildCursorPrompt, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
+export {
+  SECURITY_REVIEW_LABEL,
+  buildSecurityReviewOperatingInstructions,
+  buildSecurityReviewSystemPrompt,
+  buildSecurityReviewToolInstructions,
+  isSecurityReviewTaskText,
+  streamSecurityReviewChat,
+} from './Security';
 export {
   TOUR_GUIDE_AGENT_ID,
   TOUR_GUIDE_LABEL,
@@ -269,6 +278,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'security') {
+    await streamSecurityReviewChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'tour-guide') {
     await streamTourGuideChat({
       workspaceName: options.workspaceName,
@@ -322,7 +346,7 @@ export function getAgentDisplayName({
   activeCodexModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner') {
+  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : researcherRuntimeProvider === 'cursor'
@@ -332,7 +356,9 @@ export function getAgentDisplayName({
       ? RESEARCHER_LABEL
       : provider === 'debugger'
         ? DEBUGGER_LABEL
-        : PLANNER_LABEL;
+        : provider === 'planner'
+          ? PLANNER_LABEL
+          : SECURITY_REVIEW_LABEL;
     return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
@@ -379,6 +405,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Planner…'
       : 'Sign in to GHCP or Cursor, or install a Codi model to plan';
+  }
+  if (provider === 'security') {
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
+      ? 'Ask Security Review…'
+      : 'Sign in to GHCP or Cursor, or install a Codi model to review security';
   }
   if (provider === 'tour-guide') {
     return 'Ask Tour Guide…';
@@ -448,6 +479,17 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Planner models`
       : 'Planner needs GHCP, Cursor, or Codi';
   }
+  if (provider === 'security') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Security Review models`;
+    }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Security Review models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Security Review models`
+      : 'Security Review needs GHCP, Cursor, or Codi';
+  }
   if (provider === 'tour-guide') {
     return 'Creates guided product tours';
   }
@@ -461,6 +503,7 @@ export function resolveAgentProviderForTask({
   selectedProvider: AgentProvider;
   latestUserInput: string;
 }): AgentProvider {
+  if (isSecurityReviewTaskText(latestUserInput)) return 'security';
   if (isResearchTaskText(latestUserInput)) return 'researcher';
   if (isDebuggingTaskText(latestUserInput)) return 'debugger';
   if (isPlannerTaskText(latestUserInput)) return 'planner';
@@ -480,7 +523,7 @@ export function resolveRuntimeAgentProvider({
   hasCursorModelsReady?: boolean;
   hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'tour-guide') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
   void hasCodexModelsReady;

@@ -31,6 +31,11 @@ describe('partnerAgentControlPlane', () => {
       ready: true,
       runtimeProvider: 'ghcp',
     });
+    expect(plane.agentRows.find((row) => row.provider === 'security')).toMatchObject({
+      label: 'Security Review',
+      kind: 'specialist',
+      ready: true,
+    });
     expect(plane.modelOptions.map((option) => option.ref)).toContain('codi:local-qwen');
     expect(plane.modelOptions.map((option) => option.ref)).toContain('ghcp:gpt-4.1');
     expect(plane.modelOptions.map((option) => option.ref)).toContain('cursor:composer-2');

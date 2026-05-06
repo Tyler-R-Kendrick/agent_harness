@@ -8,6 +8,7 @@ import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
 import * as PlannerModule from './Planner';
+import * as SecurityModule from './Security';
 import * as TourGuideModule from './TourGuide';
 import { streamAgentChat } from './index';
 import { MemorySecretStore, createSecretsManagerAgent } from './Secrets';
@@ -151,6 +152,28 @@ describe('streamAgentChat', () => {
       runtimeProvider: 'ghcp',
       modelId: 'gpt-4.1',
       latestUserInput: 'Plan and orchestrate this delegated workflow.',
+      workspaceName: 'Build',
+    }), {}, undefined);
+  });
+
+  it('routes Security Review sessions through the Security adapter', async () => {
+    const streamSecurityReviewChatSpy = vi.spyOn(SecurityModule, 'streamSecurityReviewChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'security',
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'Run a security review for this PR.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Review the diff.' }],
+      workspaceName: 'Build',
+      workspacePromptContext: 'Use workspace files.',
+    }, {});
+
+    expect(streamSecurityReviewChatSpy).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      latestUserInput: 'Run a security review for this PR.',
       workspaceName: 'Build',
     }), {}, undefined);
   });
