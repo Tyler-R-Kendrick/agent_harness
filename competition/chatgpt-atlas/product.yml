@@ -1,0 +1,21 @@
+slug: chatgpt-atlas
+name: ChatGPT Atlas
+vendor: OpenAI
+segment: end-user-ai-browser
+product_path: competition/chatgpt-atlas
+design_path: competition/chatgpt-atlas/design
+features_path: competition/chatgpt-atlas/features
+marketing_path: competition/chatgpt-atlas/marketing
+gossip_path: competition/chatgpt-atlas/gossip
+snapshot_date: 2026-05-06
+primary_sources:
+  - https://openai.com/index/introducing-chatgpt-atlas/
+  - https://help.openai.com/en/articles/12628199-using-ask-chatgpt-sidebar-and-chatgpt-agent-on-atlas
+secondary_sources:
+  - https://techspot.com/news/110049-openai-chatgpt-atlas-vulnerable-prompt-injection-attacks-within.html
+  - https://www.reddit.com/r/planhub/comments/1of0vvs
+positioning: "A full browser with ChatGPT built in, turning browsing context into chat, memory, suggestions, and agentic action."
+customer_model: "Free browser access for broad ChatGPT users; agent mode gated to paid plans such as Plus, Pro, Business, Enterprise/Edu when enabled."
+competitive_threat_level: high
+notes: "Strongest consumer trust/brand competitor; biggest risk is that Atlas normalizes the exact browser-native assistant pattern."
+

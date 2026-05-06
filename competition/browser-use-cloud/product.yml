@@ -1,0 +1,21 @@
+slug: browser-use-cloud
+name: Browser Use Cloud
+vendor: Browser Use
+segment: developer-browser-agent-platform
+product_path: competition/browser-use-cloud
+design_path: competition/browser-use-cloud/design
+features_path: competition/browser-use-cloud/features
+marketing_path: competition/browser-use-cloud/marketing
+gossip_path: competition/browser-use-cloud/gossip
+snapshot_date: 2026-05-06
+primary_sources:
+  - https://docs.browser-use.com/cloud/quickstart
+  - https://docs.browser-use.com/pricing
+  - https://docs.cloud.browser-use.com/concepts/overview
+secondary_sources:
+  - https://github.com/browser-use/browser-use/issues
+positioning: "State-of-the-art AI browser automation with agents, raw CDP browser sessions, and deterministic Skills."
+customer_model: "Usage-based cloud credits plus Starter/Business/Scaleup subscriptions; open-source library as developer acquisition."
+competitive_threat_level: high
+notes: "Strongest open-source popularity signal among developer automation tools; Skills are strategically relevant to agent-browser skills."
+
