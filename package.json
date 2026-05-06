@@ -5,7 +5,8 @@
     "agent-browser",
     "ext/*/*",
     "harness-core",
-    "lib/*"
+    "lib/*",
+    "lib/workers/*"
   ],
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",

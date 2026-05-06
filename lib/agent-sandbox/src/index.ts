@@ -1,4 +1,5 @@
 export * from './BrowserSandboxProvider';
+export * from './QuickJsWasmSandboxProvider';
 export * from './WebContainerBrowserSandboxProvider';
 export * from './adapters';
 export * from './errors';
