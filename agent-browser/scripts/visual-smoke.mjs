@@ -357,10 +357,13 @@ async function main() {
     await expect(page.getByText(/No localhost sidecar/)).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Harness core' }).click();
+    const harnessCoreToggle = page.getByRole('button', { name: 'Harness core' });
+    if (await harnessCoreToggle.getAttribute('aria-expanded') === 'false') {
+      await harnessCoreToggle.click();
+    }
     await expect(page.getByText('Core active')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('thread lifecycle')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('event streaming')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('thread lifecycle', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('event streaming', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');
