@@ -269,6 +269,23 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('button', { name: 'Attach Research dashboard to session' })).toBeInTheDocument();
   });
 
+  it('renders multitask subagent branch comparison and promotion controls', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('multitask'));
+
+    render(<App />);
+
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    const panel = screen.getByRole('region', { name: 'Multitask subagents' });
+    expect(panel).toBeInTheDocument();
+    expect(screen.getByText('Branch isolation')).toBeInTheDocument();
+    expect(screen.getByText('agent/research/frontend-1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Promote agent/research/tests-2' })).toBeInTheDocument();
+  });
+
   it('renders adversary tool review controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

@@ -60,6 +60,8 @@ describe('STORAGE_KEYS', () => {
       scheduledAutomationsState: expect.any(String),
       workspaceSkillPolicyState: expect.any(String),
       runtimePluginSettings: expect.any(String),
+      browserAgentRunSdkState: expect.any(String),
+      multitaskSubagentState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       installedDefaultExtensionIds: expect.any(String),
       defaultExtensionOpenFeatureFlags: expect.any(String),
@@ -68,6 +70,8 @@ describe('STORAGE_KEYS', () => {
     expect(STORAGE_KEYS.securityReviewAgentSettings).toBe('agent-browser.security-review-agent-settings');
     expect(STORAGE_KEYS.scheduledAutomationsState).toBe('agent-browser.scheduled-automations-state');
     expect(STORAGE_KEYS.workspaceSkillPolicyState).toBe('agent-browser.workspace-skill-policy-state');
+    expect(STORAGE_KEYS.browserAgentRunSdkState).toBe('agent-browser.browser-agent-run-sdk-state');
+    expect(STORAGE_KEYS.multitaskSubagentState).toBe('agent-browser.multitask-subagent-state');
     expect(STORAGE_KEYS.runtimePluginSettings).toBe('agent-browser.runtime-plugin-settings');
   });
 });

@@ -382,6 +382,15 @@ import {
   type WorkspaceSkillPolicyState,
 } from './services/workspaceSkillPolicies';
 import {
+  DEFAULT_MULTITASK_SUBAGENT_STATE,
+  buildMultitaskPromptContext,
+  createMultitaskSubagentState,
+  isMultitaskSubagentState,
+  promoteMultitaskBranch,
+  summarizeMultitaskSubagents,
+  type MultitaskSubagentState,
+} from './services/multitaskSubagents';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -461,7 +470,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'canvases' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'canvases' | 'multitask' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -609,6 +618,7 @@ const PRIMARY_NAV = [
   ['review', 'gitPullRequest', 'Review'],
   ['wiki', 'bookmark', 'Wiki'],
   ['canvases', 'canvas', 'Canvases'],
+  ['multitask', 'share', 'Multitask'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
   ['models', 'cpu', 'Models'],
@@ -617,12 +627,13 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'history', 'extensions', 'models', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
   review: { label: 'Review', icon: 'gitPullRequest' },
   wiki: { label: 'Wiki', icon: 'bookmark' },
   canvases: { label: 'Canvases', icon: 'canvas' },
+  multitask: { label: 'Multitask', icon: 'share' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
   models: { label: 'Models', icon: 'cpu' },
@@ -699,6 +710,7 @@ const icons = {
   bellOff: BellOff,
   layers: Layers3,
   bookmark: Bookmark,
+  share: Share2,
   messageSquare: MessageSquare,
   clock: History,
   puzzle: Puzzle,
@@ -2152,6 +2164,12 @@ function buildPartnerAgentModelRef(
   return modelId ? `${provider}:${modelId}` : '';
 }
 
+function isMultitaskSubagentRequest(text: string): boolean {
+  const lowered = text.toLowerCase();
+  return /(multitask|subagents?|sub-agents?|parallel|worktrees?|branch isolation|delegate)/.test(lowered)
+    && /(split|parallel|delegate|branch|worktree|isolate|compare|promote)/.test(lowered);
+}
+
 function ChatPanel({
   installedModels,
   copilotState,
@@ -2169,6 +2187,7 @@ function ChatPanel({
   runCheckpointPromptContext,
   runCheckpointState,
   onRunCheckpointStateChange,
+  multitaskPromptContext,
   attachedArtifactCount,
   workspaceCapabilities,
   defaultExtensions,
@@ -2200,6 +2219,7 @@ function ChatPanel({
   secretSettings,
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
+  onMultitaskRequest,
   dragHandleProps,
 }: {
   installedModels: HFModel[];
@@ -2218,6 +2238,7 @@ function ChatPanel({
   runCheckpointPromptContext?: string;
   runCheckpointState: RunCheckpointState;
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
+  multitaskPromptContext?: string;
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
@@ -2249,6 +2270,7 @@ function ChatPanel({
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
+  onMultitaskRequest?: (request: string) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
@@ -2369,10 +2391,11 @@ function ChatPanel({
       artifactPromptContext,
       repoWikiPromptContext,
       runCheckpointPromptContext,
+      multitaskPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, locationPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
+    [activeSessionId, artifactPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -3159,6 +3182,9 @@ function ChatPanel({
     }
     setInput('');
     resetActiveInputHistoryCursor();
+    if (isMultitaskSubagentRequest(trimmedText)) {
+      onMultitaskRequest?.(trimmedText);
+    }
 
     if (await runSandboxPrompt(text, assistantId)) {
       return;
@@ -5330,7 +5356,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -8175,6 +8201,83 @@ function HistoryPanel({
   );
 }
 
+function MultitaskPanel({
+  state,
+  onPromoteBranch,
+}: {
+  state: MultitaskSubagentState;
+  onPromoteBranch: (branchId: string) => void;
+}) {
+  const summary = summarizeMultitaskSubagents(state);
+  const promotedBranchName = summary.promotedBranch?.branchName ?? 'No branch promoted';
+
+  return (
+    <section className="panel-scroll multitask-panel" role="region" aria-label="Multitask subagents">
+      <div className="panel-topbar multitask-topbar">
+        <div className="settings-heading">
+          <h2>Multitask</h2>
+          <p className="muted">{state.workspaceName} · {summary.total} isolated branches</p>
+        </div>
+        <span className={`badge${summary.promotedBranch ? ' connected' : ''}`}>
+          {summary.promotedBranch ? 'promoted' : 'comparing'}
+        </span>
+      </div>
+
+      <section className="multitask-summary" aria-label="Branch isolation">
+        <div>
+          <span className="panel-resource-eyebrow">Branch isolation</span>
+          <strong>{summary.running} running · {summary.ready} ready · {summary.blocked} blocked</strong>
+        </div>
+        <div className="multitask-metrics">
+          <span>{summary.changedFiles} changed files</span>
+          <span>{promotedBranchName}</span>
+        </div>
+      </section>
+
+      <SidebarSection title="Subagent branches" summary={`${summary.total} branches`} scrollBody>
+        <div className="multitask-branch-list">
+          {state.branches.map((branch) => {
+            const isForeground = branch.id === state.foregroundBranchId;
+            return (
+              <article className={`multitask-branch-card${isForeground ? ' is-foreground' : ''}`} key={branch.id}>
+                <div className="multitask-branch-header">
+                  <div>
+                    <strong>{branch.title}</strong>
+                    <code>{branch.branchName}</code>
+                  </div>
+                  <span className={`badge${branch.status === 'promoted' ? ' connected' : ''}`}>{branch.status}</span>
+                </div>
+                <p>{branch.summary}</p>
+                <div className="multitask-progress" aria-label={`${branch.branchName} progress`}>
+                  <span style={{ width: `${Math.min(100, Math.max(0, branch.progress))}%` }} />
+                </div>
+                <div className="multitask-branch-meta">
+                  <span>{branch.role}</span>
+                  <span>{Math.round(branch.confidence * 100)}% confidence</span>
+                  <span>{branch.changedFiles.length} files</span>
+                </div>
+                <ul className="multitask-validation-list">
+                  {branch.validation.map((entry) => <li key={entry}>{entry}</li>)}
+                </ul>
+                <button
+                  type="button"
+                  className="toolbar-button multitask-promote-button"
+                  aria-label={`Promote ${branch.branchName}`}
+                  disabled={isForeground}
+                  onClick={() => onPromoteBranch(branch.id)}
+                >
+                  <Icon name="share" size={13} />
+                  <span>{isForeground ? 'Foreground' : 'Promote'}</span>
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      </SidebarSection>
+    </section>
+  );
+}
+
 function isIconName(value: unknown): value is keyof typeof icons {
   return typeof value === 'string' && value in icons;
 }
@@ -9728,7 +9831,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'history', 'extensions', 'models', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -9855,6 +9958,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.browserAgentRunSdkState,
     isBrowserAgentRunSdkState,
     DEFAULT_BROWSER_AGENT_RUN_SDK_STATE,
+  );
+  const [multitaskSubagentState, setMultitaskSubagentState] = useStoredState<MultitaskSubagentState>(
+    localStorageBackend,
+    STORAGE_KEYS.multitaskSubagentState,
+    isMultitaskSubagentState,
+    DEFAULT_MULTITASK_SUBAGENT_STATE,
   );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
@@ -10110,6 +10219,33 @@ function AgentBrowserApp() {
   }, []);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
+  const activeMultitaskSubagentState = useMemo(
+    () => multitaskSubagentState.enabled && multitaskSubagentState.workspaceId === activeWorkspaceId
+      ? multitaskSubagentState
+      : createMultitaskSubagentState({
+        workspaceId: activeWorkspaceId,
+        workspaceName: activeWorkspace.name,
+        request: 'parallelize the frontend, tests, and documentation work',
+        now: new Date('2026-05-07T10:00:00.000Z'),
+      }),
+    [activeWorkspace.name, activeWorkspaceId, multitaskSubagentState],
+  );
+  const startMultitaskSubagents = useCallback((request: string) => {
+    setMultitaskSubagentState(createMultitaskSubagentState({
+      workspaceId: activeWorkspaceId,
+      workspaceName: activeWorkspace.name,
+      request,
+    }));
+    setActivePanel('multitask');
+  }, [activeWorkspace.name, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
+  const promoteActiveMultitaskBranch = useCallback((branchId: string) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return promoteMultitaskBranch(source, branchId);
+    });
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
   const activeWorkspaceViewState: WorkspaceViewState = activeWorkspace.type === 'workspace'
     ? normalizeWorkspaceViewEntry(activeWorkspace, workspaceViewStateByWorkspace[activeWorkspaceId])
@@ -13710,6 +13846,14 @@ function AgentBrowserApp() {
         />
       );
     }
+    if (activePanel === 'multitask') {
+      return (
+        <MultitaskPanel
+          state={activeMultitaskSubagentState}
+          onPromoteBranch={promoteActiveMultitaskBranch}
+        />
+      );
+    }
     if (activePanel === 'history') {
       return (
         <HistoryPanel
@@ -14051,6 +14195,7 @@ function AgentBrowserApp() {
                 runCheckpointPromptContext={activeRunCheckpointPromptContext}
                 runCheckpointState={runCheckpointState}
                 onRunCheckpointStateChange={setRunCheckpointState}
+                multitaskPromptContext={buildMultitaskPromptContext(multitaskSubagentState)}
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
                 defaultExtensions={defaultExtensionRuntime}
@@ -14094,6 +14239,7 @@ function AgentBrowserApp() {
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}
+                onMultitaskRequest={startMultitaskSubagents}
                 dragHandleProps={dragHandleProps}
               />
             );
