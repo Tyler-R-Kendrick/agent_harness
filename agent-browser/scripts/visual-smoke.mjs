@@ -17,6 +17,7 @@ const outputPath = path.resolve(
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
+const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-agent-canvases.png');
 const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
@@ -373,6 +374,62 @@ async function main() {
           preserveArtifacts: true,
         },
       }));
+      localStorage.setItem('agent-browser.artifacts-by-workspace', JSON.stringify({
+        [workspaceId]: [
+          {
+            id: 'canvas-ws-research-dashboard',
+            title: 'Launch dashboard',
+            description: 'Persistent dashboard for launch evidence and next actions.',
+            kind: 'agent-canvas:dashboard',
+            sourceSessionId: sessionId,
+            createdAt: '2026-05-07T03:00:00.000Z',
+            updatedAt: '2026-05-07T03:20:00.000Z',
+            files: [
+              {
+                path: 'dashboard.md',
+                mediaType: 'text/markdown',
+                content: '# Launch dashboard\n\n- Status: ready\n- Evidence: visual smoke',
+              },
+            ],
+            references: [],
+            versions: [
+              {
+                id: 'canvas-ws-research-dashboard-version-1',
+                createdAt: '2026-05-07T03:20:00.000Z',
+                title: 'Launch dashboard',
+                description: 'Persistent dashboard for launch evidence and next actions.',
+                kind: 'agent-canvas:dashboard',
+                files: [
+                  {
+                    path: 'dashboard.md',
+                    mediaType: 'text/markdown',
+                    content: '# Launch dashboard\n\n- Status: drafting',
+                  },
+                ],
+                references: [],
+              },
+            ],
+          },
+          {
+            id: 'canvas-ws-research-checklist',
+            title: 'Launch checklist',
+            description: 'Follow-up checklist for launch execution.',
+            kind: 'agent-canvas:checklist',
+            sourceSessionId: sessionId,
+            createdAt: '2026-05-07T03:05:00.000Z',
+            updatedAt: '2026-05-07T03:05:00.000Z',
+            files: [
+              {
+                path: 'checklist.md',
+                mediaType: 'text/markdown',
+                content: '# Launch checklist\n\n- [ ] Verify release',
+              },
+            ],
+            references: [],
+            versions: [],
+          },
+        ],
+      }));
       sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
     });
@@ -528,11 +585,28 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: repoWikiOutputPath, fullPage: true });
+    await page.getByRole('button', { name: 'Canvases', exact: true }).click();
+    const canvasesPanel = page.getByRole('region', { name: 'Agent canvases' });
+    await expect(canvasesPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(canvasesPanel.getByText('Launch dashboard')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(canvasesPanel.getByText('Launch checklist')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(canvasesPanel.getByText('rev 2')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(canvasesPanel.getByRole('button', { name: 'Open Launch dashboard' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    const dashboardCard = canvasesPanel.locator('.agent-canvas-card').filter({ hasText: 'Launch dashboard' }).first();
+    const dashboardTitleBox = await dashboardCard.getByText('Launch dashboard', { exact: true }).boundingBox();
+    const dashboardIdBox = await dashboardCard.getByText('canvas-ws-research-dashboard', { exact: true }).boundingBox();
+    if (!dashboardTitleBox || !dashboardIdBox || dashboardIdBox.y < dashboardTitleBox.y + dashboardTitleBox.height) {
+      throw new Error('Agent canvas card id must render below the title without overlap.');
+    }
+    await page.screenshot({ path: agentCanvasesOutputPath, fullPage: true });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
+    console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
     console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
