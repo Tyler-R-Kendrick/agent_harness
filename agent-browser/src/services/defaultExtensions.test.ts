@@ -7,8 +7,11 @@ import {
   createDefaultExtensionRuntime,
   getDefaultExtensionAvailability,
   getDefaultExtensionOpenFeatureFlagKey,
+  getDefaultExtensionDependencyIds,
   getExtensionMarketplaceCategory,
   getInstalledDefaultExtensionDescriptors,
+  resolveDefaultExtensionDependencyPlan,
+  resolveDefaultExtensionDependentIds,
   groupDefaultExtensionsByMarketplaceCategory,
   normalizeDefaultExtensionIds,
   resolveEnabledDefaultExtensionIds,
@@ -287,5 +290,49 @@ describe('default extensions', () => {
     const huggingFace = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.huggingface-model-provider');
     expect(huggingFace).toBeDefined();
     expect(getDefaultExtensionAvailability(huggingFace!)).toEqual({ state: 'available' });
+  });
+
+  it('resolves transitive dependencies in dependency-first install order', async () => {
+    const openDesign = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.open-design');
+    const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
+    expect(openDesign).toBeDefined();
+    expect(artifactsWorktree).toBeDefined();
+
+    expect(getDefaultExtensionDependencyIds(openDesign!)).toEqual(['agent-harness.ext.design-md-context']);
+    expect(getDefaultExtensionDependencyIds(artifactsWorktree!)).toEqual(['agent-harness.ext.artifacts-context']);
+
+    const plan = resolveDefaultExtensionDependencyPlan([
+      'agent-harness.ext.open-design',
+      'agent-harness.ext.artifacts-worktree',
+    ]);
+
+    expect(plan.extensionIds).toEqual([
+      'agent-harness.ext.design-md-context',
+      'agent-harness.ext.open-design',
+      'agent-harness.ext.artifacts-context',
+      'agent-harness.ext.artifacts-worktree',
+    ]);
+    expect(plan.missingDependencyIds).toEqual([]);
+    expect(plan.cyclicDependencyIds).toEqual([]);
+
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: ['agent-harness.ext.open-design'],
+    });
+    expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.design-md-context',
+      'agent-harness.ext.open-design',
+    ]);
+  });
+
+  it('finds installed dependents so uninstalling a base extension can remove derivatives', () => {
+    expect(resolveDefaultExtensionDependentIds(
+      ['agent-harness.ext.design-md-context'],
+      ['agent-harness.ext.design-md-context', 'agent-harness.ext.open-design'],
+    )).toEqual(['agent-harness.ext.open-design']);
+
+    expect(resolveDefaultExtensionDependentIds(
+      ['agent-harness.ext.artifacts-context'],
+      ['agent-harness.ext.artifacts-context', 'agent-harness.ext.artifacts-worktree'],
+    )).toEqual(['agent-harness.ext.artifacts-worktree']);
   });
 });

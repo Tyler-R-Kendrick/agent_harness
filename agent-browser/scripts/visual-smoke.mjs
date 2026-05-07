@@ -791,7 +791,13 @@ async function main() {
     await expect(marketplace.getByText('OpenDesign DESIGN.md Studio').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await expect(marketplace.getByText('Requires DESIGN.md agent guidance').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await expect(marketplace.getByText('Artifact worktree explorer').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByText('Requires Artifact context').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByText('Unavailable on this runtime').first()).toBeVisible({

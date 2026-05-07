@@ -320,6 +320,25 @@ describe('App smoke coverage', () => {
     expect(screen.getByText(/active plugins/i)).toBeInTheDocument();
   });
 
+  it('installs extension dependencies from the marketplace', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+
+    expect(screen.getByText('Requires DESIGN.md agent guidance')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+
+    const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
+    expect(installedSidebar).toHaveTextContent('DESIGN.md agent guidance');
+    expect(installedSidebar).toHaveTextContent('OpenDesign DESIGN.md Studio');
+    expect(installedSidebar).toHaveTextContent('Required by OpenDesign DESIGN.md Studio');
+  });
+
   it('renders partner agent control plane controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
