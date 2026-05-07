@@ -143,6 +143,11 @@ import {
   type AdversaryToolReviewSettings,
 } from './services/adversaryToolReview';
 import {
+  DEFAULT_ADVERSARY_AGENT_SETTINGS,
+  isAdversaryAgentSettings,
+  type AdversaryAgentSettings,
+} from './services/adversaryAgent';
+import {
   DEFAULT_SECURITY_REVIEW_AGENT_SETTINGS,
   buildSecurityReviewPromptContext,
   buildSecurityReviewRunPlan,
@@ -2243,6 +2248,7 @@ function ChatPanel({
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
   adversaryToolReviewSettings,
+  adversaryAgentSettings,
   securityReviewAgentSettings,
   workspaceSkillPolicyInventory,
   sharedAgentCatalog,
@@ -2297,6 +2303,7 @@ function ChatPanel({
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
+  adversaryAgentSettings: AdversaryAgentSettings;
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   sharedAgentCatalog: SharedAgentCatalog;
@@ -2594,7 +2601,7 @@ function ChatPanel({
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
     || (selectedProvider === 'codex' && Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels)
-    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security' || selectedProvider === 'steering') && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security' || selectedProvider === 'steering' || selectedProvider === 'adversary') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
@@ -2604,7 +2611,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -5763,6 +5770,7 @@ function ChatPanel({
                     <option value="planner">Planner</option>
                     <option value="security">Security Review</option>
                     <option value="steering">Steering</option>
+                    <option value="adversary">Adversary</option>
                     <option value="tour-guide">Tour Guide</option>
                   </select>
                 </label>
@@ -6016,7 +6024,7 @@ function ChatPanel({
                       : null)
                 : selectedProvider === 'tour-guide'
                   ? null
-                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'adversary' ? 'Adversary needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -7106,6 +7114,89 @@ function AdversaryToolReviewSettingsPanel({
   );
 }
 
+function AdversaryAgentSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: AdversaryAgentSettings;
+  onChange: (settings: AdversaryAgentSettings) => void;
+}) {
+  function update<Key extends keyof AdversaryAgentSettings>(
+    key: Key,
+    value: AdversaryAgentSettings[Key],
+  ) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  return (
+    <SettingsSection title="Adversary agent" defaultOpen={false}>
+      <div className="adversary-review-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable adversary candidate generation"
+              checked={settings.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+            />
+            <span>
+              <strong>Generate adversary candidates</strong>
+              <small>Run bounded red-team candidate generation beside happy-path outputs.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Rerun when adversary output wins"
+              checked={settings.rerunOnAdversaryWin}
+              onChange={(event) => update('rerunOnAdversaryWin', event.target.checked)}
+            />
+            <span>
+              <strong>Rerun on adversary win</strong>
+              <small>Restart the loop with judge feedback when a voter selects an adversary candidate.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Preserve judge feedback in AgentBus"
+              checked={settings.preserveJudgeFeedback}
+              onChange={(event) => update('preserveJudgeFeedback', event.target.checked)}
+            />
+            <span>
+              <strong>Preserve judge feedback</strong>
+              <small>Write vote outcomes and feedback hooks into the process record for later iterations.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Hide adversary labels from voters"
+              checked={settings.stealthVoterLabels}
+              onChange={(event) => update('stealthVoterLabels', event.target.checked)}
+            />
+            <span>
+              <strong>Blind voter labels</strong>
+              <small>Keep candidate labels neutral so voters do not know which output is adversarial.</small>
+            </span>
+          </label>
+        </div>
+        <label className="provider-command-field">
+          <span>Maximum candidates</span>
+          <input
+            aria-label="Maximum adversary candidates"
+            type="number"
+            min={1}
+            max={5}
+            value={settings.maxCandidates}
+            onChange={(event) => update('maxCandidates', Number(event.target.value))}
+          />
+        </label>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function SecurityReviewAgentSettingsPanel({
   settings,
   runPlan,
@@ -7742,6 +7833,7 @@ interface SettingsPanelProps {
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
+  adversaryAgentSettings: AdversaryAgentSettings;
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   securityReviewRunPlan: SecurityReviewRunPlan;
   scheduledAutomationState: ScheduledAutomationState;
@@ -7761,6 +7853,7 @@ interface SettingsPanelProps {
   runtimePluginRuntime: RuntimePluginRuntime;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
+  onAdversaryAgentSettingsChange: (settings: AdversaryAgentSettings) => void;
   onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
   onScheduledAutomationStateChange: (state: ScheduledAutomationState) => void;
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
@@ -8104,6 +8197,7 @@ function SettingsPanel({
   benchmarkRoutingCandidates,
   benchmarkEvidenceState,
   adversaryToolReviewSettings,
+  adversaryAgentSettings,
   securityReviewAgentSettings,
   securityReviewRunPlan,
   scheduledAutomationState,
@@ -8123,6 +8217,7 @@ function SettingsPanel({
   runtimePluginRuntime,
   onBenchmarkRoutingSettingsChange,
   onAdversaryToolReviewSettingsChange,
+  onAdversaryAgentSettingsChange,
   onSecurityReviewAgentSettingsChange,
   onScheduledAutomationStateChange,
   onRunCheckpointStateChange,
@@ -8198,6 +8293,11 @@ function SettingsPanel({
         onChange={onRuntimePluginSettingsChange}
       />
       <BrowserAgentRunSdkSettingsPanel state={browserAgentRunSdkState} />
+
+      <AdversaryAgentSettingsPanel
+        settings={adversaryAgentSettings}
+        onChange={onAdversaryAgentSettingsChange}
+      />
 
       <AdversaryToolReviewSettingsPanel
         settings={adversaryToolReviewSettings}
@@ -10368,7 +10468,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'steering', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'steering', 'adversary', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -10443,6 +10543,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.adversaryToolReviewSettings,
     isAdversaryToolReviewSettings,
     DEFAULT_ADVERSARY_TOOL_REVIEW_SETTINGS,
+  );
+  const [adversaryAgentSettings, setAdversaryAgentSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.adversaryAgentSettings,
+    isAdversaryAgentSettings,
+    DEFAULT_ADVERSARY_AGENT_SETTINGS,
   );
   const [securityReviewAgentSettings, setSecurityReviewAgentSettings] = useStoredState(
     localStorageBackend,
@@ -14458,6 +14564,7 @@ function AgentBrowserApp() {
         benchmarkRoutingCandidates={benchmarkRoutingCandidates}
         benchmarkEvidenceState={benchmarkEvidenceState}
         adversaryToolReviewSettings={adversaryToolReviewSettings}
+        adversaryAgentSettings={adversaryAgentSettings}
         securityReviewAgentSettings={securityReviewAgentSettings}
         securityReviewRunPlan={settingsSecurityReviewRunPlan}
         scheduledAutomationState={scheduledAutomationState}
@@ -14477,6 +14584,7 @@ function AgentBrowserApp() {
         runtimePluginRuntime={settingsRuntimePluginRuntime}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
+        onAdversaryAgentSettingsChange={setAdversaryAgentSettings}
         onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
         onScheduledAutomationStateChange={setScheduledAutomationState}
         onRunCheckpointStateChange={setRunCheckpointState}
@@ -14794,6 +14902,7 @@ function AgentBrowserApp() {
                 benchmarkRoutingSettings={benchmarkRoutingSettings}
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 adversaryToolReviewSettings={adversaryToolReviewSettings}
+                adversaryAgentSettings={adversaryAgentSettings}
                 securityReviewAgentSettings={securityReviewAgentSettings}
                 workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
                 sharedAgentCatalog={sharedAgentCatalog}

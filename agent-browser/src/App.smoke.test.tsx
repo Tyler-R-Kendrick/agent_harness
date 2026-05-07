@@ -303,6 +303,28 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Adversary review custom rules')).toBeInTheDocument();
   });
 
+  it('renders the first-class Adversary agent and Settings controls', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open Session/ })[0]);
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveTextContent('Adversary');
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Adversary agent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Adversary agent' }));
+    expect(screen.getByLabelText('Enable adversary candidate generation')).toBeInTheDocument();
+    expect(screen.getByLabelText('Maximum adversary candidates')).toHaveValue(3);
+    expect(screen.getByLabelText('Rerun when adversary output wins')).toBeChecked();
+    expect(screen.getByLabelText('Preserve judge feedback in AgentBus')).toBeChecked();
+    expect(screen.getByLabelText('Hide adversary labels from voters')).toBeChecked();
+  });
+
   it('renders runtime plugin controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

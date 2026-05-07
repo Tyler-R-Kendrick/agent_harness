@@ -772,6 +772,12 @@ async function main() {
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Adversary agent' }).click();
+    await expect(page.getByLabel('Enable adversary candidate generation')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Maximum adversary candidates')).toHaveValue('3', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Rerun when adversary output wins')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Preserve judge feedback in AgentBus')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Hide adversary labels from voters')).toBeChecked({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Security review agents' }).click();
     await expect(page.getByLabel('Enable security review agents')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable inline PR security review')).toBeVisible({ timeout: shellTimeoutMs });
