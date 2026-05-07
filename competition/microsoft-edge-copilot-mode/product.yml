@@ -1,0 +1,23 @@
+slug: microsoft-edge-copilot-mode
+name: Microsoft Edge Copilot Mode
+vendor: Microsoft
+segment: incumbent-browser-ai-assistant
+product_path: competition/microsoft-edge-copilot-mode
+design_path: competition/microsoft-edge-copilot-mode/design
+features_path: competition/microsoft-edge-copilot-mode/features
+marketing_path: competition/microsoft-edge-copilot-mode/marketing
+gossip_path: competition/microsoft-edge-copilot-mode/gossip
+snapshot_date: 2026-05-07
+primary_sources:
+  - https://www.microsoft.com/en-us/edge/ai-powered/copilot-mode
+  - https://blogs.windows.com/msedgedev/2025/07/28/introducing-copilot-mode-in-edge-a-new-way-to-browse-the-web/
+  - https://blogs.windows.com/msedgedev/2025/10/23/meet-copilot-mode-in-edge-your-ai-browser/
+  - https://support.microsoft.com/en-us/topic/copilot-actions-in-edge-5ed5e17e-42df-40a3-984a-20420eba86e2
+secondary_sources:
+  - https://www.windowscentral.com/software-apps/microsoft-edge-is-removing-its-sidebar-to-cut-clutter-while-leaving-the-ever-controversial-copilot-untouched
+  - https://www.windowslatest.com/2026/03/15/microsoft-edge-feels-more-like-copilot-than-a-browser-now-but-some-ai-features-can-be-turned-off/
+  - https://www.techradar.com/computing/edge/microsofts-latest-prod-to-use-copilot-ai-in-the-edge-browser-is-subtle-but-still-annoying-and-im-getting-fed-up-with-this
+positioning: "Experimental AI browser mode in Edge with Copilot new tab, side pane, voice browsing, cross-tab/history context, Actions, Journeys, and shopping assistance."
+customer_model: "Bundled into Edge with limited-preview/free-period caveats and Microsoft account/market/device availability constraints."
+competitive_threat_level: high
+notes: "Massive distribution and Microsoft ecosystem leverage, offset by user backlash around Copilot promotion and browser clutter."
