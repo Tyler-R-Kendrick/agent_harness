@@ -269,6 +269,8 @@ function labelForProvider(provider: AgentProvider | ModelBackedAgentProvider): s
       return 'Steering';
     case 'adversary':
       return 'Adversary';
+    case 'media':
+      return 'Media';
     case 'tour-guide':
       return 'Tour Guide';
   }

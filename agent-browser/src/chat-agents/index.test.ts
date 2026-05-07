@@ -125,6 +125,7 @@ describe('agent helpers', () => {
     expect(getAgentDisplayName({ provider: 'planner', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Planner: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'security', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Security Review: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'adversary', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Adversary: GPT-4.1');
+    expect(getAgentDisplayName({ provider: 'media', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Media: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'tour-guide' })).toBe('Tour Guide');
 
     expect(getAgentInputPlaceholder({ provider: 'codi', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Codi…');
@@ -145,6 +146,8 @@ describe('agent helpers', () => {
     expect(getAgentInputPlaceholder({ provider: 'security', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to review security');
     expect(getAgentInputPlaceholder({ provider: 'adversary', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Adversary…');
     expect(getAgentInputPlaceholder({ provider: 'adversary', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model for adversary review');
+    expect(getAgentInputPlaceholder({ provider: 'media', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Media…');
+    expect(getAgentInputPlaceholder({ provider: 'media', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install media-capable models');
     expect(getAgentInputPlaceholder({ provider: 'tour-guide', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Ask Tour Guide…');
   });
 
@@ -220,6 +223,11 @@ describe('agent helpers', () => {
       copilotState: createCopilotState(),
     })).toBe('1 Codi-backed Adversary models');
     expect(getAgentProviderSummary({
+      provider: 'media',
+      installedModels,
+      copilotState: createCopilotState(),
+    })).toBe('1 Codi-backed Media models');
+    expect(getAgentProviderSummary({
       provider: 'tour-guide',
       installedModels: [],
       copilotState: createCopilotState(),
@@ -275,6 +283,10 @@ describe('agent helpers', () => {
       selectedProvider: 'codi',
       latestUserInput: 'Run an adversary pass that red-teams candidate answers.',
     })).toBe('adversary');
+    expect(resolveAgentProviderForTask({
+      selectedProvider: 'codi',
+      latestUserInput: 'Generate image, voiceover, music, sfx, and a Remotion video.',
+    })).toBe('media');
 
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
@@ -323,5 +335,10 @@ describe('agent helpers', () => {
       hasCodiModelsReady: true,
       hasGhcpModelsReady: false,
     })).toBe('codi');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'media',
+      hasCodiModelsReady: false,
+      hasGhcpModelsReady: true,
+    })).toBe('ghcp');
   });
 });
