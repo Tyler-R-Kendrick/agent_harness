@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-06
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-07
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
@@ -237,6 +237,20 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Build specialized browser-agent security reviewers that can inspect diffs and scheduled repo state, leave inline severity-tagged findings with remediation, integrate external security tools, and deliver scan updates through the team channels already used for automation.
 
+### 34. Runtime plugin layers with tool-call interception
+- Common pattern: some harnesses are exposing a true runtime extension layer that can observe events, mutate tool calls, and enforce policy during execution instead of only packaging prompts or static tools.
+- Seen in: Kilo Code plugins that can add tools, intercept tool calls, block dangerous operations, register model and auth providers, react to session and permission events, and customize compaction or shell environments.
+- Why it matters: once agents touch terminals, browsers, and external services, extensibility needs to happen at execution time, not only at prompt construction time.
+- One-shot build instruction:
+  - Add a browser-agent plugin runtime that can register tools and providers, subscribe to execution events, intercept or veto tool invocations, inject environment or transport behavior, and expose clear audit trails for every plugin-mediated action.
+
+### 35. AI adoption scoring for engineering organizations
+- Common pattern: at least some harness vendors are moving beyond spend dashboards toward management metrics that quantify how deeply AI is woven into day-to-day engineering workflows.
+- Seen in: Kilo Code analytics plus AI Adoption Dashboard, including per-model and per-project usage breakdowns and a 0-100 adoption score split across frequency, depth, and coverage.
+- Why it matters: once agent usage becomes a budget line and a process change, teams need to measure behavioral adoption and workflow integration rather than only token spend.
+- One-shot build instruction:
+  - Build an organization-facing browser-agent analytics surface that combines usage metrics with an adoption score across frequency, workflow depth, and team coverage, so leaders can see whether the harness is becoming operationally important or just occasionally sampled.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -266,3 +280,5 @@ Method: current-product research from first-party product pages, help centers, d
 25. Add a policy-governed partner-agent control plane and model picker.
 26. Add enterprise model governance, spend limits, and per-surface usage analytics.
 27. Add specialized security review agents and scheduled vulnerability scans.
+28. Add a runtime plugin layer with tool-call interception and event hooks.
+29. Add AI adoption scoring alongside browser-agent usage analytics.

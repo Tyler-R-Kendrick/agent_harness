@@ -1,8 +1,8 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-06
+Updated: 2026-05-07
 Baseline: `.features/Summary.md` refreshed from the 2026-05-04 twenty-two-harness corpus.
-Diff type: additive update after Cursor refresh research
+Diff type: additive update after Kilo Code research
 
 ## Net new normalized features
 
@@ -38,6 +38,31 @@ Diff type: additive update after Cursor refresh research
 - One-shot instruction for an LLM:
   - Implement specialized security review agents for `agent-browser` that can inspect pull-request diffs and scheduled repository state, emit inline severity-tagged findings with remediation guidance, integrate existing security tools through the harness tool layer, and deliver scheduled scan updates through the same automation and review surfaces already used for browser-agent work.
 
+### Added: Runtime plugin layer with tool-call interception
+- Why now: Kilo Code is treating runtime extension as an execution-time policy and behavior layer, not just as a prompt or tool manifest.
+- Research delta:
+  - Kilo plugins can add custom tools and providers
+  - plugins can intercept tool calls, rewrite arguments or outputs, and block dangerous operations
+  - plugins can subscribe to session, permission, message, file-change, and diagnostics events
+  - plugins can inject shell environment variables and customize compaction behavior
+
+### Added: AI adoption scoring for engineering organizations
+- Why now: Kilo is measuring AI workflow maturity explicitly, which goes beyond spend controls and starts giving engineering leaders a management surface for adoption.
+- Research delta:
+  - Kilo analytics break usage down by day, model, project, and user
+  - the AI Adoption Dashboard exposes a 0-100 score
+  - the score is decomposed into frequency, depth, and coverage
+  - the dashboard is aimed at team leads and engineering managers tracking organizational AI maturity
+
+### Added: Add a runtime plugin layer with tool-call interception and event hooks
+- Why now: `agent-browser` already has tools, skills, and agent routing, but it lacks a first-class extension runtime where product teams can intercept actions, subscribe to agent events, and enforce policy without forking the core harness.
+- Linear issue title:
+  - `Add a runtime plugin layer with tool-call interception and event hooks`
+- Suggested problem statement:
+  - `agent-browser` supports built-in tools and repo-owned instructions, but it does not yet provide a reusable plugin runtime that can register new tools and providers, observe agent lifecycle events, or intercept risky tool calls at execution time.
+- One-shot instruction for an LLM:
+  - Implement a browser-agent plugin runtime for `agent-browser` that can load repo or user-installed plugins, register tools and model or auth providers, subscribe to structured agent lifecycle events, intercept or veto tool calls with auditable rationale, and expose a stable configuration surface that works across interactive sessions, automations, and review flows.
+
 ## How to use this file
 
 1. Treat each `Added:` section as a candidate Linear epic or feature.
@@ -47,4 +72,4 @@ Diff type: additive update after Cursor refresh research
 
 ## Recommended next Linear batch
 
-1. `Add security review agents and scheduled vulnerability scans`
+1. `Add a runtime plugin layer with tool-call interception and event hooks`
