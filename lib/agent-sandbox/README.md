@@ -37,3 +37,15 @@ Content-Security-Policy:
 ```
 
 The implementation intentionally does not expose the host DOM, privileged storage, app state, auth tokens, or arbitrary shell execution to generated skill code.
+
+## Package boundary
+
+Use the package root as the stable public import path:
+
+```ts
+import { BrowserSandboxProvider } from '@agent-harness/agent-sandbox';
+```
+
+The root export list is intentionally explicit so new implementation exports do not become public API by accident. Treat `@agent-harness/agent-sandbox/src/*` deep imports as private implementation modules; they may change without a migration path.
+
+Published package contents are limited to `README.md`, `package.json`, and runtime `src/**/*.ts` files. Tests and package-local configuration are development-only.
