@@ -43,6 +43,7 @@ const gitWorktreeViewportOutputPaths = [
   },
 ];
 const multitaskOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-multitask-subagents-branch-isolation-visual-smoke.png');
+const sharedAgentsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-shared-workspace-agents-governance-visual-smoke.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -563,6 +564,77 @@ async function main() {
           },
         ],
       }));
+      localStorage.setItem('agent-browser.shared-agent-registry-state', JSON.stringify({
+        enabled: true,
+        requirePublishApproval: true,
+        showAuditTrail: true,
+        trackUsageAnalytics: true,
+        agents: [
+          {
+            id: 'shared-agent-team-reviewer',
+            name: 'Team reviewer',
+            description: 'Reusable browser review agent for PR diffs, visual evidence, and release notes.',
+            version: '1.2.0',
+            status: 'published',
+            owner: 'Platform',
+            visibility: 'team',
+            allowedRoles: ['viewer', 'editor', 'publisher'],
+            sourceProvider: 'specialist',
+            capabilities: ['PR review', 'browser evidence', 'release summary'],
+            toolScopes: ['git-worktree:read', 'browser:evidence', 'linear:comment'],
+            updatedAt: '2026-05-07T12:00:00.000Z',
+            publishedAt: '2026-05-07T12:00:00.000Z',
+          },
+          {
+            id: 'shared-agent-release-coordinator',
+            name: 'Release coordinator',
+            description: 'Draft shared agent for coordinating verification gates and publish handoffs.',
+            version: '0.1.0',
+            status: 'draft',
+            owner: 'Release Engineering',
+            visibility: 'team',
+            allowedRoles: ['publisher', 'admin'],
+            sourceProvider: 'codex',
+            capabilities: ['verification planning', 'PR handoff', 'status reporting'],
+            toolScopes: ['github:pr', 'linear:issue', 'browser:screenshot'],
+            updatedAt: '2026-05-07T12:30:00.000Z',
+            publishedAt: null,
+          },
+        ],
+        audit: [
+          {
+            id: 'shared-agent-team-reviewer:published:2026-05-07T12:00:00.000Z',
+            agentId: 'shared-agent-team-reviewer',
+            actor: 'Platform',
+            action: 'published',
+            summary: 'Published Team reviewer v1.2.0 for team discovery',
+            createdAt: '2026-05-07T12:00:00.000Z',
+          },
+        ],
+        usage: [
+          {
+            id: 'shared-agent-team-reviewer:session-review-1:2026-05-07T13:00:00.000Z',
+            agentId: 'shared-agent-team-reviewer',
+            sessionId: 'session-review-1',
+            actor: 'Taylor User',
+            createdAt: '2026-05-07T13:00:00.000Z',
+          },
+          {
+            id: 'shared-agent-team-reviewer:session-review-2:2026-05-07T14:00:00.000Z',
+            agentId: 'shared-agent-team-reviewer',
+            sessionId: 'session-review-2',
+            actor: 'Taylor User',
+            createdAt: '2026-05-07T14:00:00.000Z',
+          },
+          {
+            id: 'shared-agent-team-reviewer:session-review-3:2026-05-07T15:00:00.000Z',
+            agentId: 'shared-agent-team-reviewer',
+            sessionId: 'session-review-3',
+            actor: 'Taylor User',
+            createdAt: '2026-05-07T15:00:00.000Z',
+          },
+        ],
+      }));
       sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
     });
@@ -653,6 +725,13 @@ async function main() {
     await expect(page.getByRole('listitem').filter({ has: page.getByText('Team reviewer', { exact: true }) })).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await page.getByRole('button', { name: 'Shared agents' }).click();
+    await expect(page.getByLabel('Enable shared-agent registry')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('1 published · 1 draft · 3 usage events', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('listitem').filter({ has: page.getByText('Release coordinator', { exact: true }) })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: sharedAgentsOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Partner agent control plane' }).click();
     await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });
@@ -777,6 +856,7 @@ async function main() {
     console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
     console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
+    console.log(`agent-browser shared agents smoke passed: ${sharedAgentsOutputPath}`);
     console.log(`agent-browser multitask subagents smoke passed: ${multitaskOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();

@@ -376,6 +376,32 @@ describe('App smoke coverage', () => {
     expect(screen.getAllByText('published').length).toBeGreaterThan(0);
   });
 
+  it('renders shared workspace agent governance controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Shared agents')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Shared agents' }));
+    expect(screen.getByLabelText('Enable shared-agent registry')).toBeChecked();
+    expect(screen.getByLabelText('Require shared-agent publish approval')).toBeChecked();
+    expect(screen.getByLabelText('Show shared-agent audit trail')).toBeChecked();
+    expect(screen.getByLabelText('Track shared-agent usage analytics')).toBeChecked();
+    expect(screen.getByText('Team reviewer')).toBeInTheDocument();
+    expect(screen.getByText('Release coordinator')).toBeInTheDocument();
+    expect(screen.getByText('3 usage events')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish Release coordinator draft' }));
+
+    expect(screen.getAllByText('published').length).toBeGreaterThan(0);
+    expect(screen.getByText('Published Release coordinator v0.1.0 for team discovery')).toBeInTheDocument();
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
