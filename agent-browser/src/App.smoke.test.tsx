@@ -213,6 +213,23 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Adversary review custom rules')).toBeInTheDocument();
   });
 
+  it('renders runtime plugin controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Runtime plugins')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Runtime plugins' }));
+    expect(screen.getByLabelText('Enable runtime plugins')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tool-call interception mode')).toHaveValue('observe');
+    expect(screen.getByText(/active plugins/i)).toBeInTheDocument();
+  });
+
   it('renders partner agent control plane controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
