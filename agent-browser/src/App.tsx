@@ -347,6 +347,15 @@ import {
   type RepoWikiSnapshot,
 } from './services/repoWiki';
 import {
+  DEFAULT_WORKSPACE_SKILL_POLICY_STATE,
+  buildWorkspaceSkillPolicyInventory,
+  buildWorkspaceSkillPolicyPromptContext,
+  isWorkspaceSkillPolicyState,
+  publishWorkspaceSkillDraft,
+  type WorkspaceSkillPolicyInventory,
+  type WorkspaceSkillPolicyState,
+} from './services/workspaceSkillPolicies';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -2078,6 +2087,7 @@ function ChatPanel({
   benchmarkRoutingCandidates,
   adversaryToolReviewSettings,
   securityReviewAgentSettings,
+  workspaceSkillPolicyInventory,
   partnerAgentControlPlaneSettings,
   onPartnerAgentAuditEntry,
   secretSettings,
@@ -2125,6 +2135,7 @@ function ChatPanel({
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
   securityReviewAgentSettings: SecurityReviewAgentSettings;
+  workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
   secretSettings: SecretManagementSettings;
@@ -3097,6 +3108,7 @@ function ChatPanel({
     }
     const requestWorkspacePromptContext = [
       workspacePromptContext,
+      buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
       buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
       buildSecurityReviewPromptContext(buildSecurityReviewRunPlan({
         settings: securityReviewAgentSettings,
@@ -6066,6 +6078,103 @@ function PartnerAgentControlPlaneSettingsPanel({
   );
 }
 
+function WorkspaceSkillPolicySettingsPanel({
+  state,
+  inventory,
+  onChange,
+}: {
+  state: WorkspaceSkillPolicyState;
+  inventory: WorkspaceSkillPolicyInventory;
+  onChange: (state: WorkspaceSkillPolicyState) => void;
+}) {
+  const update = <K extends keyof WorkspaceSkillPolicyState>(key: K, value: WorkspaceSkillPolicyState[K]) => {
+    onChange({ ...state, [key]: value });
+  };
+  const publishDraft = (packageId: string) => {
+    onChange(publishWorkspaceSkillDraft(state, packageId));
+  };
+
+  return (
+    <SettingsSection title="Workspace skill policies" defaultOpen={false}>
+      <div className="workspace-skill-policy-settings">
+        <div className="partner-agent-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+              aria-label="Enable workspace skill policies"
+            />
+            <span>Enable workspace skill policies</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.enforceLeastPrivilege}
+              onChange={(event) => update('enforceLeastPrivilege', event.target.checked)}
+              aria-label="Least-privilege enforcement"
+            />
+            <span>Least-privilege enforcement</span>
+          </label>
+        </div>
+        <article className="provider-card workspace-skill-policy-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Versioned packages</strong>
+              <p>{inventory.publishedPackageCount} published · {inventory.draftPackageCount} draft · {inventory.toolScopeCount} tool scopes · {inventory.pathScopeCount} path scopes</p>
+            </div>
+            <span className={`badge${inventory.enabled ? ' connected' : ''}`}>{inventory.enabled ? 'governed' : 'off'}</span>
+          </div>
+          <div className="workspace-skill-policy-helper-row">
+            {inventory.helperRows.map((helper) => (
+              <span key={helper.id} className={`badge${helper.enabled ? ' connected' : ''}`}>
+                {helper.label}
+              </span>
+            ))}
+          </div>
+          <p className="partner-agent-audit-note">
+            External allowlist: {inventory.externalAllowlist.join(', ') || 'none'}
+          </p>
+        </article>
+        <div className="workspace-skill-package-list" role="list" aria-label="Versioned workspace skill packages">
+          {state.packages.map((pkg) => (
+            <article key={pkg.id} className="provider-card workspace-skill-package-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{pkg.name}</strong>
+                  <p>{pkg.description}</p>
+                </div>
+                <span className={`badge${pkg.status === 'published' ? ' connected' : ''}`}>{pkg.status}</span>
+              </div>
+              <div className="workspace-skill-scope-grid">
+                <div>
+                  <span className="muted">Tools</span>
+                  <code>{pkg.toolScopes.join(', ')}</code>
+                </div>
+                <div>
+                  <span className="muted">Paths</span>
+                  <code>{pkg.pathScopes.join(', ')}</code>
+                </div>
+              </div>
+              <p className="partner-agent-audit-note">External paths: {pkg.externalPaths.join(', ') || 'none'}</p>
+              {pkg.status === 'draft' ? (
+                <button type="button" className="secondary-button" onClick={() => publishDraft(pkg.id)}>
+                  Publish {pkg.name} draft
+                </button>
+              ) : null}
+            </article>
+          ))}
+        </div>
+        {inventory.warnings.length ? (
+          <ul className="workspace-skill-policy-warnings">
+            {inventory.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          </ul>
+        ) : null}
+      </div>
+    </SettingsSection>
+  );
+}
+
 function ScheduledAutomationSettingsPanel({
   state,
   onChange,
@@ -6946,6 +7055,8 @@ interface SettingsPanelProps {
   securityReviewRunPlan: SecurityReviewRunPlan;
   scheduledAutomationState: ScheduledAutomationState;
   runCheckpointState: RunCheckpointState;
+  workspaceSkillPolicyState: WorkspaceSkillPolicyState;
+  workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
@@ -6954,6 +7065,7 @@ interface SettingsPanelProps {
   onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
   onScheduledAutomationStateChange: (state: ScheduledAutomationState) => void;
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
+  onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
@@ -7293,6 +7405,8 @@ function SettingsPanel({
   securityReviewRunPlan,
   scheduledAutomationState,
   runCheckpointState,
+  workspaceSkillPolicyState,
+  workspaceSkillPolicyInventory,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
@@ -7301,6 +7415,7 @@ function SettingsPanel({
   onSecurityReviewAgentSettingsChange,
   onScheduledAutomationStateChange,
   onRunCheckpointStateChange,
+  onWorkspaceSkillPolicyStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
@@ -7330,6 +7445,12 @@ function SettingsPanel({
         candidates={benchmarkRoutingCandidates}
         evidenceState={benchmarkEvidenceState}
         onChange={onBenchmarkRoutingSettingsChange}
+      />
+
+      <WorkspaceSkillPolicySettingsPanel
+        state={workspaceSkillPolicyState}
+        inventory={workspaceSkillPolicyInventory}
+        onChange={onWorkspaceSkillPolicyStateChange}
       />
 
       <PartnerAgentControlPlaneSettingsPanel
@@ -9281,6 +9402,12 @@ function AgentBrowserApp() {
     isRunCheckpointState,
     DEFAULT_RUN_CHECKPOINT_STATE,
   );
+  const [workspaceSkillPolicyState, setWorkspaceSkillPolicyState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceSkillPolicyState,
+    isWorkspaceSkillPolicyState,
+    DEFAULT_WORKSPACE_SKILL_POLICY_STATE,
+  );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.partnerAgentControlPlaneSettings,
@@ -9326,6 +9453,10 @@ function AgentBrowserApp() {
   const benchmarkRoutingCandidates = useMemo(
     () => mergeDiscoveredBenchmarkEvidence(benchmarkRoutingBaseCandidates, benchmarkEvidenceState.records),
     [benchmarkEvidenceState.records, benchmarkRoutingBaseCandidates],
+  );
+  const workspaceSkillPolicyInventory = useMemo(
+    () => buildWorkspaceSkillPolicyInventory(workspaceSkillPolicyState),
+    [workspaceSkillPolicyState],
   );
   const settingsPartnerAgentControlPlane = useMemo(() => {
     const selectedProvider = getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -13123,6 +13254,8 @@ function AgentBrowserApp() {
         securityReviewRunPlan={settingsSecurityReviewRunPlan}
         scheduledAutomationState={scheduledAutomationState}
         runCheckpointState={runCheckpointState}
+        workspaceSkillPolicyState={workspaceSkillPolicyState}
+        workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
@@ -13131,6 +13264,7 @@ function AgentBrowserApp() {
         onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
         onScheduledAutomationStateChange={setScheduledAutomationState}
         onRunCheckpointStateChange={setRunCheckpointState}
+        onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
@@ -13435,6 +13569,7 @@ function AgentBrowserApp() {
                 benchmarkRoutingCandidates={benchmarkRoutingCandidates}
                 adversaryToolReviewSettings={adversaryToolReviewSettings}
                 securityReviewAgentSettings={securityReviewAgentSettings}
+                workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
                 partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
                 onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}
                 secretSettings={secretSettings}

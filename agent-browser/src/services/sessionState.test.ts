@@ -58,6 +58,7 @@ describe('STORAGE_KEYS', () => {
       adversaryToolReviewSettings: expect.any(String),
       securityReviewAgentSettings: expect.any(String),
       scheduledAutomationsState: expect.any(String),
+      workspaceSkillPolicyState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       installedDefaultExtensionIds: expect.any(String),
       defaultExtensionOpenFeatureFlags: expect.any(String),
@@ -65,6 +66,7 @@ describe('STORAGE_KEYS', () => {
     });
     expect(STORAGE_KEYS.securityReviewAgentSettings).toBe('agent-browser.security-review-agent-settings');
     expect(STORAGE_KEYS.scheduledAutomationsState).toBe('agent-browser.scheduled-automations-state');
+    expect(STORAGE_KEYS.workspaceSkillPolicyState).toBe('agent-browser.workspace-skill-policy-state');
   });
 });
 

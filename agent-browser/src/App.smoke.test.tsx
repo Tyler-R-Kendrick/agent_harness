@@ -225,6 +225,27 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('event streaming')).toBeInTheDocument();
   });
 
+  it('renders versioned workspace skill policy controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Workspace skill policies')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace skill policies' }));
+    expect(screen.getByLabelText('Enable workspace skill policies')).toBeInTheDocument();
+    expect(screen.getByLabelText('Least-privilege enforcement')).toBeChecked();
+    expect(screen.getByText('Versioned packages')).toBeInTheDocument();
+    expect(screen.getByText('Policy-aware regex grep')).toBeInTheDocument();
+    expect(screen.getByText('Team reviewer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Publish Team reviewer draft' }));
+    expect(screen.getAllByText('published').length).toBeGreaterThan(0);
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
