@@ -362,6 +362,10 @@ import {
   createSamplePullRequestReviewInput,
 } from './services/prReviewUnderstanding';
 import {
+  buildBrowserEvidenceReview,
+  createSampleBrowserEvidenceArtifacts,
+} from './services/browserEvidenceReview';
+import {
   buildRepoWikiPromptContext,
   buildRepoWikiSnapshot,
   isRepoWikiSnapshotsByWorkspace,
@@ -10067,6 +10071,14 @@ function AgentBrowserApp() {
     () => buildPullRequestReview(createSamplePullRequestReviewInput(activeWorkspace.name)),
     [activeWorkspace.name],
   );
+  const activeBrowserEvidenceReview = useMemo(
+    () => buildBrowserEvidenceReview({
+      changedFiles: gitWorktreeStatus?.available ? gitWorktreeStatus.files : [],
+      selectedPath: selectedGitWorktreePath,
+      artifacts: createSampleBrowserEvidenceArtifacts(activeWorkspace.name),
+    }),
+    [activeWorkspace.name, gitWorktreeStatus, selectedGitWorktreePath],
+  );
   const [pendingReviewFollowUp, setPendingReviewFollowUp] = useState<{ sessionId: string; prompt: string } | null>(null);
   const activeMountedSessionFsIds = activeWorkspaceViewState.mountedSessionFsIds ?? [];
   const activeSessionDrives = useMemo<WorkspaceMcpSessionDrive[]>(() => activeWorkspaceSessions.map((session) => ({
@@ -13850,6 +13862,7 @@ function AgentBrowserApp() {
                     status={gitWorktreeStatus}
                     diff={gitWorktreeDiff}
                     selectedPath={selectedGitWorktreePath}
+                    browserEvidenceReview={activeBrowserEvidenceReview}
                     isLoading={isGitWorktreeStatusLoading}
                     isDiffLoading={isGitWorktreeDiffLoading}
                     onRefresh={() => void refreshGitWorktreeStatus(true)}

@@ -3112,6 +3112,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 7px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -3135,10 +3136,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .git-worktree-actions {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
   flex-shrink: 0;
 }
 .git-worktree-counts,
+.git-worktree-evidence-count,
 .git-worktree-file-status,
 .git-worktree-tree-header span {
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -3148,6 +3153,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 11px;
   line-height: 1;
   padding: 4px 6px;
+}
+.git-worktree-evidence-count--passed {
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.2);
+  background: rgba(34, 197, 94, 0.09);
+}
+.git-worktree-evidence-count--failed {
+  color: #fecaca;
+  border-color: rgba(239, 68, 68, 0.24);
+  background: rgba(239, 68, 68, 0.1);
+}
+.git-worktree-evidence-count--pending {
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.1);
 }
 .git-worktree-refresh {
   width: 26px;
@@ -3224,12 +3244,96 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 7px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .git-worktree-diff-header > div {
   min-width: 0;
+}
+.git-worktree-evidence {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.34);
+}
+.git-worktree-evidence-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.git-worktree-evidence-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #e5e7eb;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.git-worktree-evidence-list {
+  display: grid;
+  gap: 6px;
+}
+.git-worktree-evidence-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.git-worktree-evidence-status {
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.git-worktree-evidence-status--passed {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.14);
+}
+.git-worktree-evidence-status--failed {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.15);
+}
+.git-worktree-evidence-status--pending {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.14);
+}
+.git-worktree-evidence-item div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.git-worktree-evidence-item strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 650;
+}
+.git-worktree-evidence-item span,
+.git-worktree-evidence p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.git-worktree-evidence-item code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #a7f3d0;
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 10.5px;
 }
 .git-worktree-diff-virtualizer {
   flex: 1;
@@ -3245,6 +3349,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 6px 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -5219,6 +5324,13 @@ kbd {
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
+  .git-worktree-header,
+  .git-worktree-diff-header {
+    align-items: flex-start;
+  }
+  .git-worktree-actions {
+    justify-content: flex-start;
+  }
   .harness-dashboard-canvas { padding: 10px; }
   .harness-dashboard-grid {
     --harness-cell: 60px;
@@ -5258,11 +5370,21 @@ kbd {
   }
 
   .content-area {
+    grid-column: 1;
     grid-row: 1;
+    width: 100%;
+    max-width: 100vw;
     padding-bottom: env(safe-area-inset-bottom);
+  }
+  .dashboard-stack {
+    grid-template-rows: minmax(380px, 52%) minmax(0, 1fr);
+  }
+  .git-worktree-body {
+    grid-template-rows: minmax(72px, 24%) minmax(0, 1fr) auto;
   }
 
   .activity-bar {
+    grid-column: 1;
     grid-row: 2;
     flex-direction: row;
     justify-content: space-between;
@@ -5423,6 +5545,7 @@ kbd {
   .browser-split-view > .page-overlay,
   .browser-split-view > .chat-panel,
   .browser-split-view > .file-editor-panel,
+  .browser-split-view > .dashboard-stack,
   .browser-split-view > .harness-dashboard-panel {
     min-width: 0;
     min-height: 0;

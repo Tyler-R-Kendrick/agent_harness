@@ -2,6 +2,8 @@ import { useMemo, type CSSProperties } from 'react';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import { PatchDiff, Virtualizer } from '@pierre/diffs/react';
 import { RefreshCcw } from 'lucide-react';
+import type { BrowserEvidenceReviewReport, LinkedBrowserEvidenceArtifact } from '../../services/browserEvidenceReview';
+import { formatAssertionSummary } from '../../services/browserEvidenceReview';
 import type { GitWorktreeDiffResponse, GitWorktreeFileChange, GitWorktreeStatusResponse } from '../../services/gitWorktreeApi';
 
 export interface GitWorktreePanelProps {
@@ -10,6 +12,7 @@ export interface GitWorktreePanelProps {
   selectedPath: string | null;
   isLoading: boolean;
   isDiffLoading: boolean;
+  browserEvidenceReview?: BrowserEvidenceReviewReport | null;
   onRefresh: () => void;
   onSelectFile: (path: string) => void;
 }
@@ -29,6 +32,11 @@ function statusLabel(file: GitWorktreeFileChange) {
 function branchLabel(status: GitWorktreeStatusResponse | null) {
   if (!status?.available) return 'Git worktree';
   return status.branch ?? status.head ?? 'Detached worktree';
+}
+
+function evidenceSummaryLabel(report: BrowserEvidenceReviewReport | null | undefined) {
+  if (!report || report.totalEvidence === 0) return 'No browser evidence';
+  return plural(report.totalEvidence, 'evidence link');
 }
 
 const treeStyle = {
@@ -59,6 +67,7 @@ export function GitWorktreePanel({
   selectedPath,
   isLoading,
   isDiffLoading,
+  browserEvidenceReview,
   onRefresh,
   onSelectFile,
 }: GitWorktreePanelProps) {
@@ -93,6 +102,11 @@ export function GitWorktreePanel({
           {status?.available ? (
             <span className="git-worktree-counts">
               {status.isClean ? 'Working tree clean' : plural(status.summary.changed, 'changed', 'changed')}
+            </span>
+          ) : null}
+          {status?.available ? (
+            <span className={`git-worktree-evidence-count git-worktree-evidence-count--${browserEvidenceReview?.status ?? 'pending'}`}>
+              {evidenceSummaryLabel(browserEvidenceReview)}
             </span>
           ) : null}
           <button type="button" className="icon-button git-worktree-refresh" onClick={onRefresh} aria-label="Refresh git status" disabled={isLoading}>
@@ -136,6 +150,9 @@ export function GitWorktreePanel({
               </div>
               {selectedFile ? <span className="git-worktree-file-status">{statusLabel(selectedFile)}</span> : null}
             </div>
+            {browserEvidenceReview?.selectedFile ? (
+              <SelectedDiffEvidence evidence={browserEvidenceReview.selectedEvidence} />
+            ) : null}
             {isDiffLoading ? (
               <div className="git-worktree-message" role="status">Loading diff...</div>
             ) : diff?.isBinary ? (
@@ -153,6 +170,38 @@ export function GitWorktreePanel({
             {status.upstream ? <span>{status.upstream}{status.ahead || status.behind ? ` +${status.ahead} -${status.behind}` : ''}</span> : null}
           </div>
         </div>
+      )}
+    </section>
+  );
+}
+
+function SelectedDiffEvidence({ evidence }: { evidence: LinkedBrowserEvidenceArtifact[] }) {
+  return (
+    <section className="git-worktree-evidence" aria-label="Browser evidence for selected diff">
+      <div className="git-worktree-evidence-heading">
+        <span className="panel-resource-eyebrow">browser/evidence</span>
+        <strong>{evidence.length ? plural(evidence.length, 'linked artifact') : 'No linked artifacts'}</strong>
+      </div>
+      {evidence.length ? (
+        <div className="git-worktree-evidence-list">
+          {evidence.map((artifact) => (
+            <article className="git-worktree-evidence-item" key={artifact.id}>
+              <span className={`git-worktree-evidence-status git-worktree-evidence-status--${artifact.status}`}>{artifact.kind}</span>
+              <div>
+                <strong>{artifact.label}</strong>
+                <span>{formatAssertionSummary(artifact.assertionSummary)}</span>
+                {(artifact.consoleErrors ?? 0) > 0 || (artifact.networkFailures ?? 0) > 0 ? (
+                  <span>{artifact.consoleErrors ?? 0} console errors / {artifact.networkFailures ?? 0} network failures</span>
+                ) : (
+                  <span>Console and network clean</span>
+                )}
+                <code>{artifact.path}</code>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p>Run visual smoke to attach screenshots, console state, network state, and assertions to this diff.</p>
       )}
     </section>
   );

@@ -20,6 +20,28 @@ const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-brows
 const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-agent-canvases.png');
 const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
+const gitWorktreeViewportOutputPaths = [
+  {
+    name: 'mobile',
+    viewport: { width: 375, height: 820 },
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-mobile.png'),
+  },
+  {
+    name: 'tablet',
+    viewport: { width: 768, height: 900 },
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-tablet.png'),
+  },
+  {
+    name: 'desktop',
+    viewport: { width: 1280, height: 820 },
+    outputPath: gitWorktreeOutputPath,
+  },
+  {
+    name: 'wide',
+    viewport: { width: 1920, height: 1080 },
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-wide.png'),
+  },
+];
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -84,13 +106,76 @@ async function stopProcess(childProcess) {
   await Promise.race([once(childProcess, 'close'), timeout]);
 }
 
+async function assertGitWorktreeEvidenceVisible(page, timeoutMs) {
+  const gitWorktreeStatus = page.getByRole('region', { name: 'Git worktree status' });
+  await expect(gitWorktreeStatus).toBeVisible({ timeout: timeoutMs });
+  await expect(gitWorktreeStatus.getByText('feature/worktree-ui')).toBeVisible({ timeout: timeoutMs });
+  await expect(gitWorktreeStatus.getByText('2 changed')).toBeVisible({ timeout: timeoutMs });
+  await expect(gitWorktreeStatus.getByText('agent-browser/src/App.tsx').first()).toBeVisible({ timeout: timeoutMs });
+  await expect(page.getByLabel('Selected file diff')).toContainText('new worktree dashboard', { timeout: timeoutMs });
+  const selectedDiffEvidence = page.getByLabel('Browser evidence for selected diff');
+  await expect(selectedDiffEvidence).toBeVisible({ timeout: timeoutMs });
+  await expect(selectedDiffEvidence.getByText('Agent Browser visual smoke')).toBeVisible({ timeout: timeoutMs });
+  await expect(selectedDiffEvidence.getByText('2 assertions passed')).toBeVisible({ timeout: timeoutMs });
+  await expect(selectedDiffEvidence.getByText('output/playwright/agent-browser-visual-smoke.png')).toBeVisible({
+    timeout: timeoutMs,
+  });
+  const selectedDiffEvidenceBox = await selectedDiffEvidence.boundingBox();
+  const viewport = page.viewportSize();
+  expect(selectedDiffEvidenceBox).not.toBeNull();
+  if (selectedDiffEvidenceBox && viewport) {
+    expect(Math.floor(selectedDiffEvidenceBox.x)).toBeGreaterThanOrEqual(0);
+    const rightEdge = Math.ceil(selectedDiffEvidenceBox.x + selectedDiffEvidenceBox.width);
+    if (rightEdge > viewport.width) {
+      const layoutDiagnostics = await selectedDiffEvidence.evaluate((element) => {
+        const selectors = [
+          '.git-worktree-evidence',
+          '.git-worktree-diff-shell',
+          '.git-worktree-body',
+          '.git-worktree-panel',
+          '.dashboard-stack',
+          '.browser-split-view',
+          '.content-area',
+          '.app-shell',
+        ];
+        return selectors.map((selector) => {
+          const candidate = element.closest(selector);
+          if (!candidate) return { selector, missing: true };
+          const rect = candidate.getBoundingClientRect();
+          const style = getComputedStyle(candidate);
+          return {
+            selector,
+            x: Math.round(rect.x),
+            width: Math.round(rect.width),
+            minWidth: style.minWidth,
+            display: style.display,
+            overflow: style.overflow,
+          };
+        });
+      });
+      throw new Error(
+        `Selected diff evidence overflows ${viewport.width}px viewport at ${rightEdge}px: ${JSON.stringify(layoutDiagnostics)}`,
+      );
+    }
+  }
+}
+
+async function captureGitWorktreeViewportMatrix(page, timeoutMs) {
+  for (const { name, viewport, outputPath: viewportOutputPath } of gitWorktreeViewportOutputPaths) {
+    await page.setViewportSize(viewport);
+    await assertGitWorktreeEvidenceVisible(page, timeoutMs);
+    await page.screenshot({ path: viewportOutputPath, fullPage: true });
+    console.log(`agent-browser git worktree ${name} smoke passed: ${viewportOutputPath}`);
+  }
+}
+
 async function main() {
   const port = Number(process.env.AGENT_BROWSER_VISUAL_SMOKE_PORT) || await findFreePort();
   const baseURL = `http://127.0.0.1:${port}`;
   const serverOutput = [];
   const server = spawn(
     process.execPath,
-    ['../scripts/run-package-bin.mjs', 'vite', '--force', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+    ['../scripts/run-package-bin.mjs', 'vite', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
     {
       cwd: packageRoot,
       env: { ...process.env, FORCE_COLOR: '0' },
@@ -104,7 +189,7 @@ async function main() {
 
   let browser;
   try {
-    await waitForServer(baseURL, server);
+    await waitForServer(baseURL, server, 300_000);
     await mkdir(path.dirname(outputPath), { recursive: true });
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
@@ -196,7 +281,7 @@ async function main() {
       });
     });
 
-    const navigationTimeoutMs = 300_000;
+    const navigationTimeoutMs = 900_000;
     const shellTimeoutMs = 30_000;
 
     await page.addInitScript(() => {
@@ -435,16 +520,10 @@ async function main() {
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
     });
     await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: navigationTimeoutMs });
-    await expect(page).toHaveTitle('Agent Browser');
+    await expect(page).toHaveTitle('Agent Browser', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
-    const gitWorktreeStatus = page.getByRole('region', { name: 'Git worktree status' });
-    await expect(gitWorktreeStatus).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(gitWorktreeStatus.getByText('feature/worktree-ui')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(gitWorktreeStatus.getByText('2 changed')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(gitWorktreeStatus.getByText('agent-browser/src/App.tsx').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByLabel('Selected file diff')).toContainText('new worktree dashboard', { timeout: shellTimeoutMs });
-    await page.screenshot({ path: gitWorktreeOutputPath, fullPage: true });
+    await captureGitWorktreeViewportMatrix(page, shellTimeoutMs);
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
