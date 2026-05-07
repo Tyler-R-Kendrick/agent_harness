@@ -38,6 +38,7 @@ export const STORAGE_KEYS = {
   scheduledAutomationsState: 'agent-browser.scheduled-automations-state',
   runCheckpointState: 'agent-browser.run-checkpoint-state',
   workspaceSkillPolicyState: 'agent-browser.workspace-skill-policy-state',
+  browserAgentRunSdkState: 'agent-browser.browser-agent-run-sdk-state',
   partnerAgentControlPlaneSettings: 'agent-browser.partner-agent-control-plane-settings',
   runtimePluginSettings: 'agent-browser.runtime-plugin-settings',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',

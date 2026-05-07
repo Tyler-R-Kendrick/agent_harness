@@ -19,6 +19,7 @@ const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-bro
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-agent-canvases.png');
 const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
+const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -472,6 +473,13 @@ async function main() {
     });
     await expect(page.getByText('Approval before deployment').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText(/operator approval/i).first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Typed run SDK' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('SDK launch smoke')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Structured event stream is live.')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Reconnect cursor 3 is ready for clients.')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: typedSdkOutputPath, fullPage: true });
     await expect(page.getByRole('button', { name: 'Scheduled automations' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -518,6 +526,10 @@ async function main() {
     await expect(page.getByLabel('Enable runtime plugins')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Tool-call interception mode')).toHaveValue('observe', { timeout: shellTimeoutMs });
     await expect(page.getByText(/active plugins/i).first()).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Browser-agent run SDK' }).click();
+    await expect(page.getByText('Structured event stream')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Reconnect cursor')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Archive and delete lifecycle')).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });
@@ -620,6 +632,7 @@ async function main() {
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
     console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
+    console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {
