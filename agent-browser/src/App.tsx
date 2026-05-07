@@ -400,6 +400,14 @@ import {
   type SharedAgentRegistryState,
 } from './services/sharedAgents';
 import {
+  DEFAULT_BROWSER_WORKFLOW_SKILLS,
+  buildBrowserWorkflowSkillPromptContext,
+  discoverBrowserWorkflowSkills,
+  installBrowserWorkflowSkill,
+  suggestBrowserWorkflowSkills,
+  type BrowserWorkflowSkillManifest,
+} from './services/browserWorkflowSkills';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -2199,6 +2207,7 @@ function ChatPanel({
   multitaskPromptContext,
   attachedArtifactCount,
   workspaceCapabilities,
+  browserWorkflowSkills,
   defaultExtensions,
   evaluationAgents,
   negativeRubricTechniques,
@@ -2251,6 +2260,7 @@ function ChatPanel({
   multitaskPromptContext?: string;
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
+  browserWorkflowSkills: BrowserWorkflowSkillManifest[];
   defaultExtensions: DefaultExtensionRuntime | null;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
@@ -2537,6 +2547,11 @@ function ChatPanel({
         uniqueSkills.set(skill.name, skill.description);
       }
     }
+    for (const skill of browserWorkflowSkills) {
+      if (!uniqueSkills.has(skill.name)) {
+        uniqueSkills.set(skill.name, skill.description);
+      }
+    }
 
     return Array.from(uniqueSkills.entries())
       .map(([name, description]) => ({ name, description }))
@@ -2549,8 +2564,12 @@ function ChatPanel({
         }
         return left.name.localeCompare(right.name);
       });
-  }, [skillAutocompleteQuery, workspaceCapabilities.skills]);
+  }, [browserWorkflowSkills, skillAutocompleteQuery, workspaceCapabilities.skills]);
   const isSkillAutocompleteOpen = skillSuggestions.length > 0;
+  const browserWorkflowSkillSuggestions = useMemo(
+    () => suggestBrowserWorkflowSkills(input, browserWorkflowSkills, 3),
+    [browserWorkflowSkills, input],
+  );
   const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
     Boolean(parseSandboxPrompt(input))
     || selectedProvider === 'tour-guide'
@@ -3265,8 +3284,14 @@ function ChatPanel({
       manifests: DEFAULT_RUNTIME_PLUGIN_MANIFESTS,
       selectedToolIds,
     });
+    const requestBrowserWorkflowSkillSuggestions = suggestBrowserWorkflowSkills(
+      trimmedText,
+      browserWorkflowSkills,
+      3,
+    );
     const requestWorkspacePromptContext = [
       workspacePromptContext,
+      buildBrowserWorkflowSkillPromptContext(requestBrowserWorkflowSkillSuggestions),
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
       buildSharedAgentPromptContext(sharedAgentCatalog),
       buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
@@ -5369,7 +5394,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -5939,6 +5964,18 @@ function ChatPanel({
                     ))}
                   </div>
                 ) : null}
+                {!isSkillAutocompleteOpen && browserWorkflowSkillSuggestions.length ? (
+                  <div className="browser-workflow-suggestions" role="list" aria-label="Suggested workflow skills">
+                    {browserWorkflowSkillSuggestions.map((skill) => (
+                      <div key={skill.id} className="browser-workflow-suggestion" role="listitem">
+                        <span className="composer-suggestion-name">{skill.name}</span>
+                        <span className="composer-suggestion-description">
+                          {skill.matchedTriggers.join(', ')} · {skill.description}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
               {selectedRuntimeProvider === 'ghcp'
                 ? (!hasAvailableCopilotModels
@@ -6456,6 +6493,86 @@ function SharedAgentsSettingsPanel({
             {catalog.warnings.map((warning) => <li key={warning}>{warning}</li>)}
           </ul>
         ) : null}
+      </div>
+    </SettingsSection>
+  );
+}
+
+function BrowserWorkflowSkillSettingsPanel({
+  installedSkills,
+  onInstall,
+}: {
+  installedSkills: BrowserWorkflowSkillManifest[];
+  onInstall: (skill: BrowserWorkflowSkillManifest) => void;
+}) {
+  const installedIds = new Set(installedSkills.map((skill) => skill.id));
+  const installableSkills = DEFAULT_BROWSER_WORKFLOW_SKILLS.filter((skill) => !installedIds.has(skill.id));
+
+  return (
+    <SettingsSection title="Browser workflow skills" defaultOpen={false}>
+      <div className="browser-workflow-skill-settings">
+        <article className="provider-card browser-workflow-skill-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Repeatable browser workflows</strong>
+              <p>{installedSkills.length} installed · {installableSkills.length} available · permissioned assets and scripts</p>
+            </div>
+            <span className={`badge${installedSkills.length ? ' connected' : ''}`}>
+              {installedSkills.length ? 'ready' : 'empty'}
+            </span>
+          </div>
+        </article>
+        {installableSkills.length ? (
+          <div className="browser-workflow-skill-install-list" role="list" aria-label="Installable browser workflow skills">
+            {installableSkills.map((skill) => (
+              <article key={skill.id} className="provider-card browser-workflow-skill-card" role="listitem">
+                <div className="provider-card-header">
+                  <div className="provider-body">
+                    <strong>{skill.name}</strong>
+                    <p>{skill.description}</p>
+                  </div>
+                  <button type="button" className="secondary-button" onClick={() => onInstall(skill)}>
+                    Install
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+        <div className="browser-workflow-skill-list" role="list" aria-label="Installed browser workflow skills">
+          {installedSkills.length ? installedSkills.map((skill) => (
+            <article key={skill.id} className="provider-card browser-workflow-skill-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{skill.name}</strong>
+                  <p>{skill.description}</p>
+                </div>
+                <span className="badge connected">{skill.version}</span>
+              </div>
+              <div className="browser-workflow-skill-scope-grid">
+                <div>
+                  <span className="muted">Tools</span>
+                  <code>{skill.permissions.tools.join(', ') || 'none'}</code>
+                </div>
+                <div>
+                  <span className="muted">Paths</span>
+                  <code>{skill.permissions.paths.join(', ') || 'none'}</code>
+                </div>
+                <div>
+                  <span className="muted">Assets</span>
+                  <code>{skill.assets.map((asset) => asset.path).join(', ') || 'none'}</code>
+                </div>
+                <div>
+                  <span className="muted">Scripts</span>
+                  <code>{skill.scripts.map((script) => script.command).join(', ') || 'none'}</code>
+                </div>
+              </div>
+              <p className="partner-agent-audit-note">Triggers: {skill.triggers.join(', ') || 'none'}</p>
+            </article>
+          )) : (
+            <p className="empty-state">No browser workflow skills installed in this workspace.</p>
+          )}
+        </div>
       </div>
     </SettingsSection>
   );
@@ -7467,6 +7584,7 @@ interface SettingsPanelProps {
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   sharedAgentRegistryState: SharedAgentRegistryState;
   sharedAgentCatalog: SharedAgentCatalog;
+  browserWorkflowSkills: BrowserWorkflowSkillManifest[];
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
@@ -7480,6 +7598,7 @@ interface SettingsPanelProps {
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
+  onInstallBrowserWorkflowSkill: (skill: BrowserWorkflowSkillManifest) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
@@ -7824,6 +7943,7 @@ function SettingsPanel({
   workspaceSkillPolicyInventory,
   sharedAgentRegistryState,
   sharedAgentCatalog,
+  browserWorkflowSkills,
   browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
@@ -7837,6 +7957,7 @@ function SettingsPanel({
   onRunCheckpointStateChange,
   onWorkspaceSkillPolicyStateChange,
   onSharedAgentRegistryStateChange,
+  onInstallBrowserWorkflowSkill,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   evaluationAgents,
@@ -7879,6 +8000,11 @@ function SettingsPanel({
         state={sharedAgentRegistryState}
         catalog={sharedAgentCatalog}
         onChange={onSharedAgentRegistryStateChange}
+      />
+
+      <BrowserWorkflowSkillSettingsPanel
+        installedSkills={browserWorkflowSkills}
+        onInstall={onInstallBrowserWorkflowSkill}
       />
 
       <PartnerAgentControlPlaneSettingsPanel
@@ -10468,6 +10594,10 @@ function AgentBrowserApp() {
     .filter((tab): tab is TreeNode => !!tab && tab.type === 'tab' && (tab.nodeKind ?? 'browser') === 'browser');
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
+  const browserWorkflowSkills = useMemo(
+    () => discoverBrowserWorkflowSkills(activeWorkspaceFiles),
+    [activeWorkspaceFiles],
+  );
   const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? [];
   const activeAgentCanvasSummaries = useMemo(
     () => listAgentCanvasSummaries(activeArtifacts),
@@ -13289,6 +13419,14 @@ function AgentBrowserApp() {
     setToast({ msg: 'Repository wiki refreshed', type: 'success' });
   }, [activeArtifacts, activeWorkspace, activeWorkspaceFiles, activeWorkspaceId, setRepoWikiSnapshotsByWorkspace, setToast]);
 
+  const installBrowserWorkflowSkillForWorkspace = useCallback((skill: BrowserWorkflowSkillManifest) => {
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: installBrowserWorkflowSkill(current[activeWorkspaceId] ?? [], skill),
+    }));
+    setToast({ msg: `Installed ${skill.name}`, type: 'success' });
+  }, [activeWorkspaceId, setToast]);
+
   const createStarterCanvasArtifacts = useCallback(() => {
     const canvases = createStarterAgentCanvases({
       workspaceId: activeWorkspaceId,
@@ -14068,6 +14206,7 @@ function AgentBrowserApp() {
         workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
         sharedAgentRegistryState={sharedAgentRegistryState}
         sharedAgentCatalog={sharedAgentCatalog}
+        browserWorkflowSkills={browserWorkflowSkills}
         browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
@@ -14081,6 +14220,7 @@ function AgentBrowserApp() {
         onRunCheckpointStateChange={setRunCheckpointState}
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
+        onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         evaluationAgents={evaluationAgents}
@@ -14357,6 +14497,7 @@ function AgentBrowserApp() {
                 multitaskPromptContext={buildMultitaskPromptContext(multitaskSubagentState)}
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
+                browserWorkflowSkills={browserWorkflowSkills}
                 defaultExtensions={defaultExtensionRuntime}
                 evaluationAgents={evaluationAgents}
                 negativeRubricTechniques={negativeRubricTechniques}
