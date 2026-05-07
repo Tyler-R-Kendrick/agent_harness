@@ -520,6 +520,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   gap: 10px;
 }
+.runtime-plugin-settings {
+  display: grid;
+  gap: 10px;
+}
+.runtime-plugin-summary {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
 .adversary-review-rules textarea {
   width: 100%;
   min-height: 96px;

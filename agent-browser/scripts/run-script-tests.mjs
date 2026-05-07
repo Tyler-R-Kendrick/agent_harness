@@ -71,6 +71,9 @@ async function main() {
   assert.match(visualSmokeScript, /Workspace skill policies/);
   assert.match(visualSmokeScript, /Least-privilege enforcement/);
   assert.match(visualSmokeScript, /Policy-aware regex grep/);
+  assert.match(visualSmokeScript, /Runtime plugins/);
+  assert.match(visualSmokeScript, /Enable runtime plugins/);
+  assert.match(visualSmokeScript, /Tool-call interception mode/);
   assert.match(visualSmokeScript, /Evaluation-native observability/);
   assert.match(visualSmokeScript, /Live experiment/);
   assert.match(visualSmokeScript, /Scheduled automations/);

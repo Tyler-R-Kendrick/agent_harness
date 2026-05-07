@@ -514,6 +514,10 @@ async function main() {
     await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });
     await expect(page.getByText('Unified workflow')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Runtime plugins' }).click();
+    await expect(page.getByLabel('Enable runtime plugins')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Tool-call interception mode')).toHaveValue('observe', { timeout: shellTimeoutMs });
+    await expect(page.getByText(/active plugins/i).first()).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });

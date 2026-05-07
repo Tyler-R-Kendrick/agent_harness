@@ -165,6 +165,16 @@ import {
   type PartnerAgentControlPlaneSettings,
 } from './services/partnerAgentControlPlane';
 import {
+  DEFAULT_RUNTIME_PLUGIN_MANIFESTS,
+  DEFAULT_RUNTIME_PLUGIN_SETTINGS,
+  buildRuntimePluginPromptContext,
+  buildRuntimePluginRuntime,
+  isRuntimePluginSettings,
+  type RuntimePluginInterceptionMode,
+  type RuntimePluginRuntime,
+  type RuntimePluginSettings,
+} from './services/runtimePlugins';
+import {
   DEFAULT_SCHEDULED_AUTOMATION_STATE,
   buildScheduledAutomationInbox,
   isScheduledAutomationState,
@@ -2098,6 +2108,7 @@ function ChatPanel({
   securityReviewAgentSettings,
   workspaceSkillPolicyInventory,
   partnerAgentControlPlaneSettings,
+  runtimePluginSettings,
   onPartnerAgentAuditEntry,
   secretSettings,
   onSessionMcpControllerChange,
@@ -2146,6 +2157,7 @@ function ChatPanel({
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
+  runtimePluginSettings: RuntimePluginSettings;
   onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
@@ -2319,6 +2331,14 @@ function ChatPanel({
   );
   const selectedToolIds = selectedToolIdsBySession[activeChatSessionId] ?? toolDescriptors.map((descriptor) => descriptor.id);
   const toolsEnabled = selectedToolIds.length > 0;
+  const runtimePluginRuntime = useMemo(
+    () => buildRuntimePluginRuntime({
+      settings: runtimePluginSettings,
+      manifests: DEFAULT_RUNTIME_PLUGIN_MANIFESTS,
+      selectedToolIds,
+    }),
+    [runtimePluginSettings, selectedToolIds],
+  );
   const selectedPartnerAgentModelRef = buildPartnerAgentModelRef(selectedRuntimeProvider, {
     codiModelId: effectiveSelectedModelId,
     ghcpModelId: effectiveSelectedCopilotModelId,
@@ -2427,7 +2447,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -3115,6 +3135,11 @@ function ChatPanel({
     if (requestPartnerAgentControlPlane.settings.enabled) {
       onPartnerAgentAuditEntry?.(requestPartnerAgentAuditEntry);
     }
+    const requestRuntimePluginRuntime = buildRuntimePluginRuntime({
+      settings: runtimePluginSettings,
+      manifests: DEFAULT_RUNTIME_PLUGIN_MANIFESTS,
+      selectedToolIds,
+    });
     const requestWorkspacePromptContext = [
       workspacePromptContext,
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
@@ -3123,6 +3148,7 @@ function ChatPanel({
         settings: securityReviewAgentSettings,
         selectedToolIds,
       })),
+      buildRuntimePluginPromptContext(requestRuntimePluginRuntime),
     ].filter((section): section is string => Boolean(section)).join('\n\n');
 
     if (toolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
@@ -5217,7 +5243,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
@@ -6365,6 +6391,128 @@ function RunCheckpointCard({ checkpoint }: { checkpoint: RunCheckpoint }) {
   );
 }
 
+function linesFromTextarea(value: string): string[] {
+  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function RuntimePluginSettingsPanel({
+  settings,
+  runtime,
+  onChange,
+}: {
+  settings: RuntimePluginSettings;
+  runtime: RuntimePluginRuntime;
+  onChange: (settings: RuntimePluginSettings) => void;
+}) {
+  function update<Key extends keyof RuntimePluginSettings>(
+    key: Key,
+    value: RuntimePluginSettings[Key],
+  ) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  const blockedToolText = settings.blockedToolIds.join('\n');
+  const rewriteRulesText = settings.rewriteRules.join('\n');
+  const enabledPluginText = settings.enabledPluginIds.join('\n');
+
+  return (
+    <SettingsSection title="Runtime plugins" defaultOpen={false}>
+      <div className="runtime-plugin-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable runtime plugins"
+              checked={settings.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+            />
+            <span>
+              <strong>Plugin runtime</strong>
+              <small>Load data-only manifests for tools, providers, events, and policy hooks.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Require runtime plugin rationale"
+              checked={settings.requireRationale}
+              onChange={(event) => update('requireRationale', event.target.checked)}
+            />
+            <span>
+              <strong>Audit rationale</strong>
+              <small>Require interception decisions to include a visible rationale.</small>
+            </span>
+          </label>
+        </div>
+
+        <div className="provider-list runtime-plugin-summary" aria-label="Runtime plugin summary">
+          <article className="provider-card">
+            <strong>{runtime.activePluginCount}/{runtime.manifestCount} active plugins</strong>
+            <p>{runtime.toolRegistrations.length} tools · {runtime.providerRegistrations.length} providers · {Object.keys(runtime.eventSubscriptions).length} event hooks</p>
+            <div className="local-inference-badges" aria-label="Runtime plugin status">
+              <span className={`badge${runtime.enabled ? ' connected' : ''}`}>{runtime.enabled ? 'enabled' : 'off'}</span>
+              <span className="badge">{settings.defaultInterceptionMode}</span>
+            </div>
+          </article>
+          {runtime.activePlugins.map((plugin) => (
+            <article key={plugin.id} className="provider-card">
+              <strong>{plugin.name}</strong>
+              <p>{plugin.description}</p>
+              <small>{plugin.source} · {plugin.eventSubscriptions.join(', ') || 'no hooks'}</small>
+            </article>
+          ))}
+        </div>
+
+        <label className="provider-command-field">
+          <span>Tool-call interception mode</span>
+          <select
+            aria-label="Tool-call interception mode"
+            value={settings.defaultInterceptionMode}
+            onChange={(event) => update('defaultInterceptionMode', event.target.value as RuntimePluginInterceptionMode)}
+          >
+            <option value="observe">observe</option>
+            <option value="rewrite">rewrite</option>
+            <option value="block">block</option>
+          </select>
+        </label>
+
+        <label className="provider-command-field adversary-review-rules">
+          <span>Enabled plugin IDs</span>
+          <textarea
+            aria-label="Enabled runtime plugin IDs"
+            value={enabledPluginText}
+            onChange={(event) => update('enabledPluginIds', linesFromTextarea(event.target.value))}
+            placeholder="One plugin id per line"
+            rows={3}
+          />
+        </label>
+
+        <label className="provider-command-field adversary-review-rules">
+          <span>Blocked tool IDs</span>
+          <textarea
+            aria-label="Runtime plugin blocked tool IDs"
+            value={blockedToolText}
+            onChange={(event) => update('blockedToolIds', linesFromTextarea(event.target.value))}
+            placeholder="One tool id per line"
+            rows={3}
+          />
+        </label>
+
+        <label className="provider-command-field adversary-review-rules">
+          <span>Rewrite rules</span>
+          <textarea
+            aria-label="Runtime plugin rewrite rules"
+            value={rewriteRulesText}
+            onChange={(event) => update('rewriteRules', linesFromTextarea(event.target.value))}
+            placeholder="tool.id:key=value"
+            rows={3}
+          />
+        </label>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function AdversaryToolReviewSettingsPanel({
   settings,
   onChange,
@@ -7069,6 +7217,8 @@ interface SettingsPanelProps {
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
+  runtimePluginSettings: RuntimePluginSettings;
+  runtimePluginRuntime: RuntimePluginRuntime;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
@@ -7076,6 +7226,7 @@ interface SettingsPanelProps {
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
+  onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
@@ -7419,6 +7570,8 @@ function SettingsPanel({
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
+  runtimePluginSettings,
+  runtimePluginRuntime,
   onBenchmarkRoutingSettingsChange,
   onAdversaryToolReviewSettingsChange,
   onSecurityReviewAgentSettingsChange,
@@ -7426,6 +7579,7 @@ function SettingsPanel({
   onRunCheckpointStateChange,
   onWorkspaceSkillPolicyStateChange,
   onPartnerAgentControlPlaneSettingsChange,
+  onRuntimePluginSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
   onSaveEvaluationAgents,
@@ -7467,6 +7621,12 @@ function SettingsPanel({
         controlPlane={partnerAgentControlPlane}
         latestAuditEntry={latestPartnerAgentAuditEntry}
         onChange={onPartnerAgentControlPlaneSettingsChange}
+      />
+
+      <RuntimePluginSettingsPanel
+        settings={runtimePluginSettings}
+        runtime={runtimePluginRuntime}
+        onChange={onRuntimePluginSettingsChange}
       />
 
       <AdversaryToolReviewSettingsPanel
@@ -9511,6 +9671,12 @@ function AgentBrowserApp() {
     isPartnerAgentControlPlaneSettings,
     DEFAULT_PARTNER_AGENT_CONTROL_PLANE_SETTINGS,
   );
+  const [runtimePluginSettings, setRuntimePluginSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.runtimePluginSettings,
+    isRuntimePluginSettings,
+    DEFAULT_RUNTIME_PLUGIN_SETTINGS,
+  );
   const [latestPartnerAgentAuditEntry, setLatestPartnerAgentAuditEntry] = useState<PartnerAgentAuditEntry | null>(null);
   const [browserLocationContext, setBrowserLocationContext] = useStoredState(
     localStorageBackend,
@@ -9592,6 +9758,14 @@ function AgentBrowserApp() {
       selectedToolIds: [],
     }),
     [securityReviewAgentSettings],
+  );
+  const settingsRuntimePluginRuntime = useMemo(
+    () => buildRuntimePluginRuntime({
+      settings: runtimePluginSettings,
+      manifests: DEFAULT_RUNTIME_PLUGIN_MANIFESTS,
+      selectedToolIds: [],
+    }),
+    [runtimePluginSettings],
   );
   const benchmarkRoutingCandidateFingerprint = useMemo(
     () => benchmarkRoutingBaseCandidates.map((candidate) => candidate.ref).sort().join('|'),
@@ -13395,6 +13569,8 @@ function AgentBrowserApp() {
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
+        runtimePluginSettings={runtimePluginSettings}
+        runtimePluginRuntime={settingsRuntimePluginRuntime}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
@@ -13402,6 +13578,7 @@ function AgentBrowserApp() {
         onRunCheckpointStateChange={setRunCheckpointState}
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
+        onRuntimePluginSettingsChange={setRuntimePluginSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
         onSaveEvaluationAgents={saveEvaluationAgents}
@@ -13710,6 +13887,7 @@ function AgentBrowserApp() {
                 securityReviewAgentSettings={securityReviewAgentSettings}
                 workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
                 partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
+                runtimePluginSettings={runtimePluginSettings}
                 onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}
                 secretSettings={secretSettings}
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
