@@ -28,14 +28,21 @@ import cursorModelProviderManifestSource from '../../../ext/cursor-model-provide
 import { createCodexModelProviderPlugin } from '../../../ext/codex-model-provider/src/index.ts';
 import codexModelProviderManifestSource from '../../../ext/codex-model-provider/agent-harness.plugin.json';
 import { createCodiBrowserModelProviderPlugin } from '../../../ext/codi-browser-model-provider/src/index.ts';
-import codiBrowserModelProviderManifestSource from '../../../ext/codi-browser-model-provider/agent-harness.plugin.json';
-import localInferenceDaemonManifestSource from '../../../ext/daemon/local-inference-daemon/agent-harness.plugin.json';
+import huggingFaceModelProviderManifestSource from '../../../ext/codi-browser-model-provider/agent-harness.plugin.json';
+import localInferenceWorkerManifestSource from '../../../ext/worker/local-inference-worker/agent-harness.plugin.json';
 import agentSkillsManifestSource from '../../../ext/harness/agent-skills/agent-harness.plugin.json';
 import agentsMdManifestSource from '../../../ext/harness/agents-md/agent-harness.plugin.json';
-import artifactsManifestSource from '../../../ext/ide/artifacts/agent-harness.plugin.json';
-import designMdManifestSource from '../../../ext/ide/design-md/agent-harness.plugin.json';
+import artifactsContextManifestSource from '../../../ext/harness/artifacts/agent-harness.plugin.json';
+import artifactsWorktreeManifestSource from '../../../ext/ide/artifacts-worktree/agent-harness.plugin.json';
+import designMdContextManifestSource from '../../../ext/harness/design-md/agent-harness.plugin.json';
+import openDesignManifestSource from '../../../ext/ide/open-design/agent-harness.plugin.json';
 import workflowCanvasManifestSource from '../../../ext/ide/workflow-canvas/agent-harness.plugin.json';
 import localModelConnectorManifestSource from '../../../ext/provider/local-model-connector/agent-harness.plugin.json';
+import openAiModelProviderManifestSource from '../../../ext/provider/openai-model-provider/agent-harness.plugin.json';
+import azureInferenceModelProviderManifestSource from '../../../ext/provider/azure-inference-model-provider/agent-harness.plugin.json';
+import awsBedrockModelProviderManifestSource from '../../../ext/provider/aws-bedrock-model-provider/agent-harness.plugin.json';
+import anthropicModelProviderManifestSource from '../../../ext/provider/anthropic-model-provider/agent-harness.plugin.json';
+import xaiModelProviderManifestSource from '../../../ext/provider/xai-model-provider/agent-harness.plugin.json';
 import symphonyManifestSource from '../../../ext/runtime/symphony/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
@@ -63,22 +70,26 @@ export interface CreateDefaultExtensionRuntimeOptions {
   installedExtensionIds?: readonly string[];
 }
 
-export type ExtensionMarketplaceCategory = 'ide' | 'harness' | 'daemon' | 'provider' | 'runtime';
+export type ExtensionMarketplaceCategory = 'ide' | 'harness' | 'worker' | 'provider';
+
+export type DefaultExtensionAvailability =
+  | { state: 'available' }
+  | { state: 'unavailable'; reason: string };
+
+export type DefaultExtensionOpenFeatureFlags = Record<string, boolean>;
 
 export const EXTENSION_MARKETPLACE_CATEGORIES: ExtensionMarketplaceCategory[] = [
   'ide',
   'harness',
-  'daemon',
+  'worker',
   'provider',
-  'runtime',
 ];
 
 export const EXTENSION_MARKETPLACE_CATEGORY_LABELS: Record<ExtensionMarketplaceCategory, string> = {
   ide: 'IDE extensions',
   harness: 'Harness extensions',
-  daemon: 'Daemon extensions',
+  worker: 'Worker extensions',
   provider: 'Provider extensions',
-  runtime: 'Runtime extensions',
 };
 
 export const DEFAULT_EXTENSION_MARKETPLACE = parseHarnessPluginMarketplaceManifest(marketplaceManifestSource);
@@ -87,16 +98,23 @@ export const DEFAULT_EXTENSION_MARKETPLACES: HarnessPluginMarketplaceManifest[] 
 const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.agent-skills', parseHarnessPluginManifest(agentSkillsManifestSource)],
   ['agent-harness.ext.agents-md', parseHarnessPluginManifest(agentsMdManifestSource)],
-  ['agent-harness.ext.design-md', parseHarnessPluginManifest(designMdManifestSource)],
+  ['agent-harness.ext.design-md-context', parseHarnessPluginManifest(designMdContextManifestSource)],
+  ['agent-harness.ext.open-design', parseHarnessPluginManifest(openDesignManifestSource)],
   ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
-  ['agent-harness.ext.artifacts', parseHarnessPluginManifest(artifactsManifestSource)],
+  ['agent-harness.ext.artifacts-context', parseHarnessPluginManifest(artifactsContextManifestSource)],
+  ['agent-harness.ext.artifacts-worktree', parseHarnessPluginManifest(artifactsWorktreeManifestSource)],
+  ['agent-harness.ext.huggingface-model-provider', parseHarnessPluginManifest(huggingFaceModelProviderManifestSource)],
   ['agent-harness.ext.ghcp-model-provider', parseHarnessPluginManifest(ghcpModelProviderManifestSource)],
   ['agent-harness.ext.cursor-model-provider', parseHarnessPluginManifest(cursorModelProviderManifestSource)],
   ['agent-harness.ext.codex-model-provider', parseHarnessPluginManifest(codexModelProviderManifestSource)],
-  ['agent-harness.ext.codi-browser-model-provider', parseHarnessPluginManifest(codiBrowserModelProviderManifestSource)],
+  ['agent-harness.ext.openai-model-provider', parseHarnessPluginManifest(openAiModelProviderManifestSource)],
+  ['agent-harness.ext.azure-inference-model-provider', parseHarnessPluginManifest(azureInferenceModelProviderManifestSource)],
+  ['agent-harness.ext.aws-bedrock-model-provider', parseHarnessPluginManifest(awsBedrockModelProviderManifestSource)],
+  ['agent-harness.ext.anthropic-model-provider', parseHarnessPluginManifest(anthropicModelProviderManifestSource)],
+  ['agent-harness.ext.xai-model-provider', parseHarnessPluginManifest(xaiModelProviderManifestSource)],
   ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
-  ['agent-harness.ext.local-inference-daemon', parseHarnessPluginManifest(localInferenceDaemonManifestSource)],
+  ['agent-harness.ext.local-inference-daemon', parseHarnessPluginManifest(localInferenceWorkerManifestSource)],
 ]);
 
 export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
@@ -106,6 +124,14 @@ export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT
   }
   return { marketplace, manifest };
 });
+
+const DEFAULT_EXTENSION_IDS = new Set(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id));
+
+const DEFAULT_EXTENSION_ID_ALIASES = new Map<string, readonly string[]>([
+  ['agent-harness.ext.design-md', ['agent-harness.ext.design-md-context', 'agent-harness.ext.open-design']],
+  ['agent-harness.ext.artifacts', ['agent-harness.ext.artifacts-context', 'agent-harness.ext.artifacts-worktree']],
+  ['agent-harness.ext.codi-browser-model-provider', ['agent-harness.ext.huggingface-model-provider']],
+]);
 
 const EMPTY_EXTENSION_SUMMARY: DefaultExtensionSummary = Object.freeze({
   pluginCount: 0,
@@ -133,15 +159,15 @@ export async function createDefaultExtensionRuntime(
       },
     })],
     ['agent-harness.ext.agents-md', () => createAgentsMdHookPlugin(workspaceFiles)],
-    ['agent-harness.ext.design-md', () => createDesignMdPlugin({ documents: designDocuments })],
+    ['agent-harness.ext.design-md-context', () => createDesignMdPlugin({ documents: designDocuments })],
     ['agent-harness.ext.symphony', () => createSymphonyPlugin(workspaceFiles)],
     ['agent-harness.ext.workflow-canvas', () => createWorkflowCanvasPlugin()],
-    ['agent-harness.ext.artifacts', () => createArtifactsPlugin()],
+    ['agent-harness.ext.artifacts-context', () => createArtifactsPlugin()],
     ['agent-harness.ext.local-model-connector', () => createLocalModelConnectorPlugin()],
     ['agent-harness.ext.ghcp-model-provider', () => createGhcpModelProviderPlugin()],
     ['agent-harness.ext.cursor-model-provider', () => createCursorModelProviderPlugin()],
     ['agent-harness.ext.codex-model-provider', () => createCodexModelProviderPlugin()],
-    ['agent-harness.ext.codi-browser-model-provider', () => createCodiBrowserModelProviderPlugin()],
+    ['agent-harness.ext.huggingface-model-provider', () => createCodiBrowserModelProviderPlugin()],
   ]);
 
   await context.plugins.loadAll(installedExtensionIds.map((extensionId) => pluginFactories.get(extensionId)?.()).filter(isHarnessPlugin));
@@ -169,16 +195,17 @@ export function summarizeDefaultExtensionRuntime(runtime: DefaultExtensionRuntim
 export function getExtensionMarketplaceCategory(extension: DefaultExtensionDescriptor): ExtensionMarketplaceCategory {
   const metadataCategory = extension.marketplace.metadata?.marketplaceCategory;
   if (isExtensionMarketplaceCategory(metadataCategory)) return metadataCategory;
+  if (metadataCategory === 'daemon' || metadataCategory === 'runtime') return 'worker';
 
   for (const category of extension.marketplace.categories ?? []) {
     const normalized = category.replace(/-extension$/, '');
+    if (normalized === 'daemon' || normalized === 'runtime') return 'worker';
     if (isExtensionMarketplaceCategory(normalized)) return normalized;
   }
 
   if (extension.manifest.capabilities?.some((capability) => capability.kind === 'model-provider')) return 'provider';
-  if (extension.manifest.assets?.some((asset) => asset.kind === 'runtime')) return 'daemon';
-  if (extension.manifest.events?.length || extension.manifest.capabilities?.some((capability) => capability.kind === 'event' || capability.kind === 'hook')) return 'runtime';
-  if (extension.manifest.renderers?.length || extension.manifest.paneItems?.length || extension.manifest.capabilities?.some((capability) => capability.kind === 'renderer' || capability.kind === 'pane-item' || capability.kind === 'artifact')) return 'ide';
+  if (extension.manifest.assets?.some((asset) => asset.kind === 'runtime')) return 'worker';
+  if (extension.manifest.renderers?.length || extension.manifest.paneItems?.length || extension.manifest.capabilities?.some((capability) => capability.kind === 'renderer' || capability.kind === 'pane-item')) return 'ide';
   return 'harness';
 }
 
@@ -188,9 +215,8 @@ export function groupDefaultExtensionsByMarketplaceCategory(
   const groups: Record<ExtensionMarketplaceCategory, DefaultExtensionDescriptor[]> = {
     ide: [],
     harness: [],
-    daemon: [],
+    worker: [],
     provider: [],
-    runtime: [],
   };
 
   for (const extension of extensions) {
@@ -204,14 +230,16 @@ export function getInstalledDefaultExtensionDescriptors(
   runtime: DefaultExtensionRuntime | null,
   fallbackInstalledExtensionIds: readonly string[] = [],
 ): DefaultExtensionDescriptor[] {
-  const installedIds = new Set(runtime?.installedExtensionIds ?? fallbackInstalledExtensionIds);
+  const installedIds = new Set(normalizeDefaultExtensionIds(
+    fallbackInstalledExtensionIds.length ? fallbackInstalledExtensionIds : runtime?.installedExtensionIds ?? [],
+  ));
   const extensions = runtime?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
   return extensions.filter((extension) => installedIds.has(extension.manifest.id));
 }
 
 export function buildRuntimeExtensionPromptContext(runtime: DefaultExtensionRuntime | null): string | null {
   const runtimeExtensions = getInstalledDefaultExtensionDescriptors(runtime)
-    .filter((extension) => getExtensionMarketplaceCategory(extension) === 'runtime');
+    .filter(hasRuntimeEvents);
   if (!runtimeExtensions.length) return null;
 
   const lines = runtimeExtensions.map((extension) => {
@@ -223,15 +251,66 @@ export function buildRuntimeExtensionPromptContext(runtime: DefaultExtensionRunt
   return ['Runtime extensions integrated into this inference loop:', ...lines].join('\n');
 }
 
+export function normalizeDefaultExtensionIds(extensionIds: readonly string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const extensionId of extensionIds) {
+    const candidates = DEFAULT_EXTENSION_ID_ALIASES.get(extensionId) ?? [extensionId];
+    for (const candidate of candidates) {
+      if (!DEFAULT_EXTENSION_IDS.has(candidate) || seen.has(candidate)) continue;
+      seen.add(candidate);
+      normalized.push(candidate);
+    }
+  }
+
+  return normalized;
+}
+
+export function getDefaultExtensionOpenFeatureFlagKey(extensionId: string): string {
+  return `agent-harness.extensions.${extensionId}.enabled`;
+}
+
+export function resolveEnabledDefaultExtensionIds(
+  installedExtensionIds: readonly string[],
+  flags: DefaultExtensionOpenFeatureFlags,
+): string[] {
+  return normalizeDefaultExtensionIds(installedExtensionIds)
+    .filter((extensionId) => flags[getDefaultExtensionOpenFeatureFlagKey(extensionId)] !== false);
+}
+
+export function getDefaultExtensionAvailability(extension: DefaultExtensionDescriptor): DefaultExtensionAvailability {
+  const metadata = readRecord(extension.marketplace.metadata?.availability)
+    ?? readRecord(extension.manifest.metadata?.availability);
+  if (!metadata) return { state: 'available' };
+
+  if (metadata.state === 'unavailable') {
+    return {
+      state: 'unavailable',
+      reason: typeof metadata.reason === 'string'
+        ? metadata.reason
+        : 'This extension is not available in the current runtime.',
+    };
+  }
+
+  return { state: 'available' };
+}
+
 function selectInstalledDefaultExtensionIds(installedExtensionIds: readonly string[]): string[] {
-  const requested = new Set(installedExtensionIds);
-  return DEFAULT_EXTENSION_MANIFESTS
-    .map((extension) => extension.manifest.id)
-    .filter((extensionId) => requested.has(extensionId));
+  return normalizeDefaultExtensionIds(installedExtensionIds);
+}
+
+function hasRuntimeEvents(extension: DefaultExtensionDescriptor): boolean {
+  const runtimeEvents = extension.marketplace.metadata?.runtimeEvents ?? extension.manifest.metadata?.runtimeEvents;
+  return Boolean(extension.manifest.events?.length || (Array.isArray(runtimeEvents) && runtimeEvents.length));
 }
 
 function isExtensionMarketplaceCategory(value: unknown): value is ExtensionMarketplaceCategory {
   return typeof value === 'string' && (EXTENSION_MARKETPLACE_CATEGORIES as string[]).includes(value);
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
 function isHarnessPlugin(plugin: HarnessPlugin | undefined): plugin is HarnessPlugin {

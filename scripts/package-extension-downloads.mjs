@@ -27,7 +27,7 @@ export function buildWindowsDaemonBinaryDownloads(repoRoot = DEFAULT_REPO_ROOT) 
     {
       sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
       publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
-      extensionFile: path.join(repoRoot, 'ext', 'daemon', 'local-inference-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
+      extensionFile: path.join(repoRoot, 'ext', 'worker', 'local-inference-worker', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
     },
   ];
 }
@@ -156,7 +156,7 @@ export async function createZipFromDirectory(sourceDirectory, outputFile, rootNa
 
 export async function packageExtensionDownloads(repoRoot = DEFAULT_REPO_ROOT) {
   const downloads = buildDownloadPackages(repoRoot);
-  await mkdir(path.join(repoRoot, 'ext', 'daemon', 'local-inference-daemon', 'dist'), { recursive: true });
+  await mkdir(path.join(repoRoot, 'ext', 'worker', 'local-inference-worker', 'dist'), { recursive: true });
 
   for (const download of downloads) {
     await createZipFromDirectory(download.sourceDirectory, download.outputFile, download.name);
@@ -167,8 +167,8 @@ export async function packageExtensionDownloads(repoRoot = DEFAULT_REPO_ROOT) {
     const daemonExtensionZip = path.join(
       repoRoot,
       'ext',
-      'daemon',
-      'local-inference-daemon',
+      'worker',
+      'local-inference-worker',
       'dist',
       'agent-harness-local-inference-daemon.zip',
     );

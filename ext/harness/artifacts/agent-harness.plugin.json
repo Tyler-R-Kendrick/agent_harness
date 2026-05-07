@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.artifacts-context",
+  "name": "Artifact context",
+  "version": "0.1.0",
+  "description": "Lets agents use named artifacts in context through artifact tools and @artifact:name chat tokens.",
+  "activationEvents": ["onArtifact:bundle", "onChatToken:artifact"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createArtifactsPlugin"
+  },
+  "metadata": {
+    "chatTokenPrefix": "@artifact:",
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.artifacts-context.enabled"
+  },
+  "capabilities": [
+    {
+      "kind": "artifact",
+      "id": "artifacts",
+      "description": "Stores multi-file artifacts with artifact-to-artifact references."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.create",
+      "description": "Creates a stored artifact bundle."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.list",
+      "description": "Lists stored artifact bundles."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.read",
+      "description": "Reads a stored artifact bundle."
+    },
+    {
+      "kind": "tool",
+      "id": "artifacts.update",
+      "description": "Updates a stored artifact bundle while preserving version history."
+    },
+    {
+      "kind": "command",
+      "id": "artifacts.new",
+      "description": "Starts an artifact drafting prompt."
+    },
+    {
+      "kind": "setting",
+      "id": "artifacts.chat-tokens",
+      "description": "Controls artifact token autocomplete and context inclusion."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Creates, reads, and updates standalone artifact bundles."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

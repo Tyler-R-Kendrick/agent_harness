@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import {
   DndContext,
   DragOverlay,
@@ -249,11 +249,16 @@ import {
   EXTENSION_MARKETPLACE_CATEGORY_LABELS,
   buildRuntimeExtensionPromptContext,
   createDefaultExtensionRuntime,
+  getDefaultExtensionAvailability,
+  getDefaultExtensionOpenFeatureFlagKey,
   getExtensionMarketplaceCategory,
   getInstalledDefaultExtensionDescriptors,
   groupDefaultExtensionsByMarketplaceCategory,
+  normalizeDefaultExtensionIds,
+  resolveEnabledDefaultExtensionIds,
   summarizeDefaultExtensionRuntime,
   type DefaultExtensionDescriptor,
+  type DefaultExtensionOpenFeatureFlags,
   type DefaultExtensionRuntime,
 } from './services/defaultExtensions';
 import {
@@ -293,10 +298,12 @@ import {
 } from './services/browserLocation';
 import {
   STORAGE_KEYS,
+  isBooleanRecord,
   isArtifactContextBySession,
   isArtifactsByWorkspace,
   isChatMessagesBySession,
   isHarnessAppSpecRecord,
+  isJsonRecord,
   isString,
   isStringArrayRecord,
   isStringRecord,
@@ -2555,10 +2562,20 @@ function ChatPanel({
     const activeGeneration = activeGenerationRef.current;
     if (!activeGeneration) return;
     activeGeneration.cancel();
-    activeGeneration.finalizeCancelled();
-    clearActiveGeneration(activeGeneration.assistantId);
-    requestAnimationFrame(() => chatInputRef.current?.focus());
-  }, [clearActiveGeneration]);
+    try {
+      activeGeneration.finalizeCancelled();
+    } finally {
+      if (activeGenerationRef.current?.assistantId === activeGeneration.assistantId) {
+        activeGenerationRef.current = null;
+      }
+      flushSync(() => {
+        setActiveGenerationSessionId((current) => (
+          current === activeGeneration.sessionId ? null : current
+        ));
+      });
+      requestAnimationFrame(() => chatInputRef.current?.focus());
+    }
+  }, []);
 
   useEffect(() => () => {
     activeGenerationRef.current?.cancel();
@@ -5607,6 +5624,10 @@ function ChatPanel({
                     aria-label={isActiveSessionGenerating ? 'Stop response' : 'Send'}
                     title={isActiveSessionGenerating ? 'Stop response' : 'Send'}
                     disabled={!isActiveSessionGenerating && !canSubmit}
+                    onClick={isActiveSessionGenerating ? (event) => {
+                      event.preventDefault();
+                      stopActiveGeneration();
+                    } : undefined}
                   >
                     {isActiveSessionGenerating ? <Square size={13} fill="currentColor" /> : <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M8 3L4 7M8 3L12 7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                   </button>
@@ -7196,8 +7217,8 @@ function getDefaultExtensionIcon(extension: DefaultExtensionDescriptor | string)
   }
   if (extensionId.endsWith('.agent-skills')) return 'sparkles';
   if (extensionId.endsWith('.agents-md')) return 'file';
-  if (extensionId.endsWith('.design-md')) return 'slidersHorizontal';
-  if (extensionId.endsWith('.artifacts')) return 'layers';
+  if (extensionId.endsWith('.design-md-context') || extensionId.endsWith('.open-design') || extensionId.endsWith('.design-md')) return 'slidersHorizontal';
+  if (extensionId.endsWith('.artifacts-context') || extensionId.endsWith('.artifacts-worktree') || extensionId.endsWith('.artifacts')) return 'layers';
   if (extensionId.endsWith('-model-provider')) return 'cpu';
   if (extensionId.endsWith('.local-model-connector')) return 'cpu';
   if (extensionId.endsWith('.local-inference-daemon')) return 'terminal';
@@ -7253,23 +7274,107 @@ function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; d
   }
 }
 
+type ExtensionActionHandlers = {
+  onInstallExtension: (extensionId: string) => void;
+  onUninstallExtension: (extensionId: string) => void;
+  onSetExtensionEnabled: (extensionId: string, enabled: boolean) => void;
+  onConfigureExtension: (extension: DefaultExtensionDescriptor) => void;
+};
+
+function ExtensionActionButtons({
+  extension,
+  isInstalled,
+  isEnabled,
+  availability,
+  onInstallExtension,
+  onUninstallExtension,
+  onSetExtensionEnabled,
+  onConfigureExtension,
+}: {
+  extension: DefaultExtensionDescriptor;
+  isInstalled: boolean;
+  isEnabled: boolean;
+  availability: ReturnType<typeof getDefaultExtensionAvailability>;
+} & ExtensionActionHandlers) {
+  const name = extension.manifest.name;
+  if (!isInstalled) {
+    const unavailable = availability.state === 'unavailable';
+    return (
+      <button
+        type="button"
+        className="sidebar-icon-button marketplace-action"
+        disabled={unavailable}
+        aria-label={unavailable ? `${name} unavailable` : `Install ${name}`}
+        title={unavailable ? availability.reason : `Install ${name}`}
+        onClick={() => onInstallExtension(extension.manifest.id)}
+      >
+        <Icon name="plus" size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="sidebar-icon-button marketplace-action"
+        aria-label={`Configure ${name}`}
+        title={`Configure ${name}`}
+        onClick={() => onConfigureExtension(extension)}
+      >
+        <Icon name="settings" size={13} />
+      </button>
+      <button
+        type="button"
+        className="sidebar-icon-button marketplace-action"
+        aria-label={isEnabled ? `Disable ${name}` : `Enable ${name}`}
+        title={`${isEnabled ? 'Disable' : 'Enable'} ${name} through OpenFeature`}
+        onClick={() => onSetExtensionEnabled(extension.manifest.id, !isEnabled)}
+      >
+        <Icon name={isEnabled ? 'x' : 'plus'} size={13} />
+      </button>
+      <button
+        type="button"
+        className="sidebar-icon-button marketplace-action"
+        aria-label={`Uninstall ${name}`}
+        title={`Uninstall ${name}`}
+        onClick={() => onUninstallExtension(extension.manifest.id)}
+      >
+        <Icon name="trash" size={13} />
+      </button>
+    </>
+  );
+}
+
 function MarketplaceExtensionCard({
   extension,
   installedExtensionIdSet,
+  enabledExtensionIdSet,
   daemonDownload,
   onInstallExtension,
+  onUninstallExtension,
+  onSetExtensionEnabled,
+  onConfigureExtension,
 }: {
   extension: DefaultExtensionDescriptor;
   installedExtensionIdSet: Set<string>;
+  enabledExtensionIdSet: Set<string>;
   daemonDownload: DaemonDownloadChoice;
-  onInstallExtension: (extensionId: string) => void;
-}) {
+} & ExtensionActionHandlers) {
   const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
+  const isEnabled = enabledExtensionIdSet.has(extension.manifest.id);
   const category = getExtensionMarketplaceCategory(extension);
   const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
+  const availability = getDefaultExtensionAvailability(extension);
+  const className = [
+    'marketplace-card',
+    `marketplace-card--${category}`,
+    availability.state === 'unavailable' ? 'marketplace-card--unavailable' : '',
+    isInstalled && !isEnabled ? 'marketplace-card--disabled' : '',
+  ].filter(Boolean).join(' ');
 
   return (
-    <article className={`marketplace-card marketplace-card--${category}`}>
+    <article className={className} aria-disabled={availability.state === 'unavailable' ? true : undefined}>
       <div className="marketplace-card-icon">
         <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
       </div>
@@ -7279,32 +7384,36 @@ function MarketplaceExtensionCard({
         <p className="marketplace-card-desc">{extension.manifest.description}</p>
         <div className="marketplace-card-meta">
           <span>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
-          {category === 'daemon' ? <span>WebRTC peer detection</span> : null}
+          {category === 'worker' ? <span>External runtime detection</span> : null}
           {category === 'provider' ? <span>Account configurable</span> : null}
+          {isInstalled ? <span>{isEnabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span> : null}
+          {availability.state === 'unavailable' ? <span>Unavailable on this runtime</span> : null}
+          <span>Configurable</span>
         </div>
       </div>
-      {download ? (
-        <a
-          className="sidebar-icon-button marketplace-action marketplace-download-link"
-          href={download.href}
-          download={download.fileName}
-          aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
-          title={`Download ${extension.manifest.name}`}
-        >
-          <Icon name="download" size={13} />
-        </a>
-      ) : (
-        <button
-          type="button"
-          className="sidebar-icon-button marketplace-action"
-          disabled={isInstalled}
-          aria-label={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-          title={isInstalled ? `${extension.manifest.name} installed` : `Install ${extension.manifest.name}`}
-          onClick={() => onInstallExtension(extension.manifest.id)}
-        >
-          <Icon name={isInstalled ? 'save' : 'plus'} size={13} />
-        </button>
-      )}
+      <div className="marketplace-actions">
+        {download ? (
+          <a
+            className="sidebar-icon-button marketplace-action marketplace-download-link"
+            href={download.href}
+            download={download.fileName}
+            aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
+            title={`Download ${extension.manifest.name}`}
+          >
+            <Icon name="download" size={13} />
+          </a>
+        ) : null}
+        <ExtensionActionButtons
+          extension={extension}
+          isInstalled={isInstalled}
+          isEnabled={isEnabled}
+          availability={availability}
+          onInstallExtension={onInstallExtension}
+          onUninstallExtension={onUninstallExtension}
+          onSetExtensionEnabled={onSetExtensionEnabled}
+          onConfigureExtension={onConfigureExtension}
+        />
+      </div>
     </article>
   );
 }
@@ -7312,16 +7421,21 @@ function MarketplaceExtensionCard({
 function MarketplacePanel({
   defaultExtensions,
   installedExtensionIds,
+  enabledExtensionIds,
   onInstallExtension,
+  onUninstallExtension,
+  onSetExtensionEnabled,
+  onConfigureExtension,
 }: {
   defaultExtensions: DefaultExtensionRuntime | null;
   installedExtensionIds: string[];
-  onInstallExtension: (extensionId: string) => void;
-}) {
+  enabledExtensionIds: string[];
+} & ExtensionActionHandlers) {
   const [search, setSearch] = useState('');
   const daemonDownload = useResolvedDaemonDownloadChoice();
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
-  const installedExtensionIdSet = new Set(defaultExtensions?.installedExtensionIds ?? installedExtensionIds);
+  const installedExtensionIdSet = new Set(normalizeDefaultExtensionIds(installedExtensionIds));
+  const enabledExtensionIdSet = new Set(enabledExtensionIds);
   const filtered = useMemo(() => repoExtensions.filter((extension) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -7363,8 +7477,12 @@ function MarketplacePanel({
                     key={extension.manifest.id}
                     extension={extension}
                     installedExtensionIdSet={installedExtensionIdSet}
+                    enabledExtensionIdSet={enabledExtensionIdSet}
                     daemonDownload={daemonDownload}
                     onInstallExtension={onInstallExtension}
+                    onUninstallExtension={onUninstallExtension}
+                    onSetExtensionEnabled={onSetExtensionEnabled}
+                    onConfigureExtension={onConfigureExtension}
                   />
                 ))}
                 {extensions.length === 0 ? <p className="muted marketplace-empty">No matches in this category.</p> : null}
@@ -7382,14 +7500,21 @@ function ExtensionsPanel({
   capabilities,
   defaultExtensions,
   installedExtensionIds,
+  enabledExtensionIds,
+  onInstallExtension,
+  onUninstallExtension,
+  onSetExtensionEnabled,
+  onConfigureExtension,
 }: {
   workspaceName: string;
   capabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
   installedExtensionIds: string[];
-}) {
+  enabledExtensionIds: string[];
+} & ExtensionActionHandlers) {
   const installedExtensions = getInstalledDefaultExtensionDescriptors(defaultExtensions, installedExtensionIds);
   const installedByCategory = groupDefaultExtensionsByMarketplaceCategory(installedExtensions);
+  const enabledExtensionIdSet = new Set(enabledExtensionIds);
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Installed extensions">
@@ -7413,7 +7538,10 @@ function ExtensionsPanel({
               <div key={category} className="installed-extension-group">
                 <span className="extension-group-label">{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
                 {extensions.map((extension) => (
-                  <article key={extension.manifest.id} className="marketplace-card installed-extension-card">
+                  <article
+                    key={extension.manifest.id}
+                    className={`marketplace-card installed-extension-card ${enabledExtensionIdSet.has(extension.manifest.id) ? '' : 'marketplace-card--disabled'}`}
+                  >
                     <div className="marketplace-card-icon">
                       <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
                     </div>
@@ -7421,8 +7549,23 @@ function ExtensionsPanel({
                       <strong>{extension.manifest.name}</strong>
                       <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
                       <p className="marketplace-card-desc">{extension.manifest.description}</p>
+                      <div className="marketplace-card-meta">
+                        <span>{enabledExtensionIdSet.has(extension.manifest.id) ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
+                        <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
+                      </div>
                     </div>
-                    <span className="badge connected">Installed</span>
+                    <div className="marketplace-actions">
+                      <ExtensionActionButtons
+                        extension={extension}
+                        isInstalled
+                        isEnabled={enabledExtensionIdSet.has(extension.manifest.id)}
+                        availability={getDefaultExtensionAvailability(extension)}
+                        onInstallExtension={onInstallExtension}
+                        onUninstallExtension={onUninstallExtension}
+                        onSetExtensionEnabled={onSetExtensionEnabled}
+                        onConfigureExtension={onConfigureExtension}
+                      />
+                    </div>
                   </article>
                 ))}
               </div>
@@ -7472,20 +7615,27 @@ function AccountPanel({
 
       <SettingsSection title="Provider extensions" scrollBody>
         <div className="provider-list">
-          {providerExtensions.map((extension) => (
-            <article key={extension.manifest.id} className="provider-card">
-              <div className="provider-card-header">
-                <div className="provider-body">
-                  <strong>{extension.manifest.name}</strong>
-                  <p>{extension.manifest.description}</p>
+          {providerExtensions.map((extension) => {
+            const availability = getDefaultExtensionAvailability(extension);
+            return (
+              <article
+                key={extension.manifest.id}
+                className={`provider-card ${availability.state === 'unavailable' ? 'provider-card--unavailable' : ''}`}
+              >
+                <div className="provider-card-header">
+                  <div className="provider-body">
+                    <strong>{extension.manifest.name}</strong>
+                    <p>{extension.manifest.description}</p>
+                    {availability.state === 'unavailable' ? <p className="muted">{availability.reason}</p> : null}
+                  </div>
+                  <span className="badge">{availability.state === 'unavailable' ? 'Unavailable' : 'Provider'}</span>
                 </div>
-                <span className="badge">Provider</span>
-              </div>
-              {extension.manifest.id === 'agent-harness.ext.local-model-connector' ? (
-                <LocalModelSettings />
-              ) : null}
-            </article>
-          ))}
+                {extension.manifest.id === 'agent-harness.ext.local-model-connector' ? (
+                  <LocalModelSettings />
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       </SettingsSection>
     </section>
@@ -8671,6 +8821,18 @@ function AgentBrowserApp() {
     isStringArray,
     [],
   );
+  const [defaultExtensionOpenFeatureFlags, setDefaultExtensionOpenFeatureFlags] = useStoredState<DefaultExtensionOpenFeatureFlags>(
+    localStorageBackend,
+    STORAGE_KEYS.defaultExtensionOpenFeatureFlags,
+    isBooleanRecord,
+    {},
+  );
+  const [defaultExtensionConfigurationById, setDefaultExtensionConfigurationById] = useStoredState<Record<string, unknown>>(
+    localStorageBackend,
+    STORAGE_KEYS.defaultExtensionConfigurationById,
+    isJsonRecord,
+    {},
+  );
   const [benchmarkRoutingSettings, setBenchmarkRoutingSettings] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.benchmarkModelRoutingSettings,
@@ -9006,23 +9168,83 @@ function AgentBrowserApp() {
     : null;
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
+  const enabledDefaultExtensionIds = useMemo(
+    () => resolveEnabledDefaultExtensionIds(installedDefaultExtensionIds, defaultExtensionOpenFeatureFlags),
+    [defaultExtensionOpenFeatureFlags, installedDefaultExtensionIds],
+  );
   const installedDefaultExtensions = useMemo(
     () => getInstalledDefaultExtensionDescriptors(defaultExtensionRuntime, installedDefaultExtensionIds),
     [defaultExtensionRuntime, installedDefaultExtensionIds],
   );
-  const installedIdeExtensions = useMemo(
-    () => installedDefaultExtensions.filter((extension) => getExtensionMarketplaceCategory(extension) === 'ide'),
-    [installedDefaultExtensions],
+  const enabledDefaultExtensions = useMemo(
+    () => getInstalledDefaultExtensionDescriptors(defaultExtensionRuntime, enabledDefaultExtensionIds),
+    [defaultExtensionRuntime, enabledDefaultExtensionIds],
   );
+  const installedIdeExtensions = useMemo(
+    () => enabledDefaultExtensions.filter((extension) => getExtensionMarketplaceCategory(extension) === 'ide'),
+    [enabledDefaultExtensions],
+  );
+  const artifactWorktreeExtensionEnabled = enabledDefaultExtensionIds.includes('agent-harness.ext.artifacts-worktree');
   const installDefaultExtension = useCallback((extensionId: string) => {
-    setInstalledDefaultExtensionIds((current) => (
-      current.includes(extensionId) ? current : [...current, extensionId]
-    ));
-  }, [setInstalledDefaultExtensionIds]);
+    const extensionIds = normalizeDefaultExtensionIds([extensionId]);
+    setInstalledDefaultExtensionIds((current) => {
+      const existing = new Set(normalizeDefaultExtensionIds(current));
+      for (const id of extensionIds) existing.add(id);
+      return [...existing];
+    });
+    setDefaultExtensionOpenFeatureFlags((current) => {
+      const next = { ...current };
+      for (const id of extensionIds) next[getDefaultExtensionOpenFeatureFlagKey(id)] = true;
+      return next;
+    });
+  }, [setDefaultExtensionOpenFeatureFlags, setInstalledDefaultExtensionIds]);
+  const uninstallDefaultExtension = useCallback((extensionId: string) => {
+    const extensionIds = normalizeDefaultExtensionIds([extensionId]);
+    setInstalledDefaultExtensionIds((current) => normalizeDefaultExtensionIds(current).filter((id) => !extensionIds.includes(id)));
+    setDefaultExtensionOpenFeatureFlags((current) => {
+      const next = { ...current };
+      for (const id of extensionIds) delete next[getDefaultExtensionOpenFeatureFlagKey(id)];
+      return next;
+    });
+    setDefaultExtensionConfigurationById((current) => {
+      const next = { ...current };
+      for (const id of extensionIds) delete next[id];
+      return next;
+    });
+  }, [setDefaultExtensionConfigurationById, setDefaultExtensionOpenFeatureFlags, setInstalledDefaultExtensionIds]);
+  const setDefaultExtensionEnabled = useCallback((extensionId: string, enabled: boolean) => {
+    const extensionIds = normalizeDefaultExtensionIds([extensionId]);
+    setDefaultExtensionOpenFeatureFlags((current) => {
+      const next = { ...current };
+      for (const id of extensionIds) next[getDefaultExtensionOpenFeatureFlagKey(id)] = enabled;
+      return next;
+    });
+  }, [setDefaultExtensionOpenFeatureFlags]);
+  const configureDefaultExtension = useCallback((extension: DefaultExtensionDescriptor) => {
+    const current = defaultExtensionConfigurationById[extension.manifest.id] ?? {};
+    const raw = window.prompt(`Configure ${extension.manifest.name} as JSON`, JSON.stringify(current, null, 2));
+    if (raw === null) return;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Extension configuration must be a JSON object.');
+      }
+      setDefaultExtensionConfigurationById((previous) => ({
+        ...previous,
+        [extension.manifest.id]: parsed,
+      }));
+      setToast({ msg: `${extension.manifest.name} configuration saved`, type: 'success' });
+    } catch (error) {
+      setToast({
+        msg: error instanceof Error ? error.message : 'Extension configuration must be valid JSON.',
+        type: 'error',
+      });
+    }
+  }, [defaultExtensionConfigurationById, setDefaultExtensionConfigurationById, setToast]);
   useEffect(() => {
     let mounted = true;
     void createDefaultExtensionRuntime(activeWorkspaceFiles, {
-      installedExtensionIds: installedDefaultExtensionIds,
+      installedExtensionIds: enabledDefaultExtensionIds,
     })
       .then((runtime) => {
         if (mounted) setDefaultExtensionRuntime(runtime);
@@ -9034,7 +9256,7 @@ function AgentBrowserApp() {
     return () => {
       mounted = false;
     };
-  }, [activeWorkspaceFiles, installedDefaultExtensionIds]);
+  }, [activeWorkspaceFiles, enabledDefaultExtensionIds]);
   const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
     workspaceId: activeWorkspaceId,
     workspaceName: activeWorkspace.name,
@@ -9372,7 +9594,9 @@ function AgentBrowserApp() {
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
         const extensionNodes = buildInstalledExtensionDriveNodes(`extensions:${ws.id}`, installedDefaultExtensions);
         const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
-        const artifactNodes = buildArtifactDriveNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? []);
+        const artifactNodes = artifactWorktreeExtensionEnabled
+          ? buildArtifactDriveNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? [])
+          : [];
         const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
         const mountedSessionIds = normalizeWorkspaceViewEntry(normalizedWorkspace, workspaceViewStateByWorkspace[ws.id]).mountedSessionFsIds;
         const terminalFsNodes: TreeNode[] = (sessionCategory?.children ?? [])
@@ -9393,7 +9617,7 @@ function AgentBrowserApp() {
       });
       return { ...current, children: updated };
     });
-  }, [artifactsByWorkspace, installedDefaultExtensions, terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
+  }, [artifactWorktreeExtensionEnabled, artifactsByWorkspace, installedDefaultExtensions, terminalFsFileContentsBySession, terminalFsPathsBySession, workspaceFilesByWorkspace, workspaceViewStateByWorkspace]);
 
   // ── System clipboard detection ────────────────────────────────────────────
   useEffect(() => {
@@ -12330,6 +12554,11 @@ function AgentBrowserApp() {
         capabilities={activeWorkspaceCapabilities}
         defaultExtensions={defaultExtensionRuntime}
         installedExtensionIds={installedDefaultExtensionIds}
+        enabledExtensionIds={enabledDefaultExtensionIds}
+        onInstallExtension={installDefaultExtension}
+        onUninstallExtension={uninstallDefaultExtension}
+        onSetExtensionEnabled={setDefaultExtensionEnabled}
+        onConfigureExtension={configureDefaultExtension}
       />
     );
     if (activePanel === 'models') return (
@@ -12466,7 +12695,11 @@ function AgentBrowserApp() {
           <MarketplacePanel
             defaultExtensions={defaultExtensionRuntime}
             installedExtensionIds={installedDefaultExtensionIds}
+            enabledExtensionIds={enabledDefaultExtensionIds}
             onInstallExtension={installDefaultExtension}
+            onUninstallExtension={uninstallDefaultExtension}
+            onSetExtensionEnabled={setDefaultExtensionEnabled}
+            onConfigureExtension={configureDefaultExtension}
           />
         ) : (() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {

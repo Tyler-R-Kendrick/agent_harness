@@ -60,6 +60,8 @@ describe('STORAGE_KEYS', () => {
       scheduledAutomationsState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       installedDefaultExtensionIds: expect.any(String),
+      defaultExtensionOpenFeatureFlags: expect.any(String),
+      defaultExtensionConfigurationById: expect.any(String),
     });
     expect(STORAGE_KEYS.securityReviewAgentSettings).toBe('agent-browser.security-review-agent-settings');
     expect(STORAGE_KEYS.scheduledAutomationsState).toBe('agent-browser.scheduled-automations-state');

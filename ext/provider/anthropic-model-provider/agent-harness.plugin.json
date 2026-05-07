@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.anthropic-model-provider",
+  "name": "Anthropic Models",
+  "version": "0.1.0",
+  "description": "Lists the Anthropic provider extension surface for future first-class account configuration.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createAnthropicModelProviderPlugin"
+  },
+  "metadata": {
+    "availability": {
+      "state": "unavailable",
+      "reason": "Provider adapter is listed for marketplace planning but is not bundled in this runtime yet."
+    },
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.anthropic-model-provider.enabled"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "anthropic",
+        "label": "Anthropic",
+        "kind": "openai-compatible",
+        "providerIds": ["anthropic"],
+        "description": "Future Anthropic model-provider configuration."
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "anthropic",
+      "description": "Anthropic language models."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

@@ -5,9 +5,13 @@ import {
   DEFAULT_EXTENSION_MARKETPLACE,
   DEFAULT_EXTENSION_MARKETPLACES,
   createDefaultExtensionRuntime,
+  getDefaultExtensionAvailability,
+  getDefaultExtensionOpenFeatureFlagKey,
   getExtensionMarketplaceCategory,
   getInstalledDefaultExtensionDescriptors,
   groupDefaultExtensionsByMarketplaceCategory,
+  normalizeDefaultExtensionIds,
+  resolveEnabledDefaultExtensionIds,
 } from './defaultExtensions';
 
 describe('default extensions', () => {
@@ -16,40 +20,53 @@ describe('default extensions', () => {
     expect(DEFAULT_EXTENSION_MARKETPLACE.name).toBe('Agent Harness default marketplace');
     expect(DEFAULT_EXTENSION_MARKETPLACES).toEqual([DEFAULT_EXTENSION_MARKETPLACE]);
     expect(DEFAULT_EXTENSION_MARKETPLACE.plugins.some((plugin) => plugin.default === true)).toBe(false);
+
     const grouped = groupDefaultExtensionsByMarketplaceCategory(DEFAULT_EXTENSION_MANIFESTS);
     expect(grouped.ide).toEqual(expect.arrayContaining([
-      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-md' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.open-design' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
-      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-worktree' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.symphony' }) }),
     ]));
     expect(grouped.harness).toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.agent-skills' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.agents-md' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-md-context' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-context' }) }),
     ]));
-    expect(grouped.daemon).toEqual(expect.arrayContaining([
+    expect(grouped.worker).toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.local-inference-daemon' }) }),
     ]));
     expect(grouped.provider).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.huggingface-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.openai-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.azure-inference-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.aws-bedrock-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.anthropic-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.xai-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.ghcp-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.cursor-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.codex-model-provider' }) }),
-      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.codi-browser-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.local-model-connector' }) }),
-    ]));
-    expect(grouped.runtime).toEqual(expect.arrayContaining([
-      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.symphony' }) }),
     ]));
     expect(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id)).toEqual([
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
-      'agent-harness.ext.design-md',
+      'agent-harness.ext.design-md-context',
+      'agent-harness.ext.open-design',
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
-      'agent-harness.ext.artifacts',
+      'agent-harness.ext.artifacts-context',
+      'agent-harness.ext.artifacts-worktree',
+      'agent-harness.ext.huggingface-model-provider',
       'agent-harness.ext.ghcp-model-provider',
       'agent-harness.ext.cursor-model-provider',
       'agent-harness.ext.codex-model-provider',
-      'agent-harness.ext.codi-browser-model-provider',
+      'agent-harness.ext.openai-model-provider',
+      'agent-harness.ext.azure-inference-model-provider',
+      'agent-harness.ext.aws-bedrock-model-provider',
+      'agent-harness.ext.anthropic-model-provider',
+      'agent-harness.ext.xai-model-provider',
       'agent-harness.ext.local-model-connector',
       'agent-harness.ext.local-inference-daemon',
     ]);
@@ -61,16 +78,23 @@ describe('default extensions', () => {
     expect(runtime.extensions.map((extension) => extension.manifest.name)).toEqual([
       'Agent skills',
       'AGENTS.md workspace instructions',
-      'DESIGN.md design tokens',
+      'DESIGN.md agent guidance',
+      'OpenDesign DESIGN.md Studio',
       'Symphony workflow orchestration',
       'Workflow canvas orchestration',
-      'Artifacts',
+      'Artifact context',
+      'Artifact worktree explorer',
+      'Hugging Face Browser Models',
       'GitHub Copilot Models',
       'Cursor Models',
       'Codex Models',
-      'Codi Browser Models',
+      'OpenAI Models',
+      'Azure AI Inference Models',
+      'AWS Bedrock Models',
+      'Anthropic Models',
+      'xAI Models',
       'Local Model Connector',
-      'Local Inference Daemon',
+      'Local Inference Worker',
     ]);
     expect(runtime.installedExtensionIds).toEqual([]);
     expect(runtime.plugins).toEqual([]);
@@ -85,14 +109,14 @@ describe('default extensions', () => {
       installedExtensionIds: [
         'agent-harness.ext.symphony',
         'agent-harness.ext.workflow-canvas',
-        'agent-harness.ext.artifacts',
+        'agent-harness.ext.artifacts-context',
       ],
     });
 
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
-      'agent-harness.ext.artifacts',
+      'agent-harness.ext.artifacts-context',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
       'symphony',
@@ -164,9 +188,9 @@ describe('default extensions', () => {
     expect(runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.local-inference-daemon'))
       .toMatchObject({
         marketplace: {
-          manifest: './daemon/local-inference-daemon/agent-harness.plugin.json',
-          source: { path: './daemon/local-inference-daemon/dist' },
-          categories: expect.arrayContaining(['daemon-extension']),
+          manifest: './worker/local-inference-worker/agent-harness.plugin.json',
+          source: { path: './worker/local-inference-worker/dist' },
+          categories: expect.arrayContaining(['worker-extension']),
           metadata: expect.objectContaining({
             externalInstallDetection: 'webrtc-peer',
           }),
@@ -206,7 +230,7 @@ describe('default extensions', () => {
   it('lists installed descriptors and keeps their marketplace categories', async () => {
     const runtime = await createDefaultExtensionRuntime([], {
       installedExtensionIds: [
-        'agent-harness.ext.design-md',
+        'agent-harness.ext.design-md-context',
         'agent-harness.ext.agents-md',
         'agent-harness.ext.symphony',
       ],
@@ -216,13 +240,52 @@ describe('default extensions', () => {
 
     expect(installed.map((extension) => extension.manifest.id)).toEqual([
       'agent-harness.ext.agents-md',
-      'agent-harness.ext.design-md',
+      'agent-harness.ext.design-md-context',
       'agent-harness.ext.symphony',
     ]);
     expect(installed.map(getExtensionMarketplaceCategory)).toEqual([
       'harness',
+      'harness',
       'ide',
-      'runtime',
     ]);
+  });
+
+  it('normalizes pre-split extension ids into the current installable surfaces', () => {
+    expect(normalizeDefaultExtensionIds([
+      'agent-harness.ext.design-md',
+      'agent-harness.ext.artifacts',
+      'agent-harness.ext.symphony',
+      'agent-harness.ext.unknown',
+    ])).toEqual([
+      'agent-harness.ext.design-md-context',
+      'agent-harness.ext.open-design',
+      'agent-harness.ext.artifacts-context',
+      'agent-harness.ext.artifacts-worktree',
+      'agent-harness.ext.symphony',
+    ]);
+  });
+
+  it('uses OpenFeature-style boolean flags to resolve enabled installed extensions', () => {
+    const symphonyFlag = getDefaultExtensionOpenFeatureFlagKey('agent-harness.ext.symphony');
+    expect(symphonyFlag).toBe('agent-harness.extensions.agent-harness.ext.symphony.enabled');
+    expect(resolveEnabledDefaultExtensionIds([
+      'agent-harness.ext.symphony',
+      'agent-harness.ext.workflow-canvas',
+    ], {
+      [symphonyFlag]: false,
+    })).toEqual(['agent-harness.ext.workflow-canvas']);
+  });
+
+  it('marks listed-but-unavailable provider extensions as disabled marketplace choices', () => {
+    const openAi = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.openai-model-provider');
+    expect(openAi).toBeDefined();
+    expect(getDefaultExtensionAvailability(openAi!)).toEqual({
+      state: 'unavailable',
+      reason: 'Provider adapter is listed for marketplace planning but is not bundled in this runtime yet.',
+    });
+
+    const huggingFace = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.huggingface-model-provider');
+    expect(huggingFace).toBeDefined();
+    expect(getDefaultExtensionAvailability(huggingFace!)).toEqual({ state: 'available' });
   });
 });
