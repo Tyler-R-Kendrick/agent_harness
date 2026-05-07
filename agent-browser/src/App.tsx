@@ -201,6 +201,14 @@ import { createSearchTurnContextSystemMessage } from './services/conversationSea
 import { ProcessLog, type ProcessEntry, type ProcessEntryKind } from './services/processLog';
 import { InlineProcess, ProcessPanel } from './features/process';
 import {
+  buildHarnessCoreSessionSnapshot,
+  createHarnessCoreState,
+  reduceHarnessCoreEvent,
+  selectHarnessCoreSummary,
+  type HarnessCoreSessionRuntime,
+  type HarnessCoreState,
+} from './services/harnessCore';
+import {
   createWebMcpToolBridge,
   registerWorkspaceTools,
   type WorkspaceMcpBrowserPageHistory,
@@ -426,27 +434,11 @@ type FilePanel = { type: 'file'; file: WorkspaceFile };
 type ArtifactPanel = { type: 'artifact'; artifact: AgentArtifact; file: ArtifactFile | null };
 type Panel = DashboardPanel | BrowserPanel | SessionPanel | FilePanel | ArtifactPanel;
 type PanelDragHandleProps = React.HTMLAttributes<HTMLElement>;
-type SessionMcpRuntimeState = {
-  mode: 'agent' | 'terminal';
-  provider: AgentProvider | null;
-  modelId: string | null;
-  agentId: string | null;
-  toolIds: string[];
-  cwd: string | null;
-  messages: Array<{
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-    status?: string | null;
-  }>;
-};
+type SessionMcpRuntimeState = HarnessCoreSessionRuntime;
 type SessionMcpController = {
   getRuntimeState: () => SessionMcpRuntimeState;
   writeSession: (input: WorkspaceMcpWriteSessionInput) => Promise<void>;
 };
-
-function areSessionRuntimeSnapshotsEqual(left: SessionMcpRuntimeState | undefined, right: SessionMcpRuntimeState): boolean {
-  return JSON.stringify(left ?? null) === JSON.stringify(right);
-}
 
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
@@ -6945,6 +6937,7 @@ interface ModelsPanelProps {
 }
 
 interface SettingsPanelProps {
+  harnessCoreSummary: ReturnType<typeof selectHarnessCoreSummary>;
   benchmarkRoutingSettings: BenchmarkRoutingSettings;
   benchmarkRoutingCandidates: BenchmarkRoutingCandidate[];
   benchmarkEvidenceState: BenchmarkEvidenceDiscoveryState;
@@ -7256,7 +7249,42 @@ function ModelsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorS
   );
 }
 
+function HarnessCoreSettingsPanel({ summary }: { summary: ReturnType<typeof selectHarnessCoreSummary> }) {
+  return (
+    <SettingsSection title="Harness core">
+      <div className="harness-core-settings" role="status" aria-label="Harness core status">
+        <article className="provider-card harness-core-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Reusable browser-agent core</strong>
+              <p>Mode state, thread lifecycle, approvals, memory, subagents, models, and events now share a typed core boundary.</p>
+            </div>
+            <span className="badge connected">Core active</span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="Harness core metrics">
+            <span role="listitem">
+              <strong>{summary.activeSessionCount}</strong>
+              <small>active sessions</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.capabilityCount}</strong>
+              <small>capabilities</small>
+            </span>
+          </div>
+          <p className="muted">Latest event: {summary.latestEventSummary}</p>
+          <div className="chip-row" aria-label="Harness core capabilities">
+            {summary.capabilities.map((capability) => (
+              <span className="tag-chip" key={capability}>{capability}</span>
+            ))}
+          </div>
+        </article>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function SettingsPanel({
+  harnessCoreSummary,
   benchmarkRoutingSettings,
   benchmarkRoutingCandidates,
   benchmarkEvidenceState,
@@ -7294,6 +7322,8 @@ function SettingsPanel({
         </div>
         <span className="badge">{evaluationAgents.length} eval agents · {secretRecords.length} secrets</span>
       </div>
+
+      <HarnessCoreSettingsPanel summary={harnessCoreSummary} />
 
       <BenchmarkRoutingSettingsPanel
         settings={benchmarkRoutingSettings}
@@ -9476,20 +9506,14 @@ function AgentBrowserApp() {
     evaluationAgentRegistry.addNegativeRubricTechnique(technique);
     setNegativeRubricTechniques(evaluationAgentRegistry.listNegativeRubricTechniques());
   }, [evaluationAgentRegistry]);
-  const [sessionRuntimeSnapshotsById, setSessionRuntimeSnapshotsById] = useState<Record<string, SessionMcpRuntimeState>>({});
+  const [harnessCoreState, setHarnessCoreState] = useState<HarnessCoreState>(() => createHarnessCoreState());
   const handleSessionRuntimeChange = useCallback((sessionId: string, runtime: SessionMcpRuntimeState | null) => {
-    setSessionRuntimeSnapshotsById((current) => {
-      if (!runtime) {
-        if (!current[sessionId]) return current;
-        const next = { ...current };
-        delete next[sessionId];
-        return next;
-      }
-      if (areSessionRuntimeSnapshotsEqual(current[sessionId], runtime)) {
-        return current;
-      }
-      return { ...current, [sessionId]: runtime };
-    });
+    setHarnessCoreState((current) => reduceHarnessCoreEvent(
+      current,
+      runtime
+        ? { type: 'session-runtime-updated', sessionId, runtime }
+        : { type: 'session-runtime-removed', sessionId },
+    ));
   }, []);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
@@ -11699,13 +11723,10 @@ function AgentBrowserApp() {
     return entriesBySession;
   }, {}), [activeSessionFsEntries]);
   const activeDashboardSessions = useMemo(() => activeWorkspaceSessions.map((session) => {
-    const runtime = sessionRuntimeSnapshotsById[session.id] ?? sessionMcpControllersRef.current[session.id]?.getRuntimeState();
-    return {
-      ...session,
-      ...(runtime ?? {}),
-      assets: activeSessionAssetsById[session.id] ?? [],
-    };
-  }), [activeSessionAssetsById, activeWorkspaceSessions, sessionRuntimeSnapshotsById]);
+    const runtime = harnessCoreState.sessions[session.id] ?? sessionMcpControllersRef.current[session.id]?.getRuntimeState();
+    return buildHarnessCoreSessionSnapshot(session, runtime, activeSessionAssetsById[session.id] ?? []);
+  }), [activeSessionAssetsById, activeWorkspaceSessions, harnessCoreState.sessions]);
+  const harnessCoreSummary = useMemo(() => selectHarnessCoreSummary(harnessCoreState), [harnessCoreState]);
 
   const activeWorktreeItems = useMemo<WorkspaceMcpWorktreeItem[]>(() => {
     if (activeWorkspace.type !== 'workspace') {
@@ -13093,6 +13114,7 @@ function AgentBrowserApp() {
     );
     if (activePanel === 'settings') return (
       <SettingsPanel
+        harnessCoreSummary={harnessCoreSummary}
         benchmarkRoutingSettings={benchmarkRoutingSettings}
         benchmarkRoutingCandidates={benchmarkRoutingCandidates}
         benchmarkEvidenceState={benchmarkEvidenceState}
