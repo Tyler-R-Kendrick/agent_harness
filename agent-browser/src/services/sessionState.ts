@@ -34,6 +34,7 @@ export const STORAGE_KEYS = {
   benchmarkModelRoutingSettings: 'agent-browser.benchmark-model-routing-settings',
   benchmarkEvidenceState: 'agent-browser.benchmark-evidence-state',
   adversaryToolReviewSettings: 'agent-browser.adversary-tool-review-settings',
+  adversaryAgentSettings: 'agent-browser.adversary-agent-settings',
   securityReviewAgentSettings: 'agent-browser.security-review-agent-settings',
   scheduledAutomationsState: 'agent-browser.scheduled-automations-state',
   runCheckpointState: 'agent-browser.run-checkpoint-state',

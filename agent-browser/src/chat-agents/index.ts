@@ -14,6 +14,7 @@ import { isPlannerTaskText, PLANNER_LABEL, streamPlannerChat } from './Planner';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import { isSecurityReviewTaskText, SECURITY_REVIEW_LABEL, streamSecurityReviewChat } from './Security';
 import { isSteeringTaskText, STEERING_LABEL, streamSteeringChat } from './Steering';
+import { ADVERSARY_LABEL, isAdversaryTaskText, streamAdversaryChat } from './Adversary';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
@@ -30,6 +31,14 @@ export {
 } from './Debugger';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 export { CURSOR_LABEL, buildCursorPrompt, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
+export {
+  ADVERSARY_LABEL,
+  buildAdversaryOperatingInstructions,
+  buildAdversarySystemPrompt,
+  buildAdversaryToolInstructions,
+  isAdversaryTaskText,
+  streamAdversaryChat,
+} from './Adversary';
 export {
   SECURITY_REVIEW_LABEL,
   buildSecurityReviewOperatingInstructions,
@@ -317,6 +326,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'adversary') {
+    await streamAdversaryChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'tour-guide') {
     await streamTourGuideChat({
       workspaceName: options.workspaceName,
@@ -370,7 +394,7 @@ export function getAgentDisplayName({
   activeCodexModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security' || provider === 'steering') {
+  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security' || provider === 'steering' || provider === 'adversary') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : researcherRuntimeProvider === 'cursor'
@@ -384,7 +408,9 @@ export function getAgentDisplayName({
           ? PLANNER_LABEL
           : provider === 'security'
             ? SECURITY_REVIEW_LABEL
-            : STEERING_LABEL;
+            : provider === 'steering'
+              ? STEERING_LABEL
+              : ADVERSARY_LABEL;
     return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
@@ -441,6 +467,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Steering...'
       : 'Sign in to GHCP or Cursor, or install a Codi model to update steering';
+  }
+  if (provider === 'adversary') {
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
+      ? 'Ask Adversary…'
+      : 'Sign in to GHCP or Cursor, or install a Codi model for adversary review';
   }
   if (provider === 'tour-guide') {
     return 'Ask Tour Guide…';
@@ -532,6 +563,17 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Steering models`
       : 'Steering needs GHCP, Cursor, or Codi';
   }
+  if (provider === 'adversary') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Adversary models`;
+    }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Adversary models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Adversary models`
+      : 'Adversary needs GHCP, Cursor, or Codi';
+  }
   if (provider === 'tour-guide') {
     return 'Creates guided product tours';
   }
@@ -547,6 +589,7 @@ export function resolveAgentProviderForTask({
 }): AgentProvider {
   if (isSecurityReviewTaskText(latestUserInput)) return 'security';
   if (isSteeringTaskText(latestUserInput)) return 'steering';
+  if (isAdversaryTaskText(latestUserInput)) return 'adversary';
   if (isResearchTaskText(latestUserInput)) return 'researcher';
   if (isDebuggingTaskText(latestUserInput)) return 'debugger';
   if (isPlannerTaskText(latestUserInput)) return 'planner';
@@ -566,7 +609,7 @@ export function resolveRuntimeAgentProvider({
   hasCursorModelsReady?: boolean;
   hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'steering' && provider !== 'tour-guide') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'steering' && provider !== 'adversary' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
   void hasCodexModelsReady;
