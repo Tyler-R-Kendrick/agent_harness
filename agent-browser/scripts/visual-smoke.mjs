@@ -710,6 +710,11 @@ async function main() {
     await expect(page.getByText('Core active')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('thread lifecycle', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('event streaming', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Harness steering' }).click();
+    await expect(page.getByLabel('Enable harness steering')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Auto-capture steering corrections')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('.steering/STEERING.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('.steering/tool.steering.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');

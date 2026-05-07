@@ -22,7 +22,7 @@ describe('partnerAgentControlPlane', () => {
       selectedToolIds: ['read-file', 'write-file'],
     });
 
-    expect(plane.readyAgentCount).toBeGreaterThanOrEqual(6);
+    expect(plane.readyAgentCount).toBeGreaterThanOrEqual(7);
     expect(plane.agentRows.find((row) => row.provider === 'codi')).toMatchObject({
       ready: true,
       modelCount: 1,
@@ -34,6 +34,12 @@ describe('partnerAgentControlPlane', () => {
     expect(plane.agentRows.find((row) => row.provider === 'security')).toMatchObject({
       label: 'Security Review',
       kind: 'specialist',
+      ready: true,
+    });
+    expect(plane.agentRows.find((row) => row.provider === 'steering')).toMatchObject({
+      label: 'Steering',
+      kind: 'specialist',
+      runtimeProvider: 'ghcp',
       ready: true,
     });
     expect(plane.modelOptions.map((option) => option.ref)).toContain('codi:local-qwen');

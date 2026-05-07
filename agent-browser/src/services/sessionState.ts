@@ -37,6 +37,7 @@ export const STORAGE_KEYS = {
   securityReviewAgentSettings: 'agent-browser.security-review-agent-settings',
   scheduledAutomationsState: 'agent-browser.scheduled-automations-state',
   runCheckpointState: 'agent-browser.run-checkpoint-state',
+  harnessSteeringState: 'agent-browser.harness-steering-state',
   workspaceSkillPolicyState: 'agent-browser.workspace-skill-policy-state',
   browserAgentRunSdkState: 'agent-browser.browser-agent-run-sdk-state',
   multitaskSubagentState: 'agent-browser.multitask-subagent-state',

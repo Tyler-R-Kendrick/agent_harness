@@ -87,6 +87,7 @@ import {
   buildPlannerToolInstructions,
   buildResearcherToolInstructions,
   buildSecurityReviewToolInstructions,
+  buildSteeringToolInstructions,
   hasCodiModels,
   hasCursorAccess,
   hasCodexAccess,
@@ -410,6 +411,16 @@ import {
   suggestBrowserWorkflowSkills,
   type BrowserWorkflowSkillManifest,
 } from './services/browserWorkflowSkills';
+import {
+  DEFAULT_HARNESS_STEERING_STATE,
+  buildHarnessSteeringInventory,
+  buildHarnessSteeringPromptContext,
+  createHarnessSteeringCorrection,
+  isHarnessSteeringState,
+  type HarnessSteeringInventory,
+  type HarnessSteeringScope,
+  type HarnessSteeringState,
+} from './services/harnessSteering';
 import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
@@ -2235,6 +2246,7 @@ function ChatPanel({
   securityReviewAgentSettings,
   workspaceSkillPolicyInventory,
   sharedAgentCatalog,
+  harnessSteeringInventory,
   partnerAgentControlPlaneSettings,
   runtimePluginSettings,
   onPartnerAgentAuditEntry,
@@ -2288,6 +2300,7 @@ function ChatPanel({
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   sharedAgentCatalog: SharedAgentCatalog;
+  harnessSteeringInventory: HarnessSteeringInventory;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   runtimePluginSettings: RuntimePluginSettings;
   onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
@@ -2581,7 +2594,7 @@ function ChatPanel({
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
     || (selectedProvider === 'codex' && Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels)
-    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security') && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security' || selectedProvider === 'steering') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
@@ -2591,7 +2604,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -3297,6 +3310,7 @@ function ChatPanel({
       buildBrowserWorkflowSkillPromptContext(requestBrowserWorkflowSkillSuggestions),
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
       buildSharedAgentPromptContext(sharedAgentCatalog),
+      buildHarnessSteeringPromptContext(harnessSteeringInventory),
       buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
       buildSecurityReviewPromptContext(buildSecurityReviewRunPlan({
         settings: securityReviewAgentSettings,
@@ -4468,6 +4482,13 @@ function ChatPanel({
               descriptors: selectedDescriptors,
               selectedToolIds,
             })
+          : providerForRequest === 'steering'
+            ? buildSteeringToolInstructions({
+              workspaceName,
+              workspacePromptContext: requestWorkspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+            })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext: requestWorkspacePromptContext, selectedToolIds });
         const inputMessages: ModelMessage[] = nextMessages
           .filter((message) => message.id !== assistantId)
@@ -5397,7 +5418,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -5741,6 +5762,7 @@ function ChatPanel({
                     <option value="debugger">Debugger</option>
                     <option value="planner">Planner</option>
                     <option value="security">Security Review</option>
+                    <option value="steering">Steering</option>
                     <option value="tour-guide">Tour Guide</option>
                   </select>
                 </label>
@@ -6576,6 +6598,147 @@ function BrowserWorkflowSkillSettingsPanel({
             <p className="empty-state">No browser workflow skills installed in this workspace.</p>
           )}
         </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function HarnessSteeringSettingsPanel({
+  state,
+  inventory,
+  onChange,
+}: {
+  state: HarnessSteeringState;
+  inventory: HarnessSteeringInventory;
+  onChange: (state: HarnessSteeringState) => void;
+}) {
+  const [scope, setScope] = useState<Exclude<HarnessSteeringScope, 'summary'>>('workspace');
+  const [text, setText] = useState('');
+  const update = <K extends keyof HarnessSteeringState>(key: K, value: HarnessSteeringState[K]) => {
+    onChange({ ...state, [key]: value });
+  };
+  const addCorrection = () => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const correction = createHarnessSteeringCorrection({
+      text: trimmed,
+      source: 'manual',
+      scope,
+    });
+    onChange({
+      ...state,
+      corrections: [
+        correction,
+        ...state.corrections.filter((entry) => entry.id !== correction.id),
+      ],
+    });
+    setText('');
+  };
+  const derivativeRows = inventory.fileRows.filter((row) => row.scope !== 'summary');
+
+  return (
+    <SettingsSection title="Harness steering" defaultOpen={false}>
+      <div className="harness-steering-settings">
+        <div className="partner-agent-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+              aria-label="Enable harness steering"
+            />
+            <span>Enable harness steering</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.autoCapture}
+              onChange={(event) => update('autoCapture', event.target.checked)}
+              aria-label="Auto-capture steering corrections"
+            />
+            <span>Auto-capture corrections</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.enforceWithHooks}
+              onChange={(event) => update('enforceWithHooks', event.target.checked)}
+              aria-label="Enforce steering with hooks"
+            />
+            <span>Hook enforcement</span>
+          </label>
+        </div>
+        <article className="provider-card harness-steering-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>.steering memory</strong>
+              <p>{inventory.totalCorrections} corrections across {derivativeRows.length} scoped files</p>
+            </div>
+            <span className={`badge${inventory.enabled ? ' connected' : ''}`}>{inventory.enabled ? 'enabled' : 'off'}</span>
+          </div>
+          <p className="partner-agent-audit-note">
+            Summary index: .steering/STEERING.md. Scoped derivative files preserve exact correction text for prompt context, skills, and hooks.
+          </p>
+        </article>
+        <div className="harness-steering-capture-grid">
+          <label className="provider-command-field">
+            <span>Scope</span>
+            <select
+              aria-label="Harness steering correction scope"
+              value={scope}
+              onChange={(event) => setScope(event.target.value as Exclude<HarnessSteeringScope, 'summary'>)}
+            >
+              <option value="user">user</option>
+              <option value="project">project</option>
+              <option value="workspace">workspace</option>
+              <option value="session">session</option>
+              <option value="agent">agent</option>
+              <option value="tool">tool</option>
+            </select>
+          </label>
+          <label className="provider-command-field harness-steering-correction-field">
+            <span>Correction</span>
+            <textarea
+              aria-label="Harness steering correction text"
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              rows={3}
+              placeholder="Preserve this exact correction in the selected steering scope"
+            />
+          </label>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={addCorrection}
+            disabled={!text.trim()}
+          >
+            Add correction
+          </button>
+        </div>
+        <div className="harness-steering-file-list" role="list" aria-label="Harness steering files">
+          {inventory.fileRows.map((row) => (
+            <article key={row.path} className="provider-card harness-steering-file-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{row.title}</strong>
+                  <p>{row.summary}</p>
+                </div>
+                <span className={`badge${row.correctionCount > 0 ? ' connected' : ''}`}>{row.scope}</span>
+              </div>
+              <code>{row.path}</code>
+            </article>
+          ))}
+        </div>
+        {inventory.latestCorrection ? (
+          <p className="partner-agent-audit-note">
+            Latest correction: {inventory.latestCorrection.scope} - {inventory.latestCorrection.text}
+          </p>
+        ) : null}
+        {inventory.warnings.length ? (
+          <ul className="workspace-skill-policy-warnings">
+            {inventory.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          </ul>
+        ) : null}
       </div>
     </SettingsSection>
   );
@@ -7588,6 +7751,8 @@ interface SettingsPanelProps {
   sharedAgentRegistryState: SharedAgentRegistryState;
   sharedAgentCatalog: SharedAgentCatalog;
   browserWorkflowSkills: BrowserWorkflowSkillManifest[];
+  harnessSteeringState: HarnessSteeringState;
+  harnessSteeringInventory: HarnessSteeringInventory;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
@@ -7602,6 +7767,7 @@ interface SettingsPanelProps {
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
   onInstallBrowserWorkflowSkill: (skill: BrowserWorkflowSkillManifest) => void;
+  onHarnessSteeringStateChange: (state: HarnessSteeringState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
@@ -7947,6 +8113,8 @@ function SettingsPanel({
   sharedAgentRegistryState,
   sharedAgentCatalog,
   browserWorkflowSkills,
+  harnessSteeringState,
+  harnessSteeringInventory,
   browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
@@ -7961,6 +8129,7 @@ function SettingsPanel({
   onWorkspaceSkillPolicyStateChange,
   onSharedAgentRegistryStateChange,
   onInstallBrowserWorkflowSkill,
+  onHarnessSteeringStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   evaluationAgents,
@@ -8008,6 +8177,12 @@ function SettingsPanel({
       <BrowserWorkflowSkillSettingsPanel
         installedSkills={browserWorkflowSkills}
         onInstall={onInstallBrowserWorkflowSkill}
+      />
+
+      <HarnessSteeringSettingsPanel
+        state={harnessSteeringState}
+        inventory={harnessSteeringInventory}
+        onChange={onHarnessSteeringStateChange}
       />
 
       <PartnerAgentControlPlaneSettingsPanel
@@ -10193,7 +10368,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'steering', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (
@@ -10323,6 +10498,12 @@ function AgentBrowserApp() {
     isRuntimePluginSettings,
     DEFAULT_RUNTIME_PLUGIN_SETTINGS,
   );
+  const [harnessSteeringState, setHarnessSteeringState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.harnessSteeringState,
+    isHarnessSteeringState,
+    DEFAULT_HARNESS_STEERING_STATE,
+  );
   const [latestPartnerAgentAuditEntry, setLatestPartnerAgentAuditEntry] = useState<PartnerAgentAuditEntry | null>(null);
   const [browserLocationContext, setBrowserLocationContext] = useStoredState(
     localStorageBackend,
@@ -10370,6 +10551,10 @@ function AgentBrowserApp() {
   const sharedAgentCatalog = useMemo(
     () => buildSharedAgentCatalog(sharedAgentRegistryState),
     [sharedAgentRegistryState],
+  );
+  const harnessSteeringInventory = useMemo(
+    () => buildHarnessSteeringInventory(harnessSteeringState),
+    [harnessSteeringState],
   );
   const settingsPartnerAgentControlPlane = useMemo(() => {
     const selectedProvider = getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -14282,6 +14467,8 @@ function AgentBrowserApp() {
         sharedAgentRegistryState={sharedAgentRegistryState}
         sharedAgentCatalog={sharedAgentCatalog}
         browserWorkflowSkills={browserWorkflowSkills}
+        harnessSteeringState={harnessSteeringState}
+        harnessSteeringInventory={harnessSteeringInventory}
         browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
@@ -14296,6 +14483,7 @@ function AgentBrowserApp() {
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
         onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
+        onHarnessSteeringStateChange={setHarnessSteeringState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         evaluationAgents={evaluationAgents}
@@ -14609,6 +14797,7 @@ function AgentBrowserApp() {
                 securityReviewAgentSettings={securityReviewAgentSettings}
                 workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
                 sharedAgentCatalog={sharedAgentCatalog}
+                harnessSteeringInventory={harnessSteeringInventory}
                 partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
                 runtimePluginSettings={runtimePluginSettings}
                 onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}

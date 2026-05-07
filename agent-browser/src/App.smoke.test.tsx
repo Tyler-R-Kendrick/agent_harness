@@ -460,6 +460,33 @@ describe('App smoke coverage', () => {
     expect(screen.getAllByText('Visual review workflow').length).toBeGreaterThan(0);
   });
 
+  it('renders harness steering controls in Settings and captures scoped corrections', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Harness steering')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Harness steering' }));
+    expect(screen.getByLabelText('Enable harness steering')).toBeChecked();
+    expect(screen.getByLabelText('Auto-capture steering corrections')).toBeChecked();
+    expect(screen.getByLabelText('Enforce steering with hooks')).toBeChecked();
+    expect(screen.getByText('.steering/STEERING.md')).toBeInTheDocument();
+    expect(screen.getByText('.steering/tool.steering.md')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Harness steering correction scope'), { target: { value: 'project' } });
+    fireEvent.change(screen.getByLabelText('Harness steering correction text'), {
+      target: { value: 'Keep Linear progress comments current during implementation.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add correction' }));
+
+    expect(screen.getByText(/Latest correction: project - Keep Linear progress comments current/)).toBeInTheDocument();
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
