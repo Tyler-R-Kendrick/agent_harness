@@ -173,6 +173,29 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('button', { name: 'Refresh wiki' })).toBeInTheDocument();
   });
 
+  it('renders durable agent canvases and creates starter canvas artifacts', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('canvases'));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const canvasesPanel = screen.getByRole('region', { name: 'Agent canvases' });
+    expect(canvasesPanel).toBeInTheDocument();
+    expect(screen.getByText('No durable canvases in this workspace yet.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create starter canvases' }));
+
+    expect(canvasesPanel).toHaveTextContent('Research dashboard');
+    expect(canvasesPanel).toHaveTextContent('Research checklist');
+    expect(screen.getAllByText('rev 1').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Open Research dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Attach Research dashboard to session' })).toBeInTheDocument();
+  });
+
   it('renders adversary tool review controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

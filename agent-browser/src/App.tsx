@@ -298,6 +298,12 @@ import {
   type ArtifactFile,
 } from './services/artifacts';
 import {
+  buildAgentCanvasPromptContext,
+  createStarterAgentCanvases,
+  listAgentCanvasSummaries,
+  type AgentCanvasSummary,
+} from './services/agentCanvases';
+import {
   DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
   buildChatCompletionNotification,
   buildChatElicitationNotification,
@@ -435,7 +441,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'canvases' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -582,6 +588,7 @@ const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
   ['review', 'gitPullRequest', 'Review'],
   ['wiki', 'bookmark', 'Wiki'],
+  ['canvases', 'canvas', 'Canvases'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
   ['models', 'cpu', 'Models'],
@@ -590,11 +597,12 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'history', 'extensions', 'models', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
   review: { label: 'Review', icon: 'gitPullRequest' },
   wiki: { label: 'Wiki', icon: 'bookmark' },
+  canvases: { label: 'Canvases', icon: 'canvas' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
   models: { label: 'Models', icon: 'cpu' },
@@ -707,6 +715,7 @@ const icons = {
   trash: Trash2,
   clipboard: Clipboard,
   gitPullRequest: GitPullRequest,
+  canvas: Square,
   slidersHorizontal: SlidersHorizontal,
 } as const;
 
@@ -7617,6 +7626,94 @@ function RepoWikiPanel({
   );
 }
 
+function formatCanvasUpdatedTime(value: string): string {
+  return formatWikiRefreshTime(value);
+}
+
+function AgentCanvasesPanel({
+  workspaceName,
+  summaries,
+  onCreateStarterCanvases,
+  onOpenCanvas,
+  onAttachCanvas,
+}: {
+  workspaceName: string;
+  summaries: AgentCanvasSummary[];
+  onCreateStarterCanvases: () => void;
+  onOpenCanvas: (artifactId: string, filePath?: string | null) => void;
+  onAttachCanvas: (artifactId: string) => void;
+}) {
+  const countsByKind: Record<AgentCanvasSummary['canvasKind'], number> = {
+    dashboard: 0,
+    diagram: 0,
+    checklist: 0,
+    'review-panel': 0,
+  };
+  for (const summary of summaries) countsByKind[summary.canvasKind] += 1;
+
+  return (
+    <section className="panel-scroll agent-canvases-panel" role="region" aria-label="Agent canvases">
+      <div className="panel-topbar agent-canvases-topbar">
+        <div className="settings-heading">
+          <h2>Agent canvases</h2>
+          <p className="muted">{workspaceName} · {summaries.length} durable canvas{summaries.length === 1 ? '' : 'es'}</p>
+        </div>
+        <button type="button" className="toolbar-button" aria-label="Create starter canvases" onClick={onCreateStarterCanvases}>
+          <Icon name="plus" size={13} />
+          <span>Starter</span>
+        </button>
+      </div>
+
+      <section className="agent-canvas-summary" aria-label="Canvas kind coverage">
+        <strong>Durable canvases live beside chat, browser, terminal, artifacts, and review surfaces.</strong>
+        <div className="agent-canvas-metrics">
+          <span>{countsByKind.dashboard} dashboards</span>
+          <span>{countsByKind.diagram} diagrams</span>
+          <span>{countsByKind.checklist} checklists</span>
+          <span>{countsByKind['review-panel']} review panels</span>
+        </div>
+      </section>
+
+      <SidebarSection title="Canvas library" summary={`${summaries.length} artifacts`} scrollBody>
+        <div className="agent-canvas-list">
+          {summaries.length === 0 ? (
+            <article className="agent-canvas-card agent-canvas-empty">
+              <strong>No durable canvases in this workspace yet.</strong>
+              <p>Starter canvases create dashboard, diagram, checklist, and review panel artifacts with stable IDs.</p>
+            </article>
+          ) : null}
+          {summaries.map((summary) => (
+            <article key={summary.id} className={`agent-canvas-card agent-canvas-card--${summary.canvasKind}`}>
+              <div className="agent-canvas-card-header">
+                <div className="agent-canvas-card-title">
+                  <strong>{summary.title}</strong>
+                  <code>{summary.id}</code>
+                </div>
+                <span className="badge connected">rev {summary.revision}</span>
+              </div>
+              {summary.description ? <p>{summary.description}</p> : null}
+              <div className="agent-canvas-card-meta">
+                <span>{summary.canvasKind}</span>
+                <span>{summary.fileCount} file{summary.fileCount === 1 ? '' : 's'}</span>
+                <span>{summary.primaryFilePath}</span>
+                <span>{formatCanvasUpdatedTime(summary.updatedAt)}</span>
+              </div>
+              <div className="agent-canvas-actions">
+                <button type="button" className="sidebar-icon-button" aria-label={`Open ${summary.title}`} title={`Open ${summary.title}`} onClick={() => onOpenCanvas(summary.id, summary.primaryFilePath)}>
+                  <Icon name="panelRight" size={13} />
+                </button>
+                <button type="button" className="sidebar-icon-button" aria-label={`Attach ${summary.title} to session`} title={`Attach ${summary.title} to session`} onClick={() => onAttachCanvas(summary.id)}>
+                  <Icon name="link" size={13} />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
+    </section>
+  );
+}
+
 function HistoryPanel({
   scheduledAutomationState,
   runCheckpointState,
@@ -9286,7 +9383,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'history', 'extensions', 'models', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'history', 'extensions', 'models', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -9707,6 +9804,10 @@ function AgentBrowserApp() {
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
   const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? [];
+  const activeAgentCanvasSummaries = useMemo(
+    () => listAgentCanvasSummaries(activeArtifacts),
+    [activeArtifacts],
+  );
   const activeArtifactPanelSelection = activeWorkspaceViewState.activeArtifactPanel ?? null;
   const activeArtifactPanelArtifact = activeArtifactPanelSelection
     ? activeArtifacts.find((artifact) => artifact.id === activeArtifactPanelSelection.artifactId) ?? null
@@ -12523,6 +12624,30 @@ function AgentBrowserApp() {
     setToast({ msg: 'Repository wiki refreshed', type: 'success' });
   }, [activeArtifacts, activeWorkspace, activeWorkspaceFiles, activeWorkspaceId, setRepoWikiSnapshotsByWorkspace, setToast]);
 
+  const createStarterCanvasArtifacts = useCallback(() => {
+    const canvases = createStarterAgentCanvases({
+      workspaceId: activeWorkspaceId,
+      workspaceName: activeWorkspace.name,
+      sourceSessionId: activeSessionIds[0],
+    });
+    const existingIds = new Set(activeArtifacts.map((artifact) => artifact.id));
+    const newCanvases = canvases.filter((canvas) => !existingIds.has(canvas.id));
+    if (!newCanvases.length) {
+      setToast({ msg: 'Starter canvases already exist', type: 'info' });
+      return;
+    }
+    setArtifactsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: [
+        ...newCanvases,
+        ...(current[activeWorkspaceId] ?? []),
+      ],
+    }));
+    const firstCanvas = newCanvases[0];
+    openArtifactPanel(firstCanvas.id, firstCanvas.files[0]?.path ?? null, activeWorkspaceId);
+    setToast({ msg: `Created ${newCanvases.length} starter canvases`, type: 'success' });
+  }, [activeArtifacts, activeSessionIds, activeWorkspace.name, activeWorkspaceId, openArtifactPanel, setArtifactsByWorkspace, setToast]);
+
   const copyRepoWikiCitation = useCallback(async (citation: RepoWikiCitation) => {
     try {
       await writeToClipboard(`${citation.id}\n${citation.snippet}`, `Wiki citation: ${citation.label}`);
@@ -13201,6 +13326,17 @@ function AgentBrowserApp() {
         />
       );
     }
+    if (activePanel === 'canvases') {
+      return (
+        <AgentCanvasesPanel
+          workspaceName={activeWorkspace.name}
+          summaries={activeAgentCanvasSummaries}
+          onCreateStarterCanvases={createStarterCanvasArtifacts}
+          onOpenCanvas={openArtifactPanel}
+          onAttachCanvas={attachArtifactToSession}
+        />
+      );
+    }
     if (activePanel === 'history') {
       return (
         <HistoryPanel
@@ -13528,7 +13664,10 @@ function AgentBrowserApp() {
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
                 sessionSettingsContent={terminalFsFileContentsBySession[panel.id]?.[SESSION_WORKSPACE_SETTINGS_PATH] ?? null}
-                artifactPromptContext={buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? [])}
+                artifactPromptContext={[
+                  buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? []),
+                  buildAgentCanvasPromptContext(activeArtifacts),
+                ].filter(Boolean).join('\n\n')}
                 repoWikiPromptContext={activeRepoWikiPromptContext}
                 runCheckpointPromptContext={activeRunCheckpointPromptContext}
                 runCheckpointState={runCheckpointState}
