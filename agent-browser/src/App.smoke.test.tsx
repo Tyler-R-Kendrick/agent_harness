@@ -253,6 +253,29 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Daily workspace audit review trigger')).toHaveValue('failures');
   });
 
+  it('renders suspend and resume checkpoints in History and Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('History'));
+
+    expect(screen.getByRole('button', { name: 'Suspend/resume checkpoints' })).toBeInTheDocument();
+    expect(screen.getAllByText('Approval before deployment').length).toBeGreaterThan(0);
+    expect(screen.getByText(/operator approval/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: 'Suspend/resume checkpoints' }));
+
+    expect(screen.getByLabelText('Default checkpoint timeout')).toHaveValue(240);
+    expect(screen.getByLabelText('Require operator confirmation before resume')).toBeChecked();
+    expect(screen.getByLabelText('Preserve checkpoint artifacts')).toBeChecked();
+    expect(screen.getByText('resume:visual-eval-session:2026-05-07T02:30:00.000Z')).toBeInTheDocument();
+  });
+
   it('shows built-in local inference readiness in Models', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(

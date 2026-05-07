@@ -176,6 +176,19 @@ import {
   type ScheduledAutomationReviewTrigger,
   type ScheduledAutomationState,
 } from './services/scheduledAutomations';
+import {
+  DEFAULT_RUN_CHECKPOINT_STATE,
+  buildCheckpointProcessEntry,
+  buildCheckpointPromptContext,
+  createRunCheckpoint,
+  expireDueRunCheckpoints,
+  isRunCheckpointState,
+  resumeRunCheckpoint,
+  updateRunCheckpointPolicy,
+  type RunCheckpoint,
+  type RunCheckpointPolicy,
+  type RunCheckpointState,
+} from './services/runCheckpoints';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import {
   assessLocalInferenceReadiness,
@@ -2040,11 +2053,15 @@ function ChatPanel({
   pendingSearch,
   onSearchConsumed,
   onToast,
+  workspaceId,
   workspaceName,
   workspaceFiles,
   sessionSettingsContent,
   artifactPromptContext,
   repoWikiPromptContext,
+  runCheckpointPromptContext,
+  runCheckpointState,
+  onRunCheckpointStateChange,
   attachedArtifactCount,
   workspaceCapabilities,
   defaultExtensions,
@@ -2083,11 +2100,15 @@ function ChatPanel({
   pendingSearch: string | null;
   onSearchConsumed: () => void;
   onToast: (toast: Exclude<ToastState, null>) => void;
+  workspaceId: string;
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
   sessionSettingsContent?: string | null;
   artifactPromptContext?: string;
   repoWikiPromptContext?: string;
+  runCheckpointPromptContext?: string;
+  runCheckpointState: RunCheckpointState;
+  onRunCheckpointStateChange: (state: RunCheckpointState) => void;
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
@@ -2236,10 +2257,11 @@ function ChatPanel({
       }] : []),
       artifactPromptContext,
       repoWikiPromptContext,
+      runCheckpointPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, locationPromptContext, repoWikiPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
+    [activeSessionId, artifactPromptContext, locationPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -2603,6 +2625,53 @@ function ChatPanel({
     setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
   }
 
+  function createPauseCheckpoint(input: {
+    reason: RunCheckpoint['reason'];
+    summary: string;
+    boundary: string;
+    requiredInput: string;
+  }): RunCheckpoint {
+    const nextState = createRunCheckpoint(runCheckpointState, {
+      sessionId: activeChatSessionId,
+      workspaceId,
+      reason: input.reason,
+      summary: input.summary,
+      boundary: input.boundary,
+      requiredInput: input.requiredInput,
+      now: new Date(),
+    });
+    onRunCheckpointStateChange(nextState);
+    return nextState.checkpoints[0];
+  }
+
+  function resumeLatestCheckpoint(reason: RunCheckpoint['reason'], evidence: string): RunCheckpoint | null {
+    const checkpoint = runCheckpointState.checkpoints.find((entry) => (
+      entry.sessionId === activeChatSessionId
+      && entry.reason === reason
+      && entry.status === 'suspended'
+    ));
+    if (!checkpoint) return null;
+    const nextState = resumeRunCheckpoint(runCheckpointState, checkpoint.id, {
+      actor: 'operator',
+      evidence,
+      now: new Date(),
+    });
+    onRunCheckpointStateChange(nextState);
+    return nextState.checkpoints.find((entry) => entry.id === checkpoint.id) ?? null;
+  }
+
+  function reflectResumedCheckpoint(message: ChatMessage, checkpoint: RunCheckpoint | null): ChatMessage {
+    if (!checkpoint || !message.processEntries?.length) return message;
+    return {
+      ...message,
+      processEntries: message.processEntries.map((entry) => {
+        const payload = entry.payload as { checkpoint?: RunCheckpoint } | undefined;
+        if (payload?.checkpoint?.id !== checkpoint.id) return entry;
+        return buildCheckpointProcessEntry(checkpoint, entry.position);
+      }),
+    };
+  }
+
   function updateMessage(id: string, patch: Partial<ChatMessage>) {
     setMessagesBySession((current) => {
       const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
@@ -2653,6 +2722,13 @@ function ChatPanel({
         fields: detail.fields,
       },
     };
+    const checkpoint = createPauseCheckpoint({
+      reason: 'delayed-input',
+      summary: detail.prompt || 'Waiting for user input',
+      boundary: 'user elicitation',
+      requiredInput: detail.fields.map((field) => field.label).join(', ') || detail.reason || 'user response',
+    });
+    const checkpointEntry = buildCheckpointProcessEntry(checkpoint, 0);
     const targetAssistantId = activeGenerationRef.current?.assistantId;
     if (!targetAssistantId) {
       appendSharedMessages([{
@@ -2661,6 +2737,7 @@ function ChatPanel({
         status: 'complete',
         content: '',
         cards: [card],
+        processEntries: [checkpointEntry],
       }]);
       return;
     }
@@ -2668,7 +2745,14 @@ function ChatPanel({
       const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
       const nextMessages = sessionMessages.map((message) => (
         message.id === targetAssistantId
-          ? { ...message, cards: [...(message.cards ?? []), card] }
+          ? {
+            ...message,
+            cards: [...(message.cards ?? []), card],
+            processEntries: [
+              ...(message.processEntries ?? []),
+              { ...checkpointEntry, position: message.processEntries?.length ?? 0 },
+            ],
+          }
           : message
       ));
       messagesRef.current = nextMessages;
@@ -2699,6 +2783,13 @@ function ChatPanel({
         reason: detail.reason,
       },
     };
+    const checkpoint = createPauseCheckpoint({
+      reason: 'credentials',
+      summary: `Waiting for ${detail.name}`,
+      boundary: 'secret request',
+      requiredInput: detail.reason || detail.prompt || `secret value for ${detail.name}`,
+    });
+    const checkpointEntry = buildCheckpointProcessEntry(checkpoint, 0);
     const targetAssistantId = activeGenerationRef.current?.assistantId;
     if (!targetAssistantId) {
       appendSharedMessages([{
@@ -2707,6 +2798,7 @@ function ChatPanel({
         status: 'complete',
         content: '',
         cards: [card],
+        processEntries: [checkpointEntry],
       }]);
       return;
     }
@@ -2714,7 +2806,14 @@ function ChatPanel({
       const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
       const nextMessages = sessionMessages.map((message) => (
         message.id === targetAssistantId
-          ? { ...message, cards: [...(message.cards ?? []), card] }
+          ? {
+            ...message,
+            cards: [...(message.cards ?? []), card],
+            processEntries: [
+              ...(message.processEntries ?? []),
+              { ...checkpointEntry, position: message.processEntries?.length ?? 0 },
+            ],
+          }
           : message
       ));
       messagesRef.current = nextMessages;
@@ -5110,6 +5209,7 @@ function ChatPanel({
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
     if (!locationValue) return;
+    const resumedCheckpoint = resumeLatestCheckpoint('delayed-input', `Submitted ${requestId}`);
     upsertUserContextMemory(workspaceName, {
       id: 'location',
       label: 'Location',
@@ -5120,21 +5220,21 @@ function ChatPanel({
       const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
       const nextMessages = sessionMessages.map((message) => (
         message.id === messageId
-          ? {
+          ? reflectResumedCheckpoint({
             ...message,
             cards: (message.cards ?? []).map((card) => (
               card.requestId === requestId
                 ? { ...card, status: 'submitted' as const, response: values }
                 : card
             )),
-          }
+          }, resumedCheckpoint)
           : message
       ));
       messagesRef.current = nextMessages;
       return { ...current, [activeChatSessionId]: nextMessages };
     });
     void sendMessage(`Location: ${locationValue}`);
-  }, [activeChatSessionId, sendMessage, workspaceName]);
+  }, [activeChatSessionId, runCheckpointState, sendMessage, workspaceName]);
 
   const handleSecretSubmit = useCallback(async (
     messageId: string,
@@ -5152,11 +5252,12 @@ function ChatPanel({
     };
     pendingSecretRequestResolvers.get(requestId)?.(result);
     pendingSecretRequestResolvers.delete(requestId);
+    const resumedCheckpoint = resumeLatestCheckpoint('credentials', `Created ${secretRef}`);
     setMessagesBySession((current) => {
       const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
       const nextMessages = sessionMessages.map((message) => (
         message.id === messageId
-          ? {
+          ? reflectResumedCheckpoint({
             ...message,
             cards: (message.cards ?? []).map((card) => (
               card.requestId === requestId
@@ -5169,7 +5270,7 @@ function ChatPanel({
                 }
                 : card
             )),
-          }
+          }, resumedCheckpoint)
           : message
       ));
       messagesRef.current = nextMessages;
@@ -5177,7 +5278,7 @@ function ChatPanel({
     });
     void onSecretRecordsChanged?.();
     onToast({ msg: 'Secret saved', type: 'success' });
-  }, [activeChatSessionId, onSecretRecordsChanged, onToast, setMessagesBySession]);
+  }, [activeChatSessionId, onSecretRecordsChanged, onToast, runCheckpointState, setMessagesBySession]);
 
   const handleChatInputKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isSkillAutocompleteOpen) {
@@ -6067,6 +6168,93 @@ function ScheduledAutomationSettingsPanel({
   );
 }
 
+function RunCheckpointSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: RunCheckpointState;
+  onChange: (state: RunCheckpointState) => void;
+}) {
+  const activeCheckpoints = state.checkpoints.filter((checkpoint) => checkpoint.status === 'suspended');
+  const updatePolicy = (patch: Partial<RunCheckpointPolicy>) => {
+    onChange(updateRunCheckpointPolicy(state, patch));
+  };
+
+  return (
+    <SettingsSection title="Suspend/resume checkpoints" defaultOpen={false}>
+      <div className="run-checkpoint-settings">
+        <article className="provider-card run-checkpoint-policy-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Checkpoint policy</strong>
+              <p>Persist pause boundaries for approval, credentials, and delayed human input.</p>
+            </div>
+            <span className={`badge${activeCheckpoints.length ? ' connected' : ''}`}>
+              {activeCheckpoints.length} active
+            </span>
+          </div>
+          <div className="run-checkpoint-control-grid">
+            <label className="provider-command-field">
+              <span>Timeout minutes</span>
+              <input
+                aria-label="Default checkpoint timeout"
+                type="number"
+                min={5}
+                max={10080}
+                step={5}
+                value={state.policy.defaultTimeoutMinutes}
+                onChange={(event) => updatePolicy({ defaultTimeoutMinutes: Number(event.target.value) })}
+              />
+            </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Require operator confirmation before resume"
+                checked={state.policy.requireOperatorConfirmation}
+                onChange={(event) => updatePolicy({ requireOperatorConfirmation: event.target.checked })}
+              />
+              <span>Require operator confirmation before resume</span>
+            </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Preserve checkpoint artifacts"
+                checked={state.policy.preserveArtifacts}
+                onChange={(event) => updatePolicy({ preserveArtifacts: event.target.checked })}
+              />
+              <span>Preserve checkpoint artifacts</span>
+            </label>
+          </div>
+        </article>
+        {activeCheckpoints.map((checkpoint) => (
+          <RunCheckpointCard key={checkpoint.id} checkpoint={checkpoint} />
+        ))}
+      </div>
+    </SettingsSection>
+  );
+}
+
+function RunCheckpointCard({ checkpoint }: { checkpoint: RunCheckpoint }) {
+  return (
+    <article className="provider-card run-checkpoint-card">
+      <div className="provider-card-header">
+        <div className="provider-body">
+          <strong>{checkpoint.summary}</strong>
+          <p>{checkpoint.boundary} · {checkpoint.requiredInput}</p>
+        </div>
+        <span className="badge connected">{checkpoint.reason}</span>
+      </div>
+      <div className="run-checkpoint-token-row">
+        <code>{checkpoint.resumeToken}</code>
+        <span>Expires {new Date(checkpoint.expiresAt).toLocaleString()}</span>
+      </div>
+      {checkpoint.artifacts.length ? (
+        <p className="muted">Artifacts: {checkpoint.artifacts.join(', ')}</p>
+      ) : null}
+    </article>
+  );
+}
+
 function AdversaryToolReviewSettingsPanel({
   settings,
   onChange,
@@ -6764,6 +6952,7 @@ interface SettingsPanelProps {
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   securityReviewRunPlan: SecurityReviewRunPlan;
   scheduledAutomationState: ScheduledAutomationState;
+  runCheckpointState: RunCheckpointState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
@@ -6771,6 +6960,7 @@ interface SettingsPanelProps {
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
   onScheduledAutomationStateChange: (state: ScheduledAutomationState) => void;
+  onRunCheckpointStateChange: (state: RunCheckpointState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
@@ -7074,6 +7264,7 @@ function SettingsPanel({
   securityReviewAgentSettings,
   securityReviewRunPlan,
   scheduledAutomationState,
+  runCheckpointState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
@@ -7081,6 +7272,7 @@ function SettingsPanel({
   onAdversaryToolReviewSettingsChange,
   onSecurityReviewAgentSettingsChange,
   onScheduledAutomationStateChange,
+  onRunCheckpointStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
@@ -7126,6 +7318,11 @@ function SettingsPanel({
         settings={securityReviewAgentSettings}
         runPlan={securityReviewRunPlan}
         onChange={onSecurityReviewAgentSettingsChange}
+      />
+
+      <RunCheckpointSettingsPanel
+        state={runCheckpointState}
+        onChange={onRunCheckpointStateChange}
       />
 
       <ScheduledAutomationSettingsPanel
@@ -7269,8 +7466,17 @@ function RepoWikiPanel({
   );
 }
 
-function HistoryPanel({ scheduledAutomationState }: { scheduledAutomationState: ScheduledAutomationState }) {
+function HistoryPanel({
+  scheduledAutomationState,
+  runCheckpointState,
+}: {
+  scheduledAutomationState: ScheduledAutomationState;
+  runCheckpointState: RunCheckpointState;
+}) {
   const now = new Date('2026-05-06T18:00:00.000Z');
+  const checkpointSnapshot = expireDueRunCheckpoints(runCheckpointState, now);
+  const suspendedCheckpoints = checkpointSnapshot.checkpoints.filter((checkpoint) => checkpoint.status === 'suspended');
+  const latestCheckpointAudit = checkpointSnapshot.audit[0] ?? null;
   const dueAutomations = projectDueScheduledAutomations({ state: scheduledAutomationState, now });
   const enabledAutomations = scheduledAutomationState.automations.filter((automation) => automation.enabled);
   const inbox = buildScheduledAutomationInbox(scheduledAutomationState);
@@ -7284,6 +7490,44 @@ function HistoryPanel({ scheduledAutomationState }: { scheduledAutomationState: 
       <div className="panel-topbar">
         <h2>History</h2>
       </div>
+      <SidebarSection title="Suspend/resume checkpoints" scrollBody>
+        <div className="run-checkpoint-history">
+          <article className="list-card history-card run-checkpoint-history-card">
+            <div className="history-card-header">
+              <div>
+                <h3>Suspend/resume checkpoints</h3>
+                <p className="muted">{suspendedCheckpoints.length} suspended · {checkpointSnapshot.audit.length} audit events</p>
+              </div>
+              <span className={`badge${suspendedCheckpoints.length ? ' connected' : ''}`}>
+                {suspendedCheckpoints.length ? 'paused' : 'ready'}
+              </span>
+            </div>
+            <p className="history-preview">
+              {latestCheckpointAudit?.summary ?? 'No checkpoint activity recorded yet'}
+            </p>
+            <ul className="history-events">
+              <li>Timeout policy: {checkpointSnapshot.policy.defaultTimeoutMinutes} minutes</li>
+              <li>Resume confirmation: {checkpointSnapshot.policy.requireOperatorConfirmation ? 'required' : 'not required'}</li>
+            </ul>
+          </article>
+          {suspendedCheckpoints.map((checkpoint) => (
+            <article key={checkpoint.id} className="list-card history-card run-checkpoint-row-card">
+              <div className="history-card-header">
+                <div>
+                  <h3>{checkpoint.summary}</h3>
+                  <p className="muted">{checkpoint.reason} · expires {new Date(checkpoint.expiresAt).toLocaleString()}</p>
+                </div>
+                <span className="badge connected">suspended</span>
+              </div>
+              <p className="history-preview">{checkpoint.boundary} · {checkpoint.requiredInput}</p>
+              <ul className="history-events">
+                <li>Resume token: {checkpoint.resumeToken}</li>
+                <li>Artifacts: {checkpoint.artifacts.length ? checkpoint.artifacts.join(', ') : 'none'}</li>
+              </ul>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
       <SidebarSection title="Scheduled automations" scrollBody>
         <div className="scheduled-automations-summary">
           <article className="list-card history-card scheduled-automation-history-card">
@@ -9001,6 +9245,12 @@ function AgentBrowserApp() {
     isScheduledAutomationState,
     DEFAULT_SCHEDULED_AUTOMATION_STATE,
   );
+  const [runCheckpointState, setRunCheckpointState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.runCheckpointState,
+    isRunCheckpointState,
+    DEFAULT_RUN_CHECKPOINT_STATE,
+  );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.partnerAgentControlPlaneSettings,
@@ -9322,6 +9572,10 @@ function AgentBrowserApp() {
   const activeRepoWikiPromptContext = useMemo(
     () => buildRepoWikiPromptContext(activeRepoWikiSnapshot),
     [activeRepoWikiSnapshot],
+  );
+  const activeRunCheckpointPromptContext = useMemo(
+    () => buildCheckpointPromptContext(runCheckpointState, activeWorkspaceId),
+    [activeWorkspaceId, runCheckpointState],
   );
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
   const enabledDefaultExtensionIds = useMemo(
@@ -12795,7 +13049,14 @@ function AgentBrowserApp() {
         />
       );
     }
-    if (activePanel === 'history') return <HistoryPanel scheduledAutomationState={scheduledAutomationState} />;
+    if (activePanel === 'history') {
+      return (
+        <HistoryPanel
+          scheduledAutomationState={scheduledAutomationState}
+          runCheckpointState={runCheckpointState}
+        />
+      );
+    }
     if (activePanel === 'extensions') return (
       <ExtensionsPanel
         workspaceName={activeWorkspace.name}
@@ -12839,6 +13100,7 @@ function AgentBrowserApp() {
         securityReviewAgentSettings={securityReviewAgentSettings}
         securityReviewRunPlan={settingsSecurityReviewRunPlan}
         scheduledAutomationState={scheduledAutomationState}
+        runCheckpointState={runCheckpointState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
@@ -12846,6 +13108,7 @@ function AgentBrowserApp() {
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
         onScheduledAutomationStateChange={setScheduledAutomationState}
+        onRunCheckpointStateChange={setRunCheckpointState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
@@ -13105,11 +13368,15 @@ function AgentBrowserApp() {
                 pendingSearch={pendingSearch}
                 onSearchConsumed={() => setPendingSearch(null)}
                 onToast={setToast}
+                workspaceId={activeWorkspaceId}
                 workspaceName={activeWorkspace.name}
                 workspaceFiles={activeWorkspaceFiles}
                 sessionSettingsContent={terminalFsFileContentsBySession[panel.id]?.[SESSION_WORKSPACE_SETTINGS_PATH] ?? null}
                 artifactPromptContext={buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? [])}
                 repoWikiPromptContext={activeRepoWikiPromptContext}
+                runCheckpointPromptContext={activeRunCheckpointPromptContext}
+                runCheckpointState={runCheckpointState}
+                onRunCheckpointStateChange={setRunCheckpointState}
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
                 defaultExtensions={defaultExtensionRuntime}

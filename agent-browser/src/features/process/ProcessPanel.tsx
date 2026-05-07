@@ -6,6 +6,7 @@ import { ProcessDrilldown } from './ProcessDrilldown';
 import { formatOperationDuration } from '../operation-pane';
 import type { ProcessEntry, ProcessEntryKind } from '../../services/processLog';
 import { scoreEvaluationRun, type EvaluationRunScore } from '../../services/evaluationObservability';
+import type { RunCheckpoint } from '../../services/runCheckpoints';
 
 /**
  * Derives ProcessEntry rows from legacy ChatMessage fields so the unified
@@ -125,6 +126,45 @@ function EvaluationScoreStrip({ score }: { score: EvaluationRunScore }) {
   );
 }
 
+function isCheckpointPayload(value: unknown): value is { checkpoint: RunCheckpoint } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const checkpoint = (value as { checkpoint?: unknown }).checkpoint;
+  if (typeof checkpoint !== 'object' || checkpoint === null || Array.isArray(checkpoint)) return false;
+  const candidate = checkpoint as Partial<RunCheckpoint>;
+  return (
+    typeof candidate.id === 'string'
+    && typeof candidate.summary === 'string'
+    && typeof candidate.reason === 'string'
+    && typeof candidate.status === 'string'
+    && typeof candidate.requiredInput === 'string'
+    && typeof candidate.resumeToken === 'string'
+  );
+}
+
+function CheckpointStrip({ checkpoints }: { checkpoints: RunCheckpoint[] }) {
+  if (!checkpoints.length) return null;
+  return (
+    <section className="checkpoint-process-strip" aria-label="Suspended checkpoint">
+      <header>
+        <span>Suspended checkpoint</span>
+        <strong>{checkpoints.length} resumable</strong>
+      </header>
+      <div className="checkpoint-process-grid">
+        {checkpoints.map((checkpoint) => (
+          <article key={checkpoint.id} className="checkpoint-process-card">
+            <div className="checkpoint-process-row">
+              <strong>{checkpoint.summary}</strong>
+              <span className="badge connected">{checkpoint.reason}</span>
+            </div>
+            <p>{checkpoint.requiredInput}</p>
+            <code>{checkpoint.resumeToken}</code>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /**
  * Full-pane overlay rendering the unified ProcessLog graph + drill-down.
  */
@@ -142,6 +182,14 @@ export function ProcessPanel({
   const evaluationScore = useMemo(
     () => scoreEvaluationRun({ message, entries }),
     [entries, message],
+  );
+  const checkpointEntries = useMemo(
+    () => entries
+      .map((entry) => entry.payload)
+      .filter(isCheckpointPayload)
+      .map((payload) => payload.checkpoint)
+      .filter((checkpoint) => checkpoint.status === 'suspended'),
+    [entries],
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -178,6 +226,7 @@ export function ProcessPanel({
         </header>
         <div className="pg-panel-body">
           <EvaluationScoreStrip score={evaluationScore} />
+          <CheckpointStrip checkpoints={checkpointEntries} />
           <ProcessGraph
             entries={entries}
             selectedEntryId={selectedId ?? undefined}
