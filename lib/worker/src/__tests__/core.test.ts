@@ -546,6 +546,68 @@ describe('policy engine', () => {
       },
     });
   });
+
+  it('isolates policy arrays from caller and result mutation', async () => {
+    const defaultAllowedHosts = ['default.test'];
+    const defaultReadRoots = ['/workspace'];
+    const defaultWriteRoots = ['/workspace/out'];
+    const defaultSecretRefs = ['secret/default'];
+    const engine = new DefaultPolicyEngine({
+      allowedNetworkModes: ['none', 'allowlist'],
+      allowBrokeredSecrets: true,
+      defaults: {
+        network: { mode: 'allowlist', allowedHosts: defaultAllowedHosts },
+        filesystem: { readRoots: defaultReadRoots, writeRoots: defaultWriteRoots },
+        secrets: { mode: 'brokered', allowedSecretRefs: defaultSecretRefs },
+      },
+    });
+
+    defaultAllowedHosts.push('mutated-default.test');
+    defaultReadRoots.push('/mutated-default-read');
+    defaultWriteRoots.push('/mutated-default-write');
+    defaultSecretRefs.push('secret/mutated-default');
+
+    const defaultDecision = await engine.evaluate({ requestedPolicy: {} });
+
+    expect(defaultDecision.effectivePolicy?.network.allowedHosts).toEqual(['default.test']);
+    expect(defaultDecision.effectivePolicy?.filesystem.readRoots).toEqual(['/workspace']);
+    expect(defaultDecision.effectivePolicy?.filesystem.writeRoots).toEqual(['/workspace/out']);
+    expect(defaultDecision.effectivePolicy?.secrets.allowedSecretRefs).toEqual(['secret/default']);
+
+    const requestAllowedHosts = ['request.test'];
+    const requestReadRoots = ['/request-read'];
+    const requestWriteRoots = ['/request-write'];
+    const requestSecretRefs = ['secret/request'];
+    const requestedDecision = await engine.evaluate({
+      requestedPolicy: {
+        network: { allowedHosts: requestAllowedHosts },
+        filesystem: { readRoots: requestReadRoots, writeRoots: requestWriteRoots },
+        secrets: { allowedSecretRefs: requestSecretRefs },
+      },
+    });
+
+    requestAllowedHosts.push('mutated-request.test');
+    requestReadRoots.push('/mutated-request-read');
+    requestWriteRoots.push('/mutated-request-write');
+    requestSecretRefs.push('secret/mutated-request');
+
+    expect(requestedDecision.effectivePolicy?.network.allowedHosts).toEqual(['request.test']);
+    expect(requestedDecision.effectivePolicy?.filesystem.readRoots).toEqual(['/request-read']);
+    expect(requestedDecision.effectivePolicy?.filesystem.writeRoots).toEqual(['/request-write']);
+    expect(requestedDecision.effectivePolicy?.secrets.allowedSecretRefs).toEqual(['secret/request']);
+
+    requestedDecision.effectivePolicy!.network.allowedHosts.push('mutated-result.test');
+    requestedDecision.effectivePolicy!.filesystem.readRoots.push('/mutated-result-read');
+    requestedDecision.effectivePolicy!.filesystem.writeRoots.push('/mutated-result-write');
+    requestedDecision.effectivePolicy!.secrets.allowedSecretRefs.push('secret/mutated-result');
+
+    const laterDecision = await engine.evaluate({ requestedPolicy: {} });
+
+    expect(laterDecision.effectivePolicy?.network.allowedHosts).toEqual(['default.test']);
+    expect(laterDecision.effectivePolicy?.filesystem.readRoots).toEqual(['/workspace']);
+    expect(laterDecision.effectivePolicy?.filesystem.writeRoots).toEqual(['/workspace/out']);
+    expect(laterDecision.effectivePolicy?.secrets.allowedSecretRefs).toEqual(['secret/default']);
+  });
 });
 
 describe('worker and sandbox resolution', () => {
