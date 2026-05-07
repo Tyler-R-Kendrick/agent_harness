@@ -78,6 +78,7 @@
       "metadata": {
         "marketplaceCategory": "ide",
         "activityIcon": "slidersHorizontal",
+        "dependencies": ["agent-harness.ext.design-md-context"],
         "standardRefs": [
           "https://open-design.ai/",
           "https://tr.designtokens.org/format/"
@@ -157,6 +158,7 @@
         "marketplaceCategory": "ide",
         "activityIcon": "layers",
         "driveName": "//artifacts",
+        "dependencies": ["agent-harness.ext.artifacts-context"],
         "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.artifacts-worktree.enabled"
       },
       "keywords": ["artifacts", "worktree", "explorer", "workspace-node"]

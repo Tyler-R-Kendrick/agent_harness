@@ -57,6 +57,12 @@ export interface DefaultExtensionSummary {
   commandCount: number;
 }
 
+export interface DefaultExtensionDependencyPlan {
+  extensionIds: string[];
+  missingDependencyIds: string[];
+  cyclicDependencyIds: string[];
+}
+
 export interface DefaultExtensionRuntime {
   extensions: DefaultExtensionDescriptor[];
   installedExtensionIds: string[];
@@ -275,7 +281,7 @@ export function resolveEnabledDefaultExtensionIds(
   installedExtensionIds: readonly string[],
   flags: DefaultExtensionOpenFeatureFlags,
 ): string[] {
-  return normalizeDefaultExtensionIds(installedExtensionIds)
+  return resolveDefaultExtensionDependencyPlan(installedExtensionIds).extensionIds
     .filter((extensionId) => flags[getDefaultExtensionOpenFeatureFlagKey(extensionId)] !== false);
 }
 
@@ -297,7 +303,88 @@ export function getDefaultExtensionAvailability(extension: DefaultExtensionDescr
 }
 
 function selectInstalledDefaultExtensionIds(installedExtensionIds: readonly string[]): string[] {
-  return normalizeDefaultExtensionIds(installedExtensionIds);
+  return resolveDefaultExtensionDependencyPlan(installedExtensionIds).extensionIds;
+}
+
+export function getDefaultExtensionDependencyIds(extension: DefaultExtensionDescriptor): string[] {
+  const dependencyIds = [
+    ...readStringArray(extension.manifest.metadata?.dependencies),
+    ...readStringArray(extension.marketplace.metadata?.dependencies),
+  ];
+  const selfId = extension.manifest.id;
+  return normalizeDefaultExtensionIds(dependencyIds)
+    .filter((dependencyId) => dependencyId !== selfId);
+}
+
+export function resolveDefaultExtensionDependencyPlan(
+  extensionIds: readonly string[],
+  extensions: readonly DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MANIFESTS,
+): DefaultExtensionDependencyPlan {
+  const byId = new Map(extensions.map((extension) => [extension.manifest.id, extension]));
+  const ordered: string[] = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const missingDependencyIds = new Set<string>();
+  const cyclicDependencyIds = new Set<string>();
+
+  function visit(extensionId: string) {
+    if (visited.has(extensionId)) return;
+    if (visiting.has(extensionId)) {
+      cyclicDependencyIds.add(extensionId);
+      return;
+    }
+
+    const extension = byId.get(extensionId);
+    if (!extension) {
+      missingDependencyIds.add(extensionId);
+      return;
+    }
+
+    visiting.add(extensionId);
+    for (const dependencyId of getDefaultExtensionDependencyIds(extension)) {
+      if (!byId.has(dependencyId)) {
+        missingDependencyIds.add(dependencyId);
+        continue;
+      }
+      visit(dependencyId);
+    }
+    visiting.delete(extensionId);
+
+    visited.add(extensionId);
+    ordered.push(extensionId);
+  }
+
+  for (const extensionId of normalizeDefaultExtensionIds(extensionIds)) {
+    visit(extensionId);
+  }
+
+  return {
+    extensionIds: ordered,
+    missingDependencyIds: [...missingDependencyIds],
+    cyclicDependencyIds: [...cyclicDependencyIds],
+  };
+}
+
+export function resolveDefaultExtensionDependentIds(
+  extensionIds: readonly string[],
+  installedExtensionIds: readonly string[],
+  extensions: readonly DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MANIFESTS,
+): string[] {
+  const targetIds = new Set(normalizeDefaultExtensionIds(extensionIds));
+  const installedIds = new Set(normalizeDefaultExtensionIds(installedExtensionIds));
+  const dependents: string[] = [];
+
+  for (const extension of extensions) {
+    const extensionId = extension.manifest.id;
+    if (!installedIds.has(extensionId) || targetIds.has(extensionId)) continue;
+    const plan = resolveDefaultExtensionDependencyPlan([extensionId], extensions);
+    const dependencyIds = plan.extensionIds.filter((candidateId) => candidateId !== extensionId);
+    if (dependencyIds.some((dependencyId) => targetIds.has(dependencyId))) {
+      dependents.push(extensionId);
+    }
+  }
+
+  return dependents;
 }
 
 function hasRuntimeEvents(extension: DefaultExtensionDescriptor): boolean {
@@ -311,6 +398,10 @@ function isExtensionMarketplaceCategory(value: unknown): value is ExtensionMarke
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
 function isHarnessPlugin(plugin: HarnessPlugin | undefined): plugin is HarnessPlugin {

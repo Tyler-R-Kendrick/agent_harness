@@ -3836,6 +3836,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   flex-wrap: wrap;
   gap: 6px;
 }
+.extension-dependency-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
 .integration-summary-card {
   display: grid;
   gap: 8px;

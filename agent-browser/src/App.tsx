@@ -288,11 +288,14 @@ import {
   buildRuntimeExtensionPromptContext,
   createDefaultExtensionRuntime,
   getDefaultExtensionAvailability,
+  getDefaultExtensionDependencyIds,
   getDefaultExtensionOpenFeatureFlagKey,
   getExtensionMarketplaceCategory,
   getInstalledDefaultExtensionDescriptors,
   groupDefaultExtensionsByMarketplaceCategory,
   normalizeDefaultExtensionIds,
+  resolveDefaultExtensionDependencyPlan,
+  resolveDefaultExtensionDependentIds,
   resolveEnabledDefaultExtensionIds,
   summarizeDefaultExtensionRuntime,
   type DefaultExtensionDescriptor,
@@ -8304,6 +8307,27 @@ function getDefaultExtensionSourceLabel(extension: DefaultExtensionDescriptor): 
     ?? extension.marketplace.id;
 }
 
+function getDefaultExtensionName(extensionId: string, extensions: readonly DefaultExtensionDescriptor[]): string {
+  return extensions.find((extension) => extension.manifest.id === extensionId)?.manifest.name ?? extensionId;
+}
+
+function getDefaultExtensionDependencyNames(
+  extension: DefaultExtensionDescriptor,
+  extensions: readonly DefaultExtensionDescriptor[],
+): string[] {
+  return getDefaultExtensionDependencyIds(extension)
+    .map((extensionId) => getDefaultExtensionName(extensionId, extensions));
+}
+
+function getDefaultExtensionDependentNames(
+  extension: DefaultExtensionDescriptor,
+  installedExtensionIds: readonly string[],
+  extensions: readonly DefaultExtensionDescriptor[],
+): string[] {
+  return resolveDefaultExtensionDependentIds([extension.manifest.id], installedExtensionIds, extensions)
+    .map((extensionId) => getDefaultExtensionName(extensionId, extensions));
+}
+
 function getDefaultExtensionDownload(
   manifest: HarnessPluginManifest,
   daemonDownload: DaemonDownloadChoice,
@@ -8420,6 +8444,7 @@ function ExtensionActionButtons({
 
 function MarketplaceExtensionCard({
   extension,
+  extensions,
   installedExtensionIdSet,
   enabledExtensionIdSet,
   daemonDownload,
@@ -8429,6 +8454,7 @@ function MarketplaceExtensionCard({
   onConfigureExtension,
 }: {
   extension: DefaultExtensionDescriptor;
+  extensions: readonly DefaultExtensionDescriptor[];
   installedExtensionIdSet: Set<string>;
   enabledExtensionIdSet: Set<string>;
   daemonDownload: DaemonDownloadChoice;
@@ -8438,6 +8464,7 @@ function MarketplaceExtensionCard({
   const category = getExtensionMarketplaceCategory(extension);
   const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
   const availability = getDefaultExtensionAvailability(extension);
+  const dependencyNames = getDefaultExtensionDependencyNames(extension, extensions);
   const className = [
     'marketplace-card',
     `marketplace-card--${category}`,
@@ -8462,6 +8489,11 @@ function MarketplaceExtensionCard({
           {availability.state === 'unavailable' ? <span>Unavailable on this runtime</span> : null}
           <span>Configurable</span>
         </div>
+        {dependencyNames.length > 0 ? (
+          <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependencies`}>
+            {dependencyNames.map((name) => <span key={name} className="chip mini">Requires {name}</span>)}
+          </div>
+        ) : null}
       </div>
       <div className="marketplace-actions">
         {download ? (
@@ -8548,6 +8580,7 @@ function MarketplacePanel({
                   <MarketplaceExtensionCard
                     key={extension.manifest.id}
                     extension={extension}
+                    extensions={repoExtensions}
                     installedExtensionIdSet={installedExtensionIdSet}
                     enabledExtensionIdSet={enabledExtensionIdSet}
                     daemonDownload={daemonDownload}
@@ -8587,6 +8620,7 @@ function ExtensionsPanel({
   const installedExtensions = getInstalledDefaultExtensionDescriptors(defaultExtensions, installedExtensionIds);
   const installedByCategory = groupDefaultExtensionsByMarketplaceCategory(installedExtensions);
   const enabledExtensionIdSet = new Set(enabledExtensionIds);
+  const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Installed extensions">
@@ -8610,35 +8644,17 @@ function ExtensionsPanel({
               <div key={category} className="installed-extension-group">
                 <span className="extension-group-label">{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
                 {extensions.map((extension) => (
-                  <article
+                  <InstalledExtensionCard
                     key={extension.manifest.id}
-                    className={`marketplace-card installed-extension-card ${enabledExtensionIdSet.has(extension.manifest.id) ? '' : 'marketplace-card--disabled'}`}
-                  >
-                    <div className="marketplace-card-icon">
-                      <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
-                    </div>
-                    <div className="marketplace-card-body">
-                      <strong>{extension.manifest.name}</strong>
-                      <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
-                      <p className="marketplace-card-desc">{extension.manifest.description}</p>
-                      <div className="marketplace-card-meta">
-                        <span>{enabledExtensionIdSet.has(extension.manifest.id) ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
-                        <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
-                      </div>
-                    </div>
-                    <div className="marketplace-actions">
-                      <ExtensionActionButtons
-                        extension={extension}
-                        isInstalled
-                        isEnabled={enabledExtensionIdSet.has(extension.manifest.id)}
-                        availability={getDefaultExtensionAvailability(extension)}
-                        onInstallExtension={onInstallExtension}
-                        onUninstallExtension={onUninstallExtension}
-                        onSetExtensionEnabled={onSetExtensionEnabled}
-                        onConfigureExtension={onConfigureExtension}
-                      />
-                    </div>
-                  </article>
+                    extension={extension}
+                    repoExtensions={repoExtensions}
+                    installedExtensionIds={installedExtensionIds}
+                    enabled={enabledExtensionIdSet.has(extension.manifest.id)}
+                    onInstallExtension={onInstallExtension}
+                    onUninstallExtension={onUninstallExtension}
+                    onSetExtensionEnabled={onSetExtensionEnabled}
+                    onConfigureExtension={onConfigureExtension}
+                  />
                 ))}
               </div>
             );
@@ -8665,6 +8681,58 @@ function ExtensionsPanel({
         </SidebarSection>
       )}
     </section>
+  );
+}
+
+function InstalledExtensionCard({
+  extension,
+  repoExtensions,
+  installedExtensionIds,
+  enabled,
+  onInstallExtension,
+  onUninstallExtension,
+  onSetExtensionEnabled,
+  onConfigureExtension,
+}: {
+  extension: DefaultExtensionDescriptor;
+  repoExtensions: readonly DefaultExtensionDescriptor[];
+  installedExtensionIds: readonly string[];
+  enabled: boolean;
+} & ExtensionActionHandlers) {
+  const dependentNames = getDefaultExtensionDependentNames(extension, installedExtensionIds, repoExtensions);
+
+  return (
+    <article className={`marketplace-card installed-extension-card ${enabled ? '' : 'marketplace-card--disabled'}`}>
+      <div className="marketplace-card-icon">
+        <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
+      </div>
+      <div className="marketplace-card-body">
+        <strong>{extension.manifest.name}</strong>
+        <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
+        <p className="marketplace-card-desc">{extension.manifest.description}</p>
+        <div className="marketplace-card-meta">
+          <span>{enabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
+          <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
+        </div>
+        {dependentNames.length > 0 ? (
+          <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependents`}>
+            {dependentNames.map((name) => <span key={name} className="chip mini">Required by {name}</span>)}
+          </div>
+        ) : null}
+      </div>
+      <div className="marketplace-actions">
+        <ExtensionActionButtons
+          extension={extension}
+          isInstalled
+          isEnabled={enabled}
+          availability={getDefaultExtensionAvailability(extension)}
+          onInstallExtension={onInstallExtension}
+          onUninstallExtension={onUninstallExtension}
+          onSetExtensionEnabled={onSetExtensionEnabled}
+          onConfigureExtension={onConfigureExtension}
+        />
+      </div>
+    </article>
   );
 }
 
@@ -10361,7 +10429,7 @@ function AgentBrowserApp() {
   );
   const artifactWorktreeExtensionEnabled = enabledDefaultExtensionIds.includes('agent-harness.ext.artifacts-worktree');
   const installDefaultExtension = useCallback((extensionId: string) => {
-    const extensionIds = normalizeDefaultExtensionIds([extensionId]);
+    const extensionIds = resolveDefaultExtensionDependencyPlan([extensionId]).extensionIds;
     setInstalledDefaultExtensionIds((current) => {
       const existing = new Set(normalizeDefaultExtensionIds(current));
       for (const id of extensionIds) existing.add(id);
@@ -10375,26 +10443,33 @@ function AgentBrowserApp() {
   }, [setDefaultExtensionOpenFeatureFlags, setInstalledDefaultExtensionIds]);
   const uninstallDefaultExtension = useCallback((extensionId: string) => {
     const extensionIds = normalizeDefaultExtensionIds([extensionId]);
-    setInstalledDefaultExtensionIds((current) => normalizeDefaultExtensionIds(current).filter((id) => !extensionIds.includes(id)));
+    const dependentIds = resolveDefaultExtensionDependentIds(extensionIds, installedDefaultExtensionIds);
+    const removedIds = new Set([...extensionIds, ...dependentIds]);
+    setInstalledDefaultExtensionIds((current) => normalizeDefaultExtensionIds(current).filter((id) => !removedIds.has(id)));
     setDefaultExtensionOpenFeatureFlags((current) => {
       const next = { ...current };
-      for (const id of extensionIds) delete next[getDefaultExtensionOpenFeatureFlagKey(id)];
+      for (const id of removedIds) delete next[getDefaultExtensionOpenFeatureFlagKey(id)];
       return next;
     });
     setDefaultExtensionConfigurationById((current) => {
       const next = { ...current };
-      for (const id of extensionIds) delete next[id];
+      for (const id of removedIds) delete next[id];
       return next;
     });
-  }, [setDefaultExtensionConfigurationById, setDefaultExtensionOpenFeatureFlags, setInstalledDefaultExtensionIds]);
+  }, [installedDefaultExtensionIds, setDefaultExtensionConfigurationById, setDefaultExtensionOpenFeatureFlags, setInstalledDefaultExtensionIds]);
   const setDefaultExtensionEnabled = useCallback((extensionId: string, enabled: boolean) => {
-    const extensionIds = normalizeDefaultExtensionIds([extensionId]);
+    const extensionIds = enabled
+      ? resolveDefaultExtensionDependencyPlan([extensionId]).extensionIds
+      : [
+        ...normalizeDefaultExtensionIds([extensionId]),
+        ...resolveDefaultExtensionDependentIds([extensionId], installedDefaultExtensionIds),
+      ];
     setDefaultExtensionOpenFeatureFlags((current) => {
       const next = { ...current };
       for (const id of extensionIds) next[getDefaultExtensionOpenFeatureFlagKey(id)] = enabled;
       return next;
     });
-  }, [setDefaultExtensionOpenFeatureFlags]);
+  }, [installedDefaultExtensionIds, setDefaultExtensionOpenFeatureFlags]);
   const configureDefaultExtension = useCallback((extension: DefaultExtensionDescriptor) => {
     const current = defaultExtensionConfigurationById[extension.manifest.id] ?? {};
     const raw = window.prompt(`Configure ${extension.manifest.name} as JSON`, JSON.stringify(current, null, 2));
