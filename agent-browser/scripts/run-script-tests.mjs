@@ -173,6 +173,9 @@ async function main() {
   const extensionDownloadsPackager = await import(
     pathToFileURL(path.resolve(repoRoot, 'scripts/package-extension-downloads.mjs')).href
   );
+  const workspacePatchApplicator = await import(
+    pathToFileURL(path.resolve(repoRoot, 'scripts/apply-workspace-patches.mjs')).href
+  );
   const extensionDownloadsScript = await readScript('scripts/package-extension-downloads.mjs');
   assert.match(extensionDownloadsScript, /pathToFileURL\(path\.resolve\(process\.argv\[1\]\)\)\.href/);
   assert.deepEqual(extensionDownloadsPackager.buildDownloadPackages(repoRoot), [
@@ -202,6 +205,37 @@ async function main() {
     },
   ]);
   assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');
+
+  const extensionZipFixture = await mkdtemp(path.join(tmpdir(), 'extension-download-zip-'));
+  const extensionZipSource = path.join(extensionZipFixture, 'dist');
+  const extensionZipOutput = path.join(extensionZipFixture, 'download.zip');
+  await mkdir(extensionZipSource);
+  await writeFile(path.join(extensionZipSource, 'background.js'), 'console.log("runtime");');
+  await writeFile(path.join(extensionZipSource, 'background.js.map'), '{"version":3}');
+  await extensionDownloadsPackager.createZipFromDirectory(extensionZipSource, extensionZipOutput, 'extension');
+  const extensionZip = await readFile(extensionZipOutput);
+  assert.match(extensionZip.toString('latin1'), /extension\/background\.js/);
+  assert.doesNotMatch(extensionZip.toString('latin1'), /extension\/background\.js\.map/);
+
+  const patchFixture = await mkdtemp(path.join(tmpdir(), 'workspace-patches-'));
+  await mkdir(path.join(patchFixture, 'node_modules', '@tavily', 'core'), { recursive: true });
+  assert.equal(
+    workspacePatchApplicator.resolveInstalledPackagePath(
+      patchFixture,
+      'agent-browser',
+      'node_modules/@tavily/core',
+    ),
+    path.join(patchFixture, 'node_modules', '@tavily', 'core'),
+  );
+  assert.equal(
+    workspacePatchApplicator.resolvePatchWorkingDirectory(
+      patchFixture,
+      'agent-browser',
+      path.join(patchFixture, 'node_modules', '@tavily', 'core'),
+    ),
+    patchFixture,
+  );
+
   const extensionFixture = await mkdtemp(path.join(tmpdir(), 'extension-workspaces-'));
   await mkdir(path.join(extensionFixture, 'ext', 'ide', 'alpha'), { recursive: true });
   await mkdir(path.join(extensionFixture, 'ext', 'ide', 'not-a-package'), { recursive: true });
