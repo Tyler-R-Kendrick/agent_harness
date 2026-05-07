@@ -88,6 +88,7 @@ import {
   buildResearcherToolInstructions,
   buildSecurityReviewToolInstructions,
   buildSteeringToolInstructions,
+  buildMediaToolInstructions,
   hasCodiModels,
   hasCursorAccess,
   hasCodexAccess,
@@ -217,6 +218,11 @@ import {
   getBrowserLocalInferenceHardware,
   type LocalInferenceReadiness,
 } from './services/localInferenceReadiness';
+import {
+  DEFAULT_MEDIA_CAPABILITY_REQUIREMENTS,
+  buildMediaCapabilityPrompt,
+  planMediaCapabilities,
+} from './services/mediaAgent';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
 import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
@@ -2601,7 +2607,7 @@ function ChatPanel({
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
     || (selectedProvider === 'codex' && Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels)
-    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security' || selectedProvider === 'steering' || selectedProvider === 'adversary') && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security' || selectedProvider === 'steering' || selectedProvider === 'adversary' || selectedProvider === 'media') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
@@ -3196,7 +3202,7 @@ function ChatPanel({
     });
     if (requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
-      if (providerForRequest === 'planner' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security') {
+      if (providerForRequest === 'planner' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media') {
         if (routed.provider === 'ghcp') {
           requestGhcpModelId = routed.modelId;
           runtimeProviderForRequest = 'ghcp';
@@ -3275,7 +3281,7 @@ function ChatPanel({
     }
 
     if (providerForRequest !== 'tour-guide' && runtimeProviderForRequest === 'codi' && !requestLocalModel) {
-      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'security' ? 'Security Review needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
+      updateMessage(assistantId, { status: 'error', content: providerForRequest === 'researcher' ? 'Researcher needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'debugger' ? 'Debugger needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'planner' ? 'Planner needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'security' ? 'Security Review needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'steering' ? 'Steering needs a GHCP, Cursor, or browser-compatible Codi model before sending a prompt.' : providerForRequest === 'media' ? 'Media needs GHCP, Cursor, or media-capable browser models before sending a prompt.' : 'Install a browser-compatible ONNX model for Codi from Models before sending a prompt.' });
       return;
     }
 
@@ -3312,8 +3318,20 @@ function ChatPanel({
       browserWorkflowSkills,
       3,
     );
+    const requestMediaCapabilityPlan = providerForRequest === 'media'
+      ? planMediaCapabilities({
+          request: trimmedText,
+          installedModels,
+          remoteModelNames: [
+            ...copilotState.models.map((model) => model.name),
+            ...cursorState.models.map((model) => model.name),
+            ...codexState.models.map((model) => model.name),
+          ],
+        })
+      : null;
     const requestWorkspacePromptContext = [
       workspacePromptContext,
+      requestMediaCapabilityPlan ? buildMediaCapabilityPrompt(requestMediaCapabilityPlan) : '',
       buildBrowserWorkflowSkillPromptContext(requestBrowserWorkflowSkillSuggestions),
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
       buildSharedAgentPromptContext(sharedAgentCatalog),
@@ -4495,6 +4513,14 @@ function ChatPanel({
               workspacePromptContext: requestWorkspacePromptContext,
               descriptors: selectedDescriptors,
               selectedToolIds,
+            })
+          : providerForRequest === 'media'
+            ? buildMediaToolInstructions({
+              workspaceName,
+              workspacePromptContext: requestWorkspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+              capabilityPlan: requestMediaCapabilityPlan ?? undefined,
             })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext: requestWorkspacePromptContext, selectedToolIds });
         const inputMessages: ModelMessage[] = nextMessages
@@ -5771,6 +5797,7 @@ function ChatPanel({
                     <option value="security">Security Review</option>
                     <option value="steering">Steering</option>
                     <option value="adversary">Adversary</option>
+                    <option value="media">Media</option>
                     <option value="tour-guide">Tour Guide</option>
                   </select>
                 </label>
@@ -6024,7 +6051,7 @@ function ChatPanel({
                       : null)
                 : selectedProvider === 'tour-guide'
                   ? null
-                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'adversary' ? 'Adversary needs GHCP, Cursor, or Codi. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'steering' ? 'Steering needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'adversary' ? 'Adversary needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'media' ? 'Media needs GHCP, Cursor, or media models. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -6605,6 +6632,38 @@ function BrowserWorkflowSkillSettingsPanel({
           )) : (
             <p className="empty-state">No browser workflow skills installed in this workspace.</p>
           )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function MediaAgentSettingsPanel() {
+  return (
+    <SettingsSection title="Media agent" defaultOpen={false}>
+      <div className="browser-workflow-skill-settings">
+        <article className="provider-card browser-workflow-skill-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Media orchestration</strong>
+              <p>Coordinates image, voice, SFX, music, and Remotion video workflows with model readiness checks.</p>
+            </div>
+            <span className="badge connected">5 workflows</span>
+          </div>
+        </article>
+        <div className="browser-workflow-skill-list" role="list" aria-label="Media generation workflows">
+          {DEFAULT_MEDIA_CAPABILITY_REQUIREMENTS.map((requirement) => (
+            <article key={requirement.kind} className="provider-card browser-workflow-skill-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{requirement.label}</strong>
+                  <p>{requirement.verificationWorkflow}</p>
+                </div>
+                <span className="badge">{requirement.kind}</span>
+              </div>
+              <p className="partner-agent-audit-note">Recommended install: {requirement.recommendedInstall}</p>
+            </article>
+          ))}
         </div>
       </div>
     </SettingsSection>
@@ -8273,6 +8332,8 @@ function SettingsPanel({
         installedSkills={browserWorkflowSkills}
         onInstall={onInstallBrowserWorkflowSkill}
       />
+
+      <MediaAgentSettingsPanel />
 
       <HarnessSteeringSettingsPanel
         state={harnessSteeringState}
@@ -10468,7 +10529,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'steering', 'adversary', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'steering', 'adversary', 'media', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (

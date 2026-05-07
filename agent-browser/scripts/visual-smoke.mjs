@@ -20,6 +20,7 @@ const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-brows
 const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-agent-canvases.png');
 const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
+const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
 const gitWorktreeViewportOutputPaths = [
   {
     name: 'mobile',
@@ -757,6 +758,21 @@ async function main() {
     await expect(page.getByRole('list', { name: 'Installed browser workflow skills' }).getByText('npm.cmd run visual:agent-browser')).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await page.getByRole('button', { name: 'Media agent' }).click();
+    await expect(page.getByText('Media orchestration')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('list', { name: 'Media generation workflows' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('Image generation', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Voice generation', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('SFX generation', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Music generation', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Remotion video', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.waitForTimeout(250);
+    await page
+      .locator('section.settings-section')
+      .filter({ has: page.getByRole('button', { name: 'Media agent' }) })
+      .screenshot({ path: mediaAgentOutputPath });
     await page.getByRole('button', { name: 'Partner agent control plane' }).click();
     await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });

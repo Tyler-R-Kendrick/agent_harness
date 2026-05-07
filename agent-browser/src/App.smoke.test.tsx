@@ -529,6 +529,32 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Vulnerability Scanner')).toBeInTheDocument();
   });
 
+  it('renders Media agent routing and install recommendations', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+
+    const providerSelect = screen.getByLabelText('Agent provider');
+    fireEvent.change(providerSelect, { target: { value: 'media' } });
+    expect(providerSelect).toHaveValue('media');
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Media agent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Media agent' }));
+    expect(screen.getByText('Image generation')).toBeInTheDocument();
+    expect(screen.getByText('Voice generation')).toBeInTheDocument();
+    expect(screen.getByText('SFX generation')).toBeInTheDocument();
+    expect(screen.getByText('Music generation')).toBeInTheDocument();
+    expect(screen.getByText('Remotion video')).toBeInTheDocument();
+    expect(screen.getAllByText(/recommended install/i)).toHaveLength(5);
+  });
+
   it('renders scheduled automations in History and Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

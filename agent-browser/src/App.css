@@ -302,12 +302,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   align-content: start;
 }
 .settings-panel {
-  display: grid;
-  gap: 12px;
-  align-content: start;
+  display: block;
 }
 .settings-panel .collapsible-section {
-  min-height: 0;
+  min-height: max-content;
 }
 .section-toggle {
   width: 100%;
@@ -333,9 +331,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   margin-bottom: 0;
 }
 .settings-section {
-  display: grid;
+  display: block;
 }
 .settings-panel .settings-section {
+  display: block;
   min-height: 30px;
   overflow: visible;
 }

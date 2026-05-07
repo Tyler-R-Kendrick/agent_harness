@@ -15,6 +15,7 @@ import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Re
 import { isSecurityReviewTaskText, SECURITY_REVIEW_LABEL, streamSecurityReviewChat } from './Security';
 import { isSteeringTaskText, STEERING_LABEL, streamSteeringChat } from './Steering';
 import { ADVERSARY_LABEL, isAdversaryTaskText, streamAdversaryChat } from './Adversary';
+import { isMediaTaskText, MEDIA_LABEL, streamMediaChat } from './Media';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
@@ -55,6 +56,15 @@ export {
   isSteeringTaskText,
   streamSteeringChat,
 } from './Steering';
+export {
+  MEDIA_AGENT_ID,
+  MEDIA_LABEL,
+  buildMediaOperatingInstructions,
+  buildMediaSystemPrompt,
+  buildMediaToolInstructions,
+  isMediaTaskText,
+  streamMediaChat,
+} from './Media';
 export {
   TOUR_GUIDE_AGENT_ID,
   TOUR_GUIDE_LABEL,
@@ -341,6 +351,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'media') {
+    await streamMediaChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'tour-guide') {
     await streamTourGuideChat({
       workspaceName: options.workspaceName,
@@ -394,7 +419,7 @@ export function getAgentDisplayName({
   activeCodexModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security' || provider === 'steering' || provider === 'adversary') {
+  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security' || provider === 'steering' || provider === 'adversary' || provider === 'media') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : researcherRuntimeProvider === 'cursor'
@@ -410,7 +435,9 @@ export function getAgentDisplayName({
             ? SECURITY_REVIEW_LABEL
             : provider === 'steering'
               ? STEERING_LABEL
-              : ADVERSARY_LABEL;
+              : provider === 'adversary'
+                ? ADVERSARY_LABEL
+                : MEDIA_LABEL;
     return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
@@ -472,6 +499,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Adversary…'
       : 'Sign in to GHCP or Cursor, or install a Codi model for adversary review';
+  }
+  if (provider === 'media') {
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
+      ? 'Ask Media…'
+      : 'Sign in to GHCP or Cursor, or install media-capable models';
   }
   if (provider === 'tour-guide') {
     return 'Ask Tour Guide…';
@@ -574,6 +606,17 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Adversary models`
       : 'Adversary needs GHCP, Cursor, or Codi';
   }
+  if (provider === 'media') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Media models`;
+    }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Media models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Media models`
+      : 'Media needs GHCP, Cursor, or media-capable Codi models';
+  }
   if (provider === 'tour-guide') {
     return 'Creates guided product tours';
   }
@@ -590,6 +633,7 @@ export function resolveAgentProviderForTask({
   if (isSecurityReviewTaskText(latestUserInput)) return 'security';
   if (isSteeringTaskText(latestUserInput)) return 'steering';
   if (isAdversaryTaskText(latestUserInput)) return 'adversary';
+  if (isMediaTaskText(latestUserInput)) return 'media';
   if (isResearchTaskText(latestUserInput)) return 'researcher';
   if (isDebuggingTaskText(latestUserInput)) return 'debugger';
   if (isPlannerTaskText(latestUserInput)) return 'planner';
@@ -609,7 +653,7 @@ export function resolveRuntimeAgentProvider({
   hasCursorModelsReady?: boolean;
   hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'steering' && provider !== 'adversary' && provider !== 'tour-guide') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'steering' && provider !== 'adversary' && provider !== 'media' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
   void hasCodexModelsReady;
