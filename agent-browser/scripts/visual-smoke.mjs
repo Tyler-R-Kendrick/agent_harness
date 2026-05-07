@@ -277,29 +277,58 @@ async function main() {
             status: 'complete',
             content: 'Agent Browser ready.',
           },
-          {
-            id: 'visual-eval-assistant',
-            role: 'assistant',
-            status: 'complete',
-            content: 'Captured visual evidence and completed the run.',
-            cards: [{ app: 'Browser evidence', args: { screenshot: 'agent-browser-visual-smoke.png' } }],
-            processEntries: [
               {
-                id: 'visual-reasoning',
-                position: 0,
-                ts: 1000,
-                endedAt: 1300,
-                kind: 'reasoning',
+                id: 'visual-eval-assistant',
+                role: 'assistant',
+                status: 'complete',
+                content: 'Captured visual evidence and completed the run.',
+                cards: [{ app: 'Browser evidence', args: { screenshot: 'agent-browser-visual-smoke.png' } }],
+                processEntries: [
+                  {
+                    id: 'checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z',
+                    position: 0,
+                    ts: 900,
+                    kind: 'handoff',
+                    actor: 'checkpoint',
+                    summary: 'Approval before deployment',
+                    transcript: 'Suspended at before deploy tool call\nRequired input: operator approval',
+                    payload: {
+                      checkpoint: {
+                        id: 'checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z',
+                        sessionId,
+                        workspaceId,
+                        reason: 'approval',
+                        status: 'suspended',
+                        summary: 'Approval before deployment',
+                        boundary: 'before deploy tool call',
+                        requiredInput: 'operator approval',
+                        resumeToken: 'resume:visual-eval-session:2026-05-07T02:30:00.000Z',
+                        artifacts: ['agent-browser-visual-smoke.png'],
+                        createdAt: '2026-05-07T02:30:00.000Z',
+                        updatedAt: '2026-05-07T02:30:00.000Z',
+                        expiresAt: '2026-05-07T06:30:00.000Z',
+                      },
+                    },
+                    branchId: 'checkpoint:visual-eval-session',
+                    status: 'active',
+                    timeoutMs: 14_400_000,
+                  },
+                  {
+                    id: 'visual-reasoning',
+                    position: 1,
+                    ts: 1000,
+                    endedAt: 1300,
+                    kind: 'reasoning',
                 actor: 'planner',
                 summary: 'Planned visual validation',
                 transcript: 'Use the process graph and screenshot evidence.',
                 status: 'done',
               },
-              {
-                id: 'visual-tool',
-                position: 1,
-                ts: 1400,
-                endedAt: 1800,
+                  {
+                    id: 'visual-tool',
+                    position: 2,
+                    ts: 1400,
+                    endedAt: 1800,
                 kind: 'tool-call',
                 actor: 'playwright',
                 summary: 'Capture browser screenshot',
@@ -309,6 +338,40 @@ async function main() {
             ],
           },
         ],
+      }));
+      localStorage.setItem('agent-browser.run-checkpoint-state', JSON.stringify({
+        checkpoints: [
+          {
+            id: 'checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z',
+            sessionId,
+            workspaceId,
+            reason: 'approval',
+            status: 'suspended',
+            summary: 'Approval before deployment',
+            boundary: 'before deploy tool call',
+            requiredInput: 'operator approval',
+            resumeToken: 'resume:visual-eval-session:2026-05-07T02:30:00.000Z',
+            artifacts: ['agent-browser-visual-smoke.png'],
+            createdAt: '2026-05-07T02:30:00.000Z',
+            updatedAt: '2026-05-07T02:30:00.000Z',
+            expiresAt: '2026-05-07T06:30:00.000Z',
+          },
+        ],
+        audit: [
+          {
+            id: 'audit:checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z:suspended',
+            checkpointId: 'checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z',
+            action: 'suspended',
+            actor: 'agent-browser',
+            summary: 'Suspended at before deploy tool call',
+            createdAt: '2026-05-07T02:30:00.000Z',
+          },
+        ],
+        policy: {
+          defaultTimeoutMinutes: 240,
+          requireOperatorConfirmation: true,
+          preserveArtifacts: true,
+        },
       }));
       sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
@@ -327,7 +390,13 @@ async function main() {
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
-    await page.getByRole('button', { name: /Process.*2 events/ }).click();
+    await page.getByRole('button', { name: /Approval before deployment|Process.*3 events/ }).click();
+    const checkpointStrip = page.getByLabel('Suspended checkpoint');
+    await expect(checkpointStrip).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(checkpointStrip.getByText('Approval before deployment')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(checkpointStrip.getByText('resume:visual-eval-session:2026-05-07T02:30:00.000Z')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     const evaluationObservability = page.getByLabel('Evaluation-native observability');
     await expect(evaluationObservability).toBeVisible({ timeout: shellTimeoutMs });
     await expect(evaluationObservability.getByText('Evaluation', { exact: true })).toBeVisible({
@@ -341,6 +410,11 @@ async function main() {
     await page.getByRole('button', { name: 'Back to chat' }).click();
     await page.getByRole('button', { name: 'History' }).click();
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Suspend/resume checkpoints' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('Approval before deployment').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText(/operator approval/i).first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('button', { name: 'Scheduled automations' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -375,6 +449,12 @@ async function main() {
     await expect(page.getByLabel('Enable security review agents')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable inline PR security review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable scheduled vulnerability scans')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Suspend/resume checkpoints' }).click();
+    await expect(page.getByLabel('Default checkpoint timeout')).toHaveValue('240', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Require operator confirmation before resume')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByText('resume:visual-eval-session:2026-05-07T02:30:00.000Z')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await page.getByRole('button', { name: 'Scheduled automations' }).click();
     await expect(page.getByLabel('Enable Daily workspace audit')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Daily workspace audit cadence')).toHaveValue('daily', { timeout: shellTimeoutMs });

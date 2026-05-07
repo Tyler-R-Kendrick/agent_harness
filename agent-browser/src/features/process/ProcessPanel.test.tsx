@@ -72,4 +72,49 @@ describe('ProcessPanel', () => {
     expect(screen.getByText('eval-case:message-eval')).toBeInTheDocument();
     expect(screen.getByText('live:message-eval')).toBeInTheDocument();
   });
+
+  it('renders suspended checkpoint metadata for resumable process handoffs', () => {
+    const message: ChatMessage = {
+      id: 'message-checkpoint',
+      role: 'assistant',
+      content: 'Waiting on approval.',
+      status: 'streaming',
+      processEntries: [
+        {
+          id: 'checkpoint:session-1:2026-05-07T03:00:00.000Z',
+          position: 0,
+          ts: 1000,
+          kind: 'handoff',
+          actor: 'checkpoint',
+          summary: 'Approval before deployment',
+          transcript: 'Suspended before deploy tool call.',
+          status: 'active',
+          payload: {
+            checkpoint: {
+              id: 'checkpoint:session-1:2026-05-07T03:00:00.000Z',
+              sessionId: 'session-1',
+              workspaceId: 'ws-research',
+              reason: 'approval',
+              status: 'suspended',
+              summary: 'Approval before deployment',
+              boundary: 'before deploy tool call',
+              requiredInput: 'human approval',
+              resumeToken: 'resume:session-1:2026-05-07T03:00:00.000Z',
+              artifacts: ['plan.md'],
+              createdAt: '2026-05-07T03:00:00.000Z',
+              updatedAt: '2026-05-07T03:00:00.000Z',
+              expiresAt: '2026-05-07T07:00:00.000Z',
+            },
+          },
+        },
+      ],
+    };
+
+    render(<ProcessPanel message={message} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText('Suspended checkpoint')).toBeInTheDocument();
+    expect(screen.getAllByText('Approval before deployment').length).toBeGreaterThan(0);
+    expect(screen.getByText('approval')).toBeInTheDocument();
+    expect(screen.getByText('resume:session-1:2026-05-07T03:00:00.000Z')).toBeInTheDocument();
+  });
 });

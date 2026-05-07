@@ -2546,28 +2546,37 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   line-height: 1.4;
 }
 .scheduled-automations-settings,
-.scheduled-automations-summary {
+.scheduled-automations-summary,
+.run-checkpoint-settings,
+.run-checkpoint-history {
   display: grid;
   gap: 8px;
 }
 .scheduled-automation-card,
 .scheduled-automation-history-card,
-.scheduled-automation-row-card {
+.scheduled-automation-row-card,
+.run-checkpoint-policy-card,
+.run-checkpoint-card,
+.run-checkpoint-history-card,
+.run-checkpoint-row-card {
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: rgba(255,255,255,.025);
 }
-.scheduled-automation-card .settings-checkbox-row {
+.scheduled-automation-card .settings-checkbox-row,
+.run-checkpoint-policy-card .settings-checkbox-row {
   align-items: flex-start;
   font-size: 12px;
   line-height: 1.35;
 }
-.scheduled-automation-control-grid {
+.scheduled-automation-control-grid,
+.run-checkpoint-control-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
-.scheduled-automation-control-grid select {
+.scheduled-automation-control-grid select,
+.run-checkpoint-control-grid input[type="number"] {
   min-height: 30px;
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 4px;
@@ -2575,8 +2584,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--text);
   padding: 6px 8px;
 }
+.run-checkpoint-token-row {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.run-checkpoint-token-row code,
+.run-checkpoint-row-card .history-events li {
+  overflow-wrap: anywhere;
+}
+.run-checkpoint-token-row span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
 @media (max-width: 520px) {
-  .scheduled-automation-control-grid {
+  .scheduled-automation-control-grid,
+  .run-checkpoint-control-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -5420,6 +5443,55 @@ kbd {
 }
 .evaluation-score-strip--warning {
   border-left-color: #f59e0b;
+}
+.checkpoint-process-strip {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid rgba(251,191,36,.24);
+  border-left: 3px solid #fbbf24;
+  border-radius: 6px;
+  background: rgba(120,53,15,.18);
+}
+.checkpoint-process-strip header,
+.checkpoint-process-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.checkpoint-process-strip header span {
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 700;
+}
+.checkpoint-process-strip header strong {
+  color: rgba(254,243,199,.75);
+  font-size: 11px;
+}
+.checkpoint-process-grid {
+  display: grid;
+  gap: 6px;
+}
+.checkpoint-process-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.checkpoint-process-card strong {
+  color: #f8fafc;
+  font-size: 12px;
+}
+.checkpoint-process-card p {
+  margin: 0;
+  color: rgba(226,232,240,.72);
+  font-size: 11px;
+}
+.checkpoint-process-card code {
+  color: #fde68a;
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
 .evaluation-score-header,
 .evaluation-score-title,
