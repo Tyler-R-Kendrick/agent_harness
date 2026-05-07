@@ -445,6 +445,14 @@ async function main() {
     await expect(page.getByText(/Fallback priors|benchmark source|Refreshing evidence/)).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await page.getByRole('button', { name: 'Workspace skill policies' }).click();
+    await expect(page.getByLabel('Enable workspace skill policies')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Least-privilege enforcement')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Versioned packages')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Policy-aware regex grep')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('listitem').filter({ has: page.getByText('Team reviewer', { exact: true }) })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await page.getByRole('button', { name: 'Partner agent control plane' }).click();
     await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });

@@ -548,6 +548,47 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   gap: 6px;
 }
+.workspace-skill-policy-settings,
+.workspace-skill-package-list {
+  display: grid;
+  gap: 10px;
+}
+.workspace-skill-policy-summary-card,
+.workspace-skill-package-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+}
+.workspace-skill-policy-helper-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.workspace-skill-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.workspace-skill-scope-grid > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.workspace-skill-scope-grid code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #a7b3c5;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.workspace-skill-policy-warnings {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: #fde68a;
+  font-size: 11.5px;
+}
 .secrets-table {
   display: grid;
   overflow: hidden;
@@ -609,6 +650,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .secrets-form,
   .secret-settings-grid,
   .security-review-select-grid,
+  .workspace-skill-scope-grid,
   .trajectory-threshold-grid,
   .secrets-row {
     grid-template-columns: 1fr;
