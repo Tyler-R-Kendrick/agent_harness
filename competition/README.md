@@ -29,6 +29,10 @@ competition/<product-slug>/
 | BrowserOS | Open-source AI browser | `competition/browseros` |
 | Browserbase + Stagehand | Developer browser-agent platform | `competition/browserbase-stagehand` |
 | Browser Use Cloud | Developer browser-agent platform | `competition/browser-use-cloud` |
+| Fellou | End-user agentic productivity browser | `competition/fellou` |
+| Opera Neon | End-user agentic AI browser | `competition/opera-neon` |
+| Gemini in Chrome | Incumbent browser AI assistant | `competition/gemini-in-chrome` |
+| Microsoft Edge Copilot Mode | Incumbent browser AI assistant | `competition/microsoft-edge-copilot-mode` |
 
 ## Cross-Market Takeaways
 
@@ -36,4 +40,5 @@ competition/<product-slug>/
 - Developer platforms differentiate on reliability scaffolding: session replay, logs, CDP access, deterministic scripts, identity/CAPTCHA/proxy support, and the ability to mix AI actions with Playwright-level control.
 - The most repeated negative signal across the category is not "AI cannot browse"; it is that autonomous browsing widens the security, privacy, and verification surface. Prompt injection, wrong clicks, hidden page instructions, logged-in account access, and opaque billing/time costs are recurrent complaints.
 - `agent-browser` can compete by being visibly inspectable: explicit agent traces, local-first state, regression/eval artifacts, user-controlled approvals, and first-class developer extension surfaces.
+- Incumbent browsers are now absorbing the same sidecar, cross-tab, history, voice, and autonomous-action patterns. They will capture mainstream distribution, but their AI-first UI pressure creates a wedge for products that feel less intrusive and more auditable.
 

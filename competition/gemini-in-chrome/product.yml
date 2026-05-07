@@ -1,0 +1,22 @@
+slug: gemini-in-chrome
+name: Gemini in Chrome
+vendor: Google
+segment: incumbent-browser-ai-assistant
+product_path: competition/gemini-in-chrome
+design_path: competition/gemini-in-chrome/design
+features_path: competition/gemini-in-chrome/features
+marketing_path: competition/gemini-in-chrome/marketing
+gossip_path: competition/gemini-in-chrome/gossip
+snapshot_date: 2026-05-07
+primary_sources:
+  - https://gemini.google/us/overview/gemini-in-chrome/
+  - https://support.google.com/chrome/answer/16283624
+  - https://support.google.com/gemini/answer/16716225
+secondary_sources:
+  - https://techcrunch.com/2026/01/28/chrome-takes-on-ai-browsers-with-tighter-gemini-integration-agentic-features-for-autonomous-tasks/
+  - https://www.macrumors.com/2026/01/29/google-chrome-gemini-side-panel-ai-features/
+  - https://www.theverge.com/tech/924933/google-chrome-4gb-gemini-nano-ai-features
+positioning: "AI assistance inside Chrome for page understanding, cross-tab comparison, history recall, Google app context, and preview autonomous tasks."
+customer_model: "Bundled Chrome feature with staged rollout; some agentic features preview first for Google AI Pro and Ultra subscribers in the U.S."
+competitive_threat_level: high
+notes: "Largest distribution threat. Less differentiated as an agent product, but powerful because it ships inside the default browser for many users."

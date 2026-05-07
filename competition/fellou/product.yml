@@ -1,0 +1,22 @@
+slug: fellou
+name: Fellou
+vendor: Fellou
+segment: end-user-agentic-productivity-browser
+product_path: competition/fellou
+design_path: competition/fellou/design
+features_path: competition/fellou/features
+marketing_path: competition/fellou/marketing
+gossip_path: competition/fellou/gossip
+snapshot_date: 2026-05-07
+primary_sources:
+  - https://fellou.ai/landing-page
+  - https://fellou.pro/
+  - https://www.businesswire.com/news/home/20250902953779/en/Worlds-First-Spatial-Agentic-Browser-That-Works-While-You-RestFellou-CE-Launches
+secondary_sources:
+  - https://techcrunch.com/sponsor/fellou/the-rise-of-fellou-worlds-first-agentic-ai-browser/
+  - https://seraphicsecurity.com/learn/ai-browser/fellou-browser-agentic-features-pros-cons-and-security-concerns/
+  - https://www.thetoolnerd.com/p/fellou-review-agentic-browser-thetoolnerd
+positioning: "Agentic browser for deep search, cross-web automation, desktop/file actions, memory, and asynchronous task execution."
+customer_model: "Freemium/early-access product with paid credit tiers reported by reviewers; marketed to productivity power users, researchers, marketers, and operators."
+competitive_threat_level: high
+notes: "Most aggressive consumer/productivity framing around autonomous execution, multi-source reports, and step-reviewable action plans."

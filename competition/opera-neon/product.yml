@@ -1,0 +1,22 @@
+slug: opera-neon
+name: Opera Neon
+vendor: Opera
+segment: end-user-agentic-ai-browser
+product_path: competition/opera-neon
+design_path: competition/opera-neon/design
+features_path: competition/opera-neon/features
+marketing_path: competition/opera-neon/marketing
+gossip_path: competition/opera-neon/gossip
+snapshot_date: 2026-05-07
+primary_sources:
+  - https://press.opera.com/2025/05/28/opera-neon-the-first-ai-agentic-browser/
+  - https://press.opera.com/2025/09/30/opera-neon-ai-agentic-browser-release/
+  - https://press.opera.com/2025/12/11/opera-opens-public-access-to-opera-neon-its-experimental-agentic-ai-browser/
+  - https://help.opera.com/en/neon-ai-faq/
+secondary_sources:
+  - https://www.theverge.com/tech/801899/opera-neon-ai-browser-trial-run
+  - https://www.lifewire.com/opera-neon-works-smarter-for-you-11824986
+positioning: "Experimental subscription browser for AI power users with Chat, Do, Make, Tasks, Cards, and browser-local agent execution."
+customer_model: "Paid subscription AI browser; public access opened after a closed Founders phase."
+competitive_threat_level: medium
+notes: "Strong design history and browser distribution, but early reviews suggest confusing modes and uneven reliability."
