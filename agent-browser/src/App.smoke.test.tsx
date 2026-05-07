@@ -405,6 +405,7 @@ describe('App smoke coverage', () => {
 
   it('renders suspend and resume checkpoints in History and Settings', async () => {
     vi.useFakeTimers();
+
     render(<App />);
 
     await act(async () => {
@@ -428,6 +429,7 @@ describe('App smoke coverage', () => {
 
   it('renders typed browser-agent run SDK state in History and Settings', async () => {
     vi.useFakeTimers();
+
     render(<App />);
 
     await act(async () => {
@@ -448,6 +450,123 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Structured event stream')).toBeInTheDocument();
     expect(screen.getByText('Reconnect cursor')).toBeInTheDocument();
     expect(screen.getByText('Archive and delete lifecycle')).toBeInTheDocument();
+  });
+
+  it('renders structured MCP elicitation fields and submits the full response payload', async () => {
+    vi.useFakeTimers();
+    const workspaceId = 'ws-research';
+    const sessionId = 'elicitation-session';
+    window.sessionStorage.setItem(STORAGE_KEYS.activeWorkspaceId, JSON.stringify(workspaceId));
+    window.localStorage.setItem(STORAGE_KEYS.workspaceRoot, JSON.stringify({
+      id: 'root',
+      name: 'Root',
+      type: 'root',
+      expanded: true,
+      children: [{
+        id: workspaceId,
+        name: 'Research',
+        type: 'workspace',
+        expanded: true,
+        activeMemory: true,
+        color: '#60a5fa',
+        children: [
+          { id: `${workspaceId}:category:browser`, name: 'Browser', type: 'folder', nodeKind: 'browser', expanded: true, children: [] },
+          {
+            id: `${workspaceId}:category:session`,
+            name: 'Sessions',
+            type: 'folder',
+            nodeKind: 'session',
+            expanded: true,
+            children: [{
+              id: sessionId,
+              name: 'Elicitation session',
+              type: 'tab',
+              nodeKind: 'session',
+              persisted: true,
+              filePath: `${workspaceId}:session:elicitation`,
+            }],
+          },
+          { id: `${workspaceId}:category:files`, name: 'Files', type: 'folder', nodeKind: 'files', expanded: false, children: [] },
+          { id: `${workspaceId}:clipboard`, name: 'Clipboard', type: 'tab', nodeKind: 'clipboard' },
+        ],
+      }],
+    }));
+    window.localStorage.setItem(STORAGE_KEYS.workspaceViewStateByWorkspace, JSON.stringify({
+      [workspaceId]: {
+        openTabIds: [],
+        editingFilePath: null,
+        dashboardOpen: true,
+        activeMode: 'agent',
+        activeSessionIds: [sessionId],
+        mountedSessionFsIds: [sessionId],
+        panelOrder: [`session:${sessionId}`],
+        activeArtifactPanel: null,
+      },
+    }));
+    window.localStorage.setItem(STORAGE_KEYS.chatMessagesBySession, JSON.stringify({
+      [sessionId]: [
+        {
+          id: `${sessionId}:system`,
+          role: 'system',
+          status: 'complete',
+          content: 'Agent Browser session ready.',
+        },
+        {
+          id: 'assistant-elicitation',
+          role: 'assistant',
+          status: 'complete',
+          content: '',
+          cards: [{
+            app: 'Elicitation',
+            kind: 'elicitation',
+            requestId: 'elicitation-structured',
+            prompt: 'Choose how the agent should continue.',
+            status: 'pending',
+            args: {},
+            fields: [
+              { id: 'notes', label: 'Notes', type: 'textarea', defaultValue: 'Prefer official docs' },
+              {
+                id: 'urgency',
+                label: 'Urgency',
+                type: 'select',
+                required: true,
+                defaultValue: 'soon',
+                options: [
+                  { label: 'Soon', value: 'soon' },
+                  { label: 'Later', value: 'later' },
+                ],
+              },
+              { id: 'notify', label: 'Notify me', type: 'checkbox', defaultValue: 'true' },
+              { id: 'count', label: 'Result count', type: 'number', defaultValue: '3' },
+            ],
+          }],
+        },
+      ],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByText('Choose how the agent should continue.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Notes')).toHaveValue('Prefer official docs');
+    expect(screen.getByRole('combobox', { name: 'Urgency' })).toHaveValue('soon');
+    expect(screen.getByRole('checkbox', { name: 'Notify me' })).toBeChecked();
+    expect(screen.getByRole('spinbutton', { name: 'Result count' })).toHaveValue(3);
+
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Prefer official docs and examples' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Urgency' }), { target: { value: 'later' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Notify me' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Result count' }), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit requested info' }));
+
+    expect(screen.getByText('User input received')).toBeInTheDocument();
+    expect(screen.getAllByText(/"notes": "Prefer official docs and examples"/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/"urgency": "later"/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/"notify": "false"/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/"count": "5"/).length).toBeGreaterThan(0);
   });
 
   it('shows built-in local inference readiness in Models', async () => {

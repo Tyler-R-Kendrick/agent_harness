@@ -1138,6 +1138,8 @@ function MemBar({ root }: { root: TreeNode }) {
   );
 }
 
+type McpElicitationField = NonNullable<NonNullable<ChatMessage['cards']>[number]['fields']>[number];
+
 function McpElicitationCard({
   messageId,
   card,
@@ -1149,7 +1151,7 @@ function McpElicitationCard({
 }) {
   const fields = card.fields ?? [];
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(
-    fields.map((field) => [field.id, card.response?.[field.id] ?? '']),
+    fields.map((field) => [field.id, card.response?.[field.id] ?? initialElicitationFieldValue(field)]),
   ));
   const requestId = card.requestId ?? `elicitation:${messageId}`;
   if (card.status === 'submitted') {
@@ -1171,22 +1173,97 @@ function McpElicitationCard({
       <span className="tool-call-label">User input needed</span>
       {card.prompt ? <p className="elicitation-prompt">{card.prompt}</p> : null}
       {fields.map((field) => (
-        <label key={field.id} className="elicitation-field">
-          <span>{field.label}</span>
-          <input
-            aria-label={field.label}
-            value={values[field.id] ?? ''}
-            placeholder={field.placeholder}
-            required={field.required}
-            onChange={(event) => setValues((current) => ({
-              ...current,
-              [field.id]: event.target.value,
-            }))}
-          />
-        </label>
+        <McpElicitationFieldControl
+          key={field.id}
+          field={field}
+          value={values[field.id] ?? ''}
+          onChange={(value) => setValues((current) => ({
+            ...current,
+            [field.id]: value,
+          }))}
+        />
       ))}
       <button type="submit" className="elicitation-submit">Submit requested info</button>
     </form>
+  );
+}
+
+function initialElicitationFieldValue(field: McpElicitationField): string {
+  if (field.defaultValue !== undefined) return field.defaultValue;
+  if (field.type === 'checkbox') return 'false';
+  return '';
+}
+
+function McpElicitationFieldControl({
+  field,
+  value,
+  onChange,
+}: {
+  field: McpElicitationField;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (field.type === 'textarea') {
+    return (
+      <label className="elicitation-field">
+        <span>{field.label}</span>
+        <textarea
+          aria-label={field.label}
+          value={value}
+          placeholder={field.placeholder}
+          required={field.required}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+    );
+  }
+
+  if (field.type === 'select') {
+    return (
+      <label className="elicitation-field">
+        <span>{field.label}</span>
+        <select
+          aria-label={field.label}
+          value={value}
+          required={field.required}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="" disabled>{field.placeholder ?? 'Select an option'}</option>
+          {(field.options ?? []).map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
+  if (field.type === 'checkbox') {
+    return (
+      <label className="elicitation-field elicitation-checkbox-field">
+        <input
+          aria-label={field.label}
+          type="checkbox"
+          checked={value === 'true'}
+          required={field.required}
+          onChange={(event) => onChange(event.target.checked ? 'true' : 'false')}
+        />
+        <span>{field.label}</span>
+      </label>
+    );
+  }
+
+  return (
+    <label className="elicitation-field">
+      <span>{field.label}</span>
+      <input
+        aria-label={field.label}
+        type={field.type === 'number' ? 'number' : 'text'}
+        value={value}
+        placeholder={field.placeholder}
+        required={field.required}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   );
 }
 
@@ -5256,15 +5333,16 @@ function ChatPanel({
   }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
-    const locationValue = values.location?.trim() || Object.values(values).find((value) => value.trim())?.trim() || '';
-    if (!locationValue) return;
+    const locationValue = values.location?.trim();
     const resumedCheckpoint = resumeLatestCheckpoint('delayed-input', `Submitted ${requestId}`);
-    upsertUserContextMemory(workspaceName, {
-      id: 'location',
-      label: 'Location',
-      value: locationValue,
-      source: 'workspace-memory',
-    });
+    if (locationValue) {
+      upsertUserContextMemory(workspaceName, {
+        id: 'location',
+        label: 'Location',
+        value: locationValue,
+        source: 'workspace-memory',
+      });
+    }
     setMessagesBySession((current) => {
       const sessionMessages = current[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
       const nextMessages = sessionMessages.map((message) => (
@@ -5282,7 +5360,10 @@ function ChatPanel({
       messagesRef.current = nextMessages;
       return { ...current, [activeChatSessionId]: nextMessages };
     });
-    void sendMessage(`Location: ${locationValue}`);
+    void sendMessage([
+      `User input for ${requestId}:`,
+      JSON.stringify(values, null, 2),
+    ].join('\n'));
   }, [activeChatSessionId, runCheckpointState, sendMessage, workspaceName]);
 
   const handleSecretSubmit = useCallback(async (

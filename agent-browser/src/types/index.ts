@@ -46,11 +46,17 @@ export interface McpCard {
   reason?: string;
   secretName?: string;
   secretRef?: string;
-  fields?: Array<{
+  fields?: ReadonlyArray<{
     id: string;
     label: string;
     required?: boolean;
     placeholder?: string;
+    type?: 'text' | 'textarea' | 'select' | 'checkbox' | 'number';
+    options?: ReadonlyArray<{
+      label: string;
+      value: string;
+    }>;
+    defaultValue?: string;
   }>;
   status?: 'pending' | 'submitted';
   response?: Record<string, string>;
