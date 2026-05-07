@@ -732,6 +732,26 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: sharedAgentsOutputPath, fullPage: true });
+    await page.getByRole('button', { name: 'Browser workflow skills' }).click();
+    await expect(page.getByText('Repeatable browser workflows')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('list', { name: 'Installable browser workflow skills' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('Visual review workflow').first()).toBeVisible({ timeout: shellTimeoutMs });
+    const visualReviewWorkflowCard = page
+      .getByRole('list', { name: 'Installable browser workflow skills' })
+      .getByRole('listitem')
+      .filter({ has: page.getByText('Visual review workflow', { exact: true }) });
+    const visualReviewInstallButton = visualReviewWorkflowCard.getByRole('button', { name: 'Install' });
+    await visualReviewInstallButton.scrollIntoViewIfNeeded();
+    await visualReviewInstallButton.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('list', { name: 'Installed browser workflow skills' }).getByText('browser-screenshot')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByRole('list', { name: 'Installed browser workflow skills' }).getByText('npm.cmd run visual:agent-browser')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await page.getByRole('button', { name: 'Partner agent control plane' }).click();
     await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });

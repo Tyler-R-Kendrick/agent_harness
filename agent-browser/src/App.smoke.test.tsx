@@ -421,6 +421,45 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Published Release coordinator v0.1.0 for team discovery')).toBeInTheDocument();
   });
 
+  it('installs browser workflow skills and suggests them while composing', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Browser workflow skills')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Browser workflow skills' }));
+    expect(screen.getByText('Repeatable browser workflows')).toBeInTheDocument();
+    expect(screen.getByText('Visual review workflow')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]);
+    });
+    expect(screen.getByText('browser-screenshot, browser-dom-snapshot, browser-viewport')).toBeInTheDocument();
+    expect(screen.getByText('npm.cmd run visual:agent-browser')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Workspaces'));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'New session widget' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /^Open Session/ })[0]);
+    });
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Chat input'), {
+        target: { value: 'please review this UI visually and capture screenshots' },
+      });
+    });
+
+    expect(screen.getByRole('list', { name: 'Suggested workflow skills' })).toBeInTheDocument();
+    expect(screen.getAllByText('Visual review workflow').length).toBeGreaterThan(0);
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
