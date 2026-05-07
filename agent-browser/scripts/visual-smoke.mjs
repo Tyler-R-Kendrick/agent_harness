@@ -42,6 +42,7 @@ const gitWorktreeViewportOutputPaths = [
     outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-wide.png'),
   },
 ];
+const multitaskOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-multitask-subagents-branch-isolation-visual-smoke.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -61,7 +62,7 @@ async function findFreePort() {
   });
 }
 
-async function waitForServer(url, childProcess, timeoutMs = 60_000) {
+async function waitForServer(url, childProcess, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (childProcess.exitCode !== null) {
@@ -704,6 +705,15 @@ async function main() {
       throw new Error('Agent canvas card id must render below the title without overlap.');
     }
     await page.screenshot({ path: agentCanvasesOutputPath, fullPage: true });
+    await page.getByRole('button', { name: 'Multitask', exact: true }).click();
+    const multitaskPanel = page.getByRole('region', { name: 'Multitask subagents' });
+    await expect(multitaskPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(multitaskPanel.getByText('Branch isolation')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(multitaskPanel.getByText('agent/research/frontend-1', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(multitaskPanel.getByRole('button', { name: 'Promote agent/research/tests-2' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: multitaskOutputPath, fullPage: true });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
@@ -712,6 +722,7 @@ async function main() {
     console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
     console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
+    console.log(`agent-browser multitask subagents smoke passed: ${multitaskOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {

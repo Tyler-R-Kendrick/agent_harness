@@ -39,6 +39,7 @@ export const STORAGE_KEYS = {
   runCheckpointState: 'agent-browser.run-checkpoint-state',
   workspaceSkillPolicyState: 'agent-browser.workspace-skill-policy-state',
   browserAgentRunSdkState: 'agent-browser.browser-agent-run-sdk-state',
+  multitaskSubagentState: 'agent-browser.multitask-subagent-state',
   partnerAgentControlPlaneSettings: 'agent-browser.partner-agent-control-plane-settings',
   runtimePluginSettings: 'agent-browser.runtime-plugin-settings',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
