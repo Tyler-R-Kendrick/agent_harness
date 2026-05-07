@@ -34,19 +34,19 @@ describe('virtualFilesystemTree', () => {
       },
       {
         marketplace: {
-          id: 'agent-harness.ext.design-md',
-          name: 'DESIGN.md design tokens',
+          id: 'agent-harness.ext.open-design',
+          name: 'OpenDesign DESIGN.md Studio',
           version: '0.1.0',
-          description: 'Loads design guidance.',
-          source: { type: 'local', path: './ide/design-md' },
+          description: 'Visual design system studio.',
+          source: { type: 'local', path: './ide/open-design' },
           metadata: { marketplaceCategory: 'ide' },
         },
         manifest: {
           schemaVersion: 1,
-          id: 'agent-harness.ext.design-md',
-          name: 'DESIGN.md design tokens',
+          id: 'agent-harness.ext.open-design',
+          name: 'OpenDesign DESIGN.md Studio',
           version: '0.1.0',
-          description: 'Loads design guidance.',
+          description: 'Visual design system studio.',
           entrypoint: { module: './src/index.ts' },
         },
       },
@@ -76,7 +76,7 @@ describe('virtualFilesystemTree', () => {
             name: 'ide',
             children: [
               expect.objectContaining({
-                name: 'DESIGN.md design tokens',
+                name: 'OpenDesign DESIGN.md Studio',
                 children: [
                   expect.objectContaining({ name: 'manifest.json', type: 'file' }),
                 ],

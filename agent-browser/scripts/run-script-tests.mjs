@@ -191,8 +191,8 @@ async function main() {
       extensionFile: path.join(
         repoRoot,
         'ext',
-        'daemon',
-        'local-inference-daemon',
+        'worker',
+        'local-inference-worker',
         'dist',
         'agent-harness-local-inference-daemon-windows-x64.exe',
       ),

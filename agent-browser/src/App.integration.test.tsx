@@ -394,7 +394,7 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
-  it('offers Symphony from the default repo marketplace instead of loading it as a primary panel', async () => {
+  it('offers Symphony as an installable IDE marketplace extension instead of loading it as a primary panel', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -406,7 +406,7 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
-    expect(within(marketplace).getByRole('heading', { name: 'Runtime extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'IDE extensions' })).toBeInTheDocument();
     expect(within(marketplace).getByText('Symphony workflow orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
@@ -431,35 +431,43 @@ describe('App', () => {
     expect(within(marketplace).getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();
     expect(within(marketplace).getByRole('heading', { name: 'IDE extensions' })).toBeInTheDocument();
     expect(within(marketplace).getByRole('heading', { name: 'Harness extensions' })).toBeInTheDocument();
-    expect(within(marketplace).getByRole('heading', { name: 'Daemon extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'Worker extensions' })).toBeInTheDocument();
     expect(within(marketplace).getByRole('heading', { name: 'Provider extensions' })).toBeInTheDocument();
-    expect(within(marketplace).getByRole('heading', { name: 'Runtime extensions' })).toBeInTheDocument();
+    expect(within(marketplace).queryByRole('heading', { name: 'Runtime extensions' })).not.toBeInTheDocument();
     expect(within(marketplace).getByText('Agent skills')).toBeInTheDocument();
     expect(within(marketplace).getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
-    expect(within(marketplace).getByText('DESIGN.md design tokens')).toBeInTheDocument();
+    expect(within(marketplace).getByText('DESIGN.md agent guidance')).toBeInTheDocument();
+    expect(within(marketplace).getByText('OpenDesign DESIGN.md Studio')).toBeInTheDocument();
     expect(within(marketplace).getByText('Symphony workflow orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Workflow canvas orchestration')).toBeInTheDocument();
-    expect(within(marketplace).getByText('Artifacts')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Artifact context')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Artifact worktree explorer')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Hugging Face Browser Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('GitHub Copilot Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Cursor Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Codex Models')).toBeInTheDocument();
-    expect(within(marketplace).getByText('Codi Browser Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('OpenAI Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Azure AI Inference Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('AWS Bedrock Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Anthropic Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('xAI Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Model Connector')).toBeInTheDocument();
-    expect(within(marketplace).getByText('Local Inference Daemon')).toBeInTheDocument();
-    expect(within(marketplace).getByText('12 extensions')).toBeInTheDocument();
-    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(10);
+    expect(within(marketplace).getByText('Local Inference Worker')).toBeInTheDocument();
+    expect(within(marketplace).getByText('19 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(14);
+    expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',
       '/downloads/local-model-connector-extension.zip',
     );
-    expect(within(marketplace).getByRole('link', { name: 'Download Local Inference Daemon for Portable Deno source' })).toHaveAttribute(
+    expect(within(marketplace).getByRole('link', { name: 'Download Local Inference Worker for Portable Deno source' })).toHaveAttribute(
       'href',
       '/downloads/agent-harness-local-inference-daemon.zip',
     );
     expect(within(marketplace).queryByText('uBlock Origin')).not.toBeInTheDocument();
   });
 
-  it('offers the portable daemon bundle when browser architecture reports ARM Windows', async () => {
+  it('offers the portable worker bundle when browser architecture reports ARM Windows', async () => {
     vi.useFakeTimers();
     Object.defineProperty(window.navigator, 'userAgentData', {
       configurable: true,
@@ -479,7 +487,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('link', { name: 'Download Local Inference Daemon for Portable Deno source' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Download Local Inference Worker for Portable Deno source' })).toHaveAttribute(
       'href',
       '/downloads/agent-harness-local-inference-daemon.zip',
     );
@@ -494,19 +502,22 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifacts' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact context' }));
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(within(installedSidebar).getAllByText('1 installed')).toHaveLength(2);
-    expect(within(installedSidebar).getByText('Artifacts')).toBeInTheDocument();
-    expect(within(marketplace).getByRole('button', { name: 'Artifacts installed' })).toBeDisabled();
-    expect(window.localStorage.getItem('agent-browser.installed-default-extension-ids')).toContain('agent-harness.ext.artifacts');
+    expect(within(installedSidebar).getByText('Artifact context')).toBeInTheDocument();
+    expect(within(installedSidebar).queryByText(/^Installed$/)).not.toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Disable Artifact context' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Configure Artifact context' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Uninstall Artifact context' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('agent-browser.installed-default-extension-ids')).toContain('agent-harness.ext.artifacts-context');
   });
 
-  it('renders installed IDE extensions as activity-bar icons', async () => {
+  it('renders installed enabled IDE extensions as activity-bar icons', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -515,13 +526,24 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install DESIGN.md design tokens' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.getByRole('button', { name: 'DESIGN.md design tokens extension' })).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Installed extensions' })).getByText('DESIGN.md design tokens')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Installed extensions' })).getByText('OpenDesign DESIGN.md Studio')).toBeInTheDocument();
+
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Disable OpenDesign DESIGN.md Studio' }));
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.queryByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' })).not.toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Enable OpenDesign DESIGN.md Studio' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('agent-browser.default-extension-openfeature-flags')).toContain(
+      'agent-harness.extensions.agent-harness.ext.open-design.enabled',
+    );
   });
 
   it('lists provider extensions from the account menu with local provider configuration', async () => {
@@ -539,6 +561,8 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Provider extensions' })).toBeInTheDocument();
     expect(screen.getAllByText('Local Model Connector').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('OpenAI Models').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Local model provider')).toBeInTheDocument();
   });
 
@@ -2862,7 +2886,7 @@ styles:
     await disableAllTools();
     fireEvent.click(screen.getByLabelText('Workspaces'));
     openDefaultSession();
-    disableAllTools();
+    await disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Write a long answer.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -2872,10 +2896,11 @@ styles:
 
     expect(screen.getByRole('button', { name: 'Stop response' })).toBeInTheDocument();
     expect(screen.getByText('Partial draft')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Stop response' }));
+    expect(activeSignal?.aborted).toBe(false);
 
     await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Stop response' }));
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -3169,7 +3194,7 @@ styles:
     openDefaultSession();
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Agent provider' }), { target: { value: 'codex' } });
-    disableAllTools();
+    await disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Summarize the current workspace.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -5122,6 +5147,9 @@ styles:
     expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '6', altKey: true });
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '7', altKey: true });
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });

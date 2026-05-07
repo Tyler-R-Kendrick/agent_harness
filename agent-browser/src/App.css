@@ -3902,6 +3902,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .marketplace-panel {
   padding: 16px;
   gap: 14px;
+  height: 100%;
+  max-height: 100dvh;
+  overflow-y: auto;
 }
 .marketplace-topbar {
   align-items: flex-start;
@@ -3985,6 +3988,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 8px 10px;
   border-bottom: 1px solid var(--panel-border);
 }
+.marketplace-card--unavailable,
+.provider-card--unavailable {
+  opacity: .54;
+  filter: grayscale(.35);
+}
+.marketplace-card--disabled {
+  opacity: .68;
+}
 .marketplace-card:hover {
   background: rgba(255,255,255,.04);
 }
@@ -4034,6 +4045,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .marketplace-action {
   align-self: center;
+}
+.marketplace-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: max-content;
 }
 .marketplace-download-link {
   text-decoration: none;
@@ -5050,9 +5068,13 @@ kbd {
   }
 
   .marketplace-install-button,
+  .marketplace-actions,
   .install-model-btn {
     width: 100%;
     min-height: 44px;
+  }
+  .marketplace-actions {
+    justify-content: stretch;
   }
 }
 

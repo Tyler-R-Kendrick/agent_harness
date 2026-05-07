@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.open-design",
+  "name": "OpenDesign DESIGN.md Studio",
+  "version": "0.1.0",
+  "description": "Provides an IDE design-system surface inspired by OpenDesign for visually composing systems that emit DESIGN.md files.",
+  "activationEvents": ["onCommand:opendesign.open"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createOpenDesignPlugin"
+  },
+  "metadata": {
+    "standards": [
+      {
+        "name": "OpenDesign",
+        "url": "https://open-design.ai/"
+      },
+      {
+        "name": "Design Tokens Community Group Format Module",
+        "url": "https://tr.designtokens.org/format/"
+      }
+    ],
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.open-design.enabled"
+  },
+  "capabilities": [
+    {
+      "kind": "renderer",
+      "id": "open-design.studio",
+      "description": "Renders a visual design-system studio for DESIGN.md files."
+    },
+    {
+      "kind": "pane-item",
+      "id": "open-design.studio-pane",
+      "description": "Adds the OpenDesign studio pane item when DESIGN.md is selected."
+    },
+    {
+      "kind": "command",
+      "id": "open-design.export-design-md",
+      "description": "Exports visual design-system state to DESIGN.md."
+    }
+  ],
+  "renderers": [
+    {
+      "id": "open-design.studio",
+      "label": "OpenDesign Studio",
+      "description": "Interactive DESIGN.md design-system renderer and review workspace.",
+      "target": {
+        "kind": "file",
+        "fileNames": ["DESIGN.md"],
+        "mimeTypes": ["text/markdown"]
+      },
+      "component": {
+        "module": "./src/index.ts",
+        "export": "OpenDesignStudio"
+      },
+      "paneItem": {
+        "id": "open-design.studio-pane",
+        "label": "OpenDesign",
+        "description": "Open DESIGN.md in the OpenDesign studio pane.",
+        "rendererId": "open-design.studio",
+        "preferredLocation": "side",
+        "when": {
+          "kind": "file",
+          "fileNames": ["DESIGN.md"]
+        },
+        "component": {
+          "module": "./src/index.ts",
+          "export": "OpenDesignStudio"
+        }
+      }
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read-write",
+      "reason": "Reads and writes DESIGN.md when the user exports visual design-system changes."
+    }
+  ],
+  "compatibility": {
+    "agentBrowser": "^0.1.0",
+    "harnessCore": "^0.1.0"
+  }
+}

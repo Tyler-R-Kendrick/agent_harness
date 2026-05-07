@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.aws-bedrock-model-provider",
+  "name": "AWS Bedrock Models",
+  "version": "0.1.0",
+  "description": "Lists the AWS Bedrock provider extension surface for future first-class account configuration.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createAwsBedrockModelProviderPlugin"
+  },
+  "metadata": {
+    "availability": {
+      "state": "unavailable",
+      "reason": "Provider adapter is listed for marketplace planning but is not bundled in this runtime yet."
+    },
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.aws-bedrock-model-provider.enabled"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "aws-bedrock",
+        "label": "AWS Bedrock",
+        "kind": "openai-compatible",
+        "providerIds": ["aws-bedrock"],
+        "description": "Future AWS Bedrock model-provider configuration."
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "aws-bedrock",
+      "description": "AWS Bedrock language models."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

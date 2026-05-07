@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.design-md-context",
+  "name": "DESIGN.md agent guidance",
+  "version": "0.1.0",
+  "description": "Loads selected DESIGN.md files into agent loops as design guidance, DTCG-aligned design tokens, and code-substitution context.",
+  "activationEvents": ["onWorkspaceFile:DESIGN.md"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createDesignMdPlugin"
+  },
+  "metadata": {
+    "standards": [
+      {
+        "name": "Design Tokens Community Group Format Module",
+        "url": "https://tr.designtokens.org/format/"
+      },
+      {
+        "name": "OpenFeature",
+        "url": "https://openfeature.dev/specification/"
+      }
+    ],
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.design-md-context.enabled"
+  },
+  "capabilities": [
+    {
+      "kind": "hook",
+      "id": "design-md",
+      "description": "Adds design guidance only when semantic design cues match."
+    },
+    {
+      "kind": "tool",
+      "id": "design-md.apply",
+      "description": "Applies DESIGN.md tokens through plugin-selected providers."
+    },
+    {
+      "kind": "setting",
+      "id": "design-md.context",
+      "description": "Controls when DESIGN.md guidance enters agent context."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read-write",
+      "reason": "Reads DESIGN.md assets and can emit transformed target content through an explicit tool."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}

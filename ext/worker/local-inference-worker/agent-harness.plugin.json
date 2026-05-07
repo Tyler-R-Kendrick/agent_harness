@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "agent-harness.ext.local-inference-daemon",
-  "name": "Local Inference Daemon",
+  "name": "Local Inference Worker",
   "version": "0.1.0",
-  "description": "Downloadable Deno background service for WebRTC or WebSocket access to loopback OpenAI-compatible local inference endpoints.",
+  "description": "Downloadable Deno background worker for WebRTC or WebSocket access to loopback OpenAI-compatible local inference endpoints.",
   "entrypoint": {
     "module": "./src/index.ts",
     "export": "createLocalInferenceDaemonPlugin"
@@ -12,7 +12,7 @@
     {
       "kind": "asset",
       "id": "local-inference-daemon-service",
-      "description": "Installable Deno service package for Windows, Linux, and macOS local inference."
+      "description": "Installable Deno worker package for Windows, Linux, and macOS local inference."
     },
     {
       "kind": "model-provider",
@@ -24,17 +24,17 @@
     {
       "kind": "runtime",
       "path": "./dist/agent-harness-local-inference-daemon.zip",
-      "description": "Zipped Deno daemon source, compile tasks, and service installer."
+      "description": "Zipped Deno worker source, compile tasks, and service installer."
     },
     {
       "kind": "runtime",
       "path": "./dist/agent-harness-local-inference-daemon-windows-x64.exe",
-      "description": "Windows x64 daemon executable built by CI/CD."
+      "description": "Windows x64 worker executable built by CI/CD."
     },
     {
       "kind": "documentation",
       "path": "./README.md",
-      "description": "Daemon setup, compile, and service installation instructions."
+      "description": "Worker setup, compile, and service installation instructions."
     }
   ],
   "permissions": [
@@ -46,7 +46,7 @@
     {
       "scope": "storage",
       "access": "read",
-      "reason": "Reads daemon configuration from environment variables."
+      "reason": "Reads worker configuration from environment variables."
     }
   ],
   "compatibility": {

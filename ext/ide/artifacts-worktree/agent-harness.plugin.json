@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.artifacts-worktree",
+  "name": "Artifact worktree explorer",
+  "version": "0.1.0",
+  "description": "Mounts artifacts as a worktree node so artifact bundles can be browsed alongside Browser, Files, and Sessions.",
+  "activationEvents": ["onView:workspace-tree"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createArtifactWorktreePlugin"
+  },
+  "metadata": {
+    "driveName": "//artifacts",
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.artifacts-worktree.enabled"
+  },
+  "capabilities": [
+    {
+      "kind": "renderer",
+      "id": "artifacts.worktree",
+      "description": "Renders artifact bundles in the workspace tree."
+    },
+    {
+      "kind": "pane-item",
+      "id": "artifacts.worktree-pane",
+      "description": "Adds an artifact worktree browser pane."
+    }
+  ],
+  "renderers": [
+    {
+      "id": "artifacts.worktree",
+      "label": "Artifact worktree",
+      "description": "Renders Agent Harness artifact bundles as worktree nodes.",
+      "target": {
+        "kind": "workspace-item",
+        "workspaceItemTypes": ["artifact"]
+      },
+      "component": {
+        "module": "./src/index.ts",
+        "export": "ArtifactWorktreeRenderer"
+      }
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read",
+      "reason": "Reads stored artifact bundles for tree rendering."
+    }
+  ],
+  "compatibility": {
+    "agentBrowser": "^0.1.0",
+    "harnessCore": "^0.1.0"
+  }
+}

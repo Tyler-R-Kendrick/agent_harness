@@ -322,21 +322,27 @@ async function main() {
     await expect(installedExtensions.getByText('0 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('12 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('19 extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'Harness extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByRole('heading', { name: 'Daemon extensions' })).toBeVisible({
+    await expect(marketplace.getByRole('heading', { name: 'Worker extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByRole('heading', { name: 'Provider extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByRole('heading', { name: 'Runtime extensions' })).toBeVisible({
+    await expect(marketplace.getByText('Symphony workflow orchestration').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByText('Symphony workflow orchestration').first()).toBeVisible({
+    await expect(marketplace.getByText('OpenDesign DESIGN.md Studio').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByText('Artifact worktree explorer').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByText('Unavailable on this runtime').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({

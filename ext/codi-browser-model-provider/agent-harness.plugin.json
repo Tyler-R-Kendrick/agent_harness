@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "agent-harness.ext.codi-browser-model-provider",
-  "name": "Codi Browser Models",
+  "id": "agent-harness.ext.huggingface-model-provider",
+  "name": "Hugging Face Browser Models",
   "version": "0.1.0",
-  "description": "Adds browser-runnable Transformers.js and ONNX models as an installable local model-provider extension.",
+  "description": "Adds Hugging Face Transformers.js and ONNX browser-runnable models as an installable local model-provider extension.",
   "activationEvents": ["onModelProvider:codi"],
   "entrypoint": {
     "module": "./src/index.ts",
@@ -13,7 +13,7 @@
     "modelProviders": [
       {
         "id": "codi",
-        "label": "Codi",
+        "label": "Hugging Face Browser",
         "kind": "browser-local",
         "providerIds": ["codi"],
         "description": "Uses browser inference for installed Hugging Face Transformers.js-compatible local models.",

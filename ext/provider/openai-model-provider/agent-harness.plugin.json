@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.openai-model-provider",
+  "name": "OpenAI Models",
+  "version": "0.1.0",
+  "description": "Lists the OpenAI provider extension surface for future first-class account configuration.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createOpenAiModelProviderPlugin"
+  },
+  "metadata": {
+    "availability": {
+      "state": "unavailable",
+      "reason": "Provider adapter is listed for marketplace planning but is not bundled in this runtime yet."
+    },
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.openai-model-provider.enabled"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "openai",
+        "label": "OpenAI",
+        "kind": "openai-compatible",
+        "providerIds": ["openai"],
+        "description": "Future first-class OpenAI account provider configuration."
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "openai",
+      "description": "OpenAI language models."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

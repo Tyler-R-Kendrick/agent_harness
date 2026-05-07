@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.azure-inference-model-provider",
+  "name": "Azure AI Inference Models",
+  "version": "0.1.0",
+  "description": "Lists the Azure AI Inference provider extension surface for future first-class account configuration.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createAzureInferenceModelProviderPlugin"
+  },
+  "metadata": {
+    "availability": {
+      "state": "unavailable",
+      "reason": "Provider adapter is listed for marketplace planning but is not bundled in this runtime yet."
+    },
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.azure-inference-model-provider.enabled"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "azure-inference",
+        "label": "Azure AI Inference",
+        "kind": "openai-compatible",
+        "providerIds": ["azure-inference"],
+        "description": "Future Azure AI Inference model-provider configuration."
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "azure-inference",
+      "description": "Azure AI Inference language models."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

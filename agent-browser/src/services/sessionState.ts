@@ -40,6 +40,8 @@ export const STORAGE_KEYS = {
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
   installedDefaultExtensionIds: 'agent-browser.installed-default-extension-ids',
+  defaultExtensionOpenFeatureFlags: 'agent-browser.default-extension-openfeature-flags',
+  defaultExtensionConfigurationById: 'agent-browser.default-extension-configuration-by-id',
   // sessionStorage — per-tab, refresh-only
   selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
   selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',
@@ -214,6 +216,17 @@ export function isStringRecord(value: unknown): value is Record<string, string> 
     isRecord(value)
     && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'string')
   );
+}
+
+export function isBooleanRecord(value: unknown): value is Record<string, boolean> {
+  return (
+    isRecord(value)
+    && Object.values(value as Record<string, unknown>).every((entry) => typeof entry === 'boolean')
+  );
+}
+
+export function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && Object.values(value).every(isJsonValue);
 }
 
 export function isStringArrayRecord(value: unknown): value is Record<string, string[]> {
