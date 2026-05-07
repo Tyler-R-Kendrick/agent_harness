@@ -16,6 +16,7 @@ const outputPath = path.resolve(
 );
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
+const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -358,10 +359,24 @@ async function main() {
     await expect(reviewPanel).toContainText('Review risks', { timeout: shellTimeoutMs });
     await expect(reviewPanel).toContainText('Validation evidence', { timeout: shellTimeoutMs });
     await expect(reviewPanel).toContainText('Reviewer follow-up', { timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Wiki', exact: true }).click();
+    const repoWikiPanel = page.getByRole('region', { name: 'Repository wiki', exact: true });
+    await expect(repoWikiPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiPanel.getByText('Repo map').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiPanel.getByText('Architecture views')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiPanel.getByText('Onboarding')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiPanel.getByLabel('Repo map contents').getByText('wiki:ws-research:workspace-map')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiPanel.getByRole('button', { name: 'Refresh wiki' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: repoWikiOutputPath, fullPage: true });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
+    console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {

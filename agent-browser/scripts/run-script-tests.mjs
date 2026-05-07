@@ -61,6 +61,9 @@ async function main() {
   assert.match(visualSmokeScript, /\*\*\/api\/cursor\/status/);
   assert.match(visualSmokeScript, /PR review understanding/);
   assert.match(visualSmokeScript, /TK-47 review-native PR understanding/);
+  assert.match(visualSmokeScript, /Repository wiki/);
+  assert.match(visualSmokeScript, /agent-browser-repository-wiki\.png/);
+  assert.match(visualSmokeScript, /wiki:ws-research:workspace-map/);
   assert.match(visualSmokeScript, /Adversary tool review/);
   assert.match(visualSmokeScript, /Enable adversary tool-call review/);
   assert.match(visualSmokeScript, /Partner agent control plane/);

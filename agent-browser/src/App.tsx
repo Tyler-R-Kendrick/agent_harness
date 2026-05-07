@@ -318,6 +318,13 @@ import {
   createSamplePullRequestReviewInput,
 } from './services/prReviewUnderstanding';
 import {
+  buildRepoWikiPromptContext,
+  buildRepoWikiSnapshot,
+  isRepoWikiSnapshotsByWorkspace,
+  type RepoWikiCitation,
+  type RepoWikiSnapshot,
+} from './services/repoWiki';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -396,7 +403,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'review' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -558,6 +565,7 @@ const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Workspaces'],
   ['review', 'gitPullRequest', 'Review'],
+  ['wiki', 'bookmark', 'Wiki'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
   ['models', 'cpu', 'Models'],
@@ -566,10 +574,11 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'models', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Workspaces', icon: 'layers' },
   review: { label: 'Review', icon: 'gitPullRequest' },
+  wiki: { label: 'Wiki', icon: 'bookmark' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
   models: { label: 'Models', icon: 'cpu' },
@@ -645,6 +654,7 @@ const icons = {
   bell: Bell,
   bellOff: BellOff,
   layers: Layers3,
+  bookmark: Bookmark,
   messageSquare: MessageSquare,
   clock: History,
   puzzle: Puzzle,
@@ -2032,6 +2042,7 @@ function ChatPanel({
   workspaceFiles,
   sessionSettingsContent,
   artifactPromptContext,
+  repoWikiPromptContext,
   attachedArtifactCount,
   workspaceCapabilities,
   defaultExtensions,
@@ -2074,6 +2085,7 @@ function ChatPanel({
   workspaceFiles: WorkspaceFile[];
   sessionSettingsContent?: string | null;
   artifactPromptContext?: string;
+  repoWikiPromptContext?: string;
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
   defaultExtensions: DefaultExtensionRuntime | null;
@@ -2221,10 +2233,11 @@ function ChatPanel({
         content: sessionSettingsContent ?? DEFAULT_SETTINGS_JSON,
       }] : []),
       artifactPromptContext,
+      repoWikiPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, locationPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
+    [activeSessionId, artifactPromptContext, locationPromptContext, repoWikiPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -7137,6 +7150,123 @@ function SettingsPanel({
   );
 }
 
+function formatWikiRefreshTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function RepoWikiPanel({
+  snapshot,
+  onRefresh,
+  onCopyCitation,
+}: {
+  snapshot: RepoWikiSnapshot;
+  onRefresh: () => void;
+  onCopyCitation: (citation: RepoWikiCitation) => void | Promise<void>;
+}) {
+  return (
+    <section className="panel-scroll repo-wiki-panel" role="region" aria-label="Repository wiki">
+      <div className="panel-topbar repo-wiki-topbar">
+        <div className="settings-heading">
+          <h2>Repository wiki</h2>
+          <p className="muted">{snapshot.workspaceName} · refreshed {formatWikiRefreshTime(snapshot.refreshedAt)}</p>
+        </div>
+        <button type="button" className="toolbar-button" aria-label="Refresh wiki" onClick={onRefresh}>
+          <Icon name="refresh" size={13} />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <section className="repo-wiki-summary" aria-label="Wiki source coverage">
+        <strong>{snapshot.summary}</strong>
+        <div className="repo-wiki-metrics">
+          <span>{snapshot.sourceCoverage.workspaceFileCount} files</span>
+          <span>{snapshot.sourceCoverage.browserPageCount} pages</span>
+          <span>{snapshot.sourceCoverage.sessionCount} sessions</span>
+          <span>{snapshot.sourceCoverage.pluginCount} plugins</span>
+        </div>
+      </section>
+
+      <SidebarSection title="Repo map" summary={`${snapshot.sections.length} sections`} scrollBody>
+        <div className="repo-wiki-section-list">
+          {snapshot.sections.map((section) => (
+            <article className="repo-wiki-card" key={section.id}>
+              <div className="repo-wiki-card-header">
+                <strong>{section.title}</strong>
+                <code>wiki:{snapshot.workspaceId}:{section.id}</code>
+              </div>
+              <p>{section.summary}</p>
+              <ul>
+                {section.facts.map((fact) => <li key={fact}>{fact}</li>)}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
+
+      <SidebarSection title="Architecture views" summary={`${snapshot.diagrams.length} view${snapshot.diagrams.length === 1 ? '' : 's'}`}>
+        <div className="repo-wiki-diagram-list">
+          {snapshot.diagrams.map((diagram) => (
+            <article className="repo-wiki-card repo-wiki-diagram" key={diagram.id}>
+              <strong>{diagram.title}</strong>
+              <div className="repo-wiki-node-row">
+                {diagram.nodes.map((node) => <span key={node}>{node}</span>)}
+              </div>
+              <ul>
+                {diagram.edges.map((edge) => (
+                  <li key={`${edge.from}:${edge.to}:${edge.label}`}>
+                    <code>{edge.from}</code>
+                    <span>{edge.label}</span>
+                    <code>{edge.to}</code>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
+
+      <SidebarSection title="Onboarding" summary={`${snapshot.onboarding.length} steps`}>
+        <div className="repo-wiki-onboarding-list">
+          {snapshot.onboarding.map((step) => (
+            <article className="repo-wiki-card" key={step.citationId}>
+              <strong>{step.title}</strong>
+              <p>{step.detail}</p>
+              <code>{step.citationId}</code>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
+
+      <SidebarSection title="Citations" summary={`${snapshot.citations.length} handles`}>
+        <div className="repo-wiki-citation-list">
+          {snapshot.citations.map((citation) => (
+            <button
+              type="button"
+              className="repo-wiki-citation"
+              key={citation.id}
+              aria-label={`Copy ${citation.id}`}
+              onClick={() => void onCopyCitation(citation)}
+            >
+              <Icon name="clipboard" size={13} />
+              <span>
+                <code>{citation.id}</code>
+                <small>{citation.sourcePaths.length} sources</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      </SidebarSection>
+    </section>
+  );
+}
+
 function HistoryPanel({ scheduledAutomationState }: { scheduledAutomationState: ScheduledAutomationState }) {
   const now = new Date('2026-05-06T18:00:00.000Z');
   const dueAutomations = projectDueScheduledAutomations({ state: scheduledAutomationState, now });
@@ -8759,7 +8889,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'history', 'extensions', 'models', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'history', 'extensions', 'models', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -8831,6 +8961,12 @@ function AgentBrowserApp() {
     localStorageBackend,
     STORAGE_KEYS.defaultExtensionConfigurationById,
     isJsonRecord,
+    {},
+  );
+  const [repoWikiSnapshotsByWorkspace, setRepoWikiSnapshotsByWorkspace] = useStoredState<Record<string, RepoWikiSnapshot>>(
+    localStorageBackend,
+    STORAGE_KEYS.repoWikiSnapshotsByWorkspace,
+    isRepoWikiSnapshotsByWorkspace,
     {},
   );
   const [benchmarkRoutingSettings, setBenchmarkRoutingSettings] = useStoredState(
@@ -9167,6 +9303,19 @@ function AgentBrowserApp() {
     ? activeArtifactPanelArtifact.files.find((file) => file.path === activeArtifactPanelSelection?.filePath) ?? activeArtifactPanelArtifact.files[0] ?? null
     : null;
   const activeWorkspaceCapabilities = useMemo(() => discoverWorkspaceCapabilities(activeWorkspaceFiles), [activeWorkspaceFiles]);
+  const derivedRepoWikiSnapshot = useMemo(
+    () => buildRepoWikiSnapshot({
+      workspace: activeWorkspace,
+      files: activeWorkspaceFiles,
+      artifactTitles: activeArtifacts.map((artifact) => artifact.title),
+    }),
+    [activeArtifacts, activeWorkspace, activeWorkspaceFiles],
+  );
+  const activeRepoWikiSnapshot = repoWikiSnapshotsByWorkspace[activeWorkspaceId] ?? derivedRepoWikiSnapshot;
+  const activeRepoWikiPromptContext = useMemo(
+    () => buildRepoWikiPromptContext(activeRepoWikiSnapshot),
+    [activeRepoWikiSnapshot],
+  );
   const [defaultExtensionRuntime, setDefaultExtensionRuntime] = useState<DefaultExtensionRuntime | null>(null);
   const enabledDefaultExtensionIds = useMemo(
     () => resolveEnabledDefaultExtensionIds(installedDefaultExtensionIds, defaultExtensionOpenFeatureFlags),
@@ -11887,6 +12036,28 @@ function AgentBrowserApp() {
     setToast({ msg: 'Review follow-up queued in the active session', type: 'info' });
   }, [activeSessionIds, activeWorkspaceId, addSessionToWorkspace, setToast, switchSidebarPanel]);
 
+  const refreshRepoWiki = useCallback(() => {
+    const snapshot = buildRepoWikiSnapshot({
+      workspace: activeWorkspace,
+      files: activeWorkspaceFiles,
+      artifactTitles: activeArtifacts.map((artifact) => artifact.title),
+    });
+    setRepoWikiSnapshotsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: snapshot,
+    }));
+    setToast({ msg: 'Repository wiki refreshed', type: 'success' });
+  }, [activeArtifacts, activeWorkspace, activeWorkspaceFiles, activeWorkspaceId, setRepoWikiSnapshotsByWorkspace, setToast]);
+
+  const copyRepoWikiCitation = useCallback(async (citation: RepoWikiCitation) => {
+    try {
+      await writeToClipboard(`${citation.id}\n${citation.snippet}`, `Wiki citation: ${citation.label}`);
+      setToast({ msg: 'Wiki citation copied', type: 'success' });
+    } catch {
+      setToast({ msg: 'Failed to copy wiki citation', type: 'error' });
+    }
+  }, [setToast]);
+
   useEffect(() => {
     if (!pendingReviewFollowUp) return;
     if (!sessionMcpControllersRef.current[pendingReviewFollowUp.sessionId]) return;
@@ -12547,6 +12718,15 @@ function AgentBrowserApp() {
         />
       );
     }
+    if (activePanel === 'wiki') {
+      return (
+        <RepoWikiPanel
+          snapshot={activeRepoWikiSnapshot}
+          onRefresh={refreshRepoWiki}
+          onCopyCitation={copyRepoWikiCitation}
+        />
+      );
+    }
     if (activePanel === 'history') return <HistoryPanel scheduledAutomationState={scheduledAutomationState} />;
     if (activePanel === 'extensions') return (
       <ExtensionsPanel
@@ -12851,6 +13031,7 @@ function AgentBrowserApp() {
                 workspaceFiles={activeWorkspaceFiles}
                 sessionSettingsContent={terminalFsFileContentsBySession[panel.id]?.[SESSION_WORKSPACE_SETTINGS_PATH] ?? null}
                 artifactPromptContext={buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? [])}
+                repoWikiPromptContext={activeRepoWikiPromptContext}
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
                 defaultExtensions={defaultExtensionRuntime}

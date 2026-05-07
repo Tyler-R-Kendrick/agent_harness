@@ -37,6 +37,7 @@ export const STORAGE_KEYS = {
   securityReviewAgentSettings: 'agent-browser.security-review-agent-settings',
   scheduledAutomationsState: 'agent-browser.scheduled-automations-state',
   partnerAgentControlPlaneSettings: 'agent-browser.partner-agent-control-plane-settings',
+  repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
   installedDefaultExtensionIds: 'agent-browser.installed-default-extension-ids',
