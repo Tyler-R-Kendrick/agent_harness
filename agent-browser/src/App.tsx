@@ -391,6 +391,15 @@ import {
   type MultitaskSubagentState,
 } from './services/multitaskSubagents';
 import {
+  DEFAULT_SHARED_AGENT_REGISTRY_STATE,
+  buildSharedAgentCatalog,
+  buildSharedAgentPromptContext,
+  isSharedAgentRegistryState,
+  publishSharedAgentDraft,
+  type SharedAgentCatalog,
+  type SharedAgentRegistryState,
+} from './services/sharedAgents';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -2213,6 +2222,7 @@ function ChatPanel({
   adversaryToolReviewSettings,
   securityReviewAgentSettings,
   workspaceSkillPolicyInventory,
+  sharedAgentCatalog,
   partnerAgentControlPlaneSettings,
   runtimePluginSettings,
   onPartnerAgentAuditEntry,
@@ -2264,6 +2274,7 @@ function ChatPanel({
   adversaryToolReviewSettings: AdversaryToolReviewSettings;
   securityReviewAgentSettings: SecurityReviewAgentSettings;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
+  sharedAgentCatalog: SharedAgentCatalog;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   runtimePluginSettings: RuntimePluginSettings;
   onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
@@ -2394,8 +2405,9 @@ function ChatPanel({
       multitaskPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
+      buildSharedAgentPromptContext(sharedAgentCatalog),
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, workspaceFiles],
+    [activeSessionId, artifactPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -3256,6 +3268,7 @@ function ChatPanel({
     const requestWorkspacePromptContext = [
       workspacePromptContext,
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
+      buildSharedAgentPromptContext(sharedAgentCatalog),
       buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
       buildSecurityReviewPromptContext(buildSecurityReviewRunPlan({
         settings: securityReviewAgentSettings,
@@ -5356,7 +5369,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -6320,6 +6333,127 @@ function WorkspaceSkillPolicySettingsPanel({
         {inventory.warnings.length ? (
           <ul className="workspace-skill-policy-warnings">
             {inventory.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+          </ul>
+        ) : null}
+      </div>
+    </SettingsSection>
+  );
+}
+
+function SharedAgentsSettingsPanel({
+  state,
+  catalog,
+  onChange,
+}: {
+  state: SharedAgentRegistryState;
+  catalog: SharedAgentCatalog;
+  onChange: (state: SharedAgentRegistryState) => void;
+}) {
+  const update = <K extends keyof SharedAgentRegistryState>(key: K, value: SharedAgentRegistryState[K]) => {
+    onChange({ ...state, [key]: value });
+  };
+  const publishDraft = (agentId: string) => {
+    onChange(publishSharedAgentDraft(state, agentId, 'Agent Browser'));
+  };
+
+  return (
+    <SettingsSection title="Shared agents" defaultOpen={false}>
+      <div className="shared-agent-settings">
+        <div className="partner-agent-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+              aria-label="Enable shared-agent registry"
+            />
+            <span>Enable shared-agent registry</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.requirePublishApproval}
+              onChange={(event) => update('requirePublishApproval', event.target.checked)}
+              aria-label="Require shared-agent publish approval"
+            />
+            <span>Require publish approval</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.showAuditTrail}
+              onChange={(event) => update('showAuditTrail', event.target.checked)}
+              aria-label="Show shared-agent audit trail"
+            />
+            <span>Show audit trail</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={state.trackUsageAnalytics}
+              onChange={(event) => update('trackUsageAnalytics', event.target.checked)}
+              aria-label="Track shared-agent usage analytics"
+            />
+            <span>Track usage analytics</span>
+          </label>
+        </div>
+
+        <article className="provider-card shared-agent-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Team registry</strong>
+              <p>{catalog.publishedAgentCount} published · {catalog.draftAgentCount} draft · {catalog.totalUsageCount} usage events</p>
+            </div>
+            <span className={`badge${catalog.enabled ? ' connected' : ''}`}>{catalog.enabled ? 'governed' : 'off'}</span>
+          </div>
+          <div className="shared-agent-metrics" aria-label="Shared-agent registry metrics">
+            <span>{catalog.auditVisible ? 'audit visible' : 'audit hidden'}</span>
+            <span>{catalog.usageAnalyticsEnabled ? 'usage tracked' : 'usage off'}</span>
+            <span>{catalog.requirePublishApproval ? 'approval required' : 'approval optional'}</span>
+          </div>
+          <p className="partner-agent-audit-note">
+            {catalog.latestAuditEntry?.summary ?? 'No shared-agent audit entries recorded yet.'}
+          </p>
+        </article>
+
+        <div className="shared-agent-list" role="list" aria-label="Shared workspace agents">
+          {catalog.rows.map((agent) => (
+            <article key={agent.id} className="provider-card shared-agent-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{agent.name}</strong>
+                  <p>{agent.description}</p>
+                </div>
+                <span className={`badge${agent.status === 'published' ? ' connected' : ''}`}>{agent.status}</span>
+              </div>
+              <div className="shared-agent-metrics">
+                <span>v{agent.version}</span>
+                <span>{agent.visibility}</span>
+                <span>{agent.usageCount} usage events</span>
+              </div>
+              <div className="workspace-skill-scope-grid">
+                <div>
+                  <span className="muted">Roles</span>
+                  <code>{agent.roleSummary}</code>
+                </div>
+                <div>
+                  <span className="muted">Tools</span>
+                  <code>{agent.toolScopeSummary}</code>
+                </div>
+              </div>
+              <p className="partner-agent-audit-note">Capabilities: {agent.capabilitySummary}</p>
+              {agent.status === 'draft' ? (
+                <button type="button" className="secondary-button" onClick={() => publishDraft(agent.id)}>
+                  Publish {agent.name} draft
+                </button>
+              ) : null}
+            </article>
+          ))}
+        </div>
+
+        {catalog.warnings.length ? (
+          <ul className="workspace-skill-policy-warnings">
+            {catalog.warnings.map((warning) => <li key={warning}>{warning}</li>)}
           </ul>
         ) : null}
       </div>
@@ -7331,6 +7465,8 @@ interface SettingsPanelProps {
   runCheckpointState: RunCheckpointState;
   workspaceSkillPolicyState: WorkspaceSkillPolicyState;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
+  sharedAgentRegistryState: SharedAgentRegistryState;
+  sharedAgentCatalog: SharedAgentCatalog;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
@@ -7343,6 +7479,7 @@ interface SettingsPanelProps {
   onScheduledAutomationStateChange: (state: ScheduledAutomationState) => void;
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
+  onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
@@ -7685,6 +7822,8 @@ function SettingsPanel({
   runCheckpointState,
   workspaceSkillPolicyState,
   workspaceSkillPolicyInventory,
+  sharedAgentRegistryState,
+  sharedAgentCatalog,
   browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
@@ -7697,6 +7836,7 @@ function SettingsPanel({
   onScheduledAutomationStateChange,
   onRunCheckpointStateChange,
   onWorkspaceSkillPolicyStateChange,
+  onSharedAgentRegistryStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   evaluationAgents,
@@ -7733,6 +7873,12 @@ function SettingsPanel({
         state={workspaceSkillPolicyState}
         inventory={workspaceSkillPolicyInventory}
         onChange={onWorkspaceSkillPolicyStateChange}
+      />
+
+      <SharedAgentsSettingsPanel
+        state={sharedAgentRegistryState}
+        catalog={sharedAgentCatalog}
+        onChange={onSharedAgentRegistryStateChange}
       />
 
       <PartnerAgentControlPlaneSettingsPanel
@@ -9953,6 +10099,12 @@ function AgentBrowserApp() {
     isWorkspaceSkillPolicyState,
     DEFAULT_WORKSPACE_SKILL_POLICY_STATE,
   );
+  const [sharedAgentRegistryState, setSharedAgentRegistryState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.sharedAgentRegistryState,
+    isSharedAgentRegistryState,
+    DEFAULT_SHARED_AGENT_REGISTRY_STATE,
+  );
   const [browserAgentRunSdkState] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.browserAgentRunSdkState,
@@ -10020,6 +10172,10 @@ function AgentBrowserApp() {
   const workspaceSkillPolicyInventory = useMemo(
     () => buildWorkspaceSkillPolicyInventory(workspaceSkillPolicyState),
     [workspaceSkillPolicyState],
+  );
+  const sharedAgentCatalog = useMemo(
+    () => buildSharedAgentCatalog(sharedAgentRegistryState),
+    [sharedAgentRegistryState],
   );
   const settingsPartnerAgentControlPlane = useMemo(() => {
     const selectedProvider = getDefaultAgentProvider({ installedModels, copilotState, cursorState });
@@ -13910,6 +14066,8 @@ function AgentBrowserApp() {
         runCheckpointState={runCheckpointState}
         workspaceSkillPolicyState={workspaceSkillPolicyState}
         workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
+        sharedAgentRegistryState={sharedAgentRegistryState}
+        sharedAgentCatalog={sharedAgentCatalog}
         browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
@@ -13922,6 +14080,7 @@ function AgentBrowserApp() {
         onScheduledAutomationStateChange={setScheduledAutomationState}
         onRunCheckpointStateChange={setRunCheckpointState}
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
+        onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         evaluationAgents={evaluationAgents}
@@ -14233,6 +14392,7 @@ function AgentBrowserApp() {
                 adversaryToolReviewSettings={adversaryToolReviewSettings}
                 securityReviewAgentSettings={securityReviewAgentSettings}
                 workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
+                sharedAgentCatalog={sharedAgentCatalog}
                 partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
                 runtimePluginSettings={runtimePluginSettings}
                 onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}
