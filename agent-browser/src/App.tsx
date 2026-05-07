@@ -113,6 +113,7 @@ import { SharedChatModal, type SharedChatApi } from './shared-chat/SharedChatMod
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
 import { fetchCodexState, type CodexModelSummary, type CodexRuntimeState } from './services/codexApi';
+import { fetchGitWorktreeDiff, fetchGitWorktreeStatus, type GitWorktreeDiffResponse, type GitWorktreeStatusResponse } from './services/gitWorktreeApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import {
   BENCHMARK_TASK_CLASSES,
@@ -384,6 +385,7 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
+import { GitWorktreePanel } from './features/worktree/GitWorktreePanel';
 import {
   applyHarnessElementPatch,
   buildHarnessPromptContextRows,
@@ -9032,6 +9034,11 @@ function AgentBrowserApp() {
   const [isCursorStateLoading, setIsCursorStateLoading] = useState(true);
   const [codexState, setCodexState] = useState<CodexRuntimeState>(EMPTY_CODEX_STATE);
   const [isCodexStateLoading, setIsCodexStateLoading] = useState(true);
+  const [gitWorktreeStatus, setGitWorktreeStatus] = useState<GitWorktreeStatusResponse | null>(null);
+  const [isGitWorktreeStatusLoading, setIsGitWorktreeStatusLoading] = useState(true);
+  const [selectedGitWorktreePath, setSelectedGitWorktreePath] = useState<string | null>(null);
+  const [gitWorktreeDiff, setGitWorktreeDiff] = useState<GitWorktreeDiffResponse | null>(null);
+  const [isGitWorktreeDiffLoading, setIsGitWorktreeDiffLoading] = useState(false);
   const benchmarkRoutingBaseCandidates = useMemo(
     () => buildBenchmarkRoutingCandidates({ copilotModels: copilotState.models, installedModels }),
     [copilotState.models, installedModels],
@@ -9660,6 +9667,36 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
+  const refreshGitWorktreeStatus = useCallback(async (showErrors = false) => {
+    setIsGitWorktreeStatusLoading(true);
+    try {
+      const state = await fetchGitWorktreeStatus();
+      setGitWorktreeStatus(state);
+      if (state.available) {
+        setSelectedGitWorktreePath((current) => (
+          current && state.files.some((file) => file.path === current)
+            ? current
+            : state.files[0]?.path ?? null
+        ));
+      } else {
+        setSelectedGitWorktreePath(null);
+        setGitWorktreeDiff(null);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (error instanceof Error && error.name === 'AbortError') return;
+      const message = error instanceof Error ? error.message : 'Failed to check git worktree status.';
+      setGitWorktreeStatus({ available: false, error: message });
+      setSelectedGitWorktreePath(null);
+      setGitWorktreeDiff(null);
+      if (showErrors) {
+        setToast({ msg: message, type: 'warning' });
+      }
+    } finally {
+      setIsGitWorktreeStatusLoading(false);
+    }
+  }, [setToast]);
+
   useEffect(() => {
     void refreshCursorState(false);
   }, [refreshCursorState]);
@@ -9667,6 +9704,37 @@ function AgentBrowserApp() {
   useEffect(() => {
     void refreshCodexState(false);
   }, [refreshCodexState]);
+
+  useEffect(() => {
+    void refreshGitWorktreeStatus(false);
+  }, [refreshGitWorktreeStatus]);
+
+  useEffect(() => {
+    if (!gitWorktreeStatus?.available || !selectedGitWorktreePath) {
+      setGitWorktreeDiff(null);
+      setIsGitWorktreeDiffLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsGitWorktreeDiffLoading(true);
+    void fetchGitWorktreeDiff(selectedGitWorktreePath, { signal: controller.signal })
+      .then((diff) => setGitWorktreeDiff(diff))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (error instanceof Error && error.name === 'AbortError') return;
+        setGitWorktreeDiff({
+          path: selectedGitWorktreePath,
+          patch: '',
+          source: 'none',
+          isBinary: false,
+        });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsGitWorktreeDiffLoading(false);
+      });
+    return () => controller.abort();
+  }, [gitWorktreeStatus, selectedGitWorktreePath]);
 
   useEffect(() => {
     if (!benchmarkRoutingSettings.enabled || benchmarkRoutingBaseCandidates.length === 0) return;
@@ -12937,39 +13005,49 @@ function AgentBrowserApp() {
           const renderPanel = (panel: Panel, dragHandleProps?: PanelDragHandleProps) => {
             if (panel.type === 'dashboard') {
               return (
-                <HarnessDashboardPanel
-                  key={panel.workspaceId}
-                  spec={activeHarnessSpec}
-                  workspaceName={activeWorkspace.name}
-                  sessions={activeDashboardSessions}
-                  browserPages={activeBrowserPages.map((page) => ({
-                    id: page.id,
-                    title: page.title,
-                    url: page.url,
-                  }))}
-                  files={activeWorkspaceFiles.map((file) => ({
-                    path: file.path,
-                    kind: detectWorkspaceFileKind(file.path) ?? undefined,
-                  }))}
-                  onCreateSessionWidget={() => addSessionToWorkspace(activeWorkspaceId, undefined, { open: false })}
-                  onOpenSession={(sessionId) => setWorkspaceViewStateByWorkspace((current) => {
-                    const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-                    return {
-                      ...current,
-                      [activeWorkspaceId]: {
-                        ...existing,
-                        activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
-                        mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
-                          ? existing.mountedSessionFsIds
-                          : [...existing.mountedSessionFsIds, sessionId],
-                      },
-                    };
-                  })}
-                  onPatchElement={patchActiveHarnessElement}
-                  onRegenerate={regenerateActiveHarnessSpec}
-                  onRestoreDefault={restoreActiveHarnessSpec}
-                  dragHandleProps={dragHandleProps}
-                />
+                <div key={panel.workspaceId} className="dashboard-stack">
+                  <GitWorktreePanel
+                    status={gitWorktreeStatus}
+                    diff={gitWorktreeDiff}
+                    selectedPath={selectedGitWorktreePath}
+                    isLoading={isGitWorktreeStatusLoading}
+                    isDiffLoading={isGitWorktreeDiffLoading}
+                    onRefresh={() => void refreshGitWorktreeStatus(true)}
+                    onSelectFile={setSelectedGitWorktreePath}
+                  />
+                  <HarnessDashboardPanel
+                    spec={activeHarnessSpec}
+                    workspaceName={activeWorkspace.name}
+                    sessions={activeDashboardSessions}
+                    browserPages={activeBrowserPages.map((page) => ({
+                      id: page.id,
+                      title: page.title,
+                      url: page.url,
+                    }))}
+                    files={activeWorkspaceFiles.map((file) => ({
+                      path: file.path,
+                      kind: detectWorkspaceFileKind(file.path) ?? undefined,
+                    }))}
+                    onCreateSessionWidget={() => addSessionToWorkspace(activeWorkspaceId, undefined, { open: false })}
+                    onOpenSession={(sessionId) => setWorkspaceViewStateByWorkspace((current) => {
+                      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+                      return {
+                        ...current,
+                        [activeWorkspaceId]: {
+                          ...existing,
+                          activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
+                          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
+                            ? existing.mountedSessionFsIds
+                            : [...existing.mountedSessionFsIds, sessionId],
+                        },
+                      };
+                    })}
+                    onPatchElement={patchActiveHarnessElement}
+                    onRegenerate={regenerateActiveHarnessSpec}
+                    onRestoreDefault={restoreActiveHarnessSpec}
+                    dragHandleProps={dragHandleProps}
+                  />
+                </div>
               );
             }
             if (panel.type === 'file') {

@@ -17,6 +17,7 @@ const outputPath = path.resolve(
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
+const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
 async function findFreePort() {
@@ -128,6 +129,67 @@ async function main() {
           models: [],
           signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
           signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
+        }),
+      });
+    });
+    await page.route('**/api/git-worktree/status', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          available: true,
+          cwd: repoRoot,
+          worktreeRoot: repoRoot,
+          branch: 'feature/worktree-ui',
+          head: 'abc1234',
+          upstream: 'origin/main',
+          ahead: 1,
+          behind: 0,
+          isClean: false,
+          files: [
+            {
+              path: 'agent-browser/src/App.tsx',
+              status: 'modified',
+              staged: false,
+              unstaged: true,
+              conflicted: false,
+            },
+            {
+              path: 'agent-browser/src/features/worktree/GitWorktreePanel.tsx',
+              status: 'added',
+              staged: true,
+              unstaged: false,
+              conflicted: false,
+            },
+          ],
+          summary: {
+            changed: 2,
+            staged: 1,
+            unstaged: 1,
+            untracked: 0,
+            conflicts: 0,
+          },
+        }),
+      });
+    });
+    await page.route('**/api/git-worktree/diff?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          path: 'agent-browser/src/App.tsx',
+          patch: [
+            'diff --git a/agent-browser/src/App.tsx b/agent-browser/src/App.tsx',
+            'index 1111111..2222222 100644',
+            '--- a/agent-browser/src/App.tsx',
+            '+++ b/agent-browser/src/App.tsx',
+            '@@ -1 +1 @@',
+            '-old dashboard',
+            '+new worktree dashboard',
+            '',
+          ].join('\n'),
+          source: 'unstaged',
+          isBinary: false,
         }),
       });
     });
@@ -255,6 +317,13 @@ async function main() {
     await expect(page).toHaveTitle('Agent Browser');
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
+    const gitWorktreeStatus = page.getByRole('region', { name: 'Git worktree status' });
+    await expect(gitWorktreeStatus).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(gitWorktreeStatus.getByText('feature/worktree-ui')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(gitWorktreeStatus.getByText('2 changed')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(gitWorktreeStatus.getByText('agent-browser/src/App.tsx').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Selected file diff')).toContainText('new worktree dashboard', { timeout: shellTimeoutMs });
+    await page.screenshot({ path: gitWorktreeOutputPath, fullPage: true });
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
@@ -377,6 +446,7 @@ async function main() {
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
+    console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {

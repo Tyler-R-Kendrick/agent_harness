@@ -51,6 +51,8 @@
     "@github/copilot-sdk": "^0.2.2",
     "@huggingface/transformers": "4.0.1",
     "@perplexity-ai/perplexity_ai": "^0.27.0",
+    "@pierre/diffs": "^1.1.20",
+    "@pierre/trees": "^1.0.0-beta.3",
     "@radix-ui/themes": "^3.3.0",
     "@tavily/core": "^0.7.3",
     "@webcontainer/api": "^1.6.4",
