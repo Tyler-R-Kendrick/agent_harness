@@ -209,6 +209,22 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Unified workflow')).toBeInTheDocument();
   });
 
+  it('renders reusable harness core status in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Harness core')).toBeInTheDocument();
+    expect(screen.getByText('Core active')).toBeInTheDocument();
+    expect(screen.getByText('thread lifecycle')).toBeInTheDocument();
+    expect(screen.getByText('event streaming')).toBeInTheDocument();
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
