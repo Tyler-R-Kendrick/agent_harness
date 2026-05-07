@@ -13,6 +13,7 @@ import { CURSOR_LABEL, hasCursorAccess, resolveCursorModelId, streamCursorAgentC
 import { isPlannerTaskText, PLANNER_LABEL, streamPlannerChat } from './Planner';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import { isSecurityReviewTaskText, SECURITY_REVIEW_LABEL, streamSecurityReviewChat } from './Security';
+import { isSteeringTaskText, STEERING_LABEL, streamSteeringChat } from './Steering';
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
@@ -37,6 +38,14 @@ export {
   isSecurityReviewTaskText,
   streamSecurityReviewChat,
 } from './Security';
+export {
+  STEERING_LABEL,
+  buildSteeringOperatingInstructions,
+  buildSteeringSystemPrompt,
+  buildSteeringToolInstructions,
+  isSteeringTaskText,
+  streamSteeringChat,
+} from './Steering';
 export {
   TOUR_GUIDE_AGENT_ID,
   TOUR_GUIDE_LABEL,
@@ -293,6 +302,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'steering') {
+    await streamSteeringChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'tour-guide') {
     await streamTourGuideChat({
       workspaceName: options.workspaceName,
@@ -346,7 +370,7 @@ export function getAgentDisplayName({
   activeCodexModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security') {
+  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security' || provider === 'steering') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : researcherRuntimeProvider === 'cursor'
@@ -358,7 +382,9 @@ export function getAgentDisplayName({
         ? DEBUGGER_LABEL
         : provider === 'planner'
           ? PLANNER_LABEL
-          : SECURITY_REVIEW_LABEL;
+          : provider === 'security'
+            ? SECURITY_REVIEW_LABEL
+            : STEERING_LABEL;
     return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
@@ -410,6 +436,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Security Review…'
       : 'Sign in to GHCP or Cursor, or install a Codi model to review security';
+  }
+  if (provider === 'steering') {
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
+      ? 'Ask Steering...'
+      : 'Sign in to GHCP or Cursor, or install a Codi model to update steering';
   }
   if (provider === 'tour-guide') {
     return 'Ask Tour Guide…';
@@ -490,6 +521,17 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Security Review models`
       : 'Security Review needs GHCP, Cursor, or Codi';
   }
+  if (provider === 'steering') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Steering models`;
+    }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Steering models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Steering models`
+      : 'Steering needs GHCP, Cursor, or Codi';
+  }
   if (provider === 'tour-guide') {
     return 'Creates guided product tours';
   }
@@ -504,6 +546,7 @@ export function resolveAgentProviderForTask({
   latestUserInput: string;
 }): AgentProvider {
   if (isSecurityReviewTaskText(latestUserInput)) return 'security';
+  if (isSteeringTaskText(latestUserInput)) return 'steering';
   if (isResearchTaskText(latestUserInput)) return 'researcher';
   if (isDebuggingTaskText(latestUserInput)) return 'debugger';
   if (isPlannerTaskText(latestUserInput)) return 'planner';
@@ -523,7 +566,7 @@ export function resolveRuntimeAgentProvider({
   hasCursorModelsReady?: boolean;
   hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'tour-guide') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'steering' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
   void hasCodexModelsReady;

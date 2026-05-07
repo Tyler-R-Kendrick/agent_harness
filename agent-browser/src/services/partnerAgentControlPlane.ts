@@ -149,7 +149,7 @@ export function buildPartnerAgentControlPlane(
       modelCount: input.codexState.models.length,
       summary: summarizePartnerState(input.codexState, 'Codex'),
     },
-    ...(['researcher', 'debugger', 'planner', 'security'] as const).map((provider): PartnerAgentRow => ({
+    ...(['researcher', 'debugger', 'planner', 'security', 'steering'] as const).map((provider): PartnerAgentRow => ({
       provider,
       label: labelForProvider(provider),
       kind: 'specialist',
@@ -265,6 +265,8 @@ function labelForProvider(provider: AgentProvider | ModelBackedAgentProvider): s
       return 'Planner';
     case 'security':
       return 'Security Review';
+    case 'steering':
+      return 'Steering';
     case 'tour-guide':
       return 'Tour Guide';
   }
