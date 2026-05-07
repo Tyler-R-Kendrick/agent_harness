@@ -177,6 +177,23 @@ describe('registerUserContextTools', () => {
           { id: 'location', label: 'Location', required: false, placeholder: '  ' },
           { id: 'postal', label: 'Postal code', required: true, placeholder: '60601' },
           { id: 'cuisine', label: 'Cuisine', placeholder: 'Any' },
+          { id: 'notes', label: 'Notes', type: 'textarea', defaultValue: 'near transit' },
+          {
+            id: 'urgency',
+            label: 'Urgency',
+            type: 'select',
+            required: true,
+            defaultValue: 'soon',
+            options: [
+              { label: 'Soon', value: 'soon' },
+              { label: 'Later', value: 'later' },
+              { label: '', value: 'missing-label' },
+              { label: 'Missing value', value: '' },
+            ],
+          },
+          { id: 'notify', label: 'Notify me', type: 'checkbox', defaultValue: 'true' },
+          { id: 'count', label: 'Result count', type: 'number', defaultValue: '3' },
+          { id: 'fallback', label: 'Fallback', type: 'unsupported', defaultValue: 'defaulted' },
         ],
       },
     }, {} as never)).resolves.toEqual({
@@ -187,6 +204,21 @@ describe('registerUserContextTools', () => {
         { id: 'location', label: 'Location', required: false },
         { id: 'postal', label: 'Postal code', required: true, placeholder: '60601' },
         { id: 'cuisine', label: 'Cuisine', placeholder: 'Any' },
+        { id: 'notes', label: 'Notes', type: 'textarea', defaultValue: 'near transit' },
+        {
+          id: 'urgency',
+          label: 'Urgency',
+          type: 'select',
+          required: true,
+          defaultValue: 'soon',
+          options: [
+            { label: 'Soon', value: 'soon' },
+            { label: 'Later', value: 'later' },
+          ],
+        },
+        { id: 'notify', label: 'Notify me', type: 'checkbox', defaultValue: 'true' },
+        { id: 'count', label: 'Result count', type: 'number', defaultValue: '3' },
+        { id: 'fallback', label: 'Fallback', defaultValue: 'defaulted' },
       ],
     });
 
@@ -197,6 +229,21 @@ describe('registerUserContextTools', () => {
         { id: 'location', label: 'Location', required: false },
         { id: 'postal', label: 'Postal code', required: true, placeholder: '60601' },
         { id: 'cuisine', label: 'Cuisine', placeholder: 'Any' },
+        { id: 'notes', label: 'Notes', type: 'textarea', defaultValue: 'near transit' },
+        {
+          id: 'urgency',
+          label: 'Urgency',
+          type: 'select',
+          required: true,
+          defaultValue: 'soon',
+          options: [
+            { label: 'Soon', value: 'soon' },
+            { label: 'Later', value: 'later' },
+          ],
+        },
+        { id: 'notify', label: 'Notify me', type: 'checkbox', defaultValue: 'true' },
+        { id: 'count', label: 'Result count', type: 'number', defaultValue: '3' },
+        { id: 'fallback', label: 'Fallback', defaultValue: 'defaulted' },
       ],
     });
   });

@@ -339,6 +339,52 @@ async function main() {
               },
             ],
           },
+          {
+            id: 'visual-elicitation-assistant',
+            role: 'assistant',
+            status: 'complete',
+            content: 'Choose how the agent should continue.',
+            cards: [
+              {
+                app: 'Elicitation',
+                kind: 'elicitation',
+                requestId: 'elicitation-visual',
+                prompt: 'Choose how the agent should continue.',
+                status: 'pending',
+                args: {},
+                fields: [
+                  {
+                    id: 'notes',
+                    label: 'Notes',
+                    type: 'textarea',
+                    defaultValue: 'Prefer official docs',
+                  },
+                  {
+                    id: 'urgency',
+                    label: 'Urgency',
+                    type: 'select',
+                    defaultValue: 'soon',
+                    options: [
+                      { label: 'Soon', value: 'soon' },
+                      { label: 'Later', value: 'later' },
+                    ],
+                  },
+                  {
+                    id: 'notify',
+                    label: 'Notify me',
+                    type: 'checkbox',
+                    defaultValue: 'true',
+                  },
+                  {
+                    id: 'count',
+                    label: 'Result count',
+                    type: 'number',
+                    defaultValue: '3',
+                  },
+                ],
+              },
+            ],
+          },
         ],
       }));
       localStorage.setItem('agent-browser.run-checkpoint-state', JSON.stringify({
@@ -448,6 +494,15 @@ async function main() {
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
+    await expect(page.getByText('Choose how the agent should continue.').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByLabel('Notes')).toHaveValue('Prefer official docs', { timeout: shellTimeoutMs });
+    await expect(page.getByRole('combobox', { name: 'Urgency' })).toHaveValue('soon', { timeout: shellTimeoutMs });
+    await expect(page.getByRole('checkbox', { name: 'Notify me' })).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('spinbutton', { name: 'Result count' })).toHaveValue('3', {
+      timeout: shellTimeoutMs,
+    });
     await page.getByRole('button', { name: /Approval before deployment|Process.*3 events/ }).click();
     const checkpointStrip = page.getByLabel('Suspended checkpoint');
     await expect(checkpointStrip).toBeVisible({ timeout: shellTimeoutMs });

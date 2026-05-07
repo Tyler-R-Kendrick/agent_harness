@@ -278,11 +278,21 @@ export type WorkspaceMcpBrowserLocationResult =
     reason: string;
   };
 
+export type WorkspaceMcpElicitationFieldType = 'text' | 'textarea' | 'select' | 'checkbox' | 'number';
+
+export interface WorkspaceMcpElicitationOption {
+  label: string;
+  value: string;
+}
+
 export interface WorkspaceMcpElicitationField {
   id: string;
   label: string;
   required?: boolean;
   placeholder?: string;
+  type?: WorkspaceMcpElicitationFieldType;
+  options?: readonly WorkspaceMcpElicitationOption[];
+  defaultValue?: string;
 }
 
 export interface WorkspaceMcpElicitationRequest {

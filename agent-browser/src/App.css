@@ -1626,13 +1626,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #bae6fd;
   font-size: 12px;
 }
-.elicitation-field input {
+.elicitation-field input,
+.elicitation-field select,
+.elicitation-field textarea {
   min-height: 32px;
   border-radius: 4px;
   border: 1px solid rgba(148, 163, 184, 0.28);
   background: rgba(2, 6, 23, 0.45);
   color: #f8fafc;
   padding: 6px 8px;
+}
+.elicitation-field textarea {
+  min-height: 72px;
+  resize: vertical;
+  line-height: 1.4;
+}
+.elicitation-field select {
+  appearance: none;
+}
+.elicitation-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.elicitation-checkbox-field input {
+  min-height: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 .elicitation-submit {
   justify-self: start;

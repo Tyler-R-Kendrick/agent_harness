@@ -7,7 +7,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 const workspacePatches = [
   {
-    cwd: 'agent-browser',
+    cwd: '.',
     packagePath: 'node_modules/@tavily/core',
     patchFiles: ['@tavily+core+0.7.3.patch'],
   },

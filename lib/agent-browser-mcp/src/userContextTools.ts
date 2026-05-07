@@ -3,6 +3,8 @@ import { ModelContext } from '@agent-harness/webmcp';
 import type {
   RegisterWorkspaceToolsOptions,
   WorkspaceMcpElicitationField,
+  WorkspaceMcpElicitationFieldType,
+  WorkspaceMcpElicitationOption,
   WorkspaceMcpElicitationRequest,
   WorkspaceMcpSecretRequest,
 } from './workspaceToolTypes';
@@ -31,6 +33,14 @@ const DEFAULT_ELICITATION_FIELDS: WorkspaceMcpElicitationField[] = [{
   placeholder: 'Chicago, IL',
 }];
 
+const ELICITATION_FIELD_TYPES = new Set<WorkspaceMcpElicitationFieldType>([
+  'text',
+  'textarea',
+  'select',
+  'checkbox',
+  'number',
+]);
+
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
@@ -50,15 +60,40 @@ function normalizeFields(value: unknown): WorkspaceMcpElicitationField[] {
       const id = readString(record.id);
       const label = readString(record.label);
       if (!id || !label) return null;
+      const type = readElicitationFieldType(record.type);
+      const options = normalizeFieldOptions(record.options);
+      const defaultValue = readString(record.defaultValue);
       return {
         id,
         label,
         ...(typeof record.required === 'boolean' ? { required: record.required } : {}),
         ...(readString(record.placeholder) ? { placeholder: readString(record.placeholder) } : {}),
+        ...(type ? { type } : {}),
+        ...(options.length ? { options } : {}),
+        ...(defaultValue ? { defaultValue } : {}),
       };
     })
     .filter((field): field is WorkspaceMcpElicitationField => Boolean(field));
   return fields.length ? fields : DEFAULT_ELICITATION_FIELDS;
+}
+
+function readElicitationFieldType(value: unknown): WorkspaceMcpElicitationFieldType | undefined {
+  return typeof value === 'string' && ELICITATION_FIELD_TYPES.has(value as WorkspaceMcpElicitationFieldType)
+    ? value as WorkspaceMcpElicitationFieldType
+    : undefined;
+}
+
+function normalizeFieldOptions(value: unknown): WorkspaceMcpElicitationOption[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((option): WorkspaceMcpElicitationOption | null => {
+      if (!option || typeof option !== 'object' || Array.isArray(option)) return null;
+      const record = option as Record<string, unknown>;
+      const label = readString(record.label);
+      const optionValue = readString(record.value);
+      return label && optionValue ? { label, value: optionValue } : null;
+    })
+    .filter((option): option is WorkspaceMcpElicitationOption => Boolean(option));
 }
 
 export function registerUserContextTools(modelContext: ModelContext, options: RegisterWorkspaceToolsOptions): void {
@@ -128,6 +163,20 @@ export function registerUserContextTools(modelContext: ModelContext, options: Re
               label: { type: 'string' },
               required: { type: 'boolean' },
               placeholder: { type: 'string' },
+              type: { type: 'string', enum: ['text', 'textarea', 'select', 'checkbox', 'number'] },
+              defaultValue: { type: 'string' },
+              options: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    label: { type: 'string' },
+                    value: { type: 'string' },
+                  },
+                  required: ['label', 'value'],
+                  additionalProperties: false,
+                },
+              },
             },
             required: ['id', 'label'],
             additionalProperties: false,
