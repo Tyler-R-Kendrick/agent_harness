@@ -60,12 +60,14 @@ export function createHarnessStorageAdapter(adapter: HarnessStorageAdapter): Har
       value: TValue,
       options: HarnessStorageSetOptions = {},
     ): Promise<HarnessStorageEntry<TValue>> {
-      const entry = await adapter.set(key, value, options);
+      const storedValue = cloneStorageValue(value);
+      const storedOptions = cloneStorageSetOptions(options);
+      const entry = await adapter.set(key, storedValue, storedOptions);
       return cloneStorageEntry(entry ?? {
         key,
-        value,
-        metadata: { ...(options.metadata ?? {}) },
-        updatedAt: options.updatedAt ?? (adapter.now ?? systemTimestamp)(),
+        value: storedValue,
+        metadata: { ...(storedOptions.metadata ?? {}) },
+        updatedAt: storedOptions.updatedAt ?? (adapter.now ?? systemTimestamp)(),
       });
     },
     async delete(key: string): Promise<boolean> {
@@ -104,8 +106,8 @@ export class InMemoryHarnessStorage implements HarnessStorage {
   ): Promise<HarnessStorageEntry<TValue>> {
     const entry: HarnessStorageEntry<TValue> = {
       key,
-      value,
-      metadata: { ...(options.metadata ?? {}) },
+      value: cloneStorageValue(value),
+      metadata: cloneStorageValue(options.metadata ?? {}),
       updatedAt: options.updatedAt ?? this.now(),
     };
     this.entries.set(key, entry);
@@ -128,10 +130,25 @@ export class InMemoryHarnessStorage implements HarnessStorage {
 function cloneStorageEntry<TValue>(entry: HarnessStorageEntry<unknown>): HarnessStorageEntry<TValue> {
   return {
     key: entry.key,
-    value: entry.value as TValue,
-    metadata: { ...entry.metadata },
+    value: cloneStorageValue(entry.value) as TValue,
+    metadata: cloneStorageValue(entry.metadata),
     updatedAt: entry.updatedAt,
   };
+}
+
+function cloneStorageSetOptions(options: HarnessStorageSetOptions): HarnessStorageSetOptions {
+  return {
+    ...options,
+    ...(options.metadata ? { metadata: cloneStorageValue(options.metadata) } : {}),
+  };
+}
+
+function cloneStorageValue<TValue>(value: TValue): TValue {
+  try {
+    return structuredClone(value);
+  } catch {
+    return value;
+  }
 }
 
 function isHarnessStorage(source: HarnessStorage | HarnessStorageProvider): source is HarnessStorage {
