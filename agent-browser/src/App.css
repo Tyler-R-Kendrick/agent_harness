@@ -2599,7 +2599,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .scheduled-automations-settings,
 .scheduled-automations-summary,
 .run-checkpoint-settings,
-.run-checkpoint-history {
+.run-checkpoint-history,
+.browser-agent-run-sdk-settings,
+.browser-agent-run-sdk-summary {
   display: grid;
   gap: 8px;
 }
@@ -2609,10 +2611,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-checkpoint-policy-card,
 .run-checkpoint-card,
 .run-checkpoint-history-card,
-.run-checkpoint-row-card {
+.run-checkpoint-row-card,
+.browser-agent-run-sdk-history-card,
+.browser-agent-run-sdk-card {
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: rgba(255,255,255,.025);
+}
+.browser-agent-run-sdk-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.browser-agent-run-sdk-events li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.browser-agent-run-sdk-events code {
+  color: #93c5fd;
+  font-size: 10px;
 }
 .scheduled-automation-card .settings-checkbox-row,
 .run-checkpoint-policy-card .settings-checkbox-row {

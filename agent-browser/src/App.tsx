@@ -199,6 +199,12 @@ import {
   type RunCheckpointPolicy,
   type RunCheckpointState,
 } from './services/runCheckpoints';
+import {
+  DEFAULT_BROWSER_AGENT_RUN_SDK_STATE,
+  isBrowserAgentRunSdkState,
+  type BrowserAgentRunEvent,
+  type BrowserAgentRunSdkState,
+} from './services/browserAgentRunSdk';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import {
   assessLocalInferenceReadiness,
@@ -7214,6 +7220,7 @@ interface SettingsPanelProps {
   runCheckpointState: RunCheckpointState;
   workspaceSkillPolicyState: WorkspaceSkillPolicyState;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
+  browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
@@ -7567,6 +7574,7 @@ function SettingsPanel({
   runCheckpointState,
   workspaceSkillPolicyState,
   workspaceSkillPolicyInventory,
+  browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
@@ -7628,6 +7636,7 @@ function SettingsPanel({
         runtime={runtimePluginRuntime}
         onChange={onRuntimePluginSettingsChange}
       />
+      <BrowserAgentRunSdkSettingsPanel state={browserAgentRunSdkState} />
 
       <AdversaryToolReviewSettingsPanel
         settings={adversaryToolReviewSettings}
@@ -7874,12 +7883,102 @@ function AgentCanvasesPanel({
   );
 }
 
+function BrowserAgentRunSdkSettingsPanel({ state }: { state: BrowserAgentRunSdkState }) {
+  const activeRuns = state.runs.filter((run) => run.status === 'queued' || run.status === 'running');
+  const capabilityLabels = [
+    'Typed launch API',
+    'Structured event stream',
+    'Reconnect cursor',
+    'Cancellation control',
+    'Archive and delete lifecycle',
+  ];
+
+  return (
+    <SettingsSection title="Browser-agent run SDK" defaultOpen={false}>
+      <div className="browser-agent-run-sdk-settings">
+        <article className="provider-card browser-agent-run-sdk-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Public durable run API</strong>
+              <p>{state.runs.length} durable runs · {state.events.length} structured events · {activeRuns.length} active</p>
+            </div>
+            <span className="badge connected">typed</span>
+          </div>
+          <div className="browser-agent-run-sdk-chip-grid" aria-label="Browser-agent run SDK capabilities">
+            {capabilityLabels.map((label) => (
+              <span className="chip mini" key={label}>{label}</span>
+            ))}
+          </div>
+          <p className="partner-agent-audit-note">
+            Other tools can create runs, stream by sequence, reconnect from the last cursor, and apply explicit lifecycle controls without screen-scraping the UI.
+          </p>
+        </article>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function BrowserAgentRunSdkHistory({ state }: { state: BrowserAgentRunSdkState }) {
+  const latestRun = state.runs[0] ?? null;
+  const latestEvents = latestRun
+    ? state.events
+      .filter((event) => event.runId === latestRun.id)
+      .sort((left, right) => right.sequence - left.sequence)
+      .slice(0, 3)
+    : [];
+
+  return (
+    <SidebarSection title="Typed run SDK" scrollBody>
+      <div className="browser-agent-run-sdk-summary">
+        {latestRun ? (
+          <article className="list-card history-card browser-agent-run-sdk-history-card">
+            <div className="history-card-header">
+              <div>
+                <h3>{latestRun.title}</h3>
+                <p className="muted">{latestRun.mode} · {latestRun.status} · cursor {latestRun.eventCursor}</p>
+              </div>
+              <span className={`badge${latestRun.status === 'running' ? ' connected' : ''}`}>{latestRun.status}</span>
+            </div>
+            <p className="history-preview">{latestRun.prompt}</p>
+            <BrowserAgentRunEventList events={latestEvents} />
+          </article>
+        ) : (
+          <article className="list-card history-card browser-agent-run-sdk-history-card">
+            <div className="history-card-header">
+              <div>
+                <h3>No SDK runs yet</h3>
+                <p className="muted">Create a run through the typed SDK to persist lifecycle events.</p>
+              </div>
+              <span className="badge">empty</span>
+            </div>
+          </article>
+        )}
+      </div>
+    </SidebarSection>
+  );
+}
+
+function BrowserAgentRunEventList({ events }: { events: BrowserAgentRunEvent[] }) {
+  return (
+    <ul className="history-events browser-agent-run-sdk-events">
+      {events.map((event) => (
+        <li key={event.id}>
+          <span>{event.summary}</span>
+          <code>#{event.sequence}</code>
+        </li>
+      ))}
+  </ul>
+  );
+}
+
 function HistoryPanel({
   scheduledAutomationState,
   runCheckpointState,
+  browserAgentRunSdkState,
 }: {
   scheduledAutomationState: ScheduledAutomationState;
   runCheckpointState: RunCheckpointState;
+  browserAgentRunSdkState: BrowserAgentRunSdkState;
 }) {
   const now = new Date('2026-05-06T18:00:00.000Z');
   const checkpointSnapshot = expireDueRunCheckpoints(runCheckpointState, now);
@@ -7936,6 +8035,7 @@ function HistoryPanel({
           ))}
         </div>
       </SidebarSection>
+      <BrowserAgentRunSdkHistory state={browserAgentRunSdkState} />
       <SidebarSection title="Scheduled automations" scrollBody>
         <div className="scheduled-automations-summary">
           <article className="list-card history-card scheduled-automation-history-card">
@@ -9664,6 +9764,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.workspaceSkillPolicyState,
     isWorkspaceSkillPolicyState,
     DEFAULT_WORKSPACE_SKILL_POLICY_STATE,
+  );
+  const [browserAgentRunSdkState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.browserAgentRunSdkState,
+    isBrowserAgentRunSdkState,
+    DEFAULT_BROWSER_AGENT_RUN_SDK_STATE,
   );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
@@ -13516,6 +13622,7 @@ function AgentBrowserApp() {
         <HistoryPanel
           scheduledAutomationState={scheduledAutomationState}
           runCheckpointState={runCheckpointState}
+          browserAgentRunSdkState={browserAgentRunSdkState}
         />
       );
     }
@@ -13566,6 +13673,7 @@ function AgentBrowserApp() {
         runCheckpointState={runCheckpointState}
         workspaceSkillPolicyState={workspaceSkillPolicyState}
         workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
+        browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}

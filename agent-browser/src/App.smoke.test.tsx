@@ -353,6 +353,30 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('resume:visual-eval-session:2026-05-07T02:30:00.000Z')).toBeInTheDocument();
   });
 
+  it('renders typed browser-agent run SDK state in History and Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('History'));
+
+    expect(screen.getByRole('button', { name: 'Typed run SDK' })).toBeInTheDocument();
+    expect(screen.getByText('SDK launch smoke')).toBeInTheDocument();
+    expect(screen.getByText('Structured event stream is live.')).toBeInTheDocument();
+    expect(screen.getByText('Reconnect cursor 3 is ready for clients.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('button', { name: 'Browser-agent run SDK' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Browser-agent run SDK' }));
+    expect(screen.getByText('Structured event stream')).toBeInTheDocument();
+    expect(screen.getByText('Reconnect cursor')).toBeInTheDocument();
+    expect(screen.getByText('Archive and delete lifecycle')).toBeInTheDocument();
+  });
+
   it('shows built-in local inference readiness in Models', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(

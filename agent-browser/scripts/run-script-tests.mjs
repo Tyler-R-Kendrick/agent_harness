@@ -78,6 +78,10 @@ async function main() {
   assert.match(visualSmokeScript, /Live experiment/);
   assert.match(visualSmokeScript, /Scheduled automations/);
   assert.match(visualSmokeScript, /Enable Daily workspace audit/);
+  assert.match(visualSmokeScript, /Typed run SDK/);
+  assert.match(visualSmokeScript, /Structured event stream/);
+  assert.match(visualSmokeScript, /Reconnect cursor/);
+  assert.match(visualSmokeScript, /agent-browser-typed-run-sdk\.png/);
   assert.doesNotMatch(visualSmokeScript, /waitUntil:\s*'networkidle'/);
 
   const packageJson = await readScript('package.json');
