@@ -30,6 +30,68 @@ describe('harness storage and artifacts', () => {
     await expect(storage.delete('config/theme')).resolves.toBe(false);
   });
 
+  it('returns defensive storage snapshots for values and nested metadata', async () => {
+    const storage = new InMemoryHarnessStorage({
+      now: () => '2026-05-01T00:00:00.000Z',
+    });
+
+    const value = {
+      preferences: { mode: 'dark' },
+    };
+    const metadata = { tags: ['ui'] };
+    const saved = await storage.set('config/theme', value, { metadata });
+
+    value.preferences.mode = 'original';
+    metadata.tags.push('original');
+    saved.value.preferences.mode = 'light';
+    (saved.metadata.tags as string[]).push('mutated');
+
+    const firstRead = await storage.get<{ preferences: { mode: string } }>('config/theme');
+    expect(firstRead?.value.preferences.mode).toBe('dark');
+    expect(firstRead?.metadata.tags).toEqual(['ui']);
+
+    firstRead!.value.preferences.mode = 'contrast';
+    (firstRead!.metadata.tags as string[]).push('read');
+
+    const listed = await storage.list<{ preferences: { mode: string } }>({ prefix: 'config/' });
+    listed[0].value.preferences.mode = 'listed';
+    (listed[0].metadata.tags as string[]).push('list');
+
+    await expect(storage.get('config/theme')).resolves.toMatchObject({
+      value: { preferences: { mode: 'dark' } },
+      metadata: { tags: ['ui'] },
+    });
+
+    const backing = new Map<string, HarnessStorageEntry<unknown>>();
+    backing.set('remote/theme', {
+      key: 'remote/theme',
+      value: { preferences: { mode: 'dark' } },
+      metadata: { tags: ['remote'] },
+      updatedAt: 'host-now',
+    });
+    const adapter = createHarnessStorageAdapter({
+      get: (key) => backing.get(key),
+      set: () => undefined,
+      list: () => [...backing.values()],
+    });
+
+    const adapted = await adapter.get<{ preferences: { mode: string } }>('remote/theme');
+    adapted!.value.preferences.mode = 'adapted';
+    (adapted!.metadata.tags as string[]).push('adapted');
+
+    expect(backing.get('remote/theme')).toMatchObject({
+      value: { preferences: { mode: 'dark' } },
+      metadata: { tags: ['remote'] },
+    });
+
+    const callback = () => 'runtime handle';
+    const callbackEntry = await storage.set('runtime/callback', callback);
+    expect(callbackEntry.value).toBe(callback);
+    await expect(storage.get('runtime/callback')).resolves.toMatchObject({
+      value: callback,
+    });
+  });
+
   it('wraps host storage callbacks with a harness storage adapter', async () => {
     const backing = new Map<string, HarnessStorageEntry<unknown>>();
     const adapter = createHarnessStorageAdapter({
