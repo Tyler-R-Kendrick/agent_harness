@@ -154,6 +154,25 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
   });
 
+  it('renders the repository wiki sidebar panel with repo map citations', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('wiki'));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const wikiPanel = screen.getByRole('region', { name: 'Repository wiki' });
+    expect(wikiPanel).toBeInTheDocument();
+    expect(screen.getAllByText('Repo map').length).toBeGreaterThan(0);
+    expect(screen.getByText('Architecture views')).toBeInTheDocument();
+    expect(screen.getByText('Onboarding')).toBeInTheDocument();
+    expect(screen.getAllByText('wiki:ws-research:workspace-map').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Refresh wiki' })).toBeInTheDocument();
+  });
+
   it('renders adversary tool review controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
