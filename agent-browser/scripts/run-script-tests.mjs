@@ -56,11 +56,18 @@ function createGitIndex(paths) {
 async function main() {
   const visualSmokeScript = await readScript('agent-browser/scripts/visual-smoke.mjs');
   assert.match(visualSmokeScript, /waitUntil:\s*'domcontentloaded'/);
-  assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*300_000/);
+  assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*900_000/);
   assert.match(visualSmokeScript, /shellTimeoutMs\s*=\s*30_000/);
   assert.match(visualSmokeScript, /\*\*\/api\/cursor\/status/);
   assert.match(visualSmokeScript, /PR review understanding/);
   assert.match(visualSmokeScript, /TK-47 review-native PR understanding/);
+  assert.match(visualSmokeScript, /Browser evidence for selected diff/);
+  assert.match(visualSmokeScript, /Agent Browser visual smoke/);
+  assert.match(visualSmokeScript, /2 assertions passed/);
+  assert.match(visualSmokeScript, /captureGitWorktreeViewportMatrix/);
+  assert.match(visualSmokeScript, /agent-browser-git-worktree-mobile\.png/);
+  assert.match(visualSmokeScript, /agent-browser-git-worktree-tablet\.png/);
+  assert.match(visualSmokeScript, /agent-browser-git-worktree-wide\.png/);
   assert.match(visualSmokeScript, /Repository wiki/);
   assert.match(visualSmokeScript, /agent-browser-repository-wiki\.png/);
   assert.match(visualSmokeScript, /wiki:ws-research:workspace-map/);

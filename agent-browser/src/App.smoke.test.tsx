@@ -8,6 +8,8 @@ const loadModelMock = vi.fn();
 const generateMock = vi.fn();
 const fetchCopilotStateMock = vi.fn();
 const streamCopilotChatMock = vi.fn();
+const fetchGitWorktreeStatusMock = vi.fn();
+const fetchGitWorktreeDiffMock = vi.fn();
 
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
@@ -33,6 +35,11 @@ vi.mock('./services/copilotApi', () => ({
   streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
 }));
 
+vi.mock('./services/gitWorktreeApi', () => ({
+  fetchGitWorktreeStatus: (...args: unknown[]) => fetchGitWorktreeStatusMock(...args),
+  fetchGitWorktreeDiff: (...args: unknown[]) => fetchGitWorktreeDiffMock(...args),
+}));
+
 vi.mock('just-bash/browser', () => {
   class MockBash {
     cwd = '/workspace';
@@ -54,6 +61,18 @@ vi.mock('just-bash/browser', () => {
 });
 
 beforeEach(() => {
+  class MockIntersectionObserver implements IntersectionObserver {
+    readonly root: Element | Document | null = null;
+    readonly rootMargin = '';
+    readonly thresholds: ReadonlyArray<number> = [];
+
+    disconnect() {}
+    observe() {}
+    takeRecords(): IntersectionObserverEntry[] { return []; }
+    unobserve() {}
+  }
+
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
   window.localStorage.clear();
   window.sessionStorage.clear();
   searchBrowserModelsMock.mockReset();
@@ -61,6 +80,8 @@ beforeEach(() => {
   generateMock.mockReset();
   fetchCopilotStateMock.mockReset();
   streamCopilotChatMock.mockReset();
+  fetchGitWorktreeStatusMock.mockReset();
+  fetchGitWorktreeDiffMock.mockReset();
   searchBrowserModelsMock.mockResolvedValue([]);
   loadModelMock.mockResolvedValue(undefined);
   generateMock.mockResolvedValue(undefined);
@@ -72,11 +93,46 @@ beforeEach(() => {
     signInDocsUrl: 'https://docs.github.com/copilot',
   });
   streamCopilotChatMock.mockResolvedValue(undefined);
+  fetchGitWorktreeStatusMock.mockResolvedValue({
+    available: true,
+    cwd: 'C:/repo',
+    worktreeRoot: 'C:/repo',
+    branch: 'feature/evidence-review',
+    head: 'abc1234',
+    upstream: 'origin/main',
+    ahead: 1,
+    behind: 0,
+    isClean: false,
+    files: [
+      {
+        path: 'agent-browser/src/App.tsx',
+        status: 'modified',
+        staged: false,
+        unstaged: true,
+        conflicted: false,
+      },
+      {
+        path: 'agent-browser/src/features/worktree/GitWorktreePanel.tsx',
+        status: 'modified',
+        staged: false,
+        unstaged: true,
+        conflicted: false,
+      },
+    ],
+    summary: { changed: 2, staged: 0, unstaged: 2, untracked: 0, conflicts: 0 },
+  });
+  fetchGitWorktreeDiffMock.mockResolvedValue({
+    path: 'agent-browser/src/App.tsx',
+    patch: 'diff --git a/agent-browser/src/App.tsx b/agent-browser/src/App.tsx\n-old\n+new\n',
+    source: 'unstaged',
+    isBinary: false,
+  });
 });
 
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -94,6 +150,23 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New session widget' })).toBeInTheDocument();
     expect(screen.getByRole('tree', { name: 'Workspace tree' })).toBeInTheDocument();
+  });
+
+  it('renders browser evidence linked to the dashboard diff review', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('Browser evidence for selected diff')).toBeInTheDocument();
+    expect(screen.getByText('Agent Browser visual smoke')).toBeInTheDocument();
+    expect(screen.getByText('2 assertions passed')).toBeInTheDocument();
+    expect(screen.getByText('output/playwright/agent-browser-visual-smoke.png')).toBeInTheDocument();
   });
 
   it('opens the secure shared chat QR pairing dialog from the chat header', async () => {

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import type { BrowserEvidenceReviewReport } from '../../services/browserEvidenceReview';
 import type { GitWorktreeDiffResponse, GitWorktreeStatusResponse } from '../../services/gitWorktreeApi';
 import { GitWorktreePanel } from './GitWorktreePanel';
 
@@ -66,6 +67,53 @@ function createDiff(overrides: Partial<GitWorktreeDiffResponse> = {}): GitWorktr
   };
 }
 
+function createEvidenceReview(): BrowserEvidenceReviewReport {
+  return {
+    status: 'passed',
+    totalEvidence: 1,
+    totalAssertions: 2,
+    passedAssertions: 2,
+    failedAssertions: 0,
+    pendingAssertions: 0,
+    fileSummaries: [{
+      path: 'src/App.tsx',
+      status: 'passed',
+      evidenceCount: 1,
+      passedAssertions: 2,
+      failedAssertions: 0,
+      pendingAssertions: 0,
+      consoleErrors: 0,
+      networkFailures: 0,
+    }],
+    selectedFile: {
+      path: 'src/App.tsx',
+      status: 'passed',
+      evidenceCount: 1,
+      passedAssertions: 2,
+      failedAssertions: 0,
+      pendingAssertions: 0,
+      consoleErrors: 0,
+      networkFailures: 0,
+    },
+    selectedEvidence: [{
+      id: 'visual-smoke',
+      label: 'Agent Browser visual smoke',
+      kind: 'screenshot',
+      status: 'passed',
+      path: 'output/playwright/agent-browser-visual-smoke.png',
+      relatedFiles: ['src/App.tsx'],
+      linkedFiles: ['src/App.tsx'],
+      assertions: [
+        { label: 'Diff panel visible', status: 'passed' },
+        { label: 'Console is clean', status: 'passed' },
+      ],
+      assertionSummary: { passed: 2, failed: 0, pending: 0 },
+      consoleErrors: 0,
+      networkFailures: 0,
+    }],
+  };
+}
+
 describe('GitWorktreePanel', () => {
   it('renders changed worktree files with Trees and selected patches with Diffs', () => {
     const onSelectFile = vi.fn();
@@ -128,5 +176,27 @@ describe('GitWorktreePanel', () => {
     );
 
     expect(screen.getByText('not a git repository')).toBeInTheDocument();
+  });
+
+  it('renders browser evidence linked to the selected diff file', () => {
+    render(
+      <GitWorktreePanel
+        status={createStatus()}
+        diff={createDiff()}
+        selectedPath="src/App.tsx"
+        browserEvidenceReview={createEvidenceReview()}
+        isLoading={false}
+        isDiffLoading={false}
+        onRefresh={vi.fn()}
+        onSelectFile={vi.fn()}
+      />,
+    );
+
+    const panel = screen.getByRole('region', { name: 'Git worktree status' });
+    const evidence = within(panel).getByLabelText('Browser evidence for selected diff');
+    expect(evidence).toBeInTheDocument();
+    expect(within(evidence).getByText('Agent Browser visual smoke')).toBeInTheDocument();
+    expect(within(evidence).getByText('2 assertions passed')).toBeInTheDocument();
+    expect(within(evidence).getByText('output/playwright/agent-browser-visual-smoke.png')).toBeInTheDocument();
   });
 });
