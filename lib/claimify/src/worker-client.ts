@@ -71,15 +71,16 @@ export function createClaimifyWorkerExtractor(worker: Worker): ClaimExtractor {
     extract(input: ClaimExtractionInput) {
       return send<ClaimExtractionResult>({ type: 'extract', input });
     },
-    async dispose() {
+    dispose() {
       try {
-        await send<void>({ type: 'dispose' });
+        worker.postMessage({ type: 'dispose', requestId: `claimify-${nextRequestId++}` });
       } finally {
         worker.removeEventListener('message', onMessage);
         worker.removeEventListener('error', onError);
         rejectAll(new ClaimifyWorkerError('Worker disposed'));
         worker.terminate();
       }
+      return Promise.resolve();
     },
   };
 }

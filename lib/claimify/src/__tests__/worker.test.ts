@@ -1,11 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleClaimifyWorkerMessage } from '../worker';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('worker message handler', () => {
   it('posts sanitized results and errors', async () => {
     const posts: unknown[] = [];
     const extractor = {
-      preload: vi.fn(async () => ({ modelId: 'm', cached: true, device: 'wasm' as const, dtype: 'q4' })),
+      preload: vi.fn(async (options) => {
+        options.progressCallback({ loaded: 1 });
+        return { modelId: 'm', cached: true, device: 'wasm' as const, dtype: 'q4' };
+      }),
       isReadyOffline: vi.fn(async () => true),
       extract: vi.fn(async () => ({
         claims: [],
@@ -52,6 +59,7 @@ describe('worker message handler', () => {
     );
 
     expect(posts).toEqual([
+      { type: 'progress', requestId: '1', event: { loaded: 1 } },
       { type: 'result', requestId: '1', result: { modelId: 'm', cached: true, device: 'wasm', dtype: 'q4' } },
       {
         type: 'result',
@@ -76,5 +84,32 @@ describe('worker message handler', () => {
       { type: 'result', requestId: '4', result: true },
       { type: 'error', requestId: '5', error: { name: 'ClaimifyError', message: 'Unknown worker request type: unknown' } },
     ]);
+  });
+
+  it('registers the module worker message listener when loaded in a worker global', async () => {
+    vi.resetModules();
+    const posts: unknown[] = [];
+    const addEventListener = vi.fn();
+    vi.stubGlobal('postMessage', (message: unknown) => posts.push(message));
+    vi.stubGlobal('addEventListener', addEventListener);
+
+    await import('../worker?bootstrap');
+    const listener = addEventListener.mock.calls[0]?.[1] as (event: MessageEvent) => void;
+    listener(new MessageEvent('message', { data: { type: 'offline-ready', requestId: 'ready' } }));
+
+    await vi.waitFor(() => {
+      expect(posts).toContainEqual({ type: 'result', requestId: 'ready', result: false });
+    });
+  });
+
+  it('does not register the module worker listener without postMessage', async () => {
+    vi.resetModules();
+    const addEventListener = vi.fn();
+    vi.stubGlobal('postMessage', undefined);
+    vi.stubGlobal('addEventListener', addEventListener);
+
+    await import('../worker?no-post-message');
+
+    expect(addEventListener).not.toHaveBeenCalled();
   });
 });

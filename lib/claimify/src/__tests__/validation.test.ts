@@ -37,6 +37,27 @@ describe('claim validation', () => {
     expect(isAcceptableClaim('[Contoso] It reported $12 million in revenue in 2025.')).toBe(true);
   });
 
+  it('covers long, malformed, empty, and non-leading-reference validation paths', () => {
+    expect(validateClaim(`${'word '.repeat(80)}.`)).toMatchObject({
+      acceptable: false,
+      reason: 'Claim is too long',
+    });
+    expect(validateClaim('12345', { strictness: 'recall' })).toMatchObject({
+      acceptable: false,
+      reason: 'Claim is malformed',
+    });
+    expect(validateClaim('   ')).toMatchObject({
+      acceptable: false,
+      reason: 'Claim is mostly punctuation',
+    });
+    expect(validateClaim('Contoso said it reported growth in 2025.')).toMatchObject({
+      acceptable: true,
+    });
+    expect(validateClaim("' reported $12 million in revenue in 2025.")).toMatchObject({
+      acceptable: true,
+    });
+  });
+
   it('deduplicates exact and near-exact duplicates after normalization', () => {
     const claims = deduplicateClaims([
       { claim: 'Contoso reported $12 million in revenue in 2025.' },

@@ -32,11 +32,11 @@ export function validateClaim(claim: string, options: ClaimValidationOptions = {
   if (normalized.length > 360) {
     return { acceptable: false, claim: normalized, reason: 'Claim is too long' };
   }
-  if (!/\p{L}/u.test(normalized)) {
-    return { acceptable: false, claim: normalized, reason: 'Claim is malformed' };
-  }
   if (punctuationRatio(normalized) > 0.6) {
     return { acceptable: false, claim: normalized, reason: 'Claim is mostly punctuation' };
+  }
+  if (!/\p{L}/u.test(normalized)) {
+    return { acceptable: false, claim: normalized, reason: 'Claim is malformed' };
   }
   if (VAGUE_TRAILERS.some((trailer) => normalized.toLowerCase().endsWith(trailer))) {
     return { acceptable: false, claim: normalized, reason: 'Claim ends with a vague trailing phrase' };
@@ -69,6 +69,9 @@ export function deduplicateClaims<T extends { claim: string }>(claims: T[]): T[]
 }
 
 function firstUnresolvedReference(claim: string): string | null {
+  if (/^\[[^\]]+\]\s+/u.test(claim)) {
+    return null;
+  }
   const withoutBracketedContext = claim.replace(/^\[[^\]]+\]\s*/u, '');
   const firstWord = withoutBracketedContext.match(/^\p{L}+/u)?.[0];
   if (!firstWord) {

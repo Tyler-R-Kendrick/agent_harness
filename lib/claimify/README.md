@@ -48,6 +48,14 @@ await extractor.preload({
 const result = await extractor.extract({ question, answer });
 ```
 
+## Package Boundary
+
+Use `@agent-harness/claimify` as the stable root import for browser-local claim extraction APIs. Use `@agent-harness/claimify/worker-client` for the worker-backed adapter and `@agent-harness/claimify/worker` as the module worker entry point.
+
+The `@agent-harness/claimify/src/*` files are private implementation modules. They are included in the package artifact so TypeScript-source consumers can load the exported entry points directly, but consumers should not deep-import those paths.
+
+Published artifacts are intentionally runtime-only: `README.md`, `package.json`, and `src/**/*.ts` are included, while `src/__tests__/**` is excluded.
+
 ## Offline/PWA Notes
 
 Ask users to preload the model while online. The extractor enables browser and WASM cache flags where Transformers.js exposes them, and `isReadyOffline()` reports cache readiness when the model registry can answer it.

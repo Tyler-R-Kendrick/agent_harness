@@ -41,6 +41,22 @@ describe('worker client', () => {
     expect(progressCallback).toHaveBeenCalledWith({ loaded: 1 });
   });
 
+  it('ignores messages for unknown request ids', async () => {
+    const worker = new FakeWorker();
+    const extractor = createClaimifyWorkerExtractor(worker as unknown as Worker);
+
+    const preload = extractor.preload();
+    worker.emit({ type: 'result', requestId: 'unknown', result: true });
+    const request = worker.messages[0] as { requestId: string };
+    worker.emit({
+      type: 'result',
+      requestId: request.requestId,
+      result: { modelId: 'm', cached: false, device: 'wasm', dtype: 'q4' },
+    });
+
+    await expect(preload).resolves.toMatchObject({ modelId: 'm' });
+  });
+
   it('rejects request errors and supports dispose cleanup', async () => {
     const worker = new FakeWorker();
     const extractor = createClaimifyWorkerExtractor(worker as unknown as Worker);
@@ -62,5 +78,25 @@ describe('worker client', () => {
     worker.fail(new Error('boom'));
 
     await expect(ready).rejects.toMatchObject({ name: 'ClaimifyWorkerError', message: 'boom' });
+  });
+
+  it('uses fallback worker error messages', async () => {
+    const worker = new FakeWorker();
+    const extractor = createClaimifyWorkerExtractor(worker as unknown as Worker);
+
+    const ready = extractor.isReadyOffline();
+    worker.dispatchEvent(new ErrorEvent('error', { error: new Error('hidden') }));
+
+    await expect(ready).rejects.toMatchObject({ name: 'ClaimifyWorkerError', message: 'hidden' });
+  });
+
+  it('uses a generic worker error when no message is available', async () => {
+    const worker = new FakeWorker();
+    const extractor = createClaimifyWorkerExtractor(worker as unknown as Worker);
+
+    const ready = extractor.isReadyOffline();
+    worker.dispatchEvent(new ErrorEvent('error'));
+
+    await expect(ready).rejects.toMatchObject({ name: 'ClaimifyWorkerError', message: 'Worker failed' });
   });
 });
