@@ -24,6 +24,7 @@ export interface ConversationSubthread {
   id: string;
   title: string;
   branchName: string;
+  sessionId?: string;
   status: ConversationSubthreadStatus;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +59,7 @@ export interface CreateConversationBranchingStateInput {
   workspaceId: string;
   workspaceName: string;
   mainSessionId: string;
+  subthreadSessionId?: string;
   request: string;
   now?: Date;
 }
@@ -99,11 +101,13 @@ export function createConversationBranchingState({
   workspaceId,
   workspaceName,
   mainSessionId,
+  subthreadSessionId,
   request,
   now = new Date(),
 }: CreateConversationBranchingStateInput): ConversationBranchingState {
   const createdAt = normalizeDate(now);
   const title = normalizeTitle(request);
+  const branchSessionId = subthreadSessionId?.trim() || mainSessionId;
   const workspaceSlug = slugify(workspaceName || workspaceId || 'workspace');
   const requestSlug = slugify(title);
   const subthreadId = `subthread:${workspaceId}:${requestSlug}`;
@@ -122,7 +126,7 @@ export function createConversationBranchingState({
     id: branchCommitId,
     branchId: subthreadId,
     parentIds: [mainCommitId],
-    sourceSessionId: mainSessionId,
+    sourceSessionId: branchSessionId,
     messageIds: [],
     summary: `Branch started: ${title}`,
     createdAt,
@@ -141,6 +145,7 @@ export function createConversationBranchingState({
       id: subthreadId,
       title,
       branchName: `conversation/${workspaceSlug}/${requestSlug}`,
+      sessionId: branchSessionId,
       status: 'running',
       createdAt,
       updatedAt: createdAt,
@@ -162,6 +167,7 @@ export function commitConversationSubthread(
 ): ConversationBranchingState {
   const subthread = state.subthreads.find((candidate) => candidate.id === subthreadId);
   if (!subthread) return state;
+  if (subthread.status === 'merged') return state;
   const createdAt = normalizeDate(input.now ?? new Date());
   const commitId = buildCommitId(subthread.id.replace(/[^a-zA-Z0-9]+/g, '-'), state.workspaceId, createdAt);
   const commit: ConversationBranchCommit = {
@@ -259,6 +265,7 @@ export function buildConversationBranchPromptContext(state: ConversationBranchin
     ...state.subthreads.map((subthread) => [
       `- ${subthread.branchName}`,
       `  ID: ${subthread.id}`,
+      `  Session: ${subthread.sessionId ?? 'unassigned'}`,
       `  Status: ${subthread.status}`,
       `  Head commit: ${subthread.headCommitId}`,
       `  Last merged commit: ${subthread.lastMergedCommitId ?? 'not merged'}`,
@@ -284,6 +291,29 @@ export function buildConversationBranchProcessEntries(state: ConversationBranchi
       status: 'done',
       endedAt: Date.parse(commit.mergedIntoMainAt ?? commit.createdAt),
     }));
+}
+
+export function getConversationSubthreadForSession(
+  state: ConversationBranchingState,
+  sessionId: string | null | undefined,
+): ConversationSubthread | null {
+  if (!sessionId || !state.enabled) return null;
+  return state.subthreads.find((subthread) => subthread.sessionId === sessionId) ?? null;
+}
+
+export function getConversationMainSessionForSubthread(
+  state: ConversationBranchingState,
+  sessionId: string | null | undefined,
+): string | null {
+  return getConversationSubthreadForSession(state, sessionId) ? state.mainSessionId : null;
+}
+
+export function canSubmitToConversationSession(
+  state: ConversationBranchingState,
+  sessionId: string | null | undefined,
+): boolean {
+  const subthread = getConversationSubthreadForSession(state, sessionId);
+  return subthread ? subthread.status !== 'merged' : true;
 }
 
 export function isConversationBranchingRequest(text: string): boolean {
@@ -327,6 +357,7 @@ function isConversationSubthread(value: unknown): value is ConversationSubthread
     typeof value.id === 'string'
     && typeof value.title === 'string'
     && typeof value.branchName === 'string'
+    && (value.sessionId === undefined || typeof value.sessionId === 'string')
     && typeof value.status === 'string'
     && (['running', 'blocked', 'merged'] as string[]).includes(value.status)
     && typeof value.createdAt === 'string'

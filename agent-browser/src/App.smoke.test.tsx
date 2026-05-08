@@ -396,13 +396,33 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByText(/Conversation branch started/i)).toBeInTheDocument();
     expect(screen.getByText(/branches 1 active/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to main conversation' })).toBeInTheDocument();
+    expect(screen.getByText('conversation/research/branch-active-chat-thread')).toBeInTheDocument();
+    expect(screen.getByText(/Steering messages update this running subthread/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Agent provider'), { target: { value: 'tour-guide' } });
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Keep the browser evidence focused on the checkout flow.' },
+    });
+    expect(screen.getByRole('button', { name: 'Send' })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to main conversation' }));
+
+    expect(screen.getByText('Subthread transcripts')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open conversation/research/branch-active-chat-thread' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('History'));
 
     expect(screen.getByRole('button', { name: 'Branching conversations' })).toBeInTheDocument();
     expect(screen.getByText('Conversation branches')).toBeInTheDocument();
-    expect(screen.getByText('conversation/research/branch-active-chat-thread')).toBeInTheDocument();
-    expect(screen.getAllByText('Branch started: Branch active chat thread')).toHaveLength(2);
+    expect(screen.getAllByText('conversation/research/branch-active-chat-thread')).toHaveLength(2);
+    expect(screen.getAllByText('Branch started: Branch active chat thread').length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge conversation/research/branch-active-chat-thread' }));
+    expect(screen.getByText(/Conversation branch merged into main context/i)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open conversation/research/branch-active-chat-thread' })[0]);
+    expect(screen.getByRole('button', { name: 'Back to main conversation' })).toBeInTheDocument();
+    expect(screen.getByText(/Merged subthread read-only/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Chat input')).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: 'Branching conversations' }));

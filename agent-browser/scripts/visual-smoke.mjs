@@ -294,6 +294,7 @@ async function main() {
     await page.addInitScript(() => {
       const workspaceId = 'ws-research';
       const sessionId = 'visual-eval-session';
+      const subthreadSessionId = 'visual-eval-session-branch-agent-proof';
       localStorage.setItem('agent-browser.workspace-root', JSON.stringify({
         id: 'root',
         name: 'Root',
@@ -330,6 +331,14 @@ async function main() {
                     nodeKind: 'session',
                     persisted: true,
                     filePath: `${workspaceId}:session:1`,
+                  },
+                  {
+                    id: subthreadSessionId,
+                    name: 'Branch: Agent proof',
+                    type: 'tab',
+                    nodeKind: 'session',
+                    persisted: true,
+                    filePath: `${workspaceId}:session:agent-proof`,
                   },
                 ],
               },
@@ -484,6 +493,26 @@ async function main() {
             ],
           },
         ],
+        [subthreadSessionId]: [
+          {
+            id: `${subthreadSessionId}:system`,
+            role: 'system',
+            status: 'complete',
+            content: 'Agent Browser branch session ready.',
+          },
+          {
+            id: 'visual-branch-user',
+            role: 'user',
+            status: 'complete',
+            content: 'Keep the proof focused on visible browser evidence.',
+          },
+          {
+            id: 'visual-branch-assistant',
+            role: 'assistant',
+            status: 'complete',
+            content: 'Branch proof captured for the main conversation.',
+          },
+        ],
       }));
       localStorage.setItem('agent-browser.run-checkpoint-state', JSON.stringify({
         checkpoints: [
@@ -595,6 +624,7 @@ async function main() {
             id: 'subthread:ws-research:agent-proof',
             title: 'Agent proof branch',
             branchName: 'conversation/research/agent-proof',
+            sessionId: subthreadSessionId,
             status: 'merged',
             createdAt: '2026-05-08T01:00:00.000Z',
             updatedAt: '2026-05-08T01:10:00.000Z',
@@ -897,8 +927,11 @@ async function main() {
     await expect(page.getByRole('button', { name: 'Branching conversations' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByText('Conversation branches')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('conversation/research/agent-proof')).toBeVisible({ timeout: shellTimeoutMs });
+    const branchingConversations = page.getByLabel('Branching conversations');
+    await expect(branchingConversations.getByText('Conversation branches')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(branchingConversations.getByText('conversation/research/agent-proof')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await expect(page.getByText('Captured branch proof and returned the latest summary to main.').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });

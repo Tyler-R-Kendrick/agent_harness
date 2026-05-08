@@ -447,13 +447,18 @@ import {
   DEFAULT_CONVERSATION_BRANCHING_STATE,
   buildConversationBranchProcessEntries,
   buildConversationBranchPromptContext,
+  canSubmitToConversationSession,
+  commitConversationSubthread,
   createConversationBranchingState,
+  getConversationMainSessionForSubthread,
+  getConversationSubthreadForSession,
   isConversationBranchingRequest,
   isConversationBranchingState,
   mergeConversationSubthread,
   summarizeConversationBranches,
   type ConversationBranchingState,
   type ConversationBranchSettings,
+  type ConversationSubthread,
 } from './services/conversationBranches';
 import {
   DEFAULT_SHARED_AGENT_REGISTRY_STATE,
@@ -1608,6 +1613,109 @@ function ChatMessageView({
   );
 }
 
+function ConversationSubthreadBanner({
+  subthread,
+  mainSessionId,
+  onBack,
+}: {
+  subthread: ConversationSubthread;
+  mainSessionId: string | null;
+  onBack: () => void;
+}) {
+  const isMerged = subthread.status === 'merged';
+  return (
+    <div className={`conversation-subthread-banner${isMerged ? ' is-merged' : ''}`} aria-label="Conversation subthread">
+      <button
+        type="button"
+        className="toolbar-button"
+        aria-label="Back to main conversation"
+        onClick={onBack}
+        disabled={!mainSessionId}
+      >
+        <Icon name="arrowLeft" size={13} />
+        <span>Back</span>
+      </button>
+      <div>
+        <strong>{isMerged ? 'Merged subthread read-only' : 'Subthread conversation'}</strong>
+        <p>{subthread.branchName}</p>
+      </div>
+      <span className={`badge${isMerged ? ' connected' : ''}`}>{subthread.status}</span>
+      <small>{isMerged ? 'This branch has merged back to main.' : 'Steering messages update this running subthread.'}</small>
+    </div>
+  );
+}
+
+function ConversationSubthreadTranscripts({
+  state,
+  messagesBySession,
+  agentName,
+  onOpenConversationSession,
+  onOpenActivity,
+  onSubmitElicitation,
+  onSubmitSecret,
+  onCopyMessage,
+}: {
+  state: ConversationBranchingState;
+  messagesBySession: Record<string, ChatMessage[]>;
+  agentName: string;
+  onOpenConversationSession?: (sessionId: string) => void;
+  onOpenActivity?: (messageId: string) => void;
+  onSubmitElicitation?: (messageId: string, requestId: string, values: Record<string, string>) => void;
+  onSubmitSecret?: (messageId: string, requestId: string, input: { name: string; value: string }) => void;
+  onCopyMessage?: (input: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => Promise<void>;
+}) {
+  const subthreads = state.subthreads.filter((subthread) => subthread.sessionId);
+  if (!state.enabled || !subthreads.length) return null;
+
+  return (
+    <section className="conversation-subthread-transcripts" aria-label="Subthread transcripts">
+      <div className="conversation-subthread-transcripts-header">
+        <strong>Subthread transcripts</strong>
+        <span>{subthreads.length} branch{subthreads.length === 1 ? '' : 'es'}</span>
+      </div>
+      {subthreads.map((subthread) => {
+        const sessionMessages = messagesBySession[subthread.sessionId ?? ''] ?? [];
+        const visibleMessages = sessionMessages.filter((message) => message.role !== 'system');
+        return (
+          <article key={subthread.id} className="conversation-subthread-transcript-card">
+            <div className="history-card-header">
+              <div>
+                <h3>{subthread.title}</h3>
+                <p className="muted">{subthread.branchName}</p>
+              </div>
+              <span className={`badge${subthread.status === 'merged' ? ' connected' : ''}`}>{subthread.status}</span>
+            </div>
+            <p className="history-preview">{subthread.summary}</p>
+            <button
+              type="button"
+              className="toolbar-button"
+              aria-label={`Open ${subthread.branchName}`}
+              onClick={() => subthread.sessionId ? onOpenConversationSession?.(subthread.sessionId) : undefined}
+              disabled={!subthread.sessionId}
+            >
+              <Icon name="messageSquare" size={13} />
+              <span>Open branch session</span>
+            </button>
+            <div className="conversation-subthread-message-list">
+              {visibleMessages.length ? visibleMessages.map((message) => (
+                <ChatMessageView
+                  key={message.id}
+                  message={message}
+                  agentName={agentName}
+                  onOpenActivity={onOpenActivity}
+                  onSubmitElicitation={onSubmitElicitation}
+                  onSubmitSecret={onSubmitSecret}
+                  onCopyMessage={onCopyMessage}
+                />
+              )) : <p className="muted">No steering messages yet.</p>}
+            </div>
+          </article>
+        );
+      })}
+    </section>
+  );
+}
+
 function PageOverlay({ tab, onClose, onContextMenu, dragHandleProps }: { tab: TreeNode; onClose: () => void; onContextMenu?: (x: number, y: number) => void; dragHandleProps?: PanelDragHandleProps }) {
   const src = tab.url ?? '';
   return (
@@ -2365,6 +2473,8 @@ function ChatPanel({
   conversationBranchPromptContext,
   conversationBranchingState,
   onConversationBranchRequest,
+  onOpenConversationSession,
+  onConversationSubthreadSteering,
   dragHandleProps,
 }: {
   installedModels: HFModel[];
@@ -2427,6 +2537,8 @@ function ChatPanel({
   conversationBranchPromptContext?: string;
   conversationBranchingState: ConversationBranchingState;
   onConversationBranchRequest?: (request: string, sessionId: string) => void;
+  onOpenConversationSession?: (sessionId: string) => void;
+  onConversationSubthreadSteering?: (subthreadId: string, sessionId: string, text: string, messageIds: string[]) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
@@ -2534,6 +2646,15 @@ function ChatPanel({
   const webMcpBridge = useMemo(() => createWebMcpToolBridge(webMcpModelContext), [webMcpModelContext]);
   const sandboxFlags = getSandboxFeatureFlags();
   const activeChatSessionId = activeSessionId ?? 'session:fallback';
+  const activeConversationSubthread = useMemo(
+    () => getConversationSubthreadForSession(conversationBranchingState, activeChatSessionId),
+    [activeChatSessionId, conversationBranchingState],
+  );
+  const activeConversationMainSessionId = useMemo(
+    () => getConversationMainSessionForSubthread(conversationBranchingState, activeChatSessionId),
+    [activeChatSessionId, conversationBranchingState],
+  );
+  const activeConversationSessionCanSubmit = canSubmitToConversationSession(conversationBranchingState, activeChatSessionId);
   const locationPromptContext = useMemo(
     () => buildBrowserLocationPromptContext(browserLocationContext),
     [browserLocationContext],
@@ -2734,7 +2855,7 @@ function ChatPanel({
     () => createSpecWorkflowPlan({ task: input, settings: specDrivenDevelopmentSettings }),
     [input, specDrivenDevelopmentSettings],
   );
-  const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
+  const canSubmit = activeConversationSessionCanSubmit && !hasActiveGeneration && Boolean(input.trim()) && (
     Boolean(parseSandboxPrompt(input))
     || selectedProvider === 'tour-guide'
     || resolveAgentProviderForTask({ selectedProvider, latestUserInput: input.trim() }) === 'tour-guide'
@@ -2749,6 +2870,14 @@ function ChatPanel({
     ))
   );
   const providerSummary = getAgentProviderSummary({ provider: selectedProvider, installedModels, copilotState, cursorState, codexState });
+  const agentDisplayName = getAgentDisplayName({
+    provider: selectedProvider,
+    activeCodiModelName: activeLocalModel?.name,
+    activeGhcpModelName: activeCopilotModel?.name,
+    activeCursorModelName: activeCursorModel?.name,
+    activeCodexModelName: activeCodexModel?.name,
+    researcherRuntimeProvider: selectedRuntimeProvider,
+  });
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
@@ -3364,6 +3493,10 @@ function ChatPanel({
     const assistantId = createUniqueId();
     const userId = createUniqueId();
     const trimmedText = text.trim();
+    if (!canSubmitToConversationSession(conversationBranchingState, activeChatSessionId)) {
+      onToast({ msg: 'Merged subthreads are read-only', type: 'warning' });
+      return;
+    }
     let providerForRequest = resolveAgentProviderForTask({
       selectedProvider,
       latestUserInput: trimmedText,
@@ -3435,6 +3568,14 @@ function ChatPanel({
     }
     if (isConversationBranchingRequest(trimmedText)) {
       onConversationBranchRequest?.(trimmedText, activeChatSessionId);
+    }
+    if (activeConversationSubthread?.status === 'running') {
+      onConversationSubthreadSteering?.(
+        activeConversationSubthread.id,
+        activeChatSessionId,
+        trimmedText,
+        [userId, assistantId],
+      );
     }
 
     if (await runSandboxPrompt(text, assistantId)) {
@@ -5655,7 +5796,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, specDrivenDevelopmentSettings, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeConversationSubthread, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, conversationBranchingState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onConversationBranchRequest, onConversationSubthreadSteering, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, specDrivenDevelopmentSettings, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -6166,8 +6307,27 @@ function ChatPanel({
               {sharedChatApi?.active ? <button type="button" className="secondary-button" onClick={() => void sharedChatApi.endSession()}>End session</button> : null}
             </div>
           ) : null}
+          {!showBash && activeConversationSubthread ? (
+            <ConversationSubthreadBanner
+              subthread={activeConversationSubthread}
+              mainSessionId={activeConversationMainSessionId}
+              onBack={() => activeConversationMainSessionId ? onOpenConversationSession?.(activeConversationMainSessionId) : undefined}
+            />
+          ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={getAgentDisplayName({ provider: selectedProvider, activeCodiModelName: activeLocalModel?.name, activeGhcpModelName: activeCopilotModel?.name, activeCursorModelName: activeCursorModel?.name, activeCodexModelName: activeCodexModel?.name, researcherRuntimeProvider: selectedRuntimeProvider })} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={agentDisplayName} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+            {!showBash && activeChatSessionId === conversationBranchingState.mainSessionId ? (
+              <ConversationSubthreadTranscripts
+                state={conversationBranchingState}
+                messagesBySession={messagesBySession}
+                agentName={agentDisplayName}
+                onOpenConversationSession={onOpenConversationSession}
+                onOpenActivity={selectActivityMessage}
+                onSubmitElicitation={handleElicitationSubmit}
+                onSubmitSecret={handleSecretSubmit}
+                onCopyMessage={handleCopyMessage}
+              />
+            ) : null}
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
@@ -6208,9 +6368,10 @@ function ChatPanel({
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
-                    placeholder={getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels, hasCodexModelsReady: hasAvailableCodexModels })}
+                    placeholder={activeConversationSessionCanSubmit ? getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels, hasCodexModelsReady: hasAvailableCodexModels }) : 'Merged subthread is read-only'}
                     rows={1}
                     onKeyDown={handleChatInputKeyDown}
+                    disabled={!activeConversationSessionCanSubmit}
                   />
                   <button
                     type="submit"
@@ -9928,9 +10089,11 @@ function BrowserAgentRunEventList({ events }: { events: BrowserAgentRunEvent[] }
 function BranchingConversationHistory({
   state,
   onMergeConversationBranch,
+  onOpenConversationSubthread,
 }: {
   state: ConversationBranchingState;
   onMergeConversationBranch: (subthreadId: string) => void;
+  onOpenConversationSubthread?: (sessionId: string) => void;
 }) {
   const summary = summarizeConversationBranches(state);
   const processEntries = buildConversationBranchProcessEntries(state);
@@ -9979,6 +10142,17 @@ function BranchingConversationHistory({
               <Icon name="share" size={13} />
               <span>{subthread.status === 'merged' ? 'Merged' : 'Merge branch'}</span>
             </button>
+            {subthread.sessionId ? (
+              <button
+                type="button"
+                className="toolbar-button"
+                aria-label={`Open ${subthread.branchName}`}
+                onClick={() => onOpenConversationSubthread?.(subthread.sessionId!)}
+              >
+                <Icon name="messageSquare" size={13} />
+                <span>Open branch session</span>
+              </button>
+            ) : null}
           </article>
         ))}
       </div>
@@ -9992,6 +10166,7 @@ function HistoryPanel({
   browserAgentRunSdkState,
   conversationBranchingState,
   onMergeConversationBranch,
+  onOpenConversationSubthread,
   sessionChapterState,
 }: {
   scheduledAutomationState: ScheduledAutomationState;
@@ -9999,6 +10174,7 @@ function HistoryPanel({
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   conversationBranchingState: ConversationBranchingState;
   onMergeConversationBranch: (subthreadId: string) => void;
+  onOpenConversationSubthread?: (sessionId: string) => void;
   sessionChapterState: ChapteredSessionState;
 }) {
   const now = new Date('2026-05-06T18:00:00.000Z');
@@ -10061,6 +10237,7 @@ function HistoryPanel({
       <BranchingConversationHistory
         state={conversationBranchingState}
         onMergeConversationBranch={onMergeConversationBranch}
+        onOpenConversationSubthread={onOpenConversationSubthread}
       />
       <BrowserAgentRunSdkHistory state={browserAgentRunSdkState} />
       <SidebarSection title="Chaptered sessions" scrollBody>
@@ -12348,15 +12525,6 @@ function AgentBrowserApp() {
       : DEFAULT_CONVERSATION_BRANCHING_STATE,
     [activeWorkspaceId, conversationBranchingState],
   );
-  const startConversationBranch = useCallback((request: string, sessionId: string) => {
-    setConversationBranchingState(createConversationBranchingState({
-      workspaceId: activeWorkspaceId,
-      workspaceName: activeWorkspace.name,
-      mainSessionId: sessionId,
-      request,
-    }));
-    setToast({ msg: 'Conversation branch started', type: 'success' });
-  }, [activeWorkspace.name, activeWorkspaceId, setConversationBranchingState, setToast]);
   const mergeActiveConversationBranch = useCallback((subthreadId: string) => {
     setConversationBranchingState((current) => {
       if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
@@ -12368,6 +12536,16 @@ function AgentBrowserApp() {
     });
     setToast({ msg: 'Conversation branch merged into main context', type: 'success' });
   }, [activeWorkspaceId, setConversationBranchingState, setToast]);
+  const recordConversationSubthreadSteering = useCallback((subthreadId: string, sessionId: string, text: string, messageIds: string[]) => {
+    setConversationBranchingState((current) => {
+      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
+      return commitConversationSubthread(current, subthreadId, {
+        sourceSessionId: sessionId,
+        messageIds,
+        summary: `Steering update: ${text.trim().replace(/\s+/g, ' ')}`,
+      });
+    });
+  }, [activeWorkspaceId, setConversationBranchingState]);
   const updateConversationBranchSettings = useCallback((settings: ConversationBranchSettings) => {
     setConversationBranchingState((current) => ({
       ...current,
@@ -13220,6 +13398,47 @@ function AgentBrowserApp() {
     setToast({ msg: 'New session created', type: 'success' });
     return createdSession;
   }, [setToast, switchWorkspace]);
+
+  const startConversationBranch = useCallback((request: string, sessionId: string) => {
+    const title = request.trim().replace(/\s+/g, ' ') || 'Active chat thread';
+    const subthreadSession = addSessionToWorkspace(
+      activeWorkspaceId,
+      `Branch: ${title.slice(0, 48)}`,
+    );
+    setConversationBranchingState(createConversationBranchingState({
+      workspaceId: activeWorkspaceId,
+      workspaceName: activeWorkspace.name,
+      mainSessionId: sessionId,
+      subthreadSessionId: subthreadSession?.id ?? sessionId,
+      request,
+    }));
+    setToast({ msg: 'Conversation branch started', type: 'success' });
+  }, [activeWorkspace.name, activeWorkspaceId, addSessionToWorkspace, setConversationBranchingState, setToast]);
+
+  const openConversationSession = useCallback((sessionId: string) => {
+    const workspace = getWorkspace(root, activeWorkspaceId);
+    if (!workspace) return;
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(workspace);
+      const activeSessionIds = [sessionId];
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          activeMode: 'agent',
+          activeSessionIds,
+          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
+            ? existing.mountedSessionFsIds
+            : [...existing.mountedSessionFsIds, sessionId],
+          panelOrder: [
+            ...(existing.openTabIds ?? []).map((id) => `browser:${id}`),
+            ...activeSessionIds.map((id) => `session:${id}`),
+          ],
+        },
+      };
+    });
+    switchWorkspace(activeWorkspaceId);
+  }, [activeWorkspaceId, root, setWorkspaceViewStateByWorkspace, switchWorkspace]);
 
   const openArtifactPanel = useCallback((artifactId: string, filePath: string | null = null, workspaceId = activeWorkspaceId) => {
     const workspace = getWorkspace(root, workspaceId);
@@ -16023,6 +16242,7 @@ function AgentBrowserApp() {
           browserAgentRunSdkState={browserAgentRunSdkState}
           conversationBranchingState={activeConversationBranchingState}
           onMergeConversationBranch={mergeActiveConversationBranch}
+          onOpenConversationSubthread={openConversationSession}
           sessionChapterState={sessionChapterState}
         />
       );
@@ -16441,6 +16661,8 @@ function AgentBrowserApp() {
                 onSessionRuntimeChange={handleSessionRuntimeChange}
                 onMultitaskRequest={startMultitaskSubagents}
                 onConversationBranchRequest={startConversationBranch}
+                onOpenConversationSession={openConversationSession}
+                onConversationSubthreadSteering={recordConversationSubthreadSteering}
                 dragHandleProps={dragHandleProps}
               />
             );
