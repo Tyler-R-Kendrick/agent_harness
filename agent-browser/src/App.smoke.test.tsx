@@ -610,7 +610,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('npm.cmd run visual:agent-browser')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Workspaces'));
+      fireEvent.click(screen.getByLabelText('Projects'));
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'New session widget' }));

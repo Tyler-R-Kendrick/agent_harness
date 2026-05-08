@@ -36,7 +36,7 @@ async function switchWorkspaceByShortcut(world, workspaceName) {
   const shortcutMap = {
     Research: '1',
     Build: '2',
-    'Workspace 3': '3',
+    'Project 3': '3',
     Ops: '3',
   };
   const indexKey = shortcutMap[workspaceName];
@@ -46,7 +46,7 @@ async function switchWorkspaceByShortcut(world, workspaceName) {
     await world.page.evaluate((key) => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true }));
     }, indexKey);
-    await expect(world.page.getByLabel('Toggle workspace overlay')).toContainText(workspaceName);
+    await expect(world.page.getByLabel('Open projects')).toHaveAttribute('title', workspaceName);
     await expectWorkspaceTree(world.page, workspaceName);
   }
   world.currentWorkspace = workspaceName;
@@ -64,17 +64,25 @@ Given('the active workspace is {string}', async function(workspaceName) {
 
 Given('the workspaces {string} and {string} both exist', async function(firstName, secondName) {
   await openWorkspaceSwitcher(this.page);
-  const dialog = this.page.getByRole('dialog', { name: 'Workspace switcher' });
+  const dialog = this.page.getByRole('dialog', { name: 'Project switcher' });
   await expect(dialog).toContainText(firstName);
   await expect(dialog).toContainText(secondName);
-  await dialog.getByLabel('Close workspace switcher').click();
+  await dialog.getByLabel('Close project switcher').click();
+});
+
+Given('the projects {string} and {string} both exist', async function(firstName, secondName) {
+  await openWorkspaceSwitcher(this.page);
+  const dialog = this.page.getByRole('dialog', { name: 'Project switcher' });
+  await expect(dialog).toContainText(firstName);
+  await expect(dialog).toContainText(secondName);
+  await dialog.getByLabel('Close project switcher').click();
 });
 
 Given('{string} is a separate workspace', async function(workspaceName) {
   await openWorkspaceSwitcher(this.page);
-  const dialog = this.page.getByRole('dialog', { name: 'Workspace switcher' });
+  const dialog = this.page.getByRole('dialog', { name: 'Project switcher' });
   await expect(dialog).toContainText(workspaceName);
-  await dialog.getByLabel('Close workspace switcher').click();
+  await dialog.getByLabel('Close project switcher').click();
 });
 
 Given('the local model registry returns the {string} model as browser-runnable and ONNX-backed', async function(modelName) {
@@ -144,7 +152,7 @@ When('the user loads the {string} model card', async function(modelName) {
 });
 
 When('the user returns to the chat panel', async function() {
-  await openPanel(this.page, 'Workspaces');
+  await openPanel(this.page, 'Projects');
   await expect(this.page.getByLabel('Chat input')).toBeVisible();
 });
 
@@ -200,7 +208,17 @@ When('the user opens the workspace switcher from the workspace pill toggle', asy
 });
 
 When('the user selects the {string} workspace', async function(workspaceName) {
-  const dialog = this.page.getByRole('dialog', { name: 'Workspace switcher' });
+  const dialog = this.page.getByRole('dialog', { name: 'Project switcher' });
+  await dialog.locator('.workspace-card-button').filter({ hasText: workspaceName }).first().click();
+  this.currentWorkspace = workspaceName;
+});
+
+When('the user opens the project switcher from the project pill toggle', async function() {
+  await openWorkspaceSwitcher(this.page);
+});
+
+When('the user selects the {string} project', async function(workspaceName) {
+  const dialog = this.page.getByRole('dialog', { name: 'Project switcher' });
   await dialog.locator('.workspace-card-button').filter({ hasText: workspaceName }).first().click();
   this.currentWorkspace = workspaceName;
 });
@@ -210,9 +228,17 @@ When('the user presses {string}', async function(shortcut) {
 });
 
 When('the user renames the active workspace to {string}', async function(workspaceName) {
-  await this.page.getByLabel('Toggle workspace overlay').dispatchEvent('dblclick');
-  await expect(this.page.getByRole('dialog', { name: 'Rename workspace' })).toBeVisible();
-  await this.page.getByLabel('Workspace name').fill(workspaceName);
+  await this.page.getByLabel('Open projects').dispatchEvent('dblclick');
+  await expect(this.page.getByRole('dialog', { name: 'Rename project' })).toBeVisible();
+  await this.page.getByLabel('Project name').fill(workspaceName);
+  await this.page.getByRole('button', { name: 'Save' }).click();
+  this.currentWorkspace = workspaceName;
+});
+
+When('the user renames the active project to {string}', async function(workspaceName) {
+  await this.page.getByLabel('Open projects').dispatchEvent('dblclick');
+  await expect(this.page.getByRole('dialog', { name: 'Rename project' })).toBeVisible();
+  await this.page.getByLabel('Project name').fill(workspaceName);
   await this.page.getByRole('button', { name: 'Save' }).click();
   this.currentWorkspace = workspaceName;
 });
@@ -356,7 +382,11 @@ Then('the {string} dialog is visible', async function(dialogName) {
 });
 
 Then('the workspace pill shows {string}', async function(workspaceName) {
-  await expect(this.page.getByLabel('Toggle workspace overlay')).toContainText(workspaceName);
+  await expect(this.page.getByLabel('Open projects')).toHaveAttribute('title', workspaceName);
+});
+
+Then('the project pill shows {string}', async function(workspaceName) {
+  await expect(this.page.getByLabel('Open projects')).toHaveAttribute('title', workspaceName);
 });
 
 Then('the workspace tree updates to the {string} root', async function(workspaceName) {
@@ -364,7 +394,12 @@ Then('the workspace tree updates to the {string} root', async function(workspace
 });
 
 Then('a new workspace named {string} becomes active', async function(workspaceName) {
-  await expect(this.page.getByLabel('Toggle workspace overlay')).toContainText(workspaceName);
+  await expect(this.page.getByLabel('Open projects')).toHaveAttribute('title', workspaceName);
+  this.currentWorkspace = workspaceName;
+});
+
+Then('a new project named {string} becomes active', async function(workspaceName) {
+  await expect(this.page.getByLabel('Open projects')).toHaveAttribute('title', workspaceName);
   this.currentWorkspace = workspaceName;
 });
 

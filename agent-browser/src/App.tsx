@@ -548,13 +548,11 @@ import {
   type SecretRecord,
 } from './chat-agents/Secrets';
 import {
-  WORKSPACE_COLORS,
   buildWorkspaceNodeMap,
   countTabs,
   createBrowserTab,
   createInitialRoot,
   createSessionNode,
-  createWorkspaceNode,
   createWorkspaceViewEntry,
   createWorkspaceViewState,
   deepUpdate,
@@ -568,7 +566,6 @@ import {
   flattenWorkspaceTreeFiltered,
   getWorkspace,
   getWorkspaceCategory,
-  nextWorkspaceName,
   normalizeWorkspaceViewEntry,
   removeNodeById,
   renderPaneIdForNode,
@@ -577,6 +574,11 @@ import {
   type FlatTreeItem,
   type WorkspaceViewState,
 } from './services/workspaceTree';
+import {
+  createProjectWorkspace,
+  listProjectSummaries,
+  nextProjectColor,
+} from './services/projects';
 import {
   buildActiveSessionFilesystemEntries,
   buildActiveWorktreeItems,
@@ -752,7 +754,7 @@ const PANEL_MIN_WIDTH_PX = 320;
 const PANEL_MIN_HEIGHT_PX = 240;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
-  ['workspaces', 'layers', 'Workspaces'],
+  ['workspaces', 'layers', 'Projects'],
   ['review', 'gitPullRequest', 'Review'],
   ['wiki', 'bookmark', 'Wiki'],
   ['canvases', 'canvas', 'Canvases'],
@@ -767,7 +769,7 @@ const SECONDARY_NAV = [
 ] as const;
 const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
-  workspaces: { label: 'Workspaces', icon: 'layers' },
+  workspaces: { label: 'Projects', icon: 'layers' },
   review: { label: 'Review', icon: 'gitPullRequest' },
   wiki: { label: 'Wiki', icon: 'bookmark' },
   canvases: { label: 'Canvases', icon: 'canvas' },
@@ -820,12 +822,12 @@ const WORKSPACE_SHORTCUT_GROUPS = [
     ],
   },
   {
-    title: 'Workspace switching',
+    title: 'Project switching',
     items: [
-      { keys: 'Ctrl+1-9', description: 'Jump to workspace N' },
-      { keys: 'Ctrl+Alt+←/→', description: 'Previous / next workspace' },
-      { keys: 'Ctrl+Alt+N', description: 'New empty workspace' },
-      { keys: 'Double-click pill', description: 'Rename workspace' },
+      { keys: 'Ctrl+1-9', description: 'Jump to project N' },
+      { keys: 'Ctrl+Alt+←/→', description: 'Previous / next project' },
+      { keys: 'Ctrl+Alt+N', description: 'New project' },
+      { keys: 'Double-click pill', description: 'Rename project' },
     ],
   },
 ] as const;
@@ -10914,6 +10916,7 @@ function AccountPanel({
 function WorkspaceSwitcherOverlay({
   workspaces,
   activeWorkspaceId,
+  workspaceFilesByWorkspace,
   onSwitch,
   onCreateWorkspace,
   onRenameWorkspace,
@@ -10922,6 +10925,7 @@ function WorkspaceSwitcherOverlay({
 }: {
   workspaces: TreeNode[];
   activeWorkspaceId: string;
+  workspaceFilesByWorkspace: Record<string, WorkspaceFile[]>;
   onSwitch: (workspaceId: string) => void;
   onCreateWorkspace: () => void;
   onRenameWorkspace: (workspaceId: string) => void;
@@ -10930,12 +10934,17 @@ function WorkspaceSwitcherOverlay({
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const projectSummaries = listProjectSummaries(
+    { id: 'root', name: 'Root', type: 'root', children: workspaces },
+    activeWorkspaceId,
+    workspaceFilesByWorkspace,
+  );
 
-  const filteredWorkspaces = workspaces.filter((workspace) => {
+  const filteredProjects = projectSummaries.filter((project) => {
     if (!query.trim()) return true;
     const normalized = query.trim().toLowerCase();
-    const tabs = flattenTabs(workspace, 'browser').map((tab) => tab.name.toLowerCase()).join(' ');
-    return workspace.name.toLowerCase().includes(normalized) || tabs.includes(normalized);
+    const pages = project.previewItems.map((name) => name.toLowerCase()).join(' ');
+    return project.name.toLowerCase().includes(normalized) || pages.includes(normalized);
   });
 
   const handleSwitch = (id: string) => {
@@ -10949,55 +10958,52 @@ function WorkspaceSwitcherOverlay({
   };
 
   return (
-    <div className="ws-overlay-backdrop" role="dialog" aria-modal="true" aria-label="Workspace switcher" onClick={onClose}>
+    <div className="ws-overlay-backdrop" role="dialog" aria-modal="true" aria-label="Project switcher" onClick={onClose}>
       <div className="modal-card workspace-switcher-card ws-overlay-content" onClick={(e) => e.stopPropagation()}>
         <div className="workspace-switcher-header">
           <div className="workspace-switcher-heading">
-            <span className="panel-eyebrow">Workspace switcher</span>
+            <span className="panel-eyebrow">Project switcher</span>
             <div className="workspace-switcher-title-row">
-              <h2>Workspaces</h2>
-              <span className="badge">{workspaces.length} open</span>
+              <h2>Projects</h2>
+              <span className="badge">{projectSummaries.length} projects</span>
             </div>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close workspace switcher"><Icon name="x" /></button>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close project switcher"><Icon name="x" /></button>
         </div>
         <div className="workspace-switcher-body">
           <label className="workspace-switcher-search shared-input-shell">
             <Icon name="search" size={13} color="#71717a" />
-            <input aria-label="Search workspaces" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Switch to..." autoFocus />
+            <input aria-label="Search projects" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a project..." autoFocus />
           </label>
           <div className="workspace-switcher-list">
-          {filteredWorkspaces.map((workspace) => {
-            const isActive = workspace.id === activeWorkspaceId;
-            const isHovered = workspace.id === hoveredId;
-            const color = workspace.color ?? '#60a5fa';
-            const tabCount = countTabs(workspace);
-            const previewTabs = flattenTabs(workspace, 'browser').slice(0, 3);
-            const memoryTotal = totalMemoryMB(workspace);
-            const previewLabel = previewTabs.length ? previewTabs.map((tab) => tab.name).join(' · ') : 'No pages yet';
+          {filteredProjects.map((project) => {
+            const isActive = project.isActive;
+            const isHovered = project.id === hoveredId;
+            const color = project.color;
+            const previewLabel = project.previewItems.length ? project.previewItems.join(' · ') : 'No pages yet';
 
             return (
               <div
-                key={workspace.id}
+                key={project.id}
                 className={`workspace-card workspace-card-row ${isActive ? 'active' : ''} ${isHovered ? 'hovered' : ''}`}
-                onMouseEnter={() => setHoveredId(workspace.id)}
+                onMouseEnter={() => setHoveredId(project.id)}
                 onMouseLeave={() => setHoveredId(null)}
               >
                 <button
                   type="button"
                   className="workspace-card-button"
-                  onClick={() => handleSwitch(workspace.id)}
+                  onClick={() => handleSwitch(project.id)}
                 >
                   <span className="workspace-swatch" style={{ background: `${color}1c`, borderColor: `${color}55` }}>
                     <span className="workspace-swatch-dot" style={{ background: color }} />
                   </span>
                   <div className="workspace-card-main">
                     <div className="workspace-card-title-row">
-                      <span className="workspace-hotkey-chip">{workspaces.indexOf(workspace) + 1}</span>
-                      <strong className="ws-card-name" onDoubleClick={(event) => { event.stopPropagation(); onRenameWorkspace(workspace.id); }}>{workspace.name}</strong>
+                      <span className="workspace-hotkey-chip">{projectSummaries.findIndex((candidate) => candidate.id === project.id) + 1}</span>
+                      <strong className="ws-card-name" onDoubleClick={(event) => { event.stopPropagation(); onRenameWorkspace(project.id); }}>{project.name}</strong>
                       {isActive ? <span className="badge connected">Active</span> : null}
                     </div>
-                    <span className="ws-card-tab-count">{tabCount} tabs · {memoryTotal.toLocaleString()} MB</span>
+                    <span className="ws-card-tab-count">{project.sessionCount} session{project.sessionCount === 1 ? '' : 's'} · {project.browserPageCount} pages · {project.memoryMB.toLocaleString()} MB</span>
                     <span className="ws-card-tabs">{previewLabel}</span>
                   </div>
                 </button>
@@ -11005,8 +11011,8 @@ function WorkspaceSwitcherOverlay({
                   <button
                     type="button"
                     className="workspace-card-delete"
-                    onClick={(e) => { e.stopPropagation(); onDeleteWorkspace(workspace.id); }}
-                    aria-label={`Delete workspace ${workspace.name}`}
+                    onClick={(e) => { e.stopPropagation(); onDeleteWorkspace(project.id); }}
+                    aria-label={`Delete project ${project.name}`}
                   >
                     <Icon name="x" size={10} color="rgba(255,255,255,.5)" />
                   </button>
@@ -11014,7 +11020,7 @@ function WorkspaceSwitcherOverlay({
               </div>
             );
           })}
-          {!filteredWorkspaces.length ? <div className="workspace-empty-state-row">No workspaces match this query.</div> : null}
+          {!filteredProjects.length ? <div className="workspace-empty-state-row">No projects match this query.</div> : null}
           <div className="workspace-card workspace-card-row ws-card-new">
             <button type="button" className="workspace-card-button" onClick={handleCreate}>
               <span className="workspace-swatch workspace-swatch-new">
@@ -11022,9 +11028,9 @@ function WorkspaceSwitcherOverlay({
               </span>
               <div className="workspace-card-main">
                 <div className="workspace-card-title-row">
-                  <strong className="ws-card-name">New workspace</strong>
+                  <strong className="ws-card-name">New project</strong>
                 </div>
-                <span className="ws-card-tab-count">Empty context</span>
+                <span className="ws-card-tab-count">Session 1 ready</span>
                 <span className="ws-card-tabs">Ctrl+Alt+N</span>
               </div>
             </button>
@@ -11039,8 +11045,8 @@ function WorkspaceSwitcherOverlay({
           </div>
           <div className="ws-overlay-hints">
             <span>Enter open</span>
-            <span>Ctrl+Alt+N new workspace</span>
-            <span>Double-click name rename</span>
+            <span>Ctrl+Alt+N new project</span>
+            <span>Double-click project rename</span>
             <span>Esc close</span>
           </div>
         </div>
@@ -11094,19 +11100,19 @@ function RenameWorkspaceOverlay({
   onClose: () => void;
 }) {
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Rename workspace" onClick={onClose}>
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Rename project" onClick={onClose}>
       <div className="modal-card compact" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <span className="panel-eyebrow">Workspace</span>
-            <h2>Rename workspace</h2>
+            <span className="panel-eyebrow">Project</span>
+            <h2>Rename project</h2>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Close rename workspace"><Icon name="x" /></button>
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close rename project"><Icon name="x" /></button>
         </div>
         <div className="add-file-form">
           <label className="file-editor-field">
             <span>Name</span>
-            <input aria-label="Workspace name" value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave(); }} />
+            <input aria-label="Project name" value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') onSave(); }} />
           </label>
           <div className="add-file-buttons">
             <button type="button" className="primary-button" onClick={onSave}>Save</button>
@@ -13294,13 +13300,11 @@ function AgentBrowserApp() {
   }, [root]);
 
   const createWorkspace = useCallback(() => {
-    const name = nextWorkspaceName(root);
     const workspaceId = `ws-${createUniqueId()}`;
-    const workspace = createWorkspaceNode({
+    const { workspace, viewState } = createProjectWorkspace({
+      root,
       id: workspaceId,
-      name,
-      color: WORKSPACE_COLORS[(root.children ?? []).length % WORKSPACE_COLORS.length],
-      browserTabs: [],
+      color: nextProjectColor(root),
     });
     setRoot((current) => ({
       ...current,
@@ -13309,10 +13313,10 @@ function AgentBrowserApp() {
         workspace,
       ],
     }));
-    setWorkspaceViewStateByWorkspace((current) => ({ ...current, [workspaceId]: createWorkspaceViewEntry(workspace) }));
+    setWorkspaceViewStateByWorkspace((current) => ({ ...current, [workspaceId]: viewState }));
     setWorkspaceFilesByWorkspace((current) => ({ ...current, [workspaceId]: createDefaultWorkspaceFiles() }));
     setActiveWorkspaceId(workspaceId);
-    setToast({ msg: `Created ${name}`, type: 'success' });
+    setToast({ msg: `Created ${workspace.name}`, type: 'success' });
   }, [root, setToast]);
 
   const saveWorkspaceRename = useCallback(() => {
@@ -13322,7 +13326,7 @@ function AgentBrowserApp() {
       return;
     }
     setRoot((current) => deepUpdate(current, renamingWorkspaceId, (workspace) => ({ ...workspace, name: nextName })));
-    setToast({ msg: `Renamed workspace to ${nextName}`, type: 'success' });
+    setToast({ msg: `Renamed project to ${nextName}`, type: 'success' });
     setRenamingWorkspaceId(null);
   }, [renamingWorkspaceId, setToast, workspaceDraftName]);
 
@@ -14294,7 +14298,7 @@ function AgentBrowserApp() {
         { icon: Globe, label: 'New tab', onClick: () => addBrowserTabToWorkspace(activeWorkspaceId) },
         { icon: MessageSquare, label: 'New session', onClick: () => addSessionToWorkspace(activeWorkspaceId) },
         { icon: File, label: 'Add file', onClick: () => openWorkspaceFileMenu(activeWorkspaceId) },
-        { icon: Layers3, label: 'Workspaces', onClick: openWorkspaceSwitcher },
+        { icon: Layers3, label: 'Projects', onClick: openWorkspaceSwitcher },
       ],
       entries: [
         { label: 'Properties', onClick: () => setPropertiesNode(activeWorkspace) },
@@ -14305,10 +14309,10 @@ function AgentBrowserApp() {
   function buildWorkspaceContextMenu(node: TreeNode): { entries: ContextMenuEntry[]; topButtons: ContextMenuTopButton[] } {
     const entries: ContextMenuEntry[] = [];
     if (node.id !== activeWorkspaceId) {
-      entries.push({ label: 'Switch workspace', onClick: () => switchWorkspace(node.id) });
+      entries.push({ label: 'Switch project', onClick: () => switchWorkspace(node.id) });
     }
     entries.push(
-      { label: 'Workspaces', onClick: openWorkspaceSwitcher },
+      { label: 'Projects', onClick: openWorkspaceSwitcher },
       'separator',
       { label: 'Properties', onClick: () => setPropertiesNode(node) },
     );
@@ -16406,7 +16410,7 @@ function AgentBrowserApp() {
                   <button
                     type="button"
                     className="workspace-toggle-pill"
-                    aria-label="Toggle workspace overlay"
+                    aria-label="Open projects"
                     title={activeWorkspace.name}
                     onClick={openWorkspaceSwitcher}
                     onDoubleClick={() => openRenameWorkspace(activeWorkspaceId)}
@@ -16693,7 +16697,7 @@ function AgentBrowserApp() {
       </main>
       {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('tool', showAddFileMenu)}>Tool</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('memory', showAddFileMenu)}>Memory</button></div></div></div></div> : null}
       {addSessionFsMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add to session filesystem"><div className="modal-card compact"><div className="modal-header"><h2>Add to {addSessionFsMenu.basePath}</h2><button type="button" className="icon-button" onClick={() => { setAddSessionFsMenu(null); setAddSessionFsName(''); }}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name</span><input aria-label="Entry name" value={addSessionFsName} onChange={(event) => setAddSessionFsName(event.target.value)} placeholder="e.g. notes.md" autoFocus onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, addSessionFsMenu.kind === 'folder'); } if (event.key === 'Escape') { setAddSessionFsMenu(null); setAddSessionFsName(''); } }} /></label><div className="add-file-buttons">{addSessionFsMenu.kind === 'file' ? <button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, false)}>Create file</button> : addSessionFsMenu.kind === 'folder' ? <button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, true)}>Create folder</button> : <><button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, false)}>File</button><button type="button" className="secondary-button" onClick={() => void handleAddToSessionFs(addSessionFsMenu.sessionId, addSessionFsMenu.basePath, true)}>Folder</button></>}</div></div></div></div> : null}
-      {showWorkspaces ? <WorkspaceSwitcherOverlay workspaces={root.children ?? []} activeWorkspaceId={activeWorkspaceId} onSwitch={switchWorkspace} onCreateWorkspace={createWorkspace} onRenameWorkspace={openRenameWorkspace} onClose={() => setShowWorkspaces(false)} /> : null}
+      {showWorkspaces ? <WorkspaceSwitcherOverlay workspaces={root.children ?? []} activeWorkspaceId={activeWorkspaceId} workspaceFilesByWorkspace={workspaceFilesByWorkspace} onSwitch={switchWorkspace} onCreateWorkspace={createWorkspace} onRenameWorkspace={openRenameWorkspace} onClose={() => setShowWorkspaces(false)} /> : null}
       {showShortcuts ? <ShortcutOverlay onClose={() => setShowShortcuts(false)} /> : null}
       {renamingWorkspaceId ? <RenameWorkspaceOverlay value={workspaceDraftName} onChange={setWorkspaceDraftName} onSave={saveWorkspaceRename} onClose={() => setRenamingWorkspaceId(null)} /> : null}
       {renameSessionFsMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Rename"><div className="modal-card compact"><div className="modal-header"><h2>Rename</h2><button type="button" className="icon-button" onClick={() => { setRenameSessionFsMenu(null); setRenameSessionFsName(''); }}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>New name</span><input aria-label="New name" value={renameSessionFsName} onChange={(event) => setRenameSessionFsName(event.target.value)} autoFocus onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void handleRenameSessionFsNode(renameSessionFsMenu.sessionId, renameSessionFsMenu.path, renameSessionFsName); } if (event.key === 'Escape') { setRenameSessionFsMenu(null); setRenameSessionFsName(''); } }} /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => void handleRenameSessionFsNode(renameSessionFsMenu.sessionId, renameSessionFsMenu.path, renameSessionFsName)}>Rename</button></div></div></div></div> : null}

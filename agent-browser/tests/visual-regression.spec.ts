@@ -63,8 +63,8 @@ test.describe('visual regression: reference impl parity', () => {
     const activityBar = page.locator('nav.activity-bar');
     await expect(activityBar).toBeVisible();
 
-    // Reference has: Workspaces, History, Extensions at top; Account, Settings at bottom; sidebar toggle last
-    await expect(page.getByLabel('Workspaces')).toBeVisible();
+    // Reference has: Projects, History, Extensions at top; Account, Settings at bottom; sidebar toggle last
+    await expect(page.getByLabel('Projects')).toBeVisible();
     await expect(page.getByLabel('History')).toBeVisible();
     await expect(page.getByLabel('Extensions')).toBeVisible();
     await expect(page.getByLabel('Settings')).toBeVisible();
@@ -78,7 +78,7 @@ test.describe('visual regression: reference impl parity', () => {
     await activityBar.screenshot({ path: `${SCREENSHOT_DIR}/current-activity-bar.png` });
   });
 
-  // ── Sidebar workspace panel: omnibar, workspace pill toggle, tree with ──
+  // ── Sidebar workspace panel: omnibar, project pill toggle, tree with ──
   //    memory tier dots, tab count badges, memory bar at bottom
   test('sidebar workspace panel has reference features', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
@@ -93,8 +93,8 @@ test.describe('visual regression: reference impl parity', () => {
     // Omnibar (smaller, styled like chat input)
     await expect(page.getByLabel('Omnibar')).toBeVisible();
 
-    // Workspace controls now live below the omnibar on the right
-    await expect(page.getByLabel('Toggle workspace overlay')).toBeVisible();
+    // Project controls now live below the omnibar on the right
+    await expect(page.getByLabel('Open projects')).toBeVisible();
     await expect(page.getByLabel('Open keyboard shortcuts')).toBeVisible();
 
     // Workspace tree visible
@@ -107,28 +107,28 @@ test.describe('visual regression: reference impl parity', () => {
     await page.locator('aside.sidebar').screenshot({ path: `${SCREENSHOT_DIR}/current-sidebar-workspace.png` });
   });
 
-  // ── Workspace overlay: compact switcher dialog with dense workspace rows ──
+  // ── Project overlay: compact switcher dialog with dense project rows ──
   //    command-style shortcuts, quick create action, and keyboard hints
-  test('workspace overlay matches the compact switcher layout', async ({ page }) => {
+  test('project overlay matches the compact switcher layout', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
     await page.goto('/');
     await page.getByLabel('Omnibar').waitFor();
 
-    // Open workspace overlay
-    await page.getByLabel('Toggle workspace overlay').click();
+    // Open project overlay
+    await page.getByLabel('Open projects').click();
 
-    const overlay = page.getByRole('dialog', { name: 'Workspace switcher' });
+    const overlay = page.getByRole('dialog', { name: 'Project switcher' });
     await expect(overlay).toBeVisible();
 
     // Title
-    await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
 
-    // Workspace rows visible
+    // Project rows visible
     const workspaceCards = overlay.locator('.workspace-card');
     await expect(workspaceCards.first()).toBeVisible();
 
-    // New workspace button
-    await expect(overlay.getByRole('button', { name: /new workspace/i })).toBeVisible();
+    // New project button
+    await expect(overlay.getByRole('button', { name: /new project/i })).toBeVisible();
 
     // Hint row with shortcuts
     await expect(overlay.getByText(/Ctrl\+1-9/)).toBeVisible();
@@ -138,7 +138,7 @@ test.describe('visual regression: reference impl parity', () => {
   });
 
   // ── Keyboard shortcuts: sections matching reference ──────────────────────
-  //    Navigation, Selection, Operations, Quick Access, Workspace Switching
+  //    Navigation, Selection, Operations, Quick Access, Project Switching
   test('keyboard shortcuts overlay matches reference sections', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
     await page.goto('/');
@@ -285,7 +285,7 @@ test.describe('visual regression: reference impl parity', () => {
     await page.keyboard.press('Control+Alt+ArrowLeft');
     await page.waitForTimeout(500);
 
-    // Ctrl+Alt+N should create new workspace
+    // Ctrl+Alt+N should create new project
     await page.keyboard.press('Control+Alt+n');
     await page.waitForTimeout(500);
 

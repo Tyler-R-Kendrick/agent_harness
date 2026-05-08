@@ -11,7 +11,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 - Feature-gated sandbox tool execution: when `VITE_SECURE_BROWSER_SANDBOX_EXEC=true`, chat can run a `/sandbox ...` tool request inside a hidden sandboxed iframe, summarize structured results, and persist successful generated files into the active workspace `just-bash` filesystem.
 - Virtual filesystem per workspace: The Files category renders as a compute surface, mounts workspace-root and top-level directories as drives, and merges persisted workspace files with per-terminal filesystem trees per workspace.
 - Default workspace memory: every workspace starts with `.memory/` files only; optional AGENTS.md, agent-skills, and DESIGN.md behavior is provided by installable plugin examples under `ext/`.
-- Workspace switching and creation: `Research` and `Build` are separate workspaces, and users can switch, cycle, rename, or create workspaces without losing workspace-scoped state.
+- Project switching and creation: `Research` and `Build` are project entries backed by isolated workspaces, and users can switch, cycle, rename, or create projects without losing project-scoped state.
 - Clipboard history via Clip-Board: each workspace tree shows a non-expandable **Clip-Board** node after Files. Right-clicking it opens a History context menu item that launches the clipboard history modal, where users can browse previous clipboard entries (captured when copying URIs or session links within the app) and restore any prior item back to the clipboard.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
 
@@ -35,9 +35,9 @@ How to interact:
 - Open the `.agents` folder inside `//workspace` under Files only after adding plugin-owned capability files.
 - Click a file node in the tree to open the **file editor** in the content area.
 - Use the omnibar to search or navigate.
-- Use the **workspace pill toggle** under the omnibar to open the workspace overlay.
+- Use the **project pill toggle** under the omnibar to open the project switcher.
 - Use the **?** button next to it to open the screenshot-style hotkeys modal.
-- Type directly while focused in Workspaces to incrementally filter the tree.
+- Type directly while focused in Projects to incrementally filter the tree.
 - Send a prompt from the composer at the bottom using the agent pill, optional model pill, and Send button.
 
 ## Chat composer
@@ -88,7 +88,7 @@ Playwright test: `captures the extensions screen`
 How to interact:
 - Open **Extensions** from the activity bar.
 - Review which plugin manifests were discovered from the active workspace.
-- Return to **Workspaces** when you need to add or edit plugin manifest files.
+- Return to **Projects** when you need to add or edit plugin manifest files.
 
 ## History panel
 
@@ -114,19 +114,19 @@ How to interact:
 - Page overlays are workspace-scoped, so switching away and back restores the last open page for that workspace.
 - Close the overlay to return to the main chat view.
 
-## Workspace switcher
+## Project switcher
 
-Playwright test: `captures the workspace switcher modal`
+Playwright test: `captures the project switcher modal`
 
-![Workspace switcher screenshot](./screenshots/workspace-switcher.png)
+![Project switcher screenshot](./screenshots/workspace-switcher.png)
 
 How to interact:
-- Click the **workspace pill toggle** to open the switcher modal.
-- Search workspaces from the top of the overlay.
-- Each workspace row is rendered as a dense quick-pick entry with its jump hint, tab count, and memory usage.
-- Click a workspace row to switch to it and close the modal.
-- Use **Ctrl+1…9** to jump directly, **Ctrl+Alt+←/→** to cycle, and **Ctrl+Alt+N** to create a new empty workspace.
-- Double-click the workspace pill (or a workspace row) to rename a workspace.
+- Click the **project pill toggle** to open the switcher modal.
+- Search projects from the top of the overlay.
+- Each project row is rendered as a dense quick-pick entry with its jump hint, session count, page count, and memory usage.
+- Click a project row to switch to it and close the modal.
+- Use **Ctrl+1…9** to jump directly, **Ctrl+Alt+←/→** to cycle, and **Ctrl+Alt+N** to create a new session-backed project.
+- Double-click the project pill (or a project row) to rename a project.
 
 ## Keyboard shortcuts
 
@@ -140,9 +140,9 @@ How to interact:
 - Use **Space**, **Shift+↑/↓**, and **Ctrl+A** for selection.
 - Use **Enter**, **Ctrl+X**, **Ctrl+V**, and **Esc** for operations.
 - Use **Type to filter** for incremental search.
-- Use **Alt+1-5** to jump between Workspaces, History, Extensions, Settings, and Account.
+- Use **Alt+1-5** to jump between Projects, History, Extensions, Settings, and Account.
 - Use **Ctrl/Cmd+`** to toggle between the chat panel and terminal mode.
-- Use **Ctrl+1-9**, **Ctrl+Alt+←/→**, **Ctrl+Alt+N**, and **Double-click pill** for workspace switching/management.
+- Use **Ctrl+1-9**, **Ctrl+Alt+←/→**, **Ctrl+Alt+N**, and **Double-click pill** for project switching/management.
 - Press **Escape** to close the overlay.
 
 ## Sidebar collapsed
@@ -190,16 +190,16 @@ How to interact:
 - Edit the path in the compact path bar, change content in the editor surface, then click **Save file** to persist to browser storage.
 - Click **Delete file** to remove a file from the workspace.
 
-## Workspace switching
+## Project switching
 
-Playwright test: `captures workspace switching via pills`
+Playwright test: `captures project switching via pills`
 
 ![Workspace switch screenshot](./screenshots/workspace-switch.png)
 
 How to interact:
-- Click the workspace pill toggle to open the workspace overlay, then choose a workspace.
+- Click the project pill toggle to open the project switcher, then choose a project.
 - Use **Ctrl+Alt+←/→** to switch with the keyboard — the direction of the slide matches the spatial position, and cycling wraps around at the ends.
-- Use **Ctrl+1…9** to jump directly by workspace position.
-- Use **Ctrl+Alt+N** to create a new empty workspace and **Double-click pill** to rename the current workspace.
-- Each workspace has its own tabs, files, terminal/chat sessions, and restored page overlays.
-- The workspace tree highlights the active workspace and file nodes follow the active workspace context.
+- Use **Ctrl+1…9** to jump directly by project position.
+- Use **Ctrl+Alt+N** to create a new project and **Double-click pill** to rename the current project.
+- Each project has its own tabs, files, terminal/chat sessions, and restored page overlays.
+- The workspace tree highlights the active project workspace and file nodes follow the active project context.

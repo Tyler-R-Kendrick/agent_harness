@@ -1,24 +1,24 @@
 @agent-browser @workspaces
-Feature: Workspace switching and creation
-  Research and Build are separate workspaces, and users can switch, create, and rename workspaces
-  without losing workspace-scoped state.
+Feature: Project switching and creation
+  Research and Build are project entries backed by workspaces, and users can switch, create, and rename
+  projects without losing project-scoped state.
 
   Background:
     Given the agent browser is open
-    And the workspaces "Research" and "Build" both exist
+    And the projects "Research" and "Build" both exist
 
-  Scenario: Open the workspace switcher and swap the active workspace
-    When the user opens the workspace switcher from the workspace pill toggle
-    Then the "Workspace switcher" dialog is visible
-    When the user selects the "Build" workspace
-    Then the workspace pill shows "Build"
+  Scenario: Open the project switcher and swap the active project
+    When the user opens the project switcher from the project pill toggle
+    Then the "Project switcher" dialog is visible
+    When the user selects the "Build" project
+    Then the project pill shows "Build"
     And the workspace tree updates to the "Build" root
 
-  Scenario: Create and rename a new workspace
+  Scenario: Create and rename a new project
     When the user presses "Ctrl+Alt+N"
-    Then a new workspace named "Workspace 3" becomes active
-    When the user renames the active workspace to "Ops"
-    Then the workspace pill shows "Ops"
+    Then a new project named "Project 3" becomes active
+    When the user renames the active project to "Ops"
+    Then the project pill shows "Ops"
 
   Scenario: Preserve page overlays per workspace while switching
     Given the "Research" workspace has the "Hugging Face" tab open as a page overlay
