@@ -296,7 +296,7 @@ describe('App', () => {
 
     await flushAsyncUpdates();
 
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     await flushAsyncUpdates();
     await openDefaultSessionPanel();
   };
@@ -2225,7 +2225,7 @@ styles:
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     await openDefaultSessionPanel();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
@@ -2756,10 +2756,10 @@ styles:
     await act(async () => {
       await Promise.resolve();
     });
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     await openDefaultSessionPanel();
 
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     openDefaultSession();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
@@ -2813,10 +2813,10 @@ styles:
     await act(async () => {
       await Promise.resolve();
     });
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     await openDefaultSessionPanel();
 
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     openDefaultSession();
 
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
@@ -2884,7 +2884,7 @@ styles:
     });
 
     await disableAllTools();
-    fireEvent.click(screen.getByLabelText('Workspaces'));
+    fireEvent.click(screen.getByLabelText('Projects'));
     openDefaultSession();
     await disableAllTools();
     fireEvent.change(screen.getByLabelText('Chat input'), { target: { value: 'Write a long answer.' } });
@@ -5008,7 +5008,7 @@ styles:
     expect(screen.queryByLabelText('Keyboard shortcuts')).not.toBeInTheDocument();
   });
 
-  it('opens the workspace overlay with the hotkey and jumps by number', async () => {
+  it('opens the project overlay with the hotkey and jumps by number', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -5016,14 +5016,36 @@ styles:
     });
 
     fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
-    expect(screen.getByRole('dialog', { name: 'Workspace switcher' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Project switcher' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.getByText('2 projects')).toBeInTheDocument();
+    expect(screen.getByText('1 session · 2 pages · 253 MB')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.keyDown(window, { key: '2', ctrlKey: true });
       vi.advanceTimersByTime(300);
     });
-    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveAttribute('title', 'Build');
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Build');
+  });
+
+  it('presents projects as the main entrypoint for session work', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByRole('button', { name: 'Projects' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+    expect(screen.getByRole('dialog', { name: 'Project switcher' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Search projects')).toHaveAttribute('placeholder', 'Find a project...');
+
+    fireEvent.click(screen.getByRole('button', { name: /New project/ }));
+
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Project 3');
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
   });
 
   it('renders only the active workspace tree and swaps to the selected workspace', async () => {
@@ -5041,7 +5063,7 @@ styles:
 
     fireEvent.keyDown(window, { key: '2', ctrlKey: true });
 
-    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveAttribute('title', 'Build');
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Build');
     expect(screen.getByLabelText('Add file to Build')).toBeInTheDocument();
     expect(screen.queryByLabelText('Add file to Research')).not.toBeInTheDocument();
     expect(screen.getByText('CopilotKit docs')).toBeInTheDocument();
@@ -5076,7 +5098,7 @@ styles:
     expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
   });
 
-  it('supports creating and renaming workspaces from the screenshot controls', async () => {
+  it('supports creating and renaming projects from the screenshot controls', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -5084,13 +5106,13 @@ styles:
     });
 
     fireEvent.keyDown(window, { key: 'N', ctrlKey: true, altKey: true });
-    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveAttribute('title', 'Workspace 3');
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Project 3');
 
-    fireEvent.doubleClick(screen.getByLabelText('Toggle workspace overlay'));
-    expect(screen.getByRole('dialog', { name: 'Rename workspace' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Ops' } });
+    fireEvent.doubleClick(screen.getByLabelText('Open projects'));
+    expect(screen.getByRole('dialog', { name: 'Rename project' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Ops' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveAttribute('title', 'Ops');
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Ops');
   });
 
   it('supports screenshot selection and clipboard hotkeys in the workspace tree', async () => {
@@ -5179,10 +5201,10 @@ styles:
     expect(cursorLabel()).toContain('Hugging Face');
 
     fireEvent.keyDown(window, { key: 'ArrowLeft', ctrlKey: true, altKey: true });
-    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveAttribute('title', 'Build');
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Build');
 
     fireEvent.keyDown(window, { key: 'ArrowRight', ctrlKey: true, altKey: true });
-    expect(screen.getByLabelText('Toggle workspace overlay')).toHaveAttribute('title', 'Research');
+    expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Research');
   });
 
   it('keeps only the current workspace tree row in the tab order', async () => {
@@ -5823,7 +5845,7 @@ styles:
     expect(screen.getByRole('menuitem', { name: 'New tab' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'New session' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Add file' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Workspaces' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Projects' })).toBeInTheDocument();
   });
 
   it('right-clicking a Browser section opens section actions and suppresses the native browser menu', async () => {

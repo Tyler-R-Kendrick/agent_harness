@@ -38,7 +38,7 @@ export function buildInferenceWorkerModuleStub() {
         }
         if (data.action === 'generate') {
           var prompt = JSON.stringify(data.prompt || []);
-          var hasWorkspaceContext = prompt.indexOf('Active workspace: Research') !== -1 || prompt.indexOf('Active workspace: Build') !== -1 || prompt.indexOf('Active workspace: Ops') !== -1 || prompt.indexOf('Active workspace: Workspace 3') !== -1;
+          var hasWorkspaceContext = prompt.indexOf('Active workspace: Research') !== -1 || prompt.indexOf('Active workspace: Build') !== -1 || prompt.indexOf('Active workspace: Ops') !== -1 || prompt.indexOf('Active workspace: Project 3') !== -1;
           var response = 'model=' + String(data.modelId || '') + ';workspace=' + (hasWorkspaceContext ? 'present' : 'missing');
           this.onmessage && this.onmessage({ data: { type: 'phase', id: id, phase: 'thinking' } });
           this.onmessage && this.onmessage({ data: { type: 'token', id: id, token: response } });
@@ -134,20 +134,20 @@ export async function openPanel(page, label) {
 }
 
 export async function openWorkspaceSwitcher(page) {
-  await page.getByLabel('Toggle workspace overlay').click();
-  await expect(page.getByRole('dialog', { name: 'Workspace switcher' })).toBeVisible();
+  await page.getByLabel('Open projects').click();
+  await expect(page.getByRole('dialog', { name: 'Project switcher' })).toBeVisible();
 }
 
 export async function closeWorkspaceSwitcher(page) {
-  const dialog = page.getByRole('dialog', { name: 'Workspace switcher' });
+  const dialog = page.getByRole('dialog', { name: 'Project switcher' });
   if (await dialog.count()) {
-    await dialog.getByLabel('Close workspace switcher').click();
+    await dialog.getByLabel('Close project switcher').click();
     await expect(dialog).toHaveCount(0);
   }
 }
 
 export async function switchWorkspace(page, workspaceName) {
-  const workspacePill = page.getByLabel('Toggle workspace overlay');
+  const workspacePill = page.getByLabel('Open projects');
   const currentTitle = await workspacePill.getAttribute('title');
   if (currentTitle?.includes(workspaceName)) {
     await expectWorkspaceTree(page, workspaceName);
@@ -155,7 +155,7 @@ export async function switchWorkspace(page, workspaceName) {
   }
 
   await openWorkspaceSwitcher(page);
-  const dialog = page.getByRole('dialog', { name: 'Workspace switcher' });
+  const dialog = page.getByRole('dialog', { name: 'Project switcher' });
   await dialog.locator('.workspace-card-button').filter({ hasText: workspaceName }).first().click();
   await expect(workspacePill).toHaveAttribute('title', workspaceName);
   await expectWorkspaceTree(page, workspaceName);

@@ -156,11 +156,11 @@ test.describe('mobile-first accessibility viewport matrix', () => {
       await page.keyboard.press('Escape');
       await expect(shortcuts).toHaveCount(0);
 
-      await page.getByLabel('Toggle workspace overlay').click();
-      const switcher = page.getByRole('dialog', { name: 'Workspace switcher' });
+      await page.getByLabel('Open projects').click();
+      const switcher = page.getByRole('dialog', { name: 'Project switcher' });
       await expect(switcher).toBeVisible();
-      await expect(switcher.getByRole('button', { name: /New workspace/i })).toBeVisible();
-      await expectVisibleLocatorWithinViewport(page, 'workspace switcher dialog', '.workspace-switcher-card');
+      await expect(switcher.getByRole('button', { name: /New project/i })).toBeVisible();
+      await expectVisibleLocatorWithinViewport(page, 'project switcher dialog', '.workspace-switcher-card');
       await expectNoHorizontalViewportOverflow(page);
       await expectNoCriticalA11yViolations(page);
     });

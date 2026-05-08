@@ -454,7 +454,7 @@ self.onmessage = (event) => {
   await page.getByRole('button', { name: /Load/i }).first().click();
   await expect(page.getByText(/loaded/i)).toBeVisible();
 
-  await page.getByLabel('Workspaces').click();
+  await page.getByLabel('Projects').click();
   await expect(page.getByLabel('Chat input')).toBeVisible();
   await page.getByLabel('Chat input').fill('Write a long answer.');
   await page.getByRole('button', { name: 'Send' }).click();
@@ -750,16 +750,16 @@ test('captures a sandbox tool run and persists generated files', async ({ page }
   await page.screenshot({ path: 'docs/screenshots/sandbox-tool-run.png', fullPage: true });
 });
 
-// ── User flow: workspace switcher modal ───────────────────────────────
+// ── User flow: project switcher modal ───────────────────────────────
 
-test('captures the workspace switcher modal', async ({ page }) => {
+test('captures the project switcher modal', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');
-  // Click the workspace overlay toggle to open the switcher
+  // Click the project switcher toggle to open the switcher
   await page.getByLabel('Omnibar').waitFor();
-  await page.getByLabel('Toggle workspace overlay').click();
-  await expect(page.getByRole('dialog', { name: 'Workspace switcher' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Workspaces' })).toBeVisible();
+  await page.getByLabel('Open projects').click();
+  await expect(page.getByRole('dialog', { name: 'Project switcher' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/workspace-switcher.png', fullPage: true });
 });
@@ -816,10 +816,10 @@ test('lets keyboard navigation enter category contents and wrap workspace cyclin
   await expect(page.locator('.tree-row.cursor .tree-button').first()).toContainText('Hugging Face');
 
   await page.keyboard.press('Control+Alt+ArrowLeft');
-  await expect(page.getByLabel('Toggle workspace overlay')).toHaveAttribute('title', 'Build');
+  await expect(page.getByLabel('Open projects')).toHaveAttribute('title', 'Build');
 
   await page.keyboard.press('Control+Alt+ArrowRight');
-  await expect(page.getByLabel('Toggle workspace overlay')).toHaveAttribute('title', 'Research');
+  await expect(page.getByLabel('Open projects')).toHaveAttribute('title', 'Research');
 
   assertNoRuntimeErrors();
 });
@@ -1469,7 +1469,7 @@ test('falls back to staged tool pipeline + chat for delegation prompts on local 
   await modelButton.click();
   await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
 
-  await page.getByLabel('Workspaces').click();
+  await page.getByLabel('Projects').click();
   await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
   const prompt = 'figure out a multi-step problem to solve that can be parallelized; parallelize it and delegate the work to subagents.';
   await page.getByLabel('Chat input').fill(prompt);
@@ -1599,7 +1599,7 @@ test('Qwen3 direct-chat routing uses memory and coding guidance for local Codi p
   await modelButton.click();
   await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
 
-  await page.getByLabel('Workspaces').click();
+  await page.getByLabel('Projects').click();
   await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
 
   await page.evaluate(() => {
@@ -1726,7 +1726,7 @@ test('Qwen3 staged tool pipeline plans and runs without the local tool watchdog 
   await modelButton.click();
   await expect(page.getByText('Installed').first()).toBeVisible({ timeout: 8000 });
 
-  await page.getByLabel('Workspaces').click();
+  await page.getByLabel('Projects').click();
   await page.locator('select[aria-label="Agent provider"]').selectOption('codi');
   await page.getByLabel('Chat input').fill('List files in the current workspace.');
   await page.getByRole('button', { name: 'Send' }).click();
