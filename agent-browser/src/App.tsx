@@ -231,6 +231,12 @@ import {
   buildMediaCapabilityPrompt,
   planMediaCapabilities,
 } from './services/mediaAgent';
+import {
+  buildN8nCapabilitySummary,
+  buildServerlessWorkflowPreview,
+  listN8nCapabilityAreas,
+  type N8nCapabilityStatus,
+} from './services/n8nCapabilities';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
 import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
@@ -7126,6 +7132,95 @@ function ScheduledAutomationSettingsPanel({
   );
 }
 
+function N8nCapabilitiesSettingsPanel() {
+  const areas = useMemo(() => listN8nCapabilityAreas(), []);
+  const summary = useMemo(() => buildN8nCapabilitySummary(), []);
+  const preview = useMemo(() => buildServerlessWorkflowPreview(), []);
+  const previewStepNames = preview.document.do.map((step) => Object.keys(step)[0] ?? 'step');
+
+  return (
+    <SettingsSection title="n8n capabilities" defaultOpen={false}>
+      <div className="n8n-capabilities-settings">
+        <article className="provider-card n8n-capabilities-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>{summary.serializationStandard}</strong>
+              <p>Offline automation blueprints map n8n-style workflows, nodes, executions, credentials, templates, and AI/RAG work to a portable CNCF workflow document.</p>
+            </div>
+            <span className="badge connected">{summary.totalAreas} areas</span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="n8n capability readiness">
+            <span role="listitem">
+              <strong>{summary.readyAreas}</strong>
+              <small>ready</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.foundationAreas}</strong>
+              <small>foundation</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.plannedAreas}</strong>
+              <small>planned</small>
+            </span>
+          </div>
+          <div className="browser-agent-run-sdk-chip-grid" aria-label="Starter workflow coverage">
+            {preview.coverage.map((item) => <span key={item} className="tag-chip">{item}</span>)}
+          </div>
+        </article>
+
+        <div className="n8n-capability-grid" role="list" aria-label="n8n capability areas">
+          {areas.map((area) => (
+            <article key={area.id} className="provider-card n8n-capability-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>{area.title}</strong>
+                  <p>{area.summary}</p>
+                </div>
+                <span className={`badge${area.status === 'ready' ? ' connected' : ''}`}>{formatN8nCapabilityStatus(area.status)}</span>
+              </div>
+              <div className="n8n-capability-columns">
+                <CapabilityList title="n8n" items={area.n8nFeatures} />
+                <CapabilityList title="Offline PWA" items={area.offlinePwaPlan} />
+                <CapabilityList title="Serverless Workflow" items={area.serverlessWorkflowMapping} />
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <article className="provider-card n8n-workflow-preview-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Starter workflow preview</strong>
+              <p>{preview.document.document.namespace} / {preview.document.document.name} v{preview.document.document.version}</p>
+            </div>
+            <span className="badge">{preview.document.document.dsl}</span>
+          </div>
+          <div className="browser-agent-run-sdk-chip-grid" aria-label="Serverless Workflow preview steps">
+            {previewStepNames.map((name) => <code key={name}>{name}</code>)}
+          </div>
+        </article>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function CapabilityList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div>
+      <strong>{title}</strong>
+      <ul>
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function formatN8nCapabilityStatus(status: N8nCapabilityStatus): string {
+  if (status === 'ready') return 'ready';
+  if (status === 'foundation') return 'foundation';
+  return 'planned';
+}
+
 function RunCheckpointSettingsPanel({
   state,
   onChange,
@@ -8559,6 +8654,8 @@ function SettingsPanel({
         installedSkills={browserWorkflowSkills}
         onInstall={onInstallBrowserWorkflowSkill}
       />
+
+      <N8nCapabilitiesSettingsPanel />
 
       <MediaAgentSettingsPanel />
 

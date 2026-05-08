@@ -823,6 +823,14 @@ async function main() {
     await expect(page.getByText('Structured event stream')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Reconnect cursor')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Archive and delete lifecycle')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'n8n capabilities' }).click();
+    await expect(page.getByText('CNCF Serverless Workflow 1.0.3')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Workflow canvas')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Executions and debugging')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('AI, RAG, and evaluations')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('manualTrigger')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('runLocalAction')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('queueReview')).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });
