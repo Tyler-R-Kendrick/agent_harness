@@ -1,0 +1,24 @@
+slug: anchor-browser
+name: Anchor Browser
+vendor: Anchor Browser
+segment: authenticated-browser-agent-infrastructure
+product_path: competition/anchor-browser
+design_path: competition/anchor-browser/design
+features_path: competition/anchor-browser/features
+marketing_path: competition/anchor-browser/marketing
+gossip_path: competition/anchor-browser/gossip
+snapshot_date: 2026-05-08
+primary_sources:
+  - https://anchorbrowser.io/
+  - https://docs.anchorbrowser.io/introduction
+  - https://docs.anchorbrowser.io/agentic-browser-control
+  - https://docs.anchorbrowser.io/advanced/tasks
+  - https://docs.anchorbrowser.io/essentials/authenticated-applications
+  - https://docs.anchorbrowser.io/pricing
+secondary_sources:
+  - https://docs.anchorbrowser.io/essentials/embedding-identity-ui
+  - https://docs.anchorbrowser.io/advanced/os-level-control
+positioning: "Secure infrastructure for computer-use agents, emphasizing authenticated browsers, OmniConnect, deterministic task deployment, browser profiles, stealth, CAPTCHA handling, and scale."
+customer_model: "Credit and infrastructure pricing with free, starter, team/growth, and enterprise plans; enterprise upsell around authenticated browsers, compliance, regions, BYOC, and implementation support."
+competitive_threat_level: high
+notes: "Threatens agent-browser in authenticated enterprise workflows and deterministic task hardening; weaker where buyers want open local traces and user-owned browser workspaces."

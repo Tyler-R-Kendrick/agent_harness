@@ -1,0 +1,23 @@
+slug: skyvern
+name: Skyvern
+vendor: Skyvern AI
+segment: developer-browser-agent-workflow-platform
+product_path: competition/skyvern
+design_path: competition/skyvern/design
+features_path: competition/skyvern/features
+marketing_path: competition/skyvern/marketing
+gossip_path: competition/skyvern/gossip
+snapshot_date: 2026-05-08
+primary_sources:
+  - https://www.skyvern.com/docs/developers/getting-started/introduction
+  - https://www.skyvern.com/docs/running-tasks/api-spec
+  - https://www.skyvern.com/docs/api-reference/api-reference/agent/run-task
+  - https://github.com/Skyvern-AI/skyvern
+secondary_sources:
+  - https://github.com/Skyvern-AI/skyvern/issues
+  - https://github.com/Skyvern-AI/skyvern/issues/3782
+  - https://github.com/Skyvern-AI/skyvern/issues/3546
+positioning: "Open-source and cloud browser workflow automation using LLMs, computer vision, persistent sessions, artifacts, and reusable task/workflow APIs."
+customer_model: "Open-source adoption plus managed Skyvern Cloud for teams that need hosted runs, proxies, artifacts, and production support."
+competitive_threat_level: high
+notes: "Threatens agent-browser on workflow automation breadth and open-source mindshare; weaker where users need local-first inspectable browser UX."

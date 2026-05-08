@@ -1,0 +1,23 @@
+slug: hyperbrowser
+name: Hyperbrowser
+vendor: Hyperbrowser
+segment: developer-browser-agent-infrastructure
+product_path: competition/hyperbrowser
+design_path: competition/hyperbrowser/design
+features_path: competition/hyperbrowser/features
+marketing_path: competition/hyperbrowser/marketing
+gossip_path: competition/hyperbrowser/gossip
+snapshot_date: 2026-05-08
+primary_sources:
+  - https://www.hyperbrowser.ai/docs/introduction
+  - https://www.hyperbrowser.ai/docs/agents/overview
+  - https://www.hyperbrowser.ai/docs/hyperagent/introduction
+  - https://www.hyperbrowser.ai/docs/pricing
+secondary_sources:
+  - https://github.com/hyperbrowserai/HyperAgent
+  - https://github.com/hyperbrowserai
+  - https://www.reddit.com/r/AI_Agents/comments/1sk2mbs/most_agent_failures_ive_debugged_werent_actually/
+positioning: "Fast cloud browsers and agent runtimes for AI developers, spanning scraping APIs, Playwright/Puppeteer/Selenium sessions, HyperAgent, Browser Use, Claude, OpenAI, Gemini, and MCP."
+customer_model: "Usage-based developer SaaS with credit pricing, browser-hours, proxy bandwidth, scraping endpoints, and per-step or model-token agent costs."
+competitive_threat_level: high
+notes: "Threatens agent-browser when buyers want hosted browser scale, multi-agent-provider support, and cheap infrastructure over local workspace ownership."

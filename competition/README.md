@@ -29,6 +29,10 @@ competition/<product-slug>/
 | BrowserOS | Open-source AI browser | `competition/browseros` |
 | Browserbase + Stagehand | Developer browser-agent platform | `competition/browserbase-stagehand` |
 | Browser Use Cloud | Developer browser-agent platform | `competition/browser-use-cloud` |
+| Skyvern | Developer browser-agent workflow platform | `competition/skyvern` |
+| Hyperbrowser | Developer browser-agent infrastructure | `competition/hyperbrowser` |
+| Notte | Developer browser-agent platform | `competition/notte` |
+| Anchor Browser | Authenticated browser-agent infrastructure | `competition/anchor-browser` |
 | Fellou | End-user agentic productivity browser | `competition/fellou` |
 | Opera Neon | End-user agentic AI browser | `competition/opera-neon` |
 | Gemini in Chrome | Incumbent browser AI assistant | `competition/gemini-in-chrome` |

@@ -1,0 +1,23 @@
+slug: notte
+name: Notte
+vendor: Notte Labs
+segment: developer-browser-agent-platform
+product_path: competition/notte
+design_path: competition/notte/design
+features_path: competition/notte/features
+marketing_path: competition/notte/marketing
+gossip_path: competition/notte/gossip
+snapshot_date: 2026-05-08
+primary_sources:
+  - https://www.notte.cc/
+  - https://docs.notte.cc/
+  - https://docs.notte.cc/concepts/sessions
+  - https://docs.notte.cc/concepts/agents
+  - https://docs.notte.cc/concepts/vaults
+  - https://docs.notte.cc/intro/pricing
+secondary_sources:
+  - https://github.com/nottelabs
+positioning: "Full-stack browser platform for AI agents: cloud sessions, perception/actions, agents, functions, scraping, vaults, identities, profiles, and an automation studio."
+customer_model: "Usage-based developer platform with free/developer/startup/enterprise plans, low browser-hour pricing, proxy usage, and pass-through LLM costs."
+competitive_threat_level: high
+notes: "Threatens agent-browser on integrated auth, identities, studio, functions, and cost positioning; weaker for local-first user-controlled browsing."
