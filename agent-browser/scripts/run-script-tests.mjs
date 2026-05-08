@@ -85,6 +85,8 @@ async function main() {
   assert.match(visualSmokeScript, /Live experiment/);
   assert.match(visualSmokeScript, /Scheduled automations/);
   assert.match(visualSmokeScript, /Enable Daily workspace audit/);
+  assert.match(visualSmokeScript, /Chaptered sessions/);
+  assert.match(visualSmokeScript, /Enable chaptered sessions/);
   assert.match(visualSmokeScript, /Typed run SDK/);
   assert.match(visualSmokeScript, /Structured event stream/);
   assert.match(visualSmokeScript, /Reconnect cursor/);
@@ -115,6 +117,12 @@ async function main() {
   const generatedFilesWrapper = await readScript('scripts/check-generated-files-clean.ps1');
   assert.match(generatedFilesWrapper, /codex-git\.ps1'\) ls-files/);
   assert.match(generatedFilesWrapper, /check-generated-files-clean\.mjs'\) --stdin-lines/);
+  const linearCanceledIssueScript = await readScript('scripts/linear-list-canceled-active-issues.mjs');
+  assert.match(linearCanceledIssueScript, /LINEAR_API_KEY/);
+  assert.match(linearCanceledIssueScript, /--from-json/);
+  assert.match(linearCanceledIssueScript, /state-type/);
+  const linearCanceledIssueWrapper = await readScript('scripts/list-linear-canceled-issues.mjs');
+  assert.match(linearCanceledIssueWrapper, /linear-list-canceled-active-issues\.mjs/);
   const daemonBuildWorkflow = await readScript('.github/workflows/daemon-build.yml');
   assert.match(daemonBuildWorkflow, /denoland\/setup-deno@v2/);
   assert.match(daemonBuildWorkflow, /--target x86_64-pc-windows-msvc/);
