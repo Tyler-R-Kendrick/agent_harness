@@ -169,6 +169,63 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('output/playwright/agent-browser-visual-smoke.png')).toBeInTheDocument();
   });
 
+  it('renders governed agent-authored workspace surfaces on the dashboard', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(STORAGE_KEYS.workspaceSurfacesByWorkspace, JSON.stringify({
+      'ws-research': [{
+        id: 'surface-ws-research-artifact-launch-review-review-panel-md',
+        workspaceId: 'ws-research',
+        artifactId: 'artifact-launch-review',
+        artifactFilePath: 'review-panel.md',
+        surfaceType: 'review-panel',
+        renderTarget: 'panel',
+        title: 'Launch review surface',
+        description: 'Agent-authored release review panel',
+        createdByAgent: 'Researcher',
+        ownerSessionId: 'session-1',
+        permissions: {
+          canRead: true,
+          canEdit: true,
+          canRollback: true,
+          canShare: false,
+        },
+        revision: 2,
+        status: 'active',
+        createdAt: '2026-05-08T05:01:00.000Z',
+        updatedAt: '2026-05-08T05:02:00.000Z',
+        versions: [{
+          id: 'surface-ws-research-artifact-launch-review-review-panel-md-revision-1',
+          revision: 1,
+          title: 'Launch review surface',
+          surfaceType: 'review-panel',
+          renderTarget: 'panel',
+          artifactId: 'artifact-launch-review',
+          artifactFilePath: 'review-panel.md',
+          permissions: {
+            canRead: true,
+            canEdit: true,
+            canRollback: true,
+            canShare: false,
+          },
+          status: 'active',
+          createdAt: '2026-05-08T05:01:00.000Z',
+        }],
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const surfaces = screen.getByRole('region', { name: 'Agent-authored workspace surfaces' });
+    expect(surfaces).toHaveTextContent('Launch review surface');
+    expect(surfaces).toHaveTextContent('Researcher');
+    expect(surfaces).toHaveTextContent('read, edit, rollback');
+    expect(surfaces).toHaveTextContent('//artifacts/artifact-launch-review/review-panel.md');
+  });
+
   it('opens the secure shared chat QR pairing dialog from the chat header', async () => {
     vi.useFakeTimers();
     render(<App />);

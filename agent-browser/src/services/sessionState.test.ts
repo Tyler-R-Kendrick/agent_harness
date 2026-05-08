@@ -9,6 +9,7 @@ import {
   isStringArrayRecord,
   isStringRecord,
   isTreeNode,
+  isWorkspaceSurfacesByWorkspace,
   isWorkspaceViewStateRecord,
   loadJson,
   removeStoredRecordEntry,
@@ -62,6 +63,7 @@ describe('STORAGE_KEYS', () => {
       conversationBranchingState: expect.any(String),
       runtimePluginSettings: expect.any(String),
       harnessEvolutionSettings: expect.any(String),
+      workspaceSurfacesByWorkspace: expect.any(String),
       browserAgentRunSdkState: expect.any(String),
       multitaskSubagentState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
@@ -77,6 +79,7 @@ describe('STORAGE_KEYS', () => {
     expect(STORAGE_KEYS.multitaskSubagentState).toBe('agent-browser.multitask-subagent-state');
     expect(STORAGE_KEYS.runtimePluginSettings).toBe('agent-browser.runtime-plugin-settings');
     expect(STORAGE_KEYS.harnessEvolutionSettings).toBe('agent-browser.harness-evolution-settings');
+    expect(STORAGE_KEYS.workspaceSurfacesByWorkspace).toBe('agent-browser.workspace-surfaces-by-workspace');
   });
 });
 
@@ -278,6 +281,35 @@ describe('persistent session validators', () => {
     })).toBe(false);
     expect(isArtifactContextBySession({ 'session-1': ['artifact-dashboard'] })).toBe(true);
     expect(isArtifactContextBySession({ 'session-1': [42] })).toBe(false);
+  });
+
+  it('accepts governed workspace surfaces and rejects unsafe surface payloads', () => {
+    const surface = {
+      id: 'surface-ws-research-artifact-launch-review-review-panel-md',
+      workspaceId: 'ws-research',
+      artifactId: 'artifact-launch-review',
+      artifactFilePath: 'review-panel.md',
+      surfaceType: 'review-panel',
+      renderTarget: 'panel',
+      title: 'Launch review surface',
+      createdByAgent: 'Researcher',
+      ownerSessionId: 'session-1',
+      permissions: {
+        canRead: true,
+        canEdit: true,
+        canRollback: true,
+        canShare: false,
+      },
+      revision: 1,
+      status: 'active',
+      createdAt: '2026-05-08T05:01:00.000Z',
+      updatedAt: '2026-05-08T05:01:00.000Z',
+      versions: [],
+    };
+
+    expect(isWorkspaceSurfacesByWorkspace({ 'ws-research': [surface] })).toBe(true);
+    expect(isWorkspaceSurfacesByWorkspace({ 'ws-research': [{ ...surface, surfaceType: 'raw-html' }] })).toBe(false);
+    expect(isWorkspaceSurfacesByWorkspace({ 'ws-research': [{ ...surface, artifactFilePath: '../review-panel.md' }] })).toBe(false);
   });
 });
 

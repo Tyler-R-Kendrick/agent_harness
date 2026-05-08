@@ -19,6 +19,7 @@ export {
   isArtifactContextBySession,
   isArtifactsByWorkspace,
 } from './artifacts';
+export { isWorkspaceSurfacesByWorkspace } from './workspaceSurfaces';
 
 export const STORAGE_KEYS = {
   // localStorage — durable
@@ -50,6 +51,7 @@ export const STORAGE_KEYS = {
   harnessEvolutionSettings: 'agent-browser.harness-evolution-settings',
   persistentMemoryGraphState: 'agent-browser.persistent-memory-graph-state',
   specDrivenDevelopmentSettings: 'agent-browser.spec-driven-development-settings',
+  workspaceSurfacesByWorkspace: 'agent-browser.workspace-surfaces-by-workspace',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
