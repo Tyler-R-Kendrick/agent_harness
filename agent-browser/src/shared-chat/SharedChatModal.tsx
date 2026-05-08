@@ -40,6 +40,8 @@ type SharedChatPhase = 'home' | 'owner-invite' | 'join-scan' | 'join-answer' | '
 export type SharedChatApi = {
   active: boolean;
   confirmed: boolean;
+  peerLabel?: string;
+  deviceLabel?: string;
   sendText: (text: string) => Promise<void>;
   endSession: () => Promise<void>;
 };
@@ -107,6 +109,8 @@ export function SharedChatModal({
     onApiChange({
       active: true,
       confirmed: session.pairingConfirmed,
+      peerLabel: peerLabel ?? undefined,
+      deviceLabel: peerLabel ?? undefined,
       sendText: async (text: string) => {
         await sendSharedText(text);
       },
