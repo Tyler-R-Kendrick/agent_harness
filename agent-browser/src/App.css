@@ -646,6 +646,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
+.spec-driven-development-settings,
+.spec-driven-development-list {
+  display: grid;
+  gap: 10px;
+}
+.spec-driven-development-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .45fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+.spec-driven-development-summary-card,
+.spec-driven-development-item {
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+}
+.spec-driven-development-item {
+  min-width: 0;
+  padding: 10px;
+  overflow-wrap: anywhere;
+}
 .workspace-skill-scope-grid code,
 .browser-workflow-skill-scope-grid code {
   min-width: 0;
@@ -726,6 +748,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .harness-steering-capture-grid,
   .workspace-skill-scope-grid,
   .browser-workflow-skill-scope-grid,
+  .spec-driven-development-grid,
   .trajectory-threshold-grid,
   .secrets-row {
     grid-template-columns: 1fr;

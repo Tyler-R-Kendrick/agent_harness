@@ -21,6 +21,7 @@ const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-
 const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
+const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
 const gitWorktreeViewportOutputPaths = [
   {
     name: 'mobile',
@@ -796,6 +797,18 @@ async function main() {
     await expect(page.getByRole('list', { name: 'Installed browser workflow skills' }).getByText('npm.cmd run visual:agent-browser')).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await page.getByRole('button', { name: 'Spec-driven development' }).click();
+    await expect(page.getByLabel('Enable spec-driven development')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Default spec format')).toHaveValue('json-schema', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Resolve ambiguities before implementation')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Require tests or evals from spec')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.locator('.spec-driven-development-summary-card').getByText('JSON Schema 2020-12')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page
+      .locator('section.settings-section')
+      .filter({ has: page.getByRole('button', { name: 'Spec-driven development' }) })
+      .screenshot({ path: specDrivenDevelopmentOutputPath });
     await page.getByRole('button', { name: 'Media agent' }).click();
     await expect(page.getByText('Media orchestration')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('list', { name: 'Media generation workflows' })).toBeVisible({
@@ -955,6 +968,7 @@ async function main() {
     console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
     console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
+    console.log(`agent-browser spec-driven development smoke passed: ${specDrivenDevelopmentOutputPath}`);
     console.log(`agent-browser shared agents smoke passed: ${sharedAgentsOutputPath}`);
     console.log(`agent-browser multitask subagents smoke passed: ${multitaskOutputPath}`);
   } catch (error) {
