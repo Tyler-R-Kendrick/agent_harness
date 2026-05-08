@@ -1,0 +1,28 @@
+{
+  "name": "@agent-harness/llguidance-wasm",
+  "version": "0.1.0",
+  "description": "Browser-local llguidance-compatible constrained decoding runtime",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "README.md",
+    "src/**/*.ts",
+    "!src/__tests__/**"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./worker": "./src/worker.ts",
+    "./worker-client": "./src/worker-client.ts"
+  },
+  "scripts": {
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}
