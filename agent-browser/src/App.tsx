@@ -112,6 +112,14 @@ import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPa
 import { MarkdownContent } from './utils/MarkdownContent';
 import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { SharedChatModal, type SharedChatApi } from './shared-chat/SharedChatModal';
+import {
+  DEFAULT_SHARED_SESSION_CONTROL_STATE,
+  buildSharedSessionControlPromptContext,
+  formatSharedSessionPeerMessage,
+  isSharedSessionControlState,
+  recordSharedSessionControlEvent,
+  type SharedSessionControlState,
+} from './services/sharedSessionControl';
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
 import { fetchCodexState, type CodexModelSummary, type CodexRuntimeState } from './services/codexApi';
@@ -2342,6 +2350,12 @@ function ChatPanel({
     isBrowserNotificationSettings,
     DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
   );
+  const [sharedSessionControlState, setSharedSessionControlState] = useStoredState<SharedSessionControlState>(
+    localStorageBackend,
+    STORAGE_KEYS.sharedSessionControlState,
+    isSharedSessionControlState,
+    DEFAULT_SHARED_SESSION_CONTROL_STATE,
+  );
   const [selectedModelBySession, setSelectedModelBySession] = useStoredState<Record<string, string>>(
     sessionStorageBackend,
     STORAGE_KEYS.selectedCodiModelBySession,
@@ -2383,6 +2397,7 @@ function ChatPanel({
   const [pendingMcpMessage, setPendingMcpMessage] = useState<string | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharedChatApi, setSharedChatApi] = useState<SharedChatApi | null>(null);
+  const sharedChatLifecycleKeyRef = useRef<string | null>(null);
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -2429,6 +2444,10 @@ function ChatPanel({
     () => buildRuntimeExtensionPromptContext(defaultExtensions),
     [defaultExtensions],
   );
+  const sharedSessionControlPromptContext = useMemo(
+    () => buildSharedSessionControlPromptContext(sharedSessionControlState, activeChatSessionId),
+    [activeChatSessionId, sharedSessionControlState],
+  );
   const workspacePromptContext = useMemo(
     () => [
       buildWorkspacePromptContext(workspaceFiles, activeSessionId ? [{
@@ -2444,11 +2463,18 @@ function ChatPanel({
       multitaskPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
+      sharedSessionControlPromptContext,
       buildSharedAgentPromptContext(sharedAgentCatalog),
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, workspaceFiles],
+    [activeSessionId, artifactPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, sharedSessionControlPromptContext, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+  const activeSharedSessionCandidates = sharedSessionControlState.activeSessions.filter(
+    (session) => session.status !== 'ended',
+  );
+  const activeSharedSessionSummary = activeSharedSessionCandidates.find(
+    (session) => session.sessionId === activeChatSessionId,
+  ) ?? activeSharedSessionCandidates.find((session) => session.workspaceName === workspaceName);
   const selectedProvider = selectedProviderBySession[activeChatSessionId] ?? getDefaultAgentProvider({ installedModels, copilotState, cursorState });
   const selectedModelId = selectedModelBySession[activeChatSessionId] ?? '';
   const selectedCopilotModelId = selectedCopilotModelBySession[activeChatSessionId] ?? '';
@@ -2890,25 +2916,60 @@ function ChatPanel({
   const handleSharedChatApiChange = useCallback((api: SharedChatApi | null) => {
     sharedChatApiRef.current = api;
     setSharedChatApi(api);
-  }, []);
+    if (!api?.active) return;
+    const lifecycleKey = `${activeChatSessionId}:${api.confirmed ? 'confirmed' : 'opened'}`;
+    if (sharedChatLifecycleKeyRef.current === lifecycleKey) return;
+    sharedChatLifecycleKeyRef.current = lifecycleKey;
+    setSharedSessionControlState((current) => recordSharedSessionControlEvent(current, {
+      sessionId: activeChatSessionId,
+      workspaceName,
+      event: api.confirmed ? 'pairing.confirmed' : 'session.opened',
+      actor: api.peerLabel ?? 'Local device',
+      peerLabel: api.peerLabel,
+      deviceLabel: api.deviceLabel ?? api.peerLabel,
+    }));
+  }, [activeChatSessionId, setSharedSessionControlState, workspaceName]);
 
   const appendSharedChatStatus = useCallback((text: string) => {
+    if (/ended/i.test(text)) {
+      setSharedSessionControlState((current) => recordSharedSessionControlEvent(current, {
+        sessionId: activeChatSessionId,
+        workspaceName,
+        event: 'session.ended',
+        actor: 'Local device',
+        peerLabel: activeSharedSessionSummary?.peerLabel,
+        deviceLabel: activeSharedSessionSummary?.deviceLabel,
+      }));
+    }
     appendSharedMessages([{
       id: createUniqueId(),
       role: 'system',
       status: 'complete',
       content: text,
     }]);
-  }, [appendSharedMessages]);
+  }, [activeChatSessionId, activeSharedSessionSummary, appendSharedMessages, setSharedSessionControlState, workspaceName]);
 
   const appendRemoteSharedChatMessage = useCallback((text: string, peerLabel: string) => {
+    const messageContent = formatSharedSessionPeerMessage({
+      text,
+      peerLabel,
+      deviceLabel: peerLabel,
+    });
+    setSharedSessionControlState((current) => recordSharedSessionControlEvent(current, {
+      sessionId: activeChatSessionId,
+      workspaceName,
+      event: 'message.created',
+      actor: peerLabel,
+      peerLabel,
+      deviceLabel: peerLabel,
+    }));
     appendSharedMessages([{
       id: createUniqueId(),
       role: 'user',
       status: 'complete',
-      content: `Shared from ${peerLabel}:\n${text}`,
+      content: messageContent,
     }]);
-  }, [appendSharedMessages]);
+  }, [activeChatSessionId, appendSharedMessages, setSharedSessionControlState, workspaceName]);
 
   const appendElicitationCard = useCallback((detail: UserElicitationEventDetail) => {
     const card: NonNullable<ChatMessage['cards']>[number] = {
@@ -5943,11 +6004,12 @@ function ChatPanel({
           {!showBash && activeActivityMessage ? (
             <ProcessPanel message={activeActivityMessage} onClose={() => setActiveActivityBySession((current) => ({ ...current, [activeChatSessionId]: null }))} />
           ) : null}
-          {!showBash && sharedChatApi?.active ? (
-            <div className="shared-chat-active-banner">
-              <span>Shared session active</span>
-              <strong>{sharedChatApi.confirmed ? 'Pairing confirmed' : 'Pairing pending'}</strong>
-              <button type="button" className="secondary-button" onClick={() => void sharedChatApi.endSession()}>End session</button>
+          {!showBash && (sharedChatApi?.active || activeSharedSessionSummary) ? (
+            <div className="shared-chat-active-banner" aria-label="Shared session remote control">
+              <span>{activeSharedSessionSummary?.peerLabel ?? 'Shared session'} · {activeSharedSessionSummary?.deviceLabel ?? 'Remote device'}</span>
+              <strong>{sharedChatApi?.confirmed || activeSharedSessionSummary?.status === 'active' ? 'Remote control enabled' : 'Pairing pending'}</strong>
+              <small>{activeSharedSessionSummary ? `${activeSharedSessionSummary.eventCount} signed events` : '0 signed events'}</small>
+              {sharedChatApi?.active ? <button type="button" className="secondary-button" onClick={() => void sharedChatApi.endSession()}>End session</button> : null}
             </div>
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
