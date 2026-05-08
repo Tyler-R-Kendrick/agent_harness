@@ -52,6 +52,7 @@ export const STORAGE_KEYS = {
   persistentMemoryGraphState: 'agent-browser.persistent-memory-graph-state',
   specDrivenDevelopmentSettings: 'agent-browser.spec-driven-development-settings',
   workspaceSurfacesByWorkspace: 'agent-browser.workspace-surfaces-by-workspace',
+  graphKnowledgeState: 'agent-browser.graph-knowledge-state',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',

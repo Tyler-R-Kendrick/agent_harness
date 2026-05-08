@@ -237,6 +237,24 @@ import {
   listN8nCapabilityAreas,
   type N8nCapabilityStatus,
 } from './services/n8nCapabilities';
+import {
+  buildGraphKnowledgeContextPack,
+  consolidateGraphKnowledge,
+  createEmptyGraphKnowledgeState,
+  exportGraphKnowledge,
+  getGraphKnowledgeStats,
+  importGraphKnowledge,
+  ingestGraphKnowledgeSession,
+  ingestGraphKnowledgeSkill,
+  ingestGraphKnowledgeText,
+  isGraphKnowledgeState,
+  loadSampleGraphKnowledge,
+  promoteGraphKnowledgeToHotMemory,
+  searchGraphKnowledge,
+  type GraphKnowledgeContextPack,
+  type GraphKnowledgeSearchResult,
+  type GraphKnowledgeState,
+} from './services/graphKnowledge';
 import { runParallelDelegationWorkflow, shouldRunParallelDelegation } from './services/parallelDelegationWorkflow';
 import { runStagedToolPipeline, type StageMeta } from './services/stagedToolPipeline';
 import { createSearchTurnContextSystemMessage } from './services/conversationSearchContext';
@@ -7694,6 +7712,197 @@ function formatN8nCapabilityStatus(status: N8nCapabilityStatus): string {
   return 'planned';
 }
 
+type GraphKnowledgeTab = 'context' | 'hot' | 'evidence' | 'facts' | 'paths' | 'communities' | 'skills' | 'graph' | 'table' | 'raw';
+
+const GRAPH_KNOWLEDGE_TABS: Array<{ id: GraphKnowledgeTab; label: string }> = [
+  { id: 'context', label: 'Context Pack' },
+  { id: 'hot', label: 'Hot Memory' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'facts', label: 'Facts & Claims' },
+  { id: 'paths', label: 'Paths' },
+  { id: 'communities', label: 'Communities' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'graph', label: 'Graph' },
+  { id: 'table', label: 'Table' },
+  { id: 'raw', label: 'Raw JSON' },
+];
+
+function GraphKnowledgeSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: GraphKnowledgeState;
+  onChange: (state: GraphKnowledgeState) => void;
+}) {
+  const [query, setQuery] = useState('offline graph memory PathRAG Kuzu-WASM');
+  const [ingestText, setIngestText] = useState('Kuzu-WASM enables local graph traversal. PathRAG improves explainability for offline agent memory.');
+  const [sessionText, setSessionText] = useState('user: We need persistent graph memory.\nassistant: Use IndexedDB, a worker boundary, and hot context blocks.');
+  const [skillName, setSkillName] = useState('Build graph knowledge context pack');
+  const [activeTab, setActiveTab] = useState<GraphKnowledgeTab>('context');
+  const [statusMessage, setStatusMessage] = useState('Offline-ready graph memory');
+  const stats = useMemo(() => getGraphKnowledgeStats(state), [state]);
+  const searchResult = useMemo<GraphKnowledgeSearchResult>(() => searchGraphKnowledge(state, query), [state, query]);
+  const contextPack = useMemo<GraphKnowledgeContextPack>(() => buildGraphKnowledgeContextPack(state, query), [state, query]);
+  const graphPreview = useMemo(() => ({
+    nodes: stats.graphNodes,
+    edges: stats.graphEdges,
+    topEntities: searchResult.entities.map((entity) => entity.canonicalName),
+    topPaths: searchResult.paths.map((path) => JSON.parse(path.pathJson) as string[]),
+  }), [searchResult.entities, searchResult.paths, stats.graphEdges, stats.graphNodes]);
+
+  const update = (next: GraphKnowledgeState, message: string) => {
+    onChange(next);
+    setStatusMessage(message);
+  };
+  const parseSessionTurns = () => sessionText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(user|assistant|system):\s*(.+)$/i);
+      return {
+        role: (match?.[1]?.toLowerCase() ?? 'user') as 'user' | 'assistant' | 'system',
+        text: match?.[2] ?? line,
+      };
+    });
+
+  return (
+    <SettingsSection title="Graph knowledge" defaultOpen={false}>
+      <div className="graph-knowledge-settings">
+        <article className="provider-card graph-knowledge-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Offline-ready graph memory</strong>
+              <p>Local GraphRAG, PathRAG, activation retrieval, procedural recall, and prompt-ready context packs run without a backend or network call.</p>
+            </div>
+            <span className={`badge${stats.status === 'offline-ready' ? ' connected' : ''}`}>{stats.status}</span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="Graph knowledge tier status">
+            <span role="listitem">
+              <strong>{stats.hotMemoryBlocks}</strong>
+              <small>Tier 1 blocks</small>
+            </span>
+            <span role="listitem">
+              <strong>{stats.graphNodes}</strong>
+              <small>Tier 2 nodes</small>
+            </span>
+            <span role="listitem">
+              <strong>{stats.graphEdges}</strong>
+              <small>graph edges</small>
+            </span>
+            <span role="listitem">
+              <strong>{stats.archiveRecords}</strong>
+              <small>Tier 3 archive</small>
+            </span>
+            <span role="listitem">
+              <strong>{stats.skillCount}</strong>
+              <small>skills</small>
+            </span>
+          </div>
+          <p className="muted" role="status">{statusMessage}</p>
+          <div className="graph-knowledge-action-grid" aria-label="Graph knowledge controls">
+            <button type="button" className="secondary-button" onClick={() => update(loadSampleGraphKnowledge(), 'Loaded sample GraphRAG memory.')}>Load Sample Memory</button>
+            <button type="button" className="secondary-button" onClick={() => update(ingestGraphKnowledgeText(state, { title: 'Manual graph note', text: ingestText, source: 'settings ingest' }), 'Ingested text into graph memory.')}>Ingest Text</button>
+            <button type="button" className="secondary-button" onClick={() => update(ingestGraphKnowledgeSession(state, { title: 'Settings session ingest', turns: parseSessionTurns() }), 'Ingested session turns into episodic memory.')}>Ingest Session</button>
+            <button type="button" className="secondary-button" onClick={() => update(ingestGraphKnowledgeSkill(state, { name: skillName, description: 'Generate compact context packs from local graph memory.', steps: ['Search memory', 'Rank paths', 'Build context pack'], tools: ['Graph knowledge'] }), 'Added procedural skill.')}>Add Skill</button>
+            <button type="button" className="secondary-button" onClick={() => setStatusMessage(`Search Memory found ${searchResult.scoreBreakdowns.length} scored results.`)}>Search Memory</button>
+            <button type="button" className="secondary-button" onClick={() => { onChange({ ...state, contextPacks: [...state.contextPacks, contextPack], updatedAt: contextPack.createdAt }); setStatusMessage('Generated context pack.'); }}>Generate Context Pack</button>
+            <button type="button" className="secondary-button" onClick={() => setStatusMessage(`Run Query returned ${stats.graphNodes} nodes and ${stats.graphEdges} edges.`)}>Run Query</button>
+            <button type="button" className="secondary-button" onClick={() => update(consolidateGraphKnowledge(state), 'Consolidated contradictions and superseded facts.')}>Consolidate Memory</button>
+            <button type="button" className="secondary-button" onClick={() => update(promoteGraphKnowledgeToHotMemory(state, query), 'Promoted relevant memories to hot memory.')}>Promote to Hot Memory</button>
+            <button type="button" className="secondary-button" onClick={() => update(consolidateGraphKnowledge(state), 'Evolved links and refreshed graph relations.')}>Evolve Links</button>
+            <button type="button" className="secondary-button" onClick={() => setStatusMessage(`Export Memory ready: ${exportGraphKnowledge(state).length} bytes.`)}>Export Memory</button>
+            <button type="button" className="secondary-button" onClick={() => update(importGraphKnowledge(exportGraphKnowledge(state)), 'Import Memory round-trip validated.')}>Import Memory</button>
+            <button type="button" className="secondary-button danger-button" onClick={() => update(createEmptyGraphKnowledgeState(), 'Reset Memory completed.')}>Reset Memory</button>
+          </div>
+        </article>
+
+        <div className="graph-knowledge-input-grid">
+          <label className="provider-command-field">
+            <span>Natural-language memory search</span>
+            <input aria-label="Graph knowledge search query" value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <label className="provider-command-field">
+            <span>Ingest text</span>
+            <textarea aria-label="Graph knowledge ingest text" value={ingestText} onChange={(event) => setIngestText(event.target.value)} rows={3} />
+          </label>
+          <label className="provider-command-field">
+            <span>Session log</span>
+            <textarea aria-label="Graph knowledge session log" value={sessionText} onChange={(event) => setSessionText(event.target.value)} rows={3} />
+          </label>
+          <label className="provider-command-field">
+            <span>Procedural skill</span>
+            <input aria-label="Graph knowledge skill name" value={skillName} onChange={(event) => setSkillName(event.target.value)} />
+          </label>
+        </div>
+
+        <div className="graph-knowledge-tabs" role="tablist" aria-label="Graph knowledge result tabs">
+          {GRAPH_KNOWLEDGE_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={`chip ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <article className="provider-card graph-knowledge-result-card">
+          {activeTab === 'context' ? (
+            <pre aria-label="Graph knowledge context pack">{contextPack.text}</pre>
+          ) : null}
+          {activeTab === 'hot' ? <GraphKnowledgeList items={searchResult.hotMemoryBlocks.map((block) => `${block.name}: ${block.content}`)} empty="No hot memory blocks match this query." /> : null}
+          {activeTab === 'evidence' ? <GraphKnowledgeList items={searchResult.evidence.map((entry) => `${entry.id}: ${entry.text} (${entry.sourceRef})`)} empty="No evidence matched this query." /> : null}
+          {activeTab === 'facts' ? <GraphKnowledgeList items={[...searchResult.facts.map((fact) => `${fact.id}: ${fact.object}`), ...searchResult.claims.map((claim) => `${claim.id}: ${claim.text} [${claim.status}]`)]} empty="No facts or claims matched this query." /> : null}
+          {activeTab === 'paths' ? <GraphKnowledgeList items={searchResult.paths.map((path) => `${JSON.parse(path.pathJson).join(' -> ')} - ${path.explanation}`)} empty="No paths matched this query." /> : null}
+          {activeTab === 'communities' ? <GraphKnowledgeList items={searchResult.communities.map((community) => `${community.name}: ${community.summary}`)} empty="No community summaries matched this query." /> : null}
+          {activeTab === 'skills' ? <GraphKnowledgeList items={searchResult.skills.map((skill) => `${skill.name}: ${skill.steps.join(' -> ')}`)} empty="No procedural skills matched this query." /> : null}
+          {activeTab === 'graph' ? <pre aria-label="Graph knowledge graph preview">{JSON.stringify(graphPreview, null, 2)}</pre> : null}
+          {activeTab === 'table' ? <GraphKnowledgeScoreTable result={searchResult} /> : null}
+          {activeTab === 'raw' ? <pre aria-label="Graph knowledge raw JSON">{JSON.stringify({ stats, result: searchResult, citations: contextPack.localCitationIds }, null, 2)}</pre> : null}
+        </article>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function GraphKnowledgeList({ items, empty }: { items: string[]; empty: string }) {
+  if (!items.length) return <p className="muted">{empty}</p>;
+  return (
+    <ul className="graph-knowledge-list">
+      {items.map((item) => <li key={item}>{item}</li>)}
+    </ul>
+  );
+}
+
+function GraphKnowledgeScoreTable({ result }: { result: GraphKnowledgeSearchResult }) {
+  if (!result.scoreBreakdowns.length) return <p className="muted">No score breakdowns available.</p>;
+  return (
+    <div className="graph-knowledge-score-table" role="table" aria-label="Graph knowledge score breakdowns">
+      <div role="row">
+        <strong role="columnheader">Result</strong>
+        <strong role="columnheader">Lexical</strong>
+        <strong role="columnheader">Path</strong>
+        <strong role="columnheader">Activation</strong>
+        <strong role="columnheader">Total</strong>
+      </div>
+      {result.scoreBreakdowns.slice(0, 8).map((breakdown) => (
+        <div role="row" key={breakdown.id}>
+          <span role="cell">{breakdown.label}</span>
+          <span role="cell">{breakdown.lexicalScore.toFixed(1)}</span>
+          <span role="cell">{breakdown.pathScore.toFixed(1)}</span>
+          <span role="cell">{breakdown.activationScore.toFixed(1)}</span>
+          <span role="cell">{breakdown.totalScore.toFixed(1)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RunCheckpointSettingsPanel({
   state,
   onChange,
@@ -8697,6 +8906,7 @@ interface SettingsPanelProps {
   harnessEvolutionSettings: HarnessEvolutionSettings;
   harnessEvolutionPlan: HarnessEvolutionPlan;
   persistentMemoryGraphState: PersistentMemoryGraphState;
+  graphKnowledgeState: GraphKnowledgeState;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
@@ -8718,6 +8928,7 @@ interface SettingsPanelProps {
   onHarnessSteeringStateChange: (state: HarnessSteeringState) => void;
   onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
   onPersistentMemoryGraphStateChange: (state: PersistentMemoryGraphState) => void;
+  onGraphKnowledgeStateChange: (state: GraphKnowledgeState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   onSpecDrivenDevelopmentSettingsChange: (settings: SpecDrivenDevelopmentSettings) => void;
@@ -9071,6 +9282,7 @@ function SettingsPanel({
   harnessEvolutionSettings,
   harnessEvolutionPlan,
   persistentMemoryGraphState,
+  graphKnowledgeState,
   browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
@@ -9092,6 +9304,7 @@ function SettingsPanel({
   onHarnessSteeringStateChange,
   onHarnessEvolutionSettingsChange,
   onPersistentMemoryGraphStateChange,
+  onGraphKnowledgeStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   onSpecDrivenDevelopmentSettingsChange,
@@ -9153,6 +9366,11 @@ function SettingsPanel({
         settings={specDrivenDevelopmentSettings}
         plan={specWorkflowPlan}
         onChange={onSpecDrivenDevelopmentSettingsChange}
+      />
+
+      <GraphKnowledgeSettingsPanel
+        state={graphKnowledgeState}
+        onChange={onGraphKnowledgeStateChange}
       />
 
       <MediaAgentSettingsPanel />
@@ -11590,6 +11808,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.specDrivenDevelopmentSettings,
     isSpecDrivenDevelopmentSettings,
     DEFAULT_SPEC_DRIVEN_DEVELOPMENT_SETTINGS,
+  );
+  const [graphKnowledgeState, setGraphKnowledgeState] = useStoredState<GraphKnowledgeState>(
+    localStorageBackend,
+    STORAGE_KEYS.graphKnowledgeState,
+    isGraphKnowledgeState,
+    loadSampleGraphKnowledge('2026-05-08T00:00:00.000Z'),
   );
   const [harnessSteeringState, setHarnessSteeringState] = useStoredState(
     localStorageBackend,
@@ -15629,6 +15853,7 @@ function AgentBrowserApp() {
         harnessEvolutionSettings={harnessEvolutionSettings}
         harnessEvolutionPlan={settingsHarnessEvolutionPlan}
         persistentMemoryGraphState={persistentMemoryGraphState}
+        graphKnowledgeState={graphKnowledgeState}
         browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
@@ -15650,6 +15875,7 @@ function AgentBrowserApp() {
         onHarnessSteeringStateChange={setHarnessSteeringState}
         onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
         onPersistentMemoryGraphStateChange={setPersistentMemoryGraphState}
+        onGraphKnowledgeStateChange={setGraphKnowledgeState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         onSpecDrivenDevelopmentSettingsChange={setSpecDrivenDevelopmentSettings}

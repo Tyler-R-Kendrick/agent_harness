@@ -24,6 +24,7 @@ const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026
 const branchingConversationsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-branching-conversations-visual-smoke.png');
 const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
 const persistentMemoryGraphOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-persistent-memory-graphs-visual-smoke.png');
+const graphKnowledgeOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-graph-knowledge-visual-smoke.png');
 const gitWorktreeViewportOutputPaths = [
   {
     name: 'mobile',
@@ -992,6 +993,35 @@ async function main() {
     await expect(page.getByText('manualTrigger')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('runLocalAction')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('queueReview')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Graph knowledge' }).click();
+    const graphKnowledgeSection = page
+      .locator('section.settings-section')
+      .filter({ has: page.getByRole('button', { name: 'Graph knowledge' }) });
+    await expect(graphKnowledgeSection.getByRole('status').filter({ hasText: 'Offline-ready graph memory' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(graphKnowledgeSection.getByRole('button', { name: 'Load Sample Memory', exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(graphKnowledgeSection.getByRole('button', { name: 'Generate Context Pack', exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(graphKnowledgeSection.getByLabel('Graph knowledge search query')).toHaveValue(
+      'offline graph memory PathRAG Kuzu-WASM',
+      { timeout: shellTimeoutMs },
+    );
+    await expect(graphKnowledgeSection.getByText('Tier 1 blocks')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(graphKnowledgeSection.getByText('Tier 2 nodes')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(graphKnowledgeSection.getByText('Kuzu-WASM').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(graphKnowledgeSection.getByLabel('Graph knowledge context pack')).toContainText('PATHS', {
+      timeout: shellTimeoutMs,
+    });
+    await graphKnowledgeSection.getByRole('tab', { name: 'Paths' }).click();
+    await expect(graphKnowledgeSection.getByText(/Matched query seed Kuzu-WASM/i).first()).toBeVisible({ timeout: shellTimeoutMs });
+    await graphKnowledgeSection.getByRole('tab', { name: 'Communities' }).click();
+    await expect(graphKnowledgeSection.getByText('Offline graph memory').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: graphKnowledgeOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });
@@ -1018,7 +1048,7 @@ async function main() {
     await expect(page.getByLabel('Daily workspace audit notification route')).toHaveValue('inbox', {
       timeout: shellTimeoutMs,
     });
-    await benchmarkObjective.scrollIntoViewIfNeeded();
+    await page.getByRole('button', { name: 'Benchmark routing' }).scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Extensions', exact: true }).click();
     const installedExtensions = page.getByRole('region', { name: 'Installed extensions' });
