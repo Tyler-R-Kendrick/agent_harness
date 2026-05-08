@@ -807,6 +807,36 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('queueReview')).toBeInTheDocument();
   });
 
+  it('renders graph knowledge retrieval, context packs, and tier metrics', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('button', { name: 'Graph knowledge' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Graph knowledge' }));
+
+    expect(screen.getAllByText('Offline-ready graph memory').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Load Sample Memory' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate Context Pack' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Graph knowledge search query')).toHaveValue('offline graph memory PathRAG Kuzu-WASM');
+    expect(screen.getByText('Tier 1 blocks')).toBeInTheDocument();
+    expect(screen.getByText('Tier 2 nodes')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Context Pack' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Graph knowledge context pack')).toHaveTextContent('HOT MEMORY');
+    expect(screen.getByLabelText('Graph knowledge context pack')).toHaveTextContent('PATHS');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Paths' }));
+    expect(screen.getAllByText(/Matched query seed Kuzu-WASM/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Table' }));
+    expect(screen.getByRole('table', { name: 'Graph knowledge score breakdowns' })).toBeInTheDocument();
+  });
+
   it('renders suspend and resume checkpoints in History and Settings', async () => {
     vi.useFakeTimers();
 

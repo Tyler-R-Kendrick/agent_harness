@@ -2732,6 +2732,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-checkpoint-history,
 .conversation-branch-history,
 .n8n-capabilities-settings,
+.graph-knowledge-settings,
 .browser-agent-run-sdk-settings,
 .browser-agent-run-sdk-summary {
   display: grid;
@@ -2749,11 +2750,80 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .n8n-capabilities-summary-card,
 .n8n-capability-card,
 .n8n-workflow-preview-card,
+.graph-knowledge-summary-card,
+.graph-knowledge-result-card,
 .browser-agent-run-sdk-history-card,
 .browser-agent-run-sdk-card {
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: rgba(255,255,255,.025);
+}
+.graph-knowledge-action-grid,
+.graph-knowledge-input-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.graph-knowledge-action-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.graph-knowledge-action-grid .secondary-button {
+  justify-content: center;
+  min-height: 32px;
+  white-space: normal;
+}
+.graph-knowledge-input-grid textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.graph-knowledge-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.graph-knowledge-result-card {
+  min-width: 0;
+}
+.graph-knowledge-result-card pre {
+  max-height: 340px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 5px;
+  background: rgba(15,23,42,.72);
+  color: #dbeafe;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.graph-knowledge-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.graph-knowledge-score-table {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+}
+.graph-knowledge-score-table [role="row"] {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) repeat(4, minmax(48px, .55fr));
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  padding: 4px 0;
+}
+.graph-knowledge-score-table [role="cell"],
+.graph-knowledge-score-table [role="columnheader"] {
+  overflow-wrap: anywhere;
 }
 .n8n-capability-grid {
   display: grid;
@@ -2921,8 +2991,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (max-width: 520px) {
   .scheduled-automation-control-grid,
   .run-checkpoint-control-grid,
+  .graph-knowledge-action-grid,
+  .graph-knowledge-input-grid,
   .n8n-capability-columns,
   .persistent-memory-graph-input-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .graph-knowledge-score-table [role="row"] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
