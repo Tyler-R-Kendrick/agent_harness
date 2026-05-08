@@ -1,8 +1,8 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-07
-Baseline: `.features/Summary.md` refreshed from the 2026-05-04 twenty-two-harness corpus.
-Diff type: additive update after Kilo Code research
+Updated: 2026-05-08
+Baseline: `.features/Summary.md` refreshed from the 2026-05-07 twenty-three-harness corpus.
+Diff type: additive update after Roomote research
 
 ## Net new normalized features
 
@@ -63,6 +63,22 @@ Diff type: additive update after Kilo Code research
 - One-shot instruction for an LLM:
   - Implement a browser-agent plugin runtime for `agent-browser` that can load repo or user-installed plugins, register tools and model or auth providers, subscribe to structured agent lifecycle events, intercept or veto tool calls with auditable rationale, and expose a stable configuration surface that works across interactive sessions, automations, and review flows.
 
+### Added: Closed-loop PR feedback learning and autonomous refinement
+- Why now: Roomote is framing reviewer feedback as an input to future work quality, not just as cleanup on the current PR.
+- Research delta:
+  - Roomote says it self-improves from PR feedback and keeps refining in the background with approval
+  - the product also claims built-in review loops that catch issues early and auto-fix them before human reviewers spend time on low-signal cleanup
+  - Roomote's shared task UI pairs transcript, diff, logs, previews, artifacts, and task info, which gives the system a natural place to collect reusable reviewer signals instead of losing them in isolated IDE chats
+
+### Added: Add reviewer-feedback learning loops that refine future agent runs
+- Why now: `agent-browser` already has repo-owned instructions and review ambitions, but it does not yet convert accepted reviewer feedback into durable, inspectable guidance that improves later runs.
+- Linear issue title:
+  - `Add reviewer-feedback learning loops that refine future agent runs`
+- Suggested problem statement:
+  - `agent-browser` can produce diffs, browser evidence, and review artifacts, but reviewer corrections are still mostly trapped inside individual PRs instead of being promoted into reusable rules, heuristics, or self-review checks for future sessions.
+- One-shot instruction for an LLM:
+  - Implement reviewer-feedback learning for `agent-browser` so accepted and rejected PR comments can be captured as structured lessons, reviewed and approved by operators, replayed during planning and self-review, versioned per workspace or project, and safely disabled or expired when they become stale or overfit.
+
 ## How to use this file
 
 1. Treat each `Added:` section as a candidate Linear epic or feature.
@@ -72,4 +88,4 @@ Diff type: additive update after Kilo Code research
 
 ## Recommended next Linear batch
 
-1. `Add a runtime plugin layer with tool-call interception and event hooks`
+1. `Add reviewer-feedback learning loops that refine future agent runs`
