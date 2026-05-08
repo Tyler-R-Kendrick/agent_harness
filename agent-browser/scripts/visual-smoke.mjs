@@ -820,6 +820,12 @@ async function main() {
     await expect(page.getByLabel('Auto-capture steering corrections')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('.steering/STEERING.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('.steering/tool.steering.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Harness evolution' }).click();
+    await expect(page.getByLabel('Enable harness evolution')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Fallback to safe mode on failure')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Require visual validation')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Harness evolution sandbox root')).toHaveValue('.harness-evolution/sandboxes', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Harness evolution patch command')).toHaveValue('npx patch-package', { timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');
@@ -895,6 +901,14 @@ async function main() {
     await expect(page.getByText('Structured event stream')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Reconnect cursor')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Archive and delete lifecycle')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'n8n capabilities' }).click();
+    await expect(page.getByText('CNCF Serverless Workflow 1.0.3')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Workflow canvas')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Executions and debugging')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('AI, RAG, and evaluations')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('manualTrigger')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('runLocalAction')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('queueReview')).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Adversary tool review' }).click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });

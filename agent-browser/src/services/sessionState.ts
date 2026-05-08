@@ -47,6 +47,7 @@ export const STORAGE_KEYS = {
   sharedAgentRegistryState: 'agent-browser.shared-agent-registry-state',
   partnerAgentControlPlaneSettings: 'agent-browser.partner-agent-control-plane-settings',
   runtimePluginSettings: 'agent-browser.runtime-plugin-settings',
+  harnessEvolutionSettings: 'agent-browser.harness-evolution-settings',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',
