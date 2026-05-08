@@ -7553,6 +7553,7 @@ kbd {
 }
 .shared-chat-active-banner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
@@ -7564,6 +7565,15 @@ kbd {
 .shared-chat-active-banner strong {
   color: #86efac;
   font-weight: 600;
+}
+.shared-chat-active-banner small {
+  flex: 1 1 160px;
+  min-width: 0;
+  color: #9ca3af;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .shared-chat-active-banner .secondary-button {
   margin-left: auto;

@@ -185,6 +185,46 @@ describe('App smoke coverage', () => {
     expect(screen.getByText(/QR is untrusted signaling/i)).toBeInTheDocument();
   });
 
+  it('renders persisted shared-session remote control identity in the chat panel', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(STORAGE_KEYS.sharedSessionControlState, JSON.stringify({
+      enabled: true,
+      allowRemoteControl: true,
+      requirePairingConfirmation: true,
+      activeSessions: [{
+        sessionId: 'session-remote-control-smoke',
+        workspaceName: 'Research',
+        peerLabel: 'Maya',
+        deviceLabel: 'iPad Pro',
+        status: 'active',
+        eventCount: 3,
+        lastEventAt: '2026-05-07T21:31:00.000Z',
+      }],
+      audit: [{
+        id: 'session-remote-control-smoke:pairing.confirmed:2026-05-07T21:31:00.000Z',
+        sessionId: 'session-remote-control-smoke',
+        event: 'pairing.confirmed',
+        actor: 'Maya',
+        summary: 'Maya confirmed pairing for Maya on iPad Pro.',
+        createdAt: '2026-05-07T21:31:00.000Z',
+      }],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+
+    const banner = screen.getByLabelText('Shared session remote control');
+    expect(banner).toHaveTextContent('Maya');
+    expect(banner).toHaveTextContent('iPad Pro');
+    expect(banner).toHaveTextContent('Remote control enabled');
+    expect(banner).toHaveTextContent('3 signed events');
+  });
+
   it('hydrates installed local models from durable session storage', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
@@ -305,7 +345,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('button', { name: 'Branching conversations' })).toBeInTheDocument();
     expect(screen.getByText('Conversation branches')).toBeInTheDocument();
     expect(screen.getByText('conversation/research/branch-active-chat-thread')).toBeInTheDocument();
-    expect(screen.getByText('Branch started: Branch active chat thread')).toBeInTheDocument();
+    expect(screen.getAllByText('Branch started: Branch active chat thread')).toHaveLength(2);
 
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: 'Branching conversations' }));

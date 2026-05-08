@@ -699,6 +699,32 @@ async function main() {
           },
         ],
       }));
+      localStorage.setItem('agent-browser.shared-session-control-state', JSON.stringify({
+        enabled: true,
+        allowRemoteControl: true,
+        requirePairingConfirmation: true,
+        activeSessions: [
+          {
+            sessionId: sessionId,
+            workspaceName: 'Research',
+            peerLabel: 'Maya',
+            deviceLabel: 'iPad Pro',
+            status: 'active',
+            eventCount: 3,
+            lastEventAt: '2026-05-07T21:31:00.000Z',
+          },
+        ],
+        audit: [
+          {
+            id: `${sessionId}:pairing.confirmed:2026-05-07T21:31:00.000Z`,
+            sessionId: sessionId,
+            event: 'pairing.confirmed',
+            actor: 'Maya',
+            summary: 'Maya confirmed pairing for Maya on iPad Pro.',
+            createdAt: '2026-05-07T21:31:00.000Z',
+          },
+        ],
+      }));
       sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
     });
@@ -710,6 +736,12 @@ async function main() {
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
+    const sharedControlBanner = page.getByLabel('Shared session remote control');
+    await expect(sharedControlBanner).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(sharedControlBanner).toContainText('Maya', { timeout: shellTimeoutMs });
+    await expect(sharedControlBanner).toContainText('iPad Pro', { timeout: shellTimeoutMs });
+    await expect(sharedControlBanner).toContainText('Remote control enabled', { timeout: shellTimeoutMs });
+    await expect(sharedControlBanner).toContainText('3 signed events', { timeout: shellTimeoutMs });
     await expect(page.getByText('Choose how the agent should continue.').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -749,7 +781,7 @@ async function main() {
     });
     await expect(page.getByText('Conversation branches')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('conversation/research/agent-proof')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('Captured branch proof and returned the latest summary to main.')).toBeVisible({
+    await expect(page.getByText('Captured branch proof and returned the latest summary to main.').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: branchingConversationsOutputPath, fullPage: true });
