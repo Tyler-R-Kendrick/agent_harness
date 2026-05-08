@@ -851,6 +851,9 @@ async function main() {
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Enable browser notifications' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     const sharedControlBanner = page.getByLabel('Shared session remote control');
     await expect(sharedControlBanner).toBeVisible({ timeout: shellTimeoutMs });
     await expect(sharedControlBanner).toContainText('Maya', { timeout: shellTimeoutMs });
