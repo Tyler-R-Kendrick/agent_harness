@@ -420,6 +420,18 @@ import {
   type MultitaskSubagentState,
 } from './services/multitaskSubagents';
 import {
+  DEFAULT_CONVERSATION_BRANCHING_STATE,
+  buildConversationBranchProcessEntries,
+  buildConversationBranchPromptContext,
+  createConversationBranchingState,
+  isConversationBranchingRequest,
+  isConversationBranchingState,
+  mergeConversationSubthread,
+  summarizeConversationBranches,
+  type ConversationBranchingState,
+  type ConversationBranchSettings,
+} from './services/conversationBranches';
+import {
   DEFAULT_SHARED_AGENT_REGISTRY_STATE,
   buildSharedAgentCatalog,
   buildSharedAgentPromptContext,
@@ -2301,6 +2313,9 @@ function ChatPanel({
   onSessionMcpControllerChange,
   onSessionRuntimeChange,
   onMultitaskRequest,
+  conversationBranchPromptContext,
+  conversationBranchingState,
+  onConversationBranchRequest,
   dragHandleProps,
 }: {
   installedModels: HFModel[];
@@ -2358,6 +2373,9 @@ function ChatPanel({
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
   onMultitaskRequest?: (request: string) => void;
+  conversationBranchPromptContext?: string;
+  conversationBranchingState: ConversationBranchingState;
+  onConversationBranchRequest?: (request: string, sessionId: string) => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
@@ -2490,12 +2508,13 @@ function ChatPanel({
       repoWikiPromptContext,
       runCheckpointPromptContext,
       multitaskPromptContext,
+      conversationBranchPromptContext,
       locationPromptContext,
       runtimeExtensionPromptContext,
       sharedSessionControlPromptContext,
       buildSharedAgentPromptContext(sharedAgentCatalog),
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, sharedSessionControlPromptContext, workspaceFiles],
+    [activeSessionId, artifactPromptContext, conversationBranchPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, sharedSessionControlPromptContext, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const activeSharedSessionCandidates = sharedSessionControlState.activeSessions.filter(
@@ -2676,7 +2695,8 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · spec ${specWorkflowPlan.enabled ? specWorkflowPlan.stage : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · evolution ${harnessEvolutionSettings.enabled ? 'on' : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const conversationBranchSummary = summarizeConversationBranches(conversationBranchingState);
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · branches ${conversationBranchingState.enabled ? `${conversationBranchSummary.activeSubthreads} active` : 'off'} · spec ${specWorkflowPlan.enabled ? specWorkflowPlan.stage : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · evolution ${harnessEvolutionSettings.enabled ? 'on' : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -3338,6 +3358,9 @@ function ChatPanel({
     resetActiveInputHistoryCursor();
     if (isMultitaskSubagentRequest(trimmedText)) {
       onMultitaskRequest?.(trimmedText);
+    }
+    if (isConversationBranchingRequest(trimmedText)) {
+      onConversationBranchRequest?.(trimmedText, activeChatSessionId);
     }
 
     if (await runSandboxPrompt(text, assistantId)) {
@@ -6011,6 +6034,17 @@ function ChatPanel({
               >
                 <Icon name={browserNotificationSettings.enabled ? 'bell' : 'bellOff'} size={13} />
               </button>
+              <button
+                type="button"
+                className={`icon-button${conversationBranchingState.enabled ? ' is-active' : ''}`}
+                aria-label="Start conversation branch"
+                title="Start conversation branch"
+                data-tooltip="Branch"
+                onClick={() => onConversationBranchRequest?.('Branch active chat thread', activeChatSessionId)}
+                {...panelTitlebarControlProps}
+              >
+                <Icon name="share" size={13} />
+              </button>
             </>
           ) : null}
           <div className="chat-mode-controls">
@@ -6741,6 +6775,86 @@ function BrowserWorkflowSkillSettingsPanel({
             <p className="empty-state">No browser workflow skills installed in this workspace.</p>
           )}
         </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function BranchingConversationSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: ConversationBranchingState;
+  onChange: (settings: ConversationBranchSettings) => void;
+}) {
+  const summary = summarizeConversationBranches(state);
+  const update = <K extends keyof ConversationBranchSettings>(key: K, value: ConversationBranchSettings[K]) => {
+    onChange({ ...state.settings, [key]: value });
+  };
+
+  return (
+    <SettingsSection title="Branching conversations" defaultOpen={false}>
+      <div className="browser-workflow-skill-settings conversation-branch-settings">
+        <article className="provider-card browser-workflow-skill-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Subthread graph memory</strong>
+              <p>{summary.totalSubthreads} subthreads · {summary.commitCount} commits · latest summaries feed the main thread context.</p>
+            </div>
+            <span className={`badge${state.enabled ? ' connected' : ''}`}>{state.enabled ? 'enabled' : 'off'}</span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="Conversation branch metrics">
+            <span role="listitem">
+              <strong>{summary.activeSubthreads}</strong>
+              <small>active</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.mergedSubthreads}</strong>
+              <small>merged</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.commitCount}</strong>
+              <small>commits</small>
+            </span>
+          </div>
+          <p className="muted">{summary.latestSummary}</p>
+        </article>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={state.settings.enabled}
+            aria-label="Enable conversation branching"
+            onChange={(event) => update('enabled', event.target.checked)}
+          />
+          <span><strong>Conversation branching</strong><small>Allow subthreads to collect branch commits.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={state.settings.includeBranchContext}
+            aria-label="Inject branch summaries into prompt context"
+            onChange={(event) => update('includeBranchContext', event.target.checked)}
+          />
+          <span><strong>Prompt context</strong><small>Mount active and merged branch summaries into chat instructions.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={state.settings.showProcessGraphNodes}
+            aria-label="Show branch commits in process graph"
+            onChange={(event) => update('showProcessGraphNodes', event.target.checked)}
+          />
+          <span><strong>Process graph branch nodes</strong><small>Project branch commits as ProcessGraph rows.</small></span>
+        </label>
+        <label className="secret-toggle-row">
+          <input
+            type="checkbox"
+            checked={state.settings.autoSummarizeOnMerge}
+            aria-label="Auto summarize branch merges"
+            onChange={(event) => update('autoSummarizeOnMerge', event.target.checked)}
+          />
+          <span><strong>Merge summaries</strong><small>Keep a compact summary when a branch returns to main.</small></span>
+        </label>
       </div>
     </SettingsSection>
   );
@@ -8329,6 +8443,7 @@ interface SettingsPanelProps {
   sharedAgentRegistryState: SharedAgentRegistryState;
   sharedAgentCatalog: SharedAgentCatalog;
   browserWorkflowSkills: BrowserWorkflowSkillManifest[];
+  conversationBranchingState: ConversationBranchingState;
   harnessSteeringState: HarnessSteeringState;
   harnessSteeringInventory: HarnessSteeringInventory;
   harnessEvolutionSettings: HarnessEvolutionSettings;
@@ -8350,6 +8465,7 @@ interface SettingsPanelProps {
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
   onInstallBrowserWorkflowSkill: (skill: BrowserWorkflowSkillManifest) => void;
+  onConversationBranchSettingsChange: (settings: ConversationBranchSettings) => void;
   onHarnessSteeringStateChange: (state: HarnessSteeringState) => void;
   onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
@@ -8699,6 +8815,7 @@ function SettingsPanel({
   sharedAgentRegistryState,
   sharedAgentCatalog,
   browserWorkflowSkills,
+  conversationBranchingState,
   harnessSteeringState,
   harnessSteeringInventory,
   harnessEvolutionSettings,
@@ -8720,6 +8837,7 @@ function SettingsPanel({
   onWorkspaceSkillPolicyStateChange,
   onSharedAgentRegistryStateChange,
   onInstallBrowserWorkflowSkill,
+  onConversationBranchSettingsChange,
   onHarnessSteeringStateChange,
   onHarnessEvolutionSettingsChange,
   onPartnerAgentControlPlaneSettingsChange,
@@ -8770,6 +8888,11 @@ function SettingsPanel({
       <BrowserWorkflowSkillSettingsPanel
         installedSkills={browserWorkflowSkills}
         onInstall={onInstallBrowserWorkflowSkill}
+      />
+
+      <BranchingConversationSettingsPanel
+        state={conversationBranchingState}
+        onChange={onConversationBranchSettingsChange}
       />
 
       <N8nCapabilitiesSettingsPanel />
@@ -9146,14 +9269,79 @@ function BrowserAgentRunEventList({ events }: { events: BrowserAgentRunEvent[] }
   );
 }
 
+function BranchingConversationHistory({
+  state,
+  onMergeConversationBranch,
+}: {
+  state: ConversationBranchingState;
+  onMergeConversationBranch: (subthreadId: string) => void;
+}) {
+  const summary = summarizeConversationBranches(state);
+  const processEntries = buildConversationBranchProcessEntries(state);
+
+  return (
+    <SidebarSection title="Branching conversations" scrollBody>
+      <div className="conversation-branch-history">
+        <article className="list-card history-card conversation-branch-history-card">
+          <div className="history-card-header">
+            <div>
+              <h3>Conversation branches</h3>
+              <p className="muted">{summary.totalSubthreads} subthreads · {summary.commitCount} commits · {summary.mergedSubthreads} merged</p>
+            </div>
+            <span className={`badge${summary.activeSubthreads ? ' connected' : ''}`}>
+              {summary.activeSubthreads ? `${summary.activeSubthreads} active` : 'ready'}
+            </span>
+          </div>
+          <p className="history-preview">{summary.latestSummary}</p>
+          <ul className="history-events">
+            <li>Main session: {state.mainSessionId || 'none'}</li>
+            <li>Process graph rows: {processEntries.length}</li>
+          </ul>
+        </article>
+        {state.subthreads.map((subthread) => (
+          <article key={subthread.id} className="list-card history-card conversation-branch-row-card">
+            <div className="history-card-header">
+              <div>
+                <h3>{subthread.title}</h3>
+                <p className="muted">{subthread.branchName}</p>
+              </div>
+              <span className={`badge${subthread.status === 'merged' ? ' connected' : ''}`}>{subthread.status}</span>
+            </div>
+            <p className="history-preview">{subthread.summary}</p>
+            <ul className="history-events">
+              <li>Subthread ID: {subthread.id}</li>
+              <li>Head commit: {subthread.headCommitId}</li>
+              <li>Last merged: {subthread.lastMergedCommitId ?? 'not merged'}</li>
+            </ul>
+            <button
+              type="button"
+              className="toolbar-button"
+              disabled={subthread.status === 'merged'}
+              aria-label={`Merge ${subthread.branchName}`}
+              onClick={() => onMergeConversationBranch(subthread.id)}
+            >
+              <Icon name="share" size={13} />
+              <span>{subthread.status === 'merged' ? 'Merged' : 'Merge branch'}</span>
+            </button>
+          </article>
+        ))}
+      </div>
+    </SidebarSection>
+  );
+}
+
 function HistoryPanel({
   scheduledAutomationState,
   runCheckpointState,
   browserAgentRunSdkState,
+  conversationBranchingState,
+  onMergeConversationBranch,
 }: {
   scheduledAutomationState: ScheduledAutomationState;
   runCheckpointState: RunCheckpointState;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
+  conversationBranchingState: ConversationBranchingState;
+  onMergeConversationBranch: (subthreadId: string) => void;
 }) {
   const now = new Date('2026-05-06T18:00:00.000Z');
   const checkpointSnapshot = expireDueRunCheckpoints(runCheckpointState, now);
@@ -9210,6 +9398,10 @@ function HistoryPanel({
           ))}
         </div>
       </SidebarSection>
+      <BranchingConversationHistory
+        state={conversationBranchingState}
+        onMergeConversationBranch={onMergeConversationBranch}
+      />
       <BrowserAgentRunSdkHistory state={browserAgentRunSdkState} />
       <SidebarSection title="Scheduled automations" scrollBody>
         <div className="scheduled-automations-summary">
@@ -11106,6 +11298,12 @@ function AgentBrowserApp() {
     isMultitaskSubagentState,
     DEFAULT_MULTITASK_SUBAGENT_STATE,
   );
+  const [conversationBranchingState, setConversationBranchingState] = useStoredState<ConversationBranchingState>(
+    localStorageBackend,
+    STORAGE_KEYS.conversationBranchingState,
+    isConversationBranchingState,
+    DEFAULT_CONVERSATION_BRANCHING_STATE,
+  );
   const [partnerAgentControlPlaneSettings, setPartnerAgentControlPlaneSettings] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.partnerAgentControlPlaneSettings,
@@ -11421,6 +11619,40 @@ function AgentBrowserApp() {
       return promoteMultitaskBranch(source, branchId);
     });
   }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+  const activeConversationBranchingState = useMemo(
+    () => conversationBranchingState.enabled && conversationBranchingState.workspaceId === activeWorkspaceId
+      ? conversationBranchingState
+      : DEFAULT_CONVERSATION_BRANCHING_STATE,
+    [activeWorkspaceId, conversationBranchingState],
+  );
+  const startConversationBranch = useCallback((request: string, sessionId: string) => {
+    setConversationBranchingState(createConversationBranchingState({
+      workspaceId: activeWorkspaceId,
+      workspaceName: activeWorkspace.name,
+      mainSessionId: sessionId,
+      request,
+    }));
+    setToast({ msg: 'Conversation branch started', type: 'success' });
+  }, [activeWorkspace.name, activeWorkspaceId, setConversationBranchingState, setToast]);
+  const mergeActiveConversationBranch = useCallback((subthreadId: string) => {
+    setConversationBranchingState((current) => {
+      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
+      const subthread = current.subthreads.find((candidate) => candidate.id === subthreadId);
+      if (!subthread) return current;
+      return mergeConversationSubthread(current, subthreadId, {
+        summary: `Merged ${subthread.branchName}: ${subthread.summary}`,
+      });
+    });
+    setToast({ msg: 'Conversation branch merged into main context', type: 'success' });
+  }, [activeWorkspaceId, setConversationBranchingState, setToast]);
+  const updateConversationBranchSettings = useCallback((settings: ConversationBranchSettings) => {
+    setConversationBranchingState((current) => ({
+      ...current,
+      enabled: settings.enabled,
+      settings,
+      updatedAt: new Date().toISOString(),
+    }));
+  }, [setConversationBranchingState]);
   const activeBrowserTabs = useMemo(() => flattenTabs(activeWorkspace, 'browser'), [activeWorkspace]);
   const activeWorkspaceViewState: WorkspaceViewState = activeWorkspace.type === 'workspace'
     ? normalizeWorkspaceViewEntry(activeWorkspace, workspaceViewStateByWorkspace[activeWorkspaceId])
@@ -15061,6 +15293,8 @@ function AgentBrowserApp() {
           scheduledAutomationState={scheduledAutomationState}
           runCheckpointState={runCheckpointState}
           browserAgentRunSdkState={browserAgentRunSdkState}
+          conversationBranchingState={activeConversationBranchingState}
+          onMergeConversationBranch={mergeActiveConversationBranch}
         />
       );
     }
@@ -15115,6 +15349,7 @@ function AgentBrowserApp() {
         sharedAgentRegistryState={sharedAgentRegistryState}
         sharedAgentCatalog={sharedAgentCatalog}
         browserWorkflowSkills={browserWorkflowSkills}
+        conversationBranchingState={activeConversationBranchingState}
         harnessSteeringState={harnessSteeringState}
         harnessSteeringInventory={harnessSteeringInventory}
         harnessEvolutionSettings={harnessEvolutionSettings}
@@ -15136,6 +15371,7 @@ function AgentBrowserApp() {
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
         onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
+        onConversationBranchSettingsChange={updateConversationBranchSettings}
         onHarnessSteeringStateChange={setHarnessSteeringState}
         onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
@@ -15413,6 +15649,8 @@ function AgentBrowserApp() {
                 runCheckpointState={runCheckpointState}
                 onRunCheckpointStateChange={setRunCheckpointState}
                 multitaskPromptContext={buildMultitaskPromptContext(multitaskSubagentState)}
+                conversationBranchPromptContext={buildConversationBranchPromptContext(activeConversationBranchingState)}
+                conversationBranchingState={activeConversationBranchingState}
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
                 browserWorkflowSkills={browserWorkflowSkills}
@@ -15463,6 +15701,7 @@ function AgentBrowserApp() {
                 onSessionMcpControllerChange={handleSessionMcpControllerChange}
                 onSessionRuntimeChange={handleSessionRuntimeChange}
                 onMultitaskRequest={startMultitaskSubagents}
+                onConversationBranchRequest={startConversationBranch}
                 dragHandleProps={dragHandleProps}
               />
             );

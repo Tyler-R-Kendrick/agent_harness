@@ -594,6 +594,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workspace-skill-package-list,
 .shared-agent-settings,
 .shared-agent-list,
+.conversation-branch-settings,
 .browser-workflow-skill-settings,
 .browser-workflow-skill-install-list,
 .browser-workflow-skill-list {
@@ -604,6 +605,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workspace-skill-package-card,
 .shared-agent-summary-card,
 .shared-agent-card,
+.conversation-branch-history-card,
+.conversation-branch-row-card,
 .browser-workflow-skill-summary-card,
 .browser-workflow-skill-card {
   border: 1px solid var(--panel-border);
@@ -2727,6 +2730,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .scheduled-automations-summary,
 .run-checkpoint-settings,
 .run-checkpoint-history,
+.conversation-branch-history,
 .n8n-capabilities-settings,
 .browser-agent-run-sdk-settings,
 .browser-agent-run-sdk-summary {
@@ -2740,6 +2744,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-checkpoint-card,
 .run-checkpoint-history-card,
 .run-checkpoint-row-card,
+.conversation-branch-history-card,
+.conversation-branch-row-card,
 .n8n-capabilities-summary-card,
 .n8n-capability-card,
 .n8n-workflow-preview-card,

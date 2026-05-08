@@ -21,6 +21,7 @@ const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-
 const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
+const branchingConversationsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-branching-conversations-visual-smoke.png');
 const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
 const gitWorktreeViewportOutputPaths = [
   {
@@ -510,6 +511,68 @@ async function main() {
           preserveArtifacts: true,
         },
       }));
+      localStorage.setItem('agent-browser.conversation-branching-state', JSON.stringify({
+        enabled: true,
+        workspaceId,
+        workspaceName: 'Research',
+        mainSessionId: sessionId,
+        mainBranchId: 'main',
+        mainHeadCommitId: 'merge-subthread-ws-research-agent-proof:ws-research:20260508T011000000Z',
+        createdAt: '2026-05-08T01:00:00.000Z',
+        updatedAt: '2026-05-08T01:10:00.000Z',
+        settings: {
+          enabled: true,
+          includeBranchContext: true,
+          showProcessGraphNodes: true,
+          autoSummarizeOnMerge: true,
+        },
+        subthreads: [
+          {
+            id: 'subthread:ws-research:agent-proof',
+            title: 'Agent proof branch',
+            branchName: 'conversation/research/agent-proof',
+            status: 'merged',
+            createdAt: '2026-05-08T01:00:00.000Z',
+            updatedAt: '2026-05-08T01:10:00.000Z',
+            headCommitId: 'subthread-ws-research-agent-proof:ws-research:20260508T010500000Z',
+            lastMergedCommitId: 'subthread-ws-research-agent-proof:ws-research:20260508T010500000Z',
+            summary: 'Captured branch proof and returned the latest summary to main.',
+          },
+        ],
+        commits: {
+          'main:ws-research:20260508T010000000Z': {
+            id: 'main:ws-research:20260508T010000000Z',
+            branchId: 'main',
+            parentIds: [],
+            sourceSessionId: sessionId,
+            messageIds: [],
+            summary: 'Main thread before branch: Agent proof branch',
+            createdAt: '2026-05-08T01:00:00.000Z',
+          },
+          'subthread-ws-research-agent-proof:ws-research:20260508T010500000Z': {
+            id: 'subthread-ws-research-agent-proof:ws-research:20260508T010500000Z',
+            branchId: 'subthread:ws-research:agent-proof',
+            parentIds: ['main:ws-research:20260508T010000000Z'],
+            sourceSessionId: sessionId,
+            messageIds: ['visual-eval-assistant'],
+            summary: 'Captured branch proof and returned the latest summary to main.',
+            createdAt: '2026-05-08T01:05:00.000Z',
+            mergedIntoMainAt: '2026-05-08T01:10:00.000Z',
+          },
+          'merge-subthread-ws-research-agent-proof:ws-research:20260508T011000000Z': {
+            id: 'merge-subthread-ws-research-agent-proof:ws-research:20260508T011000000Z',
+            branchId: 'main',
+            parentIds: [
+              'main:ws-research:20260508T010000000Z',
+              'subthread-ws-research-agent-proof:ws-research:20260508T010500000Z',
+            ],
+            sourceSessionId: sessionId,
+            messageIds: [],
+            summary: 'Merged conversation/research/agent-proof: Captured branch proof and returned the latest summary to main.',
+            createdAt: '2026-05-08T01:10:00.000Z',
+          },
+        },
+      }));
       localStorage.setItem('agent-browser.artifacts-by-workspace', JSON.stringify({
         [workspaceId]: [
           {
@@ -714,6 +777,15 @@ async function main() {
     });
     await expect(page.getByText('Approval before deployment').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText(/operator approval/i).first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Branching conversations' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('Conversation branches')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('conversation/research/agent-proof')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByText('Captured branch proof and returned the latest summary to main.').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: branchingConversationsOutputPath, fullPage: true });
     await expect(page.getByRole('button', { name: 'Typed run SDK' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('SDK launch smoke')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Structured event stream is live.')).toBeVisible({ timeout: shellTimeoutMs });
@@ -797,6 +869,13 @@ async function main() {
     await expect(page.getByRole('list', { name: 'Installed browser workflow skills' }).getByText('npm.cmd run visual:agent-browser')).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await page.getByRole('button', { name: 'Branching conversations' }).click();
+    await expect(page.getByLabel('Enable conversation branching')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Inject branch summaries into prompt context')).toBeChecked({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('Process graph branch nodes')).toBeVisible({ timeout: shellTimeoutMs });
+
     await page.getByRole('button', { name: 'Spec-driven development' }).click();
     await expect(page.getByLabel('Enable spec-driven development')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Default spec format')).toHaveValue('json-schema', { timeout: shellTimeoutMs });
@@ -809,6 +888,7 @@ async function main() {
       .locator('section.settings-section')
       .filter({ has: page.getByRole('button', { name: 'Spec-driven development' }) })
       .screenshot({ path: specDrivenDevelopmentOutputPath });
+
     await page.getByRole('button', { name: 'Media agent' }).click();
     await expect(page.getByText('Media orchestration')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('list', { name: 'Media generation workflows' })).toBeVisible({

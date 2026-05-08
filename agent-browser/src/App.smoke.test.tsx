@@ -326,6 +326,35 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('button', { name: 'Promote agent/research/tests-2' })).toBeInTheDocument();
   });
 
+  it('starts and renders branching conversation controls across chat History and Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start conversation branch' }));
+
+    expect(screen.getByText(/Conversation branch started/i)).toBeInTheDocument();
+    expect(screen.getByText(/branches 1 active/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('History'));
+
+    expect(screen.getByRole('button', { name: 'Branching conversations' })).toBeInTheDocument();
+    expect(screen.getByText('Conversation branches')).toBeInTheDocument();
+    expect(screen.getByText('conversation/research/branch-active-chat-thread')).toBeInTheDocument();
+    expect(screen.getAllByText('Branch started: Branch active chat thread')).toHaveLength(2);
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: 'Branching conversations' }));
+
+    expect(screen.getByLabelText('Enable conversation branching')).toBeChecked();
+    expect(screen.getByLabelText('Inject branch summaries into prompt context')).toBeChecked();
+    expect(screen.getByText('Process graph branch nodes')).toBeInTheDocument();
+  });
+
   it('renders adversary tool review controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
