@@ -2704,6 +2704,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .scheduled-automations-summary,
 .run-checkpoint-settings,
 .run-checkpoint-history,
+.n8n-capabilities-settings,
 .browser-agent-run-sdk-settings,
 .browser-agent-run-sdk-summary {
   display: grid;
@@ -2716,11 +2717,49 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-checkpoint-card,
 .run-checkpoint-history-card,
 .run-checkpoint-row-card,
+.n8n-capabilities-summary-card,
+.n8n-capability-card,
+.n8n-workflow-preview-card,
 .browser-agent-run-sdk-history-card,
 .browser-agent-run-sdk-card {
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: rgba(255,255,255,.025);
+}
+.n8n-capability-grid {
+  display: grid;
+  gap: 8px;
+}
+.n8n-capability-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.n8n-capability-columns > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.n8n-capability-columns strong {
+  color: var(--text);
+  font-size: 11px;
+}
+.n8n-capability-columns ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.n8n-workflow-preview-card code {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 4px;
+  background: rgba(15,23,42,.7);
+  color: #93c5fd;
+  font-size: 11px;
+  padding: 4px 6px;
 }
 .browser-agent-run-sdk-chip-grid {
   display: flex;
@@ -2773,7 +2812,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 @media (max-width: 520px) {
   .scheduled-automation-control-grid,
-  .run-checkpoint-control-grid {
+  .run-checkpoint-control-grid,
+  .n8n-capability-columns {
     grid-template-columns: minmax(0, 1fr);
   }
 }

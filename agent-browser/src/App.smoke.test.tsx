@@ -650,6 +650,28 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Daily workspace audit review trigger')).toHaveValue('failures');
   });
 
+  it('renders n8n capability research and Serverless Workflow serialization guidance', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByRole('button', { name: 'n8n capabilities' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'n8n capabilities' }));
+
+    expect(screen.getByText('CNCF Serverless Workflow 1.0.3')).toBeInTheDocument();
+    expect(screen.getByText('Workflow canvas')).toBeInTheDocument();
+    expect(screen.getByText('Executions and debugging')).toBeInTheDocument();
+    expect(screen.getByText('AI, RAG, and evaluations')).toBeInTheDocument();
+    expect(screen.getByText('manualTrigger')).toBeInTheDocument();
+    expect(screen.getByText('runLocalAction')).toBeInTheDocument();
+    expect(screen.getByText('queueReview')).toBeInTheDocument();
+  });
+
   it('renders suspend and resume checkpoints in History and Settings', async () => {
     vi.useFakeTimers();
 
