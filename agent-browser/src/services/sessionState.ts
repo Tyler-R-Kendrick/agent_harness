@@ -53,6 +53,7 @@ export const STORAGE_KEYS = {
   specDrivenDevelopmentSettings: 'agent-browser.spec-driven-development-settings',
   workspaceSurfacesByWorkspace: 'agent-browser.workspace-surfaces-by-workspace',
   graphKnowledgeState: 'agent-browser.graph-knowledge-state',
+  sessionChapterState: 'agent-browser.session-chapter-state',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',

@@ -371,12 +371,18 @@ async function main() {
             status: 'complete',
             content: 'Agent Browser ready.',
           },
+          {
+            id: 'visual-eval-user',
+            role: 'user',
+            status: 'complete',
+            content: 'Visual validation and checkpoint review',
+          },
               {
                 id: 'visual-eval-assistant',
                 role: 'assistant',
                 status: 'complete',
                 content: 'Captured visual evidence and completed the run.',
-                cards: [{ app: 'Browser evidence', args: { screenshot: 'agent-browser-visual-smoke.png' } }],
+                cards: [{ app: 'Browser evidence', args: { screenshot: 'output/playwright/agent-browser-visual-smoke.png' } }],
                 processEntries: [
                   {
                     id: 'checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z',
@@ -397,7 +403,7 @@ async function main() {
                         boundary: 'before deploy tool call',
                         requiredInput: 'operator approval',
                         resumeToken: 'resume:visual-eval-session:2026-05-07T02:30:00.000Z',
-                        artifacts: ['agent-browser-visual-smoke.png'],
+                        artifacts: ['output/playwright/agent-browser-visual-smoke.png'],
                         createdAt: '2026-05-07T02:30:00.000Z',
                         updatedAt: '2026-05-07T02:30:00.000Z',
                         expiresAt: '2026-05-07T06:30:00.000Z',
@@ -426,7 +432,7 @@ async function main() {
                 kind: 'tool-call',
                 actor: 'playwright',
                 summary: 'Capture browser screenshot',
-                payload: { screenshot: 'agent-browser-visual-smoke.png' },
+                payload: { screenshot: 'output/playwright/agent-browser-visual-smoke.png' },
                 status: 'done',
               },
             ],
@@ -512,6 +518,62 @@ async function main() {
           requireOperatorConfirmation: true,
           preserveArtifacts: true,
         },
+      }));
+      localStorage.setItem('agent-browser.session-chapter-state', JSON.stringify({
+        enabled: true,
+        policy: {
+          automaticCompression: true,
+          compressAfterMessageCount: 2,
+          targetTokenBudget: 1200,
+          retainRecentMessageCount: 4,
+          preserveEvidenceRefs: true,
+        },
+        sessions: {
+          [sessionId]: {
+            sessionId,
+            workspaceId,
+            workspaceName: 'Research',
+            updatedAt: '2026-05-08T04:00:00.000Z',
+            chapters: [
+              {
+                id: `chapter:${sessionId}:1`,
+                sessionId,
+                workspaceId,
+                workspaceName: 'Research',
+                title: 'Chapter 1: Visual validation and checkpoint review',
+                status: 'compressed',
+                startedAt: '2026-05-08T04:00:00.000Z',
+                updatedAt: '2026-05-08T04:00:00.000Z',
+                messageIds: ['visual-eval-user', 'visual-eval-assistant'],
+                sourceTraceRefs: ['message:visual-eval-user', 'message:visual-eval-assistant', 'process:visual-tool'],
+                evidenceRefs: ['evidence:output/playwright/agent-browser-visual-smoke.png'],
+                validationRefs: ['validation:visual-tool:Capture browser screenshot'],
+                compressedContext: {
+                  summary: 'Captured visual smoke evidence and preserved the checkpoint trace for review.',
+                  carryForward: [
+                    'Visual validation produced output/playwright/agent-browser-visual-smoke.png.',
+                    'Resume checkpoints and browser evidence remain linked to the original process trace.',
+                  ],
+                  sourceTraceRefs: ['message:visual-eval-user', 'message:visual-eval-assistant', 'process:visual-tool'],
+                  evidenceRefs: ['evidence:output/playwright/agent-browser-visual-smoke.png'],
+                  validationRefs: ['validation:visual-tool:Capture browser screenshot'],
+                  retainedRecentMessageIds: ['visual-eval-user', 'visual-eval-assistant'],
+                  tokenBudget: 1200,
+                  createdAt: '2026-05-08T04:00:00.000Z',
+                },
+              },
+            ],
+          },
+        },
+        audit: [
+          {
+            id: 'audit:visual-eval-session:projected',
+            sessionId,
+            action: 'projected',
+            summary: 'Projected 1 chapter for visual-eval-session.',
+            createdAt: '2026-05-08T04:00:00.000Z',
+          },
+        ],
       }));
       localStorage.setItem('agent-browser.conversation-branching-state', JSON.stringify({
         enabled: true,
@@ -844,6 +906,13 @@ async function main() {
     await expect(page.getByText('Reconnect cursor 3 is ready for clients.')).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await expect(page.getByRole('button', { name: 'Chaptered sessions' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('heading', { name: /Chapter 1: Visual validation and checkpoint review/ })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText(/evidence:output\/playwright\/agent-browser-visual-smoke\.png/)).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await page.screenshot({ path: typedSdkOutputPath, fullPage: true });
     await expect(page.getByRole('button', { name: 'Scheduled automations' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -1039,6 +1108,13 @@ async function main() {
     await expect(page.getByLabel('Default checkpoint timeout')).toHaveValue('240', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Require operator confirmation before resume')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByText('resume:visual-eval-session:2026-05-07T02:30:00.000Z')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.getByRole('button', { name: 'Chaptered sessions' }).click();
+    await expect(page.getByLabel('Enable chaptered sessions')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Automatic context compression')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Chapter compression target tokens')).toHaveValue('1200', { timeout: shellTimeoutMs });
+    await expect(page.getByText(/1 session\s+.\s+1 chapter\s+.\s+\d+ audit events?/)).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await page.getByRole('button', { name: 'Scheduled automations' }).click();

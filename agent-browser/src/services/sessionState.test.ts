@@ -64,6 +64,8 @@ describe('STORAGE_KEYS', () => {
       runtimePluginSettings: expect.any(String),
       harnessEvolutionSettings: expect.any(String),
       workspaceSurfacesByWorkspace: expect.any(String),
+      graphKnowledgeState: expect.any(String),
+      sessionChapterState: expect.any(String),
       browserAgentRunSdkState: expect.any(String),
       multitaskSubagentState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
@@ -80,6 +82,8 @@ describe('STORAGE_KEYS', () => {
     expect(STORAGE_KEYS.runtimePluginSettings).toBe('agent-browser.runtime-plugin-settings');
     expect(STORAGE_KEYS.harnessEvolutionSettings).toBe('agent-browser.harness-evolution-settings');
     expect(STORAGE_KEYS.workspaceSurfacesByWorkspace).toBe('agent-browser.workspace-surfaces-by-workspace');
+    expect(STORAGE_KEYS.graphKnowledgeState).toBe('agent-browser.graph-knowledge-state');
+    expect(STORAGE_KEYS.sessionChapterState).toBe('agent-browser.session-chapter-state');
   });
 });
 

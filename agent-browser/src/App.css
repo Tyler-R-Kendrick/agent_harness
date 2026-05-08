@@ -2244,6 +2244,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: rgba(255,255,255,.02);
   letter-spacing: 0.02em;
 }
+.chapter-context-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(20, 83, 45, .14);
+  color: #bbf7d0;
+  font-size: 11px;
+}
+.chapter-context-strip strong {
+  color: #f0fdf4;
+  font-size: 11px;
+}
+.chapter-context-strip small {
+  color: #a7f3d0;
+}
 .chat-compose {
   display: grid;
   gap: 6px;
@@ -2731,6 +2749,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-checkpoint-settings,
 .run-checkpoint-history,
 .conversation-branch-history,
+.session-chapter-settings,
+.session-chapter-history,
 .n8n-capabilities-settings,
 .graph-knowledge-settings,
 .browser-agent-run-sdk-settings,
@@ -2747,6 +2767,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-checkpoint-row-card,
 .conversation-branch-history-card,
 .conversation-branch-row-card,
+.session-chapter-summary-card,
+.session-chapter-latest-card,
+.session-chapter-history-card,
+.session-chapter-row-card,
 .n8n-capabilities-summary-card,
 .n8n-capability-card,
 .n8n-workflow-preview-card,
@@ -2955,7 +2979,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 10px;
 }
 .scheduled-automation-card .settings-checkbox-row,
-.run-checkpoint-policy-card .settings-checkbox-row {
+.run-checkpoint-policy-card .settings-checkbox-row,
+.session-chapter-summary-card .settings-checkbox-row {
   align-items: flex-start;
   font-size: 12px;
   line-height: 1.35;
@@ -2981,7 +3006,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   min-width: 0;
 }
 .run-checkpoint-token-row code,
-.run-checkpoint-row-card .history-events li {
+.run-checkpoint-row-card .history-events li,
+.session-chapter-row-card .history-events li,
+.session-chapter-latest-card code {
   overflow-wrap: anywhere;
 }
 .run-checkpoint-token-row span {
