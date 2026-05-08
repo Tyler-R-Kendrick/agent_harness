@@ -1,5 +1,5 @@
 export type ModelBackedAgentProvider = 'codi' | 'ghcp' | 'cursor' | 'codex';
-export type AgentProvider = ModelBackedAgentProvider | 'researcher' | 'debugger' | 'planner' | 'security' | 'steering' | 'adversary' | 'media' | 'tour-guide';
+export type AgentProvider = ModelBackedAgentProvider | 'researcher' | 'debugger' | 'planner' | 'security' | 'steering' | 'adversary' | 'media' | 'swarm' | 'tour-guide';
 
 import type { BusEntryStep, GuidedTourPlan, IterationStep, ReasoningStep, VoterStep } from '../types';
 

@@ -271,6 +271,8 @@ function labelForProvider(provider: AgentProvider | ModelBackedAgentProvider): s
       return 'Adversary';
     case 'media':
       return 'Media';
+    case 'swarm':
+      return 'Swarm';
     case 'tour-guide':
       return 'Tour Guide';
   }
