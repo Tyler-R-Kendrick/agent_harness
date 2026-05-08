@@ -11,6 +11,10 @@ type TransformersModule = {
   ModelRegistry?: unknown;
 };
 
+type TransformersImporter = (specifier: string) => Promise<TransformersModule>;
+
+let transformersImporter: TransformersImporter = defaultTransformersImporter;
+
 type NavigatorLike = {
   gpu?: unknown;
 };
@@ -64,6 +68,10 @@ export async function loadTextGenerationPipeline(options: PreloadOptions = {}): 
   }
 }
 
+export function setTransformersImporterForTest(importer?: TransformersImporter): void {
+  transformersImporter = importer ?? defaultTransformersImporter;
+}
+
 export async function generateJson<T>(
   generator: TextGenerationPipeline,
   prompt: string,
@@ -83,7 +91,7 @@ export async function generateJson<T>(
   try {
     return JSON.parse(json) as T;
   } catch (error) {
-    throw new ClaimifyJsonError(error instanceof Error ? error.message : String(error));
+    throw new ClaimifyJsonError(String(error));
   }
 }
 
@@ -140,8 +148,9 @@ function readGeneratedText(output: unknown): string {
 }
 
 async function importTransformers(): Promise<TransformersModule> {
-  const dynamicImport = new Function('specifier', 'return import(specifier)') as (
-    specifier: string,
-  ) => Promise<TransformersModule>;
-  return dynamicImport('@huggingface/transformers');
+  return transformersImporter('@huggingface/transformers');
+}
+
+function defaultTransformersImporter(specifier: string): Promise<TransformersModule> {
+  return import(specifier) as Promise<TransformersModule>;
 }

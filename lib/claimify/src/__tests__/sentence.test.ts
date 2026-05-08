@@ -2,14 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildExcerpt, splitSentences } from '../sentence';
 
 describe('sentence utilities', () => {
+  it('returns no sentences for empty input', () => {
+    expect(splitSentences('   ')).toEqual([]);
+  });
+
   it('splits sentences with Intl.Segmenter when available', () => {
-    const Segmenter = vi.fn(() => ({
-      segment: () => [
-        { segment: 'First sentence. ' },
-        { segment: 'Second sentence! ' },
-        { segment: 'Third sentence?' },
-      ],
-    }));
+    class Segmenter {
+      segment() {
+        return [
+          { segment: 'First sentence. ' },
+          { segment: 'Second sentence! ' },
+          { segment: 'Third sentence?' },
+        ];
+      }
+    }
     vi.stubGlobal('Intl', { ...Intl, Segmenter });
 
     expect(splitSentences('First sentence. Second sentence! Third sentence?')).toEqual([

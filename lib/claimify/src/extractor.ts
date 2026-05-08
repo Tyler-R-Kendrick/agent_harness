@@ -127,7 +127,7 @@ export class BrowserClaimExtractor implements ClaimExtractor {
       for (const [claimIndex, candidate] of decomposition.claims.entries()) {
         const validation = validateClaim(candidate.claim, { strictness });
         if (!validation.acceptable) {
-          dropped.push(drop(sentence, sentenceIndex, 'validation', validation.reason ?? 'Claim failed validation'));
+          dropped.push(drop(sentence, sentenceIndex, 'validation', validation.reason as string));
           continue;
         }
         claims.push({
@@ -147,9 +147,6 @@ export class BrowserClaimExtractor implements ClaimExtractor {
               }
             : undefined,
         });
-      }
-      if (claims.length === beforeValidationCount && !dropped.some((item) => item.sentenceIndex === sentenceIndex)) {
-        dropped.push(drop(sentence, sentenceIndex, 'validation', 'No claims passed validation'));
       }
     }
 
@@ -193,7 +190,8 @@ function drop(sentence: string, sentenceIndex: number, stage: DroppedStage, reas
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted) {
-    throw new ClaimifyAbortError(String(signal.reason ?? 'Extraction aborted'));
+  if (!signal || !signal.aborted) {
+    return;
   }
+  throw new ClaimifyAbortError(String(signal.reason ?? 'Extraction aborted'));
 }
