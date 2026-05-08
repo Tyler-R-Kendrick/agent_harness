@@ -23,6 +23,7 @@ const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-brows
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
 const branchingConversationsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-branching-conversations-visual-smoke.png');
 const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
+const persistentMemoryGraphOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-persistent-memory-graphs-visual-smoke.png');
 const gitWorktreeViewportOutputPaths = [
   {
     name: 'mobile',
@@ -827,6 +828,23 @@ async function main() {
     await expect(page.getByLabel('Require visual validation')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Harness evolution sandbox root')).toHaveValue('.harness-evolution/sandboxes', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Harness evolution patch command')).toHaveValue('npx patch-package', { timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Persistent memory graphs' }).click();
+    const persistentMemoryGraphSection = page
+      .locator('section.settings-section')
+      .filter({ has: page.getByRole('button', { name: 'Persistent memory graphs' }) });
+    await expect(persistentMemoryGraphSection.getByText('WASM-compatible local graph')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(persistentMemoryGraphSection.getByRole('button', { name: 'Load sample memory' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await persistentMemoryGraphSection.getByRole('button', { name: 'Load sample memory' }).click();
+    await persistentMemoryGraphSection.getByLabel('Memory graph question').fill('How does Kuzu-WASM support offline retrieval?');
+    await persistentMemoryGraphSection.getByRole('button', { name: 'Search Memory' }).click();
+    await expect(persistentMemoryGraphSection.getByText('MEMORY SUMMARY')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(persistentMemoryGraphSection.getByText('Kuzu-WASM').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(persistentMemoryGraphSection.getByRole('img', { name: 'Retrieved memory graph' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await persistentMemoryGraphSection.screenshot({ path: persistentMemoryGraphOutputPath });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');
@@ -1049,6 +1067,7 @@ async function main() {
     console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
     console.log(`agent-browser spec-driven development smoke passed: ${specDrivenDevelopmentOutputPath}`);
+    console.log(`agent-browser persistent memory graphs smoke passed: ${persistentMemoryGraphOutputPath}`);
     console.log(`agent-browser shared agents smoke passed: ${sharedAgentsOutputPath}`);
     console.log(`agent-browser multitask subagents smoke passed: ${multitaskOutputPath}`);
   } catch (error) {

@@ -634,6 +634,30 @@ describe('App smoke coverage', () => {
     expect(screen.getAllByText('OpenAPI 3.1').length).toBeGreaterThan(0);
   });
 
+  it('renders persistent memory graph controls in Settings and searches sample memory', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Persistent memory graphs')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Persistent memory graphs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Load sample memory' }));
+    fireEvent.change(screen.getByLabelText('Memory graph question'), {
+      target: { value: 'How does Kuzu-WASM support offline retrieval?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search Memory' }));
+
+    expect(screen.getByText('WASM-compatible local graph')).toBeInTheDocument();
+    expect(screen.getByText(/MEMORY SUMMARY/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Kuzu-WASM/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('img', { name: 'Retrieved memory graph' })).toBeInTheDocument();
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
