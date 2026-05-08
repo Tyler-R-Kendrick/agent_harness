@@ -886,6 +886,35 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Archive and delete lifecycle')).toBeInTheDocument();
   });
 
+  it('renders chaptered session compression in History, Settings, and chat context chrome', async () => {
+    vi.useFakeTimers();
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+
+    expect(screen.getByLabelText('Chaptered session compression')).toHaveTextContent('1 chapter');
+    expect(screen.getByLabelText('Chaptered session compression')).toHaveTextContent('compressed context ready');
+
+    fireEvent.click(screen.getByLabelText('History'));
+
+    expect(screen.getByRole('button', { name: 'Chaptered sessions' })).toBeInTheDocument();
+    expect(screen.getByText(/Visual validation and checkpoint review/)).toBeInTheDocument();
+    expect(screen.getByText(/evidence:output\/playwright\/agent-browser-visual-smoke\.png/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: 'Chaptered sessions' }));
+
+    expect(screen.getByLabelText('Enable chaptered sessions')).toBeChecked();
+    expect(screen.getByLabelText('Automatic context compression')).toBeChecked();
+    expect(screen.getByLabelText('Chapter compression target tokens')).toHaveValue(1200);
+    expect(screen.getByText('1 session · 1 chapter · 1 audit event')).toBeInTheDocument();
+  });
+
   it('renders structured MCP elicitation fields and submits the full response payload', async () => {
     vi.useFakeTimers();
     const workspaceId = 'ws-research';

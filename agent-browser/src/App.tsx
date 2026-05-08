@@ -515,6 +515,15 @@ import {
   type PersistentMemoryGraphState,
 } from './services/persistentMemoryGraph';
 import {
+  DEFAULT_SESSION_CHAPTER_STATE,
+  buildSessionCompressionPromptContext,
+  isChapteredSessionState,
+  projectSessionChapters,
+  updateSessionChapterPolicy,
+  type ChapteredSessionState,
+  type SessionChapterPolicy,
+} from './services/sessionChapters';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -2312,6 +2321,8 @@ function ChatPanel({
   runCheckpointPromptContext,
   runCheckpointState,
   onRunCheckpointStateChange,
+  sessionChapterState,
+  onSessionChapterStateChange,
   multitaskPromptContext,
   attachedArtifactCount,
   workspaceCapabilities,
@@ -2372,6 +2383,8 @@ function ChatPanel({
   runCheckpointPromptContext?: string;
   runCheckpointState: RunCheckpointState;
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
+  sessionChapterState: ChapteredSessionState;
+  onSessionChapterStateChange: (state: ChapteredSessionState) => void;
   multitaskPromptContext?: string;
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
@@ -2533,6 +2546,10 @@ function ChatPanel({
     () => buildSharedSessionControlPromptContext(sharedSessionControlState, activeChatSessionId),
     [activeChatSessionId, sharedSessionControlState],
   );
+  const activeSessionCompressionPromptContext = useMemo(
+    () => buildSessionCompressionPromptContext(sessionChapterState, activeChatSessionId),
+    [activeChatSessionId, sessionChapterState],
+  );
   const workspacePromptContext = useMemo(
     () => [
       buildWorkspacePromptContext(workspaceFiles, activeSessionId ? [{
@@ -2550,11 +2567,13 @@ function ChatPanel({
       locationPromptContext,
       runtimeExtensionPromptContext,
       sharedSessionControlPromptContext,
+      activeSessionCompressionPromptContext,
       buildSharedAgentPromptContext(sharedAgentCatalog),
     ].filter((section): section is string => Boolean(section)).join('\n\n'),
-    [activeSessionId, artifactPromptContext, conversationBranchPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, sharedSessionControlPromptContext, workspaceFiles],
+    [activeSessionCompressionPromptContext, activeSessionId, artifactPromptContext, conversationBranchPromptContext, locationPromptContext, multitaskPromptContext, repoWikiPromptContext, runCheckpointPromptContext, runtimeExtensionPromptContext, sessionSettingsContent, sharedAgentCatalog, sharedSessionControlPromptContext, workspaceFiles],
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
+  const sessionChapterTotals = useMemo(() => summarizeChapteredSessionState(sessionChapterState), [sessionChapterState]);
   const activeSharedSessionCandidates = sharedSessionControlState.activeSessions.filter(
     (session) => session.status !== 'ended',
   );
@@ -2861,6 +2880,23 @@ function ChatPanel({
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!sessionChapterState.enabled || !sessionChapterState.policy.automaticCompression) return;
+    if (!messages.some((message) => message.role !== 'system')) return;
+    const currentSession = sessionChapterState.sessions[activeChatSessionId];
+    const projected = projectSessionChapters({
+      state: sessionChapterState,
+      sessionId: activeChatSessionId,
+      workspaceId,
+      workspaceName,
+      messages,
+      now: currentSession?.updatedAt ?? new Date().toISOString(),
+    });
+    const nextSession = projected.sessions[activeChatSessionId];
+    if (JSON.stringify(currentSession) === JSON.stringify(nextSession)) return;
+    onSessionChapterStateChange(projected);
+  }, [activeChatSessionId, messages, onSessionChapterStateChange, sessionChapterState, workspaceId, workspaceName]);
 
   useEffect(() => {
     if (!activeActivityMessageId) return;
@@ -6135,6 +6171,14 @@ function ChatPanel({
             <div ref={bottomRef} />
           </div>
           <div className="context-strip">Context: {contextSummary}</div>
+          {!showBash ? (
+            <div className="chapter-context-strip" aria-label="Chaptered session compression">
+              <Icon name="layers" size={12} />
+              <span>{sessionChapterTotals.chapterCount} chapter{sessionChapterTotals.chapterCount === 1 ? '' : 's'}</span>
+              <strong>{activeSessionCompressionPromptContext ? 'active session compressed' : 'compressed context ready'}</strong>
+              <small>{sessionChapterTotals.evidenceRefCount} evidence refs</small>
+            </div>
+          ) : null}
           {showBash ? (
             <form className="chat-compose terminal-compose" onSubmit={(event) => { event.preventDefault(); void runTerminalCommand(input); }}>
               <div className="terminal-compose-row">
@@ -7990,6 +8034,120 @@ function RunCheckpointCard({ checkpoint }: { checkpoint: RunCheckpoint }) {
   );
 }
 
+function SessionChapterSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: ChapteredSessionState;
+  onChange: (state: ChapteredSessionState) => void;
+}) {
+  const summary = summarizeChapteredSessionState(state);
+  const updatePolicy = (patch: Partial<SessionChapterPolicy>) => {
+    onChange(updateSessionChapterPolicy(state, patch));
+  };
+
+  return (
+    <SettingsSection title="Chaptered sessions" defaultOpen={false}>
+      <div className="session-chapter-settings">
+        <article className="provider-card session-chapter-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Automatic context compression</strong>
+              <p>Group long browser-agent runs into chapters while preserving source trace, browser evidence, and validation refs.</p>
+            </div>
+            <span className={`badge${state.enabled ? ' connected' : ''}`}>
+              {state.enabled ? 'enabled' : 'off'}
+            </span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="Chaptered session metrics">
+            <span role="listitem">
+              <strong>{summary.sessionCount}</strong>
+              <small>sessions</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.chapterCount}</strong>
+              <small>chapters</small>
+            </span>
+            <span role="listitem">
+              <strong>{summary.evidenceRefCount}</strong>
+              <small>evidence refs</small>
+            </span>
+          </div>
+          <p className="muted">{summary.sessionCount} session · {summary.chapterCount} chapter · {state.audit.length} audit event{state.audit.length === 1 ? '' : 's'}</p>
+          <div className="run-checkpoint-control-grid">
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Enable chaptered sessions"
+                checked={state.enabled}
+                onChange={(event) => onChange({ ...state, enabled: event.target.checked })}
+              />
+              <span>Enable chaptered sessions</span>
+            </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Automatic context compression"
+                checked={state.policy.automaticCompression}
+                onChange={(event) => updatePolicy({ automaticCompression: event.target.checked })}
+              />
+              <span>Automatic context compression</span>
+            </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Preserve chapter evidence references"
+                checked={state.policy.preserveEvidenceRefs}
+                onChange={(event) => updatePolicy({ preserveEvidenceRefs: event.target.checked })}
+              />
+              <span>Preserve evidence references</span>
+            </label>
+            <label className="provider-command-field">
+              <span>Target tokens</span>
+              <input
+                aria-label="Chapter compression target tokens"
+                type="number"
+                min={512}
+                max={32000}
+                step={128}
+                value={state.policy.targetTokenBudget}
+                onChange={(event) => updatePolicy({ targetTokenBudget: Number(event.target.value) })}
+              />
+            </label>
+            <label className="provider-command-field">
+              <span>Retain recent messages</span>
+              <input
+                aria-label="Chapter retained recent messages"
+                type="number"
+                min={1}
+                max={50}
+                value={state.policy.retainRecentMessageCount}
+                onChange={(event) => updatePolicy({ retainRecentMessageCount: Number(event.target.value) })}
+              />
+            </label>
+          </div>
+        </article>
+        {summary.latestChapter ? (
+          <article className="provider-card session-chapter-latest-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>{summary.latestChapter.title}</strong>
+                <p>{summary.latestChapter.compressedContext.summary}</p>
+              </div>
+              <span className="badge connected">{summary.latestChapter.status}</span>
+            </div>
+            <div className="browser-agent-run-sdk-chip-grid" aria-label="Latest chapter references">
+              {summary.latestChapter.sourceTraceRefs.slice(0, 3).map((ref) => <code key={ref}>{ref}</code>)}
+              {summary.latestChapter.evidenceRefs.slice(0, 2).map((ref) => <code key={ref}>{ref}</code>)}
+              {summary.latestChapter.validationRefs.slice(0, 2).map((ref) => <code key={ref}>{ref}</code>)}
+            </div>
+          </article>
+        ) : null}
+      </div>
+    </SettingsSection>
+  );
+}
+
 function linesFromTextarea(value: string): string[] {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
@@ -8895,6 +9053,7 @@ interface SettingsPanelProps {
   securityReviewRunPlan: SecurityReviewRunPlan;
   scheduledAutomationState: ScheduledAutomationState;
   runCheckpointState: RunCheckpointState;
+  sessionChapterState: ChapteredSessionState;
   workspaceSkillPolicyState: WorkspaceSkillPolicyState;
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   sharedAgentRegistryState: SharedAgentRegistryState;
@@ -8921,6 +9080,7 @@ interface SettingsPanelProps {
   onSecurityReviewAgentSettingsChange: (settings: SecurityReviewAgentSettings) => void;
   onScheduledAutomationStateChange: (state: ScheduledAutomationState) => void;
   onRunCheckpointStateChange: (state: RunCheckpointState) => void;
+  onSessionChapterStateChange: (state: ChapteredSessionState) => void;
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
   onInstallBrowserWorkflowSkill: (skill: BrowserWorkflowSkillManifest) => void;
@@ -8942,6 +9102,20 @@ interface SettingsPanelProps {
   onSaveSecret: (input: { name: string; value: string }) => Promise<string>;
   onDeleteSecret: (idOrRef: string) => Promise<void>;
   onSecretSettingsChange: (settings: SecretManagementSettings) => void;
+}
+
+function summarizeChapteredSessionState(state: ChapteredSessionState) {
+  const sessions = Object.values(state.sessions);
+  const chapters = sessions.flatMap((session) => session.chapters);
+  const evidenceRefCount = chapters.reduce((total, chapter) => total + chapter.evidenceRefs.length, 0);
+  const validationRefCount = chapters.reduce((total, chapter) => total + chapter.validationRefs.length, 0);
+  return {
+    sessionCount: sessions.length,
+    chapterCount: chapters.length,
+    evidenceRefCount,
+    validationRefCount,
+    latestChapter: chapters.sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null,
+  };
 }
 
 function LocalInferenceReadinessCard({ readiness }: { readiness: LocalInferenceReadiness }) {
@@ -9271,6 +9445,7 @@ function SettingsPanel({
   securityReviewRunPlan,
   scheduledAutomationState,
   runCheckpointState,
+  sessionChapterState,
   workspaceSkillPolicyState,
   workspaceSkillPolicyInventory,
   sharedAgentRegistryState,
@@ -9297,6 +9472,7 @@ function SettingsPanel({
   onSecurityReviewAgentSettingsChange,
   onScheduledAutomationStateChange,
   onRunCheckpointStateChange,
+  onSessionChapterStateChange,
   onWorkspaceSkillPolicyStateChange,
   onSharedAgentRegistryStateChange,
   onInstallBrowserWorkflowSkill,
@@ -9425,6 +9601,11 @@ function SettingsPanel({
       <RunCheckpointSettingsPanel
         state={runCheckpointState}
         onChange={onRunCheckpointStateChange}
+      />
+
+      <SessionChapterSettingsPanel
+        state={sessionChapterState}
+        onChange={onSessionChapterStateChange}
       />
 
       <ScheduledAutomationSettingsPanel
@@ -9811,12 +9992,14 @@ function HistoryPanel({
   browserAgentRunSdkState,
   conversationBranchingState,
   onMergeConversationBranch,
+  sessionChapterState,
 }: {
   scheduledAutomationState: ScheduledAutomationState;
   runCheckpointState: RunCheckpointState;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   conversationBranchingState: ConversationBranchingState;
   onMergeConversationBranch: (subthreadId: string) => void;
+  sessionChapterState: ChapteredSessionState;
 }) {
   const now = new Date('2026-05-06T18:00:00.000Z');
   const checkpointSnapshot = expireDueRunCheckpoints(runCheckpointState, now);
@@ -9829,6 +10012,8 @@ function HistoryPanel({
   const nextAutomation = enabledAutomations
     .filter((automation) => automation.nextRunAt)
     .sort((left, right) => Date.parse(left.nextRunAt ?? '') - Date.parse(right.nextRunAt ?? ''))[0] ?? null;
+  const chapterSummary = summarizeChapteredSessionState(sessionChapterState);
+  const chapterRows = Object.values(sessionChapterState.sessions).flatMap((session) => session.chapters).slice(0, 5);
 
   return (
     <section className="panel-scroll history-panel" aria-label="History">
@@ -9878,6 +10063,45 @@ function HistoryPanel({
         onMergeConversationBranch={onMergeConversationBranch}
       />
       <BrowserAgentRunSdkHistory state={browserAgentRunSdkState} />
+      <SidebarSection title="Chaptered sessions" scrollBody>
+        <div className="session-chapter-history">
+          <article className="list-card history-card session-chapter-history-card">
+            <div className="history-card-header">
+              <div>
+                <h3>Session chapters</h3>
+                <p className="muted">{chapterSummary.sessionCount} sessions · {chapterSummary.chapterCount} chapters · {chapterSummary.evidenceRefCount} evidence refs</p>
+              </div>
+              <span className={`badge${sessionChapterState.enabled ? ' connected' : ''}`}>
+                {sessionChapterState.enabled ? 'compressed' : 'off'}
+              </span>
+            </div>
+            <p className="history-preview">
+              {chapterSummary.latestChapter?.compressedContext.summary ?? 'No chaptered sessions recorded yet'}
+            </p>
+            <ul className="history-events">
+              <li>Target budget: {sessionChapterState.policy.targetTokenBudget} tokens</li>
+              <li>Validation refs: {chapterSummary.validationRefCount}</li>
+            </ul>
+          </article>
+          {chapterRows.map((chapter) => (
+            <article key={chapter.id} className="list-card history-card session-chapter-row-card">
+              <div className="history-card-header">
+                <div>
+                  <h3>{chapter.title}</h3>
+                  <p className="muted">{chapter.workspaceName} · {chapter.status} · {chapter.messageIds.length} messages</p>
+                </div>
+                <span className="badge connected">{chapter.evidenceRefs.length} evidence</span>
+              </div>
+              <p className="history-preview">{chapter.compressedContext.summary}</p>
+              <ul className="history-events">
+                <li>Sources: {chapter.sourceTraceRefs.slice(0, 4).join(', ') || 'none'}</li>
+                <li>Evidence: {chapter.evidenceRefs.join(', ') || 'none'}</li>
+                <li>Validation: {chapter.validationRefs.join(', ') || 'none'}</li>
+              </ul>
+            </article>
+          ))}
+        </div>
+      </SidebarSection>
       <SidebarSection title="Scheduled automations" scrollBody>
         <div className="scheduled-automations-summary">
           <article className="list-card history-card scheduled-automation-history-card">
@@ -11748,6 +11972,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.runCheckpointState,
     isRunCheckpointState,
     DEFAULT_RUN_CHECKPOINT_STATE,
+  );
+  const [sessionChapterState, setSessionChapterState] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.sessionChapterState,
+    isChapteredSessionState,
+    DEFAULT_SESSION_CHAPTER_STATE,
   );
   const [workspaceSkillPolicyState, setWorkspaceSkillPolicyState] = useStoredState(
     localStorageBackend,
@@ -15793,6 +16023,7 @@ function AgentBrowserApp() {
           browserAgentRunSdkState={browserAgentRunSdkState}
           conversationBranchingState={activeConversationBranchingState}
           onMergeConversationBranch={mergeActiveConversationBranch}
+          sessionChapterState={sessionChapterState}
         />
       );
     }
@@ -15842,6 +16073,7 @@ function AgentBrowserApp() {
         securityReviewRunPlan={settingsSecurityReviewRunPlan}
         scheduledAutomationState={scheduledAutomationState}
         runCheckpointState={runCheckpointState}
+        sessionChapterState={sessionChapterState}
         workspaceSkillPolicyState={workspaceSkillPolicyState}
         workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
         sharedAgentRegistryState={sharedAgentRegistryState}
@@ -15868,6 +16100,7 @@ function AgentBrowserApp() {
         onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
         onScheduledAutomationStateChange={setScheduledAutomationState}
         onRunCheckpointStateChange={setRunCheckpointState}
+        onSessionChapterStateChange={setSessionChapterState}
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
         onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
@@ -16152,6 +16385,8 @@ function AgentBrowserApp() {
                 runCheckpointPromptContext={activeRunCheckpointPromptContext}
                 runCheckpointState={runCheckpointState}
                 onRunCheckpointStateChange={setRunCheckpointState}
+                sessionChapterState={sessionChapterState}
+                onSessionChapterStateChange={setSessionChapterState}
                 multitaskPromptContext={buildMultitaskPromptContext(multitaskSubagentState)}
                 conversationBranchPromptContext={buildConversationBranchPromptContext(activeConversationBranchingState)}
                 conversationBranchingState={activeConversationBranchingState}
