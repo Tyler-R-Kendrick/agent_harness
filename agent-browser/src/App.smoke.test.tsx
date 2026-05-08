@@ -609,6 +609,31 @@ describe('App smoke coverage', () => {
     expect(persisted.safeModeOnFailure).toBe(true);
   });
 
+  it('renders spec-driven development controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Spec-driven development')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Spec-driven development' }));
+    expect(screen.getByLabelText('Enable spec-driven development')).toBeChecked();
+    expect(screen.getByLabelText('Default spec format')).toHaveValue('json-schema');
+    expect(screen.getByLabelText('Resolve ambiguities before implementation')).toBeChecked();
+    expect(screen.getByLabelText('Require tests or evals from spec')).toBeChecked();
+    expect(screen.getAllByText('JSON Schema 2020-12').length).toBeGreaterThan(0);
+    expect(screen.getByText('Write tests or evals that validate the spec before implementation.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Default spec format'), { target: { value: 'openapi' } });
+
+    expect(screen.getByLabelText('Default spec format')).toHaveValue('openapi');
+    expect(screen.getAllByText('OpenAPI 3.1').length).toBeGreaterThan(0);
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

@@ -449,6 +449,16 @@ import {
   type BrowserWorkflowSkillManifest,
 } from './services/browserWorkflowSkills';
 import {
+  DEFAULT_SPEC_DRIVEN_DEVELOPMENT_SETTINGS,
+  SPEC_FORMAT_LABELS,
+  buildSpecDrivenDevelopmentPromptContext,
+  createSpecWorkflowPlan,
+  isSpecDrivenDevelopmentSettings,
+  type SpecDrivenDevelopmentSettings,
+  type SpecFormat,
+  type SpecWorkflowPlan,
+} from './services/specDrivenDevelopment';
+import {
   DEFAULT_HARNESS_STEERING_STATE,
   buildHarnessSteeringInventory,
   buildHarnessSteeringPromptContext,
@@ -2268,6 +2278,7 @@ function ChatPanel({
   attachedArtifactCount,
   workspaceCapabilities,
   browserWorkflowSkills,
+  specDrivenDevelopmentSettings,
   defaultExtensions,
   evaluationAgents,
   negativeRubricTechniques,
@@ -2327,6 +2338,7 @@ function ChatPanel({
   attachedArtifactCount?: number;
   workspaceCapabilities: WorkspaceCapabilities;
   browserWorkflowSkills: BrowserWorkflowSkillManifest[];
+  specDrivenDevelopmentSettings: SpecDrivenDevelopmentSettings;
   defaultExtensions: DefaultExtensionRuntime | null;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
@@ -2661,6 +2673,10 @@ function ChatPanel({
     () => suggestBrowserWorkflowSkills(input, browserWorkflowSkills, 3),
     [browserWorkflowSkills, input],
   );
+  const specWorkflowPlan = useMemo(
+    () => createSpecWorkflowPlan({ task: input, settings: specDrivenDevelopmentSettings }),
+    [input, specDrivenDevelopmentSettings],
+  );
   const canSubmit = !hasActiveGeneration && Boolean(input.trim()) && (
     Boolean(parseSandboxPrompt(input))
     || selectedProvider === 'tour-guide'
@@ -2680,7 +2696,7 @@ function ChatPanel({
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
   const conversationBranchSummary = summarizeConversationBranches(conversationBranchingState);
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · branches ${conversationBranchingState.enabled ? `${conversationBranchSummary.activeSubthreads} active` : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · evolution ${harnessEvolutionSettings.enabled ? 'on' : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · branches ${conversationBranchingState.enabled ? `${conversationBranchSummary.activeSubthreads} active` : 'off'} · spec ${specWorkflowPlan.enabled ? specWorkflowPlan.stage : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · evolution ${harnessEvolutionSettings.enabled ? 'on' : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -3430,8 +3446,13 @@ function ChatPanel({
           ],
         })
       : null;
+    const requestSpecWorkflowPlan = createSpecWorkflowPlan({
+      task: trimmedText,
+      settings: specDrivenDevelopmentSettings,
+    });
     const requestWorkspacePromptContext = [
       workspacePromptContext,
+      buildSpecDrivenDevelopmentPromptContext(requestSpecWorkflowPlan),
       requestMediaCapabilityPlan ? buildMediaCapabilityPrompt(requestMediaCapabilityPlan) : '',
       buildBrowserWorkflowSkillPromptContext(requestBrowserWorkflowSkillSuggestions),
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
@@ -5560,7 +5581,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, specDrivenDevelopmentSettings, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -6834,6 +6855,96 @@ function BranchingConversationSettingsPanel({
           />
           <span><strong>Merge summaries</strong><small>Keep a compact summary when a branch returns to main.</small></span>
         </label>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function SpecDrivenDevelopmentSettingsPanel({
+  settings,
+  plan,
+  onChange,
+}: {
+  settings: SpecDrivenDevelopmentSettings;
+  plan: SpecWorkflowPlan;
+  onChange: (settings: SpecDrivenDevelopmentSettings) => void;
+}) {
+  function update<Key extends keyof SpecDrivenDevelopmentSettings>(
+    key: Key,
+    value: SpecDrivenDevelopmentSettings[Key],
+  ) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  return (
+    <SettingsSection title="Spec-driven development" defaultOpen={false}>
+      <div className="spec-driven-development-settings">
+        <div className="partner-agent-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={settings.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+              aria-label="Enable spec-driven development"
+            />
+            <span>Enable spec-driven development</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={settings.resolveAmbiguitiesBeforeImplementation}
+              onChange={(event) => update('resolveAmbiguitiesBeforeImplementation', event.target.checked)}
+              aria-label="Resolve ambiguities before implementation"
+            />
+            <span>Resolve ambiguities before implementation</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={settings.requireEvalCoverage}
+              onChange={(event) => update('requireEvalCoverage', event.target.checked)}
+              aria-label="Require tests or evals from spec"
+            />
+            <span>Require tests or evals</span>
+          </label>
+        </div>
+        <div className="spec-driven-development-grid">
+          <label className="provider-command-field">
+            <span>Default format</span>
+            <select
+              aria-label="Default spec format"
+              value={settings.defaultFormat}
+              onChange={(event) => update('defaultFormat', event.target.value as SpecFormat)}
+            >
+              {Object.entries(SPEC_FORMAT_LABELS).map(([format, label]) => (
+                <option key={format} value={format}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <article className="provider-card spec-driven-development-summary-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>{plan.formatLabel}</strong>
+                <p>Lifecycle: {plan.stage}</p>
+              </div>
+              <span className={`badge${plan.enabled ? ' connected' : ''}`}>{plan.enabled ? 'enabled' : 'off'}</span>
+            </div>
+          </article>
+        </div>
+        <div className="spec-driven-development-list" role="list" aria-label="Spec-driven validation gates">
+          {plan.validationGates.map((gate) => (
+            <article key={gate} className="provider-card spec-driven-development-item" role="listitem">
+              <strong>{gate}</strong>
+            </article>
+          ))}
+        </div>
+        <div className="spec-driven-development-list" role="list" aria-label="Spec-driven ambiguity questions">
+          {(plan.ambiguities.length ? plan.ambiguities : ['No ambiguities detected for the current draft prompt.']).map((ambiguity) => (
+            <article key={ambiguity} className="provider-card spec-driven-development-item" role="listitem">
+              <span>{ambiguity}</span>
+            </article>
+          ))}
+        </div>
       </div>
     </SettingsSection>
   );
@@ -8343,6 +8454,8 @@ interface SettingsPanelProps {
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
   runtimePluginSettings: RuntimePluginSettings;
   runtimePluginRuntime: RuntimePluginRuntime;
+  specDrivenDevelopmentSettings: SpecDrivenDevelopmentSettings;
+  specWorkflowPlan: SpecWorkflowPlan;
   onBenchmarkRoutingSettingsChange: (settings: BenchmarkRoutingSettings) => void;
   onAdversaryToolReviewSettingsChange: (settings: AdversaryToolReviewSettings) => void;
   onAdversaryAgentSettingsChange: (settings: AdversaryAgentSettings) => void;
@@ -8357,6 +8470,7 @@ interface SettingsPanelProps {
   onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
+  onSpecDrivenDevelopmentSettingsChange: (settings: SpecDrivenDevelopmentSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
   negativeRubricTechniques: string[];
   onSaveEvaluationAgents: (agents: CustomEvaluationAgent[]) => void;
@@ -8712,6 +8826,8 @@ function SettingsPanel({
   latestPartnerAgentAuditEntry,
   runtimePluginSettings,
   runtimePluginRuntime,
+  specDrivenDevelopmentSettings,
+  specWorkflowPlan,
   onBenchmarkRoutingSettingsChange,
   onAdversaryToolReviewSettingsChange,
   onAdversaryAgentSettingsChange,
@@ -8726,6 +8842,7 @@ function SettingsPanel({
   onHarnessEvolutionSettingsChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
+  onSpecDrivenDevelopmentSettingsChange,
   evaluationAgents,
   negativeRubricTechniques,
   onSaveEvaluationAgents,
@@ -8779,6 +8896,12 @@ function SettingsPanel({
       />
 
       <N8nCapabilitiesSettingsPanel />
+
+      <SpecDrivenDevelopmentSettingsPanel
+        settings={specDrivenDevelopmentSettings}
+        plan={specWorkflowPlan}
+        onChange={onSpecDrivenDevelopmentSettingsChange}
+      />
 
       <MediaAgentSettingsPanel />
 
@@ -11199,6 +11322,12 @@ function AgentBrowserApp() {
     isHarnessEvolutionSettings,
     DEFAULT_HARNESS_EVOLUTION_SETTINGS,
   );
+  const [specDrivenDevelopmentSettings, setSpecDrivenDevelopmentSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.specDrivenDevelopmentSettings,
+    isSpecDrivenDevelopmentSettings,
+    DEFAULT_SPEC_DRIVEN_DEVELOPMENT_SETTINGS,
+  );
   const [harnessSteeringState, setHarnessSteeringState] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.harnessSteeringState,
@@ -11593,6 +11722,13 @@ function AgentBrowserApp() {
   const browserWorkflowSkills = useMemo(
     () => discoverBrowserWorkflowSkills(activeWorkspaceFiles),
     [activeWorkspaceFiles],
+  );
+  const settingsSpecWorkflowPlan = useMemo(
+    () => createSpecWorkflowPlan({
+      task: 'Plan feature work',
+      settings: specDrivenDevelopmentSettings,
+    }),
+    [specDrivenDevelopmentSettings],
   );
   const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? [];
   const activeAgentCanvasSummaries = useMemo(
@@ -15224,6 +15360,8 @@ function AgentBrowserApp() {
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
         runtimePluginSettings={runtimePluginSettings}
         runtimePluginRuntime={settingsRuntimePluginRuntime}
+        specDrivenDevelopmentSettings={specDrivenDevelopmentSettings}
+        specWorkflowPlan={settingsSpecWorkflowPlan}
         onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
         onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
         onAdversaryAgentSettingsChange={setAdversaryAgentSettings}
@@ -15238,6 +15376,7 @@ function AgentBrowserApp() {
         onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
+        onSpecDrivenDevelopmentSettingsChange={setSpecDrivenDevelopmentSettings}
         evaluationAgents={evaluationAgents}
         negativeRubricTechniques={negativeRubricTechniques}
         onSaveEvaluationAgents={saveEvaluationAgents}
@@ -15515,6 +15654,7 @@ function AgentBrowserApp() {
                 attachedArtifactCount={(artifactContextBySession[panel.id] ?? []).length}
                 workspaceCapabilities={activeWorkspaceCapabilities}
                 browserWorkflowSkills={browserWorkflowSkills}
+                specDrivenDevelopmentSettings={specDrivenDevelopmentSettings}
                 defaultExtensions={defaultExtensionRuntime}
                 evaluationAgents={evaluationAgents}
                 negativeRubricTechniques={negativeRubricTechniques}
