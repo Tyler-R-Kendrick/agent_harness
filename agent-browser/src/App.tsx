@@ -478,6 +478,19 @@ import {
   type HarnessEvolutionSettings,
 } from './services/harnessEvolution';
 import {
+  createPersistentMemoryGraphState,
+  exportPersistentMemoryGraph,
+  importPersistentMemoryGraph,
+  ingestTextToMemoryGraph,
+  isPersistentMemoryGraphState,
+  loadSampleMemoryGraph,
+  runMemoryGraphQuery,
+  searchPersistentMemoryGraph,
+  type MemoryGraphQueryResult,
+  type MemoryGraphRetrievalResult,
+  type PersistentMemoryGraphState,
+} from './services/persistentMemoryGraph';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -809,6 +822,7 @@ const icons = {
   keyboard: Keyboard,
   keyRound: KeyRound,
   folder: Folder,
+  folderInput: FolderInput,
   folderOpen: FolderOpen,
   hardDrive: HardDrive,
   file: File,
@@ -7263,6 +7277,234 @@ function HarnessEvolutionSettingsPanel({
   );
 }
 
+function PersistentMemoryGraphSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: PersistentMemoryGraphState;
+  onChange: (state: PersistentMemoryGraphState) => void;
+}) {
+  const [title, setTitle] = useState('Memory graph note');
+  const [source, setSource] = useState('manual');
+  const [text, setText] = useState('Kuzu-WASM enables offline graph traversal. GraphRAG connects local evidence to claims.');
+  const [question, setQuestion] = useState('How does Kuzu-WASM support offline retrieval?');
+  const [query, setQuery] = useState('MATCH (c:Chunk)-[:MENTIONS]->(e:Entity) RETURN c.id, c.text, e.name, e.type;');
+  const [importJson, setImportJson] = useState('');
+  const [searchResult, setSearchResult] = useState<MemoryGraphRetrievalResult | null>(() =>
+    state.chunks.length > 0 ? searchPersistentMemoryGraph(state, question) : null,
+  );
+  const [queryResult, setQueryResult] = useState<MemoryGraphQueryResult | null>(() =>
+    state.chunks.length > 0 ? runMemoryGraphQuery(state, query) : null,
+  );
+  const [status, setStatus] = useState('Worker boundary ready; local graph is offline-ready.');
+
+  const loadSample = () => {
+    const next = loadSampleMemoryGraph();
+    onChange(next);
+    const nextSearch = searchPersistentMemoryGraph(next, question);
+    setSearchResult(nextSearch);
+    setQueryResult(runMemoryGraphQuery(next, query));
+    setStatus('Loaded sample memory into the browser-local graph.');
+  };
+  const ingest = () => {
+    const next = ingestTextToMemoryGraph(state, { title, source, text });
+    onChange(next);
+    setSearchResult(searchPersistentMemoryGraph(next, question));
+    setQueryResult(runMemoryGraphQuery(next, query));
+    setStatus(`Ingested ${title.trim() || 'Untitled memory document'} into persistent graph memory.`);
+  };
+  const search = () => {
+    const nextSearch = searchPersistentMemoryGraph(state, question);
+    setSearchResult(nextSearch);
+    setStatus(`Retrieved ${nextSearch.chunks.length} chunks and ${nextSearch.paths.length} ranked paths.`);
+  };
+  const runQuery = () => {
+    const nextQuery = runMemoryGraphQuery(state, query);
+    setQueryResult(nextQuery);
+    setStatus(`Query returned ${nextQuery.rows.length} rows.`);
+  };
+  const exportGraph = () => {
+    const exported = exportPersistentMemoryGraph(state);
+    setImportJson(exported);
+    setStatus('Exported memory graph JSON into the import/export editor.');
+  };
+  const importGraph = () => {
+    try {
+      const next = importPersistentMemoryGraph(importJson);
+      onChange(next);
+      setSearchResult(searchPersistentMemoryGraph(next, question));
+      setQueryResult(runMemoryGraphQuery(next, query));
+      setStatus('Imported persistent memory graph JSON.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const resetGraph = () => {
+    const next = createPersistentMemoryGraphState();
+    onChange(next);
+    setSearchResult(null);
+    setQueryResult(null);
+    setStatus('Reset local graph memory.');
+  };
+  const graph = searchResult?.subgraph ?? queryResult?.graph ?? { nodes: [], edges: [] };
+
+  return (
+    <SettingsSection title="Persistent memory graphs" defaultOpen={false}>
+      <div className="persistent-memory-graph-settings">
+        <article className="provider-card persistent-memory-graph-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>WASM-compatible local graph</strong>
+              <p>
+                Worker-shaped GraphRAG memory with local JSON persistence, deterministic extraction,
+                PathRAG explanations, and a Kuzu-WASM adapter seam.
+              </p>
+            </div>
+            <span className={`badge${state.engine.status === 'ready' ? ' connected' : ''}`}>{state.engine.status}</span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="Persistent memory graph metrics">
+            <span role="listitem"><strong>{state.documents.length}</strong><small>documents</small></span>
+            <span role="listitem"><strong>{state.chunks.length}</strong><small>chunks</small></span>
+            <span role="listitem"><strong>{state.entities.length}</strong><small>entities</small></span>
+            <span role="listitem"><strong>{state.relationships.length}</strong><small>edges</small></span>
+          </div>
+          <p className="partner-agent-audit-note" role="status">{status}</p>
+        </article>
+
+        <div className="persistent-memory-graph-toolbar">
+          <button type="button" onClick={loadSample}><Icon name="sparkles" size={14} />Load sample memory</button>
+          <button type="button" onClick={ingest}><Icon name="plus" size={14} />Ingest Text</button>
+          <button type="button" onClick={search}><Icon name="search" size={14} />Search Memory</button>
+          <button type="button" onClick={runQuery}><Icon name="terminal" size={14} />Run Query</button>
+          <button type="button" onClick={exportGraph}><Icon name="download" size={14} />Export Memory</button>
+          <button type="button" onClick={importGraph}><Icon name="folderInput" size={14} />Import Memory</button>
+          <button type="button" className="danger-button" onClick={resetGraph}><Icon name="trash" size={14} />Reset Memory</button>
+        </div>
+
+        <div className="persistent-memory-graph-input-grid">
+          <label className="provider-command-field">
+            <span>Document title</span>
+            <input aria-label="Memory graph document title" value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <label className="provider-command-field">
+            <span>Source</span>
+            <input aria-label="Memory graph source" value={source} onChange={(event) => setSource(event.target.value)} />
+          </label>
+          <label className="provider-command-field persistent-memory-graph-wide-field">
+            <span>Ingest text</span>
+            <textarea aria-label="Memory graph ingest text" value={text} onChange={(event) => setText(event.target.value)} rows={4} />
+          </label>
+          <label className="provider-command-field persistent-memory-graph-wide-field">
+            <span>Question</span>
+            <input aria-label="Memory graph question" value={question} onChange={(event) => setQuestion(event.target.value)} />
+          </label>
+          <label className="provider-command-field persistent-memory-graph-wide-field">
+            <span>Graph query</span>
+            <textarea aria-label="Memory graph query" value={query} onChange={(event) => setQuery(event.target.value)} rows={3} />
+          </label>
+        </div>
+
+        <div className="persistent-memory-graph-results">
+          <article className="provider-card persistent-memory-graph-result-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>Context</strong>
+                <p>Prompt-ready GraphRAG context with local citation IDs.</p>
+              </div>
+              <span className="badge">{searchResult?.chunks.length ?? 0} chunks</span>
+            </div>
+            <pre>{searchResult?.contextBlock ?? 'Load or ingest memory, then search to build a context block.'}</pre>
+          </article>
+
+          <article className="provider-card persistent-memory-graph-result-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>Paths</strong>
+                <p>PathRAG explanations for why memory was retrieved.</p>
+              </div>
+              <span className="badge">{searchResult?.paths.length ?? 0} paths</span>
+            </div>
+            <div className="persistent-memory-graph-path-list" role="list" aria-label="Persistent memory graph paths">
+              {(searchResult?.paths ?? []).map((path) => (
+                <article key={path.id} className="provider-card persistent-memory-graph-path-card" role="listitem">
+                  <strong>{path.nodes.map((node) => node.label).join(' -> ')}</strong>
+                  <p>{path.explanation}</p>
+                  <small>Score {path.score.toFixed(2)} · {path.relationships.join(', ')}</small>
+                </article>
+              ))}
+              {!searchResult ? <p className="muted">No retrieved paths yet.</p> : null}
+            </div>
+          </article>
+
+          <article className="provider-card persistent-memory-graph-result-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>Graph</strong>
+                <p>Retrieved subgraph for the selected memory search or query.</p>
+              </div>
+              <span className="badge">{graph.nodes.length} nodes · {graph.edges.length} edges</span>
+            </div>
+            <svg className="persistent-memory-graph-svg" role="img" aria-label="Retrieved memory graph" viewBox="0 0 360 180">
+              {graph.edges.slice(0, 12).map((edge, index) => {
+                const sourceIndex = Math.max(0, graph.nodes.findIndex((node) => node.id === edge.sourceId));
+                const targetIndex = Math.max(0, graph.nodes.findIndex((node) => node.id === edge.targetId));
+                return (
+                  <line
+                    key={edge.id}
+                    x1={graphNodeX(sourceIndex)}
+                    y1={graphNodeY(sourceIndex)}
+                    x2={graphNodeX(targetIndex)}
+                    y2={graphNodeY(targetIndex)}
+                    stroke="rgba(125, 211, 252, 0.28)"
+                    strokeWidth={Math.max(1, 2 - index * 0.04)}
+                  />
+                );
+              })}
+              {graph.nodes.slice(0, 12).map((node, index) => (
+                <g key={node.id}>
+                  <circle cx={graphNodeX(index)} cy={graphNodeY(index)} r="13" fill={graphNodeFill(node.type)} />
+                  <text x={graphNodeX(index)} y={graphNodeY(index) + 28} textAnchor="middle">{node.label.slice(0, 18)}</text>
+                </g>
+              ))}
+            </svg>
+          </article>
+
+          <article className="provider-card persistent-memory-graph-result-card">
+            <div className="provider-card-header">
+              <div className="provider-body">
+                <strong>Table</strong>
+                <p>Direct graph query rows and raw JSON exchange.</p>
+              </div>
+              <span className="badge">{queryResult?.rows.length ?? 0} rows</span>
+            </div>
+            <pre>{JSON.stringify(queryResult?.rows ?? [], null, 2)}</pre>
+            <label className="provider-command-field">
+              <span>Raw JSON</span>
+              <textarea aria-label="Memory graph import export JSON" value={importJson} onChange={(event) => setImportJson(event.target.value)} rows={5} />
+            </label>
+          </article>
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+function graphNodeX(index: number): number {
+  return 38 + ((index % 4) * 92);
+}
+
+function graphNodeY(index: number): number {
+  return 34 + (Math.floor(index / 4) * 62);
+}
+
+function graphNodeFill(type: string): string {
+  if (type === 'Entity') return '#38bdf8';
+  if (type === 'Claim') return '#a7f3d0';
+  if (type === 'Memory') return '#fbbf24';
+  if (type === 'Topic') return '#c4b5fd';
+  return '#64748b';
+}
+
 function ScheduledAutomationSettingsPanel({
   state,
   onChange,
@@ -8448,6 +8690,7 @@ interface SettingsPanelProps {
   harnessSteeringInventory: HarnessSteeringInventory;
   harnessEvolutionSettings: HarnessEvolutionSettings;
   harnessEvolutionPlan: HarnessEvolutionPlan;
+  persistentMemoryGraphState: PersistentMemoryGraphState;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
@@ -8468,6 +8711,7 @@ interface SettingsPanelProps {
   onConversationBranchSettingsChange: (settings: ConversationBranchSettings) => void;
   onHarnessSteeringStateChange: (state: HarnessSteeringState) => void;
   onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
+  onPersistentMemoryGraphStateChange: (state: PersistentMemoryGraphState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   onSpecDrivenDevelopmentSettingsChange: (settings: SpecDrivenDevelopmentSettings) => void;
@@ -8820,6 +9064,7 @@ function SettingsPanel({
   harnessSteeringInventory,
   harnessEvolutionSettings,
   harnessEvolutionPlan,
+  persistentMemoryGraphState,
   browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
@@ -8840,6 +9085,7 @@ function SettingsPanel({
   onConversationBranchSettingsChange,
   onHarnessSteeringStateChange,
   onHarnessEvolutionSettingsChange,
+  onPersistentMemoryGraphStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   onSpecDrivenDevelopmentSettingsChange,
@@ -8915,6 +9161,11 @@ function SettingsPanel({
         settings={harnessEvolutionSettings}
         plan={harnessEvolutionPlan}
         onChange={onHarnessEvolutionSettingsChange}
+      />
+
+      <PersistentMemoryGraphSettingsPanel
+        state={persistentMemoryGraphState}
+        onChange={onPersistentMemoryGraphStateChange}
       />
 
       <PartnerAgentControlPlaneSettingsPanel
@@ -11321,6 +11572,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.harnessEvolutionSettings,
     isHarnessEvolutionSettings,
     DEFAULT_HARNESS_EVOLUTION_SETTINGS,
+  );
+  const [persistentMemoryGraphState, setPersistentMemoryGraphState] = useStoredState<PersistentMemoryGraphState>(
+    localStorageBackend,
+    STORAGE_KEYS.persistentMemoryGraphState,
+    isPersistentMemoryGraphState,
+    createPersistentMemoryGraphState(),
   );
   const [specDrivenDevelopmentSettings, setSpecDrivenDevelopmentSettings] = useStoredState(
     localStorageBackend,
@@ -15354,6 +15611,7 @@ function AgentBrowserApp() {
         harnessSteeringInventory={harnessSteeringInventory}
         harnessEvolutionSettings={harnessEvolutionSettings}
         harnessEvolutionPlan={settingsHarnessEvolutionPlan}
+        persistentMemoryGraphState={persistentMemoryGraphState}
         browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
@@ -15374,6 +15632,7 @@ function AgentBrowserApp() {
         onConversationBranchSettingsChange={updateConversationBranchSettings}
         onHarnessSteeringStateChange={setHarnessSteeringState}
         onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
+        onPersistentMemoryGraphStateChange={setPersistentMemoryGraphState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         onSpecDrivenDevelopmentSettingsChange={setSpecDrivenDevelopmentSettings}

@@ -2790,6 +2790,85 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 11px;
   padding: 4px 6px;
 }
+.persistent-memory-graph-settings,
+.persistent-memory-graph-results,
+.persistent-memory-graph-path-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.persistent-memory-graph-summary-card,
+.persistent-memory-graph-result-card,
+.persistent-memory-graph-path-card {
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+}
+.persistent-memory-graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.persistent-memory-graph-toolbar button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.persistent-memory-graph-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.persistent-memory-graph-wide-field {
+  grid-column: 1 / -1;
+}
+.persistent-memory-graph-input-grid textarea,
+.persistent-memory-graph-result-card textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(7, 10, 16, 0.72);
+  color: #f3f4f6;
+  padding: 8px;
+  line-height: 1.45;
+}
+.persistent-memory-graph-result-card pre {
+  max-height: 260px;
+  min-width: 0;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.42);
+  color: #dbeafe;
+  padding: 10px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.persistent-memory-graph-svg {
+  width: 100%;
+  min-height: 180px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.34);
+}
+.persistent-memory-graph-svg text {
+  fill: #dbeafe;
+  font-size: 8px;
+}
+.persistent-memory-graph-path-card {
+  gap: 5px;
+}
+.persistent-memory-graph-path-card strong,
+.persistent-memory-graph-path-card p,
+.persistent-memory-graph-path-card small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .browser-agent-run-sdk-chip-grid {
   display: flex;
   flex-wrap: wrap;
@@ -2842,7 +2921,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (max-width: 520px) {
   .scheduled-automation-control-grid,
   .run-checkpoint-control-grid,
-  .n8n-capability-columns {
+  .n8n-capability-columns,
+  .persistent-memory-graph-input-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
