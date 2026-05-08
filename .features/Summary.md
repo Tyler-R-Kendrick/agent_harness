@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-07
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-08
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
@@ -43,21 +43,21 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
 
 ### 7. Git/PR-native execution
 - Common pattern: successful coding harnesses end in branches, diffs, and PRs rather than plain text.
-- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, Cursor Bugbot plus PR review flows plus SDK auto-PR support, Devin Review plus PR-linked bug catching, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases, OpenHands issue and PR resolution through `fix-me` labels and `@openhands-agent` comments.
+- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, Cursor Bugbot plus PR review flows plus SDK auto-PR support, Devin Review plus PR-linked bug catching, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases, OpenHands issue and PR resolution through `fix-me` labels and `@openhands-agent` comments, Roomote PR-based delivery with self-review, merge-conflict handling, and visible diff-plus-artifact handoff.
 - Why it matters: reviewable change sets are easier to trust than chat responses.
 - One-shot build instruction:
   - Make code tasks branch-native: create isolated workspaces, show structured diffs, attach validation output, support inline review comments, and optionally open a PR when acceptance checks pass.
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -78,7 +78,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 11. Chat-channel ingress and ambient command surfaces
 - Common pattern: harnesses increasingly accept tasks from messaging channels instead of requiring the primary web or IDE surface.
-- Seen in: DeerFlow Telegram/Slack/Feishu/WeChat/WeCom channels, Devin Slack task ingress and session permalinks, Goose Telegram Gateway and mobile remote access, OpenClaw chat-app-everywhere interface, Hermes multi-platform gateway, Claude Cowork phone-managed persistent thread.
+- Seen in: DeerFlow Telegram/Slack/Feishu/WeChat/WeCom channels, Devin Slack task ingress and session permalinks, Goose Telegram Gateway and mobile remote access, OpenClaw chat-app-everywhere interface, Hermes multi-platform gateway, Claude Cowork phone-managed persistent thread, Roomote Slack-first task intake with GitHub mentions and Linear assignment as secondary entry points.
 - Why it matters: task intake and follow-up often happen where teams already communicate, not where the harness was originally launched.
 - One-shot build instruction:
   - Add chat-native ingress for supported channels with per-channel auth, thread/session mapping, slash-style commands, file handoff, and safe routing into existing agent runs without fragmenting history.
@@ -251,6 +251,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Build an organization-facing browser-agent analytics surface that combines usage metrics with an adoption score across frequency, workflow depth, and team coverage, so leaders can see whether the harness is becoming operationally important or just occasionally sampled.
 
+### 36. Closed-loop PR feedback learning and autonomous refinement
+- Common pattern: some harnesses are beginning to treat review feedback as training signal for future agent behavior instead of as one-off human correction.
+- Seen in: Roomote explicitly says it self-improves from PR feedback and keeps refining in the background with approval; Cursor learned rules and auto-fix behavior are adjacent signs that reviewer feedback is becoming a durable product input.
+- Why it matters: browser and coding harnesses stay expensive and noisy if every reviewer correction dies inside one PR thread instead of becoming reusable policy, heuristics, or prompts for the next run.
+- One-shot build instruction:
+  - Add a reviewer-feedback learning loop for browser-agent work that captures accepted and rejected PR feedback, turns it into structured reusable guidance or heuristics after approval, replays it during planning and self-review, and lets operators inspect, edit, disable, or expire learned rules before they affect future runs.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -282,3 +289,4 @@ Method: current-product research from first-party product pages, help centers, d
 27. Add specialized security review agents and scheduled vulnerability scans.
 28. Add a runtime plugin layer with tool-call interception and event hooks.
 29. Add AI adoption scoring alongside browser-agent usage analytics.
+30. Add reviewer-feedback learning loops that refine future agent runs.
