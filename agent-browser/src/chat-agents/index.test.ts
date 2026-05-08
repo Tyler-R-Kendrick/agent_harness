@@ -123,6 +123,7 @@ describe('agent helpers', () => {
     expect(getAgentDisplayName({ provider: 'researcher', researcherRuntimeProvider: 'codi', activeCodiModelName: 'Qwen' })).toBe('Researcher: Qwen');
     expect(getAgentDisplayName({ provider: 'debugger', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Debugger: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'planner', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Planner: GPT-4.1');
+    expect(getAgentDisplayName({ provider: 'context-manager', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Context Manager: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'security', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Security Review: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'adversary', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Adversary: GPT-4.1');
     expect(getAgentDisplayName({ provider: 'media', researcherRuntimeProvider: 'ghcp', activeGhcpModelName: 'GPT-4.1' })).toBe('Media: GPT-4.1');
@@ -143,6 +144,8 @@ describe('agent helpers', () => {
     expect(getAgentInputPlaceholder({ provider: 'debugger', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to debug');
     expect(getAgentInputPlaceholder({ provider: 'planner', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Planner…');
     expect(getAgentInputPlaceholder({ provider: 'planner', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to plan');
+    expect(getAgentInputPlaceholder({ provider: 'context-manager', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Context Manager…');
+    expect(getAgentInputPlaceholder({ provider: 'context-manager', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to manage context');
     expect(getAgentInputPlaceholder({ provider: 'security', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Security Review…');
     expect(getAgentInputPlaceholder({ provider: 'security', hasCodiModelsReady: false, hasGhcpModelsReady: false })).toBe('Sign in to GHCP or Cursor, or install a Codi model to review security');
     expect(getAgentInputPlaceholder({ provider: 'adversary', hasCodiModelsReady: true, hasGhcpModelsReady: false })).toBe('Ask Adversary…');
@@ -216,6 +219,11 @@ describe('agent helpers', () => {
       copilotState: createCopilotState(),
     })).toBe('1 Codi-backed Planner models');
     expect(getAgentProviderSummary({
+      provider: 'context-manager',
+      installedModels,
+      copilotState: createCopilotState(),
+    })).toBe('1 Codi-backed Context Manager models');
+    expect(getAgentProviderSummary({
       provider: 'security',
       installedModels,
       copilotState: createCopilotState(),
@@ -285,6 +293,10 @@ describe('agent helpers', () => {
     })).toBe('planner');
     expect(resolveAgentProviderForTask({
       selectedProvider: 'codi',
+      latestUserInput: 'Monitor token usage and compact this chat context.',
+    })).toBe('context-manager');
+    expect(resolveAgentProviderForTask({
+      selectedProvider: 'codi',
       latestUserInput: 'Run a security review for auth regressions and prompt injection.',
     })).toBe('security');
     expect(resolveAgentProviderForTask({
@@ -337,6 +349,11 @@ describe('agent helpers', () => {
       hasCodiModelsReady: false,
       hasGhcpModelsReady: true,
     })).toBe('ghcp');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'context-manager',
+      hasCodiModelsReady: true,
+      hasGhcpModelsReady: false,
+    })).toBe('codi');
     expect(resolveRuntimeAgentProvider({
       provider: 'security',
       hasCodiModelsReady: true,

@@ -18,6 +18,7 @@
     "preview": "node ../scripts/run-package-bin.mjs vite preview",
     "preview:cucumber": "NODE_OPTIONS=--max-old-space-size=4096 npm run build && node ../scripts/run-package-bin.mjs vite preview --host 127.0.0.1 --port 4173",
     "proof:runtime-search": "node scripts/runtime-search-proof.mjs",
+    "smoke:context-manager": "node scripts/context-manager-smoke.mjs",
     "test": "node ../scripts/run-package-bin.mjs vitest run",
     "test:app": "node ../scripts/run-package-bin.mjs vitest run --config vitest.app.config.ts",
     "test:coverage": "node scripts/run-vitest-coverage.mjs",

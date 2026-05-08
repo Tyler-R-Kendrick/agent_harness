@@ -83,6 +83,7 @@ import {
   getAgentProviderSummary,
   getDefaultAgentProvider,
   resolveAgentProviderForTask,
+  buildContextManagerToolInstructions,
   buildDebuggerToolInstructions,
   buildPlannerToolInstructions,
   buildResearcherToolInstructions,
@@ -521,6 +522,9 @@ import {
 } from './services/persistentMemoryGraph';
 import {
   DEFAULT_SESSION_CHAPTER_STATE,
+  buildContextManagedMessages,
+  buildContextManagedTranscriptItems,
+  buildContextManagerSnapshot,
   buildSessionCompressionPromptContext,
   isChapteredSessionState,
   projectSessionChapters,
@@ -2607,6 +2611,7 @@ function ChatPanel({
   const [pendingMcpMessage, setPendingMcpMessage] = useState<string | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharedChatApi, setSharedChatApi] = useState<SharedChatApi | null>(null);
+  const [expandedContextChapterIds, setExpandedContextChapterIds] = useState<Record<string, boolean>>({});
   const sharedChatLifecycleKeyRef = useRef<string | null>(null);
   const showBash = activeMode === 'terminal';
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -2695,6 +2700,22 @@ function ChatPanel({
   );
   const messages = messagesBySession[activeChatSessionId] ?? [createSystemChatMessage(activeChatSessionId)];
   const sessionChapterTotals = useMemo(() => summarizeChapteredSessionState(sessionChapterState), [sessionChapterState]);
+  const contextManagedTranscriptItems = useMemo(
+    () => buildContextManagedTranscriptItems({
+      state: sessionChapterState,
+      sessionId: activeChatSessionId,
+      messages,
+    }),
+    [activeChatSessionId, messages, sessionChapterState],
+  );
+  const contextManagerSnapshot = useMemo(
+    () => buildContextManagerSnapshot({
+      state: sessionChapterState,
+      sessionId: activeChatSessionId,
+      messages,
+    }),
+    [activeChatSessionId, messages, sessionChapterState],
+  );
   const activeSharedSessionCandidates = sharedSessionControlState.activeSessions.filter(
     (session) => session.status !== 'ended',
   );
@@ -2863,7 +2884,7 @@ function ChatPanel({
     || (selectedProvider === 'ghcp' && Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
     || (selectedProvider === 'cursor' && Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
     || (selectedProvider === 'codex' && Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels)
-    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'security' || selectedProvider === 'steering' || selectedProvider === 'adversary' || selectedProvider === 'media') && (
+    || ((selectedProvider === 'researcher' || selectedProvider === 'debugger' || selectedProvider === 'planner' || selectedProvider === 'context-manager' || selectedProvider === 'security' || selectedProvider === 'steering' || selectedProvider === 'adversary' || selectedProvider === 'media' || selectedProvider === 'swarm') && (
       (Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels)
       || (Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels)
       || Boolean(activeLocalModel)
@@ -3523,7 +3544,7 @@ function ChatPanel({
     });
     if (requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
-      if (providerForRequest === 'planner' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media') {
+      if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
         if (routed.provider === 'ghcp') {
           requestGhcpModelId = routed.modelId;
           runtimeProviderForRequest = 'ghcp';
@@ -4845,6 +4866,13 @@ function ChatPanel({
               descriptors: selectedDescriptors,
               selectedToolIds,
             })
+          : providerForRequest === 'context-manager'
+            ? buildContextManagerToolInstructions({
+              workspaceName,
+              workspacePromptContext: requestWorkspacePromptContext,
+              descriptors: selectedDescriptors,
+              selectedToolIds,
+            })
           : providerForRequest === 'security'
             ? buildSecurityReviewToolInstructions({
               workspaceName,
@@ -4868,7 +4896,12 @@ function ChatPanel({
               capabilityPlan: requestMediaCapabilityPlan ?? undefined,
             })
           : buildDefaultToolInstructions({ workspaceName, workspacePromptContext: requestWorkspacePromptContext, selectedToolIds });
-        const inputMessages: ModelMessage[] = nextMessages
+        const managedNextMessages = buildContextManagedMessages({
+          state: sessionChapterState,
+          sessionId: activeChatSessionId,
+          messages: nextMessages,
+        });
+        const inputMessages: ModelMessage[] = managedNextMessages
           .filter((message) => message.id !== assistantId)
           .flatMap((message) => {
             const baseMessage: ModelMessage = {
@@ -5779,7 +5812,11 @@ function ChatPanel({
             : requestGhcpModelId,
         sessionId: activeChatSessionId,
         latestUserInput: text,
-        messages: nextMessages,
+        messages: buildContextManagedMessages({
+          state: sessionChapterState,
+          sessionId: activeChatSessionId,
+          messages: nextMessages,
+        }),
         workspaceName,
         workspacePromptContext: requestWorkspacePromptContext,
         voters: codiVoters,
@@ -6139,6 +6176,7 @@ function ChatPanel({
                     <option value="researcher">Researcher</option>
                     <option value="debugger">Debugger</option>
                     <option value="planner">Planner</option>
+                    <option value="context-manager">Context Manager</option>
                     <option value="security">Security Review</option>
                     <option value="steering">Steering</option>
                     <option value="adversary">Adversary</option>
@@ -6315,7 +6353,39 @@ function ChatPanel({
             />
           ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
-            {messages.map((message) => <ChatMessageView key={message.id} message={message} agentName={agentDisplayName} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+            {contextManagedTranscriptItems.map((item) => {
+              if (item.kind === 'message') {
+                return <ChatMessageView key={item.message.id} message={item.message} agentName={agentDisplayName} activitySelected={item.message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />;
+              }
+              const expanded = Boolean(expandedContextChapterIds[item.chapterId]);
+              return (
+                <article key={item.chapterId} className="context-manager-summary-card" aria-label="Context manager summary">
+                  <div className="context-manager-summary-header">
+                    <div>
+                      <strong>{item.title}</strong>
+                      <p>{item.summary}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => setExpandedContextChapterIds((current) => ({ ...current, [item.chapterId]: !expanded }))}
+                    >
+                      {expanded ? 'Hide originals' : 'View originals'}
+                    </button>
+                  </div>
+                  <div className="browser-agent-run-sdk-chip-grid" aria-label="Context manager references">
+                    {item.evidenceRefs.slice(0, 2).map((ref) => <code key={ref}>{ref}</code>)}
+                    {item.validationRefs.slice(0, 2).map((ref) => <code key={ref}>{ref}</code>)}
+                    {item.toolOutputRefs.slice(0, 2).map((ref) => <code key={ref}>{ref}</code>)}
+                  </div>
+                  {expanded ? (
+                    <div className="context-manager-originals" aria-label="Original messages for compacted chapter">
+                      {item.originalMessages.map((message) => <ChatMessageView key={message.id} message={message} agentName={agentDisplayName} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
             {!showBash && activeChatSessionId === conversationBranchingState.mainSessionId ? (
               <ConversationSubthreadTranscripts
                 state={conversationBranchingState}
@@ -6335,8 +6405,8 @@ function ChatPanel({
             <div className="chapter-context-strip" aria-label="Chaptered session compression">
               <Icon name="layers" size={12} />
               <span>{sessionChapterTotals.chapterCount} chapter{sessionChapterTotals.chapterCount === 1 ? '' : 's'}</span>
-              <strong>{activeSessionCompressionPromptContext ? 'active session compressed' : 'compressed context ready'}</strong>
-              <small>{sessionChapterTotals.evidenceRefCount} evidence refs</small>
+              <strong>{contextManagerSnapshot.status === 'critical' ? 'context critical' : contextManagerSnapshot.status === 'warning' ? 'context warning' : activeSessionCompressionPromptContext ? 'active session compressed' : 'compressed context ready'}</strong>
+              <small>{contextManagerSnapshot.managedTokenEstimate}/{contextManagerSnapshot.maxInputTokens} tokens · {sessionChapterTotals.evidenceRefCount} evidence refs</small>
             </div>
           ) : null}
           {showBash ? (
@@ -6436,7 +6506,7 @@ function ChatPanel({
                       : null)
                 : selectedProvider === 'tour-guide'
                   ? null
-                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'steering' ? 'Steering needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'adversary' ? 'Adversary needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'media' ? 'Media needs GHCP, Cursor, or media models. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
+                  : (!hasInstalledModels ? <button type="button" className="composer-status composer-status-action" onClick={onOpenModels}>{selectedProvider === 'researcher' ? 'Researcher needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'debugger' ? 'Debugger needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'planner' ? 'Planner needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'context-manager' ? 'Context Manager needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'security' ? 'Security Review needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'steering' ? 'Steering needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'adversary' ? 'Adversary needs GHCP, Cursor, or Codi. Open Models.' : selectedProvider === 'media' ? 'Media needs GHCP, Cursor, or media models. Open Models.' : 'No Codi model loaded. Open Models to load one.'}</button> : null)}
             </form>
           )}
         </div>
@@ -8233,6 +8303,10 @@ function SessionChapterSettingsPanel({
               <strong>{summary.evidenceRefCount}</strong>
               <small>evidence refs</small>
             </span>
+            <span role="listitem">
+              <strong>{Object.keys(state.toolOutputCache).length}</strong>
+              <small>tool caches</small>
+            </span>
           </div>
           <p className="muted">{summary.sessionCount} session · {summary.chapterCount} chapter · {state.audit.length} audit event{state.audit.length === 1 ? '' : 's'}</p>
           <div className="run-checkpoint-control-grid">
@@ -8263,6 +8337,37 @@ function SessionChapterSettingsPanel({
               />
               <span>Preserve evidence references</span>
             </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Render compacted context summaries"
+                checked={state.policy.renderCompressedMessages}
+                onChange={(event) => updatePolicy({ renderCompressedMessages: event.target.checked })}
+              />
+              <span>Render compacted summaries</span>
+            </label>
+            <label className="settings-checkbox-row">
+              <input
+                type="checkbox"
+                aria-label="Cache large tool outputs"
+                checked={state.policy.toolOutputCache.enabled}
+                onChange={(event) => updatePolicy({
+                  toolOutputCache: { ...state.policy.toolOutputCache, enabled: event.target.checked },
+                })}
+              />
+              <span>Cache large tool outputs</span>
+            </label>
+            <label className="provider-command-field">
+              <span>Context mode</span>
+              <select
+                aria-label="Context manager mode"
+                value={state.policy.contextMode}
+                onChange={(event) => updatePolicy({ contextMode: event.target.value === 'caveman' ? 'caveman' : 'standard' })}
+              >
+                <option value="standard">Standard</option>
+                <option value="caveman">Caveman</option>
+              </select>
+            </label>
             <label className="provider-command-field">
               <span>Target tokens</span>
               <input
@@ -8284,6 +8389,34 @@ function SessionChapterSettingsPanel({
                 max={50}
                 value={state.policy.retainRecentMessageCount}
                 onChange={(event) => updatePolicy({ retainRecentMessageCount: Number(event.target.value) })}
+              />
+            </label>
+            <label className="provider-command-field">
+              <span>Inline tool-output tokens</span>
+              <input
+                aria-label="Inline tool-output cache token limit"
+                type="number"
+                min={16}
+                max={32000}
+                step={64}
+                value={state.policy.toolOutputCache.inlineTokenLimit}
+                onChange={(event) => updatePolicy({
+                  toolOutputCache: { ...state.policy.toolOutputCache, inlineTokenLimit: Number(event.target.value) },
+                })}
+              />
+            </label>
+            <label className="provider-command-field">
+              <span>File cache threshold</span>
+              <input
+                aria-label="File tool-output cache token threshold"
+                type="number"
+                min={16}
+                max={128000}
+                step={128}
+                value={state.policy.toolOutputCache.fileTokenThreshold}
+                onChange={(event) => updatePolicy({
+                  toolOutputCache: { ...state.policy.toolOutputCache, fileTokenThreshold: Number(event.target.value) },
+                })}
               />
             </label>
           </div>
@@ -10257,6 +10390,8 @@ function HistoryPanel({
             </p>
             <ul className="history-events">
               <li>Target budget: {sessionChapterState.policy.targetTokenBudget} tokens</li>
+              <li>Context mode: {sessionChapterState.policy.contextMode}</li>
+              <li>Tool-output cache refs: {Object.keys(sessionChapterState.toolOutputCache).length}</li>
               <li>Validation refs: {chapterSummary.validationRefCount}</li>
             </ul>
           </article>
@@ -10274,6 +10409,7 @@ function HistoryPanel({
                 <li>Sources: {chapter.sourceTraceRefs.slice(0, 4).join(', ') || 'none'}</li>
                 <li>Evidence: {chapter.evidenceRefs.join(', ') || 'none'}</li>
                 <li>Validation: {chapter.validationRefs.join(', ') || 'none'}</li>
+                <li>Tool outputs: {chapter.toolOutputRefs.join(', ') || 'none'}</li>
               </ul>
             </article>
           ))}
@@ -12050,7 +12186,7 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 }
 
-const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'security', 'steering', 'adversary', 'media', 'tour-guide'];
+const VALID_AGENT_PROVIDERS: AgentProvider[] = ['codi', 'ghcp', 'cursor', 'codex', 'researcher', 'debugger', 'planner', 'context-manager', 'security', 'steering', 'adversary', 'media', 'swarm', 'tour-guide'];
 
 function isAgentProviderRecord(value: unknown): value is Record<string, AgentProvider> {
   return (

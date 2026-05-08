@@ -295,6 +295,10 @@ async function main() {
       const workspaceId = 'ws-research';
       const sessionId = 'visual-eval-session';
       const subthreadSessionId = 'visual-eval-session-branch-agent-proof';
+      const largeVisualToolOutput = Array.from(
+        { length: 260 },
+        (_, index) => `SCREENSHOT_TRACE_${index}: visual smoke captured layout metrics, accessibility landmarks, and context-manager tool cache proof.`,
+      ).join('\n');
       localStorage.setItem('agent-browser.workspace-root', JSON.stringify({
         id: 'root',
         name: 'Root',
@@ -441,7 +445,11 @@ async function main() {
                 kind: 'tool-call',
                 actor: 'playwright',
                 summary: 'Capture browser screenshot',
-                payload: { screenshot: 'output/playwright/agent-browser-visual-smoke.png' },
+                transcript: largeVisualToolOutput,
+                payload: {
+                  screenshot: 'output/playwright/agent-browser-visual-smoke.png',
+                  stdout: largeVisualToolOutput,
+                },
                 status: 'done',
               },
             ],
@@ -556,6 +564,15 @@ async function main() {
           targetTokenBudget: 1200,
           retainRecentMessageCount: 4,
           preserveEvidenceRefs: true,
+          renderCompressedMessages: true,
+          contextMode: 'standard',
+          toolOutputCache: {
+            enabled: true,
+            inlineTokenLimit: 800,
+            fileTokenThreshold: 2400,
+            maxMemoryEntries: 50,
+            cacheRoot: '.agent-browser/context-cache',
+          },
         },
         sessions: {
           [sessionId]: {
@@ -577,21 +594,38 @@ async function main() {
                 sourceTraceRefs: ['message:visual-eval-user', 'message:visual-eval-assistant', 'process:visual-tool'],
                 evidenceRefs: ['evidence:output/playwright/agent-browser-visual-smoke.png'],
                 validationRefs: ['validation:visual-tool:Capture browser screenshot'],
+                toolOutputRefs: ['tool-output:visual-tool'],
                 compressedContext: {
                   summary: 'Captured visual smoke evidence and preserved the checkpoint trace for review.',
                   carryForward: [
                     'Visual validation produced output/playwright/agent-browser-visual-smoke.png.',
                     'Resume checkpoints and browser evidence remain linked to the original process trace.',
+                    'Tool output cache refs preserved: tool-output:visual-tool.',
                   ],
                   sourceTraceRefs: ['message:visual-eval-user', 'message:visual-eval-assistant', 'process:visual-tool'],
                   evidenceRefs: ['evidence:output/playwright/agent-browser-visual-smoke.png'],
                   validationRefs: ['validation:visual-tool:Capture browser screenshot'],
+                  toolOutputRefs: ['tool-output:visual-tool'],
                   retainedRecentMessageIds: ['visual-eval-user', 'visual-eval-assistant'],
                   tokenBudget: 1200,
+                  estimatedTokens: 42,
+                  contextMode: 'standard',
                   createdAt: '2026-05-08T04:00:00.000Z',
                 },
               },
             ],
+          },
+        },
+        toolOutputCache: {
+          'tool-output:visual-tool': {
+            id: 'tool-output:visual-tool',
+            sessionId,
+            sourceTraceRef: 'process:visual-tool',
+            storage: 'memory',
+            tokenCount: 120,
+            summary: 'Visual smoke output preserved behind a cache ref.',
+            content: 'Visual smoke output preserved behind a cache ref.',
+            createdAt: '2026-05-08T04:00:00.000Z',
           },
         },
         audit: [
@@ -949,6 +983,9 @@ async function main() {
     await expect(page.getByText(/evidence:output\/playwright\/agent-browser-visual-smoke\.png/)).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await expect(page.getByText(/tool-output:visual-tool/)).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await page.screenshot({ path: typedSdkOutputPath, fullPage: true });
     await expect(page.getByRole('button', { name: 'Scheduled automations' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -1149,7 +1186,12 @@ async function main() {
     await page.getByRole('button', { name: 'Chaptered sessions' }).click();
     await expect(page.getByLabel('Enable chaptered sessions')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Automatic context compression')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Render compacted context summaries')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Cache large tool outputs')).toBeChecked({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Context manager mode')).toHaveValue('standard', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Chapter compression target tokens')).toHaveValue('1200', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Inline tool-output cache token limit')).toHaveValue('800', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('File tool-output cache token threshold')).toHaveValue('2400', { timeout: shellTimeoutMs });
     await expect(page.getByText(/1 session\s+.\s+1 chapter\s+.\s+\d+ audit events?/)).toBeVisible({
       timeout: shellTimeoutMs,
     });

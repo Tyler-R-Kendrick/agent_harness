@@ -1375,6 +1375,42 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   flex-direction: column;
   gap: 14px;
 }
+.context-manager-summary-card {
+  width: min(720px, 92%);
+  align-self: flex-start;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(125, 211, 252, .22);
+  border-radius: 6px;
+  background: rgba(14, 116, 144, .13);
+  color: var(--text);
+}
+.context-manager-summary-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.context-manager-summary-header p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.context-manager-summary-header .secondary-button {
+  flex-shrink: 0;
+}
+.context-manager-originals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.context-manager-originals .message {
+  max-width: 100%;
+}
 .chat-empty-state {
   display: inline-flex;
   align-items: center;
