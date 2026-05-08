@@ -87,6 +87,7 @@ async function main() {
   assert.match(visualSmokeScript, /Enable Daily workspace audit/);
   assert.match(visualSmokeScript, /Chaptered sessions/);
   assert.match(visualSmokeScript, /Enable chaptered sessions/);
+  assert.match(visualSmokeScript, /Enable browser notifications/);
   assert.match(visualSmokeScript, /Typed run SDK/);
   assert.match(visualSmokeScript, /Structured event stream/);
   assert.match(visualSmokeScript, /Reconnect cursor/);
