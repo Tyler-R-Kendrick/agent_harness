@@ -441,6 +441,15 @@ import {
   type HarnessSteeringState,
 } from './services/harnessSteering';
 import {
+  DEFAULT_HARNESS_EVOLUTION_SETTINGS,
+  buildHarnessEvolutionPlan,
+  buildHarnessEvolutionPromptContext,
+  isHarnessEvolutionSettings,
+  normalizeHarnessEvolutionSettings,
+  type HarnessEvolutionPlan,
+  type HarnessEvolutionSettings,
+} from './services/harnessEvolution';
+import {
   createEvaluationAgentRegistry,
   type CustomEvaluationAgent,
   type EvaluationAgentKind,
@@ -2267,6 +2276,7 @@ function ChatPanel({
   workspaceSkillPolicyInventory,
   sharedAgentCatalog,
   harnessSteeringInventory,
+  harnessEvolutionSettings,
   partnerAgentControlPlaneSettings,
   runtimePluginSettings,
   onPartnerAgentAuditEntry,
@@ -2322,6 +2332,7 @@ function ChatPanel({
   workspaceSkillPolicyInventory: WorkspaceSkillPolicyInventory;
   sharedAgentCatalog: SharedAgentCatalog;
   harnessSteeringInventory: HarnessSteeringInventory;
+  harnessEvolutionSettings: HarnessEvolutionSettings;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   runtimePluginSettings: RuntimePluginSettings;
   onPartnerAgentAuditEntry?: (entry: PartnerAgentAuditEntry) => void;
@@ -2643,7 +2654,7 @@ function ChatPanel({
   const defaultExtensionSummary = summarizeDefaultExtensionRuntime(defaultExtensions);
   const pluginCount = workspaceCapabilities.plugins.length + defaultExtensionSummary.pluginCount;
   const hookCount = workspaceCapabilities.hooks.length + defaultExtensionSummary.hookCount;
-  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
+  const contextSummary = `${providerSummary} · tools ${toolsEnabled ? `${selectedToolIds.length} selected` : 'off'} · adversary ${adversaryAgentSettings.enabled ? `max ${adversaryAgentSettings.maxCandidates}` : 'off'} · security ${securityReviewRunPlan.enabled ? securityReviewRunPlan.agents.length : 'off'} · steering ${harnessSteeringInventory.enabled ? harnessSteeringInventory.totalCorrections : 'off'} · evolution ${harnessEvolutionSettings.enabled ? 'on' : 'off'} · partners ${partnerAgentControlPlane.settings.enabled ? `${partnerAgentControlPlane.readyAgentCount} ready` : 'off'} · runtime plugins ${runtimePluginRuntime.enabled ? `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount}` : 'off'} · ${pluginCount} plugins · ${hookCount} hooks · artifacts ${attachedArtifactCount ?? 0} · location ${locationPromptContext ? 'on' : 'off'} · ${pendingSearch ? 'web search queued' : 'workspace ready'}`;
   const workspacePath = showBash && activeSessionId ? (cwdBySession[activeSessionId] ?? BASH_INITIAL_CWD) : BASH_INITIAL_CWD;
   const selectedProviderRef = useRef(selectedProvider);
   const effectiveSelectedModelIdRef = useRef(effectiveSelectedModelId);
@@ -3397,6 +3408,14 @@ function ChatPanel({
       buildWorkspaceSkillPolicyPromptContext(workspaceSkillPolicyInventory),
       buildSharedAgentPromptContext(sharedAgentCatalog),
       buildHarnessSteeringPromptContext(harnessSteeringInventory),
+      buildHarnessEvolutionPromptContext(buildHarnessEvolutionPlan({
+        settings: harnessEvolutionSettings,
+        request: {
+          componentId: 'Agent Browser harness',
+          changeSummary: trimmedText,
+          touchesStyling: /\b(style|css|visual|layout|theme|ui|component|dashboard|panel|widget)\b/i.test(trimmedText),
+        },
+      })),
       buildPartnerAgentPromptContext(requestPartnerAgentControlPlane, requestPartnerAgentAuditEntry),
       buildSecurityReviewPromptContext(buildSecurityReviewRunPlan({
         settings: securityReviewAgentSettings,
@@ -5512,7 +5531,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -6873,6 +6892,146 @@ function HarnessSteeringSettingsPanel({
   );
 }
 
+function HarnessEvolutionSettingsPanel({
+  settings,
+  plan,
+  onChange,
+}: {
+  settings: HarnessEvolutionSettings;
+  plan: HarnessEvolutionPlan;
+  onChange: (settings: HarnessEvolutionSettings) => void;
+}) {
+  const normalized = normalizeHarnessEvolutionSettings(settings);
+  const update = <K extends keyof HarnessEvolutionSettings>(key: K, value: HarnessEvolutionSettings[K]) => {
+    onChange(normalizeHarnessEvolutionSettings({ ...normalized, [key]: value }));
+  };
+  const updateList = (key: 'allowedPatchScopes' | 'validationCommands', value: string) => {
+    update(key, value.split('\n').map((entry) => entry.trim()).filter(Boolean));
+  };
+
+  return (
+    <SettingsSection title="Harness evolution" defaultOpen={false}>
+      <div className="harness-steering-settings">
+        <div className="partner-agent-toolbar">
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={normalized.enabled}
+              onChange={(event) => update('enabled', event.target.checked)}
+              aria-label="Enable harness evolution"
+            />
+            <span>Enable harness evolution</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={normalized.safeModeOnFailure}
+              onChange={(event) => update('safeModeOnFailure', event.target.checked)}
+              aria-label="Fallback to safe mode on failure"
+            />
+            <span>Safe-mode fallback</span>
+          </label>
+          <label className="settings-checkbox-row">
+            <input
+              type="checkbox"
+              checked={normalized.requireVisualValidation}
+              onChange={(event) => update('requireVisualValidation', event.target.checked)}
+              aria-label="Require visual validation"
+            />
+            <span>Visual validation</span>
+          </label>
+        </div>
+        <article className="provider-card harness-steering-summary-card">
+          <div className="provider-card-header">
+            <div className="provider-body">
+              <strong>Sandboxed patch plan</strong>
+              <p>{plan.summary}</p>
+            </div>
+            <span className={`badge${plan.enabled ? ' connected' : ''}`}>{plan.enabled ? 'enabled' : 'off'}</span>
+          </div>
+          <div className="local-inference-metrics" role="list" aria-label="Harness evolution metrics">
+            <span role="listitem">
+              <strong>{plan.validationCommands.length}</strong>
+              <small>validation gates</small>
+            </span>
+            <span role="listitem">
+              <strong>{plan.protectedScopes.length}</strong>
+              <small>protected scopes</small>
+            </span>
+            <span role="listitem">
+              <strong>{plan.visualValidationRequired ? 'required' : 'optional'}</strong>
+              <small>visual proof</small>
+            </span>
+          </div>
+          <p className="partner-agent-audit-note">
+            Patch candidates stay in a sandbox until tests, lint, audit, and visual checks pass. Failed patches fall back to the original component path before another sandbox iteration.
+          </p>
+        </article>
+        <div className="harness-steering-capture-grid">
+          <label className="provider-command-field">
+            <span>Sandbox root</span>
+            <input
+              aria-label="Harness evolution sandbox root"
+              value={normalized.sandboxRoot}
+              onChange={(event) => update('sandboxRoot', event.target.value)}
+            />
+          </label>
+          <label className="provider-command-field">
+            <span>Patch command</span>
+            <input
+              aria-label="Harness evolution patch command"
+              value={normalized.patchPackageCommand}
+              onChange={(event) => update('patchPackageCommand', event.target.value)}
+            />
+          </label>
+          <label className="provider-command-field harness-steering-correction-field">
+            <span>Validation commands</span>
+            <textarea
+              aria-label="Harness evolution validation commands"
+              value={normalized.validationCommands.join('\n')}
+              onChange={(event) => updateList('validationCommands', event.target.value)}
+              rows={4}
+            />
+          </label>
+          <label className="provider-command-field harness-steering-correction-field">
+            <span>Protected patch scopes</span>
+            <textarea
+              aria-label="Harness evolution protected patch scopes"
+              value={normalized.allowedPatchScopes.join('\n')}
+              onChange={(event) => updateList('allowedPatchScopes', event.target.value)}
+              rows={4}
+            />
+          </label>
+        </div>
+        <div className="harness-steering-file-list" role="list" aria-label="Harness evolution gates">
+          {plan.adoptionGate.map((gate) => (
+            <article key={gate} className="provider-card harness-steering-file-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>Adoption gate</strong>
+                  <p>{gate}</p>
+                </div>
+                <span className="badge connected">gate</span>
+              </div>
+            </article>
+          ))}
+          {plan.fallbackActions.map((action) => (
+            <article key={action} className="provider-card harness-steering-file-card" role="listitem">
+              <div className="provider-card-header">
+                <div className="provider-body">
+                  <strong>Fallback action</strong>
+                  <p>{action}</p>
+                </div>
+                <span className="badge">safe mode</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function ScheduledAutomationSettingsPanel({
   state,
   onChange,
@@ -7966,6 +8125,8 @@ interface SettingsPanelProps {
   browserWorkflowSkills: BrowserWorkflowSkillManifest[];
   harnessSteeringState: HarnessSteeringState;
   harnessSteeringInventory: HarnessSteeringInventory;
+  harnessEvolutionSettings: HarnessEvolutionSettings;
+  harnessEvolutionPlan: HarnessEvolutionPlan;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
@@ -7982,6 +8143,7 @@ interface SettingsPanelProps {
   onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
   onInstallBrowserWorkflowSkill: (skill: BrowserWorkflowSkillManifest) => void;
   onHarnessSteeringStateChange: (state: HarnessSteeringState) => void;
+  onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   evaluationAgents: CustomEvaluationAgent[];
@@ -8330,6 +8492,8 @@ function SettingsPanel({
   browserWorkflowSkills,
   harnessSteeringState,
   harnessSteeringInventory,
+  harnessEvolutionSettings,
+  harnessEvolutionPlan,
   browserAgentRunSdkState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
@@ -8346,6 +8510,7 @@ function SettingsPanel({
   onSharedAgentRegistryStateChange,
   onInstallBrowserWorkflowSkill,
   onHarnessSteeringStateChange,
+  onHarnessEvolutionSettingsChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   evaluationAgents,
@@ -8401,6 +8566,12 @@ function SettingsPanel({
         state={harnessSteeringState}
         inventory={harnessSteeringInventory}
         onChange={onHarnessSteeringStateChange}
+      />
+
+      <HarnessEvolutionSettingsPanel
+        settings={harnessEvolutionSettings}
+        plan={harnessEvolutionPlan}
+        onChange={onHarnessEvolutionSettingsChange}
       />
 
       <PartnerAgentControlPlaneSettingsPanel
@@ -10727,6 +10898,12 @@ function AgentBrowserApp() {
     isRuntimePluginSettings,
     DEFAULT_RUNTIME_PLUGIN_SETTINGS,
   );
+  const [harnessEvolutionSettings, setHarnessEvolutionSettings] = useStoredState(
+    localStorageBackend,
+    STORAGE_KEYS.harnessEvolutionSettings,
+    isHarnessEvolutionSettings,
+    DEFAULT_HARNESS_EVOLUTION_SETTINGS,
+  );
   const [harnessSteeringState, setHarnessSteeringState] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.harnessSteeringState,
@@ -10983,6 +11160,14 @@ function AgentBrowserApp() {
   }, []);
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
+  const settingsHarnessEvolutionPlan = useMemo(() => buildHarnessEvolutionPlan({
+    settings: harnessEvolutionSettings,
+    request: {
+      componentId: 'Agent Browser harness',
+      changeSummary: `Evolve ${activeWorkspace.name} harness components safely`,
+      touchesStyling: true,
+    },
+  }), [activeWorkspace.name, harnessEvolutionSettings]);
   const activeMultitaskSubagentState = useMemo(
     () => multitaskSubagentState.enabled && multitaskSubagentState.workspaceId === activeWorkspaceId
       ? multitaskSubagentState
@@ -14699,6 +14884,8 @@ function AgentBrowserApp() {
         browserWorkflowSkills={browserWorkflowSkills}
         harnessSteeringState={harnessSteeringState}
         harnessSteeringInventory={harnessSteeringInventory}
+        harnessEvolutionSettings={harnessEvolutionSettings}
+        harnessEvolutionPlan={settingsHarnessEvolutionPlan}
         browserAgentRunSdkState={browserAgentRunSdkState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
@@ -14715,6 +14902,7 @@ function AgentBrowserApp() {
         onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
         onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
         onHarnessSteeringStateChange={setHarnessSteeringState}
+        onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         evaluationAgents={evaluationAgents}
@@ -15030,6 +15218,7 @@ function AgentBrowserApp() {
                 workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
                 sharedAgentCatalog={sharedAgentCatalog}
                 harnessSteeringInventory={harnessSteeringInventory}
+                harnessEvolutionSettings={harnessEvolutionSettings}
                 partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
                 runtimePluginSettings={runtimePluginSettings}
                 onPartnerAgentAuditEntry={setLatestPartnerAgentAuditEntry}

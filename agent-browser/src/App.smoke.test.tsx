@@ -549,6 +549,37 @@ describe('App smoke coverage', () => {
     expect(screen.getByText(/Latest correction: project - Keep Linear progress comments current/)).toBeInTheDocument();
   });
 
+  it('renders harness evolution controls in Settings and persists safe-mode policy', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    expect(screen.getByText('Harness evolution')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Harness evolution' }));
+    expect(screen.getByLabelText('Enable harness evolution')).toBeChecked();
+    expect(screen.getByLabelText('Fallback to safe mode on failure')).toBeChecked();
+    expect(screen.getByLabelText('Require visual validation')).toBeChecked();
+    expect(screen.getByLabelText('Harness evolution sandbox root')).toHaveValue('.harness-evolution/sandboxes');
+    expect(screen.getByLabelText('Harness evolution patch command')).toHaveValue('npx patch-package');
+    expect(screen.getByLabelText('Harness evolution protected patch scopes')).toHaveValue(
+      'agent-browser/src/features/harness-ui\nagent-browser/src/services\nagent-browser/src/App.tsx\nagent-browser/src/App.css',
+    );
+
+    fireEvent.click(screen.getByLabelText('Enable harness evolution'));
+    await act(async () => {
+      vi.runAllTimers();
+    });
+
+    const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessEvolutionSettings) ?? '{}');
+    expect(persisted.enabled).toBe(false);
+    expect(persisted.safeModeOnFailure).toBe(true);
+  });
+
   it('renders security review agent controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
