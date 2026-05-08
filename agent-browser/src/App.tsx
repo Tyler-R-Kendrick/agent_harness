@@ -349,6 +349,12 @@ import {
   type AgentCanvasSummary,
 } from './services/agentCanvases';
 import {
+  buildWorkspaceSurfacePromptContext,
+  isWorkspaceSurfacesByWorkspace,
+  listWorkspaceSurfaceSummaries,
+  type WorkspaceSurface,
+} from './services/workspaceSurfaces';
+import {
   DEFAULT_BROWSER_NOTIFICATION_SETTINGS,
   buildChatCompletionNotification,
   buildChatElicitationNotification,
@@ -11723,6 +11729,12 @@ function AgentBrowserApp() {
     isArtifactContextBySession,
     {},
   );
+  const [workspaceSurfacesByWorkspace] = useStoredState<Record<string, WorkspaceSurface[]>>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceSurfacesByWorkspace,
+    isWorkspaceSurfacesByWorkspace,
+    {},
+  );
   const [workspaceViewStateByWorkspace, setWorkspaceViewStateByWorkspace] = useStoredState<Record<string, WorkspaceViewState>>(
     localStorageBackend,
     STORAGE_KEYS.workspaceViewStateByWorkspace,
@@ -11988,6 +12000,11 @@ function AgentBrowserApp() {
     [specDrivenDevelopmentSettings],
   );
   const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? [];
+  const activeWorkspaceSurfaces = workspaceSurfacesByWorkspace[activeWorkspaceId] ?? [];
+  const activeWorkspaceSurfaceSummaries = useMemo(
+    () => listWorkspaceSurfaceSummaries(activeWorkspaceSurfaces),
+    [activeWorkspaceSurfaces],
+  );
   const activeAgentCanvasSummaries = useMemo(
     () => listAgentCanvasSummaries(activeArtifacts),
     [activeArtifacts],
@@ -15818,6 +15835,7 @@ function AgentBrowserApp() {
                       path: file.path,
                       kind: detectWorkspaceFileKind(file.path) ?? undefined,
                     }))}
+                    surfaces={activeWorkspaceSurfaceSummaries}
                     onCreateSessionWidget={() => addSessionToWorkspace(activeWorkspaceId, undefined, { open: false })}
                     onOpenSession={(sessionId) => setWorkspaceViewStateByWorkspace((current) => {
                       const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
@@ -15902,6 +15920,7 @@ function AgentBrowserApp() {
                 artifactPromptContext={[
                   buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? []),
                   buildAgentCanvasPromptContext(activeArtifacts),
+                  buildWorkspaceSurfacePromptContext(activeWorkspaceSurfaces),
                 ].filter(Boolean).join('\n\n')}
                 repoWikiPromptContext={activeRepoWikiPromptContext}
                 runCheckpointPromptContext={activeRunCheckpointPromptContext}

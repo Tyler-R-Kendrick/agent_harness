@@ -630,6 +630,52 @@ async function main() {
           },
         ],
       }));
+      localStorage.setItem('agent-browser.workspace-surfaces-by-workspace', JSON.stringify({
+        [workspaceId]: [
+          {
+            id: 'surface-ws-research-canvas-ws-research-dashboard-dashboard-md',
+            workspaceId,
+            artifactId: 'canvas-ws-research-dashboard',
+            artifactFilePath: 'dashboard.md',
+            surfaceType: 'dashboard',
+            renderTarget: 'dashboard',
+            title: 'Launch dashboard surface',
+            description: 'Agent-authored dashboard for release evidence.',
+            createdByAgent: 'Researcher',
+            ownerSessionId: sessionId,
+            permissions: {
+              canRead: true,
+              canEdit: true,
+              canRollback: true,
+              canShare: false,
+            },
+            revision: 2,
+            status: 'active',
+            createdAt: '2026-05-07T03:00:00.000Z',
+            updatedAt: '2026-05-07T03:20:00.000Z',
+            versions: [
+              {
+                id: 'surface-ws-research-canvas-ws-research-dashboard-dashboard-md-revision-1',
+                revision: 1,
+                title: 'Launch dashboard surface',
+                description: 'Agent-authored dashboard for release evidence.',
+                surfaceType: 'dashboard',
+                renderTarget: 'dashboard',
+                artifactId: 'canvas-ws-research-dashboard',
+                artifactFilePath: 'dashboard.md',
+                permissions: {
+                  canRead: true,
+                  canEdit: true,
+                  canRollback: true,
+                  canShare: false,
+                },
+                status: 'active',
+                createdAt: '2026-05-07T03:00:00.000Z',
+              },
+            ],
+          },
+        ],
+      }));
       localStorage.setItem('agent-browser.shared-agent-registry-state', JSON.stringify({
         enabled: true,
         requirePublishApproval: true,
@@ -734,6 +780,10 @@ async function main() {
     await expect(page).toHaveTitle('Agent Browser', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
+    const workspaceSurfaces = page.getByRole('region', { name: 'Agent-authored workspace surfaces' });
+    await expect(workspaceSurfaces).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(workspaceSurfaces.getByText('Launch dashboard surface')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(workspaceSurfaces.getByText('read, edit, rollback')).toBeVisible({ timeout: shellTimeoutMs });
     await captureGitWorktreeViewportMatrix(page, shellTimeoutMs);
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });

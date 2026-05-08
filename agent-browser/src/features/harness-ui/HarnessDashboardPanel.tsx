@@ -5,6 +5,7 @@ import type { HarnessBrowserPageSummary, HarnessFileSummary, HarnessSessionSumma
 import { HarnessInspectorPanel } from './HarnessInspectorPanel';
 import { normalizeWidgetPosition, normalizeWidgetSize, resolveSpaceLayout } from './spaceLayout';
 import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, JsonValue, WidgetPosition, WidgetSize } from './types';
+import type { WorkspaceSurfaceSummary } from '../../services/workspaceSurfaces';
 
 export type HarnessDashboardPanelProps = {
   spec: HarnessAppSpec;
@@ -12,6 +13,7 @@ export type HarnessDashboardPanelProps = {
   sessions: HarnessSessionSummary[];
   browserPages?: HarnessBrowserPageSummary[];
   files?: HarnessFileSummary[];
+  surfaces?: WorkspaceSurfaceSummary[];
   onCreateSessionWidget: () => void;
   onOpenSession?: (sessionId: string) => void;
   onPatchElement?: (patch: HarnessElementPatch) => void;
@@ -155,6 +157,10 @@ function plural(count: number, singular: string, pluralLabel = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralLabel}`;
 }
 
+function formatSurfaceType(type: WorkspaceSurfaceSummary['surfaceType']) {
+  return type.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
 function conversationMessages(session: HarnessSessionSummary) {
   return (session.messages ?? []).filter((message) => message.role !== 'system' && message.content.trim());
 }
@@ -215,6 +221,7 @@ export function HarnessDashboardPanel({
   onRegenerate,
   onRestoreDefault,
   dragHandleProps,
+  surfaces = [],
 }: HarnessDashboardPanelProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 });
@@ -524,6 +531,53 @@ export function HarnessDashboardPanel({
                   </div>
                 </article>
               ) : null}
+
+              <section
+                className="harness-workspace-surfaces-widget"
+                aria-label="Agent-authored workspace surfaces"
+              >
+                <header className="harness-workspace-surfaces-header">
+                  <div>
+                    <span className="harness-widget-kicker">Governed app outputs</span>
+                    <h3>Workspace surfaces</h3>
+                  </div>
+                  <span className="harness-widget-badge">{plural(surfaces.length, 'surface')}</span>
+                </header>
+                {surfaces.length ? (
+                  <ul className="harness-workspace-surface-list">
+                    {surfaces.slice(0, 5).map((surface) => (
+                      <li key={surface.id}>
+                        <div className="harness-workspace-surface-title-row">
+                          <strong>{surface.title}</strong>
+                          <span>{formatSurfaceType(surface.surfaceType)}</span>
+                        </div>
+                        <p>{surface.description ?? `${surface.renderTarget} surface owned by ${surface.createdByAgent}`}</p>
+                        <dl>
+                          <div>
+                            <dt>Owner</dt>
+                            <dd>{surface.createdByAgent}{surface.ownerSessionId ? ` / ${surface.ownerSessionId}` : ''}</dd>
+                          </div>
+                          <div>
+                            <dt>Revision</dt>
+                            <dd>{surface.revision}</dd>
+                          </div>
+                          <div>
+                            <dt>Permissions</dt>
+                            <dd>{surface.permissionSummary}</dd>
+                          </div>
+                          <div>
+                            <dt>Rollback</dt>
+                            <dd>{surface.canRollback ? 'available' : 'locked'}</dd>
+                          </div>
+                        </dl>
+                        <code>{`//artifacts/${surface.artifactId}/${surface.artifactFilePath}`}</code>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="harness-widget-empty">No agent-authored surfaces yet.</p>
+                )}
+              </section>
             </div>
           </div>
           <div
