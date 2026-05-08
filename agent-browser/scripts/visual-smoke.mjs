@@ -748,6 +748,12 @@ async function main() {
     await expect(page.getByLabel('Auto-capture steering corrections')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('.steering/STEERING.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('.steering/tool.steering.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Harness evolution' }).click();
+    await expect(page.getByLabel('Enable harness evolution')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Fallback to safe mode on failure')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Require visual validation')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Harness evolution sandbox root')).toHaveValue('.harness-evolution/sandboxes', { timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Harness evolution patch command')).toHaveValue('npx patch-package', { timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Benchmark routing' }).click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');

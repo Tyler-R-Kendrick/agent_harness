@@ -60,6 +60,7 @@ describe('STORAGE_KEYS', () => {
       scheduledAutomationsState: expect.any(String),
       workspaceSkillPolicyState: expect.any(String),
       runtimePluginSettings: expect.any(String),
+      harnessEvolutionSettings: expect.any(String),
       browserAgentRunSdkState: expect.any(String),
       multitaskSubagentState: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
@@ -73,6 +74,7 @@ describe('STORAGE_KEYS', () => {
     expect(STORAGE_KEYS.browserAgentRunSdkState).toBe('agent-browser.browser-agent-run-sdk-state');
     expect(STORAGE_KEYS.multitaskSubagentState).toBe('agent-browser.multitask-subagent-state');
     expect(STORAGE_KEYS.runtimePluginSettings).toBe('agent-browser.runtime-plugin-settings');
+    expect(STORAGE_KEYS.harnessEvolutionSettings).toBe('agent-browser.harness-evolution-settings');
   });
 });
 
