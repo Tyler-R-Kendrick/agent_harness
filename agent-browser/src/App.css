@@ -7927,6 +7927,71 @@ kbd {
   min-height: 24px;
   padding: 2px 8px;
 }
+.conversation-subthread-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(125, 211, 252, 0.2);
+  background: rgba(14, 116, 144, 0.16);
+  color: #e0f2fe;
+  font-size: 12px;
+}
+.conversation-subthread-banner.is-merged {
+  border-bottom-color: rgba(134, 239, 172, 0.2);
+  background: rgba(6, 95, 70, 0.16);
+}
+.conversation-subthread-banner p {
+  margin: 1px 0 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #9ca3af;
+}
+.conversation-subthread-banner small {
+  grid-column: 2 / -1;
+  min-width: 0;
+  color: #bae6fd;
+}
+.conversation-subthread-transcripts {
+  display: grid;
+  gap: 10px;
+  max-width: min(760px, 100%);
+  width: 100%;
+  align-self: stretch;
+  padding: 10px;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.34);
+}
+.conversation-subthread-transcripts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #e5e7eb;
+  font-size: 12px;
+}
+.conversation-subthread-transcripts-header span {
+  color: #9ca3af;
+}
+.conversation-subthread-transcript-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255,255,255,.025);
+}
+.conversation-subthread-message-list {
+  display: grid;
+  gap: 8px;
+}
+.conversation-subthread-message-list .message {
+  max-width: 100%;
+}
 .danger-button {
   border-color: rgba(248, 113, 113, 0.4);
   color: #fecaca;
@@ -7936,4 +8001,11 @@ kbd {
   .shared-chat-modal-header,
   .shared-chat-footer,
   .shared-chat-payload-actions { align-items: stretch; flex-direction: column; }
+  .conversation-subthread-banner {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .conversation-subthread-banner small {
+    grid-column: auto;
+  }
 }

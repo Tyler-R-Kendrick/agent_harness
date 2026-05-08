@@ -3,8 +3,11 @@ import {
   DEFAULT_CONVERSATION_BRANCHING_STATE,
   buildConversationBranchProcessEntries,
   buildConversationBranchPromptContext,
+  canSubmitToConversationSession,
   commitConversationSubthread,
   createConversationBranchingState,
+  getConversationMainSessionForSubthread,
+  getConversationSubthreadForSession,
   isConversationBranchingState,
   mergeConversationSubthread,
   summarizeConversationBranches,
@@ -16,6 +19,7 @@ describe('conversationBranches', () => {
       workspaceId: 'ws-research',
       workspaceName: 'Research',
       mainSessionId: 'session-main',
+      subthreadSessionId: 'session-branch-auth',
       request: 'Branch this conversation to investigate auth options',
       now: new Date('2026-05-08T01:00:00.000Z'),
     });
@@ -32,13 +36,44 @@ describe('conversationBranches', () => {
     expect(state.subthreads[0]).toMatchObject({
       id: 'subthread:ws-research:branch-this-conversation-to-investigate-auth-options',
       branchName: 'conversation/research/branch-this-conversation-to-investigate-auth-options',
+      sessionId: 'session-branch-auth',
       status: 'running',
       summary: 'Branch started: Branch this conversation to investigate auth options',
+    });
+    expect(state.commits[state.subthreads[0].headCommitId]).toMatchObject({
+      sourceSessionId: 'session-branch-auth',
     });
     expect(Object.values(state.commits).map((commit) => commit.branchId)).toEqual([
       'main',
       state.subthreads[0].id,
     ]);
+  });
+
+  it('resolves subthread sessions back to their main conversation and locks merged subthreads', () => {
+    const running = createConversationBranchingState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      mainSessionId: 'session-main',
+      subthreadSessionId: 'session-branch-auth',
+      request: 'Branch auth options',
+      now: new Date('2026-05-08T01:00:00.000Z'),
+    });
+
+    expect(getConversationSubthreadForSession(running, 'session-branch-auth')).toMatchObject({
+      id: 'subthread:ws-research:branch-auth-options',
+      branchName: 'conversation/research/branch-auth-options',
+    });
+    expect(getConversationMainSessionForSubthread(running, 'session-branch-auth')).toBe('session-main');
+    expect(canSubmitToConversationSession(running, 'session-main')).toBe(true);
+    expect(canSubmitToConversationSession(running, 'session-branch-auth')).toBe(true);
+
+    const merged = mergeConversationSubthread(running, running.subthreads[0].id, {
+      summary: 'Merged auth branch into main.',
+      now: new Date('2026-05-08T01:08:00.000Z'),
+    });
+
+    expect(canSubmitToConversationSession(merged, 'session-main')).toBe(true);
+    expect(canSubmitToConversationSession(merged, 'session-branch-auth')).toBe(false);
   });
 
   it('appends subthread commits without changing the subthread id', () => {
