@@ -32,3 +32,4 @@ output/
 .dev-server*.log
 .codex-tk26-objects/
 .codex-tk26-index-*
+.tmp-*
