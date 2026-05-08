@@ -263,6 +263,8 @@ function labelForProvider(provider: AgentProvider | ModelBackedAgentProvider): s
       return 'Debugger';
     case 'planner':
       return 'Planner';
+    case 'context-manager':
+      return 'Context Manager';
     case 'security':
       return 'Security Review';
     case 'steering':

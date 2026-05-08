@@ -10,6 +10,7 @@ import { CODEX_LABEL, hasCodexAccess, resolveCodexModelId, streamCodexChat } fro
 import { DEBUGGER_LABEL, isDebuggingTaskText, streamDebuggerChat } from './Debugger';
 import { GHCP_LABEL, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 import { CURSOR_LABEL, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
+import { CONTEXT_MANAGER_LABEL, isContextManagerTaskText, streamContextManagerChat } from './ContextManager';
 import { isPlannerTaskText, PLANNER_LABEL, streamPlannerChat } from './Planner';
 import { isResearchTaskText, RESEARCHER_LABEL, streamResearcherChat } from './Researcher';
 import { isSecurityReviewTaskText, SECURITY_REVIEW_LABEL, streamSecurityReviewChat } from './Security';
@@ -33,6 +34,16 @@ export {
 } from './Debugger';
 export { GHCP_LABEL, buildGhcpPrompt, hasGhcpAccess, resolveGhcpModelId, streamGhcpChat } from './Ghcp';
 export { CURSOR_LABEL, buildCursorPrompt, hasCursorAccess, resolveCursorModelId, streamCursorAgentChat } from './Cursor';
+export {
+  CONTEXT_MANAGER_AGENT_ID,
+  CONTEXT_MANAGER_CACHE_ROOT,
+  CONTEXT_MANAGER_LABEL,
+  buildContextManagerOperatingInstructions,
+  buildContextManagerSystemPrompt,
+  buildContextManagerToolInstructions,
+  isContextManagerTaskText,
+  streamContextManagerChat,
+} from './ContextManager';
 export {
   ADVERSARY_LABEL,
   buildAdversaryOperatingInstructions,
@@ -316,6 +327,21 @@ export async function streamAgentChat(
     return;
   }
 
+  if (options.provider === 'context-manager') {
+    await streamContextManagerChat({
+      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      model: options.model,
+      modelId: options.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+      voters: options.voters,
+    }, callbacks, signal);
+    return;
+  }
+
   if (options.provider === 'security') {
     await streamSecurityReviewChat({
       runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
@@ -444,7 +470,7 @@ export function getAgentDisplayName({
   activeCodexModelName?: string;
   researcherRuntimeProvider?: ModelBackedAgentProvider;
 }): string {
-  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'security' || provider === 'steering' || provider === 'adversary' || provider === 'media' || provider === 'swarm') {
+  if (provider === 'researcher' || provider === 'debugger' || provider === 'planner' || provider === 'context-manager' || provider === 'security' || provider === 'steering' || provider === 'adversary' || provider === 'media' || provider === 'swarm') {
     const modelName = researcherRuntimeProvider === 'ghcp'
       ? (activeGhcpModelName ?? 'Copilot')
       : researcherRuntimeProvider === 'cursor'
@@ -456,15 +482,17 @@ export function getAgentDisplayName({
         ? DEBUGGER_LABEL
         : provider === 'planner'
           ? PLANNER_LABEL
-          : provider === 'security'
-            ? SECURITY_REVIEW_LABEL
-            : provider === 'steering'
-              ? STEERING_LABEL
-              : provider === 'adversary'
-                ? ADVERSARY_LABEL
-                : provider === 'media'
-                  ? MEDIA_LABEL
-                  : AGENT_SWARM_LABEL;
+          : provider === 'context-manager'
+            ? CONTEXT_MANAGER_LABEL
+            : provider === 'security'
+              ? SECURITY_REVIEW_LABEL
+              : provider === 'steering'
+                ? STEERING_LABEL
+                : provider === 'adversary'
+                  ? ADVERSARY_LABEL
+                  : provider === 'media'
+                    ? MEDIA_LABEL
+                    : AGENT_SWARM_LABEL;
     return `${label}: ${modelName}`;
   }
   if (provider === 'tour-guide') return TOUR_GUIDE_LABEL;
@@ -511,6 +539,11 @@ export function getAgentInputPlaceholder({
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
       ? 'Ask Planner…'
       : 'Sign in to GHCP or Cursor, or install a Codi model to plan';
+  }
+  if (provider === 'context-manager') {
+    return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
+      ? 'Ask Context Manager…'
+      : 'Sign in to GHCP or Cursor, or install a Codi model to manage context';
   }
   if (provider === 'security') {
     return (hasGhcpModelsReady || hasCursorModelsReady || hasCodiModelsReady)
@@ -605,6 +638,17 @@ export function getAgentProviderSummary({
       ? `${installedModels.length} Codi-backed Planner models`
       : 'Planner needs GHCP, Cursor, or Codi';
   }
+  if (provider === 'context-manager') {
+    if (hasGhcpAccess(copilotState)) {
+      return `${copilotState.models.length} GHCP-backed Context Manager models`;
+    }
+    if (cursorState && hasCursorAccess(cursorState)) {
+      return `${cursorState.models.length} Cursor-backed Context Manager models`;
+    }
+    return installedModels.length
+      ? `${installedModels.length} Codi-backed Context Manager models`
+      : 'Context Manager needs GHCP, Cursor, or Codi';
+  }
   if (provider === 'security') {
     if (hasGhcpAccess(copilotState)) {
       return `${copilotState.models.length} GHCP-backed Security Review models`;
@@ -680,6 +724,7 @@ export function resolveAgentProviderForTask({
   if (isAgentSwarmTaskText(latestUserInput)) return 'swarm';
   if (isResearchTaskText(latestUserInput)) return 'researcher';
   if (isDebuggingTaskText(latestUserInput)) return 'debugger';
+  if (isContextManagerTaskText(latestUserInput)) return 'context-manager';
   if (isPlannerTaskText(latestUserInput)) return 'planner';
   return isTourGuideTaskText(latestUserInput) ? 'tour-guide' : selectedProvider;
 }
@@ -697,7 +742,7 @@ export function resolveRuntimeAgentProvider({
   hasCursorModelsReady?: boolean;
   hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'security' && provider !== 'steering' && provider !== 'adversary' && provider !== 'media' && provider !== 'swarm' && provider !== 'tour-guide') return provider;
+  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'context-manager' && provider !== 'security' && provider !== 'steering' && provider !== 'adversary' && provider !== 'media' && provider !== 'swarm' && provider !== 'tour-guide') return provider;
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
   void hasCodexModelsReady;
