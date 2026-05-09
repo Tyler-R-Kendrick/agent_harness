@@ -73,7 +73,7 @@ export async function handlePersistentMemoryGraphRequest(
     return {
       id: request.id,
       ok: false,
-      state,
+      state: cloneWorkerValue(state),
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -84,5 +84,9 @@ function ok(
   state: PersistentMemoryGraphState,
   payload: PersistentMemoryGraphWorkerPayload,
 ): PersistentMemoryGraphWorkerResponse {
-  return { id, ok: true, state, payload };
+  return { id, ok: true, state: cloneWorkerValue(state), payload: cloneWorkerValue(payload) };
+}
+
+function cloneWorkerValue<T extends PersistentMemoryGraphState | PersistentMemoryGraphWorkerPayload>(value: T): T {
+  return structuredClone(value) as T;
 }
