@@ -356,41 +356,87 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    const wikiPanel = screen.getByRole('region', { name: 'Repository wiki navigation' });
+    const wikiPanel = screen.getByRole('region', { name: 'Wiki explorer' });
     expect(wikiPanel).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Wiki views' })).toBeInTheDocument();
+    expect(within(wikiPanel).queryByRole('navigation', { name: 'Wiki views' })).not.toBeInTheDocument();
+    expect(wikiPanel).not.toHaveTextContent('Wiki Pages');
+    expect(wikiPanel).not.toHaveTextContent('Knowledge Graph');
+    expect(wikiPanel).not.toHaveTextContent('Memory');
+    expect(wikiPanel).not.toHaveTextContent('Files');
+    expect(wikiPanel).not.toHaveTextContent('Plugins');
+    expect(wikiPanel).not.toHaveTextContent('Sessions');
+    expect(wikiPanel).not.toHaveTextContent('Citations');
+    expect(wikiPanel).not.toHaveTextContent(/\d+ pages/i);
+    expect(wikiPanel).not.toHaveTextContent('Generated pages');
+    expect(wikiPanel).not.toHaveTextContent('Entities, relationships');
+    expect(wikiPanel).not.toHaveTextContent('wiki:ws-research:workspace-map');
+    expect(screen.queryByLabelText('Coverage summary')).not.toBeInTheDocument();
+    expect(screen.queryByText(/stored files/)).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Workspace knowledgebase wiki' })).toBeInTheDocument();
+    expect(screen.getByRole('search', { name: 'Wiki search' })).toBeInTheDocument();
     expect(screen.getAllByText('Repo map').length).toBeGreaterThan(0);
     expect(screen.getByRole('tab', { name: 'Wiki Pages' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Knowledge Graph' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Memory Models' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Scoped Chat' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Memory Models' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Scoped Chat' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Sources' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search wiki pages and memories')).toBeInTheDocument();
     expect(screen.getAllByText('wiki:ws-research:workspace-map').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Refresh wiki' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Knowledge Graph' }));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Search wiki pages and memories'), { target: { value: 'capability' } });
+    });
 
-    expect(screen.getByRole('button', { name: 'Global graph' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Local graph' })).toBeInTheDocument();
-    expect(screen.getByText('Depth 2')).toBeInTheDocument();
-    expect(screen.getByText('Backlinks')).toBeInTheDocument();
-    expect(screen.getByText('Outgoing links')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Capability files' })).toBeInTheDocument();
+    expect(screen.getByText('Related pages')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Runtime surfaces' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Page context' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'Knowledge Graph' }));
+    });
+
+    expect(screen.getByRole('button', { name: 'All knowledge' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nearby' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Isolated chunks' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Graph relationship lines')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Graph inspector' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Relationship table' })).toBeInTheDocument();
+    expect(screen.getByText('Incoming relationships')).toBeInTheDocument();
+    expect(screen.getByText('Outgoing relationships')).toBeInTheDocument();
     expect(screen.getByText('Unlinked mentions')).toBeInTheDocument();
-    expect(screen.getByText('Obsidian wikilinks/backlinks/properties')).toBeInTheDocument();
-    expect(screen.getByText('RDF triples')).toBeInTheDocument();
-    expect(screen.getByText('SKOS concept groups')).toBeInTheDocument();
-    expect(screen.getByText('JSON Canvas layout')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select graph node Repo map' })).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Isolated chunks' }));
+    });
+    expect(screen.getByRole('tabpanel', { name: 'Knowledge Graph' })).toHaveTextContent('No isolated chunks match the current graph filter.');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Memory Models' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'Memory' }));
+    });
 
-    expect(screen.getByText('Competitor memory architecture synthesis')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Best-of harness stack' })).toBeInTheDocument();
-    expect(screen.getByText('Hermes-style prompt snapshot')).toBeInTheDocument();
-    expect(screen.getByText('GraphRAG / PathRAG retrieval')).toBeInTheDocument();
-    expect(screen.getByText('Procedural skill memory')).toBeInTheDocument();
-    expect(screen.getByText('Hot/Warm/Cool/Cold activation')).toBeInTheDocument();
-    expect(screen.getByText('Provider adapters')).toBeInTheDocument();
-    expect(screen.getByText('Foundation')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Memory management console' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Memory library' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Memory scopes' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Add memory' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Stored memory manager' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear memory search filter' })).toBeInTheDocument();
+    expect(screen.getByText('No stored memories match "capability".')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Memory scope'), { target: { value: 'project' } });
+      fireEvent.change(screen.getByLabelText('Memory text'), { target: { value: 'Repository wiki search belongs in the wiki page.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Remember' }));
+    });
+    expect(screen.getByText('Repository wiki search belongs in the wiki page.')).toBeInTheDocument();
+    const storedMemoryList = screen.getByRole('region', { name: 'Memory library' });
+    expect(within(storedMemoryList).getByText('project')).toBeInTheDocument();
+    expect(within(storedMemoryList).getByText(/warm · \.memory\/project\.memory\.md/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Forget memory: Repository wiki search belongs in the wiki page.' }));
+    });
+    expect(screen.queryByText('Repository wiki search belongs in the wiki page.')).not.toBeInTheDocument();
   });
 
   it('ignores the removed Agent canvases sidebar panel from persisted state', async () => {

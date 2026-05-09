@@ -4,6 +4,7 @@ import {
   buildRepoWikiPromptContext,
   buildRepoWikiSnapshot,
   isRepoWikiSnapshotsByWorkspace,
+  searchRepoWikiSnapshot,
 } from './repoWiki';
 
 const workspace: TreeNode = {
@@ -86,6 +87,24 @@ describe('repoWiki', () => {
       'capability-files',
       'runtime-surfaces',
     ]);
+    expect(snapshot.pages.map((page) => page.id)).toEqual([
+      'wiki:ws-research:workspace-map',
+      'wiki:ws-research:capability-files',
+      'wiki:ws-research:runtime-surfaces',
+    ]);
+    expect(snapshot.pages[0]).toMatchObject({
+      title: 'Repo map',
+      citationId: 'wiki:ws-research:workspace-map',
+      body: [
+        'Research is organized around 4 stored workspace files, 1 browser page, and 1 active session.',
+        'The generated wiki links this orientation page to capability files and runtime surfaces so repository context can be navigated instead of read as flat notes.',
+      ],
+    });
+    expect(snapshot.pages[0]?.links).toContainEqual(expect.objectContaining({
+      targetId: 'wiki:ws-research:capability-files',
+      targetTitle: 'Capability files',
+      predicate: 'linksTo',
+    }));
     expect(snapshot.sourceCoverage).toEqual({
       workspaceFileCount: 4,
       browserPageCount: 1,
@@ -115,7 +134,7 @@ describe('repoWiki', () => {
     ]);
   });
 
-  it('models wiki memory using Obsidian-style links plus RDF, SKOS, PROV, and canvas metadata', () => {
+  it('models wiki pages, graph relationships, and isolated source chunks from repository evidence', () => {
     const snapshot = buildRepoWikiSnapshot({
       workspace,
       files: [
@@ -125,23 +144,24 @@ describe('repoWiki', () => {
           content: 'Capability files and runtime surfaces need follow-up links.',
           updatedAt: '2026-05-07T00:00:00.000Z',
         },
+        {
+          path: 'docs/unlinked-research.md',
+          content: 'A standalone note with no modeled relationships yet.',
+          updatedAt: '2026-05-07T00:00:00.000Z',
+        },
       ],
       refreshedAt: '2026-05-07T00:00:00.000Z',
     });
 
-    expect(snapshot.knowledgeModel.standards).toEqual([
-      'Obsidian wikilinks/backlinks/properties',
-      'RDF triples',
-      'SKOS concept groups',
-      'PROV provenance',
-      'JSON Canvas layout',
-    ]);
     expect(snapshot.knowledgeModel.graphModes).toMatchObject({
-      globalNodeCount: 8,
+      globalNodeCount: 14,
       localFocusId: 'wiki:ws-research:workspace-map',
       localDepth: 2,
     });
-    expect(snapshot.knowledgeModel.nodes.map((node) => node.id)).toEqual([
+    expect(snapshot.knowledgeModel.nodes.map((node) => node.id)).toContain(
+      'source:docs/unlinked-research.md',
+    );
+    expect(snapshot.knowledgeModel.nodes.slice(0, 8).map((node) => node.id)).toEqual([
       'wiki:ws-research:workspace-map',
       'wiki:ws-research:capability-files',
       'wiki:ws-research:runtime-surfaces',
@@ -164,6 +184,18 @@ describe('repoWiki', () => {
       kind: 'provenance',
       predicate: 'prov:wasDerivedFrom',
     }));
+    expect(snapshot.knowledgeModel.links).toContainEqual(expect.objectContaining({
+      from: 'source:notes/orientation.md',
+      to: 'wiki:ws-research:capability-files',
+      kind: 'mention',
+      predicate: 'mentions',
+    }));
+    expect(snapshot.knowledgeModel.nodes.find((node) => node.id === 'source:docs/unlinked-research.md')).toMatchObject({
+      label: 'docs/unlinked-research.md',
+      isIsolated: true,
+      inbound: 0,
+      outbound: 0,
+    });
     expect(snapshot.knowledgeModel.groups.map((group) => group.id)).toEqual([
       'orientation',
       'capability',
@@ -184,55 +216,54 @@ describe('repoWiki', () => {
     });
   });
 
-  it('aggregates competitor memory patterns into one harness architecture roadmap', () => {
+  it('turns memory architecture patterns into a merged stored-memory model users can manage', () => {
     const snapshot = buildRepoWikiSnapshot({
       workspace,
-      files: workspaceFiles,
+      files: [
+        ...workspaceFiles,
+        {
+          path: '.memory/session.memory.md',
+          content: '# Session Memory\n\n- Follow-up should start from the repository wiki search bar',
+          updatedAt: '2026-05-07T00:00:00.000Z',
+        },
+      ],
       refreshedAt: '2026-05-07T00:00:00.000Z',
     });
 
-    expect(snapshot.memoryArchitecture.designGoal).toContain('one harness memory stack');
-    expect(snapshot.memoryArchitecture.layers.map((layer) => layer.id)).toEqual([
-      'prompt-snapshot',
-      'session-search',
-      'graph-rag',
-      'wiki-vault',
-      'procedural-skills',
-      'activation-tiers',
-      'provider-adapters',
-    ]);
-    expect(snapshot.memoryArchitecture.layers[0]).toMatchObject({
-      title: 'Hermes-style prompt snapshot',
-      inspiration: 'Hermes Agent MEMORY.md/USER.md',
-      retrievalMode: 'always injected, bounded, curated',
+    expect(snapshot.managedMemory.summary).toBe('2 stored memories are available across prompt, graph, wiki, and session retrieval.');
+    expect(snapshot.managedMemory.entries).toContainEqual(expect.objectContaining({
+      id: '.memory/session.memory.md:3',
+      scope: 'session',
+      text: 'Follow-up should start from the repository wiki search bar',
+      activationTier: 'hot',
+      retrievalModes: ['prompt-snapshot', 'session-search', 'graph-rag', 'wiki-search'],
+      sourcePath: '.memory/session.memory.md',
+      lineNumber: 3,
+    }));
+    expect(snapshot.managedMemory.instructions.some((instruction) => instruction.includes('New memories are written as scoped markdown factoids'))).toBe(true);
+    expect(snapshot.managedMemory.architectureSourcePaths).toContain('agent-browser/src/services/graphKnowledge.ts');
+  });
+
+  it('searches generated wiki pages, graph nodes, and stored memories from one scoped search index', () => {
+    const snapshot = buildRepoWikiSnapshot({
+      workspace,
+      files: [
+        ...workspaceFiles,
+        {
+          path: '.memory/session.memory.md',
+          content: '# Session Memory\n\n- Follow-up should start from the repository wiki search bar',
+          updatedAt: '2026-05-07T00:00:00.000Z',
+        },
+      ],
+      refreshedAt: '2026-05-07T00:00:00.000Z',
     });
-    expect(snapshot.memoryArchitecture.layers.find((layer) => layer.id === 'graph-rag')).toMatchObject({
-      title: 'GraphRAG / PathRAG retrieval',
-      storage: 'typed local graph with paths, claims, facts, events, communities, and hot memory blocks',
-    });
-    expect(snapshot.memoryArchitecture.layers.find((layer) => layer.id === 'procedural-skills')?.capabilities).toContain(
-      'convert successful workflows and corrections into reusable skills',
-    );
-    expect(snapshot.memoryArchitecture.gaps).toContain(
-      'Add a pluggable provider seam so external semantic stores augment, not replace, the core prompt snapshot.',
-    );
-    expect(snapshot.memoryArchitecture.roadmap.map((item) => item.phase)).toEqual([
-      'Foundation',
-      'Retrieval',
-      'Learning loop',
-      'Provider bridge',
+
+    expect(searchRepoWikiSnapshot(snapshot, 'search bar').map((result) => result.kind)).toEqual([
+      'memory',
+      'page',
+      'graph',
     ]);
-    expect(snapshot.memoryArchitecture.sourcePaths).toEqual([
-      'reference_impl/features/workspace-model/decisions/ADR-002-four-tier-memory-model.md',
-      'docs/superpowers/plans/2026-04-24-workspace-memory.md',
-      'docs/superpowers/plans/2026-05-08-graph-knowledge.md',
-      'docs/superpowers/plans/2026-05-08-persistent-memory-graphs.md',
-      'harness-core/src/memory.ts',
-      'agent-browser/src/services/workspaceMemory.ts',
-      'agent-browser/src/services/graphKnowledge.ts',
-      'agent-browser/src/services/persistentMemoryGraph.ts',
-      'ext/harness/agent-skills/examples/default-workspace-skills/memory/SKILL.md',
-    ]);
+    expect(searchRepoWikiSnapshot(snapshot, 'capability').map((result) => result.title)).toContain('Capability files');
   });
 
   it('formats compact prompt context with stable citation IDs', () => {
@@ -245,9 +276,9 @@ describe('repoWiki', () => {
 
     expect(context).toContain('Repository wiki: Research');
     expect(context).toContain('Source coverage: 4 files, 1 browser pages, 1 sessions');
-    expect(context).toContain('Architecture views: Workspace runtime architecture');
-    expect(context).toContain('Memory model: Obsidian wikilinks/backlinks/properties, RDF triples, SKOS concept groups, PROV provenance, JSON Canvas layout');
-    expect(context).toContain('Memory architectures: prompt-snapshot, session-search, graph-rag, wiki-vault, procedural-skills, activation-tiers, provider-adapters');
+    expect(context).toContain('Wiki pages: Repo map, Capability files, Runtime surfaces');
+    expect(context).toContain('Graph: 12 nodes, 13 relationships');
+    expect(context).toContain('Stored memories: 1');
     expect(context).toContain('Citations: wiki:ws-research:workspace-map, wiki:ws-research:capability-files, wiki:ws-research:runtime-surfaces');
   });
 
@@ -260,7 +291,7 @@ describe('repoWiki', () => {
 
     expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': snapshot })).toBe(true);
     expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': { ...snapshot, citations: [{ id: 42 }] } })).toBe(false);
-    expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': { ...snapshot, memoryArchitecture: { layers: [] } } })).toBe(false);
+    expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': { ...snapshot, managedMemory: { entries: [{}] } } })).toBe(false);
     expect(isRepoWikiSnapshotsByWorkspace([{ 'ws-research': snapshot }])).toBe(false);
   });
 });

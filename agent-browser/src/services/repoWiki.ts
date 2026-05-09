@@ -1,4 +1,9 @@
 import type { TreeNode, WorkspaceFile } from '../types';
+import {
+  MEMORY_FILE_DEFINITIONS,
+  parseWorkspaceMemoryFiles,
+  type WorkspaceMemoryScope,
+} from './workspaceMemory';
 
 export interface RepoWikiSourceCoverage {
   workspaceFileCount: number;
@@ -16,6 +21,25 @@ export interface RepoWikiSection {
   summary: string;
   sourcePaths: string[];
   facts: string[];
+}
+
+export interface RepoWikiPageLink {
+  targetId: string;
+  targetTitle: string;
+  predicate: string;
+  label: string;
+}
+
+export interface RepoWikiPage {
+  id: string;
+  title: string;
+  summary: string;
+  body: string[];
+  sourcePaths: string[];
+  facts: string[];
+  links: RepoWikiPageLink[];
+  backlinks: RepoWikiPageLink[];
+  citationId: string;
 }
 
 export interface RepoWikiDiagramEdge {
@@ -61,6 +85,7 @@ export interface RepoWikiKnowledgeNode {
   inbound: number;
   outbound: number;
   localDepth: number;
+  isIsolated?: boolean;
   citationId?: string;
 }
 
@@ -117,6 +142,43 @@ export interface RepoWikiKnowledgeModel {
   canvas: RepoWikiCanvasLayout;
 }
 
+export type RepoWikiMemoryActivationTier = 'hot' | 'warm' | 'cool' | 'cold';
+export type RepoWikiMemoryRetrievalMode = 'prompt-snapshot' | 'session-search' | 'graph-rag' | 'wiki-search';
+
+export interface RepoWikiManagedMemoryEntry {
+  id: string;
+  scope: WorkspaceMemoryScope;
+  text: string;
+  sourcePath: string;
+  lineNumber: number;
+  activationTier: RepoWikiMemoryActivationTier;
+  retrievalModes: RepoWikiMemoryRetrievalMode[];
+  linkedPageIds: string[];
+}
+
+export interface RepoWikiManagedMemoryScope {
+  scope: WorkspaceMemoryScope;
+  title: string;
+  description: string;
+  entryCount: number;
+}
+
+export interface RepoWikiManagedMemory {
+  summary: string;
+  instructions: string[];
+  entries: RepoWikiManagedMemoryEntry[];
+  scopes: RepoWikiManagedMemoryScope[];
+  architectureSourcePaths: string[];
+}
+
+export interface RepoWikiSearchResult {
+  id: string;
+  kind: 'page' | 'graph' | 'memory';
+  title: string;
+  detail: string;
+  citationId?: string;
+}
+
 export type RepoWikiMemoryArchitectureLayerId =
   | 'prompt-snapshot'
   | 'session-search'
@@ -160,11 +222,13 @@ export interface RepoWikiSnapshot {
   summary: string;
   sourceCoverage: RepoWikiSourceCoverage;
   sections: RepoWikiSection[];
+  pages: RepoWikiPage[];
   diagrams: RepoWikiDiagram[];
   onboarding: RepoWikiOnboardingStep[];
   citations: RepoWikiCitation[];
   knowledgeModel: RepoWikiKnowledgeModel;
   memoryArchitecture: RepoWikiMemoryArchitectureSynthesis;
+  managedMemory: RepoWikiManagedMemory;
 }
 
 export interface BuildRepoWikiSnapshotInput {
@@ -274,7 +338,30 @@ function withLinkCounts(nodes: RepoWikiKnowledgeNode[], links: RepoWikiKnowledge
     ...node,
     inbound: links.filter((link) => link.to === node.id).length,
     outbound: links.filter((link) => link.from === node.id).length,
+  })).map((node) => ({
+    ...node,
+    isIsolated: node.inbound === 0 && node.outbound === 0,
   }));
+}
+
+function normalizePathId(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function sourceNodeId(path: string): string {
+  return `source:${normalizePathId(path)}`;
+}
+
+function sourceNodeLabel(path: string): string {
+  return normalizePathId(path);
+}
+
+function sourceTagsForPath(path: string): string[] {
+  if (isPluginPath(path)) return ['capability', 'plugin'];
+  if (isHookPath(path)) return ['capability', 'hook'];
+  if (isMemoryPath(path)) return ['memory'];
+  if (isSettingsPath(path)) return ['capability', 'settings'];
+  return ['source'];
 }
 
 function buildKnowledgeModel({
@@ -299,7 +386,7 @@ function buildKnowledgeModel({
   const capabilityFilesId = capabilityFilesCitation?.id ?? `wiki:${workspace.id}:capability-files`;
   const runtimeSurfacesId = runtimeSurfacesCitation?.id ?? `wiki:${workspace.id}:runtime-surfaces`;
 
-  const nodeSeeds: RepoWikiKnowledgeNode[] = [
+  const baseNodeSeeds: RepoWikiKnowledgeNode[] = [
     {
       id: workspaceMapId,
       label: 'Repo map',
@@ -404,6 +491,23 @@ function buildKnowledgeModel({
     },
   ];
 
+  const fileNodeSeeds: RepoWikiKnowledgeNode[] = files.map((file, index) => ({
+    id: sourceNodeId(file.path),
+    label: sourceNodeLabel(file.path),
+    kind: 'source',
+    tags: sourceTagsForPath(file.path),
+    properties: [
+      { key: 'path', value: normalizePathId(file.path) },
+      { key: 'updatedAt', value: file.updatedAt },
+      { key: 'contentLength', value: String(file.content.length) },
+    ],
+    inbound: 0,
+    outbound: 0,
+    localDepth: 2 + (index % 2),
+  }));
+
+  const nodeSeeds = [...baseNodeSeeds, ...fileNodeSeeds];
+
   const links: RepoWikiKnowledgeLink[] = [
     {
       from: workspaceMapId,
@@ -440,6 +544,33 @@ function buildKnowledgeModel({
     { from: 'source:runtime-surfaces', to: runtimeSurfacesId, label: 'derives', predicate: 'prov:wasDerivedFrom', kind: 'provenance', directed: true, citationId: runtimeSurfacesId },
   ];
 
+  for (const file of files) {
+    const fileNodeId = sourceNodeId(file.path);
+    if (isPluginPath(file.path) || isHookPath(file.path) || isMemoryPath(file.path) || isSettingsPath(file.path)) {
+      links.push({
+        from: fileNodeId,
+        to: capabilityFilesId,
+        label: 'grounds',
+        predicate: 'grounds',
+        kind: 'provenance',
+        directed: true,
+        citationId: capabilityFilesId,
+      });
+    }
+    for (const section of sections) {
+      if (!containsCaseInsensitive(file.content, section.title)) continue;
+      links.push({
+        from: fileNodeId,
+        to: citations.find((citation) => citation.label === section.title)?.id ?? `wiki:${workspace.id}:${section.id}`,
+        label: 'mentions',
+        predicate: 'mentions',
+        kind: 'mention',
+        directed: true,
+        citationId: citations.find((citation) => citation.label === section.title)?.id,
+      });
+    }
+  }
+
   const groups: RepoWikiKnowledgeGroup[] = [
     { id: 'orientation', label: 'Orientation', color: '#60a5fa', query: 'tag:#orientation OR path:Wiki/Repo map.md' },
     { id: 'capability', label: 'Capability', color: '#a78bfa', query: 'tag:#capability OR path:.agents' },
@@ -473,6 +604,200 @@ function buildKnowledgeModel({
       cards: canvasCards,
     },
   };
+}
+
+function pageBodyForSection(
+  section: RepoWikiSection,
+  snapshotFacts: RepoWikiSourceCoverage,
+  workspace: TreeNode,
+): string[] {
+  if (section.id === 'workspace-map') {
+    return [
+      `${workspace.name} is organized around ${snapshotFacts.workspaceFileCount} stored workspace files, ${snapshotFacts.browserPageCount} browser page${snapshotFacts.browserPageCount === 1 ? '' : 's'}, and ${snapshotFacts.sessionCount} active session${snapshotFacts.sessionCount === 1 ? '' : 's'}.`,
+      'The generated wiki links this orientation page to capability files and runtime surfaces so repository context can be navigated instead of read as flat notes.',
+    ];
+  }
+  if (section.id === 'capability-files') {
+    return [
+      `Capability files include ${snapshotFacts.pluginCount} plugin${snapshotFacts.pluginCount === 1 ? '' : 's'}, ${snapshotFacts.hookCount} hook${snapshotFacts.hookCount === 1 ? '' : 's'}, ${snapshotFacts.memoryFileCount} memory note${snapshotFacts.memoryFileCount === 1 ? '' : 's'}, and ${snapshotFacts.settingsFileCount} settings file${snapshotFacts.settingsFileCount === 1 ? '' : 's'}.`,
+      'These files are modeled as graph sources so plugins, hooks, settings, and stored memories stay connected to the pages that explain them.',
+    ];
+  }
+  return [
+    `${section.summary} Runtime pages and sessions are linked back into the wiki so current browser state is not disconnected from durable knowledge.`,
+    'Use this page to see which active surfaces can cite wiki pages, source paths, and graph relationships.',
+  ];
+}
+
+function buildRepoWikiPages({
+  workspace,
+  sections,
+  citations,
+  knowledgeModel,
+  sourceCoverage,
+}: {
+  workspace: TreeNode;
+  sections: RepoWikiSection[];
+  citations: RepoWikiCitation[];
+  knowledgeModel: RepoWikiKnowledgeModel;
+  sourceCoverage: RepoWikiSourceCoverage;
+}): RepoWikiPage[] {
+  const nodeLabelById = new Map(knowledgeModel.nodes.map((node) => [node.id, node.label]));
+  return sections.map((section, index) => {
+    const citation = citations[index] ?? buildCitation(workspace.id, section);
+    const outgoing = knowledgeModel.links
+      .filter((link) => link.from === citation.id && link.to.startsWith('wiki:'))
+      .map((link) => ({
+        targetId: link.to,
+        targetTitle: nodeLabelById.get(link.to) ?? link.to,
+        predicate: link.predicate,
+        label: link.label,
+      }));
+    const backlinks = knowledgeModel.links
+      .filter((link) => link.to === citation.id && link.from.startsWith('wiki:'))
+      .map((link) => ({
+        targetId: link.from,
+        targetTitle: nodeLabelById.get(link.from) ?? link.from,
+        predicate: link.predicate,
+        label: link.label,
+      }));
+    return {
+      id: citation.id,
+      title: section.title,
+      summary: section.summary,
+      body: pageBodyForSection(section, sourceCoverage, workspace),
+      sourcePaths: section.sourcePaths,
+      facts: section.facts,
+      links: outgoing,
+      backlinks,
+      citationId: citation.id,
+    };
+  });
+}
+
+function activationTierForScope(scope: WorkspaceMemoryScope): RepoWikiMemoryActivationTier {
+  if (scope === 'session' || scope === 'workspace') return 'hot';
+  if (scope === 'project') return 'warm';
+  if (scope === 'user') return 'cool';
+  return 'cold';
+}
+
+function buildManagedMemory(files: readonly WorkspaceFile[], pages: readonly RepoWikiPage[]): RepoWikiManagedMemory {
+  const entries = parseWorkspaceMemoryFiles(files).map((entry): RepoWikiManagedMemoryEntry => {
+    const linkedPageIds = pages
+      .filter((page) => (
+        containsCaseInsensitive(entry.text, page.title)
+        || page.facts.some((fact) => containsCaseInsensitive(entry.text, fact))
+      ))
+      .map((page) => page.id);
+    return {
+      id: `${entry.path}:${entry.lineNumber}`,
+      scope: entry.scope,
+      text: entry.text,
+      sourcePath: entry.path,
+      lineNumber: entry.lineNumber,
+      activationTier: activationTierForScope(entry.scope),
+      retrievalModes: ['prompt-snapshot', 'session-search', 'graph-rag', 'wiki-search'],
+      linkedPageIds,
+    };
+  });
+  const scopes = MEMORY_FILE_DEFINITIONS.map((definition) => ({
+    scope: definition.scope,
+    title: definition.title,
+    description: definition.description,
+    entryCount: entries.filter((entry) => entry.scope === definition.scope).length,
+  }));
+  return {
+    summary: `${entries.length} stored memor${entries.length === 1 ? 'y is' : 'ies are'} available across prompt, graph, wiki, and session retrieval.`,
+    instructions: [
+      'New memories are written as scoped markdown factoids in .memory files.',
+      'Stored memories are searchable from the wiki and connected to graph-backed pages when their text mentions modeled knowledge.',
+      'Forgetting a memory removes the factoid from its source memory file.',
+    ],
+    entries,
+    scopes,
+    architectureSourcePaths: MEMORY_ARCHITECTURE_SOURCE_PATHS,
+  };
+}
+
+function tokenizeSearch(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+function searchScore(value: string, tokens: readonly string[]): number {
+  const haystack = value.toLowerCase();
+  return tokens.reduce((score, token) => score + (haystack.includes(token) ? 1 : 0), 0);
+}
+
+export function searchRepoWikiSnapshot(snapshot: RepoWikiSnapshot, query: string): RepoWikiSearchResult[] {
+  const tokens = tokenizeSearch(query);
+  const pageResults = snapshot.pages.map((page, index) => ({
+    result: {
+      id: page.id,
+      kind: 'page' as const,
+      title: page.title,
+      detail: page.summary,
+      citationId: page.citationId,
+    },
+    index,
+    score: tokens.length === 0 ? 1 : (
+      searchScore(page.title, tokens) * 3
+      + searchScore([
+        page.summary,
+        ...page.body,
+        ...page.facts,
+        ...page.sourcePaths,
+      ].join(' '), tokens)
+    ),
+  }));
+  const memoryResults = snapshot.managedMemory.entries.map((entry, index) => ({
+    result: {
+      id: entry.id,
+      kind: 'memory' as const,
+      title: `${entry.scope} memory`,
+      detail: entry.text,
+    },
+    index,
+    score: tokens.length === 0 ? 1 : searchScore(`${entry.scope} ${entry.text} ${entry.sourcePath}`, tokens),
+  }));
+  const graphResults = snapshot.knowledgeModel.nodes.map((node, index) => ({
+    result: {
+      id: node.id,
+      kind: 'graph' as const,
+      title: node.label,
+      detail: [
+        node.tags.join(' '),
+        ...node.properties.map((property) => `${property.key} ${property.value}`),
+      ].join(' '),
+      citationId: node.citationId,
+    },
+    index,
+    score: tokens.length === 0 ? 0 : (
+      searchScore(node.label, tokens) * 3
+      + searchScore([
+        node.tags.join(' '),
+        ...node.properties.map((property) => `${property.key} ${property.value}`),
+      ].join(' '), tokens)
+    ),
+  }));
+
+  return [...memoryResults, ...pageResults, ...graphResults]
+    .filter((candidate) => candidate.score > 0)
+    .sort((left, right) => (
+      right.score - left.score
+      || kindRank(left.result.kind) - kindRank(right.result.kind)
+      || left.index - right.index
+    ))
+    .map((candidate) => candidate.result);
+}
+
+function kindRank(kind: RepoWikiSearchResult['kind']): number {
+  if (kind === 'memory') return 0;
+  if (kind === 'page') return 1;
+  return 2;
 }
 
 function buildMemoryArchitectureSynthesis(): RepoWikiMemoryArchitectureSynthesis {
@@ -761,7 +1086,15 @@ export function buildRepoWikiSnapshot({
     sessions,
     artifactTitles,
   });
+  const pages = buildRepoWikiPages({
+    workspace,
+    sections,
+    citations,
+    knowledgeModel,
+    sourceCoverage,
+  });
   const memoryArchitecture = buildMemoryArchitectureSynthesis();
+  const managedMemory = buildManagedMemory(files, pages);
 
   return {
     id: `wiki:${workspace.id}`,
@@ -771,11 +1104,13 @@ export function buildRepoWikiSnapshot({
     summary: `${workspace.name} wiki covers ${files.length} stored files, ${browserPages.length} browser pages, and ${sessions.length} sessions.`,
     sourceCoverage,
     sections,
+    pages,
     diagrams,
     onboarding,
     citations,
     knowledgeModel,
     memoryArchitecture,
+    managedMemory,
   };
 }
 
@@ -785,10 +1120,9 @@ export function buildRepoWikiPromptContext(snapshot: RepoWikiSnapshot | null | u
     `Repository wiki: ${snapshot.workspaceName}`,
     snapshot.summary,
     `Source coverage: ${snapshot.sourceCoverage.workspaceFileCount} files, ${snapshot.sourceCoverage.browserPageCount} browser pages, ${snapshot.sourceCoverage.sessionCount} sessions`,
-    `Sections: ${snapshot.sections.map((section) => section.title).join(', ')}`,
-    `Architecture views: ${snapshot.diagrams.map((diagram) => diagram.title).join(', ')}`,
-    `Memory model: ${snapshot.knowledgeModel.standards.join(', ')}`,
-    `Memory architectures: ${snapshot.memoryArchitecture.layers.map((layer) => layer.id).join(', ')}`,
+    `Wiki pages: ${snapshot.pages.map((page) => page.title).join(', ')}`,
+    `Graph: ${snapshot.knowledgeModel.nodes.length} nodes, ${snapshot.knowledgeModel.links.length} relationships`,
+    `Stored memories: ${snapshot.managedMemory.entries.length}`,
     `Citations: ${snapshot.citations.map((citation) => citation.id).join(', ')}`,
   ].join('\n');
 }
@@ -821,6 +1155,29 @@ function isRepoWikiSection(value: unknown): value is RepoWikiSection {
     && typeof value.summary === 'string'
     && isStringArray(value.sourcePaths)
     && isStringArray(value.facts);
+}
+
+function isRepoWikiPageLink(value: unknown): value is RepoWikiPageLink {
+  return isRecord(value)
+    && typeof value.targetId === 'string'
+    && typeof value.targetTitle === 'string'
+    && typeof value.predicate === 'string'
+    && typeof value.label === 'string';
+}
+
+function isRepoWikiPage(value: unknown): value is RepoWikiPage {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.title === 'string'
+    && typeof value.summary === 'string'
+    && isStringArray(value.body)
+    && isStringArray(value.sourcePaths)
+    && isStringArray(value.facts)
+    && Array.isArray(value.links)
+    && value.links.every(isRepoWikiPageLink)
+    && Array.isArray(value.backlinks)
+    && value.backlinks.every(isRepoWikiPageLink)
+    && typeof value.citationId === 'string';
 }
 
 function isRepoWikiDiagram(value: unknown): value is RepoWikiDiagram {
@@ -872,6 +1229,7 @@ function isRepoWikiKnowledgeNode(value: unknown): value is RepoWikiKnowledgeNode
     && Number(value.outbound) >= 0
     && Number.isInteger(value.localDepth)
     && Number(value.localDepth) >= 0
+    && (value.isIsolated === undefined || typeof value.isIsolated === 'boolean')
     && (value.citationId === undefined || typeof value.citationId === 'string');
 }
 
@@ -977,6 +1335,40 @@ function isRepoWikiMemoryArchitectureSynthesis(value: unknown): value is RepoWik
     && isStringArray(value.sourcePaths);
 }
 
+function isRepoWikiManagedMemoryEntry(value: unknown): value is RepoWikiManagedMemoryEntry {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && ['global', 'user', 'project', 'workspace', 'session'].includes(String(value.scope))
+    && typeof value.text === 'string'
+    && typeof value.sourcePath === 'string'
+    && Number.isInteger(value.lineNumber)
+    && Number(value.lineNumber) > 0
+    && ['hot', 'warm', 'cool', 'cold'].includes(String(value.activationTier))
+    && Array.isArray(value.retrievalModes)
+    && value.retrievalModes.every((mode) => ['prompt-snapshot', 'session-search', 'graph-rag', 'wiki-search'].includes(String(mode)))
+    && isStringArray(value.linkedPageIds);
+}
+
+function isRepoWikiManagedMemoryScope(value: unknown): value is RepoWikiManagedMemoryScope {
+  return isRecord(value)
+    && ['global', 'user', 'project', 'workspace', 'session'].includes(String(value.scope))
+    && typeof value.title === 'string'
+    && typeof value.description === 'string'
+    && Number.isInteger(value.entryCount)
+    && Number(value.entryCount) >= 0;
+}
+
+function isRepoWikiManagedMemory(value: unknown): value is RepoWikiManagedMemory {
+  return isRecord(value)
+    && typeof value.summary === 'string'
+    && isStringArray(value.instructions)
+    && Array.isArray(value.entries)
+    && value.entries.every(isRepoWikiManagedMemoryEntry)
+    && Array.isArray(value.scopes)
+    && value.scopes.every(isRepoWikiManagedMemoryScope)
+    && isStringArray(value.architectureSourcePaths);
+}
+
 export function isRepoWikiSnapshot(value: unknown): value is RepoWikiSnapshot {
   return isRecord(value)
     && typeof value.id === 'string'
@@ -987,6 +1379,8 @@ export function isRepoWikiSnapshot(value: unknown): value is RepoWikiSnapshot {
     && isRepoWikiSourceCoverage(value.sourceCoverage)
     && Array.isArray(value.sections)
     && value.sections.every(isRepoWikiSection)
+    && Array.isArray(value.pages)
+    && value.pages.every(isRepoWikiPage)
     && Array.isArray(value.diagrams)
     && value.diagrams.every(isRepoWikiDiagram)
     && Array.isArray(value.onboarding)
@@ -994,7 +1388,8 @@ export function isRepoWikiSnapshot(value: unknown): value is RepoWikiSnapshot {
     && Array.isArray(value.citations)
     && value.citations.every(isRepoWikiCitation)
     && isRepoWikiKnowledgeModel(value.knowledgeModel)
-    && isRepoWikiMemoryArchitectureSynthesis(value.memoryArchitecture);
+    && isRepoWikiMemoryArchitectureSynthesis(value.memoryArchitecture)
+    && isRepoWikiManagedMemory(value.managedMemory);
 }
 
 export function isRepoWikiSnapshotsByWorkspace(value: unknown): value is Record<string, RepoWikiSnapshot> {
