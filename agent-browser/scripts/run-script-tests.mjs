@@ -88,6 +88,9 @@ async function main() {
   assert.match(visualSmokeScript, /Chaptered sessions/);
   assert.match(visualSmokeScript, /Enable chaptered sessions/);
   assert.match(visualSmokeScript, /Enable browser notifications/);
+  assert.match(visualSmokeScript, /git init/);
+  assert.match(visualSmokeScript, /git status --short/);
+  assert.match(visualSmokeScript, /2026-05-09-git-stub-terminal-visual-smoke\.png/);
   assert.match(visualSmokeScript, /Typed run SDK/);
   assert.match(visualSmokeScript, /Structured event stream/);
   assert.match(visualSmokeScript, /Reconnect cursor/);
@@ -136,6 +139,11 @@ async function main() {
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
   assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
+  assert.match(agentBrowserPackageJson, /"smoke:git-stub": "node scripts\/git-stub-smoke\.mjs"/);
+  assert.match(agentBrowserPackageJson, /"@agent-harness\/git-stub": "0\.1\.0"/);
+  const gitStubPackageJson = JSON.parse(await readScript('lib/git-stub/package.json'));
+  assert.equal(gitStubPackageJson.name, '@agent-harness/git-stub');
+  assert.equal(gitStubPackageJson.scripts.test, 'node ../../scripts/run-package-bin.mjs vitest run');
   const previewExtensionPackageJson = JSON.parse(
     await readScript('tools/agent-browser-preview-extension/extension/package.json'),
   );

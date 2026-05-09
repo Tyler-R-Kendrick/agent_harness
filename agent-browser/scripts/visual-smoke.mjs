@@ -25,6 +25,7 @@ const branchingConversationsOutputPath = path.resolve(repoRoot, 'docs/superpower
 const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
 const persistentMemoryGraphOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-persistent-memory-graphs-visual-smoke.png');
 const graphKnowledgeOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-graph-knowledge-visual-smoke.png');
+const gitStubOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-09-git-stub-terminal-visual-smoke.png');
 const dashboardCanvasViewportOutputPaths = [
   {
     name: 'mobile',
@@ -1286,6 +1287,24 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: multitaskOutputPath, fullPage: true });
+    await page.evaluate(() => {
+      sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
+    });
+    await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: navigationTimeoutMs });
+    await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
+    await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
+    await page.getByRole('tab', { name: 'Terminal mode' }).click();
+    const bashInput = page.getByLabel('Bash input');
+    await expect(bashInput).toBeVisible({ timeout: shellTimeoutMs });
+    await bashInput.fill('git init');
+    await bashInput.press('Enter');
+    await expect(page.getByLabel('Terminal output')).toContainText('Initialized empty git-stub repository', {
+      timeout: shellTimeoutMs,
+    });
+    await bashInput.fill('git status --short');
+    await bashInput.press('Enter');
+    await expect(page.getByLabel('Terminal output')).toContainText('?? settings.json', { timeout: shellTimeoutMs });
+    await page.screenshot({ path: gitStubOutputPath, fullPage: true });
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
@@ -1293,6 +1312,7 @@ async function main() {
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
     console.log(`agent-browser dashboard canvas smoke passed: ${dashboardCanvasOutputPath}`);
+    console.log(`agent-browser git stub smoke passed: ${gitStubOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
     console.log(`agent-browser spec-driven development smoke passed: ${specDrivenDevelopmentOutputPath}`);
     console.log(`agent-browser persistent memory graphs smoke passed: ${persistentMemoryGraphOutputPath}`);

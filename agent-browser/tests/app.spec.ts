@@ -1008,6 +1008,25 @@ test('terminal refocuses input after command execution', async ({ page }) => {
   await page.screenshot({ path: 'docs/screenshots/just-bash-command.png', fullPage: true });
 });
 
+test('terminal supports git-stub commands in the just-bash filesystem', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.goto('/');
+
+  await switchToTerminalMode(page);
+  const bashInput = page.getByLabel('Bash input');
+  await expect(bashInput).toBeVisible();
+
+  await bashInput.fill('git init');
+  await bashInput.press('Enter');
+  await expect(page.getByLabel('Terminal output')).toContainText('Initialized empty git-stub repository');
+
+  await bashInput.fill('git status --short');
+  await bashInput.press('Enter');
+  await expect(page.getByLabel('Terminal output')).toContainText('?? settings.json');
+
+  assertNoRuntimeErrors();
+});
+
 test('captures just-bash TUI pwd command', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   await page.goto('/');

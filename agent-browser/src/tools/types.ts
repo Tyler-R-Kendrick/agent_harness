@@ -1,3 +1,4 @@
+import type { IFileSystem } from 'just-bash/browser';
 import type { ChatMessage } from '../types';
 
 export type CliHistoryEntry = {
@@ -20,7 +21,13 @@ export type TerminalExecutorContext = {
   appendSharedMessages: (entries: ChatMessage[]) => void;
   getSessionBash: (sessionId: string) => {
     exec: (command: string) => Promise<{ stdout?: string; stderr: string; exitCode: number }>;
-    fs: { getAllPaths: () => string[] };
+    cwd?: string;
+    fs: {
+      getAllPaths: IFileSystem['getAllPaths'];
+      readFile?: IFileSystem['readFile'];
+      writeFile?: IFileSystem['writeFile'];
+      mkdir?: IFileSystem['mkdir'];
+    };
   };
   notifyTerminalFsPathsChanged: (sessionId: string, paths: string[]) => void;
   sessionId: string;
