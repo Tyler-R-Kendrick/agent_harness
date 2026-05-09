@@ -1,0 +1,21 @@
+slug: airtop
+name: Airtop
+vendor: Airtop
+segment: cloud-browser-automation-platform
+product_path: competition/airtop
+design_path: competition/airtop/design
+features_path: competition/airtop/features
+marketing_path: competition/airtop/marketing
+gossip_path: competition/airtop/gossip
+snapshot_date: 2026-05-09
+primary_sources:
+  - https://docs.airtop.ai/
+  - https://www.airtop.ai/pricing
+  - https://www.airtop.ai/automations
+secondary_sources:
+  - https://www.reddit.com/r/n8n/comments/1mzni9c
+  - https://www.reddit.com/r/automation/comments/1mp63qd
+positioning: "Cloud browsers, natural-language AI APIs, shared auth, live view, scraping, and a gallery of packaged automations for business workflows."
+customer_model: "Freemium SaaS with monthly plans, session concurrency limits, published-agent limits, credits, proxy support, and enterprise compliance/support."
+competitive_threat_level: high
+notes: "Threatens agent-browser where buyers want business automation templates, shared auth, and embedded monitoring more than local-first inspectability."

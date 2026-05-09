@@ -1,0 +1,23 @@
+slug: steel
+name: Steel.dev
+vendor: Steel / Nen Labs
+segment: open-source-browser-agent-infrastructure
+product_path: competition/steel
+design_path: competition/steel/design
+features_path: competition/steel/features
+marketing_path: competition/steel/marketing
+gossip_path: competition/steel/gossip
+snapshot_date: 2026-05-09
+primary_sources:
+  - https://steel.dev/
+  - https://docs.steel.dev/
+  - https://docs.steel.dev/overview/intro-to-steel
+  - https://github.com/steel-dev/steel-browser
+secondary_sources:
+  - https://github.com/steel-dev/steel-browser/issues
+  - https://github.com/steel-dev/steel-browser/issues/97
+  - https://www.reddit.com/r/LocalLLaMA/comments/1h1ni3c
+positioning: "Open-source headless browser API and cloud browser fleet for AI agents, with sessions, scraping formats, cookies, proxies, CAPTCHA support, and live debugging."
+customer_model: "Open-source adoption plus Steel Cloud usage plans, browser-hour credits, proxy bandwidth, CAPTCHA solves, and self-hosting."
+competitive_threat_level: high
+notes: "Strong threat if agent-browser needs a cloud/self-host bridge with AI-agent-specific browser primitives and OSS community gravity."
