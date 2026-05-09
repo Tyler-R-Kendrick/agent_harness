@@ -20,9 +20,9 @@ const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/age
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const dashboardCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas.png');
+const historyTimelineOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-history-unified-timeline.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
-const branchingConversationsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-branching-conversations-visual-smoke.png');
 const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
 const persistentMemoryGraphOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-persistent-memory-graphs-visual-smoke.png');
 const graphKnowledgeOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-graph-knowledge-visual-smoke.png');
@@ -294,6 +294,8 @@ async function main() {
         { length: 260 },
         (_, index) => `SCREENSHOT_TRACE_${index}: visual smoke captured layout metrics, accessibility landmarks, and context-manager tool cache proof.`,
       ).join('\n');
+      const notesFileOpId = 'file-op:ws-research:notes-md:codex:1:20260508T012100000Z';
+      const notesFileSnapshotId = 'file-snapshot:ws-research:notes-md:root:20260508T012000000Z';
       localStorage.setItem('agent-browser.workspace-root', JSON.stringify({
         id: 'root',
         name: 'Root',
@@ -517,6 +519,43 @@ async function main() {
           },
         ],
       }));
+      localStorage.setItem('agent-browser.workspace-file-crdt-histories-by-workspace', JSON.stringify({
+        [workspaceId]: {
+          'notes.md': {
+            version: 1,
+            workspaceId,
+            path: 'notes.md',
+            snapshots: [
+              {
+                id: notesFileSnapshotId,
+                workspaceId,
+                path: 'notes.md',
+                opId: null,
+                content: 'draft',
+                createdAt: '2026-05-08T01:20:00.000Z',
+              },
+            ],
+            operations: [
+              {
+                id: notesFileOpId,
+                workspaceId,
+                path: 'notes.md',
+                actorId: 'codex',
+                sequence: 1,
+                createdAt: '2026-05-08T01:21:00.000Z',
+                parentOpId: null,
+                index: 5,
+                deleteCount: 0,
+                deleteText: '',
+                insertText: '\nready',
+              },
+            ],
+            headOpId: notesFileOpId,
+            actorSequences: { user: 0, codex: 1 },
+            updatedAt: '2026-05-08T01:21:00.000Z',
+          },
+        },
+      }));
       localStorage.setItem('agent-browser.run-checkpoint-state', JSON.stringify({
         checkpoints: [
           {
@@ -695,6 +734,61 @@ async function main() {
             createdAt: '2026-05-08T01:10:00.000Z',
           },
         },
+      }));
+      const actionBaseSnapshot = {
+        workspaceId,
+        workspaceName: 'Research',
+        activePanel: 'workspaces',
+        activeSessionIds: [sessionId],
+        openTabIds: [],
+        mountedSessionFsIds: [sessionId, subthreadSessionId],
+        sessionIds: [sessionId, subthreadSessionId],
+        sessionNamesById: {
+          [sessionId]: 'Evaluation session',
+          [subthreadSessionId]: 'Branch: Agent proof',
+        },
+        conversationBranchIds: ['subthread:ws-research:agent-proof:merged:subthread-ws-research-agent-proof:ws-research:20260508T010500000Z'],
+        checkpointIds: ['checkpoint:visual-eval-session:2026-05-07T02:30:00.000Z:suspended'],
+        browserAgentRunIds: ['visual-eval-run:running:3'],
+        scheduledAutomationIds: ['daily-workspace-audit:daily:2026-05-06T09:00:00.000Z'],
+        chapterIds: ['chapter:visual-eval-session:1'],
+        workspaceFileVersionIds: [`notes.md:${notesFileOpId}:2026-05-08T01:21:00.000Z`],
+      };
+      const actionModelsSnapshot = {
+        ...actionBaseSnapshot,
+        activePanel: 'models',
+      };
+      const actionHistorySnapshot = {
+        ...actionModelsSnapshot,
+        activePanel: 'history',
+      };
+      localStorage.setItem('agent-browser.workspace-action-history-state', JSON.stringify({
+        version: 1,
+        cursorByWorkspace: {
+          [workspaceId]: 'action:ws-research:20260508T012002000Z:2',
+        },
+        actions: [
+          {
+            id: 'action:ws-research:20260508T012000000Z:1',
+            workspaceId,
+            workspaceName: 'Research',
+            label: 'Opened Models',
+            changedSlices: ['activePanel'],
+            beforeSnapshot: actionBaseSnapshot,
+            afterSnapshot: actionModelsSnapshot,
+            createdAt: '2026-05-08T01:20:00.000Z',
+          },
+          {
+            id: 'action:ws-research:20260508T012002000Z:2',
+            workspaceId,
+            workspaceName: 'Research',
+            label: 'Opened History',
+            changedSlices: ['activePanel'],
+            beforeSnapshot: actionModelsSnapshot,
+            afterSnapshot: actionHistorySnapshot,
+            createdAt: '2026-05-08T01:20:02.000Z',
+          },
+        ],
       }));
       localStorage.setItem('agent-browser.artifacts-by-workspace', JSON.stringify({
         [workspaceId]: [
@@ -947,47 +1041,62 @@ async function main() {
     });
     await page.screenshot({ path: evaluationOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Back to chat' }).click();
+    await page.getByRole('button', { name: 'Models', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'History' }).click();
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('button', { name: 'Suspend/resume checkpoints' })).toBeVisible({
+    const historyGraph = page.getByRole('region', { name: 'Workspace git graph' });
+    await expect(historyGraph).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Scrollable workspace history')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Move back on workspace history timeline' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByText('Approval before deployment').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText(/operator approval/i).first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('button', { name: 'Branching conversations' })).toBeVisible({
+    await expect(historyGraph.getByText(/App actions: Opened Models/).first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('File change: notes.md')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('Approval before deployment').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText(/operator approval/i).first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('Squash merge: Agent proof branch')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('conversation/research/agent-proof', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('SDK launch smoke')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('Daily workspace audit').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyGraph.getByText('Squash merge: Evaluation session')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    const branchingConversations = page.getByLabel('Branching conversations');
-    await expect(branchingConversations.getByText('Conversation branches')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(branchingConversations.getByText('conversation/research/agent-proof')).toBeVisible({
+    await expect(page.getByRole('button', { name: 'Suspend/resume checkpoints' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Branching conversations' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Typed run SDK' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Chaptered sessions' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Scheduled automations' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Open history detail for Squash merge: Evaluation session' }).click();
+    await expect(page.getByRole('region', { name: 'Selected history detail' }).getByText('Read-only chat')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByText('Captured branch proof and returned the latest summary to main.').first()).toBeVisible({
+    await expect(page.getByLabel('Read-only chat session').getByText('Captured visual evidence and completed the run.')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await page.screenshot({ path: branchingConversationsOutputPath, fullPage: true });
-    await expect(page.getByRole('button', { name: 'Typed run SDK' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('SDK launch smoke')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('Structured event stream is live.')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText('Reconnect cursor 3 is ready for clients.')).toBeVisible({
+    await page.getByRole('button', { name: 'Open history detail for File change: notes.md' }).click();
+    await expect(page.getByRole('region', { name: 'Selected history detail' }).getByText('Read-only file')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByRole('button', { name: 'Chaptered sessions' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByRole('heading', { name: /Chapter 1: Visual validation and checkpoint review/ })).toBeVisible({
+    await expect(page.getByText(/Materialized from CRDT snapshot/)).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByLabel('Read-only file version')).toContainText(/draft\s+ready/, { timeout: shellTimeoutMs });
+    await page.screenshot({ path: historyTimelineOutputPath, fullPage: true });
+    const historyDetail = page.getByRole('region', { name: 'Selected history detail' });
+    await historyGraph.getByRole('button', { name: /Inspect branch history for App actions: Opened Models/ }).click();
+    await expect(historyDetail.getByText('Opened History').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await historyGraph.getByRole('button', { name: 'Inspect branch history for Squash merge: Agent proof branch' }).click();
+    await expect(historyDetail.getByText('Captured branch proof and returned the latest summary to main.').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByText(/evidence:output\/playwright\/agent-browser-visual-smoke\.png/)).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await expect(page.getByText(/tool-output:visual-tool/)).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
+    await historyGraph.getByRole('button', { name: 'Inspect branch history for SDK launch smoke' }).click();
+    await expect(historyDetail.getByText('Structured event stream is live.')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyDetail.getByText('Reconnect cursor 3 is ready for clients.')).toBeVisible({ timeout: shellTimeoutMs });
+    await historyGraph.getByRole('button', { name: 'Inspect branch history for Squash merge: Evaluation session' }).click();
+    await expect(historyDetail.getByText(/evidence:output\/playwright\/agent-browser-visual-smoke\.png/)).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(historyDetail.getByText(/tool-output:visual-tool/)).toBeVisible({ timeout: shellTimeoutMs });
+    await historyGraph.getByRole('button', { name: 'Inspect branch history for Daily workspace audit' }).click();
+    await expect(historyDetail.getByText(/next run: 2026-05-06T09:00:00.000Z/)).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: typedSdkOutputPath, fullPage: true });
-    await expect(page.getByRole('button', { name: 'Scheduled automations' })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await expect(page.getByText('Daily workspace audit').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByText(/review inbox/i).first()).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Models', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Providers contents').getByText('Cursor', { exact: true })).toBeVisible({
@@ -1377,6 +1486,7 @@ async function main() {
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser dashboard canvas smoke passed: ${dashboardCanvasOutputPath}`);
     console.log(`agent-browser git stub smoke passed: ${gitStubOutputPath}`);
+    console.log(`agent-browser history timeline smoke passed: ${historyTimelineOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
     console.log(`agent-browser spec-driven development smoke passed: ${specDrivenDevelopmentOutputPath}`);
     console.log(`agent-browser persistent memory graphs smoke passed: ${persistentMemoryGraphOutputPath}`);
