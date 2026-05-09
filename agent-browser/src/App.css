@@ -3506,6 +3506,61 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 8px;
   background: #ffffff;
 }
+.artifact-native-media {
+  flex: 1;
+  min-height: 220px;
+  width: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+}
+.artifact-native-text-renderer,
+.artifact-renderer-fallback {
+  min-height: 220px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.34);
+}
+.artifact-native-text-renderer {
+  overflow: auto;
+  padding: 12px;
+}
+.artifact-native-text-renderer pre {
+  margin: 0;
+  color: #d4d4d8;
+  font-family: 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.artifact-renderer-fallback {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+.artifact-renderer-fallback-copy {
+  display: grid;
+  gap: 6px;
+}
+.artifact-renderer-fallback-copy strong {
+  color: #f3f4f6;
+  font-size: 13px;
+}
+.artifact-renderer-fallback-copy p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.artifact-renderer-fallback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .artifact-source-field {
   border-radius: 8px;
 }
@@ -4988,8 +5043,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .history-list > :last-child {
   border-bottom: 0;
 }
-.repo-wiki-panel,
-.agent-canvases-panel {
+.repo-wiki-panel {
   display: grid;
   gap: 12px;
   align-content: start;
@@ -4997,44 +5051,35 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .repo-wiki-nav-panel {
   gap: 10px;
 }
-.repo-wiki-topbar,
-.agent-canvases-topbar {
+.repo-wiki-topbar {
   align-items: flex-start;
 }
 .repo-wiki-summary,
 .repo-wiki-card,
-.repo-wiki-citation,
-.agent-canvas-summary,
-.agent-canvas-card {
+.repo-wiki-citation {
   min-width: 0;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 6px;
   background: rgba(15, 23, 42, 0.34);
 }
-.repo-wiki-summary,
-.agent-canvas-summary {
+.repo-wiki-summary {
   display: grid;
   gap: 9px;
   padding: 10px;
 }
-.repo-wiki-summary strong,
-.agent-canvas-summary strong {
+.repo-wiki-summary strong {
   color: #f3f4f6;
   font-size: 12.5px;
   line-height: 1.35;
 }
 .repo-wiki-metrics,
-.repo-wiki-node-row,
-.agent-canvas-metrics,
-.agent-canvas-card-meta {
+.repo-wiki-node-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 .repo-wiki-metrics span,
-.repo-wiki-node-row span,
-.agent-canvas-metrics span,
-.agent-canvas-card-meta span {
+.repo-wiki-node-row span {
   min-width: 0;
   padding: 2px 6px;
   border: 1px solid rgba(125, 211, 252, 0.22);
@@ -5047,40 +5092,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .repo-wiki-section-list,
 .repo-wiki-diagram-list,
 .repo-wiki-onboarding-list,
-.repo-wiki-citation-list,
-.agent-canvas-list {
+.repo-wiki-citation-list {
   display: grid;
   gap: 8px;
 }
-.repo-wiki-card,
-.agent-canvas-card {
+.repo-wiki-card {
   display: grid;
   gap: 7px;
   padding: 9px;
 }
-.repo-wiki-card-header,
-.agent-canvas-card-header {
+.repo-wiki-card-header {
   display: grid;
   gap: 4px;
 }
-.agent-canvas-card-header {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-}
-.agent-canvas-card-title {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-.repo-wiki-card strong,
-.agent-canvas-card strong {
+.repo-wiki-card strong {
   min-width: 0;
   color: #f3f4f6;
   font-size: 12px;
   font-weight: 650;
 }
-.repo-wiki-card p,
-.agent-canvas-card p {
+.repo-wiki-card p {
   margin: 0;
   color: var(--text-soft);
   font-size: 11.5px;
@@ -5096,8 +5127,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .repo-wiki-card li,
 .repo-wiki-card code,
-.repo-wiki-citation code,
-.agent-canvas-card code {
+.repo-wiki-citation code {
   display: block;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -5105,14 +5135,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-family: 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10.5px;
   line-height: 1.35;
-}
-.agent-canvas-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.agent-canvas-empty {
-  border-style: dashed;
 }
 .repo-wiki-diagram li {
   display: grid;

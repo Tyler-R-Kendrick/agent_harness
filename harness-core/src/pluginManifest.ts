@@ -4,6 +4,7 @@ import { hookPointForEvent, type HarnessHookEventDescriptor } from './hooks.js';
 import type {
   HarnessPaneItemDefinition,
   HarnessRendererDefinition,
+  HarnessRendererImplementationRuntime,
 } from './renderers.js';
 
 export const HARNESS_PLUGIN_MANIFEST_FILENAME = 'agent-harness.plugin.json';
@@ -217,6 +218,13 @@ const SAFE_COMPONENT_PATH_PATTERN = /^(?!\/|[A-Za-z]:)(?!.*(?:^|[\\/])\.\.(?:[\\
 const FILE_EXTENSION_PATTERN = /^\.[A-Za-z0-9][A-Za-z0-9.+_-]*$/;
 const MIME_TYPE_PATTERN = /^[a-z0-9.+-]+\/(?:[a-z0-9.+-]+|\*)$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
+const RENDERER_IMPLEMENTATION_RUNTIMES = new Set<HarnessRendererImplementationRuntime>([
+  'react',
+  'web-component',
+  'iframe',
+  'wasi-preview2',
+  'native-browser',
+]);
 const CAPABILITY_KINDS = new Set<HarnessPluginCapabilityKind>([
   'tool',
   'command',
@@ -392,6 +400,63 @@ const rendererComponentSchema = z.object({
   export: z.string().regex(EXPORT_NAME_PATTERN, 'Renderer exports must be JavaScript export names.').optional(),
 });
 
+const rendererImplementationComponentSchema = z.object({
+  module: z.string().regex(
+    RELATIVE_PACKAGE_PATH_PATTERN,
+    'Renderer implementation component modules must be relative paths inside the plugin package.',
+  ),
+  export: z.string().regex(EXPORT_NAME_PATTERN, 'Renderer implementation exports must be JavaScript export names.').optional(),
+});
+
+const rendererImplementationSchema = z.object({
+  id: z.string().regex(EVENT_NAME_PATTERN, 'Renderer implementation ids must be lowercase dot- or kebab-case.'),
+  label: z.string().optional(),
+  runtime: z.string(),
+  module: z.string().regex(
+    RELATIVE_PACKAGE_PATH_PATTERN,
+    'Renderer implementation modules must be relative paths inside the plugin package.',
+  ).optional(),
+  component: rendererImplementationComponentSchema.optional(),
+  wasi: z.object({
+    world: z.string().min(1, 'WASI renderer implementations require a WIT world name.'),
+    wit: z.string().regex(
+      RELATIVE_PACKAGE_PATH_PATTERN,
+      'WASI renderer WIT paths must be relative paths inside the plugin package.',
+    ).optional(),
+  }).optional(),
+}).superRefine((value, context) => {
+  if (!RENDERER_IMPLEMENTATION_RUNTIMES.has(value.runtime as HarnessRendererImplementationRuntime)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['runtime'],
+      message: `Renderer implementation runtime "${value.runtime}" is not part of the core renderer standard.`,
+    });
+  }
+  if (value.runtime === 'wasi-preview2') {
+    if (!value.module) {
+      context.addIssue({
+        code: 'custom',
+        path: ['module'],
+        message: 'WASI renderer implementations require a component module.',
+      });
+    }
+    if (!value.wasi) {
+      context.addIssue({
+        code: 'custom',
+        path: ['wasi'],
+        message: 'WASI renderer implementations require a WIT world name.',
+      });
+    }
+  }
+  if ((value.runtime === 'react' || value.runtime === 'web-component') && !value.component) {
+    context.addIssue({
+      code: 'custom',
+      path: ['component'],
+      message: `${value.runtime} renderer implementations require a component reference.`,
+    });
+  }
+});
+
 const rendererTargetSchema = z.object({
   kind: z.enum(['file', 'artifact', 'message', 'workspace-item']),
   fileNames: z.array(z.string().min(1)).optional(),
@@ -418,9 +483,18 @@ const rendererSchema = z.object({
   label: z.string().min(1, 'Renderer label is required.'),
   description: z.string().optional(),
   target: rendererTargetSchema,
-  component: rendererComponentSchema,
+  component: rendererComponentSchema.optional(),
+  implementations: z.array(rendererImplementationSchema).optional(),
   paneItem: paneItemSchema.optional(),
   priority: z.number().optional(),
+}).superRefine((value, context) => {
+  if (!value.component && !value.implementations?.length) {
+    context.addIssue({
+      code: 'custom',
+      path: ['component'],
+      message: 'Renderer contributions require a component or at least one renderer implementation.',
+    });
+  }
 });
 
 const pluginManifestSchema = z.object({

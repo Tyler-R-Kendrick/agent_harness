@@ -303,9 +303,12 @@ export {
   type HarnessPaneItemDefinition,
   type HarnessRendererComponent,
   type HarnessRendererDefinition,
+  type HarnessRendererImplementation,
+  type HarnessRendererImplementationRuntime,
   type HarnessRendererTarget,
   type HarnessRendererTargetInput,
   type HarnessRendererTargetKind,
+  type HarnessWasiRendererImplementation,
 } from './renderers.js';
 export {
   HARNESS_PLUGIN_MANIFEST_FILENAME,

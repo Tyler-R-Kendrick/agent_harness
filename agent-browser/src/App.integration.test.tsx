@@ -694,9 +694,28 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
     expect(screen.getByText(artifactCase.title)).toBeInTheDocument();
     expect(screen.getByText(`//artifacts/artifact-${artifactCase.kind}/${artifactCase.path}`)).toBeInTheDocument();
-    if (artifactCase.mediaType === 'text/html' || artifactCase.mediaType === 'image/svg+xml') {
+    if (
+      artifactCase.mediaType === 'text/html'
+      || artifactCase.mediaType === 'image/svg+xml'
+      || artifactCase.mediaType === 'application/pdf'
+      || artifactCase.mediaType.startsWith('image/')
+    ) {
       expect(screen.getByTitle(`${artifactCase.title}: ${artifactCase.path}`)).toBeInTheDocument();
+    } else if (
+      artifactCase.mediaType.startsWith('text/')
+      || artifactCase.mediaType === 'application/json'
+    ) {
+      const nativeTextRenderer = screen.getByRole('region', { name: 'Native text renderer' });
+      const contentTokens = artifactCase.content.trim().split(/\s+/);
+      expect(nativeTextRenderer).toHaveTextContent(contentTokens[0]);
+      expect(nativeTextRenderer).toHaveTextContent(contentTokens.at(-1) ?? '');
     } else {
+      expect(screen.getByRole('region', { name: 'Bounded artifact chat' })).toHaveTextContent(
+        `No installed or native renderer is bound to ${artifactCase.mediaType}.`,
+      );
+      expect(screen.getByRole('button', { name: 'Open bounded chat for artifact' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Artifact content')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Show raw artifact source' }));
       expect(screen.getByLabelText('Artifact content')).toHaveValue(artifactCase.content);
     }
   });
@@ -5187,24 +5206,25 @@ styles:
     expect(screen.getByRole('region', { name: 'Repository wiki' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '4', altKey: true });
-    expect(screen.getByRole('region', { name: 'Agent canvases' })).toBeInTheDocument();
-
-    fireEvent.keyDown(window, { key: '5', altKey: true });
+    expect(screen.queryByRole('region', { name: 'Agent canvases' })).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Multitask subagents' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '6', altKey: true });
+    fireEvent.keyDown(window, { key: '5', altKey: true });
     expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '7', altKey: true });
+    fireEvent.keyDown(window, { key: '6', altKey: true });
     expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '8', altKey: true });
+    fireEvent.keyDown(window, { key: '7', altKey: true });
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '9', altKey: true });
+    fireEvent.keyDown(window, { key: '8', altKey: true });
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Account'));
+    fireEvent.keyDown(window, { key: '9', altKey: true });
+    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });

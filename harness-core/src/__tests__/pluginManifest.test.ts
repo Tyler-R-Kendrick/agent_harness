@@ -146,6 +146,66 @@ describe('plugin manifest standards', () => {
     }).issues).toContain('File extensions must include a leading dot.');
   });
 
+  it('validates portable media renderer implementations in plugin manifests', () => {
+    const manifest = {
+      ...pluginManifest,
+      capabilities: [
+        ...pluginManifest.capabilities,
+        { kind: 'renderer', id: 'workflow-canvas.media-renderer' },
+      ],
+      renderers: [{
+        id: 'workflow-canvas.media-renderer',
+        label: 'Workflow canvas media renderer',
+        description: 'Portable renderer implementations for workflow canvas artifacts.',
+        target: {
+          kind: 'file',
+          mimeTypes: ['application/vnd.agent-harness.workflow-canvas+json'],
+        },
+        implementations: [{
+          id: 'workflow-canvas.wasi',
+          label: 'WASI component renderer',
+          runtime: 'wasi-preview2',
+          module: './dist/workflow-canvas-renderer.wasm',
+          wasi: {
+            world: 'agent-harness:media-renderer/render@0.1.0',
+            wit: './wit/media-renderer.wit',
+          },
+        }, {
+          id: 'workflow-canvas.react',
+          label: 'React fallback renderer',
+          runtime: 'react',
+          component: {
+            module: './src/WorkflowCanvasRenderer.tsx',
+            export: 'WorkflowCanvasRenderer',
+          },
+        }],
+      }],
+    };
+
+    expect(validateHarnessPluginManifest(manifest)).toEqual({ success: true, issues: [] });
+    expect(parseHarnessPluginManifest(manifest)).toEqual(manifest);
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        implementations: [{
+          ...manifest.renderers[0].implementations[0],
+          module: '../workflow-canvas-renderer.wasm',
+        }],
+      }],
+    }).issues).toContain('Renderer implementation modules must be relative paths inside the plugin package.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        implementations: [{
+          ...manifest.renderers[0].implementations[0],
+          wasi: { world: '' },
+        }],
+      }],
+    }).issues).toContain('WASI renderer implementations require a WIT world name.');
+  });
+
   it('validates VS Code-style activation events and contribution points for provider extensions', () => {
     const manifest = {
       ...pluginManifest,

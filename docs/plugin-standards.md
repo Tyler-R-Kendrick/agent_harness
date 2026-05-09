@@ -78,8 +78,10 @@ compiled-in product panels.
 ## Renderer and pane contributions
 
 Plugins may contribute custom renderers and pane items, similar to editor
-extension contribution points. A renderer declares which target it can handle
-and which component module the host should load:
+extension contribution points. A renderer declares which media target it can
+handle and one or more compliant implementations the host can load. Legacy
+single-component renderers are still accepted, but portable renderers should
+prefer implementation entries:
 
 ```json
 {
@@ -95,7 +97,19 @@ and which component module the host should load:
       "fileExtensions": [".pdf"],
       "mimeTypes": ["application/pdf"]
     },
-    "component": { "module": "./src/PdfRenderer.tsx", "export": "PdfRenderer" }
+    "implementations": [{
+      "id": "media.pdf.wasi",
+      "runtime": "wasi-preview2",
+      "module": "./dist/pdf-renderer.wasm",
+      "wasi": {
+        "world": "agent-harness:media-renderer/render@0.1.0",
+        "wit": "./wit/media-renderer.wit"
+      }
+    }, {
+      "id": "media.pdf.react",
+      "runtime": "react",
+      "component": { "module": "./src/PdfRenderer.tsx", "export": "PdfRenderer" }
+    }]
   }],
   "paneItems": [{
     "id": "design-md.designer-pane",
@@ -110,9 +124,13 @@ and which component module the host should load:
 
 Targets support `fileNames`, `fileExtensions`, `mimeTypes` including wildcards
 such as `audio/*`, `artifactKinds`, `messageTypes`, and `workspaceItemTypes`.
-Runtime plugins can also register renderers directly through
-`context.renderers`, which is useful for programmatic contributions such as an
-audio visualizer or a generated artifact viewer.
+Renderer implementation runtimes currently include `wasi-preview2`, `react`,
+`web-component`, `iframe`, and host-provided `native-browser`. Runtime plugins
+can also register renderers directly through `context.renderers`, which is
+useful for programmatic contributions such as an audio visualizer or a generated
+artifact viewer. When no installed renderer or native browser renderer matches,
+Agent Browser opens the artifact in a bounded chat session and exposes raw
+source as an optional secondary view.
 
 ## External plugin formats
 

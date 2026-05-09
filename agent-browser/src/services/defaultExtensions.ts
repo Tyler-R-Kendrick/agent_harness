@@ -7,6 +7,7 @@ import {
   type HarnessPlugin,
   type HarnessPluginManifest,
   type HarnessPluginMarketplaceManifest,
+  type HarnessRendererDefinition,
   type HarnessToolDefinition,
   type InferenceMessagesPayload,
   type MemoryMessage,
@@ -55,6 +56,7 @@ export interface DefaultExtensionSummary {
   hookCount: number;
   toolCount: number;
   commandCount: number;
+  rendererCount: number;
 }
 
 export interface DefaultExtensionDependencyPlan {
@@ -70,6 +72,7 @@ export interface DefaultExtensionRuntime {
   hooks: HarnessHook<InferenceMessagesPayload<MemoryMessage>>[];
   tools: HarnessToolDefinition[];
   commands: Command[];
+  renderers: HarnessRendererDefinition[];
 }
 
 export interface CreateDefaultExtensionRuntimeOptions {
@@ -144,6 +147,7 @@ const EMPTY_EXTENSION_SUMMARY: DefaultExtensionSummary = Object.freeze({
   hookCount: 0,
   toolCount: 0,
   commandCount: 0,
+  rendererCount: 0,
 });
 
 export async function createDefaultExtensionRuntime(
@@ -177,6 +181,13 @@ export async function createDefaultExtensionRuntime(
   ]);
 
   await context.plugins.loadAll(installedExtensionIds.map((extensionId) => pluginFactories.get(extensionId)?.()).filter(isHarnessPlugin));
+  const installedManifestRenderers = DEFAULT_EXTENSION_MANIFESTS
+    .filter((extension) => installedExtensionIds.includes(extension.manifest.id))
+    .flatMap((extension) => extension.manifest.renderers ?? []);
+  const renderers = dedupeRenderers([
+    ...installedManifestRenderers,
+    ...context.renderers.list(),
+  ]);
 
   return {
     extensions: DEFAULT_EXTENSION_MANIFESTS,
@@ -185,6 +196,7 @@ export async function createDefaultExtensionRuntime(
     hooks: context.hooks.list(),
     tools: context.tools.list(),
     commands: context.commands.list(),
+    renderers,
   };
 }
 
@@ -195,6 +207,7 @@ export function summarizeDefaultExtensionRuntime(runtime: DefaultExtensionRuntim
     hookCount: runtime.hooks.length,
     toolCount: runtime.tools.length,
     commandCount: runtime.commands.length,
+    rendererCount: runtime.renderers.length,
   };
 }
 
@@ -406,4 +419,12 @@ function readStringArray(value: unknown): string[] {
 
 function isHarnessPlugin(plugin: HarnessPlugin | undefined): plugin is HarnessPlugin {
   return Boolean(plugin);
+}
+
+function dedupeRenderers(renderers: readonly HarnessRendererDefinition[]): HarnessRendererDefinition[] {
+  const byId = new Map<string, HarnessRendererDefinition>();
+  for (const renderer of renderers) {
+    if (!byId.has(renderer.id)) byId.set(renderer.id, renderer);
+  }
+  return [...byId.values()];
 }

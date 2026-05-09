@@ -16,5 +16,7 @@ Higgsfield Canvas-style creative/media pipeline board:
   JSON.
 - `/workflow <goal>` drafts a prompt for a new DSL-backed canvas.
 
-The first slice is intentionally headless and testable. The renderer and pane
-item manifest contributions are placeholders for the future visual canvas UI.
+The first slice is intentionally headless and testable. Its manifest now
+declares the workflow canvas media type plus portable renderer implementations:
+a WASI Preview 2 component entry for cross-language renderer packages and a
+React fallback entry for the Agent Browser host.

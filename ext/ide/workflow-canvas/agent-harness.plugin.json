@@ -56,13 +56,30 @@
       "label": "Workflow canvas",
       "description": "Renders Agent Harness workflow canvas artifacts.",
       "target": {
-        "kind": "artifact",
-        "artifactKinds": ["workflow-canvas"]
+        "kind": "file",
+        "mimeTypes": ["application/vnd.agent-harness.workflow-canvas+json"]
       },
-      "component": {
-        "module": "./src/index.ts",
-        "export": "WorkflowCanvasRenderer"
-      }
+      "implementations": [
+        {
+          "id": "workflow-canvas.wasi",
+          "label": "Portable WASI component",
+          "runtime": "wasi-preview2",
+          "module": "./dist/workflow-canvas-renderer.wasm",
+          "wasi": {
+            "world": "agent-harness:media-renderer/render@0.1.0",
+            "wit": "./wit/media-renderer.wit"
+          }
+        },
+        {
+          "id": "workflow-canvas.react",
+          "label": "React workbench",
+          "runtime": "react",
+          "component": {
+            "module": "./src/index.ts",
+            "export": "WorkflowCanvasRenderer"
+          }
+        }
+      ]
     }
   ],
   "paneItems": [
@@ -73,8 +90,8 @@
       "rendererId": "workflow-canvas.renderer",
       "preferredLocation": "main",
       "when": {
-        "kind": "artifact",
-        "artifactKinds": ["workflow-canvas"]
+        "kind": "file",
+        "mimeTypes": ["application/vnd.agent-harness.workflow-canvas+json"]
       },
       "component": {
         "module": "./src/index.ts",
