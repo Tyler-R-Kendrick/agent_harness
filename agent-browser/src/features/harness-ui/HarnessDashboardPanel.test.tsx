@@ -3,132 +3,151 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createDefaultHarnessAppSpec } from './harnessSpec';
 import { HarnessDashboardPanel } from './HarnessDashboardPanel';
+import type { HarnessKnowledgeSummary } from './HarnessJsonRenderer';
 
-function createSpecWithSessionLayout() {
+const knowledge: HarnessKnowledgeSummary = {
+  metrics: [
+    { label: 'graph nodes', value: 12, detail: '8 edges' },
+    { label: 'steering', value: 2, detail: '3 files' },
+  ],
+  highlights: ['Latest steering: keep the canvas clean'],
+};
+
+function createSpecWithWidgetLayout() {
   const spec = createDefaultHarnessAppSpec({
     workspaceId: 'ws-research',
     workspaceName: 'Research',
   });
-  spec.elements['main-dashboard'].props = {
-    ...(spec.elements['main-dashboard'].props ?? {}),
-    sessionWidgetLayouts: {
-      s1: {
-        position: { col: 0, row: 0 },
-        size: { cols: 5, rows: 3 },
-      },
-    },
+  spec.elements['session-summary-widget'].props = {
+    ...(spec.elements['session-summary-widget'].props ?? {}),
+    position: { col: 0, row: 0 },
+    size: { cols: 5, rows: 3 },
+  };
+  spec.elements['knowledge-widget'].props = {
+    ...(spec.elements['knowledge-widget'].props ?? {}),
+    position: { col: 8, row: 0 },
+    size: { cols: 5, rows: 3 },
   };
   return spec;
 }
 
 describe('HarnessDashboardPanel', () => {
-  it('renders only session-linked widgets on the dashboard canvas', () => {
-    const onOpenSession = vi.fn();
+  it('renders dashboard spec widgets through the JSON renderer instead of per-session cards', () => {
+    const onOpenWidgetSession = vi.fn();
 
     render(
       <HarnessDashboardPanel
-        spec={createSpecWithSessionLayout()}
+        spec={createSpecWithWidgetLayout()}
         workspaceName="Research"
         sessions={[
-          {
-            id: 's1',
-            name: 'Session 1',
-            messages: [
-              { role: 'user', content: 'Fix the dashboard UX.' },
-              { role: 'assistant', content: 'Replacing the old generated widget cards.' },
-            ],
-            assets: [{ path: 'output/playwright/agent-browser-visual-smoke.png', kind: 'file' }],
-          },
+          { id: 's1', name: 'Session 1', messages: [{ role: 'user', content: 'Fix the dashboard UX.' }] },
           { id: 's2', name: 'Session 2', messages: [] },
         ]}
         browserPages={[{ id: 'b1', title: 'Docs', url: 'https://example.com' }]}
         files={[{ path: 'AGENTS.md', kind: 'agents' }]}
-        onCreateSessionWidget={vi.fn()}
-        onOpenSession={onOpenSession}
+        knowledge={knowledge}
+        onOpenWidgetSession={onOpenWidgetSession}
       />,
     );
 
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
     expect(within(dashboard).getByRole('heading', { name: 'Research harness' })).toBeInTheDocument();
-    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
-    expect(within(dashboard).getByRole('article', { name: 'Session 2 widget' })).toBeInTheDocument();
-    expect(within(dashboard).queryByRole('article', { name: 'Conversation summary widget' })).not.toBeInTheDocument();
-    expect(within(dashboard).queryByRole('article', { name: 'Browser pages widget' })).not.toBeInTheDocument();
-    expect(within(dashboard).queryByText('Page: Docs')).not.toBeInTheDocument();
-    expect(within(dashboard).queryByText('File: AGENTS.md')).not.toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Knowledge widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByText('Latest steering: keep the canvas clean')).toBeInTheDocument();
+    expect(within(dashboard).queryByRole('article', { name: 'Session 1 widget' })).not.toBeInTheDocument();
+    expect(within(dashboard).queryByRole('article', { name: 'Session 2 widget' })).not.toBeInTheDocument();
 
-    fireEvent.click(within(dashboard).getByRole('button', { name: 'Open Session 1' }));
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Open Session summary widget session' }));
 
-    expect(onOpenSession).toHaveBeenCalledWith('s1');
+    expect(onOpenWidgetSession).toHaveBeenCalledWith('session-summary-widget');
   });
 
-  it('creates a linked session widget instead of prompting for generated widget content', () => {
-    const onCreateSessionWidget = vi.fn();
-
+  it('does not render a separate titlebar or button strip above the infinite canvas', () => {
     render(
       <HarnessDashboardPanel
-        spec={createSpecWithSessionLayout()}
-        workspaceName="Research"
-        sessions={[]}
-        browserPages={[]}
-        files={[]}
-        onCreateSessionWidget={onCreateSessionWidget}
-      />,
-    );
-
-    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
-    fireEvent.click(within(dashboard).getAllByRole('button', { name: 'New session widget' })[0]);
-
-    expect(onCreateSessionWidget).toHaveBeenCalledTimes(1);
-    expect(screen.queryByLabelText('Describe widget')).not.toBeInTheDocument();
-  });
-
-  it('moves and resizes session widgets with pointer gestures', () => {
-    const onPatchElement = vi.fn();
-
-    render(
-      <HarnessDashboardPanel
-        spec={createSpecWithSessionLayout()}
+        spec={createSpecWithWidgetLayout()}
         workspaceName="Research"
         sessions={[{ id: 's1', name: 'Session 1' }]}
         browserPages={[]}
         files={[]}
-        onCreateSessionWidget={vi.fn()}
+        knowledge={knowledge}
+        onPatchElement={vi.fn()}
+      />,
+    );
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    const canvas = screen.getByLabelText('Infinite session canvas');
+
+    expect(dashboard.querySelector('.harness-dashboard-titlebar')).toBeNull();
+    expect(within(canvas).getByRole('heading', { name: 'Research harness' })).toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'New session widget' })).not.toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument();
+  });
+
+  it('opens a right-click canvas menu for creating a bound widget session', () => {
+    const onCreateDashboardWidget = vi.fn();
+
+    render(
+      <HarnessDashboardPanel
+        spec={createSpecWithWidgetLayout()}
+        workspaceName="Research"
+        sessions={[]}
+        browserPages={[]}
+        files={[]}
+        knowledge={knowledge}
+        onCreateDashboardWidget={onCreateDashboardWidget}
+      />,
+    );
+
+    const canvas = screen.getByLabelText('Infinite session canvas');
+    fireEvent.contextMenu(canvas, { clientX: 220, clientY: 160 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
+
+    expect(onCreateDashboardWidget).toHaveBeenCalledWith(expect.objectContaining({
+      col: expect.any(Number),
+      row: expect.any(Number),
+    }));
+  });
+
+  it('moves and resizes dashboard widgets by patching widget element props', () => {
+    const onPatchElement = vi.fn();
+
+    render(
+      <HarnessDashboardPanel
+        spec={createSpecWithWidgetLayout()}
+        workspaceName="Research"
+        sessions={[{ id: 's1', name: 'Session 1' }]}
+        browserPages={[]}
+        files={[]}
+        knowledge={knowledge}
         onPatchElement={onPatchElement}
       />,
     );
 
-    const card = screen.getByRole('article', { name: 'Session 1 widget' });
-    const moveHandle = within(card).getByLabelText('Move Session 1 widget');
+    const card = screen.getByRole('article', { name: 'Session summary widget' });
+    const moveHandle = within(card).getByLabelText('Move Session summary widget');
     fireEvent.pointerDown(moveHandle, { pointerId: 1, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 1, clientX: 186, clientY: 186 });
     fireEvent.pointerUp(window, { pointerId: 1 });
 
     expect(onPatchElement).toHaveBeenCalledWith({
-      elementId: 'main-dashboard',
+      elementId: 'session-summary-widget',
       props: {
-        sessionWidgetLayouts: {
-          s1: {
-            position: { col: 1, row: 1 },
-            size: { cols: 5, rows: 3 },
-          },
-        },
+        position: { col: 1, row: 1 },
+        size: { cols: 5, rows: 3 },
       },
     });
 
-    fireEvent.pointerDown(within(card).getByLabelText('Resize Session 1 widget'), { pointerId: 2, clientX: 400, clientY: 300 });
+    fireEvent.pointerDown(within(card).getByLabelText('Resize Session summary widget'), { pointerId: 2, clientX: 400, clientY: 300 });
     fireEvent.pointerMove(window, { pointerId: 2, clientX: 482, clientY: 382 });
     fireEvent.pointerUp(window, { pointerId: 2 });
 
     expect(onPatchElement).toHaveBeenLastCalledWith({
-      elementId: 'main-dashboard',
+      elementId: 'session-summary-widget',
       props: {
-        sessionWidgetLayouts: {
-          s1: {
-            position: { col: 0, row: 0 },
-            size: { cols: 6, rows: 4 },
-          },
-        },
+        position: { col: 0, row: 0 },
+        size: { cols: 6, rows: 4 },
       },
     });
   });
@@ -136,12 +155,12 @@ describe('HarnessDashboardPanel', () => {
   it('supports canvas panning, zooming, and minimap navigation', () => {
     render(
       <HarnessDashboardPanel
-        spec={createSpecWithSessionLayout()}
+        spec={createSpecWithWidgetLayout()}
         workspaceName="Research"
         sessions={[{ id: 's1', name: 'Session 1' }]}
         browserPages={[]}
         files={[]}
-        onCreateSessionWidget={vi.fn()}
+        knowledge={knowledge}
       />,
     );
 
@@ -162,46 +181,5 @@ describe('HarnessDashboardPanel', () => {
     fireEvent.pointerDown(minimap, { pointerId: 2, clientX: 190, clientY: 120 });
 
     expect(canvas.getAttribute('data-pan-x')).not.toBe('45');
-  });
-
-  it('keeps the harness inspector available for app-level customization', () => {
-    const onPatchElement = vi.fn();
-    const onRegenerate = vi.fn();
-    const onRestoreDefault = vi.fn();
-
-    render(
-      <HarnessDashboardPanel
-        spec={createSpecWithSessionLayout()}
-        workspaceName="Research"
-        sessions={[{ id: 's1', name: 'Session 1' }]}
-        browserPages={[]}
-        files={[]}
-        onCreateSessionWidget={vi.fn()}
-        onPatchElement={onPatchElement}
-        onRegenerate={onRegenerate}
-        onRestoreDefault={onRestoreDefault}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Customize' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Workspace tree' }));
-    fireEvent.change(screen.getByLabelText('Element title'), {
-      target: { value: 'Project map' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save element' }));
-
-    expect(onPatchElement).toHaveBeenCalledWith({
-      elementId: 'workspace-sidebar',
-      props: { title: 'Project map' },
-    });
-
-    fireEvent.change(screen.getByLabelText('Describe app change'), {
-      target: { value: 'Make the sidebar compact' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Regenerate app' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore default' }));
-
-    expect(onRegenerate).toHaveBeenCalledWith('Make the sidebar compact');
-    expect(onRestoreDefault).toHaveBeenCalledTimes(1);
   });
 });

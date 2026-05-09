@@ -124,7 +124,6 @@ import {
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
 import { fetchCodexState, type CodexModelSummary, type CodexRuntimeState } from './services/codexApi';
-import { fetchGitWorktreeDiff, fetchGitWorktreeStatus, type GitWorktreeDiffResponse, type GitWorktreeStatusResponse } from './services/gitWorktreeApi';
 import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
 import {
   BENCHMARK_TASK_CLASSES,
@@ -416,10 +415,6 @@ import {
   createSamplePullRequestReviewInput,
 } from './services/prReviewUnderstanding';
 import {
-  buildBrowserEvidenceReview,
-  createSampleBrowserEvidenceArtifacts,
-} from './services/browserEvidenceReview';
-import {
   buildRepoWikiPromptContext,
   buildRepoWikiSnapshot,
   isRepoWikiSnapshotsByWorkspace,
@@ -573,6 +568,7 @@ import {
   normalizeWorkspaceViewEntry,
   removeNodeById,
   renderPaneIdForNode,
+  syncWorkspaceDashboardNodes,
   totalMemoryMB,
   workspaceViewStateEquals,
   type FlatTreeItem,
@@ -594,18 +590,20 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
-import { GitWorktreePanel } from './features/worktree/GitWorktreePanel';
 import {
+  addHarnessDashboardWidget,
   applyHarnessElementPatch,
   buildHarnessPromptContextRows,
   createDefaultHarnessAppSpec,
+  listDashboardWidgets,
   listEditableHarnessElements,
 } from './features/harness-ui/harnessSpec';
 import {
   regenerateHarnessAppSpec,
   restoreDefaultHarnessAppSpec,
 } from './features/harness-ui/harnessRegeneration';
-import type { HarnessAppSpec, HarnessElementPatch, JsonValue } from './features/harness-ui/types';
+import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, JsonValue, WidgetPosition } from './features/harness-ui/types';
+import type { HarnessKnowledgeSummary } from './features/harness-ui/HarnessJsonRenderer';
 import { createUniqueId } from './utils/uniqueId';
 import { DEFAULT_TOOL_DESCRIPTORS, buildDefaultToolInstructions, createDefaultTools, selectToolDescriptorsByIds, selectToolsByIds, type ToolDescriptor } from './tools';
 import type { BrowserNavHistory, BusEntryStep, ChatMessage, HFModel, HistorySession, Identity, IdentityPermissions, NodeMetadata, ReasoningStep, SearchTurnContext, TreeNode, VoterStep, WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspacePlugin } from './types';
@@ -622,6 +620,10 @@ type FilePanel = { type: 'file'; file: WorkspaceFile };
 type ArtifactPanel = { type: 'artifact'; artifact: AgentArtifact; file: ArtifactFile | null };
 type Panel = DashboardPanel | BrowserPanel | SessionPanel | FilePanel | ArtifactPanel;
 type PanelDragHandleProps = React.HTMLAttributes<HTMLElement>;
+type WidgetSessionBinding = {
+  widget: HarnessElement;
+  onSavePatch: (patch: HarnessElementPatch) => void;
+};
 type SessionMcpRuntimeState = HarnessCoreSessionRuntime;
 type SessionMcpController = {
   getRuntimeState: () => SessionMcpRuntimeState;
@@ -969,6 +971,46 @@ function createSystemChatMessage(sessionId: string): ChatMessage {
     id: `${sessionId}:system`,
     role: 'system',
     content: 'Agent browser ready. Local inference is backed by browser-runnable Hugging Face ONNX models.',
+  };
+}
+
+function readHarnessElementTitle(element: HarnessElement | null | undefined, fallback: string) {
+  const title = element?.props?.title;
+  return typeof title === 'string' && title.trim() ? title.trim() : fallback;
+}
+
+function compactWidgetText(text: string, maxLength = 72) {
+  const compact = text.replace(/\s+/g, ' ').trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength - 1)}...`;
+}
+
+function titleFromWidgetEditRequest(text: string, fallback: string) {
+  const quoted = text.match(/(?:title|name|label)\s+(?:to|as)\s+["']([^"']+)["']/i)?.[1];
+  if (quoted?.trim()) return compactWidgetText(quoted, 44);
+  const colon = text.match(/(?:title|name|label)\s*:\s*([^\n]+)/i)?.[1];
+  if (colon?.trim()) return compactWidgetText(colon.split(/[.;]/u)[0] ?? colon, 44);
+  if (/knowledge|memory|steering|graph/i.test(text)) return 'Knowledge';
+  if (/summary|session/i.test(text)) return 'Session summary';
+  return fallback;
+}
+
+function buildWidgetPreviewPatch(widget: HarnessElement, requestedChange: string): NonNullable<ChatMessage['widgetPreview']> {
+  const currentTitle = readHarnessElementTitle(widget, widget.id);
+  const nextTitle = titleFromWidgetEditRequest(requestedChange, currentTitle);
+  const summary = compactWidgetText(requestedChange, 140);
+  return {
+    widgetId: widget.id,
+    widgetTitle: currentTitle,
+    requestedChange,
+    patch: {
+      elementId: widget.id,
+      props: {
+        title: nextTitle,
+        summary,
+      },
+    },
+    status: 'pending',
   };
 }
 
@@ -1496,6 +1538,8 @@ function ChatMessageView({
   onOpenActivity,
   onSubmitElicitation,
   onSubmitSecret,
+  onSaveWidgetPreview,
+  onDiscardWidgetPreview,
   onCopyMessage,
 }: {
   message: ChatMessage;
@@ -1504,6 +1548,8 @@ function ChatMessageView({
   onOpenActivity?: (messageId: string) => void;
   onSubmitElicitation?: (messageId: string, requestId: string, values: Record<string, string>) => void;
   onSubmitSecret?: (messageId: string, requestId: string, input: { name: string; value: string }) => void;
+  onSaveWidgetPreview?: (messageId: string) => void;
+  onDiscardWidgetPreview?: (messageId: string) => void;
   onCopyMessage?: (input: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => Promise<void>;
 }) {
   const content = message.streamedContent || message.content;
@@ -1610,6 +1656,33 @@ function ChatMessageView({
             </div>
           )
       ))}
+      {message.widgetPreview ? (
+        <div className={`widget-preview-card widget-preview-card--${message.widgetPreview.status}`} aria-label={`${message.widgetPreview.widgetTitle} widget preview`}>
+          <div className="widget-preview-card-header">
+            <span className="tool-call-label">Widget preview</span>
+            <span className="badge">{message.widgetPreview.status}</span>
+          </div>
+          <p>{message.widgetPreview.requestedChange}</p>
+          <dl>
+            {Object.entries(message.widgetPreview.patch.props ?? {}).map(([key, value]) => (
+              <div key={key}>
+                <dt>{key}</dt>
+                <dd>{String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          {message.widgetPreview.status === 'pending' ? (
+            <div className="widget-preview-card-actions">
+              <button type="button" className="primary-button" onClick={() => onSaveWidgetPreview?.(message.id)}>
+                Save changes
+              </button>
+              <button type="button" className="secondary-button" onClick={() => onDiscardWidgetPreview?.(message.id)}>
+                Discard
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {content ? (
         (isUser || isTerminalMessage || isError)
           ? <div className={`message-bubble${isTerminalMessage ? ' terminal-bubble' : ''}${isError ? ' message-bubble-error' : ''}`}>{content}{isStreaming && !message.isThinking && <span className="stream-cursor" />}</div>
@@ -2481,6 +2554,7 @@ function ChatPanel({
   onConversationBranchRequest,
   onOpenConversationSession,
   onConversationSubthreadSteering,
+  widgetBinding,
   dragHandleProps,
 }: {
   installedModels: HFModel[];
@@ -2545,6 +2619,7 @@ function ChatPanel({
   onConversationBranchRequest?: (request: string, sessionId: string) => void;
   onOpenConversationSession?: (sessionId: string) => void;
   onConversationSubthreadSteering?: (subthreadId: string, sessionId: string, text: string, messageIds: string[]) => void;
+  widgetBinding?: WidgetSessionBinding | null;
   dragHandleProps?: PanelDragHandleProps;
 }) {
   const [messagesBySession, setMessagesBySession] = useStoredState<Record<string, ChatMessage[]>>(
@@ -2879,7 +2954,8 @@ function ChatPanel({
     [input, specDrivenDevelopmentSettings],
   );
   const canSubmit = activeConversationSessionCanSubmit && !hasActiveGeneration && Boolean(input.trim()) && (
-    Boolean(parseSandboxPrompt(input))
+    Boolean(widgetBinding)
+    || Boolean(parseSandboxPrompt(input))
     || selectedProvider === 'tour-guide'
     || resolveAgentProviderForTask({ selectedProvider, latestUserInput: input.trim() }) === 'tour-guide'
     || (selectedProvider === 'codi' && Boolean(effectiveSelectedModelId))
@@ -3189,6 +3265,32 @@ function ChatPanel({
         return nextMessage.statusText === 'stopped' ? neutralizeStoppedMessage(nextMessage) : nextMessage;
       });
       return { ...current, [activeChatSessionId]: nextMessages };
+    });
+  }
+
+  function handleSaveWidgetPreview(messageId: string) {
+    const message = messagesRef.current.find((entry) => entry.id === messageId);
+    const preview = message?.widgetPreview;
+    if (!preview || preview.status !== 'pending' || !widgetBinding) return;
+    widgetBinding.onSavePatch({
+      elementId: preview.patch.elementId,
+      props: preview.patch.props as Record<string, JsonValue>,
+    });
+    updateMessage(messageId, {
+      content: `Saved changes to ${preview.widgetTitle}.`,
+      widgetPreview: { ...preview, status: 'saved' },
+      status: 'complete',
+    });
+  }
+
+  function handleDiscardWidgetPreview(messageId: string) {
+    const message = messagesRef.current.find((entry) => entry.id === messageId);
+    const preview = message?.widgetPreview;
+    if (!preview || preview.status !== 'pending') return;
+    updateMessage(messageId, {
+      content: `Discarded preview for ${preview.widgetTitle}.`,
+      widgetPreview: { ...preview, status: 'discarded' },
+      status: 'complete',
     });
   }
 
@@ -3518,6 +3620,29 @@ function ChatPanel({
     const trimmedText = text.trim();
     if (!canSubmitToConversationSession(conversationBranchingState, activeChatSessionId)) {
       onToast({ msg: 'Merged subthreads are read-only', type: 'warning' });
+      return;
+    }
+    if (widgetBinding) {
+      const preview = buildWidgetPreviewPatch(widgetBinding.widget, trimmedText);
+      setChatHistoryBySession((current) => ({
+        ...current,
+        [activeChatSessionId]: [...(current[activeChatSessionId] ?? []), trimmedText],
+      }));
+      const nextMessages: ChatMessage[] = [
+        ...messagesRef.current,
+        { id: userId, role: 'user', content: text },
+        {
+          id: assistantId,
+          role: 'assistant',
+          content: `Preview ready for ${preview.widgetTitle}. Save changes to apply them to the dashboard widget.`,
+          status: 'complete',
+          widgetPreview: preview,
+        },
+      ];
+      messagesRef.current = nextMessages;
+      setMessagesBySession((current) => ({ ...current, [activeChatSessionId]: nextMessages }));
+      setInput('');
+      resetActiveInputHistoryCursor();
       return;
     }
     let providerForRequest = resolveAgentProviderForTask({
@@ -5835,7 +5960,7 @@ function ChatPanel({
     } finally {
       clearActiveGeneration(assistantId);
     }
-  }, [activeChatSessionId, activeConversationSubthread, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, conversationBranchingState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onConversationBranchRequest, onConversationSubthreadSteering, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, specDrivenDevelopmentSettings, toolsEnabled, webMcpBridge, workspaceName, workspacePromptContext]);
+  }, [activeChatSessionId, activeConversationSubthread, activeLocalModel, adversaryToolReviewSettings, appendSharedMessages, benchmarkRoutingCandidates, benchmarkRoutingSettings, browserWorkflowSkills, clearActiveGeneration, codexState, conversationBranchingState, copilotState, cursorState, effectiveSelectedCodexModelId, effectiveSelectedCopilotModelId, effectiveSelectedCursorModelId, effectiveSelectedModelId, evaluationAgents, getSessionBash, harnessEvolutionSettings, harnessSteeringInventory, hasAvailableCodexModels, hasAvailableCopilotModels, hasAvailableCursorModels, installedModels, negativeRubricTechniques, notifyAssistantComplete, onConversationBranchRequest, onConversationSubthreadSteering, onMultitaskRequest, onNegativeRubricTechnique, onPartnerAgentAuditEntry, onTerminalFsPathsChanged, onToast, partnerAgentControlPlaneSettings, resetActiveInputHistoryCursor, runSandboxPrompt, runtimePluginSettings, secretSettings, securityReviewAgentSettings, selectedProvider, selectedToolIds, setBashHistoryBySession, sharedAgentCatalog, specDrivenDevelopmentSettings, toolsEnabled, webMcpBridge, widgetBinding, workspaceName, workspacePromptContext]);
 
   const handleElicitationSubmit = useCallback((messageId: string, requestId: string, values: Record<string, string>) => {
     const locationValue = values.location?.trim();
@@ -6354,10 +6479,17 @@ function ChatPanel({
               onBack={() => activeConversationMainSessionId ? onOpenConversationSession?.(activeConversationMainSessionId) : undefined}
             />
           ) : null}
+          {!showBash && widgetBinding ? (
+            <div className="widget-binding-banner" aria-label="Widget-bound session">
+              <span>Widget session</span>
+              <strong>{readHarnessElementTitle(widgetBinding.widget, widgetBinding.widget.id)}</strong>
+              <small>Changes preview in chat and apply only after Save.</small>
+            </div>
+          ) : null}
           <div className="message-list" role="log" aria-live="polite" aria-label={showBash ? 'Terminal output' : 'Chat transcript'}>
             {contextManagedTranscriptItems.map((item) => {
               if (item.kind === 'message') {
-                return <ChatMessageView key={item.message.id} message={item.message} agentName={agentDisplayName} activitySelected={item.message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />;
+                return <ChatMessageView key={item.message.id} message={item.message} agentName={agentDisplayName} activitySelected={item.message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onSaveWidgetPreview={handleSaveWidgetPreview} onDiscardWidgetPreview={handleDiscardWidgetPreview} onCopyMessage={handleCopyMessage} />;
               }
               const expanded = Boolean(expandedContextChapterIds[item.chapterId]);
               return (
@@ -6382,7 +6514,7 @@ function ChatPanel({
                   </div>
                   {expanded ? (
                     <div className="context-manager-originals" aria-label="Original messages for compacted chapter">
-                      {item.originalMessages.map((message) => <ChatMessageView key={message.id} message={message} agentName={agentDisplayName} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onCopyMessage={handleCopyMessage} />)}
+                      {item.originalMessages.map((message) => <ChatMessageView key={message.id} message={message} agentName={agentDisplayName} activitySelected={message.id === activeActivityMessageId} onOpenActivity={selectActivityMessage} onSubmitElicitation={handleElicitationSubmit} onSubmitSecret={handleSecretSubmit} onSaveWidgetPreview={handleSaveWidgetPreview} onDiscardWidgetPreview={handleDiscardWidgetPreview} onCopyMessage={handleCopyMessage} />)}
                     </div>
                   ) : null}
                 </article>
@@ -6440,7 +6572,7 @@ function ChatPanel({
                     aria-controls={isSkillAutocompleteOpen ? 'chat-skill-suggestions' : undefined}
                     value={input}
                     onChange={(event) => handleInputChange(event.target.value)}
-                    placeholder={activeConversationSessionCanSubmit ? getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels, hasCodexModelsReady: hasAvailableCodexModels }) : 'Merged subthread is read-only'}
+                    placeholder={activeConversationSessionCanSubmit ? (widgetBinding ? `Describe changes to ${readHarnessElementTitle(widgetBinding.widget, widgetBinding.widget.id)}` : getAgentInputPlaceholder({ provider: selectedProvider, hasCodiModelsReady: hasInstalledModels, hasGhcpModelsReady: hasAvailableCopilotModels, hasCursorModelsReady: hasAvailableCursorModels, hasCodexModelsReady: hasAvailableCodexModels })) : 'Merged subthread is read-only'}
                     rows={1}
                     onKeyDown={handleChatInputKeyDown}
                     disabled={!activeConversationSessionCanSubmit}
@@ -7726,8 +7858,8 @@ function PersistentMemoryGraphSettingsPanel({
               <span className="badge">{searchResult?.paths.length ?? 0} paths</span>
             </div>
             <div className="persistent-memory-graph-path-list" role="list" aria-label="Persistent memory graph paths">
-              {(searchResult?.paths ?? []).map((path) => (
-                <article key={path.id} className="provider-card persistent-memory-graph-path-card" role="listitem">
+              {(searchResult?.paths ?? []).map((path, index) => (
+                <article key={`${path.id}:${index}`} className="provider-card persistent-memory-graph-path-card" role="listitem">
                   <strong>{path.nodes.map((node) => node.label).join(' -> ')}</strong>
                   <p>{path.explanation}</p>
                   <small>Score {path.score.toFixed(2)} · {path.relationships.join(', ')}</small>
@@ -12015,6 +12147,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
                   <span className={`tree-chevron ${node.expanded ? 'tree-chevron-expanded' : ''}`}><Icon name="chevronRight" size={11} color="rgba(255,255,255,.25)" /></span>
                   {isWorkspace && node.activeMemory ? <ActiveMemoryPulse /> : null}
                   {isWorkspace && node.persisted ? <span className="persist-badge" title="Persisted" aria-label="Persisted workspace">📌</span> : null}
+                  {node.nodeKind === 'dashboard' ? <Icon name="panes" size={12} color="#67e8f9" /> : null}
                   {node.nodeKind === 'browser' ? <Icon name="globe" size={12} color="#93c5fd" /> : null}
                   {node.nodeKind === 'session' ? <Icon name="terminal" size={12} color="#86efac" /> : null}
                   {node.nodeKind === 'files' ? <Icon name="cpu" size={12} color="#a5b4fc" /> : null}
@@ -12030,6 +12163,8 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
                     </>
                   ) : node.nodeKind === 'clipboard' ? (
                     <Icon name="clipboard" size={13} color="#a5b4fc" />
+                  ) : node.nodeKind === 'dashboard' ? (
+                    <Icon name="panes" size={13} color="#67e8f9" />
                   ) : <Icon name="terminal" size={13} color="#86efac" />}
                 </>
               )}
@@ -12397,11 +12532,6 @@ function AgentBrowserApp() {
   const [isCursorStateLoading, setIsCursorStateLoading] = useState(true);
   const [codexState, setCodexState] = useState<CodexRuntimeState>(EMPTY_CODEX_STATE);
   const [isCodexStateLoading, setIsCodexStateLoading] = useState(true);
-  const [gitWorktreeStatus, setGitWorktreeStatus] = useState<GitWorktreeStatusResponse | null>(null);
-  const [isGitWorktreeStatusLoading, setIsGitWorktreeStatusLoading] = useState(true);
-  const [selectedGitWorktreePath, setSelectedGitWorktreePath] = useState<string | null>(null);
-  const [gitWorktreeDiff, setGitWorktreeDiff] = useState<GitWorktreeDiffResponse | null>(null);
-  const [isGitWorktreeDiffLoading, setIsGitWorktreeDiffLoading] = useState(false);
   const benchmarkRoutingBaseCandidates = useMemo(
     () => buildBenchmarkRoutingCandidates({ copilotModels: copilotState.models, installedModels }),
     [copilotState.models, installedModels],
@@ -12738,14 +12868,6 @@ function AgentBrowserApp() {
     () => buildPullRequestReview(createSamplePullRequestReviewInput(activeWorkspace.name)),
     [activeWorkspace.name],
   );
-  const activeBrowserEvidenceReview = useMemo(
-    () => buildBrowserEvidenceReview({
-      changedFiles: gitWorktreeStatus?.available ? gitWorktreeStatus.files : [],
-      selectedPath: selectedGitWorktreePath,
-      artifacts: createSampleBrowserEvidenceArtifacts(activeWorkspace.name),
-    }),
-    [activeWorkspace.name, gitWorktreeStatus, selectedGitWorktreePath],
-  );
   const [pendingReviewFollowUp, setPendingReviewFollowUp] = useState<{ sessionId: string; prompt: string } | null>(null);
   const activeMountedSessionFsIds = activeWorkspaceViewState.mountedSessionFsIds ?? [];
   const activeSessionDrives = useMemo<WorkspaceMcpSessionDrive[]>(() => activeWorkspaceSessions.map((session) => ({
@@ -12779,6 +12901,26 @@ function AgentBrowserApp() {
     () => listWorkspaceSurfaceSummaries(activeWorkspaceSurfaces),
     [activeWorkspaceSurfaces],
   );
+  const activeHarnessKnowledgeSummary = useMemo<HarnessKnowledgeSummary>(() => {
+    const graphStats = getGraphKnowledgeStats(graphKnowledgeState);
+    const metrics = [
+      { label: 'graph nodes', value: graphStats.graphNodes, detail: `${graphStats.graphEdges} edges` },
+      { label: 'hot memories', value: graphStats.hotMemoryBlocks, detail: `${graphStats.hotMemoryChars} chars` },
+      { label: 'sessions', value: activeWorkspaceSessions.length + graphStats.sessionCount, detail: 'open and modeled sessions' },
+      { label: 'files', value: activeWorkspaceFiles.length + persistentMemoryGraphState.documents.length, detail: 'workspace and memory docs' },
+      { label: 'steering', value: harnessSteeringInventory.totalCorrections, detail: `${harnessSteeringInventory.fileRows.length} files` },
+      { label: 'surfaces', value: activeWorkspaceSurfaceSummaries.length, detail: 'agent-authored outputs' },
+    ];
+    const highlights = [
+      graphKnowledgeState.hotMemoryBlocks[0]?.content,
+      graphKnowledgeState.communities[0] ? `${graphKnowledgeState.communities[0].name}: ${graphKnowledgeState.communities[0].summary}` : null,
+      harnessSteeringInventory.latestCorrection ? `Latest steering: ${harnessSteeringInventory.latestCorrection.text}` : null,
+      activeWorkspaceSurfaceSummaries[0] ? `Surface: ${activeWorkspaceSurfaceSummaries[0].title} (${activeWorkspaceSurfaceSummaries[0].permissionSummary})` : null,
+      activeWorkspaceFiles[0] ? `File: ${activeWorkspaceFiles[0].path}` : null,
+      persistentMemoryGraphState.memories[0] ? `Memory: ${persistentMemoryGraphState.memories[0].summary}` : null,
+    ].filter((entry): entry is string => Boolean(entry));
+    return { metrics, highlights };
+  }, [activeWorkspaceFiles, activeWorkspaceSessions.length, activeWorkspaceSurfaceSummaries, graphKnowledgeState, harnessSteeringInventory, persistentMemoryGraphState]);
   const activeAgentCanvasSummaries = useMemo(
     () => listAgentCanvasSummaries(activeArtifacts),
     [activeArtifacts],
@@ -12950,6 +13092,25 @@ function AgentBrowserApp() {
     setToast({ msg: 'Harness defaults restored', type: 'success' });
     return 'Harness defaults restored';
   }, [activeWorkspace.name, activeWorkspaceId, setToast, updateActiveHarnessSpec]);
+  useEffect(() => {
+    setRoot((current) => {
+      let changed = false;
+      const nextChildren = (current.children ?? []).map((workspace) => {
+        if (workspace.type !== 'workspace') return workspace;
+        const spec = harnessSpecsByWorkspace[workspace.id] ?? createDefaultHarnessAppSpec({
+          workspaceId: workspace.id,
+          workspaceName: workspace.name,
+        });
+        const nextWorkspace = syncWorkspaceDashboardNodes(workspace, listDashboardWidgets(spec));
+        if (JSON.stringify(nextWorkspace.children ?? []) !== JSON.stringify(workspace.children ?? [])) {
+          changed = true;
+          return nextWorkspace;
+        }
+        return workspace;
+      });
+      return changed ? { ...current, children: nextChildren } : current;
+    });
+  }, [harnessSpecsByWorkspace, setRoot]);
   const activeHarnessElements = useMemo<WorkspaceMcpHarnessElement[]>(
     () => listEditableHarnessElements(activeHarnessSpec),
     [activeHarnessSpec],
@@ -13159,36 +13320,6 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
-  const refreshGitWorktreeStatus = useCallback(async (showErrors = false) => {
-    setIsGitWorktreeStatusLoading(true);
-    try {
-      const state = await fetchGitWorktreeStatus();
-      setGitWorktreeStatus(state);
-      if (state.available) {
-        setSelectedGitWorktreePath((current) => (
-          current && state.files.some((file) => file.path === current)
-            ? current
-            : state.files[0]?.path ?? null
-        ));
-      } else {
-        setSelectedGitWorktreePath(null);
-        setGitWorktreeDiff(null);
-      }
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      if (error instanceof Error && error.name === 'AbortError') return;
-      const message = error instanceof Error ? error.message : 'Failed to check git worktree status.';
-      setGitWorktreeStatus({ available: false, error: message });
-      setSelectedGitWorktreePath(null);
-      setGitWorktreeDiff(null);
-      if (showErrors) {
-        setToast({ msg: message, type: 'warning' });
-      }
-    } finally {
-      setIsGitWorktreeStatusLoading(false);
-    }
-  }, [setToast]);
-
   useEffect(() => {
     void refreshCursorState(false);
   }, [refreshCursorState]);
@@ -13196,37 +13327,6 @@ function AgentBrowserApp() {
   useEffect(() => {
     void refreshCodexState(false);
   }, [refreshCodexState]);
-
-  useEffect(() => {
-    void refreshGitWorktreeStatus(false);
-  }, [refreshGitWorktreeStatus]);
-
-  useEffect(() => {
-    if (!gitWorktreeStatus?.available || !selectedGitWorktreePath) {
-      setGitWorktreeDiff(null);
-      setIsGitWorktreeDiffLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setIsGitWorktreeDiffLoading(true);
-    void fetchGitWorktreeDiff(selectedGitWorktreePath, { signal: controller.signal })
-      .then((diff) => setGitWorktreeDiff(diff))
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        if (error instanceof Error && error.name === 'AbortError') return;
-        setGitWorktreeDiff({
-          path: selectedGitWorktreePath,
-          patch: '',
-          source: 'none',
-          isBinary: false,
-        });
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setIsGitWorktreeDiffLoading(false);
-      });
-    return () => controller.abort();
-  }, [gitWorktreeStatus, selectedGitWorktreePath]);
 
   useEffect(() => {
     if (!benchmarkRoutingSettings.enabled || benchmarkRoutingBaseCandidates.length === 0) return;
@@ -13478,7 +13578,7 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
-  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean } = {}): { id: string; name: string; isOpen: boolean } | null => {
+  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean; boundWidgetId?: string } = {}): { id: string; name: string; isOpen: boolean } | null => {
     const shouldOpen = options.open ?? true;
     let createdSession: { id: string; name: string; isOpen: boolean } | null = null;
     let newSessionId: string | null = null;
@@ -13496,6 +13596,9 @@ function AgentBrowserApp() {
       const newSession = createSessionNode(workspaceId, nextIndex);
       if (typeof nameOverride === 'string' && nameOverride.trim()) {
         newSession.name = nameOverride.trim();
+      }
+      if (options.boundWidgetId) {
+        newSession.boundWidgetId = options.boundWidgetId;
       }
       newSessionId = newSession.id;
       createdSession = { id: newSession.id, name: newSession.name, isOpen: shouldOpen };
@@ -13538,6 +13641,48 @@ function AgentBrowserApp() {
     setToast({ msg: 'New session created', type: 'success' });
     return createdSession;
   }, [setToast, switchWorkspace]);
+
+  const openDashboardWidgetSession = useCallback((widgetId: string) => {
+    const widget = activeHarnessSpec.elements[widgetId];
+    const widgetTitle = readHarnessElementTitle(widget, widgetId);
+    const existingSession = activeWorkspace.type === 'workspace'
+      ? (getWorkspaceCategory(activeWorkspace, 'session')?.children ?? [])
+        .find((child) => child.type === 'tab' && child.nodeKind === 'session' && child.boundWidgetId === widgetId)
+      : null;
+    if (existingSession) {
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+        return {
+          ...current,
+          [activeWorkspaceId]: {
+            ...existing,
+            activeSessionIds: [existingSession.id],
+            mountedSessionFsIds: existing.mountedSessionFsIds.includes(existingSession.id)
+              ? existing.mountedSessionFsIds
+              : [...existing.mountedSessionFsIds, existingSession.id],
+            panelOrder: [`session:${existingSession.id}`],
+          },
+        };
+      });
+      return;
+    }
+    addSessionToWorkspace(activeWorkspaceId, `Customize: ${widgetTitle}`, { open: true, boundWidgetId: widgetId });
+  }, [activeHarnessSpec.elements, activeWorkspace, activeWorkspaceId, addSessionToWorkspace, setWorkspaceViewStateByWorkspace]);
+
+  const createDashboardWidgetFromCanvas = useCallback((position: WidgetPosition) => {
+    const widgetId = `dashboard-widget-${createUniqueId()}`;
+    updateActiveHarnessSpec((spec) => addHarnessDashboardWidget(spec, {
+      id: widgetId,
+      title: 'New widget',
+      position,
+      size: { cols: 5, rows: 3 },
+      props: {
+        summary: 'Describe the widget changes in the bound session.',
+      },
+    }));
+    addSessionToWorkspace(activeWorkspaceId, 'Customize: New widget', { open: true, boundWidgetId: widgetId });
+    setToast({ msg: 'Widget session created', type: 'success' });
+  }, [activeWorkspaceId, addSessionToWorkspace, setToast, updateActiveHarnessSpec]);
 
   const startConversationBranch = useCallback((request: string, sessionId: string) => {
     const title = request.trim().replace(/\s+/g, ' ') || 'Active chat thread';
@@ -14874,6 +15019,27 @@ function AgentBrowserApp() {
       if (!ids.includes(nodeId)) return [...ids, nodeId];
       return ids.length > 1 ? ids.filter((id) => id !== nodeId) : ids;
     };
+    if (node.nodeKind === 'dashboard') {
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
+        return {
+          ...current,
+          [workspace.id]: {
+            ...existing,
+            dashboardOpen: true,
+            activeSessionIds: [],
+            openTabIds: [],
+            editingFilePath: null,
+            activeArtifactPanel: null,
+            panelOrder: [`dashboard:${workspace.id}`],
+          },
+        };
+      });
+      if (node.dashboardWidgetId) {
+        openDashboardWidgetSession(node.dashboardWidgetId);
+      }
+      return;
+    }
     if ((node.nodeKind ?? 'browser') === 'browser') {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
@@ -16630,51 +16796,26 @@ function AgentBrowserApp() {
           const renderPanel = (panel: Panel, dragHandleProps?: PanelDragHandleProps) => {
             if (panel.type === 'dashboard') {
               return (
-                <div key={panel.workspaceId} className="dashboard-stack">
-                  <GitWorktreePanel
-                    status={gitWorktreeStatus}
-                    diff={gitWorktreeDiff}
-                    selectedPath={selectedGitWorktreePath}
-                    browserEvidenceReview={activeBrowserEvidenceReview}
-                    isLoading={isGitWorktreeStatusLoading}
-                    isDiffLoading={isGitWorktreeDiffLoading}
-                    onRefresh={() => void refreshGitWorktreeStatus(true)}
-                    onSelectFile={setSelectedGitWorktreePath}
-                  />
-                  <HarnessDashboardPanel
-                    spec={activeHarnessSpec}
-                    workspaceName={activeWorkspace.name}
-                    sessions={activeDashboardSessions}
-                    browserPages={activeBrowserPages.map((page) => ({
-                      id: page.id,
-                      title: page.title,
-                      url: page.url,
-                    }))}
-                    files={activeWorkspaceFiles.map((file) => ({
-                      path: file.path,
-                      kind: detectWorkspaceFileKind(file.path) ?? undefined,
-                    }))}
-                    surfaces={activeWorkspaceSurfaceSummaries}
-                    onCreateSessionWidget={() => addSessionToWorkspace(activeWorkspaceId, undefined, { open: false })}
-                    onOpenSession={(sessionId) => setWorkspaceViewStateByWorkspace((current) => {
-                      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-                      return {
-                        ...current,
-                        [activeWorkspaceId]: {
-                          ...existing,
-                          activeSessionIds: [...(existing.activeSessionIds ?? []).filter((id) => id !== sessionId), sessionId],
-                          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
-                            ? existing.mountedSessionFsIds
-                            : [...existing.mountedSessionFsIds, sessionId],
-                        },
-                      };
-                    })}
-                    onPatchElement={patchActiveHarnessElement}
-                    onRegenerate={regenerateActiveHarnessSpec}
-                    onRestoreDefault={restoreActiveHarnessSpec}
-                    dragHandleProps={dragHandleProps}
-                  />
-                </div>
+                <HarnessDashboardPanel
+                  key={panel.workspaceId}
+                  spec={activeHarnessSpec}
+                  workspaceName={activeWorkspace.name}
+                  sessions={activeDashboardSessions}
+                  browserPages={activeBrowserPages.map((page) => ({
+                    id: page.id,
+                    title: page.title,
+                    url: page.url,
+                  }))}
+                  files={activeWorkspaceFiles.map((file) => ({
+                    path: file.path,
+                    kind: detectWorkspaceFileKind(file.path) ?? undefined,
+                  }))}
+                  knowledge={activeHarnessKnowledgeSummary}
+                  onCreateDashboardWidget={createDashboardWidgetFromCanvas}
+                  onOpenWidgetSession={openDashboardWidgetSession}
+                  onPatchElement={patchActiveHarnessElement}
+                  dragHandleProps={dragHandleProps}
+                />
               );
             }
             if (panel.type === 'file') {
@@ -16722,6 +16863,8 @@ function AgentBrowserApp() {
                 />
               );
             }
+            const sessionNode = findNode(activeWorkspace, panel.id);
+            const boundWidget = sessionNode?.boundWidgetId ? activeHarnessSpec.elements[sessionNode.boundWidgetId] : null;
             return (
               <ChatPanel
                 key={panel.id}
@@ -16803,6 +16946,10 @@ function AgentBrowserApp() {
                 onConversationBranchRequest={startConversationBranch}
                 onOpenConversationSession={openConversationSession}
                 onConversationSubthreadSteering={recordConversationSubthreadSteering}
+                widgetBinding={boundWidget ? {
+                  widget: boundWidget,
+                  onSavePatch: patchActiveHarnessElement,
+                } : null}
                 dragHandleProps={dragHandleProps}
               />
             );

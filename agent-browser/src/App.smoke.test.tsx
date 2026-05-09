@@ -148,11 +148,31 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Primary navigation')).toBeInTheDocument();
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New session widget' })).toBeInTheDocument();
     expect(screen.getByRole('tree', { name: 'Workspace tree' })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /Dashboard/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: 'Knowledge widget' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New session widget' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument();
   });
 
-  it('renders browser evidence linked to the dashboard diff review', async () => {
+  it('dedicates the default workspace render area to the infinite canvas', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    const canvas = screen.getByLabelText('Infinite session canvas');
+
+    expect(dashboard).toContainElement(canvas);
+    expect(canvas.closest('.dashboard-stack')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Git worktree status' })).not.toBeInTheDocument();
+  });
+
+  it('keeps browser evidence out of the default infinite canvas render area', async () => {
     vi.useFakeTimers();
     render(<App />);
 
@@ -163,13 +183,12 @@ describe('App smoke coverage', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByLabelText('Browser evidence for selected diff')).toBeInTheDocument();
-    expect(screen.getByText('Agent Browser visual smoke')).toBeInTheDocument();
-    expect(screen.getByText('2 assertions passed')).toBeInTheDocument();
-    expect(screen.getByText('output/playwright/agent-browser-visual-smoke.png')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Browser evidence for selected diff')).not.toBeInTheDocument();
+    expect(screen.queryByText('Agent Browser visual smoke')).not.toBeInTheDocument();
+    expect(screen.queryByText('output/playwright/agent-browser-visual-smoke.png')).not.toBeInTheDocument();
   });
 
-  it('renders governed agent-authored workspace surfaces on the dashboard', async () => {
+  it('aggregates governed agent-authored workspace surfaces into the knowledge widget', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(STORAGE_KEYS.workspaceSurfacesByWorkspace, JSON.stringify({
       'ws-research': [{
@@ -219,11 +238,10 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    const surfaces = screen.getByRole('region', { name: 'Agent-authored workspace surfaces' });
-    expect(surfaces).toHaveTextContent('Launch review surface');
-    expect(surfaces).toHaveTextContent('Researcher');
-    expect(surfaces).toHaveTextContent('read, edit, rollback');
-    expect(surfaces).toHaveTextContent('//artifacts/artifact-launch-review/review-panel.md');
+    const knowledgeWidget = screen.getByRole('article', { name: 'Knowledge widget' });
+    expect(knowledgeWidget).toHaveTextContent('surfaces');
+    expect(knowledgeWidget).toHaveTextContent('Surface: Launch review surface (read, edit, rollback)');
+    expect(screen.queryByRole('region', { name: 'Agent-authored workspace surfaces' })).not.toBeInTheDocument();
   });
 
   it('opens the secure shared chat QR pairing dialog from the chat header', async () => {
@@ -499,7 +517,10 @@ describe('App smoke coverage', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     expect(screen.getByText('Requires DESIGN.md agent guidance')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+      await Promise.resolve();
+    });
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(installedSidebar).toHaveTextContent('DESIGN.md agent guidance');
@@ -613,10 +634,7 @@ describe('App smoke coverage', () => {
       fireEvent.click(screen.getByLabelText('Projects'));
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New session widget' }));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getAllByRole('button', { name: /^Open Session/ })[0]);
+      fireEvent.click(screen.getByLabelText('Add session to Research'));
     });
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Chat input'), {
@@ -722,12 +740,18 @@ describe('App smoke coverage', () => {
     fireEvent.click(screen.getByLabelText('Settings'));
 
     expect(screen.getByText('Persistent memory graphs')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Persistent memory graphs' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Load sample memory' }));
-    fireEvent.change(screen.getByLabelText('Memory graph question'), {
-      target: { value: 'How does Kuzu-WASM support offline retrieval?' },
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Persistent memory graphs' }));
+      await Promise.resolve();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Search Memory' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Load sample memory' }));
+      fireEvent.change(screen.getByLabelText('Memory graph question'), {
+        target: { value: 'How does Kuzu-WASM support offline retrieval?' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Search Memory' }));
+      await Promise.resolve();
+    });
 
     expect(screen.getByText('WASM-compatible local graph')).toBeInTheDocument();
     expect(screen.getByText(/MEMORY SUMMARY/)).toBeInTheDocument();
@@ -1039,11 +1063,14 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('checkbox', { name: 'Notify me' })).toBeChecked();
     expect(screen.getByRole('spinbutton', { name: 'Result count' })).toHaveValue(3);
 
-    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Prefer official docs and examples' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Urgency' }), { target: { value: 'later' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Notify me' }));
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Result count' }), { target: { value: '5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit requested info' }));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Prefer official docs and examples' } });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Urgency' }), { target: { value: 'later' } });
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Notify me' }));
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'Result count' }), { target: { value: '5' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Submit requested info' }));
+      await Promise.resolve();
+    });
 
     expect(screen.getByText('User input received')).toBeInTheDocument();
     expect(screen.getAllByText(/"notes": "Prefer official docs and examples"/).length).toBeGreaterThan(0);

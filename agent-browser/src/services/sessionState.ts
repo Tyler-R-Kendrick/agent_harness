@@ -190,7 +190,7 @@ export function useStoredState<T>(
 export const isString = (value: unknown): value is string => typeof value === 'string';
 
 const NODE_TYPES: NodeType[] = ['root', 'workspace', 'folder', 'tab', 'file'];
-const NODE_KINDS: NodeKind[] = ['browser', 'terminal', 'agent', 'files', 'session', 'clipboard'];
+const NODE_KINDS: NodeKind[] = ['dashboard', 'browser', 'terminal', 'agent', 'files', 'session', 'clipboard'];
 const MESSAGE_ROLES: ChatMessage['role'][] = ['user', 'assistant', 'system'];
 const MESSAGE_STATUSES: NonNullable<ChatMessage['status']>[] = ['thinking', 'streaming', 'complete', 'error'];
 
@@ -276,6 +276,8 @@ export function isTreeNode(value: unknown): value is TreeNode {
     && isOptionalString(node.artifactId)
     && isOptionalString(node.artifactFilePath)
     && isOptionalString(node.artifactReferenceId)
+    && isOptionalString(node.dashboardWidgetId)
+    && isOptionalString(node.boundWidgetId)
     && isOptionalBoolean(node.muted)
     && (node.children === undefined || (Array.isArray(node.children) && node.children.every(isTreeNode)))
   );
@@ -367,6 +369,17 @@ function isChatMessage(value: unknown): value is ChatMessage {
     && (value.statusText === undefined || value.statusText === null || typeof value.statusText === 'string')
     && isOptionalBoolean(value.isError)
     && isOptionalBoolean(value.isVoting)
+    && (value.widgetPreview === undefined || (
+      isRecord(value.widgetPreview)
+      && typeof value.widgetPreview.widgetId === 'string'
+      && typeof value.widgetPreview.widgetTitle === 'string'
+      && typeof value.widgetPreview.requestedChange === 'string'
+      && isRecord(value.widgetPreview.patch)
+      && typeof value.widgetPreview.patch.elementId === 'string'
+      && (value.widgetPreview.patch.props === undefined || isJsonRecord(value.widgetPreview.patch.props))
+      && typeof value.widgetPreview.status === 'string'
+      && ['pending', 'saved', 'discarded'].includes(value.widgetPreview.status)
+    ))
   );
 }
 

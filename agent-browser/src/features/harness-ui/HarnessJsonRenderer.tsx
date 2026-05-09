@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { HarnessAppSpec, HarnessElement, SessionWidgetAsset, SessionWidgetMessage } from './types';
 
 export type HarnessSessionSummary = {
@@ -26,11 +26,23 @@ export type HarnessFileSummary = {
   kind?: string;
 };
 
+export type HarnessKnowledgeMetric = {
+  label: string;
+  value: number;
+  detail?: string;
+};
+
+export type HarnessKnowledgeSummary = {
+  metrics: HarnessKnowledgeMetric[];
+  highlights: string[];
+};
+
 export type HarnessRenderContext = {
   workspaceName: string;
   sessions: HarnessSessionSummary[];
   browserPages: HarnessBrowserPageSummary[];
   files: HarnessFileSummary[];
+  knowledge: HarnessKnowledgeSummary;
 };
 
 export type HarnessJsonRendererProps = {
@@ -163,6 +175,37 @@ function renderSessionRuntime(context: HarnessRenderContext, element: HarnessEle
   );
 }
 
+function renderKnowledgeGraphWidget(context: HarnessRenderContext, element: HarnessElement) {
+  const metrics = context.knowledge.metrics;
+  const maxValue = Math.max(1, ...metrics.map((metric) => metric.value));
+  return (
+    <div className="harness-render-block harness-knowledge-widget">
+      <p className="harness-widget-kicker">{readStringProp(element, 'summary', 'Aggregated workspace knowledge')}</p>
+      <div className="harness-knowledge-metrics" aria-label="Knowledge metrics">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="harness-knowledge-metric">
+            <div>
+              <strong>{metric.value}</strong>
+              <span>{metric.label}</span>
+            </div>
+            <span
+              className="harness-knowledge-bar"
+              style={{ '--harness-knowledge-score': String(metric.value / maxValue) } as CSSProperties}
+              aria-hidden="true"
+            />
+            {metric.detail ? <small>{metric.detail}</small> : null}
+          </div>
+        ))}
+      </div>
+      {renderList(
+        context.knowledge.highlights,
+        'No collected knowledge yet',
+        (highlight) => <li key={highlight}>{highlight}</li>,
+      )}
+    </div>
+  );
+}
+
 function renderElement(element: HarnessElement, context: HarnessRenderContext, children: ReactNode) {
   switch (element.type) {
     case 'WorkspaceSummary':
@@ -177,6 +220,8 @@ function renderElement(element: HarnessElement, context: HarnessRenderContext, c
       return renderSessionAssets(element, context);
     case 'SessionRuntime':
       return renderSessionRuntime(context, element);
+    case 'KnowledgeGraphWidget':
+      return renderKnowledgeGraphWidget(context, element);
     case 'HarnessInspector':
       return (
         <div className="harness-render-block">

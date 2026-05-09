@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
-import { Plus } from 'lucide-react';
 
-import type { HarnessBrowserPageSummary, HarnessFileSummary, HarnessSessionSummary } from './HarnessJsonRenderer';
-import { HarnessInspectorPanel } from './HarnessInspectorPanel';
+import { HarnessJsonRenderer, type HarnessBrowserPageSummary, type HarnessFileSummary, type HarnessKnowledgeSummary, type HarnessSessionSummary } from './HarnessJsonRenderer';
 import { normalizeWidgetPosition, normalizeWidgetSize, resolveSpaceLayout } from './spaceLayout';
-import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, JsonValue, WidgetPosition, WidgetSize } from './types';
-import type { WorkspaceSurfaceSummary } from '../../services/workspaceSurfaces';
+import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, WidgetPosition, WidgetSize } from './types';
 
 export type HarnessDashboardPanelProps = {
   spec: HarnessAppSpec;
@@ -13,21 +10,19 @@ export type HarnessDashboardPanelProps = {
   sessions: HarnessSessionSummary[];
   browserPages?: HarnessBrowserPageSummary[];
   files?: HarnessFileSummary[];
-  surfaces?: WorkspaceSurfaceSummary[];
-  onCreateSessionWidget: () => void;
-  onOpenSession?: (sessionId: string) => void;
+  knowledge: HarnessKnowledgeSummary;
+  onCreateDashboardWidget?: (position: WidgetPosition) => void;
+  onOpenWidgetSession?: (widgetId: string) => void;
   onPatchElement?: (patch: HarnessElementPatch) => void;
-  onRegenerate?: (prompt: string) => void;
-  onRestoreDefault?: () => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
 };
 
-type SessionWidgetLayout = {
+type WidgetLayout = {
   position: WidgetPosition;
   size: WidgetSize;
 };
 
-type SessionWidgetLayouts = Record<string, SessionWidgetLayout>;
+type WidgetLayouts = Record<string, WidgetLayout>;
 
 type ViewportState = {
   panX: number;
@@ -38,10 +33,10 @@ type ViewportState = {
 type WidgetInteraction = {
   kind: 'move' | 'resize';
   pointerId: number;
-  sessionId: string;
+  widgetId: string;
   startX: number;
   startY: number;
-  origin: SessionWidgetLayout;
+  origin: WidgetLayout;
   lastKey: string;
 };
 
@@ -61,9 +56,9 @@ type MinimapInteraction = {
 
 type DashboardInteraction = WidgetInteraction | PanInteraction | MinimapInteraction;
 
-const DEFAULT_SESSION_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 5, rows: 3 });
-const MIN_SESSION_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 3, rows: 2 });
-const MAX_SESSION_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 24, rows: 24 });
+const DEFAULT_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 5, rows: 3 });
+const MIN_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 3, rows: 2 });
+const MAX_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 24, rows: 24 });
 const CELL_PX = 72;
 const GAP_PX = 10;
 const GRID_STEP_PX = CELL_PX + GAP_PX;
@@ -81,8 +76,9 @@ function readTitle(spec: HarnessAppSpec, elementId: string, fallback: string) {
   return typeof title === 'string' && title.trim() ? title.trim() : fallback;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+function readElementTitle(element: HarnessElement, fallback: string) {
+  const title = element.props?.title;
+  return typeof title === 'string' && title.trim() ? title.trim() : fallback;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -91,35 +87,17 @@ function clamp(value: number, min: number, max: number) {
 
 function clampWidgetSize(size: WidgetSize): WidgetSize {
   return {
-    cols: clamp(size.cols, MIN_SESSION_WIDGET_SIZE.cols, MAX_SESSION_WIDGET_SIZE.cols),
-    rows: clamp(size.rows, MIN_SESSION_WIDGET_SIZE.rows, MAX_SESSION_WIDGET_SIZE.rows),
+    cols: clamp(size.cols, MIN_WIDGET_SIZE.cols, MAX_WIDGET_SIZE.cols),
+    rows: clamp(size.rows, MIN_WIDGET_SIZE.rows, MAX_WIDGET_SIZE.rows),
   };
 }
 
-function readSessionWidgetLayouts(dashboard: HarnessElement): SessionWidgetLayouts {
-  const rawLayouts = dashboard.props?.sessionWidgetLayouts;
-  if (!isRecord(rawLayouts)) return {};
-  const layouts: SessionWidgetLayouts = {};
-  for (const [sessionId, rawLayout] of Object.entries(rawLayouts)) {
-    if (!isRecord(rawLayout)) continue;
-    layouts[sessionId] = {
-      position: normalizeWidgetPosition(rawLayout.position),
-      size: clampWidgetSize(normalizeWidgetSize(rawLayout.size, DEFAULT_SESSION_WIDGET_SIZE)),
-    };
-  }
-  return layouts;
+function readWidgetPosition(element: HarnessElement, fallback: WidgetPosition) {
+  return normalizeWidgetPosition(element.props?.position ?? fallback);
 }
 
-function toJsonLayouts(layouts: SessionWidgetLayouts): JsonValue {
-  return Object.fromEntries(
-    Object.entries(layouts).map(([sessionId, layout]) => [
-      sessionId,
-      {
-        position: { col: layout.position.col, row: layout.position.row },
-        size: { cols: layout.size.cols, rows: layout.size.rows },
-      },
-    ]),
-  ) as JsonValue;
+function readWidgetSize(element: HarnessElement) {
+  return clampWidgetSize(normalizeWidgetSize(element.props?.size, DEFAULT_WIDGET_SIZE));
 }
 
 function widgetStyle(position: WidgetPosition, size: WidgetSize) {
@@ -131,12 +109,12 @@ function widgetStyle(position: WidgetPosition, size: WidgetSize) {
   } as CSSProperties;
 }
 
-function buildDefaultSessionPositions(sessionIds: readonly string[]): Record<string, WidgetPosition> {
-  return Object.fromEntries(sessionIds.map((sessionId, index) => [
-    sessionId,
+function buildDefaultWidgetPositions(widgetIds: readonly string[]): Record<string, WidgetPosition> {
+  return Object.fromEntries(widgetIds.map((widgetId, index) => [
+    widgetId,
     {
-      col: (index % 2) * 6,
-      row: Math.floor(index / 2) * 4,
+      col: (index % 2) * 7 - 7,
+      row: Math.floor(index / 2) * 4 - 2,
     },
   ]));
 }
@@ -149,28 +127,18 @@ function viewportStyle(viewport: ViewportState) {
   } as CSSProperties;
 }
 
+function menuStyle(x: number, y: number) {
+  return {
+    '--harness-menu-x': `${x}px`,
+    '--harness-menu-y': `${y}px`,
+  } as CSSProperties;
+}
+
 function formatDataNumber(value: number) {
   return Number(value.toFixed(2)).toString();
 }
 
-function plural(count: number, singular: string, pluralLabel = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : pluralLabel}`;
-}
-
-function formatSurfaceType(type: WorkspaceSurfaceSummary['surfaceType']) {
-  return type.split('-').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
-}
-
-function conversationMessages(session: HarnessSessionSummary) {
-  return (session.messages ?? []).filter((message) => message.role !== 'system' && message.content.trim());
-}
-
-function latestConversationText(session: HarnessSessionSummary) {
-  const latest = conversationMessages(session).at(-1);
-  return latest?.content.trim() || 'No conversation yet.';
-}
-
-function computeCanvasBounds(layouts: SessionWidgetLayouts) {
+function computeCanvasBounds(layouts: WidgetLayouts) {
   const entries = Object.values(layouts);
   if (!entries.length) {
     return { minX: -400, minY: -240, width: 800, height: 480 };
@@ -198,7 +166,7 @@ function computeCanvasBounds(layouts: SessionWidgetLayouts) {
   };
 }
 
-function minimapRectStyle(layout: SessionWidgetLayout, bounds: ReturnType<typeof computeCanvasBounds>) {
+function minimapRectStyle(layout: WidgetLayout, bounds: ReturnType<typeof computeCanvasBounds>) {
   const left = ((layout.position.col * GRID_STEP_PX) - bounds.minX) / bounds.width;
   const top = ((layout.position.row * GRID_STEP_PX) - bounds.minY) / bounds.height;
   const width = ((layout.size.cols * CELL_PX) + ((layout.size.cols - 1) * GAP_PX)) / bounds.width;
@@ -215,58 +183,74 @@ export function HarnessDashboardPanel({
   spec,
   workspaceName,
   sessions,
-  onCreateSessionWidget,
-  onOpenSession,
+  browserPages = [],
+  files = [],
+  knowledge,
+  onCreateDashboardWidget,
+  onOpenWidgetSession,
   onPatchElement,
-  onRegenerate,
-  onRestoreDefault,
   dragHandleProps,
-  surfaces = [],
 }: HarnessDashboardPanelProps) {
-  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 });
+  const [canvasMenu, setCanvasMenu] = useState<{ x: number; y: number; position: WidgetPosition } | null>(null);
   const interactionRef = useRef<DashboardInteraction | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const minimapRef = useRef<HTMLDivElement>(null);
   const dashboard = readDashboardElement(spec);
-  const storedLayouts = useMemo(() => readSessionWidgetLayouts(dashboard), [dashboard]);
-  const sessionIds = useMemo(() => sessions.map((session) => session.id), [sessions]);
-  const defaultPositions = useMemo(() => buildDefaultSessionPositions(sessionIds), [sessionIds]);
-  const sessionLayouts = useMemo<SessionWidgetLayouts>(() => {
-    const widgetPositions = Object.fromEntries(sessionIds.map((sessionId) => [
-      sessionId,
-      storedLayouts[sessionId]?.position ?? defaultPositions[sessionId] ?? { col: 0, row: 0 },
+  const widgets = useMemo(
+    () => (dashboard.children ?? [])
+      .map((widgetId) => spec.elements[widgetId])
+      .filter((element): element is HarnessElement => Boolean(element)),
+    [dashboard.children, spec.elements],
+  );
+  const widgetIds = useMemo(() => widgets.map((widget) => widget.id), [widgets]);
+  const defaultPositions = useMemo(() => buildDefaultWidgetPositions(widgetIds), [widgetIds]);
+  const widgetLayouts = useMemo<WidgetLayouts>(() => {
+    const widgetPositions = Object.fromEntries(widgets.map((widget) => [
+      widget.id,
+      readWidgetPosition(widget, defaultPositions[widget.id] ?? { col: 0, row: 0 }),
     ])) as Record<string, WidgetPosition>;
-    const widgetSizes = Object.fromEntries(sessionIds.map((sessionId) => [
-      sessionId,
-      storedLayouts[sessionId]?.size ?? DEFAULT_SESSION_WIDGET_SIZE,
+    const widgetSizes = Object.fromEntries(widgets.map((widget) => [
+      widget.id,
+      readWidgetSize(widget),
     ])) as Record<string, WidgetSize>;
-    const layout = resolveSpaceLayout({ widgetIds: sessionIds, widgetPositions, widgetSizes });
-    return Object.fromEntries(sessionIds.map((sessionId) => [
-      sessionId,
+    const layout = resolveSpaceLayout({ widgetIds, widgetPositions, widgetSizes });
+    return Object.fromEntries(widgets.map((widget) => [
+      widget.id,
       {
-        position: layout.positions[sessionId] ?? normalizeWidgetPosition(widgetPositions[sessionId]),
-        size: clampWidgetSize(layout.renderedSizes[sessionId] ?? normalizeWidgetSize(widgetSizes[sessionId], DEFAULT_SESSION_WIDGET_SIZE)),
+        position: layout.positions[widget.id] ?? normalizeWidgetPosition(widgetPositions[widget.id]),
+        size: clampWidgetSize(layout.renderedSizes[widget.id] ?? normalizeWidgetSize(widgetSizes[widget.id], DEFAULT_WIDGET_SIZE)),
       },
     ]));
-  }, [defaultPositions, sessionIds, storedLayouts]);
-  const minimapBounds = useMemo(() => computeCanvasBounds(sessionLayouts), [sessionLayouts]);
-  const canCustomize = Boolean(onPatchElement && onRegenerate && onRestoreDefault);
+  }, [defaultPositions, widgetIds, widgets]);
+  const minimapBounds = useMemo(() => computeCanvasBounds(widgetLayouts), [widgetLayouts]);
+  const renderContext = useMemo(() => ({
+    workspaceName,
+    sessions,
+    browserPages,
+    files,
+    knowledge,
+  }), [browserPages, files, knowledge, sessions, workspaceName]);
 
-  const commitSessionLayout = (sessionId: string, nextLayout: SessionWidgetLayout) => {
+  const commitWidgetLayout = (widgetId: string, nextLayout: WidgetLayout) => {
     if (!onPatchElement) return;
     onPatchElement({
-      elementId: dashboard.id,
+      elementId: widgetId,
       props: {
-        sessionWidgetLayouts: toJsonLayouts({
-          ...storedLayouts,
-          [sessionId]: {
-            position: normalizeWidgetPosition(nextLayout.position),
-            size: clampWidgetSize(normalizeWidgetSize(nextLayout.size, DEFAULT_SESSION_WIDGET_SIZE)),
-          },
-        }),
+        position: normalizeWidgetPosition(nextLayout.position),
+        size: clampWidgetSize(normalizeWidgetSize(nextLayout.size, DEFAULT_WIDGET_SIZE)),
       },
     });
+  };
+
+  const canvasPositionFromClient = (clientX: number, clientY: number): WidgetPosition => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const localX = clientX - (rect?.left ?? 0);
+    const localY = clientY - (rect?.top ?? 0);
+    return {
+      col: Math.round(((localX - viewport.panX) / viewport.zoom) / GRID_STEP_PX),
+      row: Math.round(((localY - viewport.panY) / viewport.zoom) / GRID_STEP_PX),
+    };
   };
 
   const navigateFromMinimap = (clientX: number, clientY: number) => {
@@ -328,7 +312,7 @@ export function HarnessDashboardPanel({
       const key = JSON.stringify(nextLayout);
       if (key === interaction.lastKey) return;
       interactionRef.current = { ...interaction, lastKey: key };
-      commitSessionLayout(interaction.sessionId, nextLayout);
+      commitWidgetLayout(interaction.widgetId, nextLayout);
     };
 
     const handlePointerUp = (event: PointerEvent) => {
@@ -345,12 +329,13 @@ export function HarnessDashboardPanel({
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerUp);
     };
-  }, [commitSessionLayout, navigateFromMinimap, viewport.zoom]);
+  }, [commitWidgetLayout, navigateFromMinimap, viewport.zoom]);
 
   const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    setCanvasMenu(null);
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
-    if (target.closest('.harness-widget-card, .harness-add-widget-card, .harness-dashboard-minimap, button, input, select, textarea')) {
+    if (target.closest('.harness-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
       return;
     }
     interactionRef.current = {
@@ -361,6 +346,20 @@ export function HarnessDashboardPanel({
       originPanX: viewport.panX,
       originPanY: viewport.panY,
     };
+  };
+
+  const handleCanvasContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('.harness-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setCanvasMenu({
+      x: event.clientX,
+      y: event.clientY,
+      position: canvasPositionFromClient(event.clientX, event.clientY),
+    });
   };
 
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -383,8 +382,8 @@ export function HarnessDashboardPanel({
 
   const startWidgetInteraction = (
     kind: WidgetInteraction['kind'],
-    sessionId: string,
-    layout: SessionWidgetLayout,
+    widgetId: string,
+    layout: WidgetLayout,
     event: ReactPointerEvent<HTMLElement>,
   ) => {
     if (!onPatchElement || event.button !== 0) return;
@@ -395,7 +394,7 @@ export function HarnessDashboardPanel({
     interactionRef.current = {
       kind,
       pointerId: event.pointerId,
-      sessionId,
+      widgetId,
       startX: event.clientX,
       startY: event.clientY,
       origin: layout,
@@ -416,29 +415,6 @@ export function HarnessDashboardPanel({
 
   return (
     <section className="harness-dashboard-panel" aria-label="Harness dashboard">
-      <div className={`panel-titlebar harness-dashboard-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
-        <div className="panel-titlebar-heading">
-          <span className="panel-resource-eyebrow">workspace/{workspaceName}</span>
-          <h2>{readTitle(spec, dashboard.id, `${workspaceName} harness`)}</h2>
-        </div>
-        <div className="panel-titlebar-actions">
-          {canCustomize ? (
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => setInspectorOpen((current) => !current)}
-              aria-pressed={inspectorOpen}
-            >
-              Customize
-            </button>
-          ) : null}
-          <button type="button" className="secondary-button harness-new-session-widget-button" onClick={onCreateSessionWidget}>
-            <Plus size={13} />
-            <span>New session widget</span>
-          </button>
-        </div>
-      </div>
-
       <div className="harness-dashboard-workbench">
         <div
           ref={canvasRef}
@@ -447,139 +423,96 @@ export function HarnessDashboardPanel({
           data-pan-x={formatDataNumber(viewport.panX)}
           data-pan-y={formatDataNumber(viewport.panY)}
           data-zoom={formatDataNumber(viewport.zoom)}
+          onContextMenu={handleCanvasContextMenu}
           onPointerDown={handleCanvasPointerDown}
           onWheel={handleWheel}
         >
+          <div className="harness-dashboard-canvas-chrome">
+            <div
+              className={`harness-dashboard-canvas-heading${dragHandleProps ? ' harness-dashboard-canvas-heading--draggable' : ''}`}
+              {...dragHandleProps}
+            >
+              <span className="panel-resource-eyebrow">workspace/{workspaceName}</span>
+              <h2>{readTitle(spec, dashboard.id, `${workspaceName} harness`)}</h2>
+            </div>
+          </div>
           <div className="harness-dashboard-space" style={viewportStyle(viewport)}>
-            <div className="harness-dashboard-grid" aria-label="Session widgets">
-              {sessions.map((session) => {
-                const layout = sessionLayouts[session.id] ?? {
+            <div className="harness-dashboard-grid" aria-label="Dashboard widgets">
+              {widgets.map((widget) => {
+                const title = readElementTitle(widget, widget.id);
+                const layout = widgetLayouts[widget.id] ?? {
                   position: { col: 0, row: 0 },
-                  size: DEFAULT_SESSION_WIDGET_SIZE,
+                  size: DEFAULT_WIDGET_SIZE,
                 };
-                const messages = conversationMessages(session);
-                const assets = session.assets ?? [];
                 return (
                   <article
-                    key={session.id}
-                    className="harness-widget-card harness-session-widget-card"
-                    aria-label={`${session.name} widget`}
+                    key={widget.id}
+                    className="harness-widget-card"
+                    aria-label={`${title} widget`}
                     style={widgetStyle(layout.position, layout.size)}
                   >
                     <header
                       className="harness-widget-header harness-widget-drag-handle"
-                      aria-label={`Move ${session.name} widget`}
-                      onPointerDown={(event) => startWidgetInteraction('move', session.id, layout, event)}
+                      aria-label={`Move ${title} widget`}
+                      onPointerDown={(event) => startWidgetInteraction('move', widget.id, layout, event)}
                     >
                       <div className="harness-widget-title-group">
                         <button
                           type="button"
                           className="harness-widget-title-button"
-                          aria-label={`Open ${session.name}`}
-                          onClick={() => onOpenSession?.(session.id)}
+                          aria-label={`Open ${title} widget session`}
+                          onClick={() => onOpenWidgetSession?.(widget.id)}
                         >
-                          {session.name}
+                          {title}
                         </button>
-                        <span className="harness-widget-kicker">Linked chat session</span>
+                        <span className="harness-widget-kicker">Dashboard widget</span>
                       </div>
-                      <span className="harness-widget-badge">{session.isOpen ? 'Open' : 'Session'}</span>
+                      <span className="harness-widget-badge">{widget.type}</span>
                     </header>
                     <div className="harness-widget-body">
-                      <div className="harness-render-block harness-session-summary">
-                        <div className="harness-metric-row">
-                          <span>{plural(messages.length, 'message')}</span>
-                          <span>{plural(assets.length, 'asset')}</span>
-                          <span>{session.mode ?? 'agent'}</span>
-                        </div>
-                        <p className="harness-widget-summary">{latestConversationText(session)}</p>
-                        {assets.length ? (
-                          <ul className="harness-widget-list" aria-label={`${session.name} assets`}>
-                            {assets.slice(0, 4).map((asset) => (
-                              <li key={asset.path}>
-                                <span>{asset.path}</span>
-                                <small>{asset.kind ?? 'asset'}</small>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="harness-widget-empty">No session assets yet</p>
-                        )}
-                      </div>
+                      <HarnessJsonRenderer spec={spec} rootId={widget.id} context={renderContext} />
                     </div>
                     <button
                       type="button"
                       className="harness-widget-resize-handle"
-                      aria-label={`Resize ${session.name} widget`}
+                      aria-label={`Resize ${title} widget`}
                       disabled={!onPatchElement}
-                      onPointerDown={(event) => startWidgetInteraction('resize', session.id, layout, event)}
+                      onPointerDown={(event) => startWidgetInteraction('resize', widget.id, layout, event)}
                     />
                   </article>
                 );
               })}
-
-              {!sessions.length ? (
-                <article className="harness-add-widget-card harness-empty-session-widget-card" aria-label="No session widgets">
+              {!widgets.length ? (
+                <article className="harness-add-widget-card harness-empty-session-widget-card" aria-label="No dashboard widgets">
                   <header className="harness-widget-header">
-                    <h3>No session widgets</h3>
+                    <h3>No dashboard widgets</h3>
                   </header>
                   <div className="harness-add-widget-body">
-                    <p className="harness-widget-empty">Create a session widget to add a linked chat session to the canvas.</p>
-                    <button type="button" className="primary-button" onClick={onCreateSessionWidget}>
-                      <Plus size={13} />
-                      <span>New session widget</span>
-                    </button>
+                    <p className="harness-widget-empty">Right-click the canvas to create a widget.</p>
                   </div>
                 </article>
               ) : null}
-
-              <section
-                className="harness-workspace-surfaces-widget"
-                aria-label="Agent-authored workspace surfaces"
-              >
-                <header className="harness-workspace-surfaces-header">
-                  <div>
-                    <span className="harness-widget-kicker">Governed app outputs</span>
-                    <h3>Workspace surfaces</h3>
-                  </div>
-                  <span className="harness-widget-badge">{plural(surfaces.length, 'surface')}</span>
-                </header>
-                {surfaces.length ? (
-                  <ul className="harness-workspace-surface-list">
-                    {surfaces.slice(0, 5).map((surface) => (
-                      <li key={surface.id}>
-                        <div className="harness-workspace-surface-title-row">
-                          <strong>{surface.title}</strong>
-                          <span>{formatSurfaceType(surface.surfaceType)}</span>
-                        </div>
-                        <p>{surface.description ?? `${surface.renderTarget} surface owned by ${surface.createdByAgent}`}</p>
-                        <dl>
-                          <div>
-                            <dt>Owner</dt>
-                            <dd>{surface.createdByAgent}{surface.ownerSessionId ? ` / ${surface.ownerSessionId}` : ''}</dd>
-                          </div>
-                          <div>
-                            <dt>Revision</dt>
-                            <dd>{surface.revision}</dd>
-                          </div>
-                          <div>
-                            <dt>Permissions</dt>
-                            <dd>{surface.permissionSummary}</dd>
-                          </div>
-                          <div>
-                            <dt>Rollback</dt>
-                            <dd>{surface.canRollback ? 'available' : 'locked'}</dd>
-                          </div>
-                        </dl>
-                        <code>{`//artifacts/${surface.artifactId}/${surface.artifactFilePath}`}</code>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="harness-widget-empty">No agent-authored surfaces yet.</p>
-                )}
-              </section>
             </div>
           </div>
+          {canvasMenu ? (
+            <div
+              className="harness-dashboard-context-menu"
+              role="menu"
+              aria-label="Canvas widget menu"
+              style={menuStyle(canvasMenu.x, canvasMenu.y)}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onCreateDashboardWidget?.(canvasMenu.position);
+                  setCanvasMenu(null);
+                }}
+              >
+                Create widget
+              </button>
+            </div>
+          ) : null}
           <div
             ref={minimapRef}
             className="harness-dashboard-minimap"
@@ -587,29 +520,21 @@ export function HarnessDashboardPanel({
             onPointerDown={startMinimapInteraction}
           >
             <div className="harness-dashboard-minimap-grid">
-              {sessions.map((session) => {
-                const layout = sessionLayouts[session.id];
+              {widgets.map((widget) => {
+                const layout = widgetLayouts[widget.id];
                 if (!layout) return null;
                 return (
                   <span
-                    key={session.id}
+                    key={widget.id}
                     className="harness-dashboard-minimap-region"
                     style={minimapRectStyle(layout, minimapBounds)}
-                    title={session.name}
+                    title={readElementTitle(widget, widget.id)}
                   />
                 );
               })}
             </div>
           </div>
         </div>
-        {inspectorOpen && onPatchElement && onRegenerate && onRestoreDefault ? (
-          <HarnessInspectorPanel
-            spec={spec}
-            onPatchElement={onPatchElement}
-            onRegenerate={onRegenerate}
-            onRestoreDefault={onRestoreDefault}
-          />
-        ) : null}
       </div>
     </section>
   );

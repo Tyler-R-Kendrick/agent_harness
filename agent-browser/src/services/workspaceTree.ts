@@ -18,12 +18,18 @@ export type WorkspaceViewState = {
 export const WORKSPACE_COLORS = ['#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#a78bfa', '#fb7185'] as const;
 
 const CATEGORY_LABELS: Record<NodeKind, string> = {
+  dashboard: 'Dashboard',
   browser: 'Browser',
   session: 'Sessions',
   terminal: 'Terminal',
   agent: 'Agent',
   files: 'Files',
   clipboard: 'Clipboard',
+};
+
+export type DashboardWidgetNodeInput = {
+  id: string;
+  title: string;
 };
 
 export function createClipboardNode(workspaceId: string): TreeNode {
@@ -70,6 +76,17 @@ function categoryNode(workspaceId: string, kind: NodeKind, children: TreeNode[] 
   };
 }
 
+export function createDashboardWidgetNode(workspaceId: string, widget: DashboardWidgetNodeInput): TreeNode {
+  return {
+    id: `${workspaceId}:dashboard:${widget.id}`,
+    name: widget.title,
+    type: 'tab',
+    nodeKind: 'dashboard',
+    persisted: true,
+    dashboardWidgetId: widget.id,
+  };
+}
+
 export function createWorkspaceNode({
   id,
   name,
@@ -89,6 +106,7 @@ export function createWorkspaceNode({
     activeMemory: true,
     color,
     children: [
+      categoryNode(id, 'dashboard', []),
       categoryNode(id, 'browser', browserTabs),
       categoryNode(id, 'session', [createSessionNode(id, 1)]),
       categoryNode(id, 'files', []),
@@ -208,12 +226,43 @@ export function ensureWorkspaceCategories(workspace: TreeNode): TreeNode {
   const clipboardNode = (workspace.children ?? []).find((child) => child.type === 'tab' && child.nodeKind === 'clipboard')
     ?? createClipboardNode(workspace.id);
   const nextChildren: TreeNode[] = [
+    existing.get('dashboard') ?? categoryNode(workspace.id, 'dashboard', []),
     existing.get('browser') ?? categoryNode(workspace.id, 'browser', legacyTabChildren),
     sessionCategory,
     existing.get('files') ?? categoryNode(workspace.id, 'files', []),
     clipboardNode,
   ];
   return { ...workspace, children: nextChildren };
+}
+
+export function syncWorkspaceDashboardNodes(workspace: TreeNode, widgets: readonly DashboardWidgetNodeInput[]): TreeNode {
+  const normalized = ensureWorkspaceCategories(workspace);
+  const existingDashboard = getWorkspaceCategory(normalized, 'dashboard');
+  const existingByWidgetId = new Map(
+    (existingDashboard?.children ?? [])
+      .filter((child) => child.type === 'tab' && child.nodeKind === 'dashboard')
+      .map((child) => [child.dashboardWidgetId ?? child.filePath ?? child.id, child]),
+  );
+  const widgetNodes = widgets.map((widget) => {
+    const existing = existingByWidgetId.get(widget.id);
+    return {
+      ...(existing ?? createDashboardWidgetNode(workspace.id, widget)),
+      id: `${workspace.id}:dashboard:${widget.id}`,
+      name: widget.title,
+      type: 'tab' as const,
+      nodeKind: 'dashboard' as const,
+      persisted: true,
+      dashboardWidgetId: widget.id,
+    };
+  });
+  return {
+    ...normalized,
+    children: (normalized.children ?? []).map((child) => (
+      child.nodeKind === 'dashboard'
+        ? { ...child, expanded: true, children: widgetNodes }
+        : child
+    )),
+  };
 }
 
 export function findFirstSessionId(workspace: TreeNode): string | null {
@@ -317,6 +366,10 @@ export function renderPaneIdForNode(node: TreeNode): string | null {
   }
   if (node.type === 'tab' && node.nodeKind === 'session') {
     return `session:${node.id}`;
+  }
+  if (node.type === 'tab' && node.nodeKind === 'dashboard') {
+    const workspaceId = node.id.includes(':dashboard:') ? node.id.slice(0, node.id.indexOf(':dashboard:')) : node.id;
+    return `dashboard:${workspaceId}`;
   }
   if (node.type === 'file' && node.filePath) {
     return `file:${node.filePath}`;

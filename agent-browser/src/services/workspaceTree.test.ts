@@ -9,12 +9,13 @@ import {
   getWorkspaceCategory,
   normalizeWorkspaceViewEntry,
   renderPaneIdForNode,
+  syncWorkspaceDashboardNodes,
   workspaceViewStateEquals,
 } from './workspaceTree';
 import type { TreeNode } from '../types';
 
 describe('workspaceTree', () => {
-  it('creates normalized workspaces with browser, session, files, and clipboard entries', () => {
+  it('creates normalized workspaces with dashboard, browser, session, files, and clipboard entries', () => {
     const browserTab = createBrowserTab('Docs', 'https://example.com/docs', 'hot', 64, true);
     const workspace = createWorkspaceNode({
       id: 'ws-test',
@@ -23,6 +24,7 @@ describe('workspaceTree', () => {
       browserTabs: [browserTab],
     });
 
+    expect(workspace.children?.[0]).toEqual(expect.objectContaining({ name: 'Dashboard', nodeKind: 'dashboard' }));
     expect(getWorkspaceCategory(workspace, 'browser')?.children).toEqual([browserTab]);
     expect(getWorkspaceCategory(workspace, 'session')?.children?.[0]).toEqual(expect.objectContaining({
       name: 'Session 1',
@@ -104,6 +106,26 @@ describe('workspaceTree', () => {
     expect(buildWorkspaceNodeMap(root).get(browserId)).toBe('ws-filter');
   });
 
+  it('syncs dashboard widget nodes under the Dashboard section', () => {
+    const workspace = createWorkspaceNode({
+      id: 'ws-dashboard-nodes',
+      name: 'Dashboard nodes',
+      color: '#fff',
+      browserTabs: [],
+    });
+
+    const synced = syncWorkspaceDashboardNodes(workspace, [
+      { id: 'session-summary-widget', title: 'Session summary' },
+      { id: 'knowledge-widget', title: 'Knowledge' },
+    ]);
+    const dashboard = getWorkspaceCategory(synced, 'dashboard');
+
+    expect(dashboard?.children).toEqual([
+      expect.objectContaining({ name: 'Session summary', nodeKind: 'dashboard', dashboardWidgetId: 'session-summary-widget' }),
+      expect.objectContaining({ name: 'Knowledge', nodeKind: 'dashboard', dashboardWidgetId: 'knowledge-widget' }),
+    ]);
+  });
+
   it('derives stable render pane ids and compares workspace view state by value', () => {
     const file: TreeNode = {
       id: 'file-node',
@@ -123,6 +145,7 @@ describe('workspaceTree', () => {
 
     expect(renderPaneIdForNode(file)).toBe('file:AGENTS.md');
     expect(renderPaneIdForNode({ id: 'ws-test', name: 'Test', type: 'workspace' })).toBe('dashboard:ws-test');
+    expect(renderPaneIdForNode({ id: 'ws-test:dashboard:knowledge-widget', name: 'Knowledge', type: 'tab', nodeKind: 'dashboard' })).toBe('dashboard:ws-test');
     expect(workspaceViewStateEquals(left, { ...left })).toBe(true);
     expect(workspaceViewStateEquals(left, { ...left, dashboardOpen: false })).toBe(false);
     expect(workspaceViewStateEquals(left, { ...left, panelOrder: [] })).toBe(false);
