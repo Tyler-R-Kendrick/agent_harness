@@ -1,8 +1,148 @@
-export * from './adapters';
-export * from './artifact';
-export * from './capability';
-export * from './ids';
-export * from './policy';
-export * from './provider';
-export * from './sandbox';
-export * from './worker';
+export { DeepAgentsSandboxAdapter } from './adapters';
+export { InMemoryArtifactStore } from './artifact';
+export type {
+  Artifact,
+  ArtifactStore,
+  Diagnostic,
+  SerializedError,
+} from './artifact';
+export {
+  CapExecJavaScript,
+  CapExecPython,
+  CapExecShell,
+  CapFsVirtual,
+  CapFsWorkspaceScoped,
+  CapIsolationContainer,
+  CapIsolationMicrovm,
+  CapIsolationWasm,
+  CapLifecycleLongRunning,
+  CapNetworkEgress,
+  CapPackagesNpm,
+  CapPersistenceDurable,
+  CapPersistenceEphemeral,
+  CapPreviewHtml,
+  CapPreviewPort,
+  CapProcessNative,
+  DefaultCapabilityMatcher,
+  DefaultCapabilitySet,
+} from './capability';
+export type {
+  Capability,
+  CapabilityMatcher,
+  CapabilityMatchResult,
+  CapabilityRequirement,
+  CapabilitySet,
+} from './capability';
+export {
+  capabilityId,
+  eventTypeId,
+  jobIntentId,
+  providerId,
+  runtimeTypeId,
+  sandboxTypeId,
+  workerTypeId,
+} from './ids';
+export type {
+  CapabilityId,
+  EventTypeId,
+  JobIntentId,
+  ProviderId,
+  RuntimeTypeId,
+  SandboxTypeId,
+  WorkerTypeId,
+} from './ids';
+export { DefaultPolicyEngine } from './policy';
+export type {
+  DefaultPolicyEngineOptions,
+  EffectivePolicy,
+  ExecutionPolicy,
+  ExecutionPolicyRequest,
+  FilesystemPolicy,
+  FilesystemPolicyRequest,
+  NetworkPolicy,
+  NetworkPolicyRequest,
+  PolicyDecision,
+  PolicyEngine,
+  PolicyEvaluationRequest,
+  PolicyRequest,
+  PreviewPolicy,
+  PreviewPolicyRequest,
+  SecretPolicy,
+  SecretPolicyRequest,
+} from './policy';
+export {
+  DefaultProviderRegistry,
+  SandboxProviderMarker,
+  SurfaceSandboxAdapter,
+  SurfaceSandboxProvider,
+  SurfaceWorkerAdapter,
+  SurfaceWorkerProvider,
+  WorkerProviderMarker,
+  isSandboxProvider,
+  isWorkerProvider,
+} from './provider';
+export type {
+  Clock,
+  Logger,
+  ProjectRef,
+  Provider,
+  ProviderContext,
+  ProviderDescriptor,
+  ProviderRef,
+  ProviderRegistry,
+  ProviderSurface,
+  SubjectRef,
+} from './provider';
+export { DefaultSandboxBroker, DefaultSandboxResolver } from './sandbox';
+export type {
+  CreateSandboxRequest,
+  DefaultSandboxBrokerOptions,
+  Sandbox,
+  SandboxBroker,
+  SandboxDescriptor,
+  SandboxDownloadRequest,
+  SandboxDownloadResult,
+  SandboxDownloadedFile,
+  SandboxExecuteRequest,
+  SandboxExecuteResult,
+  SandboxFile,
+  SandboxFileResult,
+  SandboxLease,
+  SandboxProvider,
+  SandboxQuery,
+  SandboxRef,
+  SandboxResolver,
+  SandboxUploadRequest,
+  SandboxUploadResult,
+} from './sandbox';
+export {
+  DefaultWorkerBroker,
+  DefaultWorkerResolver,
+  EventArtifactCreated,
+  EventDiagnosticCreated,
+  EventJobAccepted,
+  EventJobCompleted,
+  EventJobFailed,
+  EventSandboxCreated,
+  EventSandboxStderr,
+  EventSandboxStdout,
+  EventWorkerStarted,
+} from './worker';
+export type {
+  CreateWorkerRequest,
+  DefaultWorkerBrokerOptions,
+  RuntimeDescriptor,
+  StopOptions,
+  SubmitJobOptions,
+  Worker,
+  WorkerBroker,
+  WorkerDescriptor,
+  WorkerEvent,
+  WorkerJob,
+  WorkerProvider,
+  WorkerQuery,
+  WorkerRef,
+  WorkerResolver,
+  WorkerResult,
+  WorkerRun,
+} from './worker';
