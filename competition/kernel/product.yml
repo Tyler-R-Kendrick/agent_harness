@@ -1,0 +1,22 @@
+slug: kernel
+name: Kernel
+vendor: Kernel
+segment: serverless-browser-infrastructure
+product_path: competition/kernel
+design_path: competition/kernel/design
+features_path: competition/kernel/features
+marketing_path: competition/kernel/marketing
+gossip_path: competition/kernel/gossip
+snapshot_date: 2026-05-09
+primary_sources:
+  - https://www.kernel.sh/docs
+  - https://www.kernel.sh/docs/info/pricing
+  - https://www.kernel.sh/docs/integrations/agent-browser
+  - https://www.kernel.sh/docs/reference/cli/browsers
+secondary_sources:
+  - https://www.onkernel.com/docs/browsers/stealth/
+  - https://www.kernel.sh/docs/migrations/scrapybara
+positioning: "Browsers-as-a-service API for web agents and automations, with CDP, live view, replays, profiles, managed auth, stealth, standby, and browser pools."
+customer_model: "Usage-based developer SaaS with free credits, paid monthly plans, per-second browser pricing, replay/profile gates, and enterprise compliance."
+competitive_threat_level: high
+notes: "Directly relevant because Kernel already documents an agent-browser provider integration and competes as a cloud execution backend."
