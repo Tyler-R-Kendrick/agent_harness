@@ -41,7 +41,7 @@ export function createPersistentMemoryGraphClient(initialState = createPersisten
   }
 
   return {
-    getState: () => state,
+    getState: () => clonePersistentMemoryGraphState(state),
     init: () => request<PersistentMemoryGraphState>({ type: 'init' }),
     loadSampleMemory: (now) => request<PersistentMemoryGraphState>({ type: 'loadSampleMemory', now }),
     ingestText: (input) => request<PersistentMemoryGraphState>({ type: 'ingestText', input }),
@@ -51,4 +51,8 @@ export function createPersistentMemoryGraphClient(initialState = createPersisten
     importMemory: (serialized) => request<PersistentMemoryGraphState>({ type: 'importMemory', serialized }),
     resetDatabase: (now) => request<PersistentMemoryGraphState>({ type: 'resetDatabase', now }),
   };
+}
+
+function clonePersistentMemoryGraphState(state: PersistentMemoryGraphState): PersistentMemoryGraphState {
+  return structuredClone(state) as PersistentMemoryGraphState;
 }

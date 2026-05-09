@@ -18,6 +18,26 @@ describe('persistentMemoryGraph worker boundary', () => {
     expect((await client.searchMemory('Kuzu-WASM')).entities.length).toBeGreaterThan(0);
   });
 
+  it('keeps returned graph snapshots isolated from future client requests', async () => {
+    const client = createPersistentMemoryGraphClient();
+
+    const loadedState = await client.loadSampleMemory('2026-05-09T00:00:00.000Z');
+    const originalTitle = loadedState.documents[0]!.title;
+    loadedState.documents[0]!.title = 'mutated through returned state payload';
+
+    expect(client.getState().documents[0]?.title).toBe(originalTitle);
+
+    const stateSnapshot = client.getState();
+    stateSnapshot.documents[0]!.title = 'mutated through getState snapshot';
+
+    expect(client.getState().documents[0]?.title).toBe(originalTitle);
+
+    const searchResult = await client.searchMemory('Kuzu-WASM graph retrieval');
+    searchResult.chunks[0]!.text = 'mutated through search payload';
+
+    expect(client.getState().chunks[0]?.text).not.toBe('mutated through search payload');
+  });
+
   it('returns typed errors for invalid imports without losing existing graph state', async () => {
     let state = (await handlePersistentMemoryGraphRequest(undefined, { id: '1', type: 'loadSampleMemory' })).state;
     const response = await handlePersistentMemoryGraphRequest(state, {
