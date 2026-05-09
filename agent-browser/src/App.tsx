@@ -191,9 +191,7 @@ import {
 } from './services/runtimePlugins';
 import {
   DEFAULT_SCHEDULED_AUTOMATION_STATE,
-  buildScheduledAutomationInbox,
   isScheduledAutomationState,
-  projectDueScheduledAutomations,
   updateScheduledAutomation,
   type ScheduledAutomation,
   type ScheduledAutomationCadence,
@@ -206,7 +204,6 @@ import {
   buildCheckpointProcessEntry,
   buildCheckpointPromptContext,
   createRunCheckpoint,
-  expireDueRunCheckpoints,
   isRunCheckpointState,
   resumeRunCheckpoint,
   updateRunCheckpointPolicy,
@@ -217,7 +214,6 @@ import {
 import {
   DEFAULT_BROWSER_AGENT_RUN_SDK_STATE,
   isBrowserAgentRunSdkState,
-  type BrowserAgentRunEvent,
   type BrowserAgentRunSdkState,
 } from './services/browserAgentRunSdk';
 import { LocalLanguageModel } from './services/localLanguageModel';
@@ -404,6 +400,7 @@ import {
   isStringRecord,
   isTreeNode,
   isWorkspaceViewStateRecord,
+  loadJson,
   removeStoredRecordEntry,
   saveJson,
   useStoredState,
@@ -439,7 +436,6 @@ import {
 } from './services/multitaskSubagents';
 import {
   DEFAULT_CONVERSATION_BRANCHING_STATE,
-  buildConversationBranchProcessEntries,
   buildConversationBranchPromptContext,
   canSubmitToConversationSession,
   commitConversationSubthread,
@@ -448,7 +444,6 @@ import {
   getConversationSubthreadForSession,
   isConversationBranchingRequest,
   isConversationBranchingState,
-  mergeConversationSubthread,
   summarizeConversationBranches,
   type ConversationBranchingState,
   type ConversationBranchSettings,
@@ -572,6 +567,29 @@ import {
   type FlatTreeItem,
   type WorkspaceViewState,
 } from './services/workspaceTree';
+import {
+  buildWorkspaceHistoryGraph,
+  type WorkspaceHistoryGraph,
+  type WorkspaceHistoryRow,
+  type WorkspaceHistorySessionInput,
+} from './services/workspaceHistoryGraph';
+import {
+  isWorkspaceFileCrdtHistoriesByWorkspace,
+  listWorkspaceFileCrdtHistories,
+  materializeWorkspaceFileVersion,
+  recordWorkspaceFileCrdtChanges,
+  type WorkspaceFileCrdtHistoriesByWorkspace,
+  type WorkspaceFileCrdtHistory,
+} from './services/workspaceFileCrdtHistory';
+import {
+  DEFAULT_WORKSPACE_ACTION_HISTORY_STATE,
+  isWorkspaceActionHistoryState,
+  moveWorkspaceActionHistoryCursor,
+  recordWorkspaceActionTransition,
+  type WorkspaceActionHistoryDirection,
+  type WorkspaceActionHistoryState,
+  type WorkspaceActionSnapshot,
+} from './services/workspaceActionHistory';
 import {
   createProjectWorkspace,
   listProjectSummaries,
@@ -10642,305 +10660,351 @@ function BrowserAgentRunSdkSettingsPanel({ state }: { state: BrowserAgentRunSdkS
   );
 }
 
-function BrowserAgentRunSdkHistory({ state }: { state: BrowserAgentRunSdkState }) {
-  const latestRun = state.runs[0] ?? null;
-  const latestEvents = latestRun
-    ? state.events
-      .filter((event) => event.runId === latestRun.id)
-      .sort((left, right) => right.sequence - left.sequence)
-      .slice(0, 3)
-    : [];
+function WorkspaceHistoryGraphPanel({
+  graph,
+  selectedRowId,
+  onSelectRow,
+}: {
+  graph: WorkspaceHistoryGraph;
+  selectedRowId: string | null;
+  onSelectRow: (rowId: string) => void;
+}) {
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const toggleRow = (rowId: string) => {
+    setExpandedRows((current) => ({ ...current, [rowId]: !current[rowId] }));
+    onSelectRow(rowId);
+  };
 
   return (
-    <SidebarSection title="Typed run SDK" scrollBody>
-      <div className="browser-agent-run-sdk-summary">
-        {latestRun ? (
-          <article className="list-card history-card browser-agent-run-sdk-history-card">
-            <div className="history-card-header">
-              <div>
-                <h3>{latestRun.title}</h3>
-                <p className="muted">{latestRun.mode} · {latestRun.status} · cursor {latestRun.eventCursor}</p>
-              </div>
-              <span className={`badge${latestRun.status === 'running' ? ' connected' : ''}`}>{latestRun.status}</span>
-            </div>
-            <p className="history-preview">{latestRun.prompt}</p>
-            <BrowserAgentRunEventList events={latestEvents} />
-          </article>
-        ) : (
-          <article className="list-card history-card browser-agent-run-sdk-history-card">
-            <div className="history-card-header">
-              <div>
-                <h3>No SDK runs yet</h3>
-                <p className="muted">Create a run through the typed SDK to persist lifecycle events.</p>
-              </div>
-              <span className="badge">empty</span>
-            </div>
-          </article>
-        )}
+    <section className="workspace-history-graph" aria-label="Workspace git graph">
+      <div className="workspace-history-graph-header">
+        <div>
+          <span className="panel-eyebrow">Graph</span>
+          <h3>{graph.workspaceName}</h3>
+        </div>
+        <div className="workspace-history-summary" aria-label="Workspace history summary">
+          <span>{graph.summary.timelineNodes} nodes</span>
+          <span>{graph.summary.mainlineCommits} main</span>
+          <span>{graph.summary.lanes.length} lanes</span>
+          <span>{graph.summary.squashMerges} squash</span>
+        </div>
       </div>
-    </SidebarSection>
+      {graph.rows.length ? (
+        <div className="workspace-history-scroll" aria-label="Scrollable workspace history" tabIndex={0}>
+          <ol className="workspace-history-mainline" aria-label="Main history">
+            {graph.rows.map((row, index) => (
+              <WorkspaceHistoryGraphRow
+                key={row.id}
+                row={row}
+                isFirst={index === 0}
+                isLast={index === graph.rows.length - 1}
+                selected={selectedRowId === row.id}
+                expanded={Boolean(expandedRows[row.id])}
+                onSelect={() => onSelectRow(row.id)}
+                onToggle={() => toggleRow(row.id)}
+              />
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <p className="workspace-history-empty">No session commits recorded yet.</p>
+      )}
+    </section>
   );
 }
 
-function BrowserAgentRunEventList({ events }: { events: BrowserAgentRunEvent[] }) {
+function WorkspaceHistoryCursorControls({
+  state,
+  workspaceId,
+  onMoveCursor,
+}: {
+  state: WorkspaceActionHistoryState;
+  workspaceId: string;
+  onMoveCursor: (direction: WorkspaceActionHistoryDirection) => void;
+}) {
+  const actions = state.actions
+    .filter((action) => action.workspaceId === workspaceId)
+    .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id));
+  const hasExplicitCursor = Object.prototype.hasOwnProperty.call(state.cursorByWorkspace, workspaceId);
+  const cursor = hasExplicitCursor ? state.cursorByWorkspace[workspaceId] : actions.at(-1)?.id ?? null;
+  const cursorIndex = cursor === null ? -1 : actions.findIndex((action) => action.id === cursor);
+  const canMoveBack = actions.length > 0 && cursorIndex >= 0;
+  const canMoveForward = actions.length > 0 && cursorIndex < actions.length - 1;
+  const cursorLabel = cursorIndex < 0 ? 'baseline' : `${cursorIndex + 1}/${actions.length}`;
+
   return (
-    <ul className="history-events browser-agent-run-sdk-events">
-      {events.map((event) => (
-        <li key={event.id}>
-          <span>{event.summary}</span>
-          <code>#{event.sequence}</code>
+    <div className="workspace-history-cursor-controls" aria-label="Workspace history navigation">
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Move back on workspace history timeline"
+        disabled={!canMoveBack}
+        onClick={() => onMoveCursor('back')}
+      >
+        <Icon name="arrowLeft" size={13} />
+      </button>
+      <span>Timeline cursor: {cursorLabel}</span>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Move forward on workspace history timeline"
+        disabled={!canMoveForward}
+        onClick={() => onMoveCursor('forward')}
+      >
+        <Icon name="arrowRight" size={13} />
+      </button>
+    </div>
+  );
+}
+
+function WorkspaceHistoryGraphRow({
+  row,
+  isFirst,
+  isLast,
+  selected,
+  expanded,
+  onSelect,
+  onToggle,
+}: {
+  row: WorkspaceHistoryRow;
+  isFirst: boolean;
+  isLast: boolean;
+  selected: boolean;
+  expanded: boolean;
+  onSelect: () => void;
+  onToggle: () => void;
+}) {
+  const detailLabel = `${row.detailCount} commit${row.detailCount === 1 ? '' : 's'}`;
+  return (
+    <li className={`workspace-history-row${isFirst ? ' is-first' : ''}${isLast ? ' is-last' : ''}${selected ? ' is-selected' : ''}`}>
+      <div className="workspace-history-lane" aria-hidden="true">
+        <span className="workspace-history-lane-line" />
+        <span className="workspace-history-dot" style={{ backgroundColor: row.color }} />
+      </div>
+      <div className="workspace-history-row-body">
+        <button
+          type="button"
+          className="workspace-history-row-select"
+          aria-pressed={selected}
+          aria-label={`Open history detail for ${row.title}`}
+          onClick={onSelect}
+        >
+          <span className="workspace-history-row-title">
+            <strong>{row.title}</strong>
+            <span className="workspace-history-branch-pill">{row.statusLabel}</span>
+          </span>
+          <span className="workspace-history-row-summary">{row.summary}</span>
+          <span className="workspace-history-row-meta">
+            <span>{formatWorkspaceHistoryTime(row.timestamp)}</span>
+            <span>{row.sourceBranchName}</span>
+          </span>
+        </button>
+        {row.detailCount ? (
+          <button
+            type="button"
+            className="workspace-history-inspect"
+            aria-expanded={expanded}
+            aria-label={`Inspect branch history for ${row.title}`}
+            onClick={onToggle}
+          >
+            <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={12} />
+            <span>Inspect branch history ({detailLabel})</span>
+          </button>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+function WorkspaceHistoryDetailPanel({
+  row,
+  messagesBySession,
+  fileHistories,
+}: {
+  row: WorkspaceHistoryRow | null;
+  messagesBySession: Record<string, ChatMessage[]>;
+  fileHistories: WorkspaceFileCrdtHistory[];
+}) {
+  if (!row) {
+    return (
+      <section className="workspace-history-detail-pane" aria-label="Selected history detail">
+        <p className="workspace-history-empty">Select a history node to inspect its branch details.</p>
+      </section>
+    );
+  }
+
+  const target = row.target;
+  if (target?.kind === 'chat-session') {
+    const messages = messagesBySession[target.sessionId] ?? [];
+    return (
+      <section className="workspace-history-detail-pane" aria-label="Selected history detail">
+        <WorkspaceHistoryDetailHeader row={row} mode="Read-only chat" />
+        {messages.length ? (
+          <>
+            <ol className="workspace-history-chat-viewer" aria-label="Read-only chat session">
+              {messages.map((message) => (
+                <li key={message.id} className={`workspace-history-chat-message is-${message.role}`}>
+                  <span>{message.role}</span>
+                  <p>{message.streamedContent ?? message.content}</p>
+                </li>
+              ))}
+            </ol>
+            <WorkspaceHistoryDetailList row={row} />
+          </>
+        ) : (
+          <WorkspaceHistoryDetailList row={row} />
+        )}
+      </section>
+    );
+  }
+
+  if (target?.kind === 'file-version') {
+    const history = fileHistories.find((candidate) => (
+      candidate.workspaceId === target.workspaceId
+      && candidate.path === target.filePath
+    ));
+    let materialized: ReturnType<typeof materializeWorkspaceFileVersion> | null = null;
+    if (history) {
+      try {
+        materialized = materializeWorkspaceFileVersion(history, target.opId);
+      } catch {
+        materialized = null;
+      }
+    }
+    return (
+      <section className="workspace-history-detail-pane" aria-label="Selected history detail">
+        <WorkspaceHistoryDetailHeader row={row} mode="Read-only file" />
+        {materialized ? (
+          <>
+            <p className="workspace-history-crdt-note">
+              Materialized from CRDT snapshot {materialized.sourceSnapshotId} with {materialized.direction} ({materialized.replayedOperationIds.length} ops).
+            </p>
+            <pre className="workspace-history-file-viewer" aria-label="Read-only file version">{materialized.content}</pre>
+          </>
+        ) : (
+          <p className="workspace-history-empty">No CRDT snapshot is available for this file version.</p>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <section className="workspace-history-detail-pane" aria-label="Selected history detail">
+      <WorkspaceHistoryDetailHeader row={row} mode={target?.kind === 'branch-history' ? 'Branch merge history' : 'History detail'} />
+      <WorkspaceHistoryDetailList row={row} />
+    </section>
+  );
+}
+
+function WorkspaceHistoryDetailHeader({ row, mode }: { row: WorkspaceHistoryRow; mode: string }) {
+  return (
+    <header className="workspace-history-detail-header">
+      <div>
+        <span className="panel-eyebrow">{mode}</span>
+        <h3>{row.title}</h3>
+      </div>
+      <span className="workspace-history-branch-pill">{row.branchName}</span>
+    </header>
+  );
+}
+
+function WorkspaceHistoryDetailList({ row }: { row: WorkspaceHistoryRow }) {
+  return (
+    <ol className="workspace-history-detail-list" aria-label={`Detailed history for ${row.title}`}>
+      {row.detailRows.map((detail) => (
+        <li key={detail.id}>
+          <span className="workspace-history-detail-dot" aria-hidden="true" />
+          <code>{detail.label}</code>
         </li>
       ))}
-  </ul>
+    </ol>
   );
 }
 
-function BranchingConversationHistory({
-  state,
-  onMergeConversationBranch,
-  onOpenConversationSubthread,
-}: {
-  state: ConversationBranchingState;
-  onMergeConversationBranch: (subthreadId: string) => void;
-  onOpenConversationSubthread?: (sessionId: string) => void;
-}) {
-  const summary = summarizeConversationBranches(state);
-  const processEntries = buildConversationBranchProcessEntries(state);
-
-  return (
-    <SidebarSection title="Branching conversations" scrollBody>
-      <div className="conversation-branch-history">
-        <article className="list-card history-card conversation-branch-history-card">
-          <div className="history-card-header">
-            <div>
-              <h3>Conversation branches</h3>
-              <p className="muted">{summary.totalSubthreads} subthreads · {summary.commitCount} commits · {summary.mergedSubthreads} merged</p>
-            </div>
-            <span className={`badge${summary.activeSubthreads ? ' connected' : ''}`}>
-              {summary.activeSubthreads ? `${summary.activeSubthreads} active` : 'ready'}
-            </span>
-          </div>
-          <p className="history-preview">{summary.latestSummary}</p>
-          <ul className="history-events">
-            <li>Main session: {state.mainSessionId || 'none'}</li>
-            <li>Process graph rows: {processEntries.length}</li>
-          </ul>
-        </article>
-        {state.subthreads.map((subthread) => (
-          <article key={subthread.id} className="list-card history-card conversation-branch-row-card">
-            <div className="history-card-header">
-              <div>
-                <h3>{subthread.title}</h3>
-                <p className="muted">{subthread.branchName}</p>
-              </div>
-              <span className={`badge${subthread.status === 'merged' ? ' connected' : ''}`}>{subthread.status}</span>
-            </div>
-            <p className="history-preview">{subthread.summary}</p>
-            <ul className="history-events">
-              <li>Subthread ID: {subthread.id}</li>
-              <li>Head commit: {subthread.headCommitId}</li>
-              <li>Last merged: {subthread.lastMergedCommitId ?? 'not merged'}</li>
-            </ul>
-            <button
-              type="button"
-              className="toolbar-button"
-              disabled={subthread.status === 'merged'}
-              aria-label={`Merge ${subthread.branchName}`}
-              onClick={() => onMergeConversationBranch(subthread.id)}
-            >
-              <Icon name="share" size={13} />
-              <span>{subthread.status === 'merged' ? 'Merged' : 'Merge branch'}</span>
-            </button>
-            {subthread.sessionId ? (
-              <button
-                type="button"
-                className="toolbar-button"
-                aria-label={`Open ${subthread.branchName}`}
-                onClick={() => onOpenConversationSubthread?.(subthread.sessionId!)}
-              >
-                <Icon name="messageSquare" size={13} />
-                <span>Open branch session</span>
-              </button>
-            ) : null}
-          </article>
-        ))}
-      </div>
-    </SidebarSection>
-  );
+function formatWorkspaceHistoryTime(timestamp: number): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 'unknown time';
+  return new Date(timestamp).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function HistoryPanel({
+  workspaceId,
+  workspaceName,
+  sessions,
   scheduledAutomationState,
   runCheckpointState,
   browserAgentRunSdkState,
   conversationBranchingState,
-  onMergeConversationBranch,
-  onOpenConversationSubthread,
   sessionChapterState,
+  actionHistoryState,
+  messagesBySession,
+  fileHistories,
+  onMoveActionHistoryCursor,
 }: {
+  workspaceId: string;
+  workspaceName: string;
+  sessions: WorkspaceHistorySessionInput[];
   scheduledAutomationState: ScheduledAutomationState;
   runCheckpointState: RunCheckpointState;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
   conversationBranchingState: ConversationBranchingState;
-  onMergeConversationBranch: (subthreadId: string) => void;
-  onOpenConversationSubthread?: (sessionId: string) => void;
   sessionChapterState: ChapteredSessionState;
+  actionHistoryState: WorkspaceActionHistoryState;
+  messagesBySession: Record<string, ChatMessage[]>;
+  fileHistories: WorkspaceFileCrdtHistory[];
+  onMoveActionHistoryCursor: (direction: WorkspaceActionHistoryDirection) => void;
 }) {
-  const now = new Date('2026-05-06T18:00:00.000Z');
-  const checkpointSnapshot = expireDueRunCheckpoints(runCheckpointState, now);
-  const suspendedCheckpoints = checkpointSnapshot.checkpoints.filter((checkpoint) => checkpoint.status === 'suspended');
-  const latestCheckpointAudit = checkpointSnapshot.audit[0] ?? null;
-  const dueAutomations = projectDueScheduledAutomations({ state: scheduledAutomationState, now });
-  const enabledAutomations = scheduledAutomationState.automations.filter((automation) => automation.enabled);
-  const inbox = buildScheduledAutomationInbox(scheduledAutomationState);
-  const latestRun = scheduledAutomationState.runs[0] ?? null;
-  const nextAutomation = enabledAutomations
-    .filter((automation) => automation.nextRunAt)
-    .sort((left, right) => Date.parse(left.nextRunAt ?? '') - Date.parse(right.nextRunAt ?? ''))[0] ?? null;
-  const chapterSummary = summarizeChapteredSessionState(sessionChapterState);
-  const chapterRows = Object.values(sessionChapterState.sessions).flatMap((session) => session.chapters).slice(0, 5);
+  const workspaceHistoryGraph = useMemo(() => buildWorkspaceHistoryGraph({
+    workspaceId,
+    workspaceName,
+    sessions,
+    chapterState: sessionChapterState,
+    conversationBranchingState,
+    runCheckpointState,
+    browserAgentRunSdkState,
+    scheduledAutomationState,
+    actionHistoryState,
+    fileHistories,
+    recentActivity: mockHistory,
+  }), [actionHistoryState, browserAgentRunSdkState, conversationBranchingState, fileHistories, runCheckpointState, scheduledAutomationState, sessionChapterState, sessions, workspaceId, workspaceName]);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(workspaceHistoryGraph.rows[0]?.id ?? null);
+  useEffect(() => {
+    if (!workspaceHistoryGraph.rows.length) {
+      setSelectedRowId(null);
+      return;
+    }
+    if (!selectedRowId || !workspaceHistoryGraph.rows.some((row) => row.id === selectedRowId)) {
+      setSelectedRowId(workspaceHistoryGraph.rows[0].id);
+    }
+  }, [selectedRowId, workspaceHistoryGraph.rows]);
+  const selectedRow = workspaceHistoryGraph.rows.find((row) => row.id === selectedRowId) ?? workspaceHistoryGraph.rows[0] ?? null;
 
   return (
     <section className="panel-scroll history-panel" aria-label="History">
       <div className="panel-topbar">
         <h2>History</h2>
+        <WorkspaceHistoryCursorControls
+          state={actionHistoryState}
+          workspaceId={workspaceId}
+          onMoveCursor={onMoveActionHistoryCursor}
+        />
       </div>
-      <SidebarSection title="Suspend/resume checkpoints" scrollBody>
-        <div className="run-checkpoint-history">
-          <article className="list-card history-card run-checkpoint-history-card">
-            <div className="history-card-header">
-              <div>
-                <h3>Suspend/resume checkpoints</h3>
-                <p className="muted">{suspendedCheckpoints.length} suspended · {checkpointSnapshot.audit.length} audit events</p>
-              </div>
-              <span className={`badge${suspendedCheckpoints.length ? ' connected' : ''}`}>
-                {suspendedCheckpoints.length ? 'paused' : 'ready'}
-              </span>
-            </div>
-            <p className="history-preview">
-              {latestCheckpointAudit?.summary ?? 'No checkpoint activity recorded yet'}
-            </p>
-            <ul className="history-events">
-              <li>Timeout policy: {checkpointSnapshot.policy.defaultTimeoutMinutes} minutes</li>
-              <li>Resume confirmation: {checkpointSnapshot.policy.requireOperatorConfirmation ? 'required' : 'not required'}</li>
-            </ul>
-          </article>
-          {suspendedCheckpoints.map((checkpoint) => (
-            <article key={checkpoint.id} className="list-card history-card run-checkpoint-row-card">
-              <div className="history-card-header">
-                <div>
-                  <h3>{checkpoint.summary}</h3>
-                  <p className="muted">{checkpoint.reason} · expires {new Date(checkpoint.expiresAt).toLocaleString()}</p>
-                </div>
-                <span className="badge connected">suspended</span>
-              </div>
-              <p className="history-preview">{checkpoint.boundary} · {checkpoint.requiredInput}</p>
-              <ul className="history-events">
-                <li>Resume token: {checkpoint.resumeToken}</li>
-                <li>Artifacts: {checkpoint.artifacts.length ? checkpoint.artifacts.join(', ') : 'none'}</li>
-              </ul>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
-      <BranchingConversationHistory
-        state={conversationBranchingState}
-        onMergeConversationBranch={onMergeConversationBranch}
-        onOpenConversationSubthread={onOpenConversationSubthread}
-      />
-      <BrowserAgentRunSdkHistory state={browserAgentRunSdkState} />
-      <SidebarSection title="Chaptered sessions" scrollBody>
-        <div className="session-chapter-history">
-          <article className="list-card history-card session-chapter-history-card">
-            <div className="history-card-header">
-              <div>
-                <h3>Session chapters</h3>
-                <p className="muted">{chapterSummary.sessionCount} sessions · {chapterSummary.chapterCount} chapters · {chapterSummary.evidenceRefCount} evidence refs</p>
-              </div>
-              <span className={`badge${sessionChapterState.enabled ? ' connected' : ''}`}>
-                {sessionChapterState.enabled ? 'compressed' : 'off'}
-              </span>
-            </div>
-            <p className="history-preview">
-              {chapterSummary.latestChapter?.compressedContext.summary ?? 'No chaptered sessions recorded yet'}
-            </p>
-            <ul className="history-events">
-              <li>Target budget: {sessionChapterState.policy.targetTokenBudget} tokens</li>
-              <li>Context mode: {sessionChapterState.policy.contextMode}</li>
-              <li>Tool-output cache refs: {Object.keys(sessionChapterState.toolOutputCache).length}</li>
-              <li>Validation refs: {chapterSummary.validationRefCount}</li>
-            </ul>
-          </article>
-          {chapterRows.map((chapter) => (
-            <article key={chapter.id} className="list-card history-card session-chapter-row-card">
-              <div className="history-card-header">
-                <div>
-                  <h3>{chapter.title}</h3>
-                  <p className="muted">{chapter.workspaceName} · {chapter.status} · {chapter.messageIds.length} messages</p>
-                </div>
-                <span className="badge connected">{chapter.evidenceRefs.length} evidence</span>
-              </div>
-              <p className="history-preview">{chapter.compressedContext.summary}</p>
-              <ul className="history-events">
-                <li>Sources: {chapter.sourceTraceRefs.slice(0, 4).join(', ') || 'none'}</li>
-                <li>Evidence: {chapter.evidenceRefs.join(', ') || 'none'}</li>
-                <li>Validation: {chapter.validationRefs.join(', ') || 'none'}</li>
-                <li>Tool outputs: {chapter.toolOutputRefs.join(', ') || 'none'}</li>
-              </ul>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
-      <SidebarSection title="Scheduled automations" scrollBody>
-        <div className="scheduled-automations-summary">
-          <article className="list-card history-card scheduled-automation-history-card">
-            <div className="history-card-header">
-              <div>
-                <h3>Scheduled automations</h3>
-                <p className="muted">{enabledAutomations.length} enabled · {dueAutomations.length} due now · {inbox.length} review inbox</p>
-              </div>
-              <span className={`badge${dueAutomations.length > 0 ? ' connected' : ''}`}>{dueAutomations.length > 0 ? 'due' : 'ready'}</span>
-            </div>
-            <p className="history-preview">
-              {nextAutomation?.nextRunAt
-                ? `Next run: ${nextAutomation.title} at ${new Date(nextAutomation.nextRunAt).toLocaleString()}`
-                : 'No enabled scheduled runs.'}
-            </p>
-            <ul className="history-events">
-              <li>Latest evidence: {latestRun?.summary ?? 'No scheduled runs recorded yet'}</li>
-              <li>Notification routes: {scheduledAutomationState.automations.map((automation) => `${automation.title} -> ${automation.notificationRoute}`).join(', ')}</li>
-            </ul>
-          </article>
-          {scheduledAutomationState.automations.map((automation) => (
-            <article key={automation.id} className="list-card history-card scheduled-automation-row-card">
-              <div className="history-card-header">
-                <div>
-                  <h3>{automation.title}</h3>
-                  <p className="muted">{automation.cadence} · {automation.retryPolicy.maxRetries} retries · review {automation.requiresReviewOn}</p>
-                </div>
-                <span className={`badge${automation.enabled ? ' connected' : ''}`}>{automation.enabled ? 'enabled' : 'paused'}</span>
-              </div>
-              <p className="history-preview">{automation.prompt}</p>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
-      <SidebarSection title={`Recent activity (${mockHistory.length})`} scrollBody>
-        <div className="history-list">
-          {mockHistory.map((session) => (
-            <article key={session.id} className="list-card history-card">
-              <div className="history-card-header">
-                <div>
-                  <h3>{session.title}</h3>
-                  <p className="muted">{session.date} · {session.events.length} events</p>
-                </div>
-              </div>
-              <p className="history-preview">{session.preview}</p>
-              <ul className="history-events">{session.events.map((entry) => <li key={entry}>{entry}</li>)}</ul>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
+      <div className="workspace-history-browser">
+        <WorkspaceHistoryGraphPanel
+          graph={workspaceHistoryGraph}
+          selectedRowId={selectedRow?.id ?? null}
+          onSelectRow={setSelectedRowId}
+        />
+        <WorkspaceHistoryDetailPanel
+          row={selectedRow}
+          messagesBySession={messagesBySession}
+          fileHistories={fileHistories}
+        />
+      </div>
     </section>
   );
 }
@@ -13143,6 +13207,18 @@ function AgentBrowserApp() {
     isChapteredSessionState,
     DEFAULT_SESSION_CHAPTER_STATE,
   );
+  const [workspaceActionHistoryState, setWorkspaceActionHistoryState] = useStoredState<WorkspaceActionHistoryState>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceActionHistoryState,
+    isWorkspaceActionHistoryState,
+    DEFAULT_WORKSPACE_ACTION_HISTORY_STATE,
+  );
+  const [workspaceFileCrdtHistoriesByWorkspace, setWorkspaceFileCrdtHistoriesByWorkspace] = useStoredState<WorkspaceFileCrdtHistoriesByWorkspace>(
+    localStorageBackend,
+    STORAGE_KEYS.workspaceFileCrdtHistoriesByWorkspace,
+    isWorkspaceFileCrdtHistoriesByWorkspace,
+    {},
+  );
   const [workspaceSkillPolicyState, setWorkspaceSkillPolicyState] = useStoredState(
     localStorageBackend,
     STORAGE_KEYS.workspaceSkillPolicyState,
@@ -13507,17 +13583,6 @@ function AgentBrowserApp() {
       : DEFAULT_CONVERSATION_BRANCHING_STATE,
     [activeWorkspaceId, conversationBranchingState],
   );
-  const mergeActiveConversationBranch = useCallback((subthreadId: string) => {
-    setConversationBranchingState((current) => {
-      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
-      const subthread = current.subthreads.find((candidate) => candidate.id === subthreadId);
-      if (!subthread) return current;
-      return mergeConversationSubthread(current, subthreadId, {
-        summary: `Merged ${subthread.branchName}: ${subthread.summary}`,
-      });
-    });
-    setToast({ msg: 'Conversation branch merged into main context', type: 'success' });
-  }, [activeWorkspaceId, setConversationBranchingState, setToast]);
   const recordConversationSubthreadSteering = useCallback((subthreadId: string, sessionId: string, text: string, messageIds: string[]) => {
     setConversationBranchingState((current) => {
       if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
@@ -13574,6 +13639,71 @@ function AgentBrowserApp() {
       : [],
     [activeSessionIds, activeWorkspace],
   );
+  const workspaceActionSnapshot = useMemo<WorkspaceActionSnapshot>(() => {
+    const chapterIds = Object.values(sessionChapterState.sessions)
+      .filter((session) => session.workspaceId === activeWorkspaceId)
+      .flatMap((session) => session.chapters.map((chapter) => chapter.id))
+      .sort();
+    return {
+      workspaceId: activeWorkspaceId,
+      workspaceName: activeWorkspace.name,
+      activePanel,
+      activeSessionIds: [...(activeWorkspaceViewState.activeSessionIds ?? [])].sort(),
+      openTabIds: [...(activeWorkspaceViewState.openTabIds ?? [])].sort(),
+      mountedSessionFsIds: [...(activeWorkspaceViewState.mountedSessionFsIds ?? [])].sort(),
+      sessionIds: activeWorkspaceSessions.map((session) => session.id).sort(),
+      sessionNamesById: Object.fromEntries(activeWorkspaceSessions
+        .map((session) => [session.id, session.name])
+        .sort(([left], [right]) => left.localeCompare(right))),
+      conversationBranchIds: activeConversationBranchingState.workspaceId === activeWorkspaceId
+        ? activeConversationBranchingState.subthreads.map((subthread) => `${subthread.id}:${subthread.status}:${subthread.headCommitId}`).sort()
+        : [],
+      checkpointIds: runCheckpointState.checkpoints
+        .filter((checkpoint) => checkpoint.workspaceId === activeWorkspaceId)
+        .map((checkpoint) => `${checkpoint.id}:${checkpoint.status}`)
+        .sort(),
+      browserAgentRunIds: browserAgentRunSdkState.runs
+        .filter((run) => run.workspaceId === activeWorkspaceId)
+        .map((run) => `${run.id}:${run.status}:${run.eventCursor}`)
+        .sort(),
+      scheduledAutomationIds: scheduledAutomationState.automations
+        .map((automation) => `${automation.id}:${automation.enabled ? automation.cadence : 'paused'}:${automation.nextRunAt ?? 'none'}`)
+        .sort(),
+      chapterIds,
+      workspaceFileVersionIds: listWorkspaceFileCrdtHistories(workspaceFileCrdtHistoriesByWorkspace, activeWorkspaceId)
+        .filter((history) => history.operations.length > 0)
+        .map((history) => `${history.path}:${history.headOpId ?? 'snapshot'}:${history.updatedAt}`)
+        .sort(),
+    };
+  }, [
+    activeConversationBranchingState,
+    activePanel,
+    activeWorkspace.name,
+    activeWorkspaceId,
+    activeWorkspaceSessions,
+    activeWorkspaceViewState.activeSessionIds,
+    activeWorkspaceViewState.mountedSessionFsIds,
+    activeWorkspaceViewState.openTabIds,
+    browserAgentRunSdkState.runs,
+    runCheckpointState.checkpoints,
+    scheduledAutomationState.automations,
+    sessionChapterState.sessions,
+    workspaceFileCrdtHistoriesByWorkspace,
+  ]);
+  const previousWorkspaceActionSnapshotRef = useRef<WorkspaceActionSnapshot | null>(null);
+  useEffect(() => {
+    const previous = previousWorkspaceActionSnapshotRef.current;
+    previousWorkspaceActionSnapshotRef.current = workspaceActionSnapshot;
+    if (!previous) return;
+    setWorkspaceActionHistoryState((current) => recordWorkspaceActionTransition(
+      current,
+      previous,
+      workspaceActionSnapshot,
+    ));
+  }, [setWorkspaceActionHistoryState, workspaceActionSnapshot]);
+  const moveActiveWorkspaceActionHistoryCursor = useCallback((direction: WorkspaceActionHistoryDirection) => {
+    setWorkspaceActionHistoryState((current) => moveWorkspaceActionHistoryCursor(current, activeWorkspaceId, direction));
+  }, [activeWorkspaceId, setWorkspaceActionHistoryState]);
   const activePrReviewReport = useMemo(
     () => buildPullRequestReview(createSamplePullRequestReviewInput(activeWorkspace.name)),
     [activeWorkspace.name],
@@ -13594,6 +13724,26 @@ function AgentBrowserApp() {
     .filter((tab): tab is TreeNode => !!tab && tab.type === 'tab' && (tab.nodeKind ?? 'browser') === 'browser');
   const workspaceByNodeId = useMemo(() => buildWorkspaceNodeMap(root), [root]);
   const activeWorkspaceFiles = workspaceFilesByWorkspace[activeWorkspaceId] ?? [];
+  const activeWorkspaceFileCrdtHistories = useMemo(
+    () => listWorkspaceFileCrdtHistories(workspaceFileCrdtHistoriesByWorkspace, activeWorkspaceId),
+    [activeWorkspaceId, workspaceFileCrdtHistoriesByWorkspace],
+  );
+  const historyMessagesBySession = useMemo(
+    () => localStorageBackend
+      ? loadJson<Record<string, ChatMessage[]>>(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, {})
+      : {},
+    [activePanel, sessionChapterState.sessions, workspaceActionHistoryState],
+  );
+  useEffect(() => {
+    setWorkspaceFileCrdtHistoriesByWorkspace((current) => recordWorkspaceFileCrdtChanges(
+      current,
+      activeWorkspaceId,
+      activeWorkspaceFiles,
+      {
+        actorId: 'agent-browser',
+      },
+    ));
+  }, [activeWorkspaceFiles, activeWorkspaceId, setWorkspaceFileCrdtHistoriesByWorkspace]);
   const browserWorkflowSkills = useMemo(
     () => discoverBrowserWorkflowSkills(activeWorkspaceFiles),
     [activeWorkspaceFiles],
@@ -17254,13 +17404,18 @@ function AgentBrowserApp() {
     if (activePanel === 'history') {
       return (
         <HistoryPanel
+          workspaceId={activeWorkspaceId}
+          workspaceName={activeWorkspace.name}
+          sessions={activeWorkspaceSessions}
           scheduledAutomationState={scheduledAutomationState}
           runCheckpointState={runCheckpointState}
           browserAgentRunSdkState={browserAgentRunSdkState}
           conversationBranchingState={activeConversationBranchingState}
-          onMergeConversationBranch={mergeActiveConversationBranch}
-          onOpenConversationSubthread={openConversationSession}
           sessionChapterState={sessionChapterState}
+          actionHistoryState={workspaceActionHistoryState}
+          messagesBySession={historyMessagesBySession}
+          fileHistories={activeWorkspaceFileCrdtHistories}
+          onMoveActionHistoryCursor={moveActiveWorkspaceActionHistoryCursor}
         />
       );
     }

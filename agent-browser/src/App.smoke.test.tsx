@@ -2,6 +2,10 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { STORAGE_KEYS } from './services/sessionState';
+import {
+  appendWorkspaceFileCrdtDiff,
+  createWorkspaceFileCrdtHistory,
+} from './services/workspaceFileCrdtHistory';
 
 const searchBrowserModelsMock = vi.fn();
 const loadModelMock = vi.fn();
@@ -451,16 +455,19 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('History'));
 
-    expect(screen.getByRole('button', { name: 'Branching conversations' })).toBeInTheDocument();
-    expect(screen.getByText('Conversation branches')).toBeInTheDocument();
-    expect(screen.getAllByText('conversation/research/branch-active-chat-thread')).toHaveLength(2);
-    expect(screen.getAllByText('Branch started: Branch active chat thread').length).toBeGreaterThanOrEqual(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Merge conversation/research/branch-active-chat-thread' }));
-    expect(screen.getByText(/Conversation branch merged into main context/i)).toBeInTheDocument();
+    const historyPanel = screen.getByRole('region', { name: 'History' });
+    expect(screen.getByRole('region', { name: 'Workspace git graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Branching conversations' })).not.toBeInTheDocument();
+    expect(historyPanel).toHaveTextContent('Branch active chat thread');
+    expect(historyPanel).toHaveTextContent('conversation/research/branch-active-chat-thread');
+    expect(historyPanel).toHaveTextContent('running');
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Branch active chat thread' }));
+    expect(historyPanel).toHaveTextContent('Branch started: Branch active chat thread');
+
     fireEvent.click(screen.getAllByRole('button', { name: 'Open conversation/research/branch-active-chat-thread' })[0]);
     expect(screen.getByRole('button', { name: 'Back to main conversation' })).toBeInTheDocument();
-    expect(screen.getByText(/Merged subthread read-only/i)).toBeInTheDocument();
-    expect(screen.getByLabelText('Chat input')).toBeDisabled();
+    expect(screen.getByText(/Steering messages update this running subthread/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Chat input')).not.toBeDisabled();
 
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: 'Branching conversations' }));
@@ -908,9 +915,10 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('History'));
 
-    expect(screen.getByRole('button', { name: 'Scheduled automations' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace git graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Scheduled automations' })).not.toBeInTheDocument();
     expect(screen.getByText('Daily workspace audit')).toBeInTheDocument();
-    expect(screen.getByText(/review inbox/i)).toBeInTheDocument();
+    expect(screen.getByText('Run a browser and workspace audit, then summarize stale evidence, failing checks, and review items.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: 'Scheduled automations' }));
@@ -985,7 +993,8 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('History'));
 
-    expect(screen.getByRole('button', { name: 'Suspend/resume checkpoints' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace git graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Suspend/resume checkpoints' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Approval before deployment').length).toBeGreaterThan(0);
     expect(screen.getByText(/operator approval/i)).toBeInTheDocument();
 
@@ -1009,8 +1018,10 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('History'));
 
-    expect(screen.getByRole('button', { name: 'Typed run SDK' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace git graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Typed run SDK' })).not.toBeInTheDocument();
     expect(screen.getByText('SDK launch smoke')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for SDK launch smoke' }));
     expect(screen.getByText('Structured event stream is live.')).toBeInTheDocument();
     expect(screen.getByText('Reconnect cursor 3 is ready for clients.')).toBeInTheDocument();
 
@@ -1039,9 +1050,11 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('History'));
 
-    expect(screen.getByRole('button', { name: 'Chaptered sessions' })).toBeInTheDocument();
-    expect(screen.getByText(/Visual validation and checkpoint review/)).toBeInTheDocument();
-    expect(screen.getByText(/evidence:output\/playwright\/agent-browser-visual-smoke\.png/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace git graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chaptered sessions' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Squash merge: visual-eval-session/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Squash merge: visual-eval-session' }));
+    expect(screen.getByText('message:visual-eval-assistant')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: 'Chaptered sessions' }));
@@ -1050,6 +1063,140 @@ describe('App smoke coverage', () => {
     expect(screen.getByLabelText('Automatic context compression')).toBeChecked();
     expect(screen.getByLabelText('Chapter compression target tokens')).toHaveValue(1200);
     expect(screen.getByText('1 session · 1 chapter · 1 audit event')).toBeInTheDocument();
+  });
+
+  it('renders History as a workspace git graph with session squashes and inspectable branch commits', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('history'));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const historyPanel = screen.getByRole('region', { name: 'History' });
+    expect(screen.getByRole('region', { name: 'Workspace git graph' })).toBeInTheDocument();
+    expect(historyPanel).toHaveTextContent('main');
+    expect(historyPanel).toHaveTextContent('Squash merge: visual-eval-session');
+    expect(historyPanel).toHaveTextContent('Approval before deployment');
+    expect(historyPanel).toHaveTextContent('SDK launch smoke');
+    expect(historyPanel).toHaveTextContent('Daily workspace audit');
+    expect(historyPanel).toHaveTextContent('Research Session');
+    expect(historyPanel).toHaveTextContent('Inspect branch history (5 commits)');
+    expect(historyPanel.querySelector('.workspace-history-mainline')).not.toHaveTextContent('message:visual-eval-assistant');
+    expect(screen.queryByRole('button', { name: 'Suspend/resume checkpoints' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Branching conversations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Typed run SDK' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chaptered sessions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Scheduled automations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Recent activity (2)' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Squash merge: visual-eval-session' }));
+
+    expect(historyPanel).toHaveTextContent('message:visual-eval-assistant');
+    expect(historyPanel).toHaveTextContent('process:visual-tool');
+    expect(historyPanel).toHaveTextContent('evidence:output/playwright/agent-browser-visual-smoke.png');
+    expect(historyPanel).toHaveTextContent('tool-output:visual-tool');
+  });
+
+  it('opens timeline rows into read-only chat and CRDT-backed file detail views', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('history'));
+    window.localStorage.setItem(STORAGE_KEYS.chatMessagesBySession, JSON.stringify({
+      'visual-eval-session': [
+        {
+          id: 'visual-eval-system',
+          role: 'system',
+          status: 'complete',
+          content: 'Agent Browser session ready.',
+        },
+        {
+          id: 'visual-eval-assistant',
+          role: 'assistant',
+          status: 'complete',
+          content: 'Visual validation completed with a screenshot artifact.',
+        },
+      ],
+    }));
+    const fileHistory = appendWorkspaceFileCrdtDiff(
+      createWorkspaceFileCrdtHistory({
+        workspaceId: 'ws-research',
+        path: 'notes.md',
+        content: 'draft',
+        actorId: 'user',
+        now: new Date('2026-05-09T18:00:00.000Z'),
+      }),
+      'draft\nready',
+      {
+        actorId: 'codex',
+        now: new Date('2026-05-09T18:01:00.000Z'),
+      },
+    );
+    window.localStorage.setItem(STORAGE_KEYS.workspaceFileCrdtHistoriesByWorkspace, JSON.stringify({
+      'ws-research': {
+        'notes.md': fileHistory,
+      },
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Scrollable workspace history')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open history detail for Squash merge: visual-eval-session' }));
+
+    expect(screen.getByRole('region', { name: 'Selected history detail' })).toHaveTextContent('Read-only chat');
+    expect(screen.getByLabelText('Read-only chat session')).toHaveTextContent('Visual validation completed with a screenshot artifact.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open history detail for File change: notes.md' }));
+
+    expect(screen.getByRole('region', { name: 'Selected history detail' })).toHaveTextContent('Read-only file');
+    expect(screen.getByLabelText('Read-only file version')).toHaveTextContent('draft ready');
+    expect(screen.getByText(/Materialized from CRDT snapshot/i)).toBeInTheDocument();
+  });
+
+  it('records aggregated app actions in History and exposes timeline cursor controls', async () => {
+    vi.useFakeTimers();
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Models'));
+    await act(async () => {
+      vi.advanceTimersByTime(25);
+    });
+    fireEvent.click(screen.getByLabelText('History'));
+    await act(async () => {
+      vi.advanceTimersByTime(25);
+    });
+
+    const historyPanel = screen.getByRole('region', { name: 'History' });
+    expect(historyPanel).toHaveTextContent('App actions: Opened Models');
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for App actions: Opened Models' }));
+    expect(historyPanel).toHaveTextContent('Opened Models');
+    expect(historyPanel).toHaveTextContent('Opened History');
+
+    const moveBack = screen.getByRole('button', { name: 'Move back on workspace history timeline' });
+    const moveForward = screen.getByRole('button', { name: 'Move forward on workspace history timeline' });
+    expect(moveBack).not.toBeDisabled();
+    expect(moveForward).toBeDisabled();
+
+    fireEvent.click(moveBack);
+
+    expect(moveForward).not.toBeDisabled();
+    expect(screen.getByText(/Timeline cursor: 1\/2/i)).toBeInTheDocument();
+
+    fireEvent.click(moveBack);
+
+    expect(screen.getByText(/Timeline cursor: baseline/i)).toBeInTheDocument();
   });
 
   it('renders structured MCP elicitation fields and submits the full response payload', async () => {

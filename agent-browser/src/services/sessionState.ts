@@ -54,6 +54,8 @@ export const STORAGE_KEYS = {
   workspaceSurfacesByWorkspace: 'agent-browser.workspace-surfaces-by-workspace',
   graphKnowledgeState: 'agent-browser.graph-knowledge-state',
   sessionChapterState: 'agent-browser.session-chapter-state',
+  workspaceActionHistoryState: 'agent-browser.workspace-action-history-state',
+  workspaceFileCrdtHistoriesByWorkspace: 'agent-browser.workspace-file-crdt-histories-by-workspace',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
   secretManagementSettings: 'agent-browser.secret-management-settings',

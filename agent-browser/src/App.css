@@ -4564,6 +4564,287 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .history-preview { color: #d7dde5; font-size: 12px; }
 .history-events { margin: 0; padding-left: 16px; color: var(--text-soft); display: grid; gap: 4px; font-size: 11px; }
+.workspace-history-graph {
+  border-bottom: 1px solid var(--panel-border);
+  padding: 10px 10px 12px;
+}
+.workspace-history-browser {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(180px, 1fr);
+}
+.workspace-history-graph-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.workspace-history-graph-header h3 {
+  font-size: 13px;
+  line-height: 1.25;
+  margin: 1px 0 0;
+}
+.workspace-history-cursor-controls {
+  align-items: center;
+  color: var(--text-soft);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 6px;
+}
+.workspace-history-cursor-controls .icon-button {
+  height: 26px;
+  width: 26px;
+}
+.workspace-history-summary {
+  color: var(--text-soft);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 10px;
+  gap: 5px;
+  justify-content: flex-end;
+}
+.workspace-history-summary span,
+.workspace-history-branch-pill {
+  background: rgba(181, 134, 246, .14);
+  border: 1px solid rgba(181, 134, 246, .3);
+  border-radius: 6px;
+  color: #d7c3ff;
+  line-height: 1;
+  padding: 3px 5px;
+}
+.workspace-history-mainline,
+.workspace-history-branch-details {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.workspace-history-scroll {
+  max-height: min(48vh, 480px);
+  min-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+.workspace-history-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-height: 72px;
+}
+.workspace-history-lane {
+  min-height: 100%;
+  position: relative;
+}
+.workspace-history-lane-line {
+  background: rgba(181, 134, 246, .45);
+  bottom: 0;
+  left: 8px;
+  position: absolute;
+  top: 0;
+  width: 2px;
+}
+.workspace-history-row.is-first .workspace-history-lane-line { top: 11px; }
+.workspace-history-row.is-last .workspace-history-lane-line { bottom: calc(100% - 12px); }
+.workspace-history-dot {
+  border: 2px solid #1f1f1f;
+  border-radius: 50%;
+  height: 10px;
+  left: 4px;
+  position: absolute;
+  top: 6px;
+  width: 10px;
+}
+.workspace-history-row-body {
+  min-width: 0;
+  padding: 2px 0 12px;
+}
+.workspace-history-row-select {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 5px;
+  text-align: left;
+}
+.workspace-history-row.is-selected .workspace-history-row-select,
+.workspace-history-row-select:hover,
+.workspace-history-row-select:focus-visible {
+  border-color: rgba(147, 197, 253, .24);
+  background: rgba(59, 130, 246, .09);
+  outline: none;
+}
+.workspace-history-row-title {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.workspace-history-row-title strong {
+  color: #e7e7e7;
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-history-row-summary {
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.workspace-history-row-meta {
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 10px;
+  gap: 8px;
+}
+.workspace-history-inspect {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #93c5fd;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  gap: 4px;
+  margin: 6px 0 0;
+  min-height: 24px;
+  padding: 0;
+}
+.workspace-history-inspect:hover,
+.workspace-history-inspect:focus-visible {
+  color: #bfdbfe;
+  outline: none;
+  text-decoration: underline;
+}
+.workspace-history-branch-details {
+  border-left: 1px solid rgba(147, 197, 253, .24);
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0 5px;
+  padding-left: 10px;
+}
+.workspace-history-branch-details li {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.workspace-history-detail-dot {
+  background: #93c5fd;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 5px;
+  width: 5px;
+}
+.workspace-history-branch-details code {
+  color: #cbd5e1;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.workspace-history-empty {
+  color: var(--text-soft);
+  font-size: 12px;
+  margin: 0;
+}
+.workspace-history-detail-pane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.workspace-history-detail-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.workspace-history-detail-header h3 {
+  margin: 1px 0 0;
+  color: #f3f4f6;
+  font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.workspace-history-chat-viewer,
+.workspace-history-detail-list {
+  min-width: 0;
+  max-height: 260px;
+  overflow: auto;
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.workspace-history-chat-message {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(148, 163, 184, .12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .03);
+  padding: 7px;
+}
+.workspace-history-chat-message span {
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.workspace-history-chat-message p {
+  margin: 0;
+  color: #d4d4d8;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.workspace-history-detail-list li {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.workspace-history-detail-list code {
+  min-width: 0;
+  color: #cbd5e1;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.workspace-history-crdt-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 10.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.workspace-history-file-viewer {
+  min-width: 0;
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, .14);
+  border-radius: 6px;
+  background: #101113;
+  color: #e5e7eb;
+  font-family: 'Cascadia Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  line-height: 1.45;
+  padding: 8px;
+  white-space: pre-wrap;
+}
 .switch { position: relative; display: inline-flex; width: 42px; height: 24px; }
 .switch input { position: absolute; inset: 0; opacity: 0; }
 .switch span {
