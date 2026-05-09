@@ -68,8 +68,11 @@ async function main() {
   assert.match(visualSmokeScript, /agent-browser-dashboard-canvas-mobile\.png/);
   assert.match(visualSmokeScript, /agent-browser-dashboard-canvas-tablet\.png/);
   assert.match(visualSmokeScript, /agent-browser-dashboard-canvas-wide\.png/);
-  assert.match(visualSmokeScript, /Repository wiki/);
+  assert.match(visualSmokeScript, /Workspace wiki/);
   assert.match(visualSmokeScript, /agent-browser-repository-wiki\.png/);
+  assert.match(visualSmokeScript, /agent-browser-repository-wiki-pages\.png/);
+  assert.match(visualSmokeScript, /agent-browser-repository-wiki-graph\.png/);
+  assert.match(visualSmokeScript, /agent-browser-repository-wiki-mobile\.png/);
   assert.match(visualSmokeScript, /wiki:ws-research:workspace-map/);
   assert.match(visualSmokeScript, /Adversary tool review/);
   assert.match(visualSmokeScript, /Enable adversary tool-call review/);

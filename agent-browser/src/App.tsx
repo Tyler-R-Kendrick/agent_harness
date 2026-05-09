@@ -416,9 +416,15 @@ import {
   buildRepoWikiPromptContext,
   buildRepoWikiSnapshot,
   isRepoWikiSnapshotsByWorkspace,
+  searchRepoWikiSnapshot,
   type RepoWikiCitation,
   type RepoWikiSnapshot,
 } from './services/repoWiki';
+import {
+  appendWorkspaceMemoryFact,
+  deleteWorkspaceMemoryEntry,
+  type WorkspaceMemoryScope,
+} from './services/workspaceMemory';
 import {
   DEFAULT_WORKSPACE_SKILL_POLICY_STATE,
   buildWorkspaceSkillPolicyInventory,
@@ -611,7 +617,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
 type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'multitask' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
-type RepoWikiView = 'pages' | 'graph' | 'memory' | 'chat' | 'sources';
+type RepoWikiView = 'pages' | 'graph' | 'memory';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -784,11 +790,9 @@ const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof type
   account: { label: 'Account', icon: 'user' },
 };
 const REPO_WIKI_VIEWS: Array<{ id: RepoWikiView; label: string; description: string; icon: keyof typeof icons }> = [
-  { id: 'pages', label: 'Wiki Pages', description: 'Generated pages and grounded repo facts', icon: 'file' },
-  { id: 'graph', label: 'Knowledge Graph', description: 'Entities, relationships, and runtime surfaces', icon: 'share' },
-  { id: 'memory', label: 'Memory Models', description: 'Competitor patterns and harness architecture', icon: 'slidersHorizontal' },
-  { id: 'chat', label: 'Scoped Chat', description: 'Ask against the current wiki snapshot', icon: 'messageSquare' },
-  { id: 'sources', label: 'Sources', description: 'Citations and indexed source coverage', icon: 'clipboard' },
+  { id: 'pages', label: 'Wiki Pages', description: 'Generated pages, links, and search', icon: 'file' },
+  { id: 'graph', label: 'Knowledge Graph', description: 'Relationships, edges, and isolated chunks', icon: 'share' },
+  { id: 'memory', label: 'Memory', description: 'View and manage stored memories', icon: 'slidersHorizontal' },
 ];
 const WORKSPACE_SHORTCUT_GROUPS = [
   {
@@ -10171,106 +10175,19 @@ function SettingsPanel({
   );
 }
 
-function formatWikiRefreshTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-function RepoWikiPanel({
-  snapshot,
-  activeView,
-  onViewChange,
-  onRefresh,
-  onCopyCitation,
-}: {
-  snapshot: RepoWikiSnapshot;
-  activeView: RepoWikiView;
-  onViewChange: (view: RepoWikiView) => void;
-  onRefresh: () => void;
-  onCopyCitation: (citation: RepoWikiCitation) => void | Promise<void>;
-}) {
+function RepoWikiPanel({ onRefresh }: { onRefresh: () => void }) {
   return (
-    <section className="panel-scroll repo-wiki-panel repo-wiki-nav-panel" role="region" aria-label="Repository wiki navigation">
-      <div className="panel-topbar repo-wiki-topbar">
-        <div className="settings-heading">
-          <h2>Repository wiki</h2>
-          <p className="muted">{snapshot.workspaceName} · refreshed {formatWikiRefreshTime(snapshot.refreshedAt)}</p>
+    <section className="panel-scroll repo-wiki-panel repo-wiki-nav-panel" role="region" aria-label="Wiki explorer">
+      <div className="repo-wiki-minimal-panel">
+        <div className="repo-wiki-minimal-title">
+          <span className="panel-eyebrow">Knowledgebase</span>
+          <h2>Wiki</h2>
         </div>
-        <button type="button" className="toolbar-button" aria-label="Refresh wiki" onClick={onRefresh}>
+        <button type="button" className="icon-button repo-wiki-refresh-button" aria-label="Refresh wiki" onClick={onRefresh}>
           <Icon name="refresh" size={13} />
           <span>Refresh</span>
         </button>
       </div>
-
-      <section className="repo-wiki-summary" aria-label="Wiki source coverage">
-        <strong>{snapshot.summary}</strong>
-        <div className="repo-wiki-metrics">
-          <span>{snapshot.sourceCoverage.workspaceFileCount} files</span>
-          <span>{snapshot.sourceCoverage.browserPageCount} pages</span>
-          <span>{snapshot.sourceCoverage.sessionCount} sessions</span>
-          <span>{snapshot.sourceCoverage.pluginCount} plugins</span>
-        </div>
-      </section>
-
-      <nav className="repo-wiki-view-nav" aria-label="Wiki views">
-        {REPO_WIKI_VIEWS.map((view) => (
-          <button
-            key={view.id}
-            type="button"
-            className={`repo-wiki-view-button${activeView === view.id ? ' active' : ''}`}
-            aria-current={activeView === view.id ? 'page' : undefined}
-            onClick={() => onViewChange(view.id)}
-          >
-            <Icon name={view.icon} size={14} />
-            <span>
-              <strong>{view.label}</strong>
-              <small>{view.description}</small>
-            </span>
-          </button>
-        ))}
-      </nav>
-
-      <SidebarSection title="Wiki pages" summary={`${snapshot.sections.length} sections`} scrollBody>
-        <div className="repo-wiki-section-list repo-wiki-nav-section-list">
-          {snapshot.sections.map((section) => (
-            <button
-              type="button"
-              className="repo-wiki-page-link"
-              key={section.id}
-              onClick={() => onViewChange('pages')}
-            >
-              <strong>{section.title}</strong>
-              <code>wiki:{snapshot.workspaceId}:{section.id}</code>
-            </button>
-          ))}
-        </div>
-      </SidebarSection>
-
-      <SidebarSection title="Citations" summary={`${snapshot.citations.length} handles`}>
-        <div className="repo-wiki-citation-list">
-          {snapshot.citations.map((citation) => (
-            <button
-              type="button"
-              className="repo-wiki-citation"
-              key={citation.id}
-              aria-label={`Copy ${citation.id}`}
-              onClick={() => void onCopyCitation(citation)}
-            >
-              <Icon name="clipboard" size={13} />
-              <span>
-                <code>{citation.id}</code>
-                <small>{citation.sourcePaths.length} sources</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      </SidebarSection>
     </section>
   );
 }
@@ -10278,44 +10195,106 @@ function RepoWikiPanel({
 function RepoWikiWorkbench({
   snapshot,
   activeView,
+  selectedPageId,
   onViewChange,
+  onOpenPage,
   onCopyCitation,
+  onRememberMemory,
+  onForgetMemory,
 }: {
   snapshot: RepoWikiSnapshot;
   activeView: RepoWikiView;
+  selectedPageId: string | null;
   onViewChange: (view: RepoWikiView) => void;
+  onOpenPage: (pageId: string) => void;
   onCopyCitation: (citation: RepoWikiCitation) => void | Promise<void>;
+  onRememberMemory: (scope: WorkspaceMemoryScope, text: string) => void;
+  onForgetMemory: (entry: { sourcePath: string; lineNumber: number; text: string }) => void;
 }) {
   const activeViewMeta = REPO_WIKI_VIEWS.find((view) => view.id === activeView) ?? REPO_WIKI_VIEWS[0];
-  const [graphMode, setGraphMode] = useState<'global' | 'local'>('global');
+  const [wikiQuery, setWikiQuery] = useState('');
+  const [graphMode, setGraphMode] = useState<'all' | 'nearby' | 'isolated'>('all');
+  const [selectedGraphNodeId, setSelectedGraphNodeId] = useState<string | null>(null);
+  const [memoryScope, setMemoryScope] = useState<WorkspaceMemoryScope>('workspace');
+  const [memoryText, setMemoryText] = useState('');
   const knowledgeModel = snapshot.knowledgeModel;
+  const searchResults = useMemo(() => searchRepoWikiSnapshot(snapshot, wikiQuery), [snapshot, wikiQuery]);
+  const pageResultIds = searchResults.filter((result) => result.kind === 'page').map((result) => result.id);
+  const visiblePages = wikiQuery.trim()
+    ? pageResultIds.map((id) => snapshot.pages.find((page) => page.id === id)).filter((page): page is (typeof snapshot.pages)[number] => Boolean(page))
+    : snapshot.pages;
+  const selectedPage = (
+    selectedPageId
+      ? visiblePages.find((page) => page.id === selectedPageId) ?? snapshot.pages.find((page) => page.id === selectedPageId)
+      : null
+  ) ?? visiblePages[0] ?? snapshot.pages[0];
   const visibleNodeIds = new Set(
     knowledgeModel.nodes
-      .filter((node) => graphMode === 'global' || node.localDepth <= knowledgeModel.graphModes.localDepth)
+      .filter((node) => {
+        if (graphMode === 'isolated') return Boolean(node.isIsolated);
+        if (graphMode === 'nearby') return node.localDepth <= knowledgeModel.graphModes.localDepth;
+        return true;
+      })
       .map((node) => node.id),
   );
   const visibleNodes = knowledgeModel.nodes.filter((node) => visibleNodeIds.has(node.id));
   const visibleLinks = knowledgeModel.links.filter((link) => visibleNodeIds.has(link.from) && visibleNodeIds.has(link.to));
   const nodeLabelById = new Map(knowledgeModel.nodes.map((node) => [node.id, node.label]));
   const canvasCardByNodeId = new Map(knowledgeModel.canvas.cards.map((card) => [card.nodeId, card]));
-  const focusNode = knowledgeModel.nodes.find((node) => node.id === knowledgeModel.graphModes.localFocusId) ?? visibleNodes[0];
-  const focusBacklinks = focusNode ? knowledgeModel.links.filter((link) => link.to === focusNode.id) : [];
-  const focusOutgoingLinks = focusNode ? knowledgeModel.links.filter((link) => link.from === focusNode.id) : [];
+  const selectedGraphNode = (
+    selectedGraphNodeId
+      ? visibleNodes.find((node) => node.id === selectedGraphNodeId) ?? knowledgeModel.nodes.find((node) => node.id === selectedGraphNodeId)
+      : null
+  ) ?? visibleNodes.find((node) => node.id === knowledgeModel.graphModes.localFocusId) ?? visibleNodes[0];
+  const incomingGraphLinks = selectedGraphNode ? knowledgeModel.links.filter((link) => link.to === selectedGraphNode.id) : [];
+  const outgoingGraphLinks = selectedGraphNode ? knowledgeModel.links.filter((link) => link.from === selectedGraphNode.id) : [];
+  const isolatedNodes = knowledgeModel.nodes.filter((node) => node.isIsolated);
+  const memorySearchTerm = wikiQuery.trim();
+  const [memoryScopeFilter, setMemoryScopeFilter] = useState<WorkspaceMemoryScope | 'all'>('all');
+  const memoryEntriesMatchingSearch = memorySearchTerm
+    ? snapshot.managedMemory.entries.filter((entry) => searchResults.some((result) => result.kind === 'memory' && result.id === entry.id))
+    : snapshot.managedMemory.entries;
+  const filteredMemoryEntries = memoryEntriesMatchingSearch.filter((entry) => memoryScopeFilter === 'all' || entry.scope === memoryScopeFilter);
+  const activeMemoryScopeTitle = memoryScopeFilter === 'all'
+    ? 'All memory'
+    : snapshot.managedMemory.scopes.find((scope) => scope.scope === memoryScopeFilter)?.title ?? memoryScopeFilter;
+  const graphSearchResults = searchResults.filter((result) => result.kind === 'graph');
+  const graphCanvasCards = visibleNodes.map((node) => canvasCardByNodeId.get(node.id)).filter((card): card is NonNullable<typeof card> => Boolean(card));
+  const graphCanvasWidth = Math.max(820, ...graphCanvasCards.map((card) => card.x + 150));
+  const graphCanvasHeight = Math.max(420, ...graphCanvasCards.map((card) => card.y + 120));
+  const graphRelationLines = visibleLinks.flatMap((link) => {
+    const fromCard = canvasCardByNodeId.get(link.from);
+    const toCard = canvasCardByNodeId.get(link.to);
+    if (!fromCard || !toCard) return [];
+    return [{
+      ...link,
+      x1: fromCard.x,
+      y1: fromCard.y,
+      x2: toCard.x,
+      y2: toCard.y,
+    }];
+  });
 
   return (
     <section className="repo-wiki-workbench" role="region" aria-label="Workspace knowledgebase wiki">
       <header className="repo-wiki-workbench-header">
         <div className="repo-wiki-workbench-title">
           <span className="panel-eyebrow">Knowledgebase</span>
-          <h2>Workspace knowledgebase wiki</h2>
-          <p>{snapshot.summary}</p>
+          <h2>Workspace wiki</h2>
+          <p>Generated from workspace pages, modeled relationships, and stored memory.</p>
         </div>
-        <div className="repo-wiki-workbench-metrics" aria-label="Knowledgebase coverage">
-          <span>{snapshot.sourceCoverage.workspaceFileCount} files</span>
-          <span>{snapshot.sourceCoverage.memoryFileCount} memory notes</span>
-          <span>{snapshot.sourceCoverage.pluginCount} plugins</span>
-          <span>{snapshot.citations.length} citations</span>
-        </div>
+        <form className="repo-wiki-search" role="search" aria-label="Wiki search" onSubmit={(event) => event.preventDefault()}>
+          <label className="shared-input-shell">
+            <Icon name="search" size={14} color="#9ca3af" />
+            <input
+              aria-label="Search wiki pages and memories"
+              value={wikiQuery}
+              onChange={(event) => setWikiQuery(event.target.value)}
+              placeholder="Search pages, graph nodes, and memories"
+            />
+          </label>
+          <span>{searchResults.length} matches</span>
+        </form>
       </header>
 
       <div className="repo-wiki-workbench-tabs" role="tablist" aria-label="Wiki views">
@@ -10337,269 +10316,430 @@ function RepoWikiWorkbench({
       <div className="repo-wiki-workbench-body" role="tabpanel" aria-label={activeViewMeta.label}>
         {activeView === 'pages' ? (
           <div className="repo-wiki-pages-view">
-            {snapshot.sections.map((section) => (
-              <article className="repo-wiki-page-card" key={section.id}>
-                <div>
+            <nav className="repo-wiki-page-index" aria-label="Generated wiki pages">
+              <div className="repo-wiki-panel-label">
+                <span>Generated pages</span>
+                <strong>{visiblePages.length}</strong>
+              </div>
+              {visiblePages.map((page) => (
+                <button
+                  type="button"
+                  key={page.id}
+                  className={selectedPage?.id === page.id ? 'active' : ''}
+                  onClick={() => onOpenPage(page.id)}
+                >
+                  <strong>{page.title}</strong>
+                  <span>{page.summary}</span>
+                </button>
+              ))}
+            </nav>
+
+            {selectedPage ? (
+              <article className="repo-wiki-page-card repo-wiki-page-card--reader" key={selectedPage.id}>
+                <header className="repo-wiki-reader-header">
                   <span className="panel-eyebrow">Wiki page</span>
-                  <h3>{section.title}</h3>
-                  <code>wiki:{snapshot.workspaceId}:{section.id}</code>
+                  <h3>{selectedPage.title}</h3>
+                  <code>{selectedPage.citationId}</code>
+                </header>
+                <div className="repo-wiki-reader-main">
+                  <div className="repo-wiki-reader-copy">
+                    <p className="repo-wiki-reader-summary">{selectedPage.summary}</p>
+                    {selectedPage.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                    <ul>
+                      {selectedPage.facts.map((fact) => <li key={fact}>{fact}</li>)}
+                    </ul>
+                  </div>
+                  <aside className="repo-wiki-page-context" role="complementary" aria-label="Page context">
+                    <section className="repo-wiki-related-pages" aria-label="Related pages">
+                      <h3>Related pages</h3>
+                      {[...selectedPage.links, ...selectedPage.backlinks].length ? (
+                        <div className="repo-wiki-link-list">
+                          {[...selectedPage.links, ...selectedPage.backlinks].map((link) => (
+                            <button
+                              type="button"
+                              key={`${link.targetId}:${link.predicate}`}
+                              aria-label={`Open ${link.targetTitle}`}
+                              onClick={() => onOpenPage(link.targetId)}
+                            >
+                              <strong>{link.targetTitle}</strong>
+                              <small>{link.predicate}</small>
+                            </button>
+                          ))}
+                        </div>
+                      ) : <p>No related wiki pages yet.</p>}
+                    </section>
+                    <section className="repo-wiki-source-paths" aria-label="Page source paths">
+                      <h3>Sources</h3>
+                      {selectedPage.sourcePaths.length
+                        ? selectedPage.sourcePaths.slice(0, 8).map((path) => <span key={path}>{path}</span>)
+                        : <span>No source paths captured</span>}
+                    </section>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        const citation = snapshot.citations.find((entry) => entry.id === selectedPage.citationId);
+                        if (citation) void onCopyCitation(citation);
+                      }}
+                    >
+                      <Icon name="clipboard" size={13} />
+                      <span>Copy Citation</span>
+                    </button>
+                  </aside>
                 </div>
-                <p>{section.summary}</p>
-                <ul>
-                  {section.facts.map((fact) => <li key={fact}>{fact}</li>)}
-                </ul>
               </article>
-            ))}
+            ) : (
+              <article className="repo-wiki-page-card">
+                <h3>No wiki pages match the current search.</h3>
+                <p>Clear the search field to see the generated wiki.</p>
+              </article>
+            )}
+
+            {wikiQuery.trim() && searchResults.length ? (
+              <section className="repo-wiki-search-results" aria-label="Wiki search results">
+                <h3>Search results</h3>
+                {searchResults.slice(0, 8).map((result) => (
+                  <button
+                    type="button"
+                    key={`${result.kind}:${result.id}`}
+                    onClick={() => {
+                      if (result.kind === 'page') {
+                        onOpenPage(result.id);
+                        onViewChange('pages');
+                      } else if (result.kind === 'memory') {
+                        onViewChange('memory');
+                      } else {
+                        setSelectedGraphNodeId(result.id);
+                        onViewChange('graph');
+                      }
+                    }}
+                  >
+                    <strong>{result.title}</strong>
+                    <span>{result.kind} · {result.detail}</span>
+                  </button>
+                ))}
+              </section>
+            ) : null}
           </div>
         ) : null}
 
         {activeView === 'graph' ? (
           <div className="repo-wiki-graph-view">
             <article className="repo-wiki-graph-card repo-wiki-graph-card--model">
-              <div className="repo-wiki-graph-heading">
+              <header className="repo-wiki-graph-heading">
                 <span className="panel-eyebrow">Knowledge Graph</span>
-                <h3>Obsidian-style memory graph</h3>
-                <p>Local and global wiki graph views backed by wikilinks, backlinks, note properties, RDF-style triples, SKOS groups, PROV provenance, and JSON Canvas coordinates.</p>
-              </div>
+                <h3>Modeled knowledge relationships</h3>
+                <p>Click a node to inspect incoming and outgoing relationships. Isolated chunks are source nodes with no modeled edges yet.</p>
+              </header>
               <div className="repo-wiki-model-toolbar" role="group" aria-label="Graph mode">
                 <button
                   type="button"
-                  className={graphMode === 'global' ? 'active' : ''}
-                  aria-pressed={graphMode === 'global'}
-                  onClick={() => setGraphMode('global')}
+                  className={graphMode === 'all' ? 'active' : ''}
+                  aria-pressed={graphMode === 'all'}
+                  onClick={() => setGraphMode('all')}
                 >
-                  Global graph
+                  All knowledge
                 </button>
                 <button
                   type="button"
-                  className={graphMode === 'local' ? 'active' : ''}
-                  aria-pressed={graphMode === 'local'}
-                  onClick={() => setGraphMode('local')}
+                  className={graphMode === 'nearby' ? 'active' : ''}
+                  aria-pressed={graphMode === 'nearby'}
+                  onClick={() => setGraphMode('nearby')}
                 >
-                  Local graph
+                  Nearby
                 </button>
-                <span>Depth {knowledgeModel.graphModes.localDepth}</span>
+                <button
+                  type="button"
+                  className={graphMode === 'isolated' ? 'active' : ''}
+                  aria-pressed={graphMode === 'isolated'}
+                  onClick={() => setGraphMode('isolated')}
+                >
+                  Isolated chunks
+                </button>
                 <span>{visibleNodes.length} nodes</span>
                 <span>{visibleLinks.length} links</span>
+                <span>{isolatedNodes.length} isolated</span>
               </div>
-              <div className="repo-wiki-standards-strip" aria-label="Knowledge visualization standards">
-                {knowledgeModel.standards.map((standard) => <span key={standard}>{standard}</span>)}
-              </div>
-              <div className="repo-wiki-group-strip" aria-label="SKOS concept groups">
+              <div className="repo-wiki-group-strip" aria-label="Knowledge groups">
                 {knowledgeModel.groups.map((group) => (
                   <span key={group.id} style={{ '--wiki-group-color': group.color } as React.CSSProperties}>
                     {group.label}
                   </span>
                 ))}
               </div>
-              <div className="repo-wiki-graph-canvas repo-wiki-graph-canvas--model" aria-label="Obsidian-style memory graph">
-                {visibleNodes.map((node) => {
-                  const card = canvasCardByNodeId.get(node.id);
-                  const degree = node.inbound + node.outbound;
-                  return (
-                    <span
-                      key={node.id}
-                      className={`repo-wiki-graph-node repo-wiki-graph-node--${node.kind}`}
-                      style={{
-                        '--wiki-node-x': `${card?.x ?? 120}px`,
-                        '--wiki-node-y': `${card?.y ?? 120}px`,
-                        '--wiki-node-scale': String(Math.min(1.35, 0.9 + degree * 0.08)),
-                      } as React.CSSProperties}
-                    >
-                      <strong>{node.label}</strong>
-                      <small>{node.inbound} in · {node.outbound} out</small>
-                    </span>
-                  );
-                })}
-              </div>
-              <div className="repo-wiki-obsidian-panels">
-                <article>
-                  <h3>Backlinks</h3>
-                  <div className="repo-wiki-link-list">
-                    {focusBacklinks.length ? focusBacklinks.map((link) => (
-                      <span key={`${link.from}:${link.to}:${link.predicate}`}>
-                        <code>{nodeLabelById.get(link.from) ?? link.from}</code>
-                        <small>{link.predicate}</small>
-                      </span>
-                    )) : <p>No backlinks for {focusNode?.label ?? 'the selected node'}.</p>}
-                  </div>
-                </article>
-                <article>
-                  <h3>Outgoing links</h3>
-                  <div className="repo-wiki-link-list">
-                    {focusOutgoingLinks.length ? focusOutgoingLinks.map((link) => (
-                      <span key={`${link.from}:${link.to}:${link.predicate}`}>
-                        <code>{nodeLabelById.get(link.to) ?? link.to}</code>
-                        <small>{link.predicate}</small>
-                      </span>
-                    )) : <p>No outgoing links for {focusNode?.label ?? 'the selected node'}.</p>}
-                  </div>
-                </article>
-                <article>
-                  <h3>Properties</h3>
-                  <div className="repo-wiki-property-list">
-                    {(focusNode?.properties ?? []).map((property) => (
-                      <span key={`${property.key}:${property.value}`}>
-                        <strong>{property.key}</strong>
-                        <code>{property.value}</code>
-                      </span>
+              <div className="repo-wiki-graph-stage">
+                <div
+                  className="repo-wiki-graph-canvas repo-wiki-graph-canvas--model"
+                  aria-label="Navigable knowledge graph"
+                  style={{ '--wiki-graph-height': `${graphCanvasHeight}px`, '--wiki-graph-width': `${graphCanvasWidth}px` } as React.CSSProperties}
+                >
+                  <svg
+                    className="repo-wiki-graph-links"
+                    role="img"
+                    aria-label="Graph relationship lines"
+                    viewBox={`0 0 ${graphCanvasWidth} ${graphCanvasHeight}`}
+                    preserveAspectRatio="none"
+                  >
+                    {graphRelationLines.map((line) => (
+                      <g key={`${line.from}:${line.to}:${line.predicate}`}>
+                        <title>{`${nodeLabelById.get(line.from) ?? line.from} ${line.predicate} ${nodeLabelById.get(line.to) ?? line.to}`}</title>
+                        <line
+                          className={selectedGraphNode && (selectedGraphNode.id === line.from || selectedGraphNode.id === line.to) ? 'active' : undefined}
+                          x1={line.x1}
+                          y1={line.y1}
+                          x2={line.x2}
+                          y2={line.y2}
+                        />
+                      </g>
                     ))}
+                  </svg>
+                  {visibleNodes.length ? visibleNodes.map((node) => {
+                    const card = canvasCardByNodeId.get(node.id);
+                    const degree = node.inbound + node.outbound;
+                    return (
+                      <button
+                        type="button"
+                        key={node.id}
+                        aria-label={`Select graph node ${node.label}`}
+                        className={`repo-wiki-graph-node repo-wiki-graph-node--${node.kind}${selectedGraphNode?.id === node.id ? ' active' : ''}`}
+                        style={{
+                          '--wiki-node-x': `${card?.x ?? 120}px`,
+                          '--wiki-node-y': `${card?.y ?? 120}px`,
+                          '--wiki-node-scale': String(Math.min(1.2, 0.92 + degree * 0.05)),
+                        } as React.CSSProperties}
+                        onClick={() => setSelectedGraphNodeId(node.id)}
+                      >
+                        <strong>{node.label}</strong>
+                        <small>{node.inbound} in · {node.outbound} out</small>
+                      </button>
+                    );
+                  }) : (
+                    <p>No isolated chunks match the current graph filter.</p>
+                  )}
+                </div>
+                <aside className="repo-wiki-graph-inspector" role="complementary" aria-label="Graph inspector">
+                  <h3>Selected node</h3>
+                  <div className="repo-wiki-property-list">
+                    {selectedGraphNode ? (
+                      <>
+                        <span>
+                          <strong>Label</strong>
+                          <code>{selectedGraphNode.label}</code>
+                        </span>
+                        <span>
+                          <strong>Kind</strong>
+                          <code>{selectedGraphNode.kind}</code>
+                        </span>
+                        <span>
+                          <strong>Status</strong>
+                          <code>{selectedGraphNode.isIsolated ? 'isolated' : 'linked'}</code>
+                        </span>
+                      </>
+                    ) : <p>No graph node selected.</p>}
                   </div>
-                </article>
-                <article>
-                  <h3>Unlinked mentions</h3>
-                  <div className="repo-wiki-link-list">
-                    {knowledgeModel.unlinkedMentions.length ? knowledgeModel.unlinkedMentions.map((mention) => (
-                      <span key={`${mention.sourcePath}:${mention.mention}:${mention.targetId}`}>
-                        <code>{mention.mention}</code>
-                        <small>{mention.sourcePath} · {Math.round(mention.confidence * 100)}%</small>
-                      </span>
-                    )) : <p>No unlinked mentions detected.</p>}
-                  </div>
-                </article>
+                  <section>
+                    <h3>Incoming relationships</h3>
+                    <div className="repo-wiki-link-list">
+                      {incomingGraphLinks.length ? incomingGraphLinks.map((link) => (
+                        <span key={`${link.from}:${link.to}:${link.predicate}`}>
+                          <code>{nodeLabelById.get(link.from) ?? link.from}</code>
+                          <small>{link.predicate}</small>
+                        </span>
+                      )) : <p>No incoming relationships for {selectedGraphNode?.label ?? 'the selected node'}.</p>}
+                    </div>
+                  </section>
+                  <section>
+                    <h3>Outgoing relationships</h3>
+                    <div className="repo-wiki-link-list">
+                      {outgoingGraphLinks.length ? outgoingGraphLinks.map((link) => (
+                        <span key={`${link.from}:${link.to}:${link.predicate}`}>
+                          <code>{nodeLabelById.get(link.to) ?? link.to}</code>
+                          <small>{link.predicate}</small>
+                        </span>
+                      )) : <p>No outgoing relationships for {selectedGraphNode?.label ?? 'the selected node'}.</p>}
+                    </div>
+                  </section>
+                </aside>
               </div>
-              <ul className="repo-wiki-edge-list repo-wiki-edge-list--model">
-                {visibleLinks.map((edge) => (
-                  <li key={`${edge.from}:${edge.to}:${edge.predicate}`}>
-                    <code>{nodeLabelById.get(edge.from) ?? edge.from}</code>
-                    <span>{edge.predicate}</span>
-                    <code>{nodeLabelById.get(edge.to) ?? edge.to}</code>
-                  </li>
-                ))}
-              </ul>
+              <section className="repo-wiki-graph-notes" aria-label="Unlinked mentions">
+                <h3>Unlinked mentions</h3>
+                <div className="repo-wiki-link-list">
+                  {knowledgeModel.unlinkedMentions.length ? knowledgeModel.unlinkedMentions.map((mention) => (
+                    <span key={`${mention.sourcePath}:${mention.mention}:${mention.targetId}`}>
+                      <code>{mention.mention}</code>
+                      <small>{mention.sourcePath} · {Math.round(mention.confidence * 100)}%</small>
+                    </span>
+                  )) : <p>No unlinked mentions detected.</p>}
+                </div>
+              </section>
+              {graphSearchResults.length ? (
+                <section className="repo-wiki-search-results" aria-label="Graph search matches">
+                  <h3>Graph matches</h3>
+                  {graphSearchResults.slice(0, 6).map((result) => (
+                    <button type="button" key={result.id} onClick={() => setSelectedGraphNodeId(result.id)}>
+                      <strong>{result.title}</strong>
+                      <span>{result.detail}</span>
+                    </button>
+                  ))}
+                </section>
+              ) : null}
+              <section className="repo-wiki-edge-table" role="region" aria-label="Relationship table">
+                <h3>Relationships</h3>
+                <ul className="repo-wiki-edge-list repo-wiki-edge-list--model">
+                  {visibleLinks.map((edge) => (
+                    <li key={`${edge.from}:${edge.to}:${edge.predicate}`}>
+                      <code>{nodeLabelById.get(edge.from) ?? edge.from}</code>
+                      <span>{edge.predicate}</span>
+                      <code>{nodeLabelById.get(edge.to) ?? edge.to}</code>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             </article>
           </div>
         ) : null}
 
         {activeView === 'memory' ? (
           <div className="repo-wiki-memory-view">
-            <article className="repo-wiki-memory-hero">
-              <div>
-                <span className="panel-eyebrow">Best-of harness stack</span>
-                <h3>Competitor memory architecture synthesis</h3>
-                <p>{snapshot.memoryArchitecture.designGoal}</p>
-              </div>
-              <div className="repo-wiki-memory-source-count" aria-label="Memory architecture source coverage">
-                <strong>{snapshot.memoryArchitecture.sourcePaths.length}</strong>
-                <span>repo references</span>
-              </div>
-            </article>
-
-            <section className="repo-wiki-memory-stack" aria-label="Recommended memory stack">
-              {snapshot.memoryArchitecture.recommendedStack.map((item, index) => (
-                <span key={item}>
-                  <strong>{index + 1}</strong>
-                  {item}
-                </span>
-              ))}
-            </section>
-
-            <section className="repo-wiki-memory-layer-grid" aria-label="Memory architecture layers">
-              {snapshot.memoryArchitecture.layers.map((layer) => (
-                <article className="repo-wiki-memory-layer" key={layer.id}>
-                  <div>
-                    <span className="panel-eyebrow">{layer.inspiration}</span>
-                    <h3>{layer.title}</h3>
-                  </div>
-                  <p>{layer.harnessImplementation}</p>
-                  <dl>
-                    <div>
-                      <dt>Storage</dt>
-                      <dd>{layer.storage}</dd>
-                    </div>
-                    <div>
-                      <dt>Retrieval</dt>
-                      <dd>{layer.retrievalMode}</dd>
-                    </div>
-                  </dl>
-                  <ul>
-                    {layer.capabilities.map((capability) => <li key={capability}>{capability}</li>)}
-                  </ul>
-                </article>
-              ))}
-            </section>
-
-            <section className="repo-wiki-memory-roadmap" aria-label="Memory architecture roadmap">
-              <div>
-                <span className="panel-eyebrow">Roadmap</span>
-                <h3>Best-of harness stack</h3>
-              </div>
-              <div className="repo-wiki-memory-roadmap-list">
-                {snapshot.memoryArchitecture.roadmap.map((item) => (
-                  <article key={item.phase}>
-                    <strong>{item.phase}</strong>
-                    <span>{item.focus}</span>
-                    <small>{item.outcome}</small>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="repo-wiki-memory-gaps" aria-label="Memory architecture gaps">
-              <div>
-                <span className="panel-eyebrow">Gaps to close</span>
-                <h3>Next implementation targets</h3>
-              </div>
-              <ul>
-                {snapshot.memoryArchitecture.gaps.map((gap) => <li key={gap}>{gap}</li>)}
-              </ul>
-            </section>
-          </div>
-        ) : null}
-
-        {activeView === 'chat' ? (
-          <div className="repo-wiki-chat-view">
-            <article className="repo-wiki-page-card">
-              <span className="panel-eyebrow">Scoped Chat</span>
-              <h3>Ask the wiki with citations</h3>
-              <p>Use the generated pages, source handles, and graph relationships as a constrained context window for workspace questions.</p>
-              <div className="repo-wiki-question-list">
-                {snapshot.onboarding.map((step) => (
-                  <button type="button" key={step.citationId} onClick={() => onViewChange('sources')}>
-                    <strong>{step.title}</strong>
-                    <span>{step.detail}</span>
-                  </button>
-                ))}
-              </div>
-            </article>
-          </div>
-        ) : null}
-
-        {activeView === 'sources' ? (
-          <div className="repo-wiki-sources-view">
-            <article className="repo-wiki-source-card repo-wiki-source-card--wide">
-              <div>
-                <span className="panel-eyebrow">Memory model export</span>
-                <h3>RDF triples, SKOS groups, PROV sources, JSON Canvas</h3>
-              </div>
-              <p>Each wiki node is addressable as a stable subject, each link has a predicate, concept groups mirror SKOS facets, source nodes carry provenance, and canvas cards preserve spatial layout metadata.</p>
-              <div className="repo-wiki-source-paths">
-                {knowledgeModel.links.slice(0, 6).map((link) => (
-                  <span key={`${link.from}:${link.to}:${link.predicate}`}>
-                    {link.from} · {link.predicate} · {link.to}
-                  </span>
-                ))}
-              </div>
-            </article>
-            {snapshot.citations.map((citation) => (
-              <article className="repo-wiki-source-card" key={citation.id}>
+            <section className="repo-wiki-memory-console" aria-label="Memory management console">
+              <header className="repo-wiki-memory-commandbar">
                 <div>
-                  <span className="panel-eyebrow">Source handle</span>
-                  <h3>{citation.label}</h3>
-                  <code>{citation.id}</code>
+                  <span className="panel-eyebrow">Memory</span>
+                  <h3>Stored memories</h3>
+                  <p>View, filter, add, and forget durable facts used by the wiki and retrieval graph.</p>
                 </div>
-                <p>{citation.snippet}</p>
-                <div className="repo-wiki-source-paths">
-                  {citation.sourcePaths.length
-                    ? citation.sourcePaths.map((path) => <span key={path}>{path}</span>)
-                    : <span>No file paths captured</span>}
-                </div>
-                <button type="button" className="secondary-button" onClick={() => void onCopyCitation(citation)}>
-                  <Icon name="clipboard" size={13} />
-                  <span>Copy Citation</span>
-                </button>
-              </article>
-            ))}
+                {memorySearchTerm ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    aria-label="Clear memory search filter"
+                    onClick={() => setWikiQuery('')}
+                  >
+                    Clear filter
+                  </button>
+                ) : null}
+              </header>
+              <div className="repo-wiki-memory-console-grid">
+                <aside className="repo-wiki-memory-scope-rail" role="region" aria-label="Memory scopes">
+                  <button
+                    type="button"
+                    className={memoryScopeFilter === 'all' ? 'active' : ''}
+                    aria-pressed={memoryScopeFilter === 'all'}
+                    onClick={() => setMemoryScopeFilter('all')}
+                  >
+                    <span>All</span>
+                    <strong>{snapshot.managedMemory.entries.length}</strong>
+                  </button>
+                  {snapshot.managedMemory.scopes.map((scope) => (
+                    <button
+                      type="button"
+                      key={scope.scope}
+                      className={memoryScopeFilter === scope.scope ? 'active' : ''}
+                      aria-pressed={memoryScopeFilter === scope.scope}
+                      onClick={() => setMemoryScopeFilter(scope.scope)}
+                    >
+                      <span>{scope.title.replace(' Memory', '')}</span>
+                      <strong>{scope.entryCount}</strong>
+                    </button>
+                  ))}
+                </aside>
+
+                <section className="repo-wiki-memory-library" role="region" aria-label="Memory library">
+                  <header className="repo-wiki-memory-library-header">
+                    <div>
+                      <h3>{activeMemoryScopeTitle}</h3>
+                      <p>
+                        {memorySearchTerm
+                          ? `Filtered by "${memorySearchTerm}"`
+                          : 'Stored facts available for prompt, graph, wiki, and session retrieval.'}
+                      </p>
+                    </div>
+                    <span>{filteredMemoryEntries.length} shown</span>
+                  </header>
+                  {filteredMemoryEntries.length ? (
+                    <div className="repo-wiki-memory-table" role="list">
+                      {filteredMemoryEntries.map((entry) => (
+                        <article key={entry.id} role="listitem">
+                          <div className="repo-wiki-memory-entry-main">
+                            <strong>{entry.text}</strong>
+                            <span>{entry.activationTier} · {entry.sourcePath}:{entry.lineNumber}</span>
+                          </div>
+                          <span className="repo-wiki-memory-scope-pill">{entry.scope}</span>
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            aria-label={`Forget memory: ${entry.text}`}
+                            onClick={() => {
+                              onForgetMemory({ sourcePath: entry.sourcePath, lineNumber: entry.lineNumber, text: entry.text });
+                              setWikiQuery('');
+                            }}
+                          >
+                            <Icon name="trash" size={13} />
+                            <span>Forget</span>
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="repo-wiki-memory-empty">
+                      <strong>
+                        {memorySearchTerm
+                          ? `No stored memories match "${memorySearchTerm}".`
+                          : memoryScopeFilter === 'all'
+                            ? 'No stored memories yet.'
+                            : `No ${activeMemoryScopeTitle.toLowerCase()} entries yet.`}
+                      </strong>
+                      <p>
+                        {memorySearchTerm
+                          ? 'Clear the search filter or add a new memory from the composer.'
+                          : 'Use the composer to add the first durable fact.'}
+                      </p>
+                    </div>
+                  )}
+                </section>
+
+                <section className="repo-wiki-memory-composer" role="region" aria-label="Add memory">
+                  <div className="repo-wiki-memory-section-heading">
+                    <h3>Add memory</h3>
+                    <p>Choose the scope first, then save the fact as managed workspace memory.</p>
+                  </div>
+                  <form
+                    className="repo-wiki-memory-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (!memoryText.trim()) return;
+                      onRememberMemory(memoryScope, memoryText);
+                      setMemoryText('');
+                      setWikiQuery('');
+                    }}
+                  >
+                    <label>
+                      <span>Scope</span>
+                      <select
+                        aria-label="Memory scope"
+                        value={memoryScope}
+                        onChange={(event) => setMemoryScope(event.target.value as WorkspaceMemoryScope)}
+                      >
+                        {snapshot.managedMemory.scopes.map((scope) => (
+                          <option key={scope.scope} value={scope.scope}>{scope.title}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span>Memory</span>
+                      <textarea
+                        aria-label="Memory text"
+                        value={memoryText}
+                        onChange={(event) => setMemoryText(event.target.value)}
+                        rows={3}
+                        placeholder="Remember a durable fact"
+                      />
+                    </label>
+                    <button type="submit" className="primary-button">Remember</button>
+                  </form>
+                </section>
+              </div>
+            </section>
           </div>
         ) : null}
       </div>
@@ -13063,6 +13203,7 @@ function AgentBrowserApp() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
   const [repoWikiView, setRepoWikiView] = useState<RepoWikiView>('pages');
+  const [repoWikiSelectedPageId, setRepoWikiSelectedPageId] = useState<string | null>(null);
   const [selectedExtensionId, setSelectedExtensionId] = useState<string | null>(null);
   const [activeExtensionFeatureId, setActiveExtensionFeatureId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(() => isMobileViewport());
@@ -16572,6 +16713,59 @@ function AgentBrowserApp() {
     }
   }, [setToast]);
 
+  const rememberRepoWikiMemory = useCallback((scope: WorkspaceMemoryScope, text: string) => {
+    const nextFiles = appendWorkspaceMemoryFact(workspaceFilesByWorkspace[activeWorkspaceId] ?? [], scope, text);
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: nextFiles,
+    }));
+    setRepoWikiSnapshotsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: buildRepoWikiSnapshot({
+        workspace: activeWorkspace,
+        files: nextFiles,
+        artifactTitles: activeArtifacts.map((artifact) => artifact.title),
+      }),
+    }));
+    setToast({ msg: 'Memory saved', type: 'success' });
+  }, [
+    activeArtifacts,
+    activeWorkspace,
+    activeWorkspaceId,
+    setRepoWikiSnapshotsByWorkspace,
+    setToast,
+    setWorkspaceFilesByWorkspace,
+    workspaceFilesByWorkspace,
+  ]);
+
+  const forgetRepoWikiMemory = useCallback((entry: { sourcePath: string; lineNumber: number; text: string }) => {
+    const nextFiles = deleteWorkspaceMemoryEntry(
+      workspaceFilesByWorkspace[activeWorkspaceId] ?? [],
+      { path: entry.sourcePath, lineNumber: entry.lineNumber },
+    );
+    setWorkspaceFilesByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: nextFiles,
+    }));
+    setRepoWikiSnapshotsByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: buildRepoWikiSnapshot({
+        workspace: activeWorkspace,
+        files: nextFiles,
+        artifactTitles: activeArtifacts.map((artifact) => artifact.title),
+      }),
+    }));
+    setToast({ msg: 'Memory forgotten', type: 'info' });
+  }, [
+    activeArtifacts,
+    activeWorkspace,
+    activeWorkspaceId,
+    setRepoWikiSnapshotsByWorkspace,
+    setToast,
+    setWorkspaceFilesByWorkspace,
+    workspaceFilesByWorkspace,
+  ]);
+
   useEffect(() => {
     if (!pendingReviewFollowUp) return;
     if (!sessionMcpControllersRef.current[pendingReviewFollowUp.sessionId]) return;
@@ -17235,11 +17429,7 @@ function AgentBrowserApp() {
     if (activePanel === 'wiki') {
       return (
         <RepoWikiPanel
-          snapshot={activeRepoWikiSnapshot}
-          activeView={repoWikiView}
-          onViewChange={setRepoWikiView}
           onRefresh={refreshRepoWiki}
-          onCopyCitation={copyRepoWikiCitation}
         />
       );
     }
@@ -17499,8 +17689,12 @@ function AgentBrowserApp() {
           <RepoWikiWorkbench
             snapshot={activeRepoWikiSnapshot}
             activeView={repoWikiView}
+            selectedPageId={repoWikiSelectedPageId}
             onViewChange={setRepoWikiView}
+            onOpenPage={setRepoWikiSelectedPageId}
             onCopyCitation={copyRepoWikiCitation}
+            onRememberMemory={rememberRepoWikiMemory}
+            onForgetMemory={forgetRepoWikiMemory}
           />
         ) : (() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {

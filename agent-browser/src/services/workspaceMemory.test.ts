@@ -4,9 +4,11 @@ import {
   appendWorkspaceMemoryFact,
   buildWorkspaceMemoryPromptContext,
   createDefaultWorkspaceMemoryFiles,
+  deleteWorkspaceMemoryEntry,
   detectWorkspaceMemoryScope,
   parseWorkspaceMemoryFiles,
   searchWorkspaceMemory,
+  updateWorkspaceMemoryEntry,
 } from './workspaceMemory';
 
 describe('workspaceMemory', () => {
@@ -187,6 +189,55 @@ describe('workspaceMemory', () => {
         content: expect.stringContaining('- Prefers concise status updates'),
         updatedAt: '2026-04-24T01:00:00.000Z',
       }),
+    ]);
+  });
+
+  it('deletes one stored memory fact without disturbing adjacent markdown', () => {
+    const files: WorkspaceFile[] = [
+      {
+        path: '.memory/project.memory.md',
+        content: '# Project Memory\n\n- Keep the wiki navigable\n- Remove stale implementation notes\n\nParagraph stays.',
+        updatedAt: '2026-04-24T00:00:00.000Z',
+      },
+    ];
+
+    const next = deleteWorkspaceMemoryEntry(
+      files,
+      { path: '.memory/project.memory.md', lineNumber: 4 },
+      '2026-04-24T01:00:00.000Z',
+    );
+
+    expect(next).toEqual([
+      {
+        path: '.memory/project.memory.md',
+        content: '# Project Memory\n\n- Keep the wiki navigable\n\nParagraph stays.',
+        updatedAt: '2026-04-24T01:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('updates one stored memory fact in place and sanitizes multiline edits', () => {
+    const files: WorkspaceFile[] = [
+      {
+        path: '.memory/workspace.memory.md',
+        content: '# Workspace Memory\n\n- Old memory text\n- Keep this fact',
+        updatedAt: '2026-04-24T00:00:00.000Z',
+      },
+    ];
+
+    const next = updateWorkspaceMemoryEntry(
+      files,
+      { path: '.memory/workspace.memory.md', lineNumber: 3 },
+      '  - New\n     memory text  ',
+      '2026-04-24T01:00:00.000Z',
+    );
+
+    expect(next).toEqual([
+      {
+        path: '.memory/workspace.memory.md',
+        content: '# Workspace Memory\n\n- New memory text\n- Keep this fact',
+        updatedAt: '2026-04-24T01:00:00.000Z',
+      },
     ]);
   });
 

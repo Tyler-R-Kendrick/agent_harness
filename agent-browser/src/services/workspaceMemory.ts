@@ -21,6 +21,11 @@ export interface WorkspaceMemorySearchOptions {
   limit?: number;
 }
 
+export interface WorkspaceMemoryEntryRef {
+  path: string;
+  lineNumber: number;
+}
+
 export const MEMORY_FILE_DEFINITIONS: readonly WorkspaceMemoryFileDefinition[] = [
   {
     scope: 'global',
@@ -206,6 +211,56 @@ export function appendWorkspaceMemoryFact(
     updatedAt,
   };
   return nextFiles;
+}
+
+function updateMemoryLine(
+  files: readonly WorkspaceFile[],
+  ref: WorkspaceMemoryEntryRef,
+  updater: (line: string) => string | null,
+  updatedAt: string,
+): WorkspaceFile[] {
+  const nextFiles = [...files];
+  const fileIndex = nextFiles.findIndex((file) => file.path === ref.path);
+  if (fileIndex === -1 || ref.lineNumber < 1) return nextFiles;
+
+  const current = nextFiles[fileIndex];
+  const lines = current.content.split(/\r?\n/);
+  const lineIndex = ref.lineNumber - 1;
+  const currentLine = lines[lineIndex];
+  if (currentLine === undefined || !/^\s*[-*]\s+/.test(currentLine)) return nextFiles;
+
+  const nextLine = updater(currentLine);
+  if (nextLine === null) {
+    lines.splice(lineIndex, 1);
+  } else {
+    lines[lineIndex] = nextLine;
+  }
+
+  nextFiles[fileIndex] = {
+    ...current,
+    content: lines.join('\n'),
+    updatedAt,
+  };
+  return nextFiles;
+}
+
+export function deleteWorkspaceMemoryEntry(
+  files: readonly WorkspaceFile[],
+  ref: WorkspaceMemoryEntryRef,
+  updatedAt = new Date().toISOString(),
+): WorkspaceFile[] {
+  return updateMemoryLine(files, ref, () => null, updatedAt);
+}
+
+export function updateWorkspaceMemoryEntry(
+  files: readonly WorkspaceFile[],
+  ref: WorkspaceMemoryEntryRef,
+  fact: string,
+  updatedAt = new Date().toISOString(),
+): WorkspaceFile[] {
+  const sanitized = sanitizeFact(fact);
+  if (!sanitized) return deleteWorkspaceMemoryEntry(files, ref, updatedAt);
+  return updateMemoryLine(files, ref, () => `- ${sanitized}`, updatedAt);
 }
 
 export function buildWorkspaceMemoryPromptContext(files: readonly WorkspaceFile[], query = ''): string {

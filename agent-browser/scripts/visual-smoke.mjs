@@ -19,6 +19,10 @@ const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agen
 const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
+const repoWikiPagesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-pages.png');
+const repoWikiGraphOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-graph.png');
+const repoWikiMemoryOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-memory.png');
+const repoWikiMobileOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-mobile.png');
 const dashboardCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
@@ -1273,76 +1277,120 @@ async function main() {
     await expect(reviewPanel).toContainText('Validation evidence', { timeout: shellTimeoutMs });
     await expect(reviewPanel).toContainText('Reviewer follow-up', { timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Wiki', exact: true }).click();
-    const repoWikiPanel = page.getByRole('region', { name: 'Repository wiki navigation', exact: true });
+    const repoWikiPanel = page.getByRole('region', { name: 'Wiki explorer', exact: true });
     const repoWikiWorkbench = page.getByRole('region', { name: 'Workspace knowledgebase wiki', exact: true });
     await expect(repoWikiPanel).toBeVisible({ timeout: shellTimeoutMs });
     await expect(repoWikiWorkbench).toBeVisible({ timeout: shellTimeoutMs });
-    const repoWikiViewNav = repoWikiPanel.getByRole('navigation', { name: 'Wiki views' });
-    await expect(repoWikiViewNav.getByRole('button', { name: 'Wiki Pages' })).toBeVisible({
+    await expect(repoWikiPanel).not.toContainText('Files', { timeout: shellTimeoutMs });
+    await expect(repoWikiPanel).not.toContainText('Sessions', { timeout: shellTimeoutMs });
+    await expect(repoWikiPanel).not.toContainText('Citations', { timeout: shellTimeoutMs });
+    await expect(repoWikiPanel).not.toContainText('Wiki Pages', { timeout: shellTimeoutMs });
+    await expect(repoWikiPanel).not.toContainText('Knowledge Graph', { timeout: shellTimeoutMs });
+    await expect(repoWikiPanel).not.toContainText('Memory', { timeout: shellTimeoutMs });
+    await expect(repoWikiPanel).not.toContainText('wiki:ws-research:workspace-map', { timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.locator('.repo-wiki-workbench-title')).not.toContainText('stored files', {
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiViewNav.getByRole('button', { name: 'Knowledge Graph' })).toBeVisible({
+    const repoWikiViewTabs = repoWikiWorkbench.getByRole('tablist', { name: 'Wiki views' });
+    await expect(repoWikiViewTabs.getByRole('tab', { name: 'Wiki Pages' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiViewTabs.getByRole('tab', { name: 'Knowledge Graph' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(repoWikiPanel.getByRole('button', { name: 'Refresh wiki' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiWorkbench.getByRole('heading', { name: 'Workspace knowledgebase wiki' })).toBeVisible({
+    await expect(repoWikiWorkbench.getByRole('heading', { name: 'Workspace wiki' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiWorkbench.getByText('Repo map')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('search', { name: 'Wiki search' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiWorkbench.getByLabel('Search wiki pages and memories')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('heading', { name: 'Repo map' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(repoWikiWorkbench.getByText('wiki:ws-research:workspace-map')).toBeVisible({ timeout: shellTimeoutMs });
-    await repoWikiViewNav.getByRole('button', { name: 'Knowledge Graph' }).click();
+    await repoWikiWorkbench.getByLabel('Search wiki pages and memories').fill('capability');
+    await expect(repoWikiWorkbench.getByRole('heading', { name: 'Capability files' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('button', { name: 'Open Runtime surfaces' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('complementary', { name: 'Page context' })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.screenshot({ path: repoWikiPagesOutputPath, fullPage: true });
+    await repoWikiViewTabs.getByRole('tab', { name: 'Knowledge Graph' }).click();
     const repoWikiGraphPanel = repoWikiWorkbench.getByRole('tabpanel', { name: 'Knowledge Graph' });
     await expect(repoWikiGraphPanel).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiGraphPanel.getByText('Knowledge Graph').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Global graph' })).toBeVisible({
+    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Modeled knowledge relationships' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Local graph' })).toBeVisible({
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'All knowledge' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiGraphPanel.getByText('Depth 2')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Backlinks', exact: true })).toBeVisible({
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Nearby' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Outgoing links', exact: true })).toBeVisible({
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Isolated chunks' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByLabel('Graph relationship lines')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByRole('complementary', { name: 'Graph inspector' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Incoming relationships', exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Outgoing relationships', exact: true })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Unlinked mentions', exact: true })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiGraphPanel.getByText('Obsidian wikilinks/backlinks/properties', { exact: true })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await expect(repoWikiGraphPanel.getByText('RDF triples', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiGraphPanel.getByText('SKOS concept groups', { exact: true })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await expect(repoWikiGraphPanel.getByText('JSON Canvas layout', { exact: true })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await repoWikiGraphPanel.getByRole('button', { name: 'Local graph' }).click();
-    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Local graph' })).toHaveAttribute(
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Select graph node Repo map' })).toBeVisible({ timeout: shellTimeoutMs });
+    await repoWikiGraphPanel.getByRole('button', { name: 'Nearby' }).click();
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Nearby' })).toHaveAttribute(
       'aria-pressed',
       'true',
       { timeout: shellTimeoutMs },
     );
-    await repoWikiViewNav.getByRole('button', { name: 'Memory Models' }).click();
-    const repoWikiMemoryPanel = repoWikiWorkbench.getByRole('tabpanel', { name: 'Memory Models' });
+    await page.screenshot({ path: repoWikiGraphOutputPath, fullPage: true });
+    await repoWikiViewTabs.getByRole('tab', { name: 'Memory' }).click();
+    const repoWikiMemoryPanel = repoWikiWorkbench.getByRole('tabpanel', { name: 'Memory' });
     await expect(repoWikiMemoryPanel).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiMemoryPanel.getByText('Competitor memory architecture synthesis')).toBeVisible({
+    await expect(repoWikiMemoryPanel.getByRole('region', { name: 'Memory management console' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiMemoryPanel.getByRole('heading', { name: 'Best-of harness stack' })).toBeVisible({
+    await expect(repoWikiMemoryPanel.getByRole('heading', { name: 'Stored memories' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByRole('region', { name: 'Memory scopes' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByRole('region', { name: 'Memory library' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByRole('region', { name: 'Add memory' })).toBeVisible({ timeout: shellTimeoutMs });
+    const clearMemorySearchButton = repoWikiMemoryPanel.getByRole('button', { name: 'Clear memory search filter' });
+    await expect(clearMemorySearchButton).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(repoWikiMemoryPanel.getByText('Hermes-style prompt snapshot')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiMemoryPanel.getByText('GraphRAG / PathRAG retrieval')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiMemoryPanel.getByText('Procedural skill memory')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiMemoryPanel.getByText('Hot/Warm/Cool/Cold activation')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiMemoryPanel.getByText('Provider adapters')).toBeVisible({ timeout: shellTimeoutMs });
+    await clearMemorySearchButton.click();
+    await expect(repoWikiMemoryPanel.getByText('No stored memories match "capability".')).toHaveCount(0);
+    await expect(repoWikiMemoryPanel.getByLabel('Memory scope', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await repoWikiMemoryPanel
+      .getByLabel('Memory text')
+      .fill('Repository wiki search belongs inside wiki pages, with citations shown in page context.');
+    await repoWikiMemoryPanel.getByRole('button', { name: 'Remember' }).click();
+    await expect(repoWikiMemoryPanel.getByText('Repository wiki search belongs inside wiki pages, with citations shown in page context.')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiMemoryPanel.getByText(/hot · \.memory\/workspace\.memory\.md/)).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiMemoryPanel.getByRole('button', { name: /Forget memory: Repository wiki search belongs inside wiki pages/ })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: repoWikiMemoryOutputPath, fullPage: true });
     await page.screenshot({ path: repoWikiOutputPath, fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(repoWikiWorkbench).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('search', { name: 'Wiki search' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByRole('heading', { name: 'Stored memories' })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.screenshot({ path: repoWikiMobileOutputPath, fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 820 });
     await page.getByRole('button', { name: 'Multitask', exact: true }).click();
     const multitaskPanel = page.getByRole('region', { name: 'Multitask subagents' });
     await expect(multitaskPanel).toBeVisible({ timeout: shellTimeoutMs });
