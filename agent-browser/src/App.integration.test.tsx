@@ -428,8 +428,10 @@ describe('App', () => {
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(within(installedSidebar).getByRole('heading', { name: 'Installed extensions' })).toBeInTheDocument();
-    expect(within(installedSidebar).getAllByText('0 installed')).toHaveLength(2);
-    expect(within(installedSidebar).getByText('No installed extensions')).toBeInTheDocument();
+    expect(within(installedSidebar).getAllByText('1 installed')).toHaveLength(2);
+    expect(within(installedSidebar).queryByText('No installed extensions')).not.toBeInTheDocument();
+    expect(within(installedSidebar).queryByText(/Workspace plugins/i)).not.toBeInTheDocument();
+    expect(within(installedSidebar).getByText('Workspace plugin')).toBeInTheDocument();
     expect(within(installedSidebar).queryByText('Local Model Connector')).not.toBeInTheDocument();
 
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
@@ -513,7 +515,7 @@ describe('App', () => {
     });
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
-    expect(within(installedSidebar).getAllByText('1 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getAllByText('2 installed')).toHaveLength(2);
     expect(within(installedSidebar).getByText('Artifact context')).toBeInTheDocument();
     expect(within(installedSidebar).queryByText(/^Installed$/)).not.toBeInTheDocument();
     expect(within(marketplace).getByRole('button', { name: 'Disable Artifact context' })).toBeInTheDocument();

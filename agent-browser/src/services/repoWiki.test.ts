@@ -115,6 +115,126 @@ describe('repoWiki', () => {
     ]);
   });
 
+  it('models wiki memory using Obsidian-style links plus RDF, SKOS, PROV, and canvas metadata', () => {
+    const snapshot = buildRepoWikiSnapshot({
+      workspace,
+      files: [
+        ...workspaceFiles,
+        {
+          path: 'notes/orientation.md',
+          content: 'Capability files and runtime surfaces need follow-up links.',
+          updatedAt: '2026-05-07T00:00:00.000Z',
+        },
+      ],
+      refreshedAt: '2026-05-07T00:00:00.000Z',
+    });
+
+    expect(snapshot.knowledgeModel.standards).toEqual([
+      'Obsidian wikilinks/backlinks/properties',
+      'RDF triples',
+      'SKOS concept groups',
+      'PROV provenance',
+      'JSON Canvas layout',
+    ]);
+    expect(snapshot.knowledgeModel.graphModes).toMatchObject({
+      globalNodeCount: 8,
+      localFocusId: 'wiki:ws-research:workspace-map',
+      localDepth: 2,
+    });
+    expect(snapshot.knowledgeModel.nodes.map((node) => node.id)).toEqual([
+      'wiki:ws-research:workspace-map',
+      'wiki:ws-research:capability-files',
+      'wiki:ws-research:runtime-surfaces',
+      'tag:orientation',
+      'tag:capability',
+      'tag:runtime',
+      'source:workspace-files',
+      'source:runtime-surfaces',
+    ]);
+    expect(snapshot.knowledgeModel.links).toContainEqual(expect.objectContaining({
+      from: 'wiki:ws-research:workspace-map',
+      to: 'wiki:ws-research:capability-files',
+      kind: 'wikilink',
+      predicate: 'linksTo',
+      directed: true,
+    }));
+    expect(snapshot.knowledgeModel.links).toContainEqual(expect.objectContaining({
+      from: 'source:workspace-files',
+      to: 'wiki:ws-research:workspace-map',
+      kind: 'provenance',
+      predicate: 'prov:wasDerivedFrom',
+    }));
+    expect(snapshot.knowledgeModel.groups.map((group) => group.id)).toEqual([
+      'orientation',
+      'capability',
+      'runtime',
+      'provenance',
+    ]);
+    expect(snapshot.knowledgeModel.unlinkedMentions).toContainEqual(expect.objectContaining({
+      mention: 'Capability files',
+      sourcePath: 'notes/orientation.md',
+      targetId: 'wiki:ws-research:capability-files',
+    }));
+    expect(snapshot.knowledgeModel.canvas.cards[0]).toMatchObject({
+      id: 'card:wiki:ws-research:workspace-map',
+      nodeId: 'wiki:ws-research:workspace-map',
+      kind: 'note',
+      x: 80,
+      y: 80,
+    });
+  });
+
+  it('aggregates competitor memory patterns into one harness architecture roadmap', () => {
+    const snapshot = buildRepoWikiSnapshot({
+      workspace,
+      files: workspaceFiles,
+      refreshedAt: '2026-05-07T00:00:00.000Z',
+    });
+
+    expect(snapshot.memoryArchitecture.designGoal).toContain('one harness memory stack');
+    expect(snapshot.memoryArchitecture.layers.map((layer) => layer.id)).toEqual([
+      'prompt-snapshot',
+      'session-search',
+      'graph-rag',
+      'wiki-vault',
+      'procedural-skills',
+      'activation-tiers',
+      'provider-adapters',
+    ]);
+    expect(snapshot.memoryArchitecture.layers[0]).toMatchObject({
+      title: 'Hermes-style prompt snapshot',
+      inspiration: 'Hermes Agent MEMORY.md/USER.md',
+      retrievalMode: 'always injected, bounded, curated',
+    });
+    expect(snapshot.memoryArchitecture.layers.find((layer) => layer.id === 'graph-rag')).toMatchObject({
+      title: 'GraphRAG / PathRAG retrieval',
+      storage: 'typed local graph with paths, claims, facts, events, communities, and hot memory blocks',
+    });
+    expect(snapshot.memoryArchitecture.layers.find((layer) => layer.id === 'procedural-skills')?.capabilities).toContain(
+      'convert successful workflows and corrections into reusable skills',
+    );
+    expect(snapshot.memoryArchitecture.gaps).toContain(
+      'Add a pluggable provider seam so external semantic stores augment, not replace, the core prompt snapshot.',
+    );
+    expect(snapshot.memoryArchitecture.roadmap.map((item) => item.phase)).toEqual([
+      'Foundation',
+      'Retrieval',
+      'Learning loop',
+      'Provider bridge',
+    ]);
+    expect(snapshot.memoryArchitecture.sourcePaths).toEqual([
+      'reference_impl/features/workspace-model/decisions/ADR-002-four-tier-memory-model.md',
+      'docs/superpowers/plans/2026-04-24-workspace-memory.md',
+      'docs/superpowers/plans/2026-05-08-graph-knowledge.md',
+      'docs/superpowers/plans/2026-05-08-persistent-memory-graphs.md',
+      'harness-core/src/memory.ts',
+      'agent-browser/src/services/workspaceMemory.ts',
+      'agent-browser/src/services/graphKnowledge.ts',
+      'agent-browser/src/services/persistentMemoryGraph.ts',
+      'ext/harness/agent-skills/examples/default-workspace-skills/memory/SKILL.md',
+    ]);
+  });
+
   it('formats compact prompt context with stable citation IDs', () => {
     const snapshot = buildRepoWikiSnapshot({
       workspace,
@@ -126,6 +246,8 @@ describe('repoWiki', () => {
     expect(context).toContain('Repository wiki: Research');
     expect(context).toContain('Source coverage: 4 files, 1 browser pages, 1 sessions');
     expect(context).toContain('Architecture views: Workspace runtime architecture');
+    expect(context).toContain('Memory model: Obsidian wikilinks/backlinks/properties, RDF triples, SKOS concept groups, PROV provenance, JSON Canvas layout');
+    expect(context).toContain('Memory architectures: prompt-snapshot, session-search, graph-rag, wiki-vault, procedural-skills, activation-tiers, provider-adapters');
     expect(context).toContain('Citations: wiki:ws-research:workspace-map, wiki:ws-research:capability-files, wiki:ws-research:runtime-surfaces');
   });
 
@@ -138,6 +260,7 @@ describe('repoWiki', () => {
 
     expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': snapshot })).toBe(true);
     expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': { ...snapshot, citations: [{ id: 42 }] } })).toBe(false);
+    expect(isRepoWikiSnapshotsByWorkspace({ 'ws-research': { ...snapshot, memoryArchitecture: { layers: [] } } })).toBe(false);
     expect(isRepoWikiSnapshotsByWorkspace([{ 'ws-research': snapshot }])).toBe(false);
   });
 });

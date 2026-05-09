@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { STORAGE_KEYS } from './services/sessionState';
@@ -342,7 +342,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
   });
 
-  it('renders the repository wiki sidebar panel with repo map citations', async () => {
+  it('renders the repository wiki as a navigation sidebar plus knowledgebase workbench', async () => {
     vi.useFakeTimers();
     window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('wiki'));
 
@@ -352,13 +352,41 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    const wikiPanel = screen.getByRole('region', { name: 'Repository wiki' });
+    const wikiPanel = screen.getByRole('region', { name: 'Repository wiki navigation' });
     expect(wikiPanel).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Wiki views' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace knowledgebase wiki' })).toBeInTheDocument();
     expect(screen.getAllByText('Repo map').length).toBeGreaterThan(0);
-    expect(screen.getByText('Architecture views')).toBeInTheDocument();
-    expect(screen.getByText('Onboarding')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Wiki Pages' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Knowledge Graph' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Memory Models' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Scoped Chat' })).toBeInTheDocument();
     expect(screen.getAllByText('wiki:ws-research:workspace-map').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Refresh wiki' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Knowledge Graph' }));
+
+    expect(screen.getByRole('button', { name: 'Global graph' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Local graph' })).toBeInTheDocument();
+    expect(screen.getByText('Depth 2')).toBeInTheDocument();
+    expect(screen.getByText('Backlinks')).toBeInTheDocument();
+    expect(screen.getByText('Outgoing links')).toBeInTheDocument();
+    expect(screen.getByText('Unlinked mentions')).toBeInTheDocument();
+    expect(screen.getByText('Obsidian wikilinks/backlinks/properties')).toBeInTheDocument();
+    expect(screen.getByText('RDF triples')).toBeInTheDocument();
+    expect(screen.getByText('SKOS concept groups')).toBeInTheDocument();
+    expect(screen.getByText('JSON Canvas layout')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Memory Models' }));
+
+    expect(screen.getByText('Competitor memory architecture synthesis')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Best-of harness stack' })).toBeInTheDocument();
+    expect(screen.getByText('Hermes-style prompt snapshot')).toBeInTheDocument();
+    expect(screen.getByText('GraphRAG / PathRAG retrieval')).toBeInTheDocument();
+    expect(screen.getByText('Procedural skill memory')).toBeInTheDocument();
+    expect(screen.getByText('Hot/Warm/Cool/Cold activation')).toBeInTheDocument();
+    expect(screen.getByText('Provider adapters')).toBeInTheDocument();
+    expect(screen.getByText('Foundation')).toBeInTheDocument();
   });
 
   it('renders durable agent canvases and creates starter canvas artifacts', async () => {
@@ -526,6 +554,79 @@ describe('App smoke coverage', () => {
     expect(installedSidebar).toHaveTextContent('DESIGN.md agent guidance');
     expect(installedSidebar).toHaveTextContent('OpenDesign DESIGN.md Studio');
     expect(installedSidebar).toHaveTextContent('Required by OpenDesign DESIGN.md Studio');
+  });
+
+  it('opens marketplace items as README-style extension details', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Open details for OpenDesign DESIGN.md Studio' }));
+
+    const detail = screen.getByRole('region', { name: 'Extension detail' });
+    expect(within(detail).getByRole('heading', { name: 'OpenDesign DESIGN.md Studio' })).toBeInTheDocument();
+    expect(within(detail).getByRole('tab', { name: 'Details' })).toBeInTheDocument();
+    expect(within(detail).getByRole('tab', { name: 'Features' })).toBeInTheDocument();
+    expect(within(detail).getByRole('heading', { name: 'README.md' })).toBeInTheDocument();
+    expect(within(detail).getByText('Identifier')).toBeInTheDocument();
+    expect(within(detail).getByText('agent-harness.ext.open-design')).toBeInTheDocument();
+  });
+
+  it('merges workspace plugin manifests into installed extensions instead of a separate pane', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
+
+    expect(installedSidebar).not.toHaveTextContent('Workspace plugins');
+    expect(installedSidebar).toHaveTextContent('symphony');
+    expect(installedSidebar).toHaveTextContent('Workspace plugin');
+  });
+
+  it('opens installed IDE extension activity icons as feature panes and keeps Models independent', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact worktree explorer' }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }));
+    expect(screen.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Symphony workflow orchestration extension' }));
+    expect(screen.getByRole('region', { name: 'Symphony workflow orchestration feature pane' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));
+    expect(screen.getByRole('region', { name: 'Workflow canvas orchestration feature pane' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Artifact worktree explorer extension' }));
+    expect(screen.getByRole('region', { name: 'Artifact worktree explorer feature pane' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Models'));
+    expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Artifact worktree explorer feature pane' })).not.toBeInTheDocument();
   });
 
   it('renders partner agent control plane controls in Settings', async () => {

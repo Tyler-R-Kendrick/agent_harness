@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDefaultHarnessAppSpec } from './harnessSpec';
 import { HarnessDashboardPanel } from './HarnessDashboardPanel';
 import type { HarnessKnowledgeSummary } from './HarnessJsonRenderer';
+import type { HarnessAppSpec, HarnessElementPatch, WidgetPosition, WidgetSize } from './types';
 
 const knowledge: HarnessKnowledgeSummary = {
   metrics: [
@@ -13,22 +15,79 @@ const knowledge: HarnessKnowledgeSummary = {
   highlights: ['Latest steering: keep the canvas clean'],
 };
 
-function createSpecWithWidgetLayout() {
+function createSpecWithWidgetLayout(
+  layouts: Record<string, { position: WidgetPosition; size: WidgetSize }> = {
+    'session-summary-widget': {
+      position: { col: 0, row: 0 },
+      size: { cols: 5, rows: 3 },
+    },
+    'knowledge-widget': {
+      position: { col: 8, row: 0 },
+      size: { cols: 5, rows: 3 },
+    },
+  },
+) {
   const spec = createDefaultHarnessAppSpec({
     workspaceId: 'ws-research',
     workspaceName: 'Research',
   });
   spec.elements['session-summary-widget'].props = {
     ...(spec.elements['session-summary-widget'].props ?? {}),
-    position: { col: 0, row: 0 },
-    size: { cols: 5, rows: 3 },
+    ...layouts['session-summary-widget'],
   };
   spec.elements['knowledge-widget'].props = {
     ...(spec.elements['knowledge-widget'].props ?? {}),
-    position: { col: 8, row: 0 },
-    size: { cols: 5, rows: 3 },
+    ...layouts['knowledge-widget'],
   };
   return spec;
+}
+
+function applyHarnessPatch(spec: HarnessAppSpec, patch: HarnessElementPatch): HarnessAppSpec {
+  return {
+    ...spec,
+    elements: {
+      ...spec.elements,
+      [patch.elementId]: {
+        ...spec.elements[patch.elementId],
+        props: {
+          ...(spec.elements[patch.elementId].props ?? {}),
+          ...(patch.props ?? {}),
+        },
+      },
+    },
+  };
+}
+
+function StatefulDashboard({ onPatchElement }: { onPatchElement: (patch: HarnessElementPatch) => void }) {
+  const [spec, setSpec] = useState(() => createSpecWithWidgetLayout({
+    'session-summary-widget': {
+      position: { col: 0, row: 0 },
+      size: { cols: 5, rows: 3 },
+    },
+    'knowledge-widget': {
+      position: { col: 8, row: 0 },
+      size: { cols: 5, rows: 3 },
+    },
+  }));
+
+  return (
+    <HarnessDashboardPanel
+      spec={spec}
+      workspaceName="Research"
+      sessions={[
+        { id: 's1', name: 'Session 1' },
+        { id: 's2', name: 'Session 2' },
+      ]}
+      browserPages={[]}
+      files={[]}
+      knowledge={knowledge}
+      onCreateDashboardWidget={vi.fn()}
+      onPatchElement={(patch) => {
+        onPatchElement(patch);
+        setSpec((current) => applyHarnessPatch(current, patch));
+      }}
+    />
+  );
 }
 
 describe('HarnessDashboardPanel', () => {
@@ -148,6 +207,33 @@ describe('HarnessDashboardPanel', () => {
       props: {
         position: { col: 0, row: 0 },
         size: { cols: 6, rows: 4 },
+      },
+    });
+  });
+
+  it('moves only the dragged dashboard widget without repositioning neighboring widgets', () => {
+    const onPatchElement = vi.fn();
+
+    render(<StatefulDashboard onPatchElement={onPatchElement} />);
+
+    const draggedCard = screen.getByRole('article', { name: 'Session summary widget' });
+    const neighborCard = screen.getByRole('article', { name: 'Knowledge widget' });
+    const moveHandle = within(draggedCard).getByLabelText('Move Session summary widget');
+
+    expect(draggedCard.style.getPropertyValue('--harness-widget-col')).toBe('0');
+    expect(neighborCard.style.getPropertyValue('--harness-widget-col')).toBe('8');
+
+    fireEvent.pointerDown(moveHandle, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 592, clientY: 100 });
+    fireEvent.pointerUp(window, { pointerId: 1 });
+
+    expect(draggedCard.style.getPropertyValue('--harness-widget-col')).toBe('6');
+    expect(neighborCard.style.getPropertyValue('--harness-widget-col')).toBe('8');
+    expect(onPatchElement).toHaveBeenLastCalledWith({
+      elementId: 'session-summary-widget',
+      props: {
+        position: { col: 6, row: 0 },
+        size: { cols: 5, rows: 3 },
       },
     });
   });
