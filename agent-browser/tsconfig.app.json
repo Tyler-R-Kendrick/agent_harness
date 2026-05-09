@@ -26,6 +26,7 @@
       "@agent-harness/ext-workflow-canvas": ["../ext/ide/workflow-canvas/src/index.ts"],
       "@agent-harness/ext-local-model-connector": ["../ext/provider/local-model-connector/src/index.ts"],
       "@agent-harness/agent-sandbox": ["../lib/agent-sandbox/src/index.ts"],
+      "@agent-harness/git-stub": ["../lib/git-stub/src/index.ts"],
       "inbrowser-use": ["../lib/inbrowser-use/src/index.ts"],
       "logact": ["../lib/logact/src/index.ts"],
       "harness-core": ["../harness-core/src/index.ts"],
