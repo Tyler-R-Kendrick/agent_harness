@@ -51,6 +51,7 @@ describe('persistentMemoryGraph', () => {
     expect(result.chunks.length).toBeGreaterThan(0);
     expect(result.entities.map((entity) => entity.name)).toEqual(expect.arrayContaining(['Kuzu-WASM', 'GraphRAG']));
     expect(result.paths.length).toBeGreaterThan(0);
+    expect(new Set(result.paths.map((path) => path.id)).size).toBe(result.paths.length);
     expect(result.contextBlock).toContain('RELEVANT PATHS');
   });
 

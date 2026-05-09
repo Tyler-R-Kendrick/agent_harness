@@ -4970,7 +4970,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   letter-spacing: .08em;
 }
 .installed-extension-card {
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 .extensions-list,
 .workspace-plugins-section {
@@ -4993,6 +4993,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   gap: 12px;
   align-content: start;
+}
+.repo-wiki-nav-panel {
+  gap: 10px;
 }
 .repo-wiki-topbar,
 .agent-canvases-topbar {
@@ -5144,6 +5147,576 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--text-muted);
   font-size: 10.5px;
 }
+.repo-wiki-view-nav,
+.repo-wiki-nav-section-list {
+  display: grid;
+  gap: 4px;
+}
+.repo-wiki-view-button,
+.repo-wiki-page-link {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.repo-wiki-page-link {
+  grid-template-columns: minmax(0, 1fr);
+}
+.repo-wiki-view-button:hover,
+.repo-wiki-page-link:hover,
+.repo-wiki-view-button.active {
+  border-color: rgba(125, 211, 252, 0.26);
+  background: rgba(14, 99, 156, 0.18);
+}
+.repo-wiki-view-button:focus-visible,
+.repo-wiki-page-link:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.72);
+  outline-offset: 2px;
+}
+.repo-wiki-view-button span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.repo-wiki-view-button strong,
+.repo-wiki-page-link strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #f3f4f6;
+  font-size: 12px;
+}
+.repo-wiki-view-button small,
+.repo-wiki-page-link code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+.repo-wiki-workbench,
+.extension-detail-page,
+.extension-feature-pane {
+  height: 100%;
+  overflow: auto;
+  padding: 22px 28px;
+  background: #0d1117;
+}
+.repo-wiki-workbench {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 18px;
+}
+.repo-wiki-workbench-header,
+.extension-detail-hero,
+.extension-feature-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.repo-wiki-workbench-title,
+.extension-detail-title,
+.extension-feature-header > div:last-child {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.repo-wiki-workbench h2,
+.extension-detail-page h2,
+.extension-feature-pane h2 {
+  margin: 0;
+  color: #e6edf3;
+  font-size: 28px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.repo-wiki-workbench p,
+.extension-detail-page p,
+.extension-feature-pane p {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+.repo-wiki-workbench-metrics,
+.extension-feature-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.repo-wiki-workbench-metrics span,
+.extension-feature-metrics span,
+.extension-sidebar-chip-list span {
+  padding: 3px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  color: #c7d2fe;
+  background: rgba(30, 41, 59, 0.58);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.repo-wiki-workbench-tabs,
+.extension-detail-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+.repo-wiki-workbench-tab,
+.extension-detail-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-soft);
+  background: transparent;
+  font-size: 12px;
+}
+.repo-wiki-workbench-tab.active,
+.repo-wiki-workbench-tab[aria-selected="true"],
+.extension-detail-tabs button.active {
+  color: #f8fafc;
+  border-bottom-color: #58a6ff;
+}
+.repo-wiki-workbench-tab:focus-visible,
+.extension-detail-tabs button:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.72);
+  outline-offset: 2px;
+}
+.repo-wiki-workbench-body {
+  min-height: 0;
+}
+.repo-wiki-pages-view,
+.repo-wiki-graph-view,
+.repo-wiki-chat-view,
+.repo-wiki-sources-view,
+.extension-feature-grid {
+  display: grid;
+  gap: 14px;
+}
+.repo-wiki-pages-view,
+.repo-wiki-sources-view,
+.extension-feature-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.repo-wiki-page-card,
+.repo-wiki-graph-card,
+.repo-wiki-source-card,
+.extension-feature-card,
+.extension-readme,
+.extension-detail-sidebar section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.38);
+}
+.repo-wiki-page-card h3,
+.repo-wiki-graph-card h3,
+.repo-wiki-source-card h3,
+.extension-feature-card h3,
+.extension-readme h3,
+.extension-detail-sidebar h3 {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 16px;
+}
+.extension-readme h4 {
+  margin: 6px 0 0;
+  color: #e6edf3;
+  font-size: 13px;
+}
+.repo-wiki-page-card ul,
+.extension-readme ul,
+.repo-wiki-edge-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+}
+.repo-wiki-page-card code,
+.repo-wiki-source-card code,
+.extension-resource-list code,
+.extension-contribution-list code,
+.extension-detail-sidebar dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.repo-wiki-graph-canvas {
+  position: relative;
+  min-height: 280px;
+  border: 1px solid rgba(88, 166, 255, 0.16);
+  border-radius: 6px;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    rgba(2, 6, 23, 0.38);
+  background-size: 32px 32px;
+}
+.repo-wiki-graph-card--model {
+  gap: 14px;
+}
+.repo-wiki-graph-heading p {
+  margin: 6px 0 0;
+  max-width: 880px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.repo-wiki-model-toolbar,
+.repo-wiki-standards-strip,
+.repo-wiki-group-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+.repo-wiki-model-toolbar {
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.28);
+}
+.repo-wiki-model-toolbar button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 5px;
+  color: var(--text-soft);
+  background: rgba(15, 23, 42, 0.44);
+}
+.repo-wiki-model-toolbar button.active,
+.repo-wiki-model-toolbar button[aria-pressed="true"] {
+  border-color: rgba(88, 166, 255, 0.56);
+  color: #e0f2fe;
+  background: rgba(14, 116, 144, 0.28);
+}
+.repo-wiki-model-toolbar span,
+.repo-wiki-standards-strip span,
+.repo-wiki-group-strip span {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  color: #c7d2fe;
+  background: rgba(30, 41, 59, 0.5);
+  font-size: 11px;
+}
+.repo-wiki-group-strip span {
+  border-color: color-mix(in srgb, var(--wiki-group-color) 48%, transparent);
+  color: #f8fafc;
+  box-shadow: inset 3px 0 0 var(--wiki-group-color);
+}
+.repo-wiki-graph-canvas--model {
+  min-height: 420px;
+  overflow: hidden;
+}
+.repo-wiki-graph-node {
+  position: absolute;
+  left: var(--wiki-node-x);
+  top: var(--wiki-node-y);
+  max-width: 180px;
+  transform: translate(-50%, -50%) scale(var(--wiki-node-scale, 1));
+  padding: 8px 10px;
+  border: 1px solid rgba(125, 211, 252, 0.36);
+  border-radius: 5px;
+  color: #e0f2fe;
+  background: rgba(14, 116, 144, 0.28);
+  font-size: 12px;
+  text-align: center;
+}
+.repo-wiki-graph-node strong,
+.repo-wiki-graph-node small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-wiki-graph-node small {
+  margin-top: 2px;
+  color: rgba(224, 242, 254, 0.72);
+  font-size: 10px;
+}
+.repo-wiki-graph-node--tag {
+  border-color: rgba(167, 139, 250, 0.38);
+  color: #ede9fe;
+  background: rgba(88, 28, 135, 0.28);
+}
+.repo-wiki-graph-node--source {
+  border-color: rgba(251, 191, 36, 0.36);
+  color: #fef3c7;
+  background: rgba(120, 53, 15, 0.25);
+}
+.repo-wiki-graph-node--runtime {
+  border-color: rgba(52, 211, 153, 0.36);
+  color: #d1fae5;
+  background: rgba(6, 95, 70, 0.25);
+}
+.repo-wiki-edge-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.repo-wiki-edge-list span {
+  color: var(--text-muted);
+  text-align: center;
+}
+.repo-wiki-edge-list--model {
+  max-height: 220px;
+  overflow: auto;
+}
+.repo-wiki-obsidian-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.repo-wiki-obsidian-panels article {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.24);
+}
+.repo-wiki-obsidian-panels h3 {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 13px;
+}
+.repo-wiki-link-list,
+.repo-wiki-property-list {
+  display: grid;
+  gap: 6px;
+}
+.repo-wiki-link-list span,
+.repo-wiki-property-list span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px;
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.48);
+}
+.repo-wiki-link-list code,
+.repo-wiki-property-list code {
+  overflow-wrap: anywhere;
+}
+.repo-wiki-link-list small,
+.repo-wiki-property-list strong {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+.repo-wiki-source-card--wide {
+  grid-column: 1 / -1;
+}
+.repo-wiki-memory-view {
+  display: grid;
+  gap: 12px;
+}
+.repo-wiki-memory-hero,
+.repo-wiki-memory-roadmap,
+.repo-wiki-memory-gaps,
+.repo-wiki-memory-layer {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.48);
+}
+.repo-wiki-memory-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+}
+.repo-wiki-memory-hero h3,
+.repo-wiki-memory-roadmap h3,
+.repo-wiki-memory-gaps h3,
+.repo-wiki-memory-layer h3 {
+  margin: 0;
+  color: #f3f4f6;
+  font-size: 16px;
+}
+.repo-wiki-memory-hero p,
+.repo-wiki-memory-layer p {
+  margin: 7px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.repo-wiki-memory-source-count {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  min-width: 92px;
+  color: var(--text-soft);
+}
+.repo-wiki-memory-source-count strong {
+  color: #e0f2fe;
+  font-size: 24px;
+}
+.repo-wiki-memory-stack {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+.repo-wiki-memory-stack span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(125, 211, 252, 0.16);
+  border-radius: 6px;
+  color: var(--text-soft);
+  background: rgba(8, 47, 73, 0.24);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.repo-wiki-memory-stack strong {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  color: #082f49;
+  background: #7dd3fc;
+  font-size: 11px;
+}
+.repo-wiki-memory-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+.repo-wiki-memory-layer {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 12px;
+}
+.repo-wiki-memory-layer dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+.repo-wiki-memory-layer dl div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 5px;
+  background: rgba(2, 6, 23, 0.32);
+}
+.repo-wiki-memory-layer dt {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  text-transform: uppercase;
+}
+.repo-wiki-memory-layer dd {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.repo-wiki-memory-layer ul,
+.repo-wiki-memory-gaps ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.repo-wiki-memory-roadmap,
+.repo-wiki-memory-gaps {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+.repo-wiki-memory-roadmap-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+.repo-wiki-memory-roadmap-list article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px;
+  border-radius: 5px;
+  background: rgba(2, 6, 23, 0.32);
+}
+.repo-wiki-memory-roadmap-list strong {
+  color: #fef3c7;
+  font-size: 13px;
+}
+.repo-wiki-memory-roadmap-list span {
+  color: #e6edf3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.repo-wiki-memory-roadmap-list small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.repo-wiki-question-list,
+.repo-wiki-source-paths,
+.extension-resource-list,
+.extension-contribution-list,
+.extension-sidebar-chip-list {
+  display: grid;
+  gap: 7px;
+}
+.repo-wiki-question-list button {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 5px;
+  color: inherit;
+  background: rgba(15, 23, 42, 0.42);
+  text-align: left;
+}
+.repo-wiki-source-paths span,
+.extension-resource-list span,
+.extension-contribution-list span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 5px;
+  background: rgba(2, 6, 23, 0.32);
+}
+.extension-feature-card--wide {
+  grid-column: 1 / -1;
+}
 .multitask-panel {
   display: grid;
   gap: 12px;
@@ -5250,10 +5823,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .marketplace-card {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 8px 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  align-items: stretch;
+  padding: 0;
   border-bottom: 1px solid var(--panel-border);
 }
 .marketplace-card--unavailable,
@@ -5267,9 +5840,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .marketplace-card:hover {
   background: rgba(255,255,255,.04);
 }
+.marketplace-card-main {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.marketplace-card-main--static {
+  border: 0;
+}
+.marketplace-card-main:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.72);
+  outline-offset: -2px;
+}
 .marketplace-card-icon {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
   display: grid;
   place-items: center;
@@ -5279,10 +5872,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .marketplace-card-body {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 .marketplace-card-body strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
 }
 .marketplace-card-author,
@@ -5293,19 +5891,37 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .marketplace-card-author,
 .marketplace-card-desc,
 .extension-content p {
-  overflow-wrap: anywhere;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .marketplace-card-desc {
   margin: 0;
   font-size: 11px;
   color: #d7dde5;
   line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  white-space: normal;
 }
 .marketplace-card-meta {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+.marketplace-card-meta span {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.extension-detail-actions .sidebar-icon-button {
+  min-width: 32px;
 }
 .marketplace-install-button {
   min-width: 72px;
@@ -5320,9 +5936,91 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   justify-content: flex-end;
   gap: 4px;
   min-width: max-content;
+  padding: 8px 10px 8px 0;
 }
 .marketplace-download-link {
   text-decoration: none;
+}
+.extension-detail-page,
+.extension-feature-pane {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+.extension-detail-hero {
+  grid-template-columns: 96px minmax(0, 1fr);
+}
+.extension-detail-icon,
+.extension-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 86px;
+  height: 86px;
+  border: 1px solid rgba(88, 166, 255, 0.24);
+  border-radius: 8px;
+  color: #bfdbfe;
+  background: rgba(14, 99, 156, 0.18);
+}
+.extension-feature-icon {
+  width: 58px;
+  height: 58px;
+}
+.extension-detail-publisher,
+.extension-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.extension-detail-publisher span {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+.extension-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  gap: 22px;
+  align-items: start;
+}
+.extension-readme {
+  align-content: start;
+  padding: 18px;
+  background: transparent;
+  border-color: transparent;
+}
+.extension-readme p,
+.extension-readme li {
+  max-width: 920px;
+}
+.extension-detail-sidebar {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.extension-detail-sidebar dl {
+  display: grid;
+  grid-template-columns: minmax(92px, auto) minmax(0, 1fr);
+  gap: 7px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.extension-detail-sidebar dt {
+  color: var(--text-muted);
+}
+.extension-detail-sidebar dd {
+  margin: 0;
+  color: #e6edf3;
+}
+.extension-detail-warning {
+  padding: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  border-radius: 5px;
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.24);
+}
+.workspace-plugin-card .marketplace-card-icon {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.16);
 }
 .marketplace-stars {
   color: #d7ba7d;
@@ -6193,6 +6891,14 @@ kbd {
     overscroll-behavior: contain;
   }
 
+  .repo-wiki-memory-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .repo-wiki-memory-source-count {
+    justify-items: start;
+  }
+
   .workspace-nav-row .icon-button,
   .workspace-toggle-pill,
   .workspace-hotkey-button,
@@ -6373,6 +7079,36 @@ kbd {
   }
   .marketplace-actions {
     justify-content: stretch;
+  }
+
+  .repo-wiki-workbench,
+  .extension-detail-page,
+  .extension-feature-pane {
+    padding: 16px;
+  }
+
+  .repo-wiki-workbench-header,
+  .extension-detail-hero,
+  .extension-feature-header,
+  .extension-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .repo-wiki-workbench-metrics,
+  .extension-feature-metrics,
+  .extension-detail-actions {
+    justify-content: flex-start;
+  }
+
+  .repo-wiki-workbench-tabs,
+  .extension-detail-tabs {
+    overflow-x: auto;
+    padding-bottom: 1px;
+  }
+
+  .extension-detail-icon {
+    width: 64px;
+    height: 64px;
   }
 }
 

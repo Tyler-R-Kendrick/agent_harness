@@ -613,6 +613,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
 type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'canvases' | 'multitask' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
+type RepoWikiView = 'pages' | 'graph' | 'memory' | 'chat' | 'sources';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -786,6 +787,13 @@ const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof type
   settings: { label: 'Settings', icon: 'settings' },
   account: { label: 'Account', icon: 'user' },
 };
+const REPO_WIKI_VIEWS: Array<{ id: RepoWikiView; label: string; description: string; icon: keyof typeof icons }> = [
+  { id: 'pages', label: 'Wiki Pages', description: 'Generated pages and grounded repo facts', icon: 'file' },
+  { id: 'graph', label: 'Knowledge Graph', description: 'Entities, relationships, and runtime surfaces', icon: 'share' },
+  { id: 'memory', label: 'Memory Models', description: 'Competitor patterns and harness architecture', icon: 'slidersHorizontal' },
+  { id: 'chat', label: 'Scoped Chat', description: 'Ask against the current wiki snapshot', icon: 'messageSquare' },
+  { id: 'sources', label: 'Sources', description: 'Citations and indexed source coverage', icon: 'clipboard' },
+];
 const WORKSPACE_SHORTCUT_GROUPS = [
   {
     title: 'Navigation',
@@ -10073,15 +10081,19 @@ function formatWikiRefreshTime(value: string): string {
 
 function RepoWikiPanel({
   snapshot,
+  activeView,
+  onViewChange,
   onRefresh,
   onCopyCitation,
 }: {
   snapshot: RepoWikiSnapshot;
+  activeView: RepoWikiView;
+  onViewChange: (view: RepoWikiView) => void;
   onRefresh: () => void;
   onCopyCitation: (citation: RepoWikiCitation) => void | Promise<void>;
 }) {
   return (
-    <section className="panel-scroll repo-wiki-panel" role="region" aria-label="Repository wiki">
+    <section className="panel-scroll repo-wiki-panel repo-wiki-nav-panel" role="region" aria-label="Repository wiki navigation">
       <div className="panel-topbar repo-wiki-topbar">
         <div className="settings-heading">
           <h2>Repository wiki</h2>
@@ -10103,53 +10115,36 @@ function RepoWikiPanel({
         </div>
       </section>
 
-      <SidebarSection title="Repo map" summary={`${snapshot.sections.length} sections`} scrollBody>
-        <div className="repo-wiki-section-list">
+      <nav className="repo-wiki-view-nav" aria-label="Wiki views">
+        {REPO_WIKI_VIEWS.map((view) => (
+          <button
+            key={view.id}
+            type="button"
+            className={`repo-wiki-view-button${activeView === view.id ? ' active' : ''}`}
+            aria-current={activeView === view.id ? 'page' : undefined}
+            onClick={() => onViewChange(view.id)}
+          >
+            <Icon name={view.icon} size={14} />
+            <span>
+              <strong>{view.label}</strong>
+              <small>{view.description}</small>
+            </span>
+          </button>
+        ))}
+      </nav>
+
+      <SidebarSection title="Wiki pages" summary={`${snapshot.sections.length} sections`} scrollBody>
+        <div className="repo-wiki-section-list repo-wiki-nav-section-list">
           {snapshot.sections.map((section) => (
-            <article className="repo-wiki-card" key={section.id}>
-              <div className="repo-wiki-card-header">
-                <strong>{section.title}</strong>
-                <code>wiki:{snapshot.workspaceId}:{section.id}</code>
-              </div>
-              <p>{section.summary}</p>
-              <ul>
-                {section.facts.map((fact) => <li key={fact}>{fact}</li>)}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
-
-      <SidebarSection title="Architecture views" summary={`${snapshot.diagrams.length} view${snapshot.diagrams.length === 1 ? '' : 's'}`}>
-        <div className="repo-wiki-diagram-list">
-          {snapshot.diagrams.map((diagram) => (
-            <article className="repo-wiki-card repo-wiki-diagram" key={diagram.id}>
-              <strong>{diagram.title}</strong>
-              <div className="repo-wiki-node-row">
-                {diagram.nodes.map((node) => <span key={node}>{node}</span>)}
-              </div>
-              <ul>
-                {diagram.edges.map((edge) => (
-                  <li key={`${edge.from}:${edge.to}:${edge.label}`}>
-                    <code>{edge.from}</code>
-                    <span>{edge.label}</span>
-                    <code>{edge.to}</code>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
-
-      <SidebarSection title="Onboarding" summary={`${snapshot.onboarding.length} steps`}>
-        <div className="repo-wiki-onboarding-list">
-          {snapshot.onboarding.map((step) => (
-            <article className="repo-wiki-card" key={step.citationId}>
-              <strong>{step.title}</strong>
-              <p>{step.detail}</p>
-              <code>{step.citationId}</code>
-            </article>
+            <button
+              type="button"
+              className="repo-wiki-page-link"
+              key={section.id}
+              onClick={() => onViewChange('pages')}
+            >
+              <strong>{section.title}</strong>
+              <code>wiki:{snapshot.workspaceId}:{section.id}</code>
+            </button>
           ))}
         </div>
       </SidebarSection>
@@ -10173,6 +10168,338 @@ function RepoWikiPanel({
           ))}
         </div>
       </SidebarSection>
+    </section>
+  );
+}
+
+function RepoWikiWorkbench({
+  snapshot,
+  activeView,
+  onViewChange,
+  onCopyCitation,
+}: {
+  snapshot: RepoWikiSnapshot;
+  activeView: RepoWikiView;
+  onViewChange: (view: RepoWikiView) => void;
+  onCopyCitation: (citation: RepoWikiCitation) => void | Promise<void>;
+}) {
+  const activeViewMeta = REPO_WIKI_VIEWS.find((view) => view.id === activeView) ?? REPO_WIKI_VIEWS[0];
+  const [graphMode, setGraphMode] = useState<'global' | 'local'>('global');
+  const knowledgeModel = snapshot.knowledgeModel;
+  const visibleNodeIds = new Set(
+    knowledgeModel.nodes
+      .filter((node) => graphMode === 'global' || node.localDepth <= knowledgeModel.graphModes.localDepth)
+      .map((node) => node.id),
+  );
+  const visibleNodes = knowledgeModel.nodes.filter((node) => visibleNodeIds.has(node.id));
+  const visibleLinks = knowledgeModel.links.filter((link) => visibleNodeIds.has(link.from) && visibleNodeIds.has(link.to));
+  const nodeLabelById = new Map(knowledgeModel.nodes.map((node) => [node.id, node.label]));
+  const canvasCardByNodeId = new Map(knowledgeModel.canvas.cards.map((card) => [card.nodeId, card]));
+  const focusNode = knowledgeModel.nodes.find((node) => node.id === knowledgeModel.graphModes.localFocusId) ?? visibleNodes[0];
+  const focusBacklinks = focusNode ? knowledgeModel.links.filter((link) => link.to === focusNode.id) : [];
+  const focusOutgoingLinks = focusNode ? knowledgeModel.links.filter((link) => link.from === focusNode.id) : [];
+
+  return (
+    <section className="repo-wiki-workbench" role="region" aria-label="Workspace knowledgebase wiki">
+      <header className="repo-wiki-workbench-header">
+        <div className="repo-wiki-workbench-title">
+          <span className="panel-eyebrow">Knowledgebase</span>
+          <h2>Workspace knowledgebase wiki</h2>
+          <p>{snapshot.summary}</p>
+        </div>
+        <div className="repo-wiki-workbench-metrics" aria-label="Knowledgebase coverage">
+          <span>{snapshot.sourceCoverage.workspaceFileCount} files</span>
+          <span>{snapshot.sourceCoverage.memoryFileCount} memory notes</span>
+          <span>{snapshot.sourceCoverage.pluginCount} plugins</span>
+          <span>{snapshot.citations.length} citations</span>
+        </div>
+      </header>
+
+      <div className="repo-wiki-workbench-tabs" role="tablist" aria-label="Wiki views">
+        {REPO_WIKI_VIEWS.map((view) => (
+          <button
+            key={view.id}
+            type="button"
+            role="tab"
+            aria-selected={activeView === view.id}
+            className={`repo-wiki-workbench-tab${activeView === view.id ? ' active' : ''}`}
+            onClick={() => onViewChange(view.id)}
+          >
+            <Icon name={view.icon} size={14} />
+            <span>{view.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="repo-wiki-workbench-body" role="tabpanel" aria-label={activeViewMeta.label}>
+        {activeView === 'pages' ? (
+          <div className="repo-wiki-pages-view">
+            {snapshot.sections.map((section) => (
+              <article className="repo-wiki-page-card" key={section.id}>
+                <div>
+                  <span className="panel-eyebrow">Wiki page</span>
+                  <h3>{section.title}</h3>
+                  <code>wiki:{snapshot.workspaceId}:{section.id}</code>
+                </div>
+                <p>{section.summary}</p>
+                <ul>
+                  {section.facts.map((fact) => <li key={fact}>{fact}</li>)}
+                </ul>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {activeView === 'graph' ? (
+          <div className="repo-wiki-graph-view">
+            <article className="repo-wiki-graph-card repo-wiki-graph-card--model">
+              <div className="repo-wiki-graph-heading">
+                <span className="panel-eyebrow">Knowledge Graph</span>
+                <h3>Obsidian-style memory graph</h3>
+                <p>Local and global wiki graph views backed by wikilinks, backlinks, note properties, RDF-style triples, SKOS groups, PROV provenance, and JSON Canvas coordinates.</p>
+              </div>
+              <div className="repo-wiki-model-toolbar" role="group" aria-label="Graph mode">
+                <button
+                  type="button"
+                  className={graphMode === 'global' ? 'active' : ''}
+                  aria-pressed={graphMode === 'global'}
+                  onClick={() => setGraphMode('global')}
+                >
+                  Global graph
+                </button>
+                <button
+                  type="button"
+                  className={graphMode === 'local' ? 'active' : ''}
+                  aria-pressed={graphMode === 'local'}
+                  onClick={() => setGraphMode('local')}
+                >
+                  Local graph
+                </button>
+                <span>Depth {knowledgeModel.graphModes.localDepth}</span>
+                <span>{visibleNodes.length} nodes</span>
+                <span>{visibleLinks.length} links</span>
+              </div>
+              <div className="repo-wiki-standards-strip" aria-label="Knowledge visualization standards">
+                {knowledgeModel.standards.map((standard) => <span key={standard}>{standard}</span>)}
+              </div>
+              <div className="repo-wiki-group-strip" aria-label="SKOS concept groups">
+                {knowledgeModel.groups.map((group) => (
+                  <span key={group.id} style={{ '--wiki-group-color': group.color } as React.CSSProperties}>
+                    {group.label}
+                  </span>
+                ))}
+              </div>
+              <div className="repo-wiki-graph-canvas repo-wiki-graph-canvas--model" aria-label="Obsidian-style memory graph">
+                {visibleNodes.map((node) => {
+                  const card = canvasCardByNodeId.get(node.id);
+                  const degree = node.inbound + node.outbound;
+                  return (
+                    <span
+                      key={node.id}
+                      className={`repo-wiki-graph-node repo-wiki-graph-node--${node.kind}`}
+                      style={{
+                        '--wiki-node-x': `${card?.x ?? 120}px`,
+                        '--wiki-node-y': `${card?.y ?? 120}px`,
+                        '--wiki-node-scale': String(Math.min(1.35, 0.9 + degree * 0.08)),
+                      } as React.CSSProperties}
+                    >
+                      <strong>{node.label}</strong>
+                      <small>{node.inbound} in · {node.outbound} out</small>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="repo-wiki-obsidian-panels">
+                <article>
+                  <h3>Backlinks</h3>
+                  <div className="repo-wiki-link-list">
+                    {focusBacklinks.length ? focusBacklinks.map((link) => (
+                      <span key={`${link.from}:${link.to}:${link.predicate}`}>
+                        <code>{nodeLabelById.get(link.from) ?? link.from}</code>
+                        <small>{link.predicate}</small>
+                      </span>
+                    )) : <p>No backlinks for {focusNode?.label ?? 'the selected node'}.</p>}
+                  </div>
+                </article>
+                <article>
+                  <h3>Outgoing links</h3>
+                  <div className="repo-wiki-link-list">
+                    {focusOutgoingLinks.length ? focusOutgoingLinks.map((link) => (
+                      <span key={`${link.from}:${link.to}:${link.predicate}`}>
+                        <code>{nodeLabelById.get(link.to) ?? link.to}</code>
+                        <small>{link.predicate}</small>
+                      </span>
+                    )) : <p>No outgoing links for {focusNode?.label ?? 'the selected node'}.</p>}
+                  </div>
+                </article>
+                <article>
+                  <h3>Properties</h3>
+                  <div className="repo-wiki-property-list">
+                    {(focusNode?.properties ?? []).map((property) => (
+                      <span key={`${property.key}:${property.value}`}>
+                        <strong>{property.key}</strong>
+                        <code>{property.value}</code>
+                      </span>
+                    ))}
+                  </div>
+                </article>
+                <article>
+                  <h3>Unlinked mentions</h3>
+                  <div className="repo-wiki-link-list">
+                    {knowledgeModel.unlinkedMentions.length ? knowledgeModel.unlinkedMentions.map((mention) => (
+                      <span key={`${mention.sourcePath}:${mention.mention}:${mention.targetId}`}>
+                        <code>{mention.mention}</code>
+                        <small>{mention.sourcePath} · {Math.round(mention.confidence * 100)}%</small>
+                      </span>
+                    )) : <p>No unlinked mentions detected.</p>}
+                  </div>
+                </article>
+              </div>
+              <ul className="repo-wiki-edge-list repo-wiki-edge-list--model">
+                {visibleLinks.map((edge) => (
+                  <li key={`${edge.from}:${edge.to}:${edge.predicate}`}>
+                    <code>{nodeLabelById.get(edge.from) ?? edge.from}</code>
+                    <span>{edge.predicate}</span>
+                    <code>{nodeLabelById.get(edge.to) ?? edge.to}</code>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        ) : null}
+
+        {activeView === 'memory' ? (
+          <div className="repo-wiki-memory-view">
+            <article className="repo-wiki-memory-hero">
+              <div>
+                <span className="panel-eyebrow">Best-of harness stack</span>
+                <h3>Competitor memory architecture synthesis</h3>
+                <p>{snapshot.memoryArchitecture.designGoal}</p>
+              </div>
+              <div className="repo-wiki-memory-source-count" aria-label="Memory architecture source coverage">
+                <strong>{snapshot.memoryArchitecture.sourcePaths.length}</strong>
+                <span>repo references</span>
+              </div>
+            </article>
+
+            <section className="repo-wiki-memory-stack" aria-label="Recommended memory stack">
+              {snapshot.memoryArchitecture.recommendedStack.map((item, index) => (
+                <span key={item}>
+                  <strong>{index + 1}</strong>
+                  {item}
+                </span>
+              ))}
+            </section>
+
+            <section className="repo-wiki-memory-layer-grid" aria-label="Memory architecture layers">
+              {snapshot.memoryArchitecture.layers.map((layer) => (
+                <article className="repo-wiki-memory-layer" key={layer.id}>
+                  <div>
+                    <span className="panel-eyebrow">{layer.inspiration}</span>
+                    <h3>{layer.title}</h3>
+                  </div>
+                  <p>{layer.harnessImplementation}</p>
+                  <dl>
+                    <div>
+                      <dt>Storage</dt>
+                      <dd>{layer.storage}</dd>
+                    </div>
+                    <div>
+                      <dt>Retrieval</dt>
+                      <dd>{layer.retrievalMode}</dd>
+                    </div>
+                  </dl>
+                  <ul>
+                    {layer.capabilities.map((capability) => <li key={capability}>{capability}</li>)}
+                  </ul>
+                </article>
+              ))}
+            </section>
+
+            <section className="repo-wiki-memory-roadmap" aria-label="Memory architecture roadmap">
+              <div>
+                <span className="panel-eyebrow">Roadmap</span>
+                <h3>Best-of harness stack</h3>
+              </div>
+              <div className="repo-wiki-memory-roadmap-list">
+                {snapshot.memoryArchitecture.roadmap.map((item) => (
+                  <article key={item.phase}>
+                    <strong>{item.phase}</strong>
+                    <span>{item.focus}</span>
+                    <small>{item.outcome}</small>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="repo-wiki-memory-gaps" aria-label="Memory architecture gaps">
+              <div>
+                <span className="panel-eyebrow">Gaps to close</span>
+                <h3>Next implementation targets</h3>
+              </div>
+              <ul>
+                {snapshot.memoryArchitecture.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+              </ul>
+            </section>
+          </div>
+        ) : null}
+
+        {activeView === 'chat' ? (
+          <div className="repo-wiki-chat-view">
+            <article className="repo-wiki-page-card">
+              <span className="panel-eyebrow">Scoped Chat</span>
+              <h3>Ask the wiki with citations</h3>
+              <p>Use the generated pages, source handles, and graph relationships as a constrained context window for workspace questions.</p>
+              <div className="repo-wiki-question-list">
+                {snapshot.onboarding.map((step) => (
+                  <button type="button" key={step.citationId} onClick={() => onViewChange('sources')}>
+                    <strong>{step.title}</strong>
+                    <span>{step.detail}</span>
+                  </button>
+                ))}
+              </div>
+            </article>
+          </div>
+        ) : null}
+
+        {activeView === 'sources' ? (
+          <div className="repo-wiki-sources-view">
+            <article className="repo-wiki-source-card repo-wiki-source-card--wide">
+              <div>
+                <span className="panel-eyebrow">Memory model export</span>
+                <h3>RDF triples, SKOS groups, PROV sources, JSON Canvas</h3>
+              </div>
+              <p>Each wiki node is addressable as a stable subject, each link has a predicate, concept groups mirror SKOS facets, source nodes carry provenance, and canvas cards preserve spatial layout metadata.</p>
+              <div className="repo-wiki-source-paths">
+                {knowledgeModel.links.slice(0, 6).map((link) => (
+                  <span key={`${link.from}:${link.to}:${link.predicate}`}>
+                    {link.from} · {link.predicate} · {link.to}
+                  </span>
+                ))}
+              </div>
+            </article>
+            {snapshot.citations.map((citation) => (
+              <article className="repo-wiki-source-card" key={citation.id}>
+                <div>
+                  <span className="panel-eyebrow">Source handle</span>
+                  <h3>{citation.label}</h3>
+                  <code>{citation.id}</code>
+                </div>
+                <p>{citation.snippet}</p>
+                <div className="repo-wiki-source-paths">
+                  {citation.sourcePaths.length
+                    ? citation.sourcePaths.map((path) => <span key={path}>{path}</span>)
+                    : <span>No file paths captured</span>}
+                </div>
+                <button type="button" className="secondary-button" onClick={() => void onCopyCitation(citation)}>
+                  <Icon name="clipboard" size={13} />
+                  <span>Copy Citation</span>
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -10757,15 +11084,17 @@ function useResolvedDaemonDownloadChoice(): DaemonDownloadChoice {
   return daemonDownload;
 }
 
-function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { name: string; description: string } {
+function parseWorkspacePluginDisplay(plugin: WorkspacePlugin): { id: string; name: string; version: string; description: string } {
   try {
     const manifest = JSON.parse(plugin.content) as Record<string, unknown>;
     return {
+      id: typeof manifest.id === 'string' ? manifest.id : plugin.directory,
       name: typeof manifest.name === 'string' ? manifest.name : plugin.directory,
+      version: typeof manifest.version === 'string' ? manifest.version : 'workspace',
       description: typeof manifest.description === 'string' ? manifest.description : plugin.path,
     };
   } catch {
-    return { name: plugin.directory, description: plugin.path };
+    return { id: plugin.directory, name: plugin.directory, version: 'workspace', description: plugin.path };
   }
 }
 
@@ -10775,6 +11104,77 @@ type ExtensionActionHandlers = {
   onSetExtensionEnabled: (extensionId: string, enabled: boolean) => void;
   onConfigureExtension: (extension: DefaultExtensionDescriptor) => void;
 };
+
+type ExtensionNavigationHandlers = {
+  onOpenExtensionDetail: (extensionId: string) => void;
+};
+
+function extensionMetadataValue(extension: DefaultExtensionDescriptor, key: string): unknown {
+  const metadata = extension.marketplace.metadata;
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function getExtensionResourceRows(extension: DefaultExtensionDescriptor): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = [
+    { label: 'Manifest', value: extension.marketplace.manifest ?? extension.manifest.id },
+    { label: 'Source', value: extension.marketplace.source?.path ?? 'Bundled package' },
+  ];
+  for (const asset of extension.manifest.assets ?? []) {
+    if (asset.kind === 'documentation') rows.push({ label: 'README.md', value: asset.path });
+  }
+  const standardRefs = extensionMetadataValue(extension, 'standardRefs');
+  if (Array.isArray(standardRefs)) {
+    for (const ref of standardRefs) {
+      if (typeof ref === 'string') rows.push({ label: 'Reference', value: ref });
+    }
+  }
+  return rows;
+}
+
+function getExtensionReadmeBullets(extension: DefaultExtensionDescriptor): string[] {
+  const bullets = [
+    extension.manifest.description,
+    ...((extension.manifest.capabilities ?? []).map((capability) => capability.description)),
+    ...((extension.manifest.renderers ?? []).map((renderer) => renderer.description)),
+    ...((extension.manifest.paneItems ?? []).map((paneItem) => paneItem.description)),
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  return bullets.length ? bullets : ['This plugin publishes manifest metadata for Agent Harness IDE integration.'];
+}
+
+function getExtensionContributionRows(extension: DefaultExtensionDescriptor): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const capability of extension.manifest.capabilities ?? []) rows.push({ label: capability.kind, value: capability.id });
+  for (const renderer of extension.manifest.renderers ?? []) rows.push({ label: 'renderer', value: renderer.id });
+  for (const paneItem of extension.manifest.paneItems ?? []) rows.push({ label: 'pane', value: paneItem.id });
+  for (const event of extension.manifest.activationEvents ?? []) rows.push({ label: 'activation', value: event });
+  return rows;
+}
+
+function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string {
+  if (extension.manifest.id === 'agent-harness.ext.open-design') return 'OpenDesign Studio';
+  if (extension.manifest.id === 'agent-harness.ext.symphony') return 'Symphony Board';
+  if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') return 'Workflow Canvas';
+  if (extension.manifest.id === 'agent-harness.ext.artifacts-worktree') return 'Artifact Worktree';
+  return extension.manifest.name;
+}
+
+function getExtensionFeatureSummary(extension: DefaultExtensionDescriptor): string {
+  if (extension.manifest.id === 'agent-harness.ext.open-design') {
+    return 'Compose DESIGN.md systems, inspect token guidance, and keep design-system decisions visible as an IDE pane.';
+  }
+  if (extension.manifest.id === 'agent-harness.ext.symphony') {
+    return 'Navigate WORKFLOW.md orchestration, runtime hooks, and the preserved Symphony board package from one feature pane.';
+  }
+  if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') {
+    return 'Open saved workflow canvases as main-pane automation graphs backed by CNCF Serverless Workflow documents.';
+  }
+  if (extension.manifest.id === 'agent-harness.ext.artifacts-worktree') {
+    return 'Browse artifacts as a worktree surface alongside Browser, Files, and Sessions.';
+  }
+  return extension.manifest.description;
+}
 
 function ExtensionActionButtons({
   extension,
@@ -10847,6 +11247,7 @@ function MarketplaceExtensionCard({
   installedExtensionIdSet,
   enabledExtensionIdSet,
   daemonDownload,
+  onOpenExtensionDetail,
   onInstallExtension,
   onUninstallExtension,
   onSetExtensionEnabled,
@@ -10857,7 +11258,7 @@ function MarketplaceExtensionCard({
   installedExtensionIdSet: Set<string>;
   enabledExtensionIdSet: Set<string>;
   daemonDownload: DaemonDownloadChoice;
-} & ExtensionActionHandlers) {
+} & ExtensionActionHandlers & ExtensionNavigationHandlers) {
   const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
   const isEnabled = enabledExtensionIdSet.has(extension.manifest.id);
   const category = getExtensionMarketplaceCategory(extension);
@@ -10873,27 +11274,34 @@ function MarketplaceExtensionCard({
 
   return (
     <article className={className} aria-disabled={availability.state === 'unavailable' ? true : undefined}>
-      <div className="marketplace-card-icon">
-        <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
-      </div>
-      <div className="marketplace-card-body">
-        <strong>{extension.manifest.name}</strong>
-        <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
-        <p className="marketplace-card-desc">{extension.manifest.description}</p>
-        <div className="marketplace-card-meta">
-          <span>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
-          {category === 'worker' ? <span>External runtime detection</span> : null}
-          {category === 'provider' ? <span>Account configurable</span> : null}
-          {isInstalled ? <span>{isEnabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span> : null}
-          {availability.state === 'unavailable' ? <span>Unavailable on this runtime</span> : null}
-          <span>Configurable</span>
-        </div>
-        {dependencyNames.length > 0 ? (
-          <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependencies`}>
-            {dependencyNames.map((name) => <span key={name} className="chip mini">Requires {name}</span>)}
+      <button
+        type="button"
+        className="marketplace-card-main"
+        aria-label={`Open details for ${extension.manifest.name}`}
+        onClick={() => onOpenExtensionDetail(extension.manifest.id)}
+      >
+        <span className="marketplace-card-icon">
+          <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
+        </span>
+        <div className="marketplace-card-body">
+          <strong>{extension.manifest.name}</strong>
+          <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
+          <p className="marketplace-card-desc">{extension.manifest.description}</p>
+          <div className="marketplace-card-meta">
+            <span>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
+            {category === 'worker' ? <span>External runtime detection</span> : null}
+            {category === 'provider' ? <span>Account configurable</span> : null}
+            {isInstalled ? <span>{isEnabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span> : null}
+            {availability.state === 'unavailable' ? <span>Unavailable on this runtime</span> : null}
+            <span>Configurable</span>
           </div>
-        ) : null}
-      </div>
+          {dependencyNames.length > 0 ? (
+            <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependencies`}>
+              {dependencyNames.map((name) => <span key={name} className="chip mini">Requires {name}</span>)}
+            </div>
+          ) : null}
+        </div>
+      </button>
       <div className="marketplace-actions">
         {download ? (
           <a
@@ -10925,6 +11333,7 @@ function MarketplacePanel({
   defaultExtensions,
   installedExtensionIds,
   enabledExtensionIds,
+  onOpenExtensionDetail,
   onInstallExtension,
   onUninstallExtension,
   onSetExtensionEnabled,
@@ -10933,7 +11342,7 @@ function MarketplacePanel({
   defaultExtensions: DefaultExtensionRuntime | null;
   installedExtensionIds: string[];
   enabledExtensionIds: string[];
-} & ExtensionActionHandlers) {
+} & ExtensionActionHandlers & ExtensionNavigationHandlers) {
   const [search, setSearch] = useState('');
   const daemonDownload = useResolvedDaemonDownloadChoice();
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
@@ -10963,7 +11372,14 @@ function MarketplacePanel({
       </div>
       <label className="extensions-search shared-input-shell marketplace-search">
         <Icon name="search" size={13} color="#7d8594" />
-        <input aria-label="Search marketplace" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter marketplace" />
+        <input
+          aria-label="Search marketplace"
+          name="extension-marketplace-search"
+          autoComplete="off"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search marketplace…"
+        />
       </label>
       <div className="marketplace-category-list">
         {EXTENSION_MARKETPLACE_CATEGORIES.map((category) => {
@@ -10983,6 +11399,7 @@ function MarketplacePanel({
                     installedExtensionIdSet={installedExtensionIdSet}
                     enabledExtensionIdSet={enabledExtensionIdSet}
                     daemonDownload={daemonDownload}
+                    onOpenExtensionDetail={onOpenExtensionDetail}
                     onInstallExtension={onInstallExtension}
                     onUninstallExtension={onUninstallExtension}
                     onSetExtensionEnabled={onSetExtensionEnabled}
@@ -11005,6 +11422,7 @@ function ExtensionsPanel({
   defaultExtensions,
   installedExtensionIds,
   enabledExtensionIds,
+  onOpenExtensionDetail,
   onInstallExtension,
   onUninstallExtension,
   onSetExtensionEnabled,
@@ -11015,27 +11433,28 @@ function ExtensionsPanel({
   defaultExtensions: DefaultExtensionRuntime | null;
   installedExtensionIds: string[];
   enabledExtensionIds: string[];
-} & ExtensionActionHandlers) {
+} & ExtensionActionHandlers & ExtensionNavigationHandlers) {
   const installedExtensions = getInstalledDefaultExtensionDescriptors(defaultExtensions, installedExtensionIds);
   const installedByCategory = groupDefaultExtensionsByMarketplaceCategory(installedExtensions);
   const enabledExtensionIdSet = new Set(enabledExtensionIds);
   const repoExtensions = defaultExtensions?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
+  const installedCount = installedExtensions.length + capabilities.plugins.length;
 
   return (
     <section className="panel-scroll extensions-panel" aria-label="Installed extensions">
       <div className="panel-topbar extensions-topbar">
         <div>
           <h2>Installed extensions</h2>
-          <p className="muted">{installedExtensions.length} installed</p>
+          <p className="muted">{installedCount} installed</p>
         </div>
       </div>
       <SidebarSection
         title="Installed extensions"
-        summary={`${installedExtensions.length} installed`}
+        summary={`${installedCount} installed`}
         scrollBody
       >
         <div className="extensions-list">
-          {installedExtensions.length === 0 ? <p className="muted extension-empty-state">No installed extensions</p> : null}
+          {installedCount === 0 ? <p className="muted extension-empty-state">No installed extensions</p> : null}
           {EXTENSION_MARKETPLACE_CATEGORIES.map((category) => {
             const extensions = installedByCategory[category];
             if (!extensions.length) return null;
@@ -11049,6 +11468,7 @@ function ExtensionsPanel({
                     repoExtensions={repoExtensions}
                     installedExtensionIds={installedExtensionIds}
                     enabled={enabledExtensionIdSet.has(extension.manifest.id)}
+                    onOpenExtensionDetail={onOpenExtensionDetail}
                     onInstallExtension={onInstallExtension}
                     onUninstallExtension={onUninstallExtension}
                     onSetExtensionEnabled={onSetExtensionEnabled}
@@ -11058,27 +11478,16 @@ function ExtensionsPanel({
               </div>
             );
           })}
+          {capabilities.plugins.length > 0 ? (
+            <div className="installed-extension-group">
+              <span className="extension-group-label">{workspaceName}</span>
+              {capabilities.plugins.map((plugin) => (
+                <WorkspacePluginInstalledCard key={plugin.path} plugin={plugin} />
+              ))}
+            </div>
+          ) : null}
         </div>
       </SidebarSection>
-      {capabilities.plugins.length > 0 && (
-        <SidebarSection title={`Workspace plugins (${capabilities.plugins.length})`} summary={workspaceName} scrollBody>
-          <div className="workspace-plugins-section">
-            {capabilities.plugins.map((plugin) => {
-              const display = parseWorkspacePluginDisplay(plugin);
-              return (
-                <div key={plugin.path} className="list-card extension-card">
-                  <div className="extension-icon"><Icon name="puzzle" color="#f59e0b" /></div>
-                  <div className="extension-content">
-                    <div className="extension-title-row"><h3>{plugin.directory}</h3><small>{plugin.manifestName}</small></div>
-                    <p>{display.name}</p>
-                    <p className="muted">{display.description}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SidebarSection>
-      )}
     </section>
   );
 }
@@ -11088,6 +11497,7 @@ function InstalledExtensionCard({
   repoExtensions,
   installedExtensionIds,
   enabled,
+  onOpenExtensionDetail,
   onInstallExtension,
   onUninstallExtension,
   onSetExtensionEnabled,
@@ -11097,28 +11507,35 @@ function InstalledExtensionCard({
   repoExtensions: readonly DefaultExtensionDescriptor[];
   installedExtensionIds: readonly string[];
   enabled: boolean;
-} & ExtensionActionHandlers) {
+} & ExtensionActionHandlers & ExtensionNavigationHandlers) {
   const dependentNames = getDefaultExtensionDependentNames(extension, installedExtensionIds, repoExtensions);
 
   return (
     <article className={`marketplace-card installed-extension-card ${enabled ? '' : 'marketplace-card--disabled'}`}>
-      <div className="marketplace-card-icon">
-        <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
-      </div>
-      <div className="marketplace-card-body">
-        <strong>{extension.manifest.name}</strong>
-        <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
-        <p className="marketplace-card-desc">{extension.manifest.description}</p>
-        <div className="marketplace-card-meta">
-          <span>{enabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
-          <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
-        </div>
-        {dependentNames.length > 0 ? (
-          <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependents`}>
-            {dependentNames.map((name) => <span key={name} className="chip mini">Required by {name}</span>)}
+      <button
+        type="button"
+        className="marketplace-card-main"
+        aria-label={`Open details for ${extension.manifest.name}`}
+        onClick={() => onOpenExtensionDetail(extension.manifest.id)}
+      >
+        <span className="marketplace-card-icon">
+          <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
+        </span>
+        <div className="marketplace-card-body">
+          <strong>{extension.manifest.name}</strong>
+          <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
+          <p className="marketplace-card-desc">{extension.manifest.description}</p>
+          <div className="marketplace-card-meta">
+            <span>{enabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
+            <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
           </div>
-        ) : null}
-      </div>
+          {dependentNames.length > 0 ? (
+            <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependents`}>
+              {dependentNames.map((name) => <span key={name} className="chip mini">Required by {name}</span>)}
+            </div>
+          ) : null}
+        </div>
+      </button>
       <div className="marketplace-actions">
         <ExtensionActionButtons
           extension={extension}
@@ -11132,6 +11549,281 @@ function InstalledExtensionCard({
         />
       </div>
     </article>
+  );
+}
+
+function WorkspacePluginInstalledCard({ plugin }: { plugin: WorkspacePlugin }) {
+  const display = parseWorkspacePluginDisplay(plugin);
+  return (
+    <article className="marketplace-card installed-extension-card workspace-plugin-card">
+      <div className="marketplace-card-main marketplace-card-main--static">
+        <span className="marketplace-card-icon">
+          <Icon name="puzzle" color="currentColor" />
+        </span>
+        <div className="marketplace-card-body">
+          <strong>{plugin.directory}</strong>
+          <span className="marketplace-card-author">{display.name}</span>
+          <p className="marketplace-card-desc">{display.description}</p>
+          <div className="marketplace-card-meta">
+            <span>Workspace plugin</span>
+            <span>{display.id}</span>
+            <span>{display.version}</span>
+            <span>{plugin.manifestName}</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ExtensionDetailPage({
+  extension,
+  extensions,
+  installedExtensionIds,
+  enabledExtensionIds,
+  daemonDownload,
+  onInstallExtension,
+  onUninstallExtension,
+  onSetExtensionEnabled,
+  onConfigureExtension,
+}: {
+  extension: DefaultExtensionDescriptor;
+  extensions: readonly DefaultExtensionDescriptor[];
+  installedExtensionIds: readonly string[];
+  enabledExtensionIds: readonly string[];
+  daemonDownload: DaemonDownloadChoice;
+} & ExtensionActionHandlers) {
+  const detailTabs = ['Details', 'Features', 'Changelog', 'Dependencies'] as const;
+  const [activeTab, setActiveTab] = useState<(typeof detailTabs)[number]>('Details');
+  const installedExtensionIdSet = new Set(normalizeDefaultExtensionIds(installedExtensionIds));
+  const enabledExtensionIdSet = new Set(enabledExtensionIds);
+  const isInstalled = installedExtensionIdSet.has(extension.manifest.id);
+  const isEnabled = enabledExtensionIdSet.has(extension.manifest.id);
+  const availability = getDefaultExtensionAvailability(extension);
+  const category = getExtensionMarketplaceCategory(extension);
+  const dependencyNames = getDefaultExtensionDependencyNames(extension, extensions);
+  const dependentNames = getDefaultExtensionDependentNames(extension, installedExtensionIds, extensions);
+  const contributionRows = getExtensionContributionRows(extension);
+  const resourceRows = getExtensionResourceRows(extension);
+  const readmeBullets = getExtensionReadmeBullets(extension);
+  const download = getDefaultExtensionDownload(extension.manifest, daemonDownload);
+
+  return (
+    <section className="extension-detail-page" role="region" aria-label="Extension detail">
+      <header className="extension-detail-hero">
+        <div className="extension-detail-icon">
+          <Icon name={getDefaultExtensionIcon(extension)} size={54} />
+        </div>
+        <div className="extension-detail-title">
+          <h2>{extension.manifest.name}</h2>
+          <div className="extension-detail-publisher">
+            <span>{getDefaultExtensionSourceLabel(extension)}</span>
+            <span>{extension.manifest.version}</span>
+            <span>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
+          </div>
+          <p>{extension.manifest.description}</p>
+          <div className="extension-detail-actions">
+            {download ? (
+              <a
+                className="secondary-button"
+                href={download.href}
+                download={download.fileName}
+                aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
+              >
+                <Icon name="download" size={13} />
+                <span>Download</span>
+              </a>
+            ) : null}
+            <ExtensionActionButtons
+              extension={extension}
+              isInstalled={isInstalled}
+              isEnabled={isEnabled}
+              availability={availability}
+              onInstallExtension={onInstallExtension}
+              onUninstallExtension={onUninstallExtension}
+              onSetExtensionEnabled={onSetExtensionEnabled}
+              onConfigureExtension={onConfigureExtension}
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="extension-detail-tabs" role="tablist" aria-label={`${extension.manifest.name} sections`}>
+        {detailTabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            className={activeTab === tab ? 'active' : ''}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div className="extension-detail-layout">
+        <article className="extension-readme" aria-label={`${extension.manifest.name} README`}>
+          <h3>README.md</h3>
+          {activeTab === 'Details' ? (
+            <>
+              <p>{extension.manifest.description}</p>
+              <h4>Features</h4>
+              <ul>
+                {readmeBullets.map((bullet) => <li key={bullet}>{bullet}</li>)}
+              </ul>
+            </>
+          ) : null}
+          {activeTab === 'Features' ? (
+            <div className="extension-contribution-list">
+              {contributionRows.length ? contributionRows.map((row, index) => (
+                <span key={`${row.label}:${row.value}:${index}`}>
+                  <strong>{row.label}</strong>
+                  <code>{row.value}</code>
+                </span>
+              )) : <p>No contribution points declared.</p>}
+            </div>
+          ) : null}
+          {activeTab === 'Changelog' ? (
+            <div className="extension-contribution-list">
+              <span>
+                <strong>{extension.manifest.version}</strong>
+                <code>Bundled marketplace manifest synchronized with the local package index.</code>
+              </span>
+            </div>
+          ) : null}
+          {activeTab === 'Dependencies' ? (
+            <div className="extension-sidebar-chip-list">
+              {dependencyNames.length || dependentNames.length ? (
+                <>
+                  {dependencyNames.map((name) => <span key={`requires:${name}`}>Requires {name}</span>)}
+                  {dependentNames.map((name) => <span key={`required-by:${name}`}>Required by {name}</span>)}
+                </>
+              ) : <p>No extension dependencies.</p>}
+            </div>
+          ) : null}
+          {availability.state === 'unavailable' ? <p className="extension-detail-warning">{availability.reason}</p> : null}
+        </article>
+
+        <aside className="extension-detail-sidebar" aria-label="Extension metadata">
+          <section>
+            <h3>Installation</h3>
+            <dl>
+              <dt>Identifier</dt>
+              <dd>{extension.manifest.id}</dd>
+              <dt>Version</dt>
+              <dd>{extension.manifest.version}</dd>
+              <dt>Status</dt>
+              <dd>{isInstalled ? (isEnabled ? 'Enabled' : 'Disabled') : 'Not installed'}</dd>
+              <dt>Category</dt>
+              <dd>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Marketplace</h3>
+            <dl>
+              <dt>Publisher</dt>
+              <dd>{getDefaultExtensionSourceLabel(extension)}</dd>
+              <dt>Package</dt>
+              <dd>{extension.marketplace.source?.path ?? extension.marketplace.manifest}</dd>
+              <dt>Keywords</dt>
+              <dd>{extension.marketplace.keywords?.join(', ') || 'none'}</dd>
+            </dl>
+          </section>
+          <section>
+            <h3>Dependencies</h3>
+            {dependencyNames.length || dependentNames.length ? (
+              <div className="extension-sidebar-chip-list">
+                {dependencyNames.map((name) => <span key={`requires:${name}`}>Requires {name}</span>)}
+                {dependentNames.map((name) => <span key={`required-by:${name}`}>Required by {name}</span>)}
+              </div>
+            ) : (
+              <p>No extension dependencies.</p>
+            )}
+          </section>
+          <section>
+            <h3>Resources</h3>
+            <div className="extension-resource-list">
+              {resourceRows.map((row, index) => (
+                <span key={`${row.label}:${row.value}:${index}`}>
+                  <strong>{row.label}</strong>
+                  <code>{row.value}</code>
+                </span>
+              ))}
+            </div>
+          </section>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function ExtensionFeaturePane({
+  extension,
+  workspaceName,
+  artifactCount,
+}: {
+  extension: DefaultExtensionDescriptor;
+  workspaceName: string;
+  artifactCount: number;
+}) {
+  const contributionRows = getExtensionContributionRows(extension);
+  const resourceRows = getExtensionResourceRows(extension);
+  const category = getExtensionMarketplaceCategory(extension);
+
+  return (
+    <section className="extension-feature-pane" role="region" aria-label={`${extension.manifest.name} feature pane`}>
+      <header className="extension-feature-header">
+        <div className="extension-feature-icon">
+          <Icon name={getDefaultExtensionIcon(extension)} size={32} />
+        </div>
+        <div>
+          <span className="panel-eyebrow">{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
+          <h2>{getExtensionFeatureTitle(extension)}</h2>
+          <p>{getExtensionFeatureSummary(extension)}</p>
+        </div>
+      </header>
+
+      <div className="extension-feature-grid">
+        <article className="extension-feature-card extension-feature-card--wide">
+          <span className="panel-eyebrow">Current workspace</span>
+          <h3>{workspaceName}</h3>
+          <p>{extension.manifest.description}</p>
+          <div className="extension-feature-metrics">
+            <span>{contributionRows.length} contributions</span>
+            <span>{resourceRows.length} resources</span>
+            <span>{artifactCount} artifacts</span>
+          </div>
+        </article>
+
+        <article className="extension-feature-card">
+          <span className="panel-eyebrow">Pane contract</span>
+          <h3>Manifest contributions</h3>
+          <div className="extension-contribution-list">
+            {contributionRows.length ? contributionRows.map((row, index) => (
+              <span key={`${row.label}:${row.value}:${index}`}>
+                <strong>{row.label}</strong>
+                <code>{row.value}</code>
+              </span>
+            )) : <p>No pane contributions declared.</p>}
+          </div>
+        </article>
+
+        <article className="extension-feature-card">
+          <span className="panel-eyebrow">Package index</span>
+          <h3>README and assets</h3>
+          <div className="extension-resource-list">
+            {resourceRows.map((row, index) => (
+              <span key={`${row.label}:${row.value}:${index}`}>
+                <strong>{row.label}</strong>
+                <code>{row.value}</code>
+              </span>
+            ))}
+          </div>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -12355,6 +13047,9 @@ function AgentBrowserApp() {
   );
   const [activeWorkspaceId, setActiveWorkspaceId] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activeWorkspaceId, isString, 'ws-research');
   const [activePanel, setActivePanel] = useStoredState(sessionStorageBackend, STORAGE_KEYS.activePanel, isSidebarPanel, 'workspaces' as SidebarPanel);
+  const [repoWikiView, setRepoWikiView] = useState<RepoWikiView>('pages');
+  const [selectedExtensionId, setSelectedExtensionId] = useState<string | null>(null);
+  const [activeExtensionFeatureId, setActiveExtensionFeatureId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(() => isMobileViewport());
   const sidebarUserOverrideRef = useRef(false);
   const [registryTask, setRegistryTask] = useState('');
@@ -12967,6 +13662,14 @@ function AgentBrowserApp() {
     () => enabledDefaultExtensions.filter((extension) => getExtensionMarketplaceCategory(extension) === 'ide'),
     [enabledDefaultExtensions],
   );
+  const extensionCatalog = defaultExtensionRuntime?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
+  const selectedExtension = selectedExtensionId
+    ? extensionCatalog.find((extension) => extension.manifest.id === selectedExtensionId) ?? null
+    : null;
+  const activeExtensionFeature = activeExtensionFeatureId
+    ? installedIdeExtensions.find((extension) => extension.manifest.id === activeExtensionFeatureId) ?? null
+    : null;
+  const daemonDownload = useResolvedDaemonDownloadChoice();
   const artifactWorktreeExtensionEnabled = enabledDefaultExtensionIds.includes('agent-harness.ext.artifacts-worktree');
   const installDefaultExtension = useCallback((extensionId: string) => {
     const extensionIds = resolveDefaultExtensionDependencyPlan([extensionId]).extensionIds;
@@ -13510,12 +14213,42 @@ function AgentBrowserApp() {
 
   const switchSidebarPanel = useCallback((panel: SidebarPanel) => {
     setActivePanel(panel);
+    if (panel !== 'extensions') {
+      setSelectedExtensionId(null);
+      setActiveExtensionFeatureId(null);
+    }
+    setSidebarCollapsed(false, true);
+    setShowWorkspaces(false);
+  }, [setSidebarCollapsed]);
+
+  const openExtensionsMarketplace = useCallback(() => {
+    setActivePanel('extensions');
+    setSelectedExtensionId(null);
+    setActiveExtensionFeatureId(null);
+    setSidebarCollapsed(false, true);
+    setShowWorkspaces(false);
+  }, [setSidebarCollapsed]);
+
+  const openExtensionDetail = useCallback((extensionId: string) => {
+    setActivePanel('extensions');
+    setSelectedExtensionId(extensionId);
+    setActiveExtensionFeatureId(null);
+    setSidebarCollapsed(false, true);
+    setShowWorkspaces(false);
+  }, [setSidebarCollapsed]);
+
+  const openExtensionFeature = useCallback((extensionId: string) => {
+    setActivePanel('extensions');
+    setSelectedExtensionId(null);
+    setActiveExtensionFeatureId(extensionId);
     setSidebarCollapsed(false, true);
     setShowWorkspaces(false);
   }, [setSidebarCollapsed]);
 
   const openWorkspaceSwitcher = useCallback(() => {
     setActivePanel('workspaces');
+    setSelectedExtensionId(null);
+    setActiveExtensionFeatureId(null);
     setSidebarCollapsed(false, true);
     setShowWorkspaces(true);
   }, [setSidebarCollapsed]);
@@ -16516,6 +17249,8 @@ function AgentBrowserApp() {
       return (
         <RepoWikiPanel
           snapshot={activeRepoWikiSnapshot}
+          activeView={repoWikiView}
+          onViewChange={setRepoWikiView}
           onRefresh={refreshRepoWiki}
           onCopyCitation={copyRepoWikiCitation}
         />
@@ -16560,6 +17295,7 @@ function AgentBrowserApp() {
         defaultExtensions={defaultExtensionRuntime}
         installedExtensionIds={installedDefaultExtensionIds}
         enabledExtensionIds={enabledDefaultExtensionIds}
+        onOpenExtensionDetail={openExtensionDetail}
         onInstallExtension={installDefaultExtension}
         onUninstallExtension={uninstallDefaultExtension}
         onSetExtensionEnabled={setDefaultExtensionEnabled}
@@ -16658,17 +17394,39 @@ function AgentBrowserApp() {
       <a className="skip-link" href="#workspace-content">Skip to workspace content</a>
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
-          {PRIMARY_NAV.map(([id, icon, label], index) => <button key={id} type="button" className={`activity-button ${activePanel === id ? 'active' : ''}`} onClick={() => { if (id === 'workspaces') { if (activePanel === 'workspaces') openWorkspaceSwitcher(); else switchSidebarPanel('workspaces'); } else { switchSidebarPanel(id as SidebarPanel); } }} aria-label={label} title={`${label} (Alt+${index + 1})`}><Icon name={icon as keyof typeof icons} size={16} color={activePanel === id ? '#7dd3fc' : '#71717a'} /></button>)}
+          {PRIMARY_NAV.map(([id, icon, label], index) => (
+            <button
+              key={id}
+              type="button"
+              className={`activity-button ${activePanel === id && (id !== 'extensions' || !activeExtensionFeatureId) ? 'active' : ''}`}
+              onClick={() => {
+                if (id === 'workspaces') {
+                  if (activePanel === 'workspaces') openWorkspaceSwitcher();
+                  else switchSidebarPanel('workspaces');
+                  return;
+                }
+                if (id === 'extensions') {
+                  openExtensionsMarketplace();
+                  return;
+                }
+                switchSidebarPanel(id as SidebarPanel);
+              }}
+              aria-label={label}
+              title={`${label} (Alt+${index + 1})`}
+            >
+              <Icon name={icon as keyof typeof icons} size={16} color={activePanel === id && (id !== 'extensions' || !activeExtensionFeatureId) ? '#7dd3fc' : '#71717a'} />
+            </button>
+          ))}
           {installedIdeExtensions.map((extension) => (
             <button
               key={extension.manifest.id}
               type="button"
-              className="activity-button activity-button-extension"
-              onClick={() => switchSidebarPanel('extensions')}
+              className={`activity-button activity-button-extension ${activeExtensionFeatureId === extension.manifest.id ? 'active' : ''}`}
+              onClick={() => openExtensionFeature(extension.manifest.id)}
               aria-label={`${extension.manifest.name} extension`}
               title={extension.manifest.name}
             >
-              <Icon name={getDefaultExtensionIcon(extension)} size={16} color="#a7f3d0" />
+              <Icon name={getDefaultExtensionIcon(extension)} size={16} color={activeExtensionFeatureId === extension.manifest.id ? '#7dd3fc' : '#a7f3d0'} />
             </button>
           ))}
         </div>
@@ -16731,14 +17489,42 @@ function AgentBrowserApp() {
       ) : null}
       <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
         {activePanel === 'extensions' ? (
-          <MarketplacePanel
-            defaultExtensions={defaultExtensionRuntime}
-            installedExtensionIds={installedDefaultExtensionIds}
-            enabledExtensionIds={enabledDefaultExtensionIds}
-            onInstallExtension={installDefaultExtension}
-            onUninstallExtension={uninstallDefaultExtension}
-            onSetExtensionEnabled={setDefaultExtensionEnabled}
-            onConfigureExtension={configureDefaultExtension}
+          activeExtensionFeature ? (
+            <ExtensionFeaturePane
+              extension={activeExtensionFeature}
+              workspaceName={activeWorkspace.name}
+              artifactCount={activeArtifacts.length}
+            />
+          ) : selectedExtension ? (
+            <ExtensionDetailPage
+              extension={selectedExtension}
+              extensions={extensionCatalog}
+              installedExtensionIds={installedDefaultExtensionIds}
+              enabledExtensionIds={enabledDefaultExtensionIds}
+              daemonDownload={daemonDownload}
+              onInstallExtension={installDefaultExtension}
+              onUninstallExtension={uninstallDefaultExtension}
+              onSetExtensionEnabled={setDefaultExtensionEnabled}
+              onConfigureExtension={configureDefaultExtension}
+            />
+          ) : (
+            <MarketplacePanel
+              defaultExtensions={defaultExtensionRuntime}
+              installedExtensionIds={installedDefaultExtensionIds}
+              enabledExtensionIds={enabledDefaultExtensionIds}
+              onOpenExtensionDetail={openExtensionDetail}
+              onInstallExtension={installDefaultExtension}
+              onUninstallExtension={uninstallDefaultExtension}
+              onSetExtensionEnabled={setDefaultExtensionEnabled}
+              onConfigureExtension={configureDefaultExtension}
+            />
+          )
+        ) : activePanel === 'wiki' ? (
+          <RepoWikiWorkbench
+            snapshot={activeRepoWikiSnapshot}
+            activeView={repoWikiView}
+            onViewChange={setRepoWikiView}
+            onCopyCitation={copyRepoWikiCitation}
           />
         ) : (() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {

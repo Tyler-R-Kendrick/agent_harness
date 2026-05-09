@@ -15,6 +15,8 @@ const outputPath = path.resolve(
     ?? 'output/playwright/agent-browser-visual-smoke.png',
 );
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
+const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-detail.png');
+const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-agent-canvases.png');
@@ -1203,7 +1205,9 @@ async function main() {
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(installedExtensions.getByText('0 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('1 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Workspace plugin')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByText('19 extensions')).toBeVisible({ timeout: shellTimeoutMs });
@@ -1240,6 +1244,26 @@ async function main() {
     });
     await expect(page.getByRole('region', { name: 'Symphony task board' })).toHaveCount(0);
     await page.screenshot({ path: marketplaceOutputPath, fullPage: true });
+    await marketplace.getByRole('button', { name: 'Open details for OpenDesign DESIGN.md Studio' }).click();
+    const extensionDetail = page.getByRole('region', { name: 'Extension detail' });
+    await expect(extensionDetail).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionDetail.getByRole('heading', { name: 'OpenDesign DESIGN.md Studio' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(extensionDetail.getByRole('heading', { name: 'README.md' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionDetail.getByLabel('Extension metadata').getByText('Identifier')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: extensionDetailOutputPath, fullPage: true });
+    await extensionDetail.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }).click();
+    await page.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }).click();
+    const extensionFeaturePane = page.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' });
+    await expect(extensionFeaturePane).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByRole('heading', { name: 'OpenDesign Studio' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(extensionFeaturePane.getByText('Manifest contributions')).toBeVisible({ timeout: shellTimeoutMs });
+    await page.screenshot({ path: extensionFeatureOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Review', exact: true }).click();
     const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });
     await expect(reviewPanel).toBeVisible({ timeout: shellTimeoutMs });
@@ -1249,17 +1273,75 @@ async function main() {
     await expect(reviewPanel).toContainText('Validation evidence', { timeout: shellTimeoutMs });
     await expect(reviewPanel).toContainText('Reviewer follow-up', { timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Wiki', exact: true }).click();
-    const repoWikiPanel = page.getByRole('region', { name: 'Repository wiki', exact: true });
+    const repoWikiPanel = page.getByRole('region', { name: 'Repository wiki navigation', exact: true });
+    const repoWikiWorkbench = page.getByRole('region', { name: 'Workspace knowledgebase wiki', exact: true });
     await expect(repoWikiPanel).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiPanel.getByText('Repo map').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiPanel.getByText('Architecture views')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiPanel.getByText('Onboarding')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiPanel.getByLabel('Repo map contents').getByText('wiki:ws-research:workspace-map')).toBeVisible({
+    await expect(repoWikiWorkbench).toBeVisible({ timeout: shellTimeoutMs });
+    const repoWikiViewNav = repoWikiPanel.getByRole('navigation', { name: 'Wiki views' });
+    await expect(repoWikiViewNav.getByRole('button', { name: 'Wiki Pages' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiViewNav.getByRole('button', { name: 'Knowledge Graph' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(repoWikiPanel.getByRole('button', { name: 'Refresh wiki' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
+    await expect(repoWikiWorkbench.getByRole('heading', { name: 'Workspace knowledgebase wiki' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiWorkbench.getByText('Repo map')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByText('wiki:ws-research:workspace-map')).toBeVisible({ timeout: shellTimeoutMs });
+    await repoWikiViewNav.getByRole('button', { name: 'Knowledge Graph' }).click();
+    const repoWikiGraphPanel = repoWikiWorkbench.getByRole('tabpanel', { name: 'Knowledge Graph' });
+    await expect(repoWikiGraphPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiGraphPanel.getByText('Knowledge Graph').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Global graph' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Local graph' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByText('Depth 2')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Backlinks', exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Outgoing links', exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByRole('heading', { name: 'Unlinked mentions', exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByText('Obsidian wikilinks/backlinks/properties', { exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByText('RDF triples', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiGraphPanel.getByText('SKOS concept groups', { exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiGraphPanel.getByText('JSON Canvas layout', { exact: true })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await repoWikiGraphPanel.getByRole('button', { name: 'Local graph' }).click();
+    await expect(repoWikiGraphPanel.getByRole('button', { name: 'Local graph' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+      { timeout: shellTimeoutMs },
+    );
+    await repoWikiViewNav.getByRole('button', { name: 'Memory Models' }).click();
+    const repoWikiMemoryPanel = repoWikiWorkbench.getByRole('tabpanel', { name: 'Memory Models' });
+    await expect(repoWikiMemoryPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByText('Competitor memory architecture synthesis')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiMemoryPanel.getByRole('heading', { name: 'Best-of harness stack' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiMemoryPanel.getByText('Hermes-style prompt snapshot')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByText('GraphRAG / PathRAG retrieval')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByText('Procedural skill memory')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByText('Hot/Warm/Cool/Cold activation')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiMemoryPanel.getByText('Provider adapters')).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: repoWikiOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Canvases', exact: true }).click();
     const canvasesPanel = page.getByRole('region', { name: 'Agent canvases' });

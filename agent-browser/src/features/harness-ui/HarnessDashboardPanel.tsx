@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttributes, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
 
 import { HarnessJsonRenderer, type HarnessBrowserPageSummary, type HarnessFileSummary, type HarnessKnowledgeSummary, type HarnessSessionSummary } from './HarnessJsonRenderer';
-import { normalizeWidgetPosition, normalizeWidgetSize, resolveSpaceLayout } from './spaceLayout';
+import { normalizeWidgetPosition, normalizeWidgetSize } from './spaceLayout';
 import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, WidgetPosition, WidgetSize } from './types';
 
 export type HarnessDashboardPanelProps = {
@@ -206,23 +206,14 @@ export function HarnessDashboardPanel({
   const widgetIds = useMemo(() => widgets.map((widget) => widget.id), [widgets]);
   const defaultPositions = useMemo(() => buildDefaultWidgetPositions(widgetIds), [widgetIds]);
   const widgetLayouts = useMemo<WidgetLayouts>(() => {
-    const widgetPositions = Object.fromEntries(widgets.map((widget) => [
-      widget.id,
-      readWidgetPosition(widget, defaultPositions[widget.id] ?? { col: 0, row: 0 }),
-    ])) as Record<string, WidgetPosition>;
-    const widgetSizes = Object.fromEntries(widgets.map((widget) => [
-      widget.id,
-      readWidgetSize(widget),
-    ])) as Record<string, WidgetSize>;
-    const layout = resolveSpaceLayout({ widgetIds, widgetPositions, widgetSizes });
     return Object.fromEntries(widgets.map((widget) => [
       widget.id,
       {
-        position: layout.positions[widget.id] ?? normalizeWidgetPosition(widgetPositions[widget.id]),
-        size: clampWidgetSize(layout.renderedSizes[widget.id] ?? normalizeWidgetSize(widgetSizes[widget.id], DEFAULT_WIDGET_SIZE)),
+        position: readWidgetPosition(widget, defaultPositions[widget.id] ?? { col: 0, row: 0 }),
+        size: readWidgetSize(widget),
       },
     ]));
-  }, [defaultPositions, widgetIds, widgets]);
+  }, [defaultPositions, widgets]);
   const minimapBounds = useMemo(() => computeCanvasBounds(widgetLayouts), [widgetLayouts]);
   const renderContext = useMemo(() => ({
     workspaceName,

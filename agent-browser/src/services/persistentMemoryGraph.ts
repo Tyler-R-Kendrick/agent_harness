@@ -394,7 +394,7 @@ export function retrievePathsForQuestion(
   const paths = uniqueStrings(seeds)
     .flatMap((seedId) => expandPathsFromSeed(state, seedId, maxDepth, queryTerms))
     .sort((left, right) => right.score - left.score || left.nodes.length - right.nodes.length);
-  return paths.slice(0, options.maxPaths ?? 5);
+  return uniquePathsById(paths).slice(0, options.maxPaths ?? 5);
 }
 
 export function buildRagContext(result: MemoryGraphRetrievalResult): string {
@@ -593,6 +593,15 @@ function expandPathsFromSeed(
     }
   }
   return paths.filter((path) => path.nodes.length > 1 && path.score > 0);
+}
+
+function uniquePathsById(paths: MemoryGraphPath[]): MemoryGraphPath[] {
+  const seen = new Set<string>();
+  return paths.filter((path) => {
+    if (seen.has(path.id)) return false;
+    seen.add(path.id);
+    return true;
+  });
 }
 
 function pathFromIds(
