@@ -1,14 +1,14 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-08
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-09
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, Roo Code built-in Orchestrator plus cloud agent team, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
@@ -22,7 +22,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Roo Code marketplace MCPs plus modes plus on-demand skills, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -43,21 +43,21 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Roo Code IDE + web dashboard + GitHub + Slack, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
 
 ### 7. Git/PR-native execution
 - Common pattern: successful coding harnesses end in branches, diffs, and PRs rather than plain text.
-- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, Cursor Bugbot plus PR review flows plus SDK auto-PR support, Devin Review plus PR-linked bug catching, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases, OpenHands issue and PR resolution through `fix-me` labels and `@openhands-agent` comments, Roomote PR-based delivery with self-review, merge-conflict handling, and visible diff-plus-artifact handoff.
+- Seen in: Codex diff review, Claude Code git-native commits/PRs, Cline checkpoints and worktrees, Copilot cloud agent branch/PR flow, Cursor Bugbot plus PR review flows plus SDK auto-PR support, Devin Review plus PR-linked bug catching, OpenAI Symphony proof-of-work packets and safe landing, OpenClaw development use cases, OpenHands issue and PR resolution through `fix-me` labels and `@openhands-agent` comments, Roomote PR-based delivery with self-review, merge-conflict handling, and visible diff-plus-artifact handoff, Roo Code Coder/Reviewer/Fixer agent flow through GitHub.
 - Why it matters: reviewable change sets are easier to trust than chat responses.
 - One-shot build instruction:
   - Make code tasks branch-native: create isolated workspaces, show structured diffs, attach validation output, support inline review comments, and optionally open a PR when acceptance checks pass.
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture, Roo Code project/global MCP installs plus team-enforced MCP policy.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -85,7 +85,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 12. Shareable sessions and debug handoff
 - Common pattern: harnesses increasingly let users publish a run artifact that others can inspect without replaying the whole session locally.
-- Seen in: OpenCode share links, GitHub Copilot cloud logs and PR sessions, Codex thread sharing and review surfaces, Cursor web share links plus desktop handoff, Devin Slack session permalinks and review surfaces, Pi private gist sharing plus public OSS session publishing.
+- Seen in: OpenCode share links, GitHub Copilot cloud logs and PR sessions, Codex thread sharing and review surfaces, Cursor web share links plus desktop handoff, Devin Slack session permalinks and review surfaces, Pi private gist sharing plus public OSS session publishing, Roo Code task sharing plus cloud task monitoring.
 - Why it matters: async debugging and review improve when the run itself is a portable artifact rather than an anecdote.
 - One-shot build instruction:
   - Add review-safe run sharing that publishes a sanitized session artifact with transcript, artifacts, diff links, and verification evidence, plus retention controls and a clear private-by-default policy.
@@ -99,7 +99,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 14. Background execution without stealing focus
 - Common pattern: harnesses are reducing UI interruption so the agent can keep working while the human keeps editing or supervising elsewhere.
-- Seen in: Cline Background Edit plus background terminal execution, Claude in Chrome background workflows, Cursor background agents, ChatGPT scheduled/background runs.
+- Seen in: Cline Background Edit plus background terminal execution, Claude in Chrome background workflows, Cursor background agents, ChatGPT scheduled/background runs, Roo Code queued follow-up steering while work continues.
 - Why it matters: high-agency agents become less useful if every diff, terminal handoff, or focus change blocks the user.
 - One-shot build instruction:
   - Add a background execution mode that streams diffs, tool output, and validation status into a side panel or timeline without forcing focus changes, while preserving one-click rollback and approval controls.
@@ -134,7 +134,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 19. Agent-ready remote environments and trigger wiring
 - Common pattern: hosted agent systems are increasingly packaging reusable execution environments together with triggers from issue trackers, chat systems, and CI so automation can start from live business events instead of a local terminal.
-- Seen in: Warp Cloud Agents with reusable setup plus GitHub, Linear, Slack, scheduled runs, and GitHub Actions triggers; OpenAI Symphony isolated issue workspaces and workflow hooks are adjacent from the orchestration side; OpenHands cloud agents with Kubernetes-based isolated runtimes, issue triggers, Slack and Jira events, and scheduled automations.
+- Seen in: Warp Cloud Agents with reusable setup plus GitHub, Linear, Slack, scheduled runs, and GitHub Actions triggers; OpenAI Symphony isolated issue workspaces and workflow hooks are adjacent from the orchestration side; OpenHands cloud agents with Kubernetes-based isolated runtimes, issue triggers, Slack and Jira events, and scheduled automations; Roo Code preview environments plus cloud task sync and analytics.
 - Why it matters: reliable automation depends on reproducible remote environments and first-class launch wiring, not just a strong prompt in a developer laptop session.
 - One-shot build instruction:
   - Build reusable remote execution environments for browser agents with repo bootstrap, secrets, and dependency setup captured once, then let users bind those environments to schedules, issue events, chat commands, and CI triggers with clear audit history and replayable launch parameters.
@@ -258,6 +258,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add a reviewer-feedback learning loop for browser-agent work that captures accepted and rejected PR feedback, turns it into structured reusable guidance or heuristics after approval, replays it during planning and self-review, and lets operators inspect, edit, disable, or expire learned rules before they affect future runs.
 
+### 37. Mode-scoped execution profiles and sticky task inheritance
+- Common pattern: some harnesses now let teams bind execution profiles to specialized agent modes, then keep those profile choices stable across resumes, parallel work, and delegated subtasks.
+- Seen in: Roo Code API Configuration Profiles can be pinned, linked to modes, and kept sticky per task; reopened tasks retain their original profile, multi-workspace runs avoid unexpected profile switches, and Orchestrator subtasks inherit the parent profile for their lifetime.
+- Why it matters: multi-model harnesses become hard to trust when provider, model, or budget settings drift silently between planning, execution, resume, and delegation steps.
+- One-shot build instruction:
+  - Add execution profiles for browser-agent modes with explicit provider, model, thinking-budget, rate-limit, and tool-policy settings; let users bind profiles to agent roles, and keep a run's chosen profile sticky across resumes, child runs, worktrees, and remote execution unless a human explicitly changes it.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -290,3 +297,4 @@ Method: current-product research from first-party product pages, help centers, d
 28. Add a runtime plugin layer with tool-call interception and event hooks.
 29. Add AI adoption scoring alongside browser-agent usage analytics.
 30. Add reviewer-feedback learning loops that refine future agent runs.
+31. Bind model and provider profiles to agent roles, and keep them sticky across resumes and child runs.

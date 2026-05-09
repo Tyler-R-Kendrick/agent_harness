@@ -1,10 +1,46 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-08
-Baseline: `.features/Summary.md` refreshed from the 2026-05-07 twenty-three-harness corpus.
-Diff type: additive update after Roomote research
+Updated: 2026-05-09
+Baseline: `.features/Summary.md` refreshed from the 2026-05-08 twenty-four-harness corpus.
+Diff type: additive update after Roo Code research
 
 ## Net new normalized features
+
+### Added: Mode-scoped execution profiles with sticky task inheritance
+- Why now: Roo Code shows a strong execution-control pattern for multi-model harnesses where profile choice is tied to agent mode and preserved across resumes, worktrees, and delegated subtasks.
+- Research delta:
+  - Roo profiles can package provider, model, thinking-budget, temperature, diff-edit, and rate-limit settings
+  - users can pin profiles, switch them from chat, and explicitly bind profiles to modes
+  - each task remembers the profile it started with when reopened from history
+  - Orchestrator subtasks inherit the parent profile and keep it for their lifetime
+  - the April 23, 2026 `v3.53.0` repo README adds GPT-5.5 support through the OpenAI Codex provider, reinforcing Roo's execution-profile posture
+
+### Expanded: Background execution without stealing focus
+- Why now: Roo pairs background progress with active user steering instead of forcing the task back to an idle handoff state first.
+- Research delta:
+  - Roo's Message Queueing lets users send follow-up instructions while the agent is still working
+  - queued messages are processed FIFO and stay editable until they run
+  - a queued message implicitly approves the next pending action, even if normal auto-approval is disabled
+  - Intelligent Context Condensing keeps long-running threads coherent while those queued follow-ups continue to accumulate
+
+### Expanded: Git/PR-native execution
+- Why now: Roo Code Cloud turns branch creation, review comments, and review-driven fixes into specialized agent roles instead of one monolithic coding flow.
+- Research delta:
+  - the Coder agent can commit, push, and open PRs
+  - the Reviewer agent can automatically review new PRs and later commits
+  - the Fixer agent can read PR comments and push fixes back onto the branch
+  - the same cloud team is reachable from GitHub, Slack, and the web dashboard
+
+### Added: Add mode-scoped execution profiles with sticky task inheritance
+- Why now: `agent-browser` already supports multiple agent surfaces and model choices, but it lacks a durable execution-profile layer that keeps routing decisions stable across resumes, child runs, and role handoffs.
+- Linear issue:
+  - `TK-58`
+- Linear issue title:
+  - `Add mode-scoped execution profiles with sticky task inheritance`
+- Suggested problem statement:
+  - `agent-browser` can route work across different agents and model surfaces, but it does not yet provide a first-class execution-profile system where provider, model, budget, and policy settings can be bound to a role and then inherited predictably across resumed runs, delegated tasks, and isolated workspaces.
+- One-shot instruction for an LLM:
+  - Implement execution profiles for `agent-browser` that let users define provider, model, thinking-budget, rate-limit, and tool-policy settings per profile, bind those profiles to agent roles or modes, and keep the selected profile sticky across resumes, child runs, worktrees, and remote execution unless a human explicitly overrides it.
 
 ### Added: Enterprise model governance and spend-aware operations
 - Why now: Cursor is showing that once harnesses span local chats, cloud agents, automations, and reviewer agents, admins need policy and budget controls that work across all of them.
@@ -88,4 +124,4 @@ Diff type: additive update after Roomote research
 
 ## Recommended next Linear batch
 
-1. `Add reviewer-feedback learning loops that refine future agent runs`
+1. `Add mode-scoped execution profiles with sticky task inheritance`
