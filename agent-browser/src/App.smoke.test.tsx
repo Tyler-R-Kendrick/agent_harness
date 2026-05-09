@@ -389,7 +389,7 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('Foundation')).toBeInTheDocument();
   });
 
-  it('renders durable agent canvases and creates starter canvas artifacts', async () => {
+  it('ignores the removed Agent canvases sidebar panel from persisted state', async () => {
     vi.useFakeTimers();
     window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('canvases'));
 
@@ -399,17 +399,9 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    const canvasesPanel = screen.getByRole('region', { name: 'Agent canvases' });
-    expect(canvasesPanel).toBeInTheDocument();
-    expect(screen.getByText('No durable canvases in this workspace yet.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create starter canvases' }));
-
-    expect(canvasesPanel).toHaveTextContent('Research dashboard');
-    expect(canvasesPanel).toHaveTextContent('Research checklist');
-    expect(screen.getAllByText('rev 1').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Open Research dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Attach Research dashboard to session' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Agent canvases' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Canvases' })).not.toBeInTheDocument();
   });
 
   it('renders multitask subagent branch comparison and promotion controls', async () => {

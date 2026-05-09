@@ -130,6 +130,9 @@ describe('default extensions', () => {
       'symphony.workflow-md',
     ]);
     expect(runtime.commands.map((command) => command.id)).toContain('artifacts.new');
+    expect(runtime.renderers.map((renderer) => renderer.id)).toEqual(expect.arrayContaining([
+      'workflow-canvas.renderer',
+    ]));
     expect(runtime.tools.map((tool) => tool.id)).toEqual(expect.arrayContaining([
       'workflow-canvas.inventory',
       'workflow-canvas.validate',

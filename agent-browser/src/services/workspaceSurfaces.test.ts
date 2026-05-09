@@ -13,7 +13,7 @@ import {
 const artifact = createArtifact({
   id: 'artifact-launch-review',
   title: 'Launch review',
-  kind: 'agent-canvas:review-panel',
+  kind: 'workspace-surface:review-panel',
   files: [{
     path: 'review-panel.md',
     mediaType: 'text/markdown',

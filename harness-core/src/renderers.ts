@@ -24,6 +24,27 @@ export interface HarnessRendererComponent {
   export?: string;
 }
 
+export type HarnessRendererImplementationRuntime =
+  | 'react'
+  | 'web-component'
+  | 'iframe'
+  | 'wasi-preview2'
+  | 'native-browser';
+
+export interface HarnessWasiRendererImplementation {
+  world: string;
+  wit?: string;
+}
+
+export interface HarnessRendererImplementation {
+  id: string;
+  label?: string;
+  runtime: HarnessRendererImplementationRuntime;
+  module?: string;
+  component?: HarnessRendererComponent;
+  wasi?: HarnessWasiRendererImplementation;
+}
+
 export interface HarnessPaneItemDefinition {
   id: string;
   label: string;
@@ -40,7 +61,8 @@ export interface HarnessRendererDefinition {
   label: string;
   description?: string;
   target: HarnessRendererTarget;
-  component: HarnessRendererComponent;
+  component?: HarnessRendererComponent;
+  implementations?: readonly HarnessRendererImplementation[];
   paneItem?: HarnessPaneItemDefinition;
   priority?: number;
 }

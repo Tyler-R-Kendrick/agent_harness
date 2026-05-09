@@ -26,7 +26,7 @@ TK-35 asks for a mutable workspace-surface system where agents can persist dashb
 ### Existing Architecture
 
 - `agent-browser/src/services/artifacts.ts` already stores durable agent outputs with versions and files.
-- `agent-browser/src/services/agentCanvases.ts` already models durable canvases as artifact kinds.
+- Agent Canvas is now the plugin media-renderer contract, not a workspace surface or sidebar. Renderer declarations live on extension manifests and are resolved for artifact media types at open time.
 - `agent-browser/src/services/sessionState.ts` centralizes localStorage keys and validators.
 - `agent-browser/src/features/harness-ui/HarnessDashboardPanel.tsx` renders the persistent dashboard canvas.
 - `agent-browser/src/App.tsx` owns the workspace stores, artifact stores, and dashboard props.

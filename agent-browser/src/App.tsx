@@ -361,11 +361,9 @@ import {
   type ArtifactFile,
 } from './services/artifacts';
 import {
-  buildAgentCanvasPromptContext,
-  createStarterAgentCanvases,
-  listAgentCanvasSummaries,
-  type AgentCanvasSummary,
-} from './services/agentCanvases';
+  resolveArtifactFileRenderer,
+  type ArtifactFileRendererBinding,
+} from './services/mediaRenderers';
 import {
   buildWorkspaceSurfacePromptContext,
   isWorkspaceSurfacesByWorkspace,
@@ -612,7 +610,7 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'canvases' | 'multitask' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
+type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'multitask' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
 type RepoWikiView = 'pages' | 'graph' | 'memory' | 'chat' | 'sources';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
@@ -764,7 +762,6 @@ const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Projects'],
   ['review', 'gitPullRequest', 'Review'],
   ['wiki', 'bookmark', 'Wiki'],
-  ['canvases', 'canvas', 'Canvases'],
   ['multitask', 'share', 'Multitask'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
@@ -774,12 +771,11 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Projects', icon: 'layers' },
   review: { label: 'Review', icon: 'gitPullRequest' },
   wiki: { label: 'Wiki', icon: 'bookmark' },
-  canvases: { label: 'Canvases', icon: 'canvas' },
   multitask: { label: 'Multitask', icon: 'share' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
@@ -1961,16 +1957,10 @@ function FileEditorPanel({
   );
 }
 
-function isPreviewableArtifactFile(file: ArtifactFile | null): boolean {
-  if (!file) return false;
-  const mediaType = file.mediaType?.toLowerCase() ?? '';
-  const path = file.path.toLowerCase();
-  return mediaType === 'text/html' || mediaType === 'image/svg+xml' || path.endsWith('.html') || path.endsWith('.htm') || path.endsWith('.svg');
-}
-
 function ArtifactViewerPanel({
   artifact,
   file,
+  extensionRenderers,
   onSelectFile,
   onDownload,
   onAttach,
@@ -1980,6 +1970,7 @@ function ArtifactViewerPanel({
 }: {
   artifact: AgentArtifact;
   file: ArtifactFile | null;
+  extensionRenderers: DefaultExtensionRuntime['renderers'];
   onSelectFile: (filePath: string) => void;
   onDownload: () => void;
   onAttach: () => void;
@@ -1987,7 +1978,7 @@ function ArtifactViewerPanel({
   onClose: () => void;
   dragHandleProps?: PanelDragHandleProps;
 }) {
-  const canPreview = isPreviewableArtifactFile(file);
+  const rendererBinding = resolveArtifactFileRenderer(file, { extensionRenderers });
   return (
     <section className="file-editor-panel artifact-viewer-panel" aria-label="Artifact viewer">
       <header className={`file-editor-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
@@ -2026,19 +2017,12 @@ function ArtifactViewerPanel({
           </div>
         ) : null}
         {file ? (
-          canPreview ? (
-            <iframe
-              className="artifact-preview-frame"
-              title={`${artifact.title}: ${file.path}`}
-              sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-              srcDoc={file.content}
-            />
-          ) : (
-            <label className="file-editor-field file-editor-content-field artifact-source-field">
-              <span className="sr-only">Artifact content</span>
-              <textarea aria-label="Artifact content" value={file.content} readOnly />
-            </label>
-          )
+          <ArtifactRendererContent
+            artifact={artifact}
+            file={file}
+            binding={rendererBinding}
+            onOpenSession={onOpenSession}
+          />
         ) : (
           <div className="page-empty">
             <Icon name="layers" size={32} color="#3f3f46" />
@@ -2048,6 +2032,125 @@ function ArtifactViewerPanel({
       </div>
     </section>
   );
+}
+
+function ArtifactRendererContent({
+  artifact,
+  file,
+  binding,
+  onOpenSession,
+}: {
+  artifact: AgentArtifact;
+  file: ArtifactFile;
+  binding: ArtifactFileRendererBinding;
+  onOpenSession: () => void;
+}) {
+  const [showRawSource, setShowRawSource] = useState(false);
+  useEffect(() => {
+    setShowRawSource(false);
+  }, [artifact.id, file.path]);
+
+  if (binding.kind === 'native') {
+    if (binding.nativeKind === 'text') {
+      return (
+        <section className="artifact-native-text-renderer" role="region" aria-label="Native text renderer">
+          <pre>{file.content}</pre>
+        </section>
+      );
+    }
+    if (binding.nativeKind === 'image') {
+      return (
+        <img
+          className="artifact-native-media"
+          alt={`${artifact.title}: ${file.path}`}
+          title={`${artifact.title}: ${file.path}`}
+          src={artifactFileDataUrl(file)}
+        />
+      );
+    }
+    if (binding.nativeKind === 'audio') {
+      return (
+        <audio
+          className="artifact-native-media"
+          title={`${artifact.title}: ${file.path}`}
+          src={artifactFileDataUrl(file)}
+          controls
+        />
+      );
+    }
+    if (binding.nativeKind === 'video') {
+      return (
+        <video
+          className="artifact-native-media"
+          title={`${artifact.title}: ${file.path}`}
+          src={artifactFileDataUrl(file)}
+          controls
+        />
+      );
+    }
+    return (
+      <iframe
+        className="artifact-preview-frame"
+        title={`${artifact.title}: ${file.path}`}
+        sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+        src={nativeIframeSource(file)}
+        srcDoc={nativeIframeSourceDoc(file)}
+      />
+    );
+  }
+
+  return (
+    <section className="artifact-renderer-fallback" role="region" aria-label={binding.kind === 'plugin' ? 'Plugin media renderer' : 'Bounded artifact chat'}>
+      <div className="artifact-renderer-fallback-copy">
+        <strong>{binding.kind === 'plugin' ? binding.label : 'Chat session'}</strong>
+        {binding.kind === 'plugin' ? (
+          <p>
+            Renderer <code>{binding.rendererId}</code> is supplied by an installed extension through <code>{binding.implementationRuntime}</code>.
+          </p>
+        ) : (
+          <p>{binding.reason}</p>
+        )}
+      </div>
+      <div className="artifact-renderer-fallback-actions">
+        {binding.kind === 'bounded-chat' ? (
+          <button type="button" className="secondary-button" onClick={onOpenSession}>Open bounded chat for artifact</button>
+        ) : null}
+        <button
+          type="button"
+          className="secondary-button"
+          aria-expanded={showRawSource}
+          onClick={() => setShowRawSource((current) => !current)}
+        >
+          {showRawSource ? 'Hide raw artifact source' : 'Show raw artifact source'}
+        </button>
+      </div>
+      {showRawSource ? <ArtifactRawSource file={file} /> : null}
+    </section>
+  );
+}
+
+function ArtifactRawSource({ file }: { file: ArtifactFile }) {
+  return (
+    <label className="file-editor-field file-editor-content-field artifact-source-field">
+      <span className="sr-only">Artifact content</span>
+      <textarea aria-label="Artifact content" value={file.content} readOnly />
+    </label>
+  );
+}
+
+function nativeIframeSourceDoc(file: ArtifactFile): string | undefined {
+  const mediaType = file.mediaType?.toLowerCase() ?? '';
+  if (mediaType === 'text/html' || mediaType === 'image/svg+xml') return file.content;
+  return undefined;
+}
+
+function nativeIframeSource(file: ArtifactFile): string | undefined {
+  return nativeIframeSourceDoc(file) ? undefined : artifactFileDataUrl(file);
+}
+
+function artifactFileDataUrl(file: ArtifactFile): string {
+  const mediaType = file.mediaType ?? 'text/plain';
+  return `data:${mediaType};charset=utf-8,${encodeURIComponent(file.content)}`;
 }
 
 function ClosedPanelsPlaceholder({ workspaceName, onNewSession }: { workspaceName: string; onNewSession: () => void }) {
@@ -10504,94 +10607,6 @@ function RepoWikiWorkbench({
   );
 }
 
-function formatCanvasUpdatedTime(value: string): string {
-  return formatWikiRefreshTime(value);
-}
-
-function AgentCanvasesPanel({
-  workspaceName,
-  summaries,
-  onCreateStarterCanvases,
-  onOpenCanvas,
-  onAttachCanvas,
-}: {
-  workspaceName: string;
-  summaries: AgentCanvasSummary[];
-  onCreateStarterCanvases: () => void;
-  onOpenCanvas: (artifactId: string, filePath?: string | null) => void;
-  onAttachCanvas: (artifactId: string) => void;
-}) {
-  const countsByKind: Record<AgentCanvasSummary['canvasKind'], number> = {
-    dashboard: 0,
-    diagram: 0,
-    checklist: 0,
-    'review-panel': 0,
-  };
-  for (const summary of summaries) countsByKind[summary.canvasKind] += 1;
-
-  return (
-    <section className="panel-scroll agent-canvases-panel" role="region" aria-label="Agent canvases">
-      <div className="panel-topbar agent-canvases-topbar">
-        <div className="settings-heading">
-          <h2>Agent canvases</h2>
-          <p className="muted">{workspaceName} · {summaries.length} durable canvas{summaries.length === 1 ? '' : 'es'}</p>
-        </div>
-        <button type="button" className="toolbar-button" aria-label="Create starter canvases" onClick={onCreateStarterCanvases}>
-          <Icon name="plus" size={13} />
-          <span>Starter</span>
-        </button>
-      </div>
-
-      <section className="agent-canvas-summary" aria-label="Canvas kind coverage">
-        <strong>Durable canvases live beside chat, browser, terminal, artifacts, and review surfaces.</strong>
-        <div className="agent-canvas-metrics">
-          <span>{countsByKind.dashboard} dashboards</span>
-          <span>{countsByKind.diagram} diagrams</span>
-          <span>{countsByKind.checklist} checklists</span>
-          <span>{countsByKind['review-panel']} review panels</span>
-        </div>
-      </section>
-
-      <SidebarSection title="Canvas library" summary={`${summaries.length} artifacts`} scrollBody>
-        <div className="agent-canvas-list">
-          {summaries.length === 0 ? (
-            <article className="agent-canvas-card agent-canvas-empty">
-              <strong>No durable canvases in this workspace yet.</strong>
-              <p>Starter canvases create dashboard, diagram, checklist, and review panel artifacts with stable IDs.</p>
-            </article>
-          ) : null}
-          {summaries.map((summary) => (
-            <article key={summary.id} className={`agent-canvas-card agent-canvas-card--${summary.canvasKind}`}>
-              <div className="agent-canvas-card-header">
-                <div className="agent-canvas-card-title">
-                  <strong>{summary.title}</strong>
-                  <code>{summary.id}</code>
-                </div>
-                <span className="badge connected">rev {summary.revision}</span>
-              </div>
-              {summary.description ? <p>{summary.description}</p> : null}
-              <div className="agent-canvas-card-meta">
-                <span>{summary.canvasKind}</span>
-                <span>{summary.fileCount} file{summary.fileCount === 1 ? '' : 's'}</span>
-                <span>{summary.primaryFilePath}</span>
-                <span>{formatCanvasUpdatedTime(summary.updatedAt)}</span>
-              </div>
-              <div className="agent-canvas-actions">
-                <button type="button" className="sidebar-icon-button" aria-label={`Open ${summary.title}`} title={`Open ${summary.title}`} onClick={() => onOpenCanvas(summary.id, summary.primaryFilePath)}>
-                  <Icon name="panelRight" size={13} />
-                </button>
-                <button type="button" className="sidebar-icon-button" aria-label={`Attach ${summary.title} to session`} title={`Attach ${summary.title} to session`} onClick={() => onAttachCanvas(summary.id)}>
-                  <Icon name="link" size={13} />
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </SidebarSection>
-    </section>
-  );
-}
-
 function BrowserAgentRunSdkSettingsPanel({ state }: { state: BrowserAgentRunSdkState }) {
   const activeRuns = state.runs.filter((run) => run.status === 'queued' || run.status === 'running');
   const capabilityLabels = [
@@ -12997,7 +13012,7 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'canvases', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -13616,10 +13631,6 @@ function AgentBrowserApp() {
     ].filter((entry): entry is string => Boolean(entry));
     return { metrics, highlights };
   }, [activeWorkspaceFiles, activeWorkspaceSessions.length, activeWorkspaceSurfaceSummaries, graphKnowledgeState, harnessSteeringInventory, persistentMemoryGraphState]);
-  const activeAgentCanvasSummaries = useMemo(
-    () => listAgentCanvasSummaries(activeArtifacts),
-    [activeArtifacts],
-  );
   const activeArtifactPanelSelection = activeWorkspaceViewState.activeArtifactPanel ?? null;
   const activeArtifactPanelArtifact = activeArtifactPanelSelection
     ? activeArtifacts.find((artifact) => artifact.id === activeArtifactPanelSelection.artifactId) ?? null
@@ -16552,30 +16563,6 @@ function AgentBrowserApp() {
     setToast({ msg: `Installed ${skill.name}`, type: 'success' });
   }, [activeWorkspaceId, setToast]);
 
-  const createStarterCanvasArtifacts = useCallback(() => {
-    const canvases = createStarterAgentCanvases({
-      workspaceId: activeWorkspaceId,
-      workspaceName: activeWorkspace.name,
-      sourceSessionId: activeSessionIds[0],
-    });
-    const existingIds = new Set(activeArtifacts.map((artifact) => artifact.id));
-    const newCanvases = canvases.filter((canvas) => !existingIds.has(canvas.id));
-    if (!newCanvases.length) {
-      setToast({ msg: 'Starter canvases already exist', type: 'info' });
-      return;
-    }
-    setArtifactsByWorkspace((current) => ({
-      ...current,
-      [activeWorkspaceId]: [
-        ...newCanvases,
-        ...(current[activeWorkspaceId] ?? []),
-      ],
-    }));
-    const firstCanvas = newCanvases[0];
-    openArtifactPanel(firstCanvas.id, firstCanvas.files[0]?.path ?? null, activeWorkspaceId);
-    setToast({ msg: `Created ${newCanvases.length} starter canvases`, type: 'success' });
-  }, [activeArtifacts, activeSessionIds, activeWorkspace.name, activeWorkspaceId, openArtifactPanel, setArtifactsByWorkspace, setToast]);
-
   const copyRepoWikiCitation = useCallback(async (citation: RepoWikiCitation) => {
     try {
       await writeToClipboard(`${citation.id}\n${citation.snippet}`, `Wiki citation: ${citation.label}`);
@@ -17256,17 +17243,6 @@ function AgentBrowserApp() {
         />
       );
     }
-    if (activePanel === 'canvases') {
-      return (
-        <AgentCanvasesPanel
-          workspaceName={activeWorkspace.name}
-          summaries={activeAgentCanvasSummaries}
-          onCreateStarterCanvases={createStarterCanvasArtifacts}
-          onOpenCanvas={openArtifactPanel}
-          onAttachCanvas={attachArtifactToSession}
-        />
-      );
-    }
     if (activePanel === 'multitask') {
       return (
         <MultitaskPanel
@@ -17640,6 +17616,7 @@ function AgentBrowserApp() {
                   key={`${panel.artifact.id}:${panel.file?.path ?? ''}`}
                   artifact={panel.artifact}
                   file={panel.file}
+                  extensionRenderers={defaultExtensionRuntime?.renderers ?? []}
                   onSelectFile={(filePath) => openArtifactPanel(panel.artifact.id, filePath)}
                   onDownload={() => downloadArtifact(panel.artifact.id)}
                   onAttach={() => attachArtifactToSession(panel.artifact.id)}
@@ -17667,7 +17644,6 @@ function AgentBrowserApp() {
                 sessionSettingsContent={terminalFsFileContentsBySession[panel.id]?.[SESSION_WORKSPACE_SETTINGS_PATH] ?? null}
                 artifactPromptContext={[
                   buildArtifactPromptContext(activeArtifacts, artifactContextBySession[panel.id] ?? []),
-                  buildAgentCanvasPromptContext(activeArtifacts),
                   buildWorkspaceSurfacePromptContext(activeWorkspaceSurfaces),
                 ].filter(Boolean).join('\n\n')}
                 repoWikiPromptContext={activeRepoWikiPromptContext}
