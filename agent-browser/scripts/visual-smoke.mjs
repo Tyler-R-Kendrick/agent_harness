@@ -18,33 +18,33 @@ const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-br
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const agentCanvasesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-agent-canvases.png');
-const gitWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree.png');
+const dashboardCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
 const branchingConversationsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-branching-conversations-visual-smoke.png');
 const specDrivenDevelopmentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-spec-driven-development-visual-smoke.png');
 const persistentMemoryGraphOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-persistent-memory-graphs-visual-smoke.png');
 const graphKnowledgeOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-08-graph-knowledge-visual-smoke.png');
-const gitWorktreeViewportOutputPaths = [
+const dashboardCanvasViewportOutputPaths = [
   {
     name: 'mobile',
     viewport: { width: 375, height: 820 },
-    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-mobile.png'),
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas-mobile.png'),
   },
   {
     name: 'tablet',
     viewport: { width: 768, height: 900 },
-    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-tablet.png'),
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas-tablet.png'),
   },
   {
     name: 'desktop',
     viewport: { width: 1280, height: 820 },
-    outputPath: gitWorktreeOutputPath,
+    outputPath: dashboardCanvasOutputPath,
   },
   {
     name: 'wide',
     viewport: { width: 1920, height: 1080 },
-    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-git-worktree-wide.png'),
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas-wide.png'),
   },
 ];
 const multitaskOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-multitask-subagents-branch-isolation-visual-smoke.png');
@@ -113,34 +113,27 @@ async function stopProcess(childProcess) {
   await Promise.race([once(childProcess, 'close'), timeout]);
 }
 
-async function assertGitWorktreeEvidenceVisible(page, timeoutMs) {
-  const gitWorktreeStatus = page.getByRole('region', { name: 'Git worktree status' });
-  await expect(gitWorktreeStatus).toBeVisible({ timeout: timeoutMs });
-  await expect(gitWorktreeStatus.getByText('feature/worktree-ui')).toBeVisible({ timeout: timeoutMs });
-  await expect(gitWorktreeStatus.getByText('2 changed')).toBeVisible({ timeout: timeoutMs });
-  await expect(gitWorktreeStatus.getByText('agent-browser/src/App.tsx').first()).toBeVisible({ timeout: timeoutMs });
-  await expect(page.getByLabel('Selected file diff')).toContainText('new worktree dashboard', { timeout: timeoutMs });
-  const selectedDiffEvidence = page.getByLabel('Browser evidence for selected diff');
-  await expect(selectedDiffEvidence).toBeVisible({ timeout: timeoutMs });
-  await expect(selectedDiffEvidence.getByText('Agent Browser visual smoke')).toBeVisible({ timeout: timeoutMs });
-  await expect(selectedDiffEvidence.getByText('2 assertions passed')).toBeVisible({ timeout: timeoutMs });
-  await expect(selectedDiffEvidence.getByText('output/playwright/agent-browser-visual-smoke.png')).toBeVisible({
-    timeout: timeoutMs,
-  });
-  const selectedDiffEvidenceBox = await selectedDiffEvidence.boundingBox();
+async function assertDashboardCanvasVisible(page, timeoutMs) {
+  const dashboard = page.getByRole('region', { name: 'Harness dashboard' });
+  await expect(dashboard).toBeVisible({ timeout: timeoutMs });
+  const canvas = page.getByLabel('Infinite session canvas');
+  await expect(canvas).toBeVisible({ timeout: timeoutMs });
+  await expect(dashboard.getByRole('article', { name: 'Session summary widget' })).toBeVisible({ timeout: timeoutMs });
+  await expect(dashboard.getByRole('article', { name: 'Knowledge widget' })).toBeVisible({ timeout: timeoutMs });
+  await expect(page.getByRole('region', { name: 'Git worktree status' })).toHaveCount(0, { timeout: timeoutMs });
+  await expect(page.getByRole('button', { name: 'Customize' })).toHaveCount(0, { timeout: timeoutMs });
+  await expect(page.getByRole('button', { name: 'New session widget' })).toHaveCount(0, { timeout: timeoutMs });
+  const canvasBox = await canvas.boundingBox();
   const viewport = page.viewportSize();
-  expect(selectedDiffEvidenceBox).not.toBeNull();
-  if (selectedDiffEvidenceBox && viewport) {
-    expect(Math.floor(selectedDiffEvidenceBox.x)).toBeGreaterThanOrEqual(0);
-    const rightEdge = Math.ceil(selectedDiffEvidenceBox.x + selectedDiffEvidenceBox.width);
+  expect(canvasBox).not.toBeNull();
+  if (canvasBox && viewport) {
+    expect(Math.floor(canvasBox.x)).toBeGreaterThanOrEqual(0);
+    const rightEdge = Math.ceil(canvasBox.x + canvasBox.width);
     if (rightEdge > viewport.width) {
-      const layoutDiagnostics = await selectedDiffEvidence.evaluate((element) => {
+      const layoutDiagnostics = await canvas.evaluate((element) => {
         const selectors = [
-          '.git-worktree-evidence',
-          '.git-worktree-diff-shell',
-          '.git-worktree-body',
-          '.git-worktree-panel',
-          '.dashboard-stack',
+          '.harness-dashboard-canvas',
+          '.harness-dashboard-panel',
           '.browser-split-view',
           '.content-area',
           '.app-shell',
@@ -161,18 +154,18 @@ async function assertGitWorktreeEvidenceVisible(page, timeoutMs) {
         });
       });
       throw new Error(
-        `Selected diff evidence overflows ${viewport.width}px viewport at ${rightEdge}px: ${JSON.stringify(layoutDiagnostics)}`,
+        `Dashboard canvas overflows ${viewport.width}px viewport at ${rightEdge}px: ${JSON.stringify(layoutDiagnostics)}`,
       );
     }
   }
 }
 
-async function captureGitWorktreeViewportMatrix(page, timeoutMs) {
-  for (const { name, viewport, outputPath: viewportOutputPath } of gitWorktreeViewportOutputPaths) {
+async function captureDashboardCanvasViewportMatrix(page, timeoutMs) {
+  for (const { name, viewport, outputPath: viewportOutputPath } of dashboardCanvasViewportOutputPaths) {
     await page.setViewportSize(viewport);
-    await assertGitWorktreeEvidenceVisible(page, timeoutMs);
+    await assertDashboardCanvasVisible(page, timeoutMs);
     await page.screenshot({ path: viewportOutputPath, fullPage: true });
-    console.log(`agent-browser git worktree ${name} smoke passed: ${viewportOutputPath}`);
+    console.log(`agent-browser dashboard canvas ${name} smoke passed: ${viewportOutputPath}`);
   }
 }
 
@@ -907,11 +900,12 @@ async function main() {
     await expect(page).toHaveTitle('Agent Browser', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Omnibar')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
-    const workspaceSurfaces = page.getByRole('region', { name: 'Agent-authored workspace surfaces' });
-    await expect(workspaceSurfaces).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(workspaceSurfaces.getByText('Launch dashboard surface')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(workspaceSurfaces.getByText('read, edit, rollback')).toBeVisible({ timeout: shellTimeoutMs });
-    await captureGitWorktreeViewportMatrix(page, shellTimeoutMs);
+    const knowledgeWidget = page.getByRole('article', { name: 'Knowledge widget' });
+    await expect(knowledgeWidget).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(knowledgeWidget.getByText('Surface: Launch dashboard surface (read, edit, rollback)')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await captureDashboardCanvasViewportMatrix(page, shellTimeoutMs);
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
@@ -1298,7 +1292,7 @@ async function main() {
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser agent canvases smoke passed: ${agentCanvasesOutputPath}`);
-    console.log(`agent-browser git worktree smoke passed: ${gitWorktreeOutputPath}`);
+    console.log(`agent-browser dashboard canvas smoke passed: ${dashboardCanvasOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);
     console.log(`agent-browser spec-driven development smoke passed: ${specDrivenDevelopmentOutputPath}`);
     console.log(`agent-browser persistent memory graphs smoke passed: ${persistentMemoryGraphOutputPath}`);

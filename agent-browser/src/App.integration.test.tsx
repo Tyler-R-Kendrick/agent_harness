@@ -259,6 +259,8 @@ describe('App', () => {
 
   const openDefaultSessionPanel = async () => {
     if (screen.queryByLabelText('Chat panel')) return;
+    fireEvent.click(screen.getByLabelText('Projects'));
+    await flushAsyncUpdates();
     const openSessionButton = screen.queryByRole('button', { name: 'Open Session 1' })
       ?? screen.queryByRole('button', { name: 'Session 1' });
     if (!openSessionButton) return;
@@ -286,6 +288,7 @@ describe('App', () => {
   };
 
   const openDefaultSession = () => {
+    fireEvent.click(screen.getByLabelText('Projects'));
     fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
   };
 
@@ -377,7 +380,9 @@ describe('App', () => {
     expect(screen.getByLabelText('Omnibar')).toBeInTheDocument();
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
     expect(dashboard).toBeInTheDocument();
-    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Knowledge widget' })).toBeInTheDocument();
+    expect(within(dashboard).queryByRole('article', { name: 'Session 1 widget' })).not.toBeInTheDocument();
     expect(within(dashboard).queryByText('Page: Hugging Face')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Chat')).not.toBeInTheDocument();
     openDefaultSession();
@@ -694,7 +699,7 @@ describe('App', () => {
     }
   });
 
-  it('customizes and persists the generated harness app spec from the dashboard', async () => {
+  it('creates dashboard widgets from the canvas and commits widget-bound chat previews', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -702,25 +707,36 @@ describe('App', () => {
     });
 
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
-    fireEvent.click(within(dashboard).getByRole('button', { name: 'Customize' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Workspace tree' }));
-    fireEvent.change(screen.getByLabelText('Element title'), {
-      target: { value: 'Project map' },
+    expect(within(dashboard).queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument();
+    expect(within(dashboard).queryByRole('button', { name: 'New session widget' })).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getByLabelText('Infinite session canvas'), { clientX: 260, clientY: 180 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
+
+    expect(screen.getByLabelText('Widget-bound session')).toHaveTextContent('New widget');
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'title: Project map. Summarize the dashboard work.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save element' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(screen.getByRole('button', { name: 'Project map' })).toBeInTheDocument();
+    expect(screen.getByLabelText('New widget widget preview')).toHaveTextContent('Project map');
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    fireEvent.click(within(dashboard).getByRole('button', { name: 'New session widget' }));
-
-    expect(within(dashboard).getByRole('article', { name: 'Session 2 widget' })).toBeInTheDocument();
-
+    fireEvent.click(screen.getByRole('button', { name: 'Close chat panel' }));
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
+
+    expect(screen.getByRole('article', { name: 'Project map widget' })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /Project map/ })).toBeInTheDocument();
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
-    expect(persisted['ws-research'].elements['workspace-sidebar'].props.title).toBe('Project map');
-    expect(Object.keys(persisted['ws-research'].elements).some((id) => id.startsWith('generated-session-summary-widget-'))).toBe(false);
+    const persistedElements = Object.values(persisted['ws-research'].elements) as Array<{ type: string; props?: Record<string, unknown> }>;
+    const persistedWidget = persistedElements.find((element) => element.props?.title === 'Project map');
+    expect(persistedWidget).toMatchObject({
+      type: 'SessionConversationSummary',
+      props: expect.objectContaining({ summary: 'title: Project map. Summarize the dashboard work.' }),
+    });
   });
 
   it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context/Settings sub-groups', async () => {
@@ -806,8 +822,8 @@ describe('App', () => {
     await flushAsyncUpdates();
 
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
-    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
-    expect(within(dashboard).queryByRole('article', { name: 'Session summary widget' })).not.toBeInTheDocument();
+    expect(within(dashboard).queryByRole('article', { name: 'Session 1 widget' })).not.toBeInTheDocument();
+    expect(within(dashboard).getAllByRole('article', { name: 'Session summary widget' }).length).toBeGreaterThan(0);
     await expect(webmcpTool.execute?.({ tool: 'read_harness_prompt_context' }, {} as never)).resolves.toMatchObject({
       rows: expect.arrayContaining([
         expect.stringContaining('Project map'),
@@ -853,14 +869,15 @@ describe('App', () => {
       }, {} as never);
     });
 
-    expect(screen.getByText('What city or neighborhood should I use to list restaurants near you?')).toBeInTheDocument();
+    expect(screen.getAllByText('What city or neighborhood should I use to list restaurants near you?').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByLabelText('City or neighborhood'), { target: { value: 'Chicago, IL' } });
     fireEvent.click(screen.getByRole('button', { name: 'Submit requested info' }));
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('Location: Chicago, IL')).toBeInTheDocument();
+    expect(screen.getByText('User input received')).toBeInTheDocument();
+    expect(screen.getAllByText(/Chicago, IL/).length).toBeGreaterThan(0);
     const stored = JSON.parse(window.localStorage.getItem('agent-browser:user-context-memory:v1') ?? '{}');
     expect(stored.Research).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -1226,7 +1243,7 @@ describe('App', () => {
       await Promise.resolve();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Session 1' }));
+    await openDefaultSessionPanel();
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
     await disableAllTools();
 
@@ -5045,7 +5062,9 @@ styles:
 
     expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Project 3');
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
-    expect(within(dashboard).getByRole('article', { name: 'Session 1 widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Knowledge widget' })).toBeInTheDocument();
+    expect(within(dashboard).queryByRole('article', { name: 'Session 1 widget' })).not.toBeInTheDocument();
   });
 
   it('renders only the active workspace tree and swaps to the selected workspace', async () => {
@@ -5156,31 +5175,43 @@ styles:
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.keyDown(window, { key: '5', altKey: true });
-    expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '1', altKey: true });
+    expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '2', altKey: true });
     expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '3', altKey: true });
-    expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Repository wiki' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '4', altKey: true });
-    expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Agent canvases' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '5', altKey: true });
+    expect(screen.getByRole('region', { name: 'Multitask subagents' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '6', altKey: true });
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '7', altKey: true });
+    expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '8', altKey: true });
+    expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: '9', altKey: true });
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Account'));
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });
     expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '`', code: 'Backquote', ctrlKey: true });
+    fireEvent.keyDown(window, { key: '', code: 'Backquote', ctrlKey: true });
     expect(screen.getByRole('heading', { name: 'Terminal' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '`', code: 'Backquote', ctrlKey: true });
+    fireEvent.keyDown(window, { key: '', code: 'Backquote', ctrlKey: true });
     expect(screen.getByRole('heading', { name: 'Chat' })).toBeInTheDocument();
   });
 
@@ -5195,10 +5226,10 @@ styles:
     const cursorLabel = () => document.querySelector('.tree-row.cursor .tree-button')?.textContent ?? '';
 
     fireEvent.keyDown(window, { key: 'Home' });
-    expect(cursorLabel()).toContain('Browser');
+    expect(cursorLabel()).toContain('Dashboard');
 
     fireEvent.keyDown(window, { key: 'ArrowRight' });
-    expect(cursorLabel()).toContain('Hugging Face');
+    expect(cursorLabel()).toContain('Session summary');
 
     fireEvent.keyDown(window, { key: 'ArrowLeft', ctrlKey: true, altKey: true });
     expect(screen.getByLabelText('Open projects')).toHaveAttribute('title', 'Build');
@@ -5220,11 +5251,11 @@ styles:
       .map((button) => button.textContent ?? '');
 
     expect(getTabbableTreeLabels()).toHaveLength(1);
-    expect(getTabbableTreeLabels()[0]).toContain('Browser');
+    expect(getTabbableTreeLabels()[0]).toContain('Dashboard');
 
     fireEvent.keyDown(window, { key: 'ArrowDown' });
     expect(getTabbableTreeLabels()).toHaveLength(1);
-    expect(getTabbableTreeLabels()[0]).toContain('Hugging Face');
+    expect(getTabbableTreeLabels()[0]).toContain('Session summary');
   });
 
   it('debounces model searches and aborts the previous request on query changes', async () => {

@@ -55,6 +55,15 @@ const CATALOG: HarnessCatalogComponent[] = [
     naturalLanguageHints: ['workspace tree', 'sidebar', 'left pane'],
   },
   {
+    type: 'DashboardTreeSection',
+    label: 'Dashboard tree section',
+    description: 'Sidebar dashboard widget section.',
+    allowedSlots: ['app.sidebar.dashboard'],
+    allowedProps: PANEL_PROPS,
+    designTokens: ['tree-section', 'harness-dashboard-panel', 'harness-widget-card'],
+    naturalLanguageHints: ['dashboard section', 'dashboard widgets', 'home widgets'],
+  },
+  {
     type: 'BrowserTreeSection',
     label: 'Browser tree section',
     description: 'Sidebar browser pages section.',
@@ -125,6 +134,15 @@ const CATALOG: HarnessCatalogComponent[] = [
     allowedProps: WIDGET_PROPS,
     designTokens: ['harness-widget-card', 'harness-metric-row', 'harness-session-summary'],
     naturalLanguageHints: ['conversation summary', 'session summary', 'chat summary'],
+  },
+  {
+    type: 'KnowledgeGraphWidget',
+    label: 'Knowledge widget',
+    description: 'Dashboard widget visualizing aggregated memory, knowledge, steering, files, sessions, and generated surfaces.',
+    allowedSlots: ['dashboard.canvas'],
+    allowedProps: WIDGET_PROPS,
+    designTokens: ['harness-widget-card', 'harness-knowledge-widget', 'harness-metric-row'],
+    naturalLanguageHints: ['knowledge widget', 'memory graph', 'steering knowledge', 'context graph'],
   },
   {
     type: 'SessionStorageAssets',

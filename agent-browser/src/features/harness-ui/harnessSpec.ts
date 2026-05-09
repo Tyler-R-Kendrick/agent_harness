@@ -5,6 +5,8 @@ import type {
   HarnessElementPatch,
   HarnessElementSlot,
   JsonValue,
+  WidgetPosition,
+  WidgetSize,
 } from './types';
 import { assertHarnessElementAllowedByCatalog } from './harnessCatalog';
 
@@ -35,10 +37,10 @@ function element(
   };
 }
 
-function sessionWidgetProps(
+function dashboardWidgetProps(
   title: string,
-  position: { col: number; row: number },
-  size: { cols: number; rows: number },
+  position: WidgetPosition,
+  size: WidgetSize,
   extra: Record<string, JsonValue> = {},
 ) {
   return {
@@ -113,8 +115,14 @@ export function createDefaultHarnessAppSpec({
         { title: 'Workspace tree', density: 'comfortable' },
         {
           slot: 'app.sidebar',
-          children: ['browser-tree-section', 'session-tree-section', 'files-tree-section', 'clipboard-tree-section'],
+          children: ['dashboard-tree-section', 'browser-tree-section', 'session-tree-section', 'files-tree-section', 'clipboard-tree-section'],
         },
+      ),
+      'dashboard-tree-section': element(
+        'dashboard-tree-section',
+        'DashboardTreeSection',
+        { title: 'Dashboard', emptyLabel: 'No widgets yet' },
+        { slot: 'app.sidebar.dashboard' },
       ),
       'browser-tree-section': element(
         'browser-tree-section',
@@ -155,45 +163,33 @@ export function createDefaultHarnessAppSpec({
         {
           title: `${title} harness`,
           density: 'comfortable',
-          addWidgetLabel: 'Add Widget',
+          addWidgetLabel: 'Create widget',
         },
         {
           slot: 'dashboard.canvas',
-          children: [
-            'conversation-summary-widget',
-            'session-storage-widget',
-            'session-activity-widget',
-            'runtime-context-widget',
-          ],
+          children: ['session-summary-widget', 'knowledge-widget'],
         },
       ),
-      'conversation-summary-widget': element(
-        'conversation-summary-widget',
+      'session-summary-widget': element(
+        'session-summary-widget',
         'SessionConversationSummary',
-        sessionWidgetProps(
-          'Conversation summary',
+        dashboardWidgetProps(
+          'Session summary',
           { col: -7, row: -2 },
-          { cols: 5, rows: 3 },
-          { summary: 'Default conversation summary' },
+          { cols: 6, rows: 3 },
+          { summary: 'Aggregated session summary' },
         ),
         { slot: 'dashboard.canvas' },
       ),
-      'session-storage-widget': element(
-        'session-storage-widget',
-        'SessionStorageAssets',
-        sessionWidgetProps('Session storage', { col: -2, row: -2 }, { cols: 4, rows: 3 }, { emptyLabel: 'No session assets yet' }),
-        { slot: 'dashboard.canvas' },
-      ),
-      'session-activity-widget': element(
-        'session-activity-widget',
-        'SessionActivity',
-        sessionWidgetProps('Session activity', { col: -7, row: 1 }, { cols: 5, rows: 3 }, { emptyLabel: 'No chat history yet' }),
-        { slot: 'dashboard.canvas' },
-      ),
-      'runtime-context-widget': element(
-        'runtime-context-widget',
-        'SessionRuntime',
-        sessionWidgetProps('Runtime context', { col: -2, row: 1 }, { cols: 4, rows: 2 }),
+      'knowledge-widget': element(
+        'knowledge-widget',
+        'KnowledgeGraphWidget',
+        dashboardWidgetProps(
+          'Knowledge',
+          { col: 0, row: -2 },
+          { cols: 7, rows: 4 },
+          { summary: 'Memory, knowledge, steering, files, sessions, and surfaces' },
+        ),
         { slot: 'dashboard.canvas' },
       ),
       'browser-page-panel': element(
@@ -266,6 +262,86 @@ function listEditableFromElement(
 
 export function listEditableHarnessElements(spec: HarnessAppSpec): EditableHarnessElement[] {
   return listEditableFromElement(spec, spec.root);
+}
+
+export type DashboardWidgetSummary = {
+  id: string;
+  title: string;
+  type: string;
+};
+
+export type AddHarnessDashboardWidgetInput = {
+  id?: string;
+  type?: string;
+  title?: string;
+  position?: WidgetPosition;
+  size?: WidgetSize;
+  props?: Record<string, JsonValue>;
+};
+
+function nextDashboardWidgetId(spec: HarnessAppSpec): string {
+  let index = 1;
+  let candidate = `dashboard-widget-${index}`;
+  while (spec.elements[candidate]) {
+    index += 1;
+    candidate = `dashboard-widget-${index}`;
+  }
+  return candidate;
+}
+
+export function listDashboardWidgets(spec: HarnessAppSpec): DashboardWidgetSummary[] {
+  const dashboard = Object.values(spec.elements).find((entry) => entry.type === 'DashboardCanvas') ?? spec.elements['main-dashboard'];
+  return (dashboard?.children ?? [])
+    .map((id) => spec.elements[id])
+    .filter((entry): entry is HarnessElement => Boolean(entry))
+    .map((entry) => ({
+      id: entry.id,
+      title: readElementTitle(entry, entry.id),
+      type: entry.type,
+    }));
+}
+
+export function addHarnessDashboardWidget(spec: HarnessAppSpec, input: AddHarnessDashboardWidgetInput = {}): HarnessAppSpec {
+  const dashboard = spec.elements['main-dashboard'];
+  if (!dashboard) {
+    throw new Error('Harness dashboard element "main-dashboard" does not exist.');
+  }
+  const id = input.id ?? nextDashboardWidgetId(spec);
+  if (spec.elements[id]) {
+    throw new Error(`Harness element "${id}" already exists.`);
+  }
+  const widget: HarnessElement = {
+    id,
+    type: input.type ?? 'SessionConversationSummary',
+    slot: 'dashboard.canvas',
+    editable: true,
+    props: dashboardWidgetProps(
+      input.title ?? 'New widget',
+      input.position ?? { col: 1, row: 2 },
+      input.size ?? { cols: 5, rows: 3 },
+      {
+        summary: 'Draft widget',
+        emptyLabel: 'Nothing to show yet',
+        ...(input.props ?? {}),
+      },
+    ),
+  };
+  assertHarnessElementAllowedByCatalog(widget);
+  assertHarnessElementAllowedByCatalog({
+    ...dashboard,
+    children: [...(dashboard.children ?? []), id],
+  });
+  return withRevision({
+    ...spec,
+    elements: {
+      ...spec.elements,
+      [id]: widget,
+      'main-dashboard': {
+        ...dashboard,
+        children: [...(dashboard.children ?? []), id],
+      },
+    },
+  });
 }
 
 export function applyHarnessElementPatch(spec: HarnessAppSpec, patch: HarnessElementPatch): HarnessAppSpec {

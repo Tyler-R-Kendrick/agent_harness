@@ -6,6 +6,7 @@ export type HarnessElementSlot =
   | 'app.rail'
   | 'app.omnibar'
   | 'app.sidebar'
+  | 'app.sidebar.dashboard'
   | 'app.sidebar.browser'
   | 'app.sidebar.sessions'
   | 'app.sidebar.files'

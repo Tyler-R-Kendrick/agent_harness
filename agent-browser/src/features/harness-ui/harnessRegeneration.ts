@@ -63,6 +63,7 @@ function nextGeneratedId(spec: HarnessAppSpec, baseId: string): string {
 }
 
 function titleFromPrompt(prompt: string): string {
+  if (/\bknowledge|memory|steering|graph/i.test(prompt)) return 'Knowledge';
   if (/\bstorage|asset|artifact|file|workspace file/i.test(prompt)) return 'Session storage';
   if (/\bruntime|tool|cwd|model|provider/i.test(prompt)) return 'Runtime context';
   if (/\bactivity|history|handoff|transcript/i.test(prompt)) return 'Session activity';
@@ -70,6 +71,7 @@ function titleFromPrompt(prompt: string): string {
 }
 
 function typeFromPrompt(prompt: string): HarnessElement['type'] {
+  if (/\bknowledge|memory|steering|graph/i.test(prompt)) return 'KnowledgeGraphWidget';
   if (/\bstorage|asset|artifact|file|workspace file/i.test(prompt)) return 'SessionStorageAssets';
   if (/\bruntime|tool|cwd|model|provider/i.test(prompt)) return 'SessionRuntime';
   if (/\bactivity|history|handoff|transcript/i.test(prompt)) return 'SessionActivity';
@@ -77,6 +79,7 @@ function typeFromPrompt(prompt: string): HarnessElement['type'] {
 }
 
 function generatedBaseId(prompt: string): string {
+  if (/\bknowledge|memory|steering|graph/i.test(prompt)) return 'generated-knowledge-widget';
   if (/\bstorage|asset|artifact|file|workspace file/i.test(prompt)) return 'generated-session-storage-widget';
   if (/\bruntime|tool|cwd|model|provider/i.test(prompt)) return 'generated-runtime-context-widget';
   if (/\bactivity|history|handoff|transcript/i.test(prompt)) return 'generated-session-activity-widget';
@@ -93,6 +96,8 @@ function addGeneratedDashboardWidget(spec: HarnessAppSpec, prompt: string): Harn
     props: {
       title: titleFromPrompt(prompt),
       sessionId: 'active',
+      position: { col: 1, row: 2 },
+      size: { cols: 5, rows: 3 },
       emptyLabel: 'Nothing to show yet',
     },
   };
