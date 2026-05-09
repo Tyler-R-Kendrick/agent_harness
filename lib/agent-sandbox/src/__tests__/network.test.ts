@@ -64,6 +64,38 @@ describe('SandboxFetchPolicy', () => {
     expect(response.headers).toEqual({ 'content-type': 'text/plain', 'x-safe': 'yes' });
   });
 
+  it('strips mixed-case token and Sec-prefixed request headers before fetch', async () => {
+    const requests: RequestInit[] = [];
+    const policy = new SandboxFetchPolicy({
+      enabled: true,
+      allowedOrigins: ['https://api.example.test'],
+      fetchImplementation: async (_input, init) => {
+        requests.push(init ?? {});
+        return new Response('ok');
+      },
+    });
+
+    await expect(policy.fetch('https://api.example.test/data', {
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Proxy-Authorization': 'Basic c2VjcmV0',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-GPC': '1',
+        'X-Api-Key': 'secret-key',
+        'x-auth-token': 'secret-token',
+      },
+    })).resolves.toMatchObject({ bodyText: 'ok' });
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        credentials: 'omit',
+        headers: { accept: 'application/json' },
+        redirect: 'manual',
+      }),
+    ]);
+  });
+
   it('supports wildcard origins, array headers, Headers objects, and method allowlists', async () => {
     const calls: unknown[] = [];
     const policy = new SandboxFetchPolicy({
