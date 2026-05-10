@@ -1,0 +1,28 @@
+slug: apify
+name: Apify
+vendor: Apify
+segment: actor-marketplace-and-agent-web-data-platform
+product_path: competition/apify
+design_path: competition/apify/design
+features_path: competition/apify/features
+marketing_path: competition/apify/marketing
+gossip_path: competition/apify/gossip
+snapshot_date: 2026-05-10
+primary_sources:
+  - https://apify.com/
+  - https://apify.com/store
+  - https://apify.com/ai-agents
+  - https://apify.com/ai-agents/ai-agent-marketplace
+  - https://docs.apify.com/platform/actors
+  - https://docs.apify.com/platform/integrations/mcp
+  - https://apify.com/apify/ai-web-agent
+  - https://apify.com/pricing/
+secondary_sources:
+  - https://apify.com/apify/ai-web-agent/issues/not-working-013hO0CfIDICEuate
+  - https://apify.com/apify/ai-web-scraper/issues/taking-way-too-long-a1bElfMHCFzlH9vEx
+  - https://use-apify.com/docs/what-is-apify/apify-review
+  - https://use-apify.com/docs/what-is-apify/apify-pricing
+positioning: "Marketplace and cloud platform for web scraping, browser automation, and AI-agent web data, centered on serverless Actors, structured outputs, MCP access, scheduling, datasets, proxies, and monetization."
+customer_model: "Free credits, monthly usage plans, compute-unit pay-as-you-go, Store Actor pricing, proxy/data/storage usage, enterprise plans, and marketplace monetization for Actor creators."
+competitive_threat_level: medium
+notes: "Threatens agent-browser when buyers frame the job as reusable web data extraction or agent tool marketplace access rather than interactive browser-agent workspace control."
