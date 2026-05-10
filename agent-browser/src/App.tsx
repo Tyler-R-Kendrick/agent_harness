@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import {
   DndContext,
@@ -342,6 +342,26 @@ import {
   type DefaultExtensionOpenFeatureFlags,
   type DefaultExtensionRuntime,
 } from './services/defaultExtensions';
+import {
+  OPEN_DESIGN_DIRECTIONS,
+  approveOpenDesignTokenRevision,
+  buildOpenDesignWorkspaceBundle,
+  createOpenDesignApprovalComposition,
+  createOpenDesignExportArtifact,
+  createOpenDesignStudioState,
+  getOpenDesignApprovalSummary,
+  getOpenDesignResearchInventory,
+  publishOpenDesignSystem,
+  requestOpenDesignTokenRevision,
+  runOpenDesignCritique,
+  selectOpenDesignDirection,
+  updateOpenDesignBrief,
+  type OpenDesignBrief,
+  type OpenDesignApprovalComposition,
+  type OpenDesignDirectionId,
+  type OpenDesignStudioState,
+  type OpenDesignTokenReviewItem,
+} from '@agent-harness/ext-open-design';
 import {
   PORTABLE_DAEMON_SOURCE_DOWNLOAD,
   resolveLocalInferenceDaemonDownload,
@@ -11485,28 +11505,28 @@ function MarketplaceExtensionCard({
   const availability = getDefaultExtensionAvailability(extension);
   const dependencyNames = getDefaultExtensionDependencyNames(extension, extensions);
   const className = [
-    'marketplace-card',
-    `marketplace-card--${category}`,
-    availability.state === 'unavailable' ? 'marketplace-card--unavailable' : '',
-    isInstalled && !isEnabled ? 'marketplace-card--disabled' : '',
+    'extension-row',
+    `extension-row--${category}`,
+    availability.state === 'unavailable' ? 'extension-row--unavailable' : '',
+    isInstalled && !isEnabled ? 'extension-row--disabled' : '',
   ].filter(Boolean).join(' ');
 
   return (
     <article className={className} aria-disabled={availability.state === 'unavailable' ? true : undefined}>
       <button
         type="button"
-        className="marketplace-card-main"
+        className="extension-row-main"
         aria-label={`Open details for ${extension.manifest.name}`}
         onClick={() => onOpenExtensionDetail(extension.manifest.id)}
       >
-        <span className="marketplace-card-icon">
+        <span className="extension-row-glyph">
           <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
         </span>
-        <div className="marketplace-card-body">
+        <div className="extension-row-body">
           <strong>{extension.manifest.name}</strong>
-          <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
-          <p className="marketplace-card-desc">{extension.manifest.description}</p>
-          <div className="marketplace-card-meta">
+          <span className="extension-row-source">{getDefaultExtensionSourceLabel(extension)}</span>
+          <p className="extension-row-desc">{extension.manifest.description}</p>
+          <div className="extension-row-meta">
             <span>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</span>
             {category === 'worker' ? <span>External runtime detection</span> : null}
             {category === 'provider' ? <span>Account configurable</span> : null}
@@ -11515,8 +11535,8 @@ function MarketplaceExtensionCard({
             <span>Configurable</span>
           </div>
           {dependencyNames.length > 0 ? (
-            <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependencies`}>
-              {dependencyNames.map((name) => <span key={name} className="chip mini">Requires {name}</span>)}
+            <div className="extension-dependency-lines" aria-label={`${extension.manifest.name} dependencies`}>
+              {dependencyNames.map((name) => <span key={name}>Requires {name}</span>)}
             </div>
           ) : null}
         </div>
@@ -11607,7 +11627,7 @@ function MarketplacePanel({
             <section key={category} className="marketplace-category-section" aria-labelledby={`marketplace-${category}-heading`}>
               <div className="marketplace-category-heading">
                 <h3 id={`marketplace-${category}-heading`}>{EXTENSION_MARKETPLACE_CATEGORY_LABELS[category]}</h3>
-                <span className="badge">{extensions.length}</span>
+                <span className="extension-count-mark">{extensions.length}</span>
               </div>
               <div className="extensions-list marketplace-category-grid">
                 {extensions.map((extension) => (
@@ -11730,27 +11750,27 @@ function InstalledExtensionCard({
   const dependentNames = getDefaultExtensionDependentNames(extension, installedExtensionIds, repoExtensions);
 
   return (
-    <article className={`marketplace-card installed-extension-card ${enabled ? '' : 'marketplace-card--disabled'}`}>
+    <article className={`extension-row installed-extension-row ${enabled ? '' : 'extension-row--disabled'}`}>
       <button
         type="button"
-        className="marketplace-card-main"
+        className="extension-row-main"
         aria-label={`Open details for ${extension.manifest.name}`}
         onClick={() => onOpenExtensionDetail(extension.manifest.id)}
       >
-        <span className="marketplace-card-icon">
+        <span className="extension-row-glyph">
           <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
         </span>
-        <div className="marketplace-card-body">
+        <div className="extension-row-body">
           <strong>{extension.manifest.name}</strong>
-          <span className="marketplace-card-author">{getDefaultExtensionSourceLabel(extension)}</span>
-          <p className="marketplace-card-desc">{extension.manifest.description}</p>
-          <div className="marketplace-card-meta">
+          <span className="extension-row-source">{getDefaultExtensionSourceLabel(extension)}</span>
+          <p className="extension-row-desc">{extension.manifest.description}</p>
+          <div className="extension-row-meta">
             <span>{enabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
             <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
           </div>
           {dependentNames.length > 0 ? (
-            <div className="extension-dependency-list" aria-label={`${extension.manifest.name} dependents`}>
-              {dependentNames.map((name) => <span key={name} className="chip mini">Required by {name}</span>)}
+            <div className="extension-dependency-lines" aria-label={`${extension.manifest.name} dependents`}>
+              {dependentNames.map((name) => <span key={name}>Required by {name}</span>)}
             </div>
           ) : null}
         </div>
@@ -11774,16 +11794,16 @@ function InstalledExtensionCard({
 function WorkspacePluginInstalledCard({ plugin }: { plugin: WorkspacePlugin }) {
   const display = parseWorkspacePluginDisplay(plugin);
   return (
-    <article className="marketplace-card installed-extension-card workspace-plugin-card">
-      <div className="marketplace-card-main marketplace-card-main--static">
-        <span className="marketplace-card-icon">
+    <article className="extension-row installed-extension-row workspace-plugin-card">
+      <div className="extension-row-main extension-row-main--static">
+        <span className="extension-row-glyph">
           <Icon name="puzzle" color="currentColor" />
         </span>
-        <div className="marketplace-card-body">
+        <div className="extension-row-body">
           <strong>{plugin.directory}</strong>
-          <span className="marketplace-card-author">{display.name}</span>
-          <p className="marketplace-card-desc">{display.description}</p>
-          <div className="marketplace-card-meta">
+          <span className="extension-row-source">{display.name}</span>
+          <p className="extension-row-desc">{display.description}</p>
+          <div className="extension-row-meta">
             <span>Workspace plugin</span>
             <span>{display.id}</span>
             <span>{display.version}</span>
@@ -11850,7 +11870,6 @@ function ExtensionDetailPage({
                 aria-label={`Download ${extension.manifest.name}${download.includeLabelInAria ? ` for ${download.label}` : ''}`}
               >
                 <Icon name="download" size={13} />
-                <span>Download</span>
               </a>
             ) : null}
             <ExtensionActionButtons
@@ -11913,7 +11932,7 @@ function ExtensionDetailPage({
             </div>
           ) : null}
           {activeTab === 'Dependencies' ? (
-            <div className="extension-sidebar-chip-list">
+            <div className="extension-sidebar-line-list">
               {dependencyNames.length || dependentNames.length ? (
                 <>
                   {dependencyNames.map((name) => <span key={`requires:${name}`}>Requires {name}</span>)}
@@ -11953,7 +11972,7 @@ function ExtensionDetailPage({
           <section>
             <h3>Dependencies</h3>
             {dependencyNames.length || dependentNames.length ? (
-              <div className="extension-sidebar-chip-list">
+              <div className="extension-sidebar-line-list">
                 {dependencyNames.map((name) => <span key={`requires:${name}`}>Requires {name}</span>)}
                 {dependentNames.map((name) => <span key={`required-by:${name}`}>Required by {name}</span>)}
               </div>
@@ -11978,15 +11997,615 @@ function ExtensionDetailPage({
   );
 }
 
+type OpenDesignStudioView = 'preview' | 'review' | 'files' | 'critique' | 'research';
+
+const OPEN_DESIGN_STUDIO_VIEWS: Array<{ id: OpenDesignStudioView; icon: keyof typeof icons; label: string }> = [
+  { id: 'preview', icon: 'canvas', label: 'Show preview' },
+  { id: 'review', icon: 'clipboard', label: 'Show token review' },
+  { id: 'files', icon: 'file', label: 'Show DESIGN.md files' },
+  { id: 'critique', icon: 'sparkles', label: 'Show critique' },
+  { id: 'research', icon: 'search', label: 'Show research' },
+];
+
+function OpenDesignStudioPane({
+  workspaceName,
+  workspaceFiles,
+  onWorkspaceFilesChange,
+}: {
+  workspaceName: string;
+  workspaceFiles: WorkspaceFile[];
+  onWorkspaceFilesChange: (files: WorkspaceFile[]) => void;
+}) {
+  const [studioState, setStudioState] = useState<OpenDesignStudioState>(() => createOpenDesignStudioState({
+    workspaceName,
+    brief: {
+      projectName: `${workspaceName} Design System`,
+      audience: 'Agent Browser users',
+      surface: 'IDE extension pane',
+      prompt: 'Build a sleek AI-native DESIGN.md studio for composing product design systems.',
+      githubUrl: '',
+      localFolder: 'agent-browser',
+      designFile: 'DESIGN.md',
+      assets: '',
+      notes: 'Keep controls minimal, icon-led, and useful at phone, tablet, and desktop widths.',
+    },
+  }));
+  const [view, setView] = useState<OpenDesignStudioView>('preview');
+  const [inspectMode, setInspectMode] = useState(true);
+  const [status, setStatus] = useState('Ready to compile DESIGN.md');
+  const researchInventory = useMemo(() => getOpenDesignResearchInventory(), []);
+  const designFiles = workspaceFiles
+    .filter((file) => file.path === 'DESIGN.md' || file.path.startsWith('design/open-design/'))
+    .sort((left, right) => left.path.localeCompare(right.path));
+  const activeDirection = OPEN_DESIGN_DIRECTIONS.find((direction) => direction.id === studioState.directionId)
+    ?? OPEN_DESIGN_DIRECTIONS[0]!;
+  const approvalSummary = getOpenDesignApprovalSummary(studioState);
+  const approvalComposition = createOpenDesignApprovalComposition(studioState);
+  const designDocument = workspaceFiles.find((file) => file.path === 'DESIGN.md')?.content
+    ?? buildOpenDesignWorkspaceBundle(studioState)[0].content;
+
+  const commitFiles = (files: WorkspaceFile[], nextStatus: string) => {
+    onWorkspaceFilesChange(files);
+    setStatus(nextStatus);
+  };
+
+  const upsertFiles = (nextFiles: WorkspaceFile[], nextStatus: string) => {
+    commitFiles(nextFiles.reduce((current, file) => upsertWorkspaceFile(current, file), workspaceFiles), nextStatus);
+  };
+
+  const changeBrief = (field: keyof OpenDesignBrief, value: string) => {
+    setStudioState((current) => updateOpenDesignBrief(current, { [field]: value } as Partial<OpenDesignBrief>));
+  };
+
+  const approveTokenReview = (item: OpenDesignTokenReviewItem) => {
+    setStudioState((current) => approveOpenDesignTokenRevision(current, item.id, 'Design lead', 'Looks good.'));
+    setStatus(`${item.label} approved`);
+  };
+
+  const requestTokenRevision = (item: OpenDesignTokenReviewItem) => {
+    setStudioState((current) => requestOpenDesignTokenRevision(
+      current,
+      item.id,
+      `${item.proposedValue} · revise`,
+      'Design lead',
+      'Needs work before this token can be locked.',
+    ));
+    setStatus(`${item.label} revision requested`);
+  };
+
+  const publishDesignSystem = (enabled: boolean) => {
+    if (!enabled) {
+      setStudioState((current) => ({ ...current, published: false }));
+      setStatus('Design system unpublished');
+      return;
+    }
+    setStudioState((current) => publishOpenDesignSystem(current, 'Design lead', 'Published approved DESIGN.md system.'));
+    setStatus(approvalSummary.readyToPublish ? 'Design system published' : 'Publish blocked until token reviews are approved');
+  };
+
+  const setDefaultDesignSystem = (enabled: boolean) => {
+    setStudioState((current) => ({ ...current, defaultForWorkspace: enabled }));
+    setStatus(enabled ? 'Design system marked as workspace default' : 'Workspace default cleared');
+  };
+
+  const compileDesignSystem = () => {
+    const timestamp = new Date().toISOString();
+    upsertFiles(buildOpenDesignWorkspaceBundle(studioState, timestamp), 'DESIGN.md compiled into workspace files');
+    setView('files');
+  };
+
+  const runCritique = () => {
+    const timestamp = new Date().toISOString();
+    const critique = runOpenDesignCritique(studioState);
+    const nextState = { ...studioState, lastCritique: critique };
+    setStudioState(nextState);
+    upsertFiles(buildOpenDesignWorkspaceBundle(nextState, timestamp), `Critique ${critique.gate} at ${critique.score}/10`);
+    setView('critique');
+  };
+
+  const exportHtml = () => {
+    const timestamp = new Date().toISOString();
+    upsertFiles([createOpenDesignExportArtifact('html', studioState, timestamp)], 'Standalone HTML export added');
+    setView('files');
+  };
+
+  const exportHandoff = () => {
+    const timestamp = new Date().toISOString();
+    upsertFiles([createOpenDesignExportArtifact('handoff', studioState, timestamp)], 'Claude Code handoff added');
+    setView('files');
+  };
+
+  return (
+    <section className="open-design-studio" role="region" aria-label="OpenDesign DESIGN.md Studio feature pane">
+      <header className="od-topbar">
+        <div className="od-title-lockup">
+          <span className="od-logo-mark"><Icon name="slidersHorizontal" size={20} /></span>
+          <div>
+            <span className="panel-eyebrow">DESIGN.md Studio</span>
+            <h2>OpenDesign Studio</h2>
+            <p>Brief, review, approve, preview, critique, and export a design system that agents can apply.</p>
+          </div>
+        </div>
+        <div className="od-toolbar" aria-label="OpenDesign studio actions">
+          <button type="button" className="od-icon-action" aria-label="Compile DESIGN.md" title="Compile DESIGN.md" onClick={compileDesignSystem}>
+            <Icon name="save" size={15} />
+          </button>
+          <button type="button" className="od-icon-action" aria-label="Run design critique" title="Run design critique" onClick={runCritique}>
+            <Icon name="sparkles" size={15} />
+          </button>
+          <button type="button" className="od-icon-action" aria-label="Publish approved design system" title="Publish approved design system" onClick={() => publishDesignSystem(true)}>
+            <Icon name="clipboard" size={15} />
+          </button>
+          <button type="button" className="od-icon-action" aria-label="Export standalone HTML" title="Export standalone HTML" onClick={exportHtml}>
+            <Icon name="download" size={15} />
+          </button>
+          <button type="button" className="od-icon-action" aria-label="Export Claude Code handoff" title="Export Claude Code handoff" onClick={exportHandoff}>
+            <Icon name="share" size={15} />
+          </button>
+        </div>
+      </header>
+
+      <div className="od-workbench">
+        <aside className="od-brief-rail" aria-label="Design brief">
+          <div className="od-rail-header">
+            <Icon name="messageSquare" size={14} />
+            <strong>Brief</strong>
+          </div>
+          <label>
+            <span>Project</span>
+            <input aria-label="OpenDesign project name" value={studioState.brief.projectName} onChange={(event) => changeBrief('projectName', event.target.value)} />
+          </label>
+          <label>
+            <span>Prompt</span>
+            <textarea aria-label="OpenDesign design prompt" value={studioState.brief.prompt} onChange={(event) => changeBrief('prompt', event.target.value)} />
+          </label>
+          <label>
+            <span>Audience</span>
+            <input aria-label="OpenDesign audience" value={studioState.brief.audience} onChange={(event) => changeBrief('audience', event.target.value)} />
+          </label>
+          <label>
+            <span>Surface</span>
+            <input aria-label="OpenDesign surface" value={studioState.brief.surface} onChange={(event) => changeBrief('surface', event.target.value)} />
+          </label>
+          <label>
+            <span>Code</span>
+            <input aria-label="OpenDesign local folder" value={studioState.brief.localFolder} onChange={(event) => changeBrief('localFolder', event.target.value)} />
+          </label>
+          <label>
+            <span>Assets</span>
+            <input aria-label="OpenDesign assets" value={studioState.brief.assets} onChange={(event) => changeBrief('assets', event.target.value)} />
+          </label>
+          <label>
+            <span>Notes</span>
+            <textarea aria-label="OpenDesign notes" value={studioState.brief.notes} onChange={(event) => changeBrief('notes', event.target.value)} />
+          </label>
+        </aside>
+
+        <main className="od-main-stage">
+          <div className="od-stage-switcher" role="tablist" aria-label="OpenDesign studio views">
+            {OPEN_DESIGN_STUDIO_VIEWS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={view === item.id}
+                className={view === item.id ? 'is-active' : ''}
+                aria-label={item.label}
+                title={item.label}
+                onClick={() => setView(item.id)}
+              >
+                <Icon name={item.icon} size={15} />
+              </button>
+            ))}
+            <button
+              type="button"
+              className={inspectMode ? 'is-active' : ''}
+              aria-label="Toggle inspect mode"
+              title="Toggle inspect mode"
+              onClick={() => setInspectMode((current) => !current)}
+            >
+              <Icon name="pencil" size={15} />
+            </button>
+          </div>
+
+          {view === 'preview' ? (
+            <section className="od-preview-plane" aria-label="OpenDesign preview">
+              <div className="od-artifact-frame">
+                <div className="od-artifact-topline">
+                  <span>Browser frame</span>
+                  <span>{studioState.fidelity}</span>
+                  <span>{activeDirection.label}</span>
+                </div>
+                <div className="od-artifact-body" style={{
+                  '--od-canvas': activeDirection.palette.canvas,
+                  '--od-surface': activeDirection.palette.surface,
+                  '--od-text': activeDirection.palette.text,
+                  '--od-muted': activeDirection.palette.muted,
+                  '--od-accent': activeDirection.palette.accent,
+                  '--od-border': activeDirection.palette.border,
+                } as CSSProperties}>
+                  <div className="od-artifact-copy">
+                    <span>OpenDesign seed</span>
+                    <h3>{studioState.brief.projectName || `${workspaceName} Design System`}</h3>
+                    <p>{studioState.brief.prompt}</p>
+                    <button type="button" aria-label="Preview primary action" title="Preview primary action">
+                      <Icon name="sparkles" size={14} />
+                    </button>
+                  </div>
+                  <div className="od-token-ladder" aria-label="Generated token swatches">
+                    {Object.entries(activeDirection.palette).slice(0, 6).map(([name, value]) => (
+                      <span key={name} title={`${name}: ${value}`} style={{ background: value }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {inspectMode ? (
+                <div className="od-inspect-strip" aria-label="OpenDesign inspect controls">
+                  <label>
+                    <span>Density</span>
+                    <input
+                      aria-label="OpenDesign density"
+                      type="range"
+                      min="3"
+                      max="6"
+                      value={studioState.density}
+                      onChange={(event) => setStudioState((current) => ({ ...current, density: Number(event.target.value) }))}
+                    />
+                    <output>{studioState.density}</output>
+                  </label>
+                  <label>
+                    <span>Radius</span>
+                    <input
+                      aria-label="OpenDesign radius"
+                      type="range"
+                      min="2"
+                      max="10"
+                      value={studioState.radius}
+                      onChange={(event) => setStudioState((current) => ({ ...current, radius: Number(event.target.value) }))}
+                    />
+                    <output>{studioState.radius}px</output>
+                  </label>
+                  <span>Inspect mode tunes computed DESIGN.md tokens before export.</span>
+                </div>
+              ) : null}
+            </section>
+          ) : view === 'review' ? (
+            <section className="od-token-review-plane" aria-label="OpenDesign token review">
+              <div className="od-plane-heading">
+                <Icon name="clipboard" size={14} />
+                <strong>{approvalSummary.status === 'published' ? 'Published token system' : approvalSummary.readyToPublish ? 'Ready to publish' : 'Token review queue'}</strong>
+              </div>
+              <div className="od-review-summary" aria-label="OpenDesign approval summary">
+                <span>{approvalSummary.approved}/{approvalSummary.total} approved</span>
+                <span>{approvalSummary.needsReview} needs review</span>
+                <span>{approvalSummary.changesRequested} needs work</span>
+                <span>{studioState.published ? 'Published' : 'Draft'}</span>
+              </div>
+              <div className="od-font-warning">
+                <Icon name="file" size={14} />
+                <span>Claude Design review parity: missing fonts and extracted tokens must be reviewed before publishing.</span>
+              </div>
+              <OpenDesignApprovalCompositionSample
+                composition={approvalComposition}
+                direction={activeDirection}
+                state={studioState}
+              />
+              <div className="od-token-review-list">
+                {studioState.tokenReviews.map((item) => (
+                  <div key={item.id} className={`od-token-review-row od-token-review-row--${item.status}`}>
+                    <div className="od-token-review-copy">
+                      <span>{item.group} · rev {item.revision}</span>
+                      <strong>{item.label}</strong>
+                      <code>{item.currentValue}</code>
+                      <code>{item.proposedValue}</code>
+                      <small>{item.note || item.source}</small>
+                    </div>
+                    <OpenDesignTokenVisualSample
+                      direction={activeDirection}
+                      item={item}
+                      radius={studioState.radius}
+                    />
+                    <span className="od-token-review-state">{item.status}</span>
+                    <div className="od-token-review-actions" aria-label={`${item.label} review actions`}>
+                      <button type="button" aria-label={`Approve ${item.label}`} title={`Approve ${item.label}`} onClick={() => approveTokenReview(item)}>
+                        <Icon name="save" size={14} />
+                      </button>
+                      <button type="button" aria-label={`Request changes for ${item.label}`} title={`Request changes for ${item.label}`} onClick={() => requestTokenRevision(item)}>
+                        <Icon name="pencil" size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="od-publish-strip" aria-label="OpenDesign publish controls">
+                <label>
+                  <input
+                    aria-label="Publish approved OpenDesign system"
+                    type="checkbox"
+                    checked={studioState.published}
+                    onChange={(event) => publishDesignSystem(event.target.checked)}
+                  />
+                  <span>Published</span>
+                </label>
+                <label>
+                  <input
+                    aria-label="Use OpenDesign system as workspace default"
+                    type="checkbox"
+                    checked={studioState.defaultForWorkspace}
+                    onChange={(event) => setDefaultDesignSystem(event.target.checked)}
+                  />
+                  <span>Default</span>
+                </label>
+              </div>
+              <div className="od-approval-event-list" aria-label="OpenDesign approval events">
+                {studioState.approvalEvents.length ? studioState.approvalEvents.slice(-5).map((event) => (
+                  <span key={event.id}>{event.action} · {event.itemId} · {event.reviewer}</span>
+                )) : <span>No token decisions recorded yet.</span>}
+              </div>
+            </section>
+          ) : view === 'files' ? (
+            <section className="od-file-plane" aria-label="OpenDesign generated files">
+              <div className="od-plane-heading">
+                <Icon name="file" size={14} />
+                <strong>Generated files</strong>
+              </div>
+              <div className="od-file-list">
+                {designFiles.length ? designFiles.map((file) => (
+                  <div key={file.path} className="od-file-row">
+                    <Icon name={file.path.endsWith('.md') ? 'file' : file.path.endsWith('.html') ? 'globe' : 'clipboard'} size={14} />
+                    <code>{file.path}</code>
+                    <span>{file.content.length.toLocaleString()} bytes</span>
+                  </div>
+                )) : <p>No files generated yet. Compile DESIGN.md to write the studio bundle.</p>}
+              </div>
+              <pre className="od-design-md-preview" aria-label="DESIGN.md preview">{designDocument}</pre>
+            </section>
+          ) : view === 'critique' ? (
+            <section className="od-critique-plane" aria-label="OpenDesign critique">
+              <div className="od-plane-heading">
+                <Icon name="sparkles" size={14} />
+                <strong>{studioState.lastCritique ? `Gate ${studioState.lastCritique.gate} at ${studioState.lastCritique.score}/10` : 'Critique not run'}</strong>
+              </div>
+              <div className="od-critique-list">
+                {(studioState.lastCritique?.panelists ?? []).map((panelist) => (
+                  <div key={panelist.id} className="od-critique-row">
+                    <strong>{panelist.label}</strong>
+                    <span>{panelist.score}/10</span>
+                    <p>{panelist.finding}</p>
+                  </div>
+                ))}
+                {!studioState.lastCritique ? <p>Run critique to score accessibility, brand fit, craft, hierarchy, and implementation readiness.</p> : null}
+              </div>
+            </section>
+          ) : (
+            <section className="od-research-plane" aria-label="OpenDesign research">
+              <div className="od-plane-heading">
+                <Icon name="search" size={14} />
+                <strong>Captured research</strong>
+              </div>
+              <div className="od-research-list">
+                {researchInventory.sources.map((source) => (
+                  <a key={`${source.product}:${source.title}`} href={source.url} target="_blank" rel="noreferrer" className="od-research-row">
+                    <span>{source.product}</span>
+                    <strong>{source.title}</strong>
+                    <small>{source.features.join(' / ')}</small>
+                  </a>
+                ))}
+              </div>
+              <div className="od-research-list od-screenshot-list">
+                {researchInventory.screenshotReferences.map((screenshot) => (
+                  <a key={`${screenshot.product}:${screenshot.label}`} href={screenshot.url} target="_blank" rel="noreferrer" className="od-research-row">
+                    <span>{screenshot.product}</span>
+                    <strong>{screenshot.label}</strong>
+                    <small>{screenshot.userFlow}</small>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
+        </main>
+
+        <aside className="od-token-rail" aria-label="OpenDesign token rail">
+          <div className="od-rail-header">
+            <Icon name="slidersHorizontal" size={14} />
+            <strong>Directions</strong>
+          </div>
+          <div className="od-direction-list">
+            {OPEN_DESIGN_DIRECTIONS.map((direction) => (
+              <div key={direction.id} className={`od-direction-row${direction.id === studioState.directionId ? ' is-active' : ''}`}>
+                <button
+                  type="button"
+                  aria-label={`Select ${direction.label} direction`}
+                  title={`Select ${direction.label}`}
+                  onClick={() => setStudioState((current) => selectOpenDesignDirection(current, direction.id as OpenDesignDirectionId))}
+                >
+                  <span style={{ background: direction.palette.accent }} />
+                </button>
+                <div>
+                  <strong>{direction.label}</strong>
+                  <span>{direction.description}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="od-status-line" aria-live="polite">
+            <Icon name="save" size={13} />
+            <span>{status}</span>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function OpenDesignApprovalCompositionSample({
+  composition,
+  direction,
+  state,
+}: {
+  composition: OpenDesignApprovalComposition;
+  direction: (typeof OPEN_DESIGN_DIRECTIONS)[number];
+  state: OpenDesignStudioState;
+}) {
+  return (
+    <section
+      className="od-approval-composition"
+      aria-label="OpenDesign approval composition sample"
+      style={{
+        '--od-sample-canvas': direction.palette.canvas,
+        '--od-sample-surface': direction.palette.surface,
+        '--od-sample-raised': direction.palette.surfaceRaised,
+        '--od-sample-text': direction.palette.text,
+        '--od-sample-muted': direction.palette.muted,
+        '--od-sample-accent': direction.palette.accent,
+        '--od-sample-border': direction.palette.border,
+        '--od-sample-radius': `${state.radius}px`,
+      } as CSSProperties}
+    >
+      <div className="od-composition-copy">
+        <span>Aggregate sample</span>
+        <strong>{composition.title}</strong>
+        <small>{composition.description}</small>
+      </div>
+      <div className="od-composition-frame" aria-hidden="true">
+        <div className="od-composition-rail">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="od-composition-canvas">
+          <div className="od-composition-topline">
+            <b />
+            <i />
+          </div>
+          <div className="od-composition-message od-composition-message--user" />
+          <div className="od-composition-message od-composition-message--agent" />
+          <div className="od-composition-tool" />
+          <div className="od-composition-input" />
+        </div>
+        <div className="od-composition-inspector">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      </div>
+      <div className="od-composition-region-list">
+        {composition.regions.map((region) => (
+          <span key={region.id}>
+            <strong>{region.label}</strong>
+            <small>{region.sampleTokens.join(' / ')}</small>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OpenDesignTokenVisualSample({
+  direction,
+  item,
+  radius,
+}: {
+  direction: (typeof OPEN_DESIGN_DIRECTIONS)[number];
+  item: OpenDesignTokenReviewItem;
+  radius: number;
+}) {
+  const style = {
+    '--od-sample-canvas': direction.palette.canvas,
+    '--od-sample-surface': direction.palette.surface,
+    '--od-sample-raised': direction.palette.surfaceRaised,
+    '--od-sample-text': direction.palette.text,
+    '--od-sample-muted': direction.palette.muted,
+    '--od-sample-accent': direction.palette.accent,
+    '--od-sample-border': direction.palette.border,
+    '--od-sample-radius': `${radius}px`,
+    '--od-sample-display': direction.typography.display,
+    '--od-sample-ui': direction.typography.ui,
+    '--od-sample-mono': direction.typography.mono,
+  } as CSSProperties;
+
+  return (
+    <div
+      className={`od-token-visual od-token-visual--${item.sample.kind}`}
+      aria-label={`${item.label} visual sample`}
+      style={style}
+    >
+      <span>{item.sample.visualLabel}</span>
+      {item.sample.kind === 'palette' ? (
+        <div className="od-visual-palette">
+          {[
+            direction.palette.canvas,
+            direction.palette.surface,
+            direction.palette.surfaceRaised,
+            direction.palette.text,
+            direction.palette.muted,
+            direction.palette.accent,
+          ].map((value) => <i key={value} style={{ background: value }} />)}
+        </div>
+      ) : item.sample.kind === 'spacing' ? (
+        <div className="od-visual-spacing">
+          <i />
+          <i />
+          <i />
+        </div>
+      ) : item.sample.kind === 'radius' ? (
+        <div className="od-visual-radius">
+          <i />
+          <i />
+          <i />
+        </div>
+      ) : item.sample.kind === 'component' ? (
+        <div className="od-visual-component">
+          <button type="button" aria-label={`${item.label} sample primary action`} tabIndex={-1}>
+            <Icon name="sparkles" size={12} />
+          </button>
+          <button type="button" aria-label={`${item.label} sample approval action`} tabIndex={-1}>
+            <Icon name="save" size={12} />
+          </button>
+          <small>Run</small>
+        </div>
+      ) : item.sample.kind === 'brand' ? (
+        <div className="od-visual-brand">
+          <Icon name="slidersHorizontal" size={16} />
+          <strong>{direction.label}</strong>
+          <small>Use system</small>
+        </div>
+      ) : (
+        <div className="od-visual-type">
+          <strong>Aa</strong>
+          <small>{direction.typography.ui}</small>
+          <code>const token = value;</code>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExtensionFeaturePane({
   extension,
   workspaceName,
+  workspaceFiles,
   artifactCount,
+  onWorkspaceFilesChange,
 }: {
   extension: DefaultExtensionDescriptor;
   workspaceName: string;
+  workspaceFiles: WorkspaceFile[];
   artifactCount: number;
+  onWorkspaceFilesChange: (files: WorkspaceFile[]) => void;
 }) {
+  if (extension.manifest.id === 'agent-harness.ext.open-design') {
+    return (
+      <OpenDesignStudioPane
+        workspaceName={workspaceName}
+        workspaceFiles={workspaceFiles}
+        onWorkspaceFilesChange={onWorkspaceFilesChange}
+      />
+    );
+  }
+
   const contributionRows = getExtensionContributionRows(extension);
   const resourceRows = getExtensionResourceRows(extension);
   const category = getExtensionMarketplaceCategory(extension);
@@ -12005,7 +12624,7 @@ function ExtensionFeaturePane({
       </header>
 
       <div className="extension-feature-grid">
-        <article className="extension-feature-card extension-feature-card--wide">
+        <article className="extension-feature-section extension-feature-section--wide">
           <span className="panel-eyebrow">Current workspace</span>
           <h3>{workspaceName}</h3>
           <p>{extension.manifest.description}</p>
@@ -12016,7 +12635,7 @@ function ExtensionFeaturePane({
           </div>
         </article>
 
-        <article className="extension-feature-card">
+        <article className="extension-feature-section">
           <span className="panel-eyebrow">Pane contract</span>
           <h3>Manifest contributions</h3>
           <div className="extension-contribution-list">
@@ -12029,7 +12648,7 @@ function ExtensionFeaturePane({
           </div>
         </article>
 
-        <article className="extension-feature-card">
+        <article className="extension-feature-section">
           <span className="panel-eyebrow">Package index</span>
           <h3>README and assets</h3>
           <div className="extension-resource-list">
@@ -17814,7 +18433,11 @@ function AgentBrowserApp() {
             <ExtensionFeaturePane
               extension={activeExtensionFeature}
               workspaceName={activeWorkspace.name}
+              workspaceFiles={activeWorkspaceFiles}
               artifactCount={activeArtifacts.length}
+              onWorkspaceFilesChange={(files) => {
+                setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: files }));
+              }}
             />
           ) : selectedExtension ? (
             <ExtensionDetailPage

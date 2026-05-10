@@ -17,6 +17,19 @@ const outputPath = path.resolve(
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-detail.png');
 const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
+const openDesignTokenReviewOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review.png');
+const openDesignTokenReviewViewportOutputPaths = [
+  {
+    name: 'mobile',
+    viewport: { width: 390, height: 840 },
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review-mobile.png'),
+  },
+  {
+    name: 'tablet',
+    viewport: { width: 768, height: 900 },
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review-tablet.png'),
+  },
+];
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const repoWikiPagesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-pages.png');
@@ -172,6 +185,25 @@ async function captureDashboardCanvasViewportMatrix(page, timeoutMs) {
     await assertDashboardCanvasVisible(page, timeoutMs);
     await page.screenshot({ path: viewportOutputPath, fullPage: true });
     console.log(`agent-browser dashboard canvas ${name} smoke passed: ${viewportOutputPath}`);
+  }
+}
+
+async function captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, timeoutMs) {
+  for (const { name, viewport, outputPath: viewportOutputPath } of openDesignTokenReviewViewportOutputPaths) {
+    await page.setViewportSize(viewport);
+    await expect(tokenReview).toBeVisible({ timeout: timeoutMs });
+    await tokenReview.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expect(tokenReview.getByLabel('OpenDesign approval composition sample')).toContainText(
+      'Agent Browser approval composition',
+      { timeout: timeoutMs },
+    );
+    await expect(tokenReview.getByLabel('Display type visual sample')).toContainText('Aa', {
+      timeout: timeoutMs,
+    });
+    await page.screenshot({ path: viewportOutputPath, fullPage: true });
+    console.log(`agent-browser OpenDesign token review ${name} smoke passed: ${viewportOutputPath}`);
   }
 }
 
@@ -1375,7 +1407,57 @@ async function main() {
     await expect(extensionFeaturePane.getByRole('heading', { name: 'OpenDesign Studio' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(extensionFeaturePane.getByText('Manifest contributions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByLabel('Design brief')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByLabel('OpenDesign preview')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByLabel('OpenDesign token rail')).toBeVisible({ timeout: shellTimeoutMs });
+    await extensionFeaturePane.getByRole('tab', { name: 'Show token review' }).click();
+    const tokenReview = extensionFeaturePane.getByRole('region', { name: 'OpenDesign token review' });
+    await expect(tokenReview).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(tokenReview.getByLabel('OpenDesign approval summary')).toContainText('0/6 approved', {
+      timeout: shellTimeoutMs,
+    });
+    await expect(tokenReview.getByLabel('OpenDesign approval composition sample')).toContainText(
+      'Agent Browser approval composition',
+      { timeout: shellTimeoutMs },
+    );
+    await expect(tokenReview.getByLabel('Display type visual sample')).toContainText('Aa', {
+      timeout: shellTimeoutMs,
+    });
+    await expect(tokenReview.getByLabel('Action components visual sample')).toContainText('Run', {
+      timeout: shellTimeoutMs,
+    });
+    const approveTokenButtons = tokenReview.getByRole('button', { name: /^Approve / });
+    const approveTokenButtonCount = await approveTokenButtons.count();
+    for (let index = 0; index < approveTokenButtonCount; index += 1) {
+      await approveTokenButtons.nth(index).click();
+    }
+    await expect(tokenReview.getByLabel('OpenDesign approval summary')).toContainText('6/6 approved', {
+      timeout: shellTimeoutMs,
+    });
+    await tokenReview.getByLabel('Publish approved OpenDesign system').check();
+    await tokenReview.getByLabel('Use OpenDesign system as workspace default').check();
+    await tokenReview.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await page.screenshot({ path: openDesignTokenReviewOutputPath, fullPage: true });
+    await captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, shellTimeoutMs);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await extensionFeaturePane.getByRole('button', { name: 'Compile DESIGN.md' }).click();
+    await expect(extensionFeaturePane.getByRole('region', { name: 'OpenDesign generated files' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(extensionFeaturePane.getByText('DESIGN.md').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByText('design/open-design/research.json')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(extensionFeaturePane.getByText('design/open-design/token-review.json')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await extensionFeaturePane.getByRole('button', { name: 'Run design critique' }).click();
+    await expect(extensionFeaturePane.getByRole('region', { name: 'OpenDesign critique' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(extensionFeaturePane.getByText('Gate pass')).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: extensionFeatureOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Review', exact: true }).click();
     const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });
@@ -1530,6 +1612,7 @@ async function main() {
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
+    console.log(`agent-browser OpenDesign token review smoke passed: ${openDesignTokenReviewOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser dashboard canvas smoke passed: ${dashboardCanvasOutputPath}`);

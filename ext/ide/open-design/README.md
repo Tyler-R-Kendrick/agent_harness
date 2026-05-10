@@ -1,0 +1,5 @@
+# OpenDesign DESIGN.md Studio
+
+Optional Agent Harness plugin for an OpenDesign-inspired design studio that compiles interactive design-system work into `DESIGN.md` assets.
+
+The plugin owns the DESIGN.md authoring loop: brief capture, direction selection, Claude Design-style token review, aggregate composition sampling, per-section visual specimens, approval or needs-work revision decisions, generated preview files, critique scoring, publish/default readiness, and export handoffs. Agent Browser renders the studio surface in the IDE extension pane.
