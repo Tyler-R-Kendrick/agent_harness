@@ -30,6 +30,19 @@ describe('sharedAgents', () => {
     });
   });
 
+  it('returns audit entries as catalog snapshots instead of registry-owned objects', () => {
+    const catalog = buildSharedAgentCatalog(DEFAULT_SHARED_AGENT_REGISTRY_STATE);
+
+    expect(catalog.latestAuditEntry?.summary).toBe('Published Team reviewer v1.2.0 for team discovery');
+
+    if (!catalog.latestAuditEntry) throw new Error('expected a latest audit entry');
+    catalog.latestAuditEntry.summary = 'mutated by caller';
+
+    expect(DEFAULT_SHARED_AGENT_REGISTRY_STATE.audit[0]?.summary).toBe('Published Team reviewer v1.2.0 for team discovery');
+    expect(buildSharedAgentCatalog(DEFAULT_SHARED_AGENT_REGISTRY_STATE).latestAuditEntry?.summary)
+      .toBe('Published Team reviewer v1.2.0 for team discovery');
+  });
+
   it('accepts only well-formed registry states and known RBAC roles', () => {
     expect(isSharedAgentRegistryState(DEFAULT_SHARED_AGENT_REGISTRY_STATE)).toBe(true);
     expect(isSharedAgentRegistryState({
