@@ -1,0 +1,28 @@
+slug: browserless
+name: Browserless
+vendor: Browserless
+segment: browser-automation-infrastructure
+product_path: competition/browserless
+design_path: competition/browserless/design
+features_path: competition/browserless/features
+marketing_path: competition/browserless/marketing
+gossip_path: competition/browserless/gossip
+snapshot_date: 2026-05-10
+primary_sources:
+  - https://www.browserless.io/
+  - https://www.browserless.io/feature/browserql
+  - https://docs.browserless.io/
+  - https://docs.browserless.io/browserql/start
+  - https://docs.browserless.io/baas/start
+  - https://www.browserless.io/pricing
+secondary_sources:
+  - https://github.com/browserless/browserless/issues
+  - https://github.com/browserless/browserless/issues/5059
+  - https://github.com/browserless/browserless/issues/4979
+  - https://github.com/browserless/browserless/issues/4960
+  - https://github.com/browserless/browserless/issues/4913
+  - https://github.com/browserless/browserless/issues/4792
+positioning: "Managed and self-hosted browser automation infrastructure with BrowserQL for stealthy scraping, BaaS endpoints for Puppeteer/Playwright, REST APIs, session replay, proxies, CAPTCHA handling, and enterprise private deployments."
+customer_model: "Free tier, usage-unit SaaS plans, paid persisted logs/replays, residential proxy and CAPTCHA unit consumption, and custom enterprise/private/self-hosted deployments."
+competitive_threat_level: high
+notes: "Threatens agent-browser anywhere buyers want production browser fleet reliability, anti-bot features, and remote debugging rather than a local inspectable browser workspace."

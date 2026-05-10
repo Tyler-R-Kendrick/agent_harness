@@ -1,0 +1,26 @@
+slug: playwright-mcp
+name: Playwright MCP
+vendor: Microsoft Playwright
+segment: open-source-browser-automation-mcp
+product_path: competition/playwright-mcp
+design_path: competition/playwright-mcp/design
+features_path: competition/playwright-mcp/features
+marketing_path: competition/playwright-mcp/marketing
+gossip_path: competition/playwright-mcp/gossip
+snapshot_date: 2026-05-10
+primary_sources:
+  - https://playwright.dev/mcp/introduction
+  - https://github.com/microsoft/playwright
+  - https://github.com/microsoft/playwright-mcp
+  - https://github.com/microsoft/playwright-mcp/blob/main/README.md
+  - https://learn.microsoft.com/en-us/power-platform/developer/playwright-samples/ai-mcp
+secondary_sources:
+  - https://github.com/microsoft/playwright-mcp/issues
+  - https://github.com/microsoft/playwright/issues/39955
+  - https://github.com/microsoft/playwright-mcp/issues/1479
+  - https://github.com/microsoft/playwright-mcp/issues/942
+  - https://github.com/microsoft/playwright-mcp/issues/1140
+positioning: "Official Playwright MCP server that gives AI agents browser control through structured accessibility snapshots, deterministic element refs, and Playwright-backed actions."
+customer_model: "Free open-source tool distributed through npm and integrated into AI coding assistants; monetization is indirect through Microsoft developer ecosystem gravity."
+competitive_threat_level: high
+notes: "Directly competes with agent-browser's browser-control layer by becoming the default cheap, official, editor-compatible browser MCP path."
