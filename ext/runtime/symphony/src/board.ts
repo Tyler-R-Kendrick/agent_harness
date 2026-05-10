@@ -414,7 +414,7 @@ function createSeedTask({
     labels,
     agent,
     proofs: defaultProofs(),
-    activity: [activity(`${id}-seed`, 'created', 'Imported from Linear', 'Seeded from the Symphony demo board.', now)],
+    activity: [activity(`${id}-seed`, 'created', 'Seeded internally', 'Seeded from the internal Symphony task manager.', now)],
     createdAt: now,
     updatedAt: now,
   };

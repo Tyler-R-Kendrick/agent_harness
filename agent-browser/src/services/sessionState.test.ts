@@ -70,6 +70,7 @@ describe('STORAGE_KEYS', () => {
       workspaceFileCrdtHistoriesByWorkspace: expect.any(String),
       browserAgentRunSdkState: expect.any(String),
       multitaskSubagentState: expect.any(String),
+      symphonyAutopilotSettings: expect.any(String),
       harnessSpecsByWorkspace: expect.any(String),
       installedDefaultExtensionIds: expect.any(String),
       defaultExtensionOpenFeatureFlags: expect.any(String),
@@ -81,6 +82,7 @@ describe('STORAGE_KEYS', () => {
     expect(STORAGE_KEYS.conversationBranchingState).toBe('agent-browser.conversation-branching-state');
     expect(STORAGE_KEYS.browserAgentRunSdkState).toBe('agent-browser.browser-agent-run-sdk-state');
     expect(STORAGE_KEYS.multitaskSubagentState).toBe('agent-browser.multitask-subagent-state');
+    expect(STORAGE_KEYS.symphonyAutopilotSettings).toBe('agent-browser.symphony-autopilot-settings');
     expect(STORAGE_KEYS.runtimePluginSettings).toBe('agent-browser.runtime-plugin-settings');
     expect(STORAGE_KEYS.harnessEvolutionSettings).toBe('agent-browser.harness-evolution-settings');
     expect(STORAGE_KEYS.workspaceSurfacesByWorkspace).toBe('agent-browser.workspace-surfaces-by-workspace');

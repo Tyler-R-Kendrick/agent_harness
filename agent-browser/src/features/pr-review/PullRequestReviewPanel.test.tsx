@@ -10,13 +10,13 @@ describe('PullRequestReviewPanel', () => {
 
     render(<PullRequestReviewPanel report={report} onStartFollowUp={vi.fn()} />);
 
-    const panel = screen.getByRole('region', { name: 'PR review understanding' });
-    expect(panel).toHaveTextContent('TK-47 review-native PR understanding');
+    const panel = screen.getByRole('region', { name: 'Merge review understanding' });
+    expect(panel).toHaveTextContent('Symphony branch merge review');
     expect(panel).toHaveTextContent('needs review');
     expect(within(panel).getByText('Runtime services and tools')).toBeInTheDocument();
     expect(within(panel).getByText('User-facing review surface')).toBeInTheDocument();
     expect(within(panel).getByText('Agent Browser verifier')).toBeInTheDocument();
-    expect(within(panel).getByText('Review panel visual smoke')).toBeInTheDocument();
+    expect(within(panel).getByText('Symphony review visual smoke')).toBeInTheDocument();
     expect(within(panel).getByText('Reviewer')).toBeInTheDocument();
     expect(within(panel).getByText('Validation evidence incomplete')).toBeInTheDocument();
   });
@@ -30,5 +30,24 @@ describe('PullRequestReviewPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start follow-up: Address Reviewer feedback' }));
 
     expect(onStartFollowUp).toHaveBeenCalledWith(expect.stringContaining('Reviewer request: Check that the review summary links validation evidence before approval.'));
+  });
+
+  it('renders ready review evidence without optional details or risks', () => {
+    const report = buildPullRequestReview({
+      title: 'Ready branch merge',
+      author: 'agent-browser',
+      summary: 'Ready merge approval.',
+      changedFiles: ['agent-browser/src/App.css'],
+      validations: [{ label: 'Agent Browser verifier', command: 'npm.cmd run verify:agent-browser', status: 'passed' }],
+      browserEvidence: [{ label: 'Visual smoke', path: 'output/playwright/agent-browser-visual-smoke.png', kind: 'screenshot' }],
+      reviewerComments: [],
+    });
+
+    render(<PullRequestReviewPanel report={report} onStartFollowUp={vi.fn()} />);
+
+    const panel = screen.getByRole('region', { name: 'Merge review understanding' });
+    expect(panel).toHaveTextContent('ready');
+    expect(panel).toHaveTextContent('No review risks detected.');
+    expect(within(panel).getByText('Agent Browser verifier')).toBeInTheDocument();
   });
 });

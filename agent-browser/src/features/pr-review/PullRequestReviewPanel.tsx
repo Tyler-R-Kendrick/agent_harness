@@ -33,7 +33,7 @@ const VALIDATION_LABELS: Record<PullRequestValidationStatus, string> = {
 
 export function PullRequestReviewPanel({ report, onStartFollowUp }: PullRequestReviewPanelProps) {
   return (
-    <section className="pr-review-panel" role="region" aria-label="PR review understanding">
+    <section className="pr-review-panel" role="region" aria-label="Merge review understanding">
       <header className="pr-review-header">
         <div className="pr-review-title-group">
           <span className="panel-eyebrow"><GitPullRequest size={12} aria-hidden="true" />Review</span>

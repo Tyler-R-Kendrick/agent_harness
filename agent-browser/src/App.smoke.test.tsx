@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { createMultitaskSubagentState } from './services/multitaskSubagents';
 import { STORAGE_KEYS } from './services/sessionState';
 import {
   appendWorkspaceFileCrdtDiff,
@@ -333,9 +334,9 @@ describe('App smoke coverage', () => {
     expect(screen.getAllByText(/Qwen3-0\.6B-ONNX/i).length).toBeGreaterThan(0);
   });
 
-  it('hydrates the Review sidebar panel from durable session storage', async () => {
+  it('hydrates the Symphony task system from durable session storage', async () => {
     vi.useFakeTimers();
-    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('review'));
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
 
     render(<App />);
 
@@ -343,7 +344,30 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    expect(app).toBeInTheDocument();
+    expect(app).toHaveTextContent('Agent Workspaces');
+    expect(app).toHaveTextContent('Isolated Workspaces');
+    expect(app).toHaveTextContent('Review Gate');
+    expect(app).toHaveTextContent('No active Symphony task');
+    expect(app).not.toHaveTextContent('agent/research/frontend-1');
+    expect(app).not.toHaveTextContent('Running');
+    expect(app).not.toHaveTextContent('Slots');
+    const sidebar = screen.getByRole('region', { name: 'Symphony activity summary' });
+    expect(sidebar).toHaveTextContent('Idle');
+    expect(sidebar).not.toHaveTextContent('State store');
+    expect(sidebar).not.toHaveTextContent('IndexedDB');
+    expect(sidebar).not.toHaveTextContent('agent/research/tests-2');
+    expect(within(sidebar).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'PR review understanding' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Symphony task request'), {
+      target: { value: 'parallelize frontend and validation work' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start Symphony task' }));
+
+    expect(screen.getByText('agent/research/frontend-1')).toBeInTheDocument();
+    expect(screen.getAllByText('Queued').length).toBeGreaterThan(0);
   });
 
   it('renders the repository wiki as a navigation sidebar plus knowledgebase workbench', async () => {
@@ -454,9 +478,21 @@ describe('App smoke coverage', () => {
     expect(screen.queryByRole('button', { name: 'Canvases' })).not.toBeInTheDocument();
   });
 
-  it('renders multitask subagent branch comparison and promotion controls', async () => {
+  it('renders Symphony branch comparison, merge review, and approval controls', async () => {
     vi.useFakeTimers();
-    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('multitask'));
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
+    const taskState = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentState, JSON.stringify({
+      ...taskState,
+      branches: taskState.branches.map((branch) => branch.branchName.endsWith('/tests-2')
+        ? { ...branch, status: 'ready', progress: 100 }
+        : branch),
+    }));
 
     render(<App />);
 
@@ -464,11 +500,138 @@ describe('App smoke coverage', () => {
       await vi.runOnlyPendingTimersAsync();
     });
 
-    const panel = screen.getByRole('region', { name: 'Multitask subagents' });
-    expect(panel).toBeInTheDocument();
-    expect(screen.getByText('Branch isolation')).toBeInTheDocument();
-    expect(screen.getByText('agent/research/frontend-1')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Promote agent/research/tests-2' })).toBeInTheDocument();
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    expect(app).toBeInTheDocument();
+    expect(screen.getByText('Isolated Workspaces')).toBeInTheDocument();
+    expect(screen.getAllByText('agent/research/frontend-1').length).toBeGreaterThan(0);
+    expect(screen.getByText(/SYM-001/)).toBeInTheDocument();
+    expect(screen.getByText('Review Gate')).toBeInTheDocument();
+    expect(screen.getAllByText('Reviewer Feedback').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Send reviewer agent feedback for agent/research/tests-2' })).toBeInTheDocument();
+    fireEvent.click(within(app).getByRole('button', { name: 'Request changes for agent/research/tests-2' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
+    expect(persisted.branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/tests-2')).toMatchObject({
+      status: 'queued',
+      progress: 0,
+    });
+  });
+
+  it('persists Symphony branch session lifecycle controls from the workspace app', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
+    const taskState = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentState, JSON.stringify(taskState));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    fireEvent.click(within(app).getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}')
+      .branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/frontend-1')).toMatchObject({
+        status: 'running',
+      });
+
+    fireEvent.click(within(app).getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}')
+      .branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/frontend-1')).toMatchObject({
+        status: 'stopped',
+      });
+
+    expect(within(app).queryByRole('button', { name: 'Cancel task for agent/research/frontend-1' })).not.toBeInTheDocument();
+    fireEvent.click(within(app).getByRole('button', { name: 'Close task and dispose workspace for agent/research/frontend-1' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}')
+      .branches.some((branch: { branchName: string }) => branch.branchName === 'agent/research/frontend-1')).toBe(false);
+  });
+
+  it('rolls Symphony task events and session summaries into History', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.change(screen.getByLabelText('Symphony task request'), {
+      target: { value: 'parallelize frontend and validation work' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start Symphony task' }));
+    await act(async () => {
+      vi.advanceTimersByTime(25);
+    });
+
+    fireEvent.click(screen.getByLabelText('History'));
+    await act(async () => {
+      vi.advanceTimersByTime(25);
+    });
+
+    const historyPanel = screen.getByRole('region', { name: 'History' });
+    expect(historyPanel).toHaveTextContent('Symphony activity: Updated Symphony');
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Symphony activity: Updated Symphony' }));
+    expect(historyPanel).toHaveTextContent('Symphony event: workflow loaded - Loaded WORKFLOW.md and applied Symphony runtime defaults.');
+    expect(historyPanel).toHaveTextContent('Symphony session: SYM-001 agent/research/frontend-1 PreparingWorkspace pending no live session');
+  });
+
+  it('enables Symphony reviewer autopilot by default and persists disabling it from Settings', async () => {
+    vi.useFakeTimers();
+    const taskState = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize frontend work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentState, JSON.stringify({
+      ...taskState,
+      branches: taskState.branches.map((branch) => ({ ...branch, status: 'ready', progress: 100 })),
+    }));
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: 'Symphony autopilot' }));
+
+    const autopilotToggle = screen.getByLabelText('Enable Symphony autopilot');
+    expect(autopilotToggle).toBeChecked();
+    fireEvent.click(autopilotToggle);
+
+    expect(autopilotToggle).not.toBeChecked();
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.symphonyAutopilotSettings) ?? '{}')).toEqual({
+      autopilotEnabled: false,
+    });
+
+    fireEvent.click(screen.getByLabelText('Symphony'));
+
+    expect(screen.queryByRole('button', { name: 'Reviewer agent disabled for agent/research/frontend-1' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Symphony activity summary' })).toHaveTextContent('Reviewer disabled');
   });
 
   it('starts and renders branching conversation controls across chat History and Settings', async () => {
@@ -657,7 +820,7 @@ describe('App smoke coverage', () => {
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     await act(async () => {
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
-      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' }));
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony internal task orchestration' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact worktree explorer' }));
     });
@@ -709,9 +872,9 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('region', { name: 'OpenDesign critique' })).toHaveTextContent('Gate pass');
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Symphony workflow orchestration extension' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Symphony internal task orchestration extension' }));
     });
-    expect(screen.getByRole('region', { name: 'Symphony workflow orchestration feature pane' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Symphony internal task orchestration feature pane' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));

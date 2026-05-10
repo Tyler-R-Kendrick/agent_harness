@@ -83,7 +83,7 @@ type GroupDefinition = {
   title: string;
   intent: string;
   riskLevel: PullRequestRiskLevel;
-  matches: (path: string) => boolean;
+  matches?: (path: string) => boolean;
 };
 
 const GROUP_DEFINITIONS: GroupDefinition[] = [
@@ -147,7 +147,6 @@ const FALLBACK_GROUP: GroupDefinition = {
   title: 'Repository changes',
   intent: 'Review repository changes that do not fit a more specific Agent Browser area.',
   riskLevel: 'medium',
-  matches: () => true,
 };
 
 const HIGH_RISK_TERMS = [
@@ -188,9 +187,9 @@ function getGroupDefinition(path: string): GroupDefinition {
     || path.endsWith('.test.tsx')
     || path.endsWith('.test.mjs')
   ) {
-    return GROUP_DEFINITIONS.find((group) => group.id === 'validation') ?? FALLBACK_GROUP;
+    return GROUP_DEFINITIONS.find((group) => group.id === 'validation')!;
   }
-  return GROUP_DEFINITIONS.find((group) => group.matches(path)) ?? FALLBACK_GROUP;
+  return GROUP_DEFINITIONS.find((group) => group.matches?.(path)) ?? FALLBACK_GROUP;
 }
 
 function containsTerm(value: string, terms: string[]) {
@@ -258,7 +257,7 @@ function buildRisks(input: PullRequestReviewInput, groups: PullRequestChangeGrou
     risks.push({
       severity: 'high',
       title: 'Sensitive runtime surface changed',
-      reason: 'The PR touches provider routing, tool execution, permissions, credentials, or secret-adjacent code.',
+      reason: 'The change set touches provider routing, tool execution, permissions, credentials, or secret-adjacent code.',
       recommendedCheck: 'Review secret handling, command execution, and permission boundaries before approval.',
     });
   }
@@ -303,7 +302,7 @@ function buildRisks(input: PullRequestReviewInput, groups: PullRequestChangeGrou
     risks.push({
       severity: 'medium',
       title: 'Durable workspace state changed',
-      reason: 'The PR touches persistence, workspace state, model selection, or MCP integration paths.',
+      reason: 'The change set touches persistence, workspace state, model selection, or MCP integration paths.',
       recommendedCheck: 'Check migration behavior with existing localStorage/sessionStorage data.',
     });
   }
@@ -347,11 +346,11 @@ function buildReviewerFollowUpPromptFromParts(
     : 'none recorded';
   const groupSummary = groups.map((group) => `${group.title} (${group.files.length} files, ${group.riskLevel} risk)`).join('; ');
   return [
-    `Review PR: ${title}`,
+    `Review change set: ${title}`,
     `Reviewer request: ${request}`,
     `Highest risks: ${highestRisks}`,
     `Changed groups: ${groupSummary}`,
-    'Use the PR understanding report, linked validations, and browser evidence before proposing follow-up work.',
+    'Use the Symphony merge review report, linked validations, and browser evidence before proposing follow-up work.',
   ].join('\n');
 }
 
@@ -380,15 +379,15 @@ export function buildPullRequestReview(input: PullRequestReviewInput): PullReque
 
 export function createSamplePullRequestReviewInput(workspaceName: string): PullRequestReviewInput {
   return {
-    title: 'TK-47 review-native PR understanding',
+    title: 'Symphony branch merge review',
     author: 'agent-browser',
-    summary: `Adds a dedicated Review panel for ${workspaceName} with grouped changes, risk, validation, and follow-up prompts.`,
+    summary: `Combines isolated Symphony worktree branches for ${workspaceName} with grouped changes, validation, reviewer comments, and merge approval prompts.`,
     changedFiles: [
       'agent-browser/src/services/prReviewUnderstanding.ts',
-      'agent-browser/src/features/pr-review/PullRequestReviewPanel.tsx',
+      'agent-browser/src/features/symphony/SymphonyOrchestrationPanel.tsx',
       'agent-browser/src/App.tsx',
       'agent-browser/src/App.css',
-      'agent-browser/src/features/pr-review/PullRequestReviewPanel.test.tsx',
+      'agent-browser/src/features/symphony/SymphonyOrchestrationPanel.test.tsx',
       'docs/superpowers/plans/2026-05-03-review-native-pr-understanding.md',
     ],
     validations: [
@@ -402,12 +401,12 @@ export function createSamplePullRequestReviewInput(workspaceName: string): PullR
         label: 'Agent Browser verifier',
         command: 'npm.cmd run verify:agent-browser',
         status: 'pending',
-        detail: 'Required before PR handoff.',
+        detail: 'Required before merge approval.',
       },
     ],
     browserEvidence: [
       {
-        label: 'Review panel visual smoke',
+        label: 'Symphony review visual smoke',
         path: 'output/playwright/agent-browser-visual-smoke.png',
         kind: 'screenshot',
       },

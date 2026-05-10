@@ -15,6 +15,8 @@ export interface WorkspaceActionSnapshot {
   scheduledAutomationIds: string[];
   chapterIds: string[];
   workspaceFileVersionIds?: string[];
+  symphonyEventSummaries?: string[];
+  symphonySessionSummaries?: string[];
 }
 
 export interface WorkspaceActionHistoryAction {
@@ -170,11 +172,16 @@ export function buildWorkspaceActionTimeline(
   return groups.map((group) => {
     const first = group[0];
     const last = group[group.length - 1];
+    const symphonyActions = group.filter(isSymphonyAction);
     return {
       id: `app-actions:${first.id}:${last.id}`,
       workspaceId,
-      title: `App actions: ${first.label}`,
-      summary: `${group.length} app action${group.length === 1 ? '' : 's'} captured for ${last.workspaceName}.`,
+      title: symphonyActions.length
+        ? `Symphony activity: ${symphonyActions[0].label}`
+        : `App actions: ${first.label}`,
+      summary: symphonyActions.length
+        ? buildSymphonyTimelineSummary(group.length, symphonyActions.length, last.workspaceName)
+        : `${group.length} app action${group.length === 1 ? '' : 's'} captured for ${last.workspaceName}.`,
       actionIds: group.map((action) => action.id),
       actionCount: group.length,
       cursorActionId: last.id,
@@ -183,12 +190,7 @@ export function buildWorkspaceActionTimeline(
         : group.some((action) => action.id === currentCursor),
       createdAt: first.createdAt,
       updatedAt: last.createdAt,
-      detailRows: group.map((action) => ({
-        id: `app-action-detail:${action.id}`,
-        label: action.label,
-        timestamp: Date.parse(action.createdAt),
-        actionId: action.id,
-      })),
+      detailRows: group.flatMap(buildActionTimelineDetailRows),
     };
   });
 }
@@ -232,6 +234,8 @@ function getChangedSlices(beforeSnapshot: WorkspaceActionSnapshot, afterSnapshot
     ['scheduledAutomations', beforeSnapshot.scheduledAutomationIds, afterSnapshot.scheduledAutomationIds],
     ['chapters', beforeSnapshot.chapterIds, afterSnapshot.chapterIds],
     ['workspaceFiles', beforeSnapshot.workspaceFileVersionIds ?? [], afterSnapshot.workspaceFileVersionIds ?? []],
+    ['symphonyEvents', beforeSnapshot.symphonyEventSummaries ?? [], afterSnapshot.symphonyEventSummaries ?? []],
+    ['symphonySessions', beforeSnapshot.symphonySessionSummaries ?? [], afterSnapshot.symphonySessionSummaries ?? []],
   ];
   return checks
     .filter(([, before, after]) => !jsonEquals(before, after))
@@ -286,6 +290,9 @@ function buildActionLabel(
   if (changedSlices.includes('scheduledAutomations')) {
     phrases.push('updated automations');
   }
+  if (changedSlices.some(isSymphonySlice)) {
+    phrases.push('updated Symphony');
+  }
   if (!phrases.length) {
     return `Updated ${formatSliceName(changedSlices[0] ?? beforeSnapshot.workspaceName)}`;
   }
@@ -309,7 +316,49 @@ function formatSliceName(slice: string): string {
   if (slice === 'browserAgentRuns') return 'browser-agent runs';
   if (slice === 'scheduledAutomations') return 'automations';
   if (slice === 'workspaceFiles') return 'workspace files';
+  if (isSymphonySlice(slice)) return 'Symphony';
   return slice;
+}
+
+function buildActionTimelineDetailRows(action: WorkspaceActionHistoryAction): WorkspaceActionTimelineDetailRow[] {
+  const labels = buildActionDetailLabels(action);
+  return labels.map((label, index) => ({
+    id: `app-action-detail:${action.id}:${index}`,
+    label,
+    timestamp: Date.parse(action.createdAt) + index,
+    actionId: action.id,
+  }));
+}
+
+function buildActionDetailLabels(action: WorkspaceActionHistoryAction): string[] {
+  if (!isSymphonyAction(action)) return [action.label];
+
+  const labels = [
+    ...getNewStrings(action.beforeSnapshot.symphonyEventSummaries ?? [], action.afterSnapshot.symphonyEventSummaries ?? []),
+    ...getNewStrings(action.beforeSnapshot.symphonySessionSummaries ?? [], action.afterSnapshot.symphonySessionSummaries ?? []),
+  ];
+  return uniqueStrings(labels).length ? uniqueStrings(labels) : [action.label];
+}
+
+function buildSymphonyTimelineSummary(groupActionCount: number, symphonyActionCount: number, workspaceName: string): string {
+  if (groupActionCount === symphonyActionCount) {
+    return `${symphonyActionCount} Symphony update${symphonyActionCount === 1 ? '' : 's'} rolled up for ${workspaceName}.`;
+  }
+  const appActionCount = groupActionCount - symphonyActionCount;
+  return `${symphonyActionCount} Symphony update${symphonyActionCount === 1 ? '' : 's'} and ${appActionCount} app action${appActionCount === 1 ? '' : 's'} rolled up for ${workspaceName}.`;
+}
+
+function isSymphonyAction(action: WorkspaceActionHistoryAction): boolean {
+  return action.changedSlices.some(isSymphonySlice);
+}
+
+function isSymphonySlice(slice: string): boolean {
+  return slice === 'symphonyEvents' || slice === 'symphonySessions';
+}
+
+function getNewStrings(before: string[], after: string[]): string[] {
+  const beforeSet = new Set(before);
+  return after.filter((entry) => !beforeSet.has(entry));
 }
 
 function joinWords(values: string[]): string {
@@ -362,6 +411,8 @@ function isWorkspaceActionSnapshot(value: unknown): value is WorkspaceActionSnap
     && isStringArray(value.scheduledAutomationIds)
     && isStringArray(value.chapterIds)
     && (value.workspaceFileVersionIds === undefined || isStringArray(value.workspaceFileVersionIds))
+    && (value.symphonyEventSummaries === undefined || isStringArray(value.symphonyEventSummaries))
+    && (value.symphonySessionSummaries === undefined || isStringArray(value.symphonySessionSummaries))
   );
 }
 
@@ -371,6 +422,10 @@ function isStringArray(value: unknown): value is string[] {
 
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

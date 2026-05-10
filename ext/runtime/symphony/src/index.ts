@@ -90,6 +90,40 @@ export function createSymphonyPlugin<TMessage extends MemoryMessage = MemoryMess
 }
 
 export * from './board.js';
+export {
+  INTERNAL_TASK_STORE_CONFIG,
+  createHarnessTaskManager,
+  isHarnessManagedTask,
+} from '@agent-harness/task-manager';
+export type {
+  HarnessManagedTask,
+  HarnessTaskManager,
+  HarnessTaskSummary,
+} from '@agent-harness/task-manager';
+export {
+  WorkGraphCommandError,
+  applyAgentIssueProposal,
+  createAgentIssueProposal,
+  createInMemoryWorkGraphRepository,
+  createSequentialWorkGraphIdFactory,
+  createWorkGraph,
+  createWorkGraphExternalStore,
+  enqueueWorkGraphAutomationTask,
+  exportWorkGraph,
+  importWorkGraph,
+  searchWorkGraph,
+  selectIssuesForView,
+  sortIssuesByPriority,
+} from '@agent-harness/workgraph';
+export type {
+  WorkGraph,
+  WorkGraphActor,
+  WorkGraphCommand,
+  WorkGraphEvent,
+  WorkGraphExternalStore,
+  WorkGraphIssue,
+  WorkGraphProjectionState,
+} from '@agent-harness/workgraph';
 
 function formatWorkflowFile(file: WorkspaceFile): string {
   return `- ${file.path}\n${file.content}`;

@@ -14,6 +14,7 @@ import {
   normalizeSessionFsPath,
 } from './services/sessionFsPath';
 import { WORKSPACE_FILES_STORAGE_KEY } from './services/workspaceFiles';
+import { createMultitaskSubagentState } from './services/multitaskSubagents';
 import { STORAGE_KEYS } from './services/sessionState';
 import type { CopilotRuntimeState } from './services/copilotApi';
 import type { CodexRuntimeState } from './services/codexApi';
@@ -399,22 +400,51 @@ describe('App', () => {
     expect(screen.getAllByRole('button', { name: 'Files' }).length).toBeGreaterThan(0);
   });
 
-  it('offers Symphony as an installable IDE marketplace extension instead of loading it as a primary panel', async () => {
+  it('renders Symphony as a primary isolated-workspace task system while keeping the extension installable', async () => {
     vi.useFakeTimers();
+    const taskState = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentState, JSON.stringify({
+      ...taskState,
+      branches: taskState.branches.map((branch) => branch.branchName.endsWith('/tests-2')
+        ? { ...branch, status: 'ready', progress: 100 }
+        : branch),
+    }));
     render(<App />);
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.queryByLabelText('Symphony')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Symphony'));
+
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    expect(app).toBeInTheDocument();
+    expect(within(app).getByText('Agent Workspaces')).toBeInTheDocument();
+    expect(within(app).getByText('Isolated Workspaces')).toBeInTheDocument();
+    expect(within(app).getByText('Review Gate')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Symphony activity summary' })).toBeInTheDocument();
+    expect(within(app).queryByRole('button', { name: 'agent/research/tests-2 is not ready for merge approval' })).not.toBeInTheDocument();
+    expect(within(app).getByRole('button', { name: 'Send reviewer agent feedback for agent/research/tests-2' })).toBeInTheDocument();
+    fireEvent.click(within(app).getByRole('button', { name: 'Request changes for agent/research/tests-2' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
+    expect(persisted.branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/tests-2')).toMatchObject({
+      status: 'queued',
+      progress: 0,
+    });
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     expect(within(marketplace).getByRole('heading', { name: 'IDE extensions' })).toBeInTheDocument();
-    expect(within(marketplace).getByText('Symphony workflow orchestration')).toBeInTheDocument();
-    expect(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Symphony task board' })).not.toBeInTheDocument();
+    expect(within(marketplace).getByText('Symphony internal task orchestration')).toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Install Symphony internal task orchestration' })).toBeInTheDocument();
   });
 
   it('lists installed extensions in the sidebar and renders the marketplace in the active area', async () => {
@@ -445,7 +475,7 @@ describe('App', () => {
     expect(within(marketplace).getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
     expect(within(marketplace).getByText('DESIGN.md agent guidance')).toBeInTheDocument();
     expect(within(marketplace).getByText('OpenDesign DESIGN.md Studio')).toBeInTheDocument();
-    expect(within(marketplace).getByText('Symphony workflow orchestration')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Symphony internal task orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Workflow canvas orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Artifact context')).toBeInTheDocument();
     expect(within(marketplace).getByText('Artifact worktree explorer')).toBeInTheDocument();
@@ -5200,31 +5230,24 @@ styles:
     expect(screen.getByLabelText('Workspace tree')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '2', altKey: true });
-    expect(screen.getByRole('region', { name: 'PR review understanding' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Symphony task management system' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '3', altKey: true });
     expect(screen.getByRole('region', { name: 'Repository wiki' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '4', altKey: true });
-    expect(screen.queryByRole('region', { name: 'Agent canvases' })).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Multitask subagents' })).toBeInTheDocument();
-
-    fireEvent.keyDown(window, { key: '5', altKey: true });
     expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '6', altKey: true });
+    fireEvent.keyDown(window, { key: '5', altKey: true });
     expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '7', altKey: true });
+    fireEvent.keyDown(window, { key: '6', altKey: true });
     expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '8', altKey: true });
+    fireEvent.keyDown(window, { key: '7', altKey: true });
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
 
-    fireEvent.keyDown(window, { key: '9', altKey: true });
-    expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    fireEvent.keyDown(window, { key: '8', altKey: true });
     expect(screen.getByRole('heading', { name: 'Account' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '1', altKey: true });

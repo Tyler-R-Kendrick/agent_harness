@@ -44,6 +44,7 @@ export const STORAGE_KEYS = {
   workspaceSkillPolicyState: 'agent-browser.workspace-skill-policy-state',
   browserAgentRunSdkState: 'agent-browser.browser-agent-run-sdk-state',
   multitaskSubagentState: 'agent-browser.multitask-subagent-state',
+  symphonyAutopilotSettings: 'agent-browser.symphony-autopilot-settings',
   sharedSessionControlState: 'agent-browser.shared-session-control-state',
   sharedAgentRegistryState: 'agent-browser.shared-agent-registry-state',
   partnerAgentControlPlaneSettings: 'agent-browser.partner-agent-control-plane-settings',

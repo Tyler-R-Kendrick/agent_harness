@@ -83,7 +83,7 @@ describe('default extensions', () => {
       'AGENTS.md workspace instructions',
       'DESIGN.md agent guidance',
       'OpenDesign DESIGN.md Studio',
-      'Symphony workflow orchestration',
+      'Symphony internal task orchestration',
       'Workflow canvas orchestration',
       'Artifact context',
       'Artifact worktree explorer',

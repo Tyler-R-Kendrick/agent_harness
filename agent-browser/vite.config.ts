@@ -107,6 +107,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../ext/runtime/symphony/src/index.ts'),
       },
       {
+        find: '@agent-harness/workgraph',
+        replacement: path.resolve(__dirname, '../lib/workgraph/src/index.ts'),
+      },
+      {
         find: '@agent-harness/ext-workflow-canvas',
         replacement: path.resolve(__dirname, '../ext/ide/workflow-canvas/src/index.ts'),
       },

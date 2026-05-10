@@ -146,7 +146,8 @@ describe('stagedToolPipeline', () => {
     });
     expect(onAgentHandoff.mock.calls.map(([from, to]) => `${from}->${to}`)).toEqual([
       'chat-agent->orchestrator',
-      'orchestrator->logact',
+      'orchestrator->symphony-orchestrator',
+      'symphony-orchestrator->logact',
       'logact->tool-agent',
       'logact->student-driver',
       'student-driver->voter:teacher',
@@ -168,7 +169,7 @@ describe('stagedToolPipeline', () => {
     expect(events.at(-1)).toBe('done:done');
     expect(onAgentHandoff.mock.calls.map(([from, to]) => `${from}->${to}`)).not.toContain('judge-decider->executor-agent');
     const busActors = onBusEntry.mock.calls.map(([entry]) => entry.actorId ?? entry.actor);
-    expect(busActors).toEqual(expect.arrayContaining(['tool-agent', 'student-driver', 'voter:teacher']));
+    expect(busActors).toEqual(expect.arrayContaining(['symphony-orchestrator', 'tool-agent', 'student-driver', 'voter:teacher']));
     expect(busActors).not.toContain('logact');
     const toolPolicyEntry = onBusEntry.mock.calls.find(([entry]) => (
       entry.actorId === 'tool-agent'
@@ -182,6 +183,61 @@ describe('stagedToolPipeline', () => {
     });
     expect(runToolAgentMock).toHaveBeenCalledTimes(1);
     expect(runToolAgentMock.mock.calls[0][0].tools.read_session_file).toBeDefined();
+  });
+
+  it('routes Symphony workflow strategy through AgentBus policy, voters, and decider phases', async () => {
+    runToolAgentMock.mockResolvedValue({ text: 'done', steps: 1 });
+    const model = makeStreamingModel();
+    const onStageStart = vi.fn();
+    const onAgentHandoff = vi.fn();
+    const onBusEntry = vi.fn();
+    const onVoterStep = vi.fn();
+
+    await runStagedToolPipeline({
+      model: model as never,
+      tools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      toolDescriptors: [toolDescriptors[1]],
+      instructions: 'You are a workspace agent.',
+      messages: [{
+        role: 'user',
+        content: 'Use Symphony to split frontend and review work into isolated worktree branches, then stop at needs review before merge.',
+      }],
+      workspaceName: 'Research',
+      capabilities: { contextWindow: 2048, maxOutputTokens: 256 },
+    }, { onStageStart, onAgentHandoff, onBusEntry, onVoterStep });
+
+    expect(onStageStart.mock.calls.map(([stage]) => stage)).toContain('symphony');
+    expect(onStageStart.mock.calls.find(([stage]) => stage === 'symphony')?.[2]).toMatchObject({
+      agentId: 'symphony-orchestrator',
+      agentLabel: 'Symphony Orchestrator',
+    });
+    expect(onAgentHandoff.mock.calls.map(([from, to]) => `${from}->${to}`)).toEqual(expect.arrayContaining([
+      'orchestrator->symphony-orchestrator',
+      'symphony-orchestrator->logact',
+      'student-driver->voter:teacher',
+      'judge-decider->adversary-driver',
+    ]));
+
+    const entries = onBusEntry.mock.calls.map(([entry]) => entry);
+    const workflowPolicy = entries.find((entry) => (
+      entry.actorId === 'symphony-orchestrator'
+      && entry.payloadType === 'Policy'
+      && entry.detail.includes('symphony-workflow-strategy')
+    ));
+    expect(workflowPolicy?.detail).toContain('isolated worktree');
+    expect(workflowPolicy?.detail).toContain('review gate');
+    expect(workflowPolicy?.detail).toContain('Human Review');
+    expect(entries.some((entry) => entry.actorId === 'voter:teacher' && entry.payloadType === 'Vote')).toBe(true);
+    expect(entries.some((entry) => entry.actorId === 'judge-decider' && entry.payloadType === 'Commit')).toBe(true);
+    expect(onVoterStep.mock.calls.map(([step]) => step.voterId)).toContain('voter:teacher');
+
+    const teacherVote = entries.find((entry) => (
+      entry.actorId === 'voter:teacher'
+      && entry.payloadType === 'Vote'
+      && entry.detail.includes('Symphony task intent durable')
+    ));
+    expect(teacherVote?.detail).toContain('Symphony task intent durable');
+    expect(workflowPolicy?.detail).toContain('AgentBus');
   });
 
   it('runs each parallel orchestrator task as its own LogAct flow using the enriched task prompt', async () => {
@@ -386,6 +442,7 @@ describe('stagedToolPipeline', () => {
     expect(payloadTypes).toEqual(expect.arrayContaining(['Mail', 'InfIn', 'InfOut', 'Intent', 'Vote', 'Commit', 'Result']));
     expect(onBusEntry.mock.calls.some(([entry]) => entry.payloadType === 'Result' && entry.detail === 'remote tool result')).toBe(true);
     expect(onBusEntry.mock.calls.map(([entry]) => entry.actorId ?? entry.actor)).toEqual(expect.arrayContaining([
+      'symphony-orchestrator',
       'tool-agent',
       'student-driver',
       'voter:teacher',
