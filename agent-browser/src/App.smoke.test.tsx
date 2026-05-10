@@ -589,7 +589,11 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
 
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     expect(screen.getByText('Requires DESIGN.md agent guidance')).toBeInTheDocument();
+    expect(marketplace.querySelector('.marketplace-card')).toBeNull();
+    expect(marketplace.querySelector('.badge')).toBeNull();
+    expect(marketplace.querySelector('.chip')).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
       await Promise.resolve();
@@ -599,6 +603,9 @@ describe('App smoke coverage', () => {
     expect(installedSidebar).toHaveTextContent('DESIGN.md agent guidance');
     expect(installedSidebar).toHaveTextContent('OpenDesign DESIGN.md Studio');
     expect(installedSidebar).toHaveTextContent('Required by OpenDesign DESIGN.md Studio');
+    expect(installedSidebar.querySelector('.marketplace-card')).toBeNull();
+    expect(installedSidebar.querySelector('.badge')).toBeNull();
+    expect(installedSidebar.querySelector('.chip')).toBeNull();
   });
 
   it('opens marketplace items as README-style extension details', async () => {
@@ -648,28 +655,77 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' }));
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact worktree explorer' }));
+    await act(async () => {
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony workflow orchestration' }));
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact worktree explorer' }));
+    });
 
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }));
-    expect(screen.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }));
+    });
+    const studio = screen.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' });
+    expect(within(studio).getByRole('heading', { name: 'OpenDesign Studio' })).toBeInTheDocument();
+    expect(within(studio).getByLabelText('OpenDesign design prompt')).toHaveValue(
+      'Build a sleek AI-native DESIGN.md studio for composing product design systems.',
+    );
+    await act(async () => {
+      fireEvent.click(within(studio).getByRole('tab', { name: 'Show token review' }));
+    });
+    const review = screen.getByRole('region', { name: 'OpenDesign token review' });
+    expect(within(review).getByLabelText('OpenDesign approval summary')).toHaveTextContent('0/6 approved');
+    expect(within(review).getByLabelText('OpenDesign approval composition sample')).toHaveTextContent('Agent Browser approval composition');
+    expect(within(review).getByLabelText('Display type visual sample')).toHaveTextContent('Aa');
+    expect(within(review).getByLabelText('Action components visual sample')).toHaveTextContent('Run');
+    for (const approveButton of within(review).getAllByRole('button', { name: /^Approve / })) {
+      await act(async () => {
+        fireEvent.click(approveButton);
+      });
+    }
+    expect(within(review).getByLabelText('OpenDesign approval summary')).toHaveTextContent('6/6 approved');
+    await act(async () => {
+      fireEvent.click(within(review).getByLabelText('Publish approved OpenDesign system'));
+      fireEvent.click(within(review).getByLabelText('Use OpenDesign system as workspace default'));
+    });
+    expect(within(review).getByLabelText('Publish approved OpenDesign system')).toBeChecked();
+    expect(within(review).getByLabelText('Use OpenDesign system as workspace default')).toBeChecked();
+    await act(async () => {
+      fireEvent.click(within(studio).getByRole('button', { name: 'Compile DESIGN.md' }));
+    });
+    expect(screen.getByRole('region', { name: 'OpenDesign generated files' })).toHaveTextContent('DESIGN.md');
+    expect(screen.getByRole('region', { name: 'OpenDesign generated files' })).toHaveTextContent('design/open-design/research.json');
+    expect(screen.getByRole('region', { name: 'OpenDesign generated files' })).toHaveTextContent('design/open-design/token-review.json');
+    expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('## Source Inventory');
+    expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('## Token Review And Approval');
+    expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('status: published');
+    await act(async () => {
+      fireEvent.click(within(studio).getByRole('button', { name: 'Run design critique' }));
+    });
+    expect(screen.getByRole('region', { name: 'OpenDesign critique' })).toHaveTextContent('Gate pass');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Symphony workflow orchestration extension' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Symphony workflow orchestration extension' }));
+    });
     expect(screen.getByRole('region', { name: 'Symphony workflow orchestration feature pane' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));
+    });
     expect(screen.getByRole('region', { name: 'Workflow canvas orchestration feature pane' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Artifact worktree explorer extension' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Artifact worktree explorer extension' }));
+    });
     expect(screen.getByRole('region', { name: 'Artifact worktree explorer feature pane' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Models'));
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Models'));
+    });
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Artifact worktree explorer feature pane' })).not.toBeInTheDocument();
   });
