@@ -205,7 +205,7 @@ export function buildSharedAgentCatalog(state: SharedAgentRegistryState): Shared
     totalUsageCount: state.trackUsageAnalytics ? state.usage.length : 0,
     rows,
     warnings,
-    latestAuditEntry: state.showAuditTrail ? state.audit[0] ?? null : null,
+    latestAuditEntry: state.showAuditTrail ? cloneAuditEntry(state.audit[0]) : null,
   };
 }
 
@@ -357,6 +357,10 @@ function buildAgentWarnings(agent: SharedAgentDefinition): string[] {
 
 function summarizeList(entries: string[]): string {
   return entries.join(', ') || 'none';
+}
+
+function cloneAuditEntry(entry: SharedAgentAuditEntry | undefined): SharedAgentAuditEntry | null {
+  return entry ? { ...entry } : null;
 }
 
 function cloneRegistryState(state: SharedAgentRegistryState): SharedAgentRegistryState {
