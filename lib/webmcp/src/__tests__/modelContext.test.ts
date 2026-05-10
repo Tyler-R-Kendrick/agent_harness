@@ -87,17 +87,22 @@ describe('ModelContext', () => {
     );
   });
 
-  it('registers a tool with empty annotations', () => {
+  it('treats empty tool annotations as the default non-read-only contract', () => {
     const modelContext = new ModelContext();
 
-    expect(() => {
-      modelContext.registerTool({
-        name: 'empty-annotations',
-        description: 'echo input',
-        execute: (input) => input,
-        annotations: {},
-      });
-    }).not.toThrow();
+    modelContext.registerTool({
+      name: 'empty-annotations',
+      description: 'echo input',
+      execute: (input) => input,
+      annotations: {},
+    });
+
+    expect(getModelContextRegistry(modelContext).get('empty-annotations')).toEqual(
+      expect.objectContaining({
+        inputSchema: '',
+        readOnlyHint: false,
+      }),
+    );
   });
 
   it('accepts schemas whose toJSON returns a string value', () => {
