@@ -1,8 +1,8 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-09
-Baseline: `.features/Summary.md` refreshed from the 2026-05-08 twenty-four-harness corpus.
-Diff type: additive update after Roo Code research
+Updated: 2026-05-10
+Baseline: `.features/Summary.md` refreshed from the 2026-05-09 twenty-five-harness corpus.
+Diff type: additive update after n8n research
 
 ## Net new normalized features
 
@@ -115,6 +115,40 @@ Diff type: additive update after Roo Code research
 - One-shot instruction for an LLM:
   - Implement reviewer-feedback learning for `agent-browser` so accepted and rejected PR comments can be captured as structured lessons, reviewed and approved by operators, replayed during planning and self-review, versioned per workspace or project, and safely disabled or expired when they become stale or overfit.
 
+### Added: Deterministic workflow graphs around agent steps
+- Why now: n8n is showing a strong harness pattern where the agent is only one node in a broader operational graph that also includes deterministic steps, approvals, reusable subflows, evaluations, and deployment-safe publishing.
+- Research delta:
+  - AI Workflow Builder turns natural-language intent into a workflow and exposes real-time build phases instead of only returning a chat answer
+  - the AI Agent Tool node lets one agent delegate to specialized child agents as tools, including multi-tier trees and fallback models
+  - the Call n8n Workflow Tool turns whole workflows into reusable tools and supports AI-filled parameters through typed fields and `$fromAI()`
+  - n8n pauses workflows for per-tool human approval and now supports Chat actions that can message a user and wait for a response inside the same execution
+  - built-in light and metric-based evaluations plus versioned publishing, rollback, and concurrency protection make the workflow graph itself a governed operational artifact
+
+### Expanded: Embeddable agent runtimes and protocol surfaces
+- Why now: n8n's April 29, 2026 MCP update moved the product from "external agents can trigger workflows" to "external agents can create, edit, validate, test, and rerun workflows inside the instance."
+- Research delta:
+  - instance-level MCP access now exposes workflow and data-table management in addition to execution
+  - n8n positions the MCP server as first-party, built in, and available across Cloud, Enterprise, and Community Edition
+  - the workflow-building loop now commonly validates, executes, reads errors, fixes, and retries without leaving the client conversation
+
+### Expanded: Evaluation-native observability and live scoring
+- Why now: n8n has one of the clearest productized eval surfaces for operational AI workflows, with explicit pre-deployment and post-deployment modes.
+- Research delta:
+  - evaluation is dataset-backed from the start, not only trace-backed after deployment
+  - n8n explicitly frames evaluations as the way to compare models and prompts and to preserve confidence across edge cases
+  - metric-based evaluation turns workflow quality into an ongoing measurable surface rather than a manual eyeballing exercise
+
+### Added: Add workflow-graph orchestration with deterministic, agent, and human-review steps
+- Why now: `agent-browser` already has automations, browser evidence, tools, and agent routing, but it still lacks a first-class workflow graph that can mix deterministic control flow with agent reasoning, pause states, approvals, and release-safe lifecycle controls.
+- Linear issue:
+  - `TK-59`
+- Linear issue title:
+  - `Add workflow-graph orchestration with deterministic, agent, and human-review steps`
+- Suggested problem statement:
+  - `agent-browser` can run chat agents and automations, but it does not yet provide a workflow-native orchestration layer where deterministic steps, specialized agent nodes, human checkpoints, reusable subflows, evaluations, and publish-or-rollback controls can be composed into one governed execution graph.
+- One-shot instruction for an LLM:
+  - Implement a workflow-graph orchestration system for `agent-browser` that lets users compose deterministic steps, agent nodes, reusable workflow-tools, human approval or clarification checkpoints, dataset-backed evaluation nodes, and versioned publish or rollback controls, then run that graph locally or remotely with inspectable state, retry semantics, and linked browser/code evidence.
+
 ## How to use this file
 
 1. Treat each `Added:` section as a candidate Linear epic or feature.
@@ -124,4 +158,4 @@ Diff type: additive update after Roo Code research
 
 ## Recommended next Linear batch
 
-1. `Add mode-scoped execution profiles with sticky task inheritance`
+1. `Add workflow-graph orchestration with deterministic, agent, and human-review steps`

@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-09
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-10
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
@@ -57,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture, Roo Code project/global MCP installs plus team-enforced MCP policy.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, n8n's instance-level MCP server plus workflow-tool composition and 500+ integrations, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture, Roo Code project/global MCP installs plus team-enforced MCP policy.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -127,7 +127,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 18. Embeddable agent runtimes and protocol surfaces
 - Common pattern: some harnesses are no longer just end-user apps and are instead exposing stable runtime layers other products can embed directly.
-- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, Gemini CLI headless mode plus JSON and streaming automation surfaces, Goose desktop plus CLI plus API plus ACP server and ACP provider bridge, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
+- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, Gemini CLI headless mode plus JSON and streaming automation surfaces, Goose desktop plus CLI plus API plus ACP server and ACP provider bridge, n8n's built-in MCP server that can search, test, create, and edit workflows and data tables from external clients, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
 - Why it matters: product teams increasingly want the same agent core available in the terminal, in the browser, in IDEs, and inside orchestrators without re-implementing session, transport, and tool behavior each time.
 - One-shot build instruction:
   - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
@@ -162,7 +162,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 23. Evaluation-native observability and live scoring
 - Common pattern: newer agent platforms are starting to fuse traces, quality scoring, and experiments into the same operational surface instead of treating evals as an offline research-only activity.
-- Seen in: Mastra Observability plus Scorers plus Studio experiments most explicitly; OpenAI Symphony proof-of-work packets and operator telemetry are adjacent from the orchestration side.
+- Seen in: Mastra Observability plus Scorers plus Studio experiments most explicitly; n8n light and metric-based evaluations add dataset-backed pre-deployment and post-deployment workflow scoring; OpenAI Symphony proof-of-work packets and operator telemetry are adjacent from the orchestration side.
 - Why it matters: once agents run continuously, teams need to see not only what happened, but whether quality, safety, and tool behavior are drifting over time.
 - One-shot build instruction:
   - Add evaluation-native observability for browser agents with trace capture, live scorer hooks, experiment datasets, issue-linked regression views, and operator dashboards that connect run evidence to quality signals.
@@ -265,6 +265,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add execution profiles for browser-agent modes with explicit provider, model, thinking-budget, rate-limit, and tool-policy settings; let users bind profiles to agent roles, and keep a run's chosen profile sticky across resumes, child runs, worktrees, and remote execution unless a human explicitly changes it.
 
+### 38. Deterministic workflow graphs around agent steps
+- Common pattern: some harnesses are treating agents as nodes inside versioned workflows, with explicit deterministic steps, pause states, approvals, evaluations, and deployment-safe publishing around the agent core.
+- Seen in: n8n AI Workflow Builder, AI Agent and Chat nodes, workflow-as-tool composition, per-tool human review, dataset-backed evaluations, and versioned publishing with rollback and concurrency protection.
+- Why it matters: agent reliability improves when reasoning is embedded inside an inspectable workflow graph instead of being forced to carry branching logic, approvals, and recovery policy entirely inside the prompt.
+- One-shot build instruction:
+  - Add a workflow-graph orchestration layer for browser-agent work that composes deterministic steps, agent nodes, reusable workflow-tools, human approval checkpoints, evaluation nodes, and versioned publish or rollback semantics so long-running automations can be built, debugged, and governed as operational systems.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -298,3 +305,4 @@ Method: current-product research from first-party product pages, help centers, d
 29. Add AI adoption scoring alongside browser-agent usage analytics.
 30. Add reviewer-feedback learning loops that refine future agent runs.
 31. Bind model and provider profiles to agent roles, and keep them sticky across resumes and child runs.
+32. Add workflow-graph orchestration that mixes deterministic steps, agent nodes, approvals, and versioned releases.
