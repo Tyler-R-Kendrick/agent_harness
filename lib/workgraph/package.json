@@ -1,0 +1,36 @@
+{
+  "name": "@agent-harness/workgraph",
+  "version": "0.1.0",
+  "description": "Local-first browser work graph for Agent Harness task orchestration.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "README.md",
+    "src/**/*.{ts,tsx}",
+    "!src/**/*.test.ts",
+    "!src/__tests__/**"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "dependencies": {
+    "@agent-harness/browser-durable-tasks": "0.1.0",
+    "dexie": "^4.2.1",
+    "zod": "^4.1.13"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "react": "^18.2.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}

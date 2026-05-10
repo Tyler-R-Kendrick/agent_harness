@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "agent-harness.ext.symphony",
-  "name": "Symphony workflow orchestration",
+  "name": "Symphony internal task orchestration",
   "version": "0.1.0",
-  "description": "Loads WORKFLOW.md assets and optional Symphony orchestration examples as a runtime extension.",
+  "description": "Loads WORKFLOW.md assets and exposes Symphony's internal durable task orchestration runtime.",
   "entrypoint": {
     "module": "./src/index.ts",
     "export": "createSymphonyPlugin"
@@ -20,8 +20,13 @@
     },
     {
       "kind": "asset",
+      "id": "symphony.task-manager",
+      "description": "Provides the internal durable task manager used by Symphony render-area orchestration."
+    },
+    {
+      "kind": "asset",
       "id": "symphony.board",
-      "description": "Provides the extracted Symphony board model and example Agent Browser surface."
+      "description": "Provides the extracted Symphony board compatibility model and example Agent Browser surface."
     }
   ],
   "events": [
@@ -35,7 +40,7 @@
     {
       "kind": "example",
       "path": "./examples/agent-browser-symphony",
-      "description": "Former Agent Browser Symphony task-board surface."
+      "description": "Example Symphony task-management surface."
     }
   ],
   "permissions": [

@@ -20,6 +20,7 @@ import {
 import type { BusEntryStep, ValidationContract, VoterStep } from '../types';
 import type { ToolDescriptor } from '../tools';
 import type { ToolPlan } from '../tool-agents/tool-agent';
+import type { SymphonyWorkflowStrategy } from './symphonyWorkflowStrategy';
 
 export interface LogActToolPolicy {
   allowedToolIds: string[];
@@ -61,6 +62,7 @@ export interface RunLogActActorWorkflowOptions {
   maxExecutionAttempts?: number;
   verificationCriteria?: string[];
   validationContract?: ValidationContract;
+  workflowStrategy?: SymphonyWorkflowStrategy;
   adversaryToolReviewSettings?: AdversaryToolReviewSettings;
   onExecutorStart?: (summary: string) => void;
   selectTools?: (context: {
@@ -149,6 +151,14 @@ const ACTOR_META: Record<string, AgentBusPayloadMeta> = {
     branchId: 'agent:tool-agent',
     agentLabel: 'Tool Agent',
     modelProvider: 'logact',
+  },
+  'symphony-orchestrator': {
+    actorId: 'symphony-orchestrator',
+    actorRole: 'orchestrator',
+    parentActorId: 'orchestrator',
+    branchId: 'agent:symphony-orchestrator',
+    agentLabel: 'Symphony Orchestrator',
+    modelProvider: 'deterministic',
   },
   'student-driver': {
     actorId: 'student-driver',
@@ -355,6 +365,9 @@ export async function runLogActActorWorkflow(
   });
   const validationCriteria = buildValidationCriteria(options.verificationCriteria ?? [], validationContract);
   await appendValidationContract(bus, validationContract, validationCriteria);
+  if (options.workflowStrategy) {
+    await appendSymphonyWorkflowStrategy(bus, options.workflowStrategy);
+  }
 
   const maxExecutionAttempts = Math.max(1, Math.floor(options.maxExecutionAttempts ?? 3));
   let nextPassIndex = 1;
@@ -673,6 +686,25 @@ export async function runLogActActorWorkflow(
     }),
   });
   return { text, steps: lastExecutionSteps, failed: true, error: lastExecutionError ?? text };
+}
+
+async function appendSymphonyWorkflowStrategy(
+  bus: IAgentBus,
+  strategy: SymphonyWorkflowStrategy,
+): Promise<void> {
+  await bus.append({
+    type: PayloadType.Policy,
+    target: 'symphony.workflow.strategy',
+    value: {
+      type: strategy.id,
+      workspaceName: strategy.workspaceName,
+      executionMode: strategy.executionMode,
+      taskStore: strategy.taskStore,
+      phases: strategy.phases,
+      verificationCriteria: strategy.verificationCriteria,
+    },
+    meta: actorMeta('symphony-orchestrator'),
+  });
 }
 
 function verificationFailureUserText(

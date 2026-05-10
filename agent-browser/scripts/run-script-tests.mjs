@@ -59,8 +59,12 @@ async function main() {
   assert.match(visualSmokeScript, /navigationTimeoutMs\s*=\s*900_000/);
   assert.match(visualSmokeScript, /shellTimeoutMs\s*=\s*30_000/);
   assert.match(visualSmokeScript, /\*\*\/api\/cursor\/status/);
-  assert.match(visualSmokeScript, /PR review understanding/);
-  assert.match(visualSmokeScript, /TK-47 review-native PR understanding/);
+  assert.match(visualSmokeScript, /Symphony task management system/);
+  assert.match(visualSmokeScript, /Review Gate/);
+  assert.match(visualSmokeScript, /Agent Workspaces/);
+  assert.match(visualSmokeScript, /No active Symphony task/);
+  assert.match(visualSmokeScript, /Start Symphony task/);
+  assert.match(visualSmokeScript, /agent-browser-symphony-system\.png/);
   assert.match(visualSmokeScript, /Infinite session canvas/);
   assert.match(visualSmokeScript, /Session summary widget/);
   assert.match(visualSmokeScript, /Knowledge widget/);

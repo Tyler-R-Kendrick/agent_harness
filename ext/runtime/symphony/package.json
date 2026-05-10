@@ -1,7 +1,7 @@
 {
   "name": "@agent-harness/ext-symphony",
   "version": "0.1.0",
-  "description": "Optional Agent Harness plugin for Symphony workflow orchestration.",
+  "description": "Optional Agent Harness plugin for Symphony internal durable task orchestration.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -27,6 +27,10 @@
   },
   "peerDependencies": {
     "harness-core": "0.1.0"
+  },
+  "dependencies": {
+    "@agent-harness/task-manager": "0.1.0",
+    "@agent-harness/workgraph": "0.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.5",

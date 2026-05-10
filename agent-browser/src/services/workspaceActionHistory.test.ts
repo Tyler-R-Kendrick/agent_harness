@@ -150,4 +150,44 @@ describe('workspace action history', () => {
       afterSnapshot: nextSnapshot,
     });
   });
+
+  it('records Symphony event and session summaries as rolled-up History nodes', () => {
+    const beforeSnapshot = {
+      ...baseSnapshot,
+      activePanel: 'symphony',
+      symphonyEventSummaries: ['Symphony event: idle - No active Symphony task.'],
+      symphonySessionSummaries: [],
+    };
+    const afterSnapshot = {
+      ...beforeSnapshot,
+      symphonyEventSummaries: [
+        'Symphony event: workflow loaded - Loaded WORKFLOW.md and applied Symphony runtime defaults.',
+      ],
+      symphonySessionSummaries: [
+        'Symphony session: SYM-001 agent/research/frontend-1 PreparingWorkspace pending',
+      ],
+    };
+
+    const state = recordWorkspaceActionTransition(
+      DEFAULT_WORKSPACE_ACTION_HISTORY_STATE,
+      beforeSnapshot,
+      afterSnapshot,
+      new Date('2026-05-09T18:04:00.000Z'),
+    );
+    const timeline = buildWorkspaceActionTimeline(state, 'ws-research');
+
+    expect(state.actions[0]).toMatchObject({
+      label: 'Updated Symphony',
+      changedSlices: ['symphonyEvents', 'symphonySessions'],
+    });
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]).toMatchObject({
+      title: 'Symphony activity: Updated Symphony',
+      summary: '1 Symphony update rolled up for Research.',
+    });
+    expect(timeline[0].detailRows.map((row) => row.label)).toEqual([
+      'Symphony event: workflow loaded - Loaded WORKFLOW.md and applied Symphony runtime defaults.',
+      'Symphony session: SYM-001 agent/research/frontend-1 PreparingWorkspace pending',
+    ]);
+  });
 });

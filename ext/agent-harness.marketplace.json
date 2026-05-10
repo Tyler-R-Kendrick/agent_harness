@@ -89,9 +89,9 @@
     },
     {
       "id": "agent-harness.ext.symphony",
-      "name": "Symphony workflow orchestration",
+      "name": "Symphony internal task orchestration",
       "version": "0.1.0",
-      "description": "Loads WORKFLOW.md assets and optional Symphony orchestration examples while exposing Symphony as an IDE extension.",
+      "description": "Exposes Symphony as an IDE extension backed by the internal durable task manager.",
       "manifest": "./runtime/symphony/agent-harness.plugin.json",
       "source": {
         "type": "local",
@@ -104,7 +104,7 @@
         "runtimeEvents": ["llm", "agent", "tool"],
         "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.symphony.enabled"
       },
-      "keywords": ["symphony", "workflow-md", "orchestration"]
+      "keywords": ["symphony", "workflow-md", "orchestration", "task-manager"]
     },
     {
       "id": "agent-harness.ext.workflow-canvas",

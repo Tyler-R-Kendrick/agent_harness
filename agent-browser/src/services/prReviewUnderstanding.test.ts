@@ -8,9 +8,9 @@ import {
 describe('prReviewUnderstanding', () => {
   it('groups changed files into semantic review sections with intent summaries', () => {
     const report = buildPullRequestReview({
-      title: 'Add review-native PR understanding',
+      title: 'Add Symphony merge review',
       author: 'agent-browser',
-      summary: 'Adds a Review sidebar that explains grouped changes and validation evidence.',
+      summary: 'Adds a Symphony merge gate that explains grouped changes and validation evidence.',
       changedFiles: [
         'agent-browser/src/chat-agents/Debugger/index.ts',
         'agent-browser/src/services/prReviewUnderstanding.ts',
@@ -35,7 +35,7 @@ describe('prReviewUnderstanding', () => {
       files: ['agent-browser/src/chat-agents/Debugger/index.ts'],
       riskLevel: 'high',
     });
-    expect(report.summary).toBe('Adds a Review sidebar that explains grouped changes and validation evidence.');
+    expect(report.summary).toBe('Adds a Symphony merge gate that explains grouped changes and validation evidence.');
   });
 
   it('highlights missing validation and sensitive runtime risks', () => {
@@ -87,12 +87,73 @@ describe('prReviewUnderstanding', () => {
     expect(report.risks.find((risk) => risk.title === 'No browser evidence linked')).toBeUndefined();
   });
 
+  it('flags failed validation, durable state, and uncategorized merge files', () => {
+    const report = buildPullRequestReview({
+      title: 'Update workspace session merge state',
+      author: 'agent-browser',
+      summary: 'Keeps session state in sync while merging a generated manifest.',
+      changedFiles: [
+        'agent-browser/src/chat-agents/Debugger/index.ts',
+        'agent-browser/src/App.tsx',
+        'generated/merge-manifest.json',
+      ],
+      validations: [{ label: 'Agent Browser verifier', command: 'npm.cmd run verify:agent-browser', status: 'failed' }],
+      browserEvidence: [{ label: 'Visual smoke', path: 'output/playwright/agent-browser-visual-smoke.png', kind: 'screenshot' }],
+      reviewerComments: [],
+    });
+
+    expect(report.groups.map((group) => group.title)).toEqual([
+      'Agent routing and behavior',
+      'User-facing review surface',
+      'Repository changes',
+    ]);
+    expect(report.groups[0].riskLevel).toBe('high');
+    expect(report.groups[1].riskLevel).toBe('medium');
+    expect(report.risks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Validation failed' }),
+      expect.objectContaining({ title: 'Durable workspace state changed' }),
+    ]));
+  });
+
+  it('flags high-risk groups that have no passing validation', () => {
+    const report = buildPullRequestReview({
+      title: 'Adjust agent routing',
+      author: 'agent-browser',
+      summary: 'Changes the debugger branch handoff.',
+      changedFiles: ['agent-browser/src/chat-agents/Debugger/index.ts'],
+      validations: [],
+      browserEvidence: [],
+      reviewerComments: [],
+    });
+
+    expect(report.risks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'High-risk changes lack passing validation' }),
+    ]));
+  });
+
+  it('normalizes object-shaped changed files and backslash paths', () => {
+    const report = buildPullRequestReview({
+      title: 'Normalize changed file objects',
+      author: 'agent-browser',
+      changedFiles: [{ path: 'agent-browser\\src\\App.css' }],
+      validations: [],
+      browserEvidence: [],
+      reviewerComments: [],
+    });
+
+    expect(report.summary).toBe('Normalize changed file objects');
+    expect(report.groups[0]).toMatchObject({
+      title: 'User-facing review surface',
+      files: ['agent-browser/src/App.css'],
+    });
+  });
+
   it('builds comment-driven follow-up prompts with review context', () => {
     const report = buildPullRequestReview(createSamplePullRequestReviewInput('Agent Browser'));
-    const prompt = buildReviewerFollowUpPrompt(report, 'Check whether screenshot evidence covers the Review panel.');
+    const prompt = buildReviewerFollowUpPrompt(report, 'Check whether screenshot evidence covers the Symphony review surface.');
 
-    expect(prompt).toContain('Review PR: TK-47 review-native PR understanding');
-    expect(prompt).toContain('Check whether screenshot evidence covers the Review panel.');
+    expect(prompt).toContain('Review change set: Symphony branch merge review');
+    expect(prompt).toContain('Check whether screenshot evidence covers the Symphony review surface.');
     expect(prompt).toContain('Highest risks:');
     expect(prompt).toContain('Changed groups:');
   });

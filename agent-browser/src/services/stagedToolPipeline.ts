@@ -25,6 +25,11 @@ import type { CustomEvaluationAgent } from './evaluationAgentRegistry';
 import { resolveConversationSearchContext } from './conversationSearchContext';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from './selfReflection';
 import type { AdversaryToolReviewSettings } from './adversaryToolReview';
+import {
+  appendSymphonyWorkflowContext,
+  createSymphonyWorkflowStrategy,
+  formatSymphonyWorkflowStage,
+} from './symphonyWorkflowStrategy';
 
 const CHAT_OUTPUT_TOKENS = 512;
 
@@ -47,6 +52,7 @@ type StageName =
   | 'router-agent'
   | 'router'
   | 'orchestrator'
+  | 'symphony'
   | 'tool-agent'
   | 'group-select'
   | 'tool-select'
@@ -354,8 +360,14 @@ export async function runStagedToolPipeline(
     : conversationResolution.messages;
   const chatMeta = agentMeta(options.model, 'chat-agent', 'Chat Agent');
   const orchestratorMeta = agentMeta(options.model, 'orchestrator', 'Orchestrator Agent');
+  const symphonyMeta = agentMeta(options.model, 'symphony-orchestrator', 'Symphony Orchestrator');
   const executorMeta = agentMeta(options.model, 'executor', 'Executor Agent');
-  const orchestrated = planOrchestratorTasks(pipelineMessages, options.workspaceName);
+  const planned = planOrchestratorTasks(pipelineMessages, options.workspaceName);
+  const symphonyStrategy = createSymphonyWorkflowStrategy(planned, options.workspaceName);
+  const orchestrated: OrchestratorTaskPlan = {
+    ...planned,
+    tasks: planned.tasks.map((task) => appendSymphonyWorkflowContext(task, symphonyStrategy)),
+  };
 
   emitToolAgentStages(callbacks, 'chat-agent', 'Receiving the user prompt and delegating planning.', chatMeta);
   callbacks.onAgentHandoff?.('chat-agent', 'orchestrator', 'Agent handoff: classify the prompt, decompose the task, and choose registered agents.');
@@ -395,7 +407,13 @@ export async function runStagedToolPipeline(
     },
   };
 
-  callbacks.onAgentHandoff?.('orchestrator', 'logact', 'Agent handoff: submit the tool-aware workflow to the LogAct AgentBus.');
+  callbacks.onAgentHandoff?.(
+    'orchestrator',
+    'symphony-orchestrator',
+    'Agent handoff: wrap the plan in durable Symphony task, isolated worktree, and review-gate policy.',
+  );
+  emitToolAgentStages(callbacks, 'symphony', formatSymphonyWorkflowStage(symphonyStrategy), symphonyMeta);
+  callbacks.onAgentHandoff?.('symphony-orchestrator', 'logact', 'Agent handoff: submit the Symphony workflow to the LogAct AgentBus.');
   callbacks.onStageToken?.('orchestrator', [
     `Execution mode: ${orchestrated.mode}.`,
     `State machine pending: ${orchestrated.tasks.map((task) => task.id).join(', ')}.`,
@@ -421,6 +439,7 @@ export async function runStagedToolPipeline(
         selectedDescriptors: fallbackSelection.selectedDescriptors,
         selectedTools: fallbackSelection.selectedTools,
         verificationCriteria: task.verificationCriteria,
+        workflowStrategy: symphonyStrategy,
         selectTools: async ({ messages }) => {
           const planned = await runToolPlanningAgent({
             model: options.model,
@@ -442,10 +461,12 @@ export async function runStagedToolPipeline(
         adversaryToolReviewSettings: options.adversaryToolReviewSettings,
         customTeacherInstructions: (options.evaluationAgents ?? [])
           .filter((agent) => agent.enabled && agent.kind === 'teacher')
-          .map((agent) => agent.instructions),
+          .map((agent) => agent.instructions)
+          .concat(symphonyStrategy.teacherInstructions),
         customJudgeRubricCriteria: (options.evaluationAgents ?? [])
           .filter((agent) => agent.enabled && agent.kind === 'judge')
-          .flatMap((agent) => agent.rubricCriteria ?? [agent.instructions]),
+          .flatMap((agent) => agent.rubricCriteria ?? [agent.instructions])
+          .concat(symphonyStrategy.judgeRubricCriteria),
         onNegativeRubricTechnique: options.onNegativeRubricTechnique,
         onExecutorStart: beginExecutor,
         execute: (context) => {

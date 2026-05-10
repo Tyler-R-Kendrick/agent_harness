@@ -23,6 +23,7 @@
       "@agent-harness/ext-artifacts": ["../ext/ide/artifacts/src/index.ts"],
       "@agent-harness/ext-design-md": ["../ext/ide/design-md/src/index.ts"],
       "@agent-harness/ext-symphony": ["../ext/runtime/symphony/src/index.ts"],
+      "@agent-harness/workgraph": ["../lib/workgraph/src/index.ts"],
       "@agent-harness/ext-workflow-canvas": ["../ext/ide/workflow-canvas/src/index.ts"],
       "@agent-harness/ext-local-model-connector": ["../ext/provider/local-model-connector/src/index.ts"],
       "@agent-harness/agent-sandbox": ["../lib/agent-sandbox/src/index.ts"],

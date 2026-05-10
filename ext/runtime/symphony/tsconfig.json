@@ -4,11 +4,16 @@
     "lib": ["ES2023", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals"],
+    "baseUrl": ".",
+    "paths": {
+      "@agent-harness/workgraph": ["../../../lib/workgraph/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

@@ -107,7 +107,10 @@ import { COPILOT_RUNTIME_ENABLED } from './config';
 import { LocalModelSettings } from './local-model-extension/LocalModelSettings';
 import { getSandboxFeatureFlags } from './features/flags';
 import { formatOperationDuration } from './features/operation-pane';
-import { PullRequestReviewPanel } from './features/pr-review/PullRequestReviewPanel';
+import {
+  SymphonyActivityPanel,
+  SymphonyWorkspaceApp,
+} from './features/symphony/SymphonyOrchestrationPanel';
 // Unified per-turn process visualization surfaced via InlineProcess and
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
@@ -427,7 +430,6 @@ import {
 } from './services/sessionState';
 import {
   buildPullRequestReview,
-  createSamplePullRequestReviewInput,
 } from './services/prReviewUnderstanding';
 import {
   buildRepoWikiPromptContext,
@@ -453,13 +455,28 @@ import {
 } from './services/workspaceSkillPolicies';
 import {
   DEFAULT_MULTITASK_SUBAGENT_STATE,
+  addMultitaskTask,
   buildMultitaskPromptContext,
+  createMultitaskProject,
   createMultitaskSubagentState,
   isMultitaskSubagentState,
   promoteMultitaskBranch,
-  summarizeMultitaskSubagents,
+  reduceMultitaskBranchLifecycle,
+  requestMultitaskBranchChanges,
+  selectMultitaskProject,
+  selectMultitaskTask,
+  type MultitaskApprovalActor,
+  type MultitaskBranchLifecycleAction,
   type MultitaskSubagentState,
 } from './services/multitaskSubagents';
+import {
+  DEFAULT_SYMPHONY_AUTOPILOT_SETTINGS,
+  buildSymphonyHistoryEventSummaries,
+  buildSymphonyHistorySessionSummaries,
+  createSymphonyRuntimeSnapshot,
+  isSymphonyAutopilotSettings,
+  type SymphonyAutopilotSettings,
+} from './services/symphonyRuntime';
 import {
   DEFAULT_CONVERSATION_BRANCHING_STATE,
   buildConversationBranchPromptContext,
@@ -654,8 +671,8 @@ import { installModelContext, ModelContext } from 'webmcp';
 
 type ToastState = { msg: string; type: 'info' | 'success' | 'error' | 'warning' } | null;
 type ClipboardEntry = { id: string; text: string; label: string; timestamp: number };
-type SidebarPanel = 'workspaces' | 'review' | 'wiki' | 'multitask' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
-type RepoWikiView = 'pages' | 'graph' | 'memory';
+type SidebarPanel = 'workspaces' | 'symphony' | 'wiki' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
+type RepoWikiView = 'pages' | 'graph' | 'memory' | 'chat' | 'sources';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
@@ -804,9 +821,8 @@ const PANEL_MIN_HEIGHT_PX = 240;
 const INITIAL_WORKSPACE_IDS = ['ws-research', 'ws-build'] as const;
 const PRIMARY_NAV = [
   ['workspaces', 'layers', 'Projects'],
-  ['review', 'gitPullRequest', 'Review'],
+  ['symphony', 'share', 'Symphony'],
   ['wiki', 'bookmark', 'Wiki'],
-  ['multitask', 'share', 'Multitask'],
   ['history', 'clock', 'History'],
   ['extensions', 'puzzle', 'Extensions'],
   ['models', 'cpu', 'Models'],
@@ -815,12 +831,11 @@ const SECONDARY_NAV = [
   ['settings', 'settings', 'Settings'],
   ['account', 'user', 'Account'],
 ] as const;
-const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
+const PANEL_SHORTCUT_ORDER: SidebarPanel[] = ['workspaces', 'symphony', 'wiki', 'history', 'extensions', 'models', 'settings', 'account'];
 const SIDEBAR_PANEL_META: Record<SidebarPanel, { label: string; icon: keyof typeof icons }> = {
   workspaces: { label: 'Projects', icon: 'layers' },
-  review: { label: 'Review', icon: 'gitPullRequest' },
+  symphony: { label: 'Symphony', icon: 'share' },
   wiki: { label: 'Wiki', icon: 'bookmark' },
-  multitask: { label: 'Multitask', icon: 'share' },
   history: { label: 'History', icon: 'clock' },
   extensions: { label: 'Extensions', icon: 'puzzle' },
   models: { label: 'Models', icon: 'cpu' },
@@ -2640,7 +2655,7 @@ function buildPartnerAgentModelRef(
 
 function isMultitaskSubagentRequest(text: string): boolean {
   const lowered = text.toLowerCase();
-  return /(multitask|subagents?|sub-agents?|parallel|worktrees?|branch isolation|delegate)/.test(lowered)
+  return /(symphony|multitask|subagents?|sub-agents?|parallel|worktrees?|branch isolation|delegate)/.test(lowered)
     && /(split|parallel|delegate|branch|worktree|isolate|compare|promote)/.test(lowered);
 }
 
@@ -3997,7 +4012,7 @@ function ChatPanel({
       }
 
       const controller = new AbortController();
-      type PlanningStageName = 'chat-agent' | 'planner' | 'router-agent' | 'router' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent' | 'orchestrator' | 'tool-agent' | 'group-select' | 'tool-select' | 'logact' | 'voter-ensemble' | 'agent-bus' | 'executor' | 'chat';
+      type PlanningStageName = 'chat-agent' | 'planner' | 'router-agent' | 'router' | 'coordinator' | 'breakdown-agent' | 'assignment-agent' | 'validation-agent' | 'orchestrator' | 'symphony' | 'tool-agent' | 'group-select' | 'tool-select' | 'logact' | 'voter-ensemble' | 'agent-bus' | 'executor' | 'chat';
       type PlanningStageLayout = {
         parentStage?: PlanningStageName;
         lane?: 'sequential' | 'parallel';
@@ -4027,6 +4042,7 @@ function ChatPanel({
         'router-agent': 'router-agent',
         router: 'router-agent',
         orchestrator: 'orchestrator',
+        symphony: 'symphony-orchestrator',
         'tool-agent': 'tool-agent',
         'group-select': 'tool-agent',
         'tool-select': 'tool-agent',
@@ -4191,6 +4207,10 @@ function ChatPanel({
           title: 'Orchestrator',
           body: 'Choosing registered agents for the prepared tasks.',
         },
+        symphony: {
+          title: 'Symphony workflow',
+          body: 'Applying durable task, isolated worktree, AgentBus review, and merge-approval policy.',
+        },
         'tool-agent': {
           title: 'Tool agent',
           body: 'Assigning active workspace tools to selected agents.',
@@ -4218,6 +4238,7 @@ function ChatPanel({
         'assignment-agent': { parentStage: 'coordinator', lane: 'parallel' },
         'validation-agent': { parentStage: 'coordinator', lane: 'parallel' },
         orchestrator: { parentStage: 'router-agent' },
+        symphony: { parentStage: 'orchestrator' },
         'tool-agent': { parentStage: 'orchestrator' },
         'group-select': { parentStage: 'tool-agent' },
         'tool-select': { parentStage: 'group-select' },
@@ -4246,6 +4267,7 @@ function ChatPanel({
         'assignment-agent': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 120_000 },
         'validation-agent': { hardMs: 210_000, thinkingIdleMs: 150_000, streamingIdleMs: 120_000 },
         orchestrator: { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
+        symphony: { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
         'tool-agent': { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
         logact: { hardMs: 180_000, thinkingIdleMs: 135_000, streamingIdleMs: 120_000 },
         'voter-ensemble': { hardMs: 120_000, thinkingIdleMs: 90_000, streamingIdleMs: 60_000 },
@@ -4373,6 +4395,7 @@ function ChatPanel({
           'router-agent',
           'router',
           'orchestrator',
+          'symphony',
           'tool-agent',
           'group-select',
           'tool-select',
@@ -7380,6 +7403,39 @@ function BrowserWorkflowSkillSettingsPanel({
   );
 }
 
+function SymphonyAutopilotSettingsPanel({
+  settings,
+  onChange,
+}: {
+  settings: SymphonyAutopilotSettings;
+  onChange: (settings: SymphonyAutopilotSettings) => void;
+}) {
+  return (
+    <SettingsSection title="Symphony autopilot" defaultOpen={false}>
+      <div className="adversary-review-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable Symphony autopilot"
+              checked={settings.autopilotEnabled}
+              onChange={(event) => onChange({ ...settings, autopilotEnabled: event.target.checked })}
+            />
+            <span>
+              <strong>Reviewer-agent approvals</strong>
+              <small>Allow the critical Symphony reviewer agent to approve clean merge requests or reject them with actionable feedback.</small>
+            </span>
+          </label>
+        </div>
+        <article className="provider-card">
+          <strong>{settings.autopilotEnabled ? 'Reviewer agent enabled' : 'Reviewer agent disabled'}</strong>
+          <p>When enabled, the reviewer agent checks validation status, browser evidence, risk findings, and blocked branches before approving a merge request.</p>
+        </article>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function BranchingConversationSettingsPanel({
   state,
   onChange,
@@ -9640,6 +9696,7 @@ interface SettingsPanelProps {
   sharedAgentRegistryState: SharedAgentRegistryState;
   sharedAgentCatalog: SharedAgentCatalog;
   browserWorkflowSkills: BrowserWorkflowSkillManifest[];
+  symphonyAutopilotSettings: SymphonyAutopilotSettings;
   conversationBranchingState: ConversationBranchingState;
   harnessSteeringState: HarnessSteeringState;
   harnessSteeringInventory: HarnessSteeringInventory;
@@ -9665,6 +9722,7 @@ interface SettingsPanelProps {
   onWorkspaceSkillPolicyStateChange: (state: WorkspaceSkillPolicyState) => void;
   onSharedAgentRegistryStateChange: (state: SharedAgentRegistryState) => void;
   onInstallBrowserWorkflowSkill: (skill: BrowserWorkflowSkillManifest) => void;
+  onSymphonyAutopilotSettingsChange: (settings: SymphonyAutopilotSettings) => void;
   onConversationBranchSettingsChange: (settings: ConversationBranchSettings) => void;
   onHarnessSteeringStateChange: (state: HarnessSteeringState) => void;
   onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
@@ -10032,6 +10090,7 @@ function SettingsPanel({
   sharedAgentRegistryState,
   sharedAgentCatalog,
   browserWorkflowSkills,
+  symphonyAutopilotSettings,
   conversationBranchingState,
   harnessSteeringState,
   harnessSteeringInventory,
@@ -10057,6 +10116,7 @@ function SettingsPanel({
   onWorkspaceSkillPolicyStateChange,
   onSharedAgentRegistryStateChange,
   onInstallBrowserWorkflowSkill,
+  onSymphonyAutopilotSettingsChange,
   onConversationBranchSettingsChange,
   onHarnessSteeringStateChange,
   onHarnessEvolutionSettingsChange,
@@ -10110,6 +10170,11 @@ function SettingsPanel({
       <BrowserWorkflowSkillSettingsPanel
         installedSkills={browserWorkflowSkills}
         onInstall={onInstallBrowserWorkflowSkill}
+      />
+
+      <SymphonyAutopilotSettingsPanel
+        settings={symphonyAutopilotSettings}
+        onChange={onSymphonyAutopilotSettingsChange}
       />
 
       <BranchingConversationSettingsPanel
@@ -11165,83 +11230,6 @@ function HistoryPanel({
           fileHistories={fileHistories}
         />
       </div>
-    </section>
-  );
-}
-
-function MultitaskPanel({
-  state,
-  onPromoteBranch,
-}: {
-  state: MultitaskSubagentState;
-  onPromoteBranch: (branchId: string) => void;
-}) {
-  const summary = summarizeMultitaskSubagents(state);
-  const promotedBranchName = summary.promotedBranch?.branchName ?? 'No branch promoted';
-
-  return (
-    <section className="panel-scroll multitask-panel" role="region" aria-label="Multitask subagents">
-      <div className="panel-topbar multitask-topbar">
-        <div className="settings-heading">
-          <h2>Multitask</h2>
-          <p className="muted">{state.workspaceName} · {summary.total} isolated branches</p>
-        </div>
-        <span className={`badge${summary.promotedBranch ? ' connected' : ''}`}>
-          {summary.promotedBranch ? 'promoted' : 'comparing'}
-        </span>
-      </div>
-
-      <section className="multitask-summary" aria-label="Branch isolation">
-        <div>
-          <span className="panel-resource-eyebrow">Branch isolation</span>
-          <strong>{summary.running} running · {summary.ready} ready · {summary.blocked} blocked</strong>
-        </div>
-        <div className="multitask-metrics">
-          <span>{summary.changedFiles} changed files</span>
-          <span>{promotedBranchName}</span>
-        </div>
-      </section>
-
-      <SidebarSection title="Subagent branches" summary={`${summary.total} branches`} scrollBody>
-        <div className="multitask-branch-list">
-          {state.branches.map((branch) => {
-            const isForeground = branch.id === state.foregroundBranchId;
-            return (
-              <article className={`multitask-branch-card${isForeground ? ' is-foreground' : ''}`} key={branch.id}>
-                <div className="multitask-branch-header">
-                  <div>
-                    <strong>{branch.title}</strong>
-                    <code>{branch.branchName}</code>
-                  </div>
-                  <span className={`badge${branch.status === 'promoted' ? ' connected' : ''}`}>{branch.status}</span>
-                </div>
-                <p>{branch.summary}</p>
-                <div className="multitask-progress" aria-label={`${branch.branchName} progress`}>
-                  <span style={{ width: `${Math.min(100, Math.max(0, branch.progress))}%` }} />
-                </div>
-                <div className="multitask-branch-meta">
-                  <span>{branch.role}</span>
-                  <span>{Math.round(branch.confidence * 100)}% confidence</span>
-                  <span>{branch.changedFiles.length} files</span>
-                </div>
-                <ul className="multitask-validation-list">
-                  {branch.validation.map((entry) => <li key={entry}>{entry}</li>)}
-                </ul>
-                <button
-                  type="button"
-                  className="toolbar-button multitask-promote-button"
-                  aria-label={`Promote ${branch.branchName}`}
-                  disabled={isForeground}
-                  onClick={() => onPromoteBranch(branch.id)}
-                >
-                  <Icon name="share" size={13} />
-                  <span>{isForeground ? 'Foreground' : 'Promote'}</span>
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      </SidebarSection>
     </section>
   );
 }
@@ -13835,7 +13823,8 @@ function PanelSplitView({
   );
 }
 
-const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'review', 'wiki', 'multitask', 'history', 'extensions', 'models', 'settings', 'account'];
+const VALID_SIDEBAR_PANELS: SidebarPanel[] = ['workspaces', 'symphony', 'wiki', 'history', 'extensions', 'models', 'settings', 'account'];
+const LEGACY_SYMPHONY_PANEL_IDS = new Set(['review', 'multitask']);
 
 function isSidebarPanel(value: unknown): value is SidebarPanel {
   return typeof value === 'string' && (VALID_SIDEBAR_PANELS as string[]).includes(value);
@@ -13889,6 +13878,19 @@ function AgentBrowserApp() {
   const [repoWikiSelectedPageId, setRepoWikiSelectedPageId] = useState<string | null>(null);
   const [selectedExtensionId, setSelectedExtensionId] = useState<string | null>(null);
   const [activeExtensionFeatureId, setActiveExtensionFeatureId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sessionStorageBackend) return;
+    const rawActivePanel = sessionStorageBackend.getItem(STORAGE_KEYS.activePanel);
+    if (!rawActivePanel) return;
+    try {
+      const parsedActivePanel = JSON.parse(rawActivePanel) as unknown;
+      if (typeof parsedActivePanel === 'string' && LEGACY_SYMPHONY_PANEL_IDS.has(parsedActivePanel)) {
+        setActivePanel('symphony');
+      }
+    } catch {
+      // Invalid persisted panel values fall back through useStoredState.
+    }
+  }, [setActivePanel]);
   const [collapsed, setCollapsed] = useState(() => isMobileViewport());
   const sidebarUserOverrideRef = useRef(false);
   const [registryTask, setRegistryTask] = useState('');
@@ -14002,6 +14004,12 @@ function AgentBrowserApp() {
     STORAGE_KEYS.multitaskSubagentState,
     isMultitaskSubagentState,
     DEFAULT_MULTITASK_SUBAGENT_STATE,
+  );
+  const [symphonyAutopilotSettings, setSymphonyAutopilotSettings] = useStoredState<SymphonyAutopilotSettings>(
+    localStorageBackend,
+    STORAGE_KEYS.symphonyAutopilotSettings,
+    isSymphonyAutopilotSettings,
+    DEFAULT_SYMPHONY_AUTOPILOT_SETTINGS,
   );
   const [conversationBranchingState, setConversationBranchingState] = useStoredState<ConversationBranchingState>(
     localStorageBackend,
@@ -14313,12 +14321,11 @@ function AgentBrowserApp() {
   const activeMultitaskSubagentState = useMemo(
     () => multitaskSubagentState.enabled && multitaskSubagentState.workspaceId === activeWorkspaceId
       ? multitaskSubagentState
-      : createMultitaskSubagentState({
+      : {
+        ...DEFAULT_MULTITASK_SUBAGENT_STATE,
         workspaceId: activeWorkspaceId,
         workspaceName: activeWorkspace.name,
-        request: 'parallelize the frontend, tests, and documentation work',
-        now: new Date('2026-05-07T10:00:00.000Z'),
-      }),
+      },
     [activeWorkspace.name, activeWorkspaceId, multitaskSubagentState],
   );
   const startMultitaskSubagents = useCallback((request: string) => {
@@ -14327,14 +14334,56 @@ function AgentBrowserApp() {
       workspaceName: activeWorkspace.name,
       request,
     }));
-    setActivePanel('multitask');
+    setActivePanel('symphony');
   }, [activeWorkspace.name, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
-  const promoteActiveMultitaskBranch = useCallback((branchId: string) => {
+  const promoteActiveMultitaskBranch = useCallback((branchId: string, actor: MultitaskApprovalActor = 'user') => {
     setMultitaskSubagentState((current) => {
       const source = current.enabled && current.workspaceId === activeWorkspaceId
         ? current
         : activeMultitaskSubagentState;
-      return promoteMultitaskBranch(source, branchId);
+      return promoteMultitaskBranch(source, branchId, actor);
+    });
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+  const manageActiveMultitaskBranch = useCallback((branchId: string, action: MultitaskBranchLifecycleAction) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return reduceMultitaskBranchLifecycle(source, branchId, action);
+    });
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+  const createActiveMultitaskProject = useCallback((name: string) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return createMultitaskProject(source, name);
+    });
+    setActivePanel('symphony');
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
+  const createActiveMultitaskTask = useCallback((title: string, projectId: string | null) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return addMultitaskTask(source, { title, projectId });
+    });
+    setActivePanel('symphony');
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
+  const selectActiveMultitaskProject = useCallback((projectId: string) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return selectMultitaskProject(source, projectId);
+    });
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+  const selectActiveMultitaskTask = useCallback((branchId: string) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return selectMultitaskTask(source, branchId);
     });
   }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
   const activeConversationBranchingState = useMemo(
@@ -14399,6 +14448,39 @@ function AgentBrowserApp() {
       : [],
     [activeSessionIds, activeWorkspace],
   );
+  const activePrReviewReport = useMemo(
+    () => {
+      if (!activeMultitaskSubagentState.enabled || activeMultitaskSubagentState.branches.length === 0) {
+        return buildPullRequestReview({
+          title: 'No active Symphony task',
+          author: 'agent-browser',
+          summary: `${activeWorkspace.name} has no active Symphony task.`,
+          changedFiles: [],
+          validations: [],
+          browserEvidence: [],
+          reviewerComments: [],
+        });
+      }
+      return buildPullRequestReview({
+        title: `${activeWorkspace.name} Symphony task review`,
+        author: 'agent-browser',
+        summary: activeMultitaskSubagentState.request || `Review isolated Symphony branches for ${activeWorkspace.name}.`,
+        changedFiles: [...new Set(activeMultitaskSubagentState.branches.flatMap((branch) => branch.changedFiles))],
+        validations: [],
+        browserEvidence: [],
+        reviewerComments: [],
+      });
+    },
+    [activeMultitaskSubagentState, activeWorkspace.name],
+  );
+  const activeSymphonySnapshot = useMemo(
+    () => createSymphonyRuntimeSnapshot({
+      state: activeMultitaskSubagentState,
+      report: activePrReviewReport,
+      autopilotSettings: symphonyAutopilotSettings,
+    }),
+    [activeMultitaskSubagentState, activePrReviewReport, symphonyAutopilotSettings],
+  );
   const workspaceActionSnapshot = useMemo<WorkspaceActionSnapshot>(() => {
     const chapterIds = Object.values(sessionChapterState.sessions)
       .filter((session) => session.workspaceId === activeWorkspaceId)
@@ -14434,10 +14516,13 @@ function AgentBrowserApp() {
         .filter((history) => history.operations.length > 0)
         .map((history) => `${history.path}:${history.headOpId ?? 'snapshot'}:${history.updatedAt}`)
         .sort(),
+      symphonyEventSummaries: buildSymphonyHistoryEventSummaries(activeSymphonySnapshot),
+      symphonySessionSummaries: buildSymphonyHistorySessionSummaries(activeSymphonySnapshot),
     };
   }, [
     activeConversationBranchingState,
     activePanel,
+    activeSymphonySnapshot,
     activeWorkspace.name,
     activeWorkspaceId,
     activeWorkspaceSessions,
@@ -14464,10 +14549,6 @@ function AgentBrowserApp() {
   const moveActiveWorkspaceActionHistoryCursor = useCallback((direction: WorkspaceActionHistoryDirection) => {
     setWorkspaceActionHistoryState((current) => moveWorkspaceActionHistoryCursor(current, activeWorkspaceId, direction));
   }, [activeWorkspaceId, setWorkspaceActionHistoryState]);
-  const activePrReviewReport = useMemo(
-    () => buildPullRequestReview(createSamplePullRequestReviewInput(activeWorkspace.name)),
-    [activeWorkspace.name],
-  );
   const [pendingReviewFollowUp, setPendingReviewFollowUp] = useState<{ sessionId: string; prompt: string } | null>(null);
   const activeMountedSessionFsIds = activeWorkspaceViewState.mountedSessionFsIds ?? [];
   const activeSessionDrives = useMemo<WorkspaceMcpSessionDrive[]>(() => activeWorkspaceSessions.map((session) => ({
@@ -17452,6 +17533,16 @@ function AgentBrowserApp() {
     setToast({ msg: 'Review follow-up queued in the active session', type: 'info' });
   }, [activeSessionIds, activeWorkspaceId, addSessionToWorkspace, setToast, switchSidebarPanel]);
 
+  const requestActiveMultitaskChanges = useCallback((branchId: string, prompt: string) => {
+    setMultitaskSubagentState((current) => {
+      const source = current.enabled && current.workspaceId === activeWorkspaceId
+        ? current
+        : activeMultitaskSubagentState;
+      return requestMultitaskBranchChanges(source, branchId, prompt.split('\n'));
+    });
+    startReviewFollowUp(prompt);
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState, startReviewFollowUp]);
+
   const refreshRepoWiki = useCallback(() => {
     const snapshot = buildRepoWikiSnapshot({
       workspace: activeWorkspace,
@@ -18187,10 +18278,13 @@ function AgentBrowserApp() {
         </div>
       );
     }
-    if (activePanel === 'review') {
+    if (activePanel === 'symphony') {
       return (
-        <PullRequestReviewPanel
-          report={activePrReviewReport}
+        <SymphonyActivityPanel
+          snapshot={activeSymphonySnapshot}
+          onApproveMerge={promoteActiveMultitaskBranch}
+          onRequestChanges={requestActiveMultitaskChanges}
+          onStartTask={startMultitaskSubagents}
           onStartFollowUp={startReviewFollowUp}
         />
       );
@@ -18199,14 +18293,6 @@ function AgentBrowserApp() {
       return (
         <RepoWikiPanel
           onRefresh={refreshRepoWiki}
-        />
-      );
-    }
-    if (activePanel === 'multitask') {
-      return (
-        <MultitaskPanel
-          state={activeMultitaskSubagentState}
-          onPromoteBranch={promoteActiveMultitaskBranch}
         />
       );
     }
@@ -18281,6 +18367,7 @@ function AgentBrowserApp() {
         sharedAgentRegistryState={sharedAgentRegistryState}
         sharedAgentCatalog={sharedAgentCatalog}
         browserWorkflowSkills={browserWorkflowSkills}
+        symphonyAutopilotSettings={symphonyAutopilotSettings}
         conversationBranchingState={activeConversationBranchingState}
         harnessSteeringState={harnessSteeringState}
         harnessSteeringInventory={harnessSteeringInventory}
@@ -18306,6 +18393,7 @@ function AgentBrowserApp() {
         onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
         onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
         onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
+        onSymphonyAutopilotSettingsChange={setSymphonyAutopilotSettings}
         onConversationBranchSettingsChange={updateConversationBranchSettings}
         onHarnessSteeringStateChange={setHarnessSteeringState}
         onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
@@ -18428,7 +18516,20 @@ function AgentBrowserApp() {
       </aside>
       ) : null}
       <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
-        {activePanel === 'extensions' ? (
+        {activePanel === 'symphony' ? (
+          <SymphonyWorkspaceApp
+            snapshot={activeSymphonySnapshot}
+            onApproveMerge={promoteActiveMultitaskBranch}
+            onManageBranch={manageActiveMultitaskBranch}
+            onRequestChanges={requestActiveMultitaskChanges}
+            onStartTask={startMultitaskSubagents}
+            onCreateProject={createActiveMultitaskProject}
+            onCreateTask={createActiveMultitaskTask}
+            onSelectProject={selectActiveMultitaskProject}
+            onSelectTask={selectActiveMultitaskTask}
+            onStartFollowUp={startReviewFollowUp}
+          />
+        ) : activePanel === 'extensions' ? (
           activeExtensionFeature ? (
             <ExtensionFeaturePane
               extension={activeExtensionFeature}

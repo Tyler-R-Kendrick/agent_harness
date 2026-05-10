@@ -66,7 +66,7 @@ const dashboardCanvasViewportOutputPaths = [
     outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas-wide.png'),
   },
 ];
-const multitaskOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-multitask-subagents-branch-isolation-visual-smoke.png');
+const symphonyOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-symphony-system.png');
 const sharedAgentsOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-shared-workspace-agents-governance-visual-smoke.png');
 const PROCESS_SHUTDOWN_TIMEOUT_MS = 5_000;
 
@@ -1344,7 +1344,93 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.getByRole('button', { name: 'Benchmark routing' }).scrollIntoViewIfNeeded();
-    await expect(page.getByRole('button', { name: 'Symphony' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Symphony', exact: true }).click();
+    const symphonyApp = page.getByRole('region', { name: 'Symphony task management system' });
+    const symphonySidePanel = page.getByRole('region', { name: 'Symphony activity summary' });
+    await expect(symphonyApp).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(symphonySidePanel).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonySidePanel).toContainText('Current phase', { timeout: shellTimeoutMs });
+    await expect(symphonySidePanel).toContainText('Idle', { timeout: shellTimeoutMs });
+    await expect(symphonySidePanel).not.toContainText('State store', { timeout: shellTimeoutMs });
+    await expect(symphonySidePanel).not.toContainText('IndexedDB', { timeout: shellTimeoutMs });
+    await expect(symphonySidePanel).not.toContainText('agent/research/tests-2', { timeout: shellTimeoutMs });
+    await expect(symphonySidePanel.getByRole('button')).toHaveCount(0, { timeout: shellTimeoutMs });
+    await expect(symphonyApp.getByRole('heading', { name: 'Agent Workspaces' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('heading', { name: 'Isolated Workspaces' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('heading', { name: 'Review Gate' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp).toContainText('No active Symphony task', { timeout: shellTimeoutMs });
+    await expect(symphonyApp).not.toContainText('Running', { timeout: shellTimeoutMs });
+    await expect(symphonyApp).not.toContainText('Slots', { timeout: shellTimeoutMs });
+
+    await symphonyApp.getByLabel('Symphony task request').fill('parallelize frontend, tests, and documentation work');
+    await symphonyApp.getByRole('button', { name: 'Start Symphony task' }).click();
+    await expect(symphonyApp.getByRole('navigation', { name: 'Symphony projects' })).toContainText('Projects', {
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('button', { name: 'Open project Research' })).toHaveAttribute('aria-current', 'page', {
+      timeout: shellTimeoutMs,
+    });
+    const symphonyQueue = symphonyApp.getByRole('region', { name: 'Symphony work queue' });
+    await expect(symphonyQueue).toContainText('Work queue', { timeout: shellTimeoutMs });
+    await symphonyQueue.getByLabel('New task title').fill('Add smoke proof');
+    await symphonyQueue.getByRole('button', { name: 'Create Symphony task' }).click();
+    await expect(symphonyQueue.getByRole('button', { name: 'Open task SYM-004 Add smoke proof' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('region', { name: 'Symphony task detail' })).toContainText('Add smoke proof', {
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('button', { name: 'Open task SYM-001 Frontend branch' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByText(/SYM-001/).first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByText('Queued').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }).click();
+    await expect(symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' }).click();
+    await expect(symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('button', { name: /Cancel task/ })).toHaveCount(0);
+    await symphonyApp.getByRole('button', { name: 'Close task and dispose workspace for agent/research/documentation-3' }).click();
+    await expect(symphonyApp.getByText('agent/research/documentation-3', { exact: true })).toHaveCount(0, {
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyApp.getByRole('button', { name: 'agent/research/frontend-1 is not ready for merge approval' })).toHaveCount(0);
+    await expect(symphonyApp.getByRole('button', { name: 'Reviewer agent waiting for agent/research/frontend-1 to finish' })).toHaveCount(0);
+    await expect(symphonyApp.getByRole('button', { name: /Start rework/ })).toHaveCount(0);
+    await expect(symphonyApp.getByRole('button', { name: /Explain highest risk group/ })).toHaveCount(0);
+    await symphonyApp.screenshot({ path: symphonyOutputPath });
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    const historyPanelAfterSymphony = page.getByRole('region', { name: 'History', exact: true });
+    await expect(historyPanelAfterSymphony).toContainText('Symphony activity: Updated Symphony', { timeout: shellTimeoutMs });
+    await historyPanelAfterSymphony.getByRole('button', { name: /Inspect branch history for Symphony activity: Updated Symphony/ }).click();
+    await expect(historyPanelAfterSymphony).toContainText(
+      'Symphony event: workflow loaded - Loaded WORKFLOW.md and applied Symphony runtime defaults.',
+      { timeout: shellTimeoutMs },
+    );
+    await expect(historyPanelAfterSymphony).toContainText(
+      'Symphony session: SYM-001 agent/research/frontend-1 StreamingTurn active 1 turn',
+      { timeout: shellTimeoutMs },
+    );
+    await expect(historyPanelAfterSymphony).toContainText(
+      'Symphony session: SYM-001 agent/research/frontend-1 CanceledByReconciliation stopped no live session',
+      { timeout: shellTimeoutMs },
+    );
     await page.getByRole('button', { name: 'Extensions', exact: true }).click();
     const installedExtensions = page.getByRole('region', { name: 'Installed extensions' });
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
@@ -1366,7 +1452,7 @@ async function main() {
     await expect(marketplace.getByRole('heading', { name: 'Provider extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByText('Symphony workflow orchestration').first()).toBeVisible({
+    await expect(marketplace.getByText('Symphony internal task orchestration').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByText('OpenDesign DESIGN.md Studio').first()).toBeVisible({
@@ -1384,10 +1470,9 @@ async function main() {
     await expect(marketplace.getByText('Unavailable on this runtime').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByRole('button', { name: 'Install Symphony workflow orchestration' })).toBeVisible({
+    await expect(marketplace.getByRole('button', { name: 'Install Symphony internal task orchestration' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByRole('region', { name: 'Symphony task board' })).toHaveCount(0);
     await page.screenshot({ path: marketplaceOutputPath, fullPage: true });
     await marketplace.getByRole('button', { name: 'Open details for OpenDesign DESIGN.md Studio' }).click();
     const extensionDetail = page.getByRole('region', { name: 'Extension detail' });
@@ -1459,14 +1544,6 @@ async function main() {
     });
     await expect(extensionFeaturePane.getByText('Gate pass')).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: extensionFeatureOutputPath, fullPage: true });
-    await page.getByRole('button', { name: 'Review', exact: true }).click();
-    const reviewPanel = page.getByRole('region', { name: 'PR review understanding' });
-    await expect(reviewPanel).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(reviewPanel).toContainText('TK-47 review-native PR understanding', { timeout: shellTimeoutMs });
-    await expect(reviewPanel).toContainText('Change groups', { timeout: shellTimeoutMs });
-    await expect(reviewPanel).toContainText('Review risks', { timeout: shellTimeoutMs });
-    await expect(reviewPanel).toContainText('Validation evidence', { timeout: shellTimeoutMs });
-    await expect(reviewPanel).toContainText('Reviewer follow-up', { timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Wiki', exact: true }).click();
     const repoWikiPanel = page.getByRole('region', { name: 'Wiki explorer', exact: true });
     const repoWikiWorkbench = page.getByRole('region', { name: 'Workspace knowledgebase wiki', exact: true });
@@ -1582,15 +1659,6 @@ async function main() {
     await expect(repoWikiMemoryPanel.getByRole('heading', { name: 'Stored memories' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: repoWikiMobileOutputPath, fullPage: true });
     await page.setViewportSize({ width: 1280, height: 820 });
-    await page.getByRole('button', { name: 'Multitask', exact: true }).click();
-    const multitaskPanel = page.getByRole('region', { name: 'Multitask subagents' });
-    await expect(multitaskPanel).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(multitaskPanel.getByText('Branch isolation')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(multitaskPanel.getByText('agent/research/frontend-1', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(multitaskPanel.getByRole('button', { name: 'Promote agent/research/tests-2' })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
-    await page.screenshot({ path: multitaskOutputPath, fullPage: true });
     await page.evaluate(() => {
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
     });
@@ -1622,7 +1690,7 @@ async function main() {
     console.log(`agent-browser spec-driven development smoke passed: ${specDrivenDevelopmentOutputPath}`);
     console.log(`agent-browser persistent memory graphs smoke passed: ${persistentMemoryGraphOutputPath}`);
     console.log(`agent-browser shared agents smoke passed: ${sharedAgentsOutputPath}`);
-    console.log(`agent-browser multitask subagents smoke passed: ${multitaskOutputPath}`);
+    console.log(`agent-browser symphony system smoke passed: ${symphonyOutputPath}`);
   } catch (error) {
     const output = serverOutput.join('').trim();
     if (output) {
