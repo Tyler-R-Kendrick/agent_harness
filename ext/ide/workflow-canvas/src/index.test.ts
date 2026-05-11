@@ -167,6 +167,20 @@ describe('workflow-canvas extension', () => {
         'Task entry must contain exactly one named step.',
       ],
     });
+    expect(validateServerlessWorkflowDocument({
+      ...serverlessWorkflow,
+      do: [{ ' ': {} }],
+    })).toMatchObject({
+      valid: false,
+      issues: ['Task entry name is required.'],
+    });
+    expect(validateServerlessWorkflowDocument({
+      ...serverlessWorkflow,
+      do: [{ choose: { switch: [{ then: [{ ' ': {} }] }] } }],
+    })).toMatchObject({
+      valid: false,
+      issues: ['Task choose.0. name is required.'],
+    });
   });
 
   it('converts Serverless Workflow tasks into a reusable workflow canvas graph', () => {
