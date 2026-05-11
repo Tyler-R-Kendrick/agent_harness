@@ -61,14 +61,24 @@ async function appendAcceptedTheaterCandidate(context: LogActActorExecuteContext
 }
 
 describe('runLogActActorWorkflow', () => {
-  it('escalates reviewed actions before executor execution when operator rules match', async () => {
+  it('records rejected advisory adversary approval without replacing the useful chat answer', async () => {
     const onBusEntry = vi.fn();
     const onVoterStep = vi.fn();
     const onVoterStepUpdate = vi.fn();
-    const execute = vi.fn(async () => ({ text: 'executor result', steps: 1 }));
+    const execute = vi.fn(async (context: LogActActorExecuteContext) => {
+      await appendAcceptedTheaterCandidate(context);
+      return {
+        text: [
+          'Here are theaters near Arlington Heights, IL:',
+          '',
+          '1. [AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12) - Why: Official theater page with showtimes near Arlington Heights, IL.',
+        ].join('\n'),
+        steps: 1,
+      };
+    });
 
     const result = await runLogActActorWorkflow({
-      messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
+      messages: [{ role: 'user', content: 'tell me what theaters are open near me' }],
       instructions: 'Use tools carefully.',
       workspaceName: 'Research',
       plan,
@@ -77,24 +87,31 @@ describe('runLogActActorWorkflow', () => {
       adversaryToolReviewSettings: {
         enabled: true,
         strictMode: false,
-        customRules: ['Inspect AGENTS.md requires approval'],
+        customRules: ['theaters near me require approval'],
       },
       execute,
     }, { onBusEntry, onVoterStep, onVoterStepUpdate });
 
-    expect(execute).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      blocked: true,
-      needsUserInput: true,
-    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result.text).toContain('[AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12)');
+    expect(result.steps).toBe(1);
+    expect(result.blocked).toBeUndefined();
+    expect(result.needsUserInput).toBeUndefined();
     expect(result.failed).toBeUndefined();
-    expect(result.text).toMatch(/Adversary tool review requires operator approval/i);
+    expect(result.text).not.toMatch(/Adversary tool review requires operator approval/i);
     expect(onVoterStep.mock.calls.map(([step]) => step.voterId)).toContain('adversary-tool-review');
     expect(onVoterStepUpdate.mock.calls.map(([, patch]) => patch.approve)).toContain(false);
     const reviewPolicy = onBusEntry.mock.calls
       .map(([entry]) => entry)
       .find((entry) => entry.actorId === 'adversary-tool-review' && entry.payloadType === PayloadType.Policy);
     expect(reviewPolicy?.detail).toContain('"decision":"escalate"');
+    expect(onBusEntry.mock.calls.map(([entry]) => entry.actorId)).toEqual(expect.arrayContaining([
+      'adversary-tool-review',
+      'executor',
+      'post-processor',
+      'response-ready',
+      'workflow-complete',
+    ]));
   });
 
   it('blocks strict high-risk reviewed actions before executor execution', async () => {

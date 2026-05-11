@@ -1695,6 +1695,20 @@ async function runAdversaryToolReviewGate(
 
   if (result.decision === 'allow') return null;
 
+  if (result.decision === 'escalate' && result.severity !== 'high') {
+    await bus.append({
+      type: PayloadType.Completion,
+      intentId: executePlanIntentId,
+      done: true,
+      score: 'low',
+      feedback: `Adversary tool review recorded advisory rejection before execution continued: ${result.summary}`,
+      meta: actorMeta('adversary-tool-review', passIndex, {
+        parentActorId: 'execute-plan',
+      }),
+    });
+    return null;
+  }
+
   const text = result.decision === 'block'
     ? `Adversary tool review blocked the action before execution: ${result.summary}`
     : `Adversary tool review requires operator approval before execution: ${result.summary}`;
