@@ -10,7 +10,7 @@ const STATE_DIR = '.git-stub';
 const STATE_FILE = 'state.json';
 const DEFAULT_BRANCH = 'main';
 
-type StatusEntryKind = 'added' | 'modified';
+type StatusEntryKind = 'added' | 'modified' | 'deleted';
 
 interface StatusEntry {
   path: string;
@@ -238,11 +238,17 @@ async function formatStatus(repo: GitStubRepository, state: GitStubState, short:
 
 function formatShortStatus(status: Awaited<ReturnType<typeof getStatus>>): string {
   const lines = [
-    ...status.staged.map((entry) => `${entry.kind === 'added' ? 'A' : 'M'}  ${entry.path}`),
-    ...status.unstaged.map((entry) => ` M ${entry.path}`),
+    ...status.staged.map((entry) => `${formatShortStatusKind(entry.kind)}  ${entry.path}`),
+    ...status.unstaged.map((entry) => ` ${formatShortStatusKind(entry.kind)} ${entry.path}`),
     ...status.untracked.map((path) => `?? ${path}`),
   ];
   return lines.join('\n') || 'clean';
+}
+
+function formatShortStatusKind(kind: StatusEntryKind): string {
+  if (kind === 'added') return 'A';
+  if (kind === 'deleted') return 'D';
+  return 'M';
 }
 
 async function formatDiff(repo: GitStubRepository, state: GitStubState, cached: boolean): Promise<string> {
@@ -287,6 +293,14 @@ async function getStatus(repo: GitStubRepository, state: GitStubState) {
     if (workingFiles[path] !== baseline) {
       unstaged.push({ path, kind: 'modified' });
     }
+  }
+
+  const trackedPaths = new Set([...Object.keys(headFiles), ...Object.keys(state.index)]);
+  for (const path of [...trackedPaths].sort((left, right) => left.localeCompare(right))) {
+    if (Object.prototype.hasOwnProperty.call(workingFiles, path)) {
+      continue;
+    }
+    unstaged.push({ path, kind: 'deleted' });
   }
 
   return {
