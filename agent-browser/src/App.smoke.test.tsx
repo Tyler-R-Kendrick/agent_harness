@@ -941,7 +941,6 @@ describe('App smoke coverage', () => {
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony internal task orchestration' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
-      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact worktree explorer' }));
     });
 
     await act(async () => {
@@ -1001,11 +1000,6 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('region', { name: 'Workflow canvas orchestration feature pane' })).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Artifact worktree explorer extension' }));
-    });
-    expect(screen.getByRole('region', { name: 'Artifact worktree explorer feature pane' })).toBeInTheDocument();
-
-    await act(async () => {
       fireEvent.click(screen.getByLabelText('Models'));
     });
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
@@ -1048,6 +1042,62 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).not.toBeInTheDocument();
+  });
+
+  it('installs the artifact worktree explorer as a workspace tree Artifacts node instead of an activity pane', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(STORAGE_KEYS.artifactsByWorkspace, JSON.stringify({
+      'ws-research': [{
+        id: 'artifact-launch-review',
+        title: 'Launch review',
+        kind: 'markdown',
+        createdAt: '2026-05-10T12:00:00.000Z',
+        updatedAt: '2026-05-10T12:00:00.000Z',
+        files: [{
+          path: 'review-panel.md',
+          mediaType: 'text/markdown',
+          content: '# Launch review\n\nReady for workspace-tree review.',
+        }],
+        references: [],
+        versions: [],
+      }],
+    }));
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    await act(async () => {
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Artifact worktree explorer' }));
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.queryByRole('button', { name: 'Artifact worktree explorer extension' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Artifact worktree explorer feature pane' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Projects'));
+      vi.advanceTimersByTime(350);
+    });
+
+    const tree = screen.getByRole('tree', { name: 'Workspace tree' });
+    expect(within(tree).getByRole('treeitem', { name: /^Artifacts/ })).toBeInTheDocument();
+    const artifactBundleRow = within(tree).getByRole('treeitem', { name: /^Launch review/ });
+    expect(artifactBundleRow).toBeInTheDocument();
+    expect(within(tree).queryByRole('treeitem', { name: /\/\/artifacts/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(artifactBundleRow).getByRole('button', { name: /^Launch review/ }));
+    const artifactFileRow = within(tree).getByRole('treeitem', { name: /review-panel\.md/ });
+    const artifactFileButton = artifactFileRow.querySelector('.tree-button');
+    expect(artifactFileButton).not.toBeNull();
+    fireEvent.click(artifactFileButton!);
+
+    expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
+    expect(screen.getByText('//artifacts/artifact-launch-review/review-panel.md')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Native text renderer' })).toHaveTextContent('Ready for workspace-tree review.');
   });
 
   it('renders partner agent control plane controls in Settings', async () => {

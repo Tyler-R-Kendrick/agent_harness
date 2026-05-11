@@ -4,7 +4,7 @@ import type { GuidedTourPlan } from '../features/tours/driverTour';
 
 export type MemoryTier = 'hot' | 'warm' | 'cool' | 'cold';
 export type NodeType = 'root' | 'workspace' | 'folder' | 'tab' | 'file';
-export type NodeKind = 'dashboard' | 'browser' | 'terminal' | 'agent' | 'files' | 'session' | 'clipboard';
+export type NodeKind = 'dashboard' | 'browser' | 'terminal' | 'agent' | 'files' | 'artifact' | 'session' | 'clipboard';
 export type MessageRole = 'user' | 'assistant' | 'system';
 export type MessageStatus = 'thinking' | 'streaming' | 'complete' | 'error';
 export type ReasoningStepKind = 'thinking' | 'search' | 'tool' | 'summary';

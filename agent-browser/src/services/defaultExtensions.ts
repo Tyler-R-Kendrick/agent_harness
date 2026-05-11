@@ -228,6 +228,18 @@ export function getExtensionMarketplaceCategory(extension: DefaultExtensionDescr
   return 'harness';
 }
 
+export function isDefaultExtensionActivityFeature(extension: DefaultExtensionDescriptor): boolean {
+  const marketplaceCategories = extension.marketplace.categories ?? [];
+  const installSurface = extension.marketplace.metadata?.installSurface ?? extension.manifest.metadata?.installSurface;
+  const workspaceItemOnlyRenderer = Boolean(extension.manifest.renderers?.length)
+    && (extension.manifest.renderers ?? []).every((renderer) => renderer.target.kind === 'workspace-item')
+    && !(extension.manifest.paneItems?.length);
+  const workspaceTreeOnly = marketplaceCategories.includes('workspace-tree')
+    || installSurface === 'workspace-tree'
+    || workspaceItemOnlyRenderer;
+  return getExtensionMarketplaceCategory(extension) === 'ide' && !workspaceTreeOnly;
+}
+
 export function groupDefaultExtensionsByMarketplaceCategory(
   extensions: readonly DefaultExtensionDescriptor[],
 ): Record<ExtensionMarketplaceCategory, DefaultExtensionDescriptor[]> {

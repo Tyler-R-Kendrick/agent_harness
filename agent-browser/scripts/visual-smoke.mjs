@@ -17,6 +17,7 @@ const outputPath = path.resolve(
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-detail.png');
 const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
+const artifactWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-artifact-worktree.png');
 const openDesignTokenReviewOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review.png');
 const openDesignTokenReviewViewportOutputPaths = [
   {
@@ -1478,6 +1479,31 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: marketplaceOutputPath, fullPage: true });
+    await marketplace.getByRole('button', { name: 'Install Artifact context' }).click();
+    await expect(marketplace.getByRole('button', { name: 'Install Artifact worktree explorer' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await marketplace.getByRole('button', { name: 'Install Artifact worktree explorer' }).click();
+    await expect(page.getByRole('button', { name: 'Artifact worktree explorer extension' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(workspaceTree.getByRole('treeitem', { name: /^Artifacts/ })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(workspaceTree.getByRole('treeitem', { name: /^Launch dashboard/ })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(workspaceTree.getByRole('treeitem', { name: /\/\/artifacts/ })).toHaveCount(0);
+    await workspaceTree.getByRole('button', { name: /^Launch dashboard/ }).click();
+    await workspaceTree.getByRole('button', { name: 'dashboard.md', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Artifact viewer' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.getByText('//artifacts/artifact-ws-research-dashboard/dashboard.md')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: artifactWorktreeOutputPath, fullPage: true });
+    await page.getByRole('button', { name: 'Extensions', exact: true }).click();
     await marketplace.getByRole('button', { name: 'Open details for OpenDesign DESIGN.md Studio' }).click();
     const extensionDetail = page.getByRole('region', { name: 'Extension detail' });
     await expect(extensionDetail).toBeVisible({ timeout: shellTimeoutMs });
@@ -1684,6 +1710,7 @@ async function main() {
     await page.screenshot({ path: outputPath, fullPage: true });
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
+    console.log(`agent-browser artifact worktree smoke passed: ${artifactWorktreeOutputPath}`);
     console.log(`agent-browser OpenDesign token review smoke passed: ${openDesignTokenReviewOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
