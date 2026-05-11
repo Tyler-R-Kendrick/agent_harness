@@ -1,10 +1,45 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-10
-Baseline: `.features/Summary.md` refreshed from the 2026-05-09 twenty-five-harness corpus.
-Diff type: additive update after n8n research
+Updated: 2026-05-11
+Baseline: `.features/Summary.md` refreshed from the 2026-05-10 twenty-six-harness corpus.
+Diff type: additive update after Kimi AI research
 
 ## Net new normalized features
+
+### Added: Self-organizing swarm execution with context sharding
+- Why now: Kimi AI shows a stronger orchestration pattern than ordinary "launch a few helpers" subagents by letting the system invent its own specialist team structure at runtime and keep each worker on its own context shard.
+- Research delta:
+  - Kimi's current Agent Swarm surface says users do not need predefined roles or hand-crafted workflows
+  - the orchestrator can coordinate up to 300 sub-agents and more than 4,000 tool calls in one task
+  - Kimi says the swarm is about 4.5x faster than single-agent execution
+  - context sharding gives each sub-agent its own notebook and only promotes key conclusions back to the commander
+  - after the swarm run, users can switch back to a single K2.6 Agent for follow-up turns instead of staying trapped inside the swarm surface
+
+### Expanded: Browser use and computer control
+- Why now: Kimi's browser-control story is not just first-party computer use; it is an attachable local bridge that can upgrade multiple outside harnesses.
+- Research delta:
+  - Kimi WebBridge installs as a local service plus browser extension
+  - it uses Chrome DevTools Protocol to navigate, click, screenshot, and read pages in the user's existing Chrome or Edge session
+  - Kimi explicitly says page content and login sessions stay on the user's device
+  - the supported-agent list includes Kimi Code, Claude Code, Cursor, Codex, and Hermes
+
+### Expanded: Multi-surface continuity
+- Why now: Kimi is spreading one agent family across general chat, specialist deliverable surfaces, mobile, desktop, cloud-deployed Claws, and linked self-hosted OpenClaw instances.
+- Research delta:
+  - K2.6 Agent spans websites, documents, spreadsheets, slides, deep research, and swarm mode from one top-level surface
+  - Kimi Claw can be one-click deployed from the web, linked from an existing OpenClaw, and connected to Telegram and other chat channels
+  - WebBridge and Kimi Desktop extend the same ecosystem into a local browser-control loop
+
+### Added: Add self-organizing swarm execution with context sharding
+- Why now: `agent-browser` already supports multiple agents and worktree-style isolation, but it still expects humans to decide most delegation structure and does not yet expose bounded context shards as a first-class orchestration primitive.
+- Linear issue:
+  - `TK-60`
+- Linear issue title:
+  - `Add self-organizing swarm execution with context sharding`
+- Suggested problem statement:
+  - `agent-browser` can launch multiple agent runs, but it does not yet provide a swarm mode where an orchestrator decides how to decompose work at runtime, spins up many bounded child agents, shards context intentionally, and reconciles their outputs back into one inspectable result without human-authored role graphs.
+- One-shot instruction for an LLM:
+  - Implement a self-organizing swarm mode for `agent-browser` where a commander agent can decide parallel width dynamically, spawn bounded child agents with explicit context shards and objectives, monitor sub-agent progress and tool use, merge findings into a structured final output, and let operators continue the same task in a single-agent follow-up mode after the swarm finishes.
 
 ### Added: Mode-scoped execution profiles with sticky task inheritance
 - Why now: Roo Code shows a strong execution-control pattern for multi-model harnesses where profile choice is tied to agent mode and preserved across resumes, worktrees, and delegated subtasks.
@@ -158,4 +193,4 @@ Diff type: additive update after n8n research
 
 ## Recommended next Linear batch
 
-1. `Add workflow-graph orchestration with deterministic, agent, and human-review steps`
+1. `Add self-organizing swarm execution with context sharding`
