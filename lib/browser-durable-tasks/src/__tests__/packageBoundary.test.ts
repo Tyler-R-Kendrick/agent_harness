@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
+import * as publicApi from '../index.js';
+
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 function readPackageFile(path: string): string {
@@ -36,5 +38,26 @@ describe('browser-durable-tasks package boundary', () => {
     expect(readme).toContain('## Package boundary');
     expect(readme).toContain("import { createDurableTaskRuntime } from '@agent-harness/browser-durable-tasks';");
     expect(readme).toContain('@agent-harness/browser-durable-tasks/src/*');
+  });
+
+  test('keeps root exports explicit so implementation exports do not leak', () => {
+    const source = readPackageFile('src/index.ts');
+
+    expect(source).not.toContain('export * from');
+    expect(source).toContain("export { createDurableTaskRuntime } from './runtime.js';");
+    expect(source).toContain("export { createMemoryDurableTaskStore } from './memoryStore.js';");
+    expect(source).toContain("export { createDexieDurableTaskStore } from './dexieStore.js';");
+  });
+
+  test('preserves the current runtime value API from the root entry point', () => {
+    expect(Object.keys(publicApi).sort()).toEqual([
+      'createDexieDurableTaskStore',
+      'createDurableTaskMachine',
+      'createDurableTaskRuntime',
+      'createMemoryDurableTaskStore',
+      'createServiceWorkerOutboxBridge',
+      'createWorkboxBackgroundSyncRegistration',
+      'transitionDurableTaskStatus',
+    ]);
   });
 });
