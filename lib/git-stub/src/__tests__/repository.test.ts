@@ -32,6 +32,11 @@ class MemoryGitStubFileSystem implements GitStubFileSystem {
     this.paths.add(path);
   }
 
+  deleteFile(path: string) {
+    this.files.delete(path);
+    this.paths.delete(path);
+  }
+
   private writeFileSync(path: string, content: string) {
     const parts = path.split('/').filter(Boolean);
     let cursor = '';
@@ -170,6 +175,38 @@ describe('git-stub repository', () => {
     expect(await executeGitStubCommand(repo, 'git branch')).toMatchObject({
       exitCode: 0,
       stdout: '  main\n* experiment',
+    });
+  });
+
+  it('reports deleted tracked files as unstaged status and diff entries', async () => {
+    const fs = new MemoryGitStubFileSystem({
+      '/workspace/app.ts': 'export const value = 1;\n',
+      '/workspace/readme.md': 'notes\n',
+    });
+    const repo = createGitStubRepository({ fs, cwd: '/workspace' });
+
+    await executeGitStubCommand(repo, 'git init');
+    await executeGitStubCommand(repo, 'git add .');
+    await executeGitStubCommand(repo, 'git commit -m baseline');
+    fs.deleteFile('/workspace/app.ts');
+
+    expect(await executeGitStubCommand(repo, 'git status --short')).toMatchObject({
+      exitCode: 0,
+      stdout: ' D app.ts',
+    });
+    expect(await executeGitStubCommand(repo, 'git status')).toMatchObject({
+      exitCode: 0,
+      stdout: [
+        'On branch main',
+        'Changes not staged for commit:',
+        '  deleted: app.ts',
+        '',
+        'nothing staged for commit',
+      ].join('\n'),
+    });
+    expect(await executeGitStubCommand(repo, 'git diff')).toMatchObject({
+      exitCode: 0,
+      stdout: 'deleted app.ts',
     });
   });
 
