@@ -1,7 +1,7 @@
 {
   "name": "@agent-harness/ext-open-design",
   "version": "0.1.0",
-  "description": "Optional Agent Harness plugin for OpenDesign-inspired DESIGN.md studio artifacts.",
+  "description": "Optional Agent Harness plugin for Design Studio DESIGN.md project artifacts.",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

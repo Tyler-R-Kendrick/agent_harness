@@ -8503,6 +8503,73 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .extensions-panel .sidebar-section-body {
   overflow: visible;
 }
+.design-studio-projects-panel .sidebar-section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.design-studio-projects-panel .panel-section-header {
+  padding-inline: 0;
+  background: transparent;
+}
+.design-studio-project-list {
+  display: grid;
+  border-top: 1px solid var(--panel-border);
+}
+.design-studio-project-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: stretch;
+  border-bottom: 1px solid var(--panel-border);
+}
+.design-studio-project-row:hover {
+  background: rgba(255,255,255,.04);
+}
+.design-studio-project-main {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.design-studio-project-main:focus-visible {
+  outline: 2px solid rgba(125, 211, 252, 0.72);
+  outline-offset: -2px;
+}
+.design-studio-project-main svg {
+  color: #7dd3fc;
+}
+.design-studio-project-main span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.design-studio-project-main strong,
+.design-studio-project-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.design-studio-project-main strong {
+  font-size: 13px;
+}
+.design-studio-project-main small {
+  color: var(--text-soft);
+  font-size: 11px;
+}
+.sidebar-muted-text {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .extension-detail-actions .sidebar-icon-button {
   min-width: 32px;
 }

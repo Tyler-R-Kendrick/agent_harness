@@ -474,7 +474,7 @@ describe('App', () => {
     expect(within(marketplace).getByText('Agent skills')).toBeInTheDocument();
     expect(within(marketplace).getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
     expect(within(marketplace).getByText('DESIGN.md agent guidance')).toBeInTheDocument();
-    expect(within(marketplace).getByText('OpenDesign DESIGN.md Studio')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Design Studio')).toBeInTheDocument();
     expect(within(marketplace).getByText('Symphony internal task orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Workflow canvas orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Artifact context')).toBeInTheDocument();
@@ -563,21 +563,21 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Design Studio' }));
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' })).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Installed extensions' })).getByText('OpenDesign DESIGN.md Studio')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Design Studio extension' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Installed extensions' })).getByText('Design Studio')).toBeInTheDocument();
 
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Disable OpenDesign DESIGN.md Studio' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Disable Design Studio' }));
     await act(async () => {
       vi.advanceTimersByTime(350);
     });
 
-    expect(screen.queryByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' })).not.toBeInTheDocument();
-    expect(within(marketplace).getByRole('button', { name: 'Enable OpenDesign DESIGN.md Studio' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Design Studio extension' })).not.toBeInTheDocument();
+    expect(within(marketplace).getByRole('button', { name: 'Enable Design Studio' })).toBeInTheDocument();
     expect(window.localStorage.getItem('agent-browser.default-extension-openfeature-flags')).toContain(
       'agent-harness.extensions.agent-harness.ext.open-design.enabled',
     );

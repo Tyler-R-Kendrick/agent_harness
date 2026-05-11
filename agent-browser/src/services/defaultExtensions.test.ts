@@ -17,6 +17,7 @@ import {
   normalizeDefaultExtensionIds,
   resolveEnabledDefaultExtensionIds,
 } from './defaultExtensions';
+import { createArtifact } from './artifacts';
 
 describe('default extensions', () => {
   it('defines the monorepo marketplace as the default marketplace source', () => {
@@ -83,7 +84,7 @@ describe('default extensions', () => {
       'Agent skills',
       'AGENTS.md workspace instructions',
       'DESIGN.md agent guidance',
-      'OpenDesign DESIGN.md Studio',
+      'Design Studio',
       'Symphony internal task orchestration',
       'Workflow canvas orchestration',
       'Artifact context',
@@ -216,6 +217,49 @@ describe('default extensions', () => {
       });
   });
 
+  it('loads DESIGN.md guidance from artifact-backed Design Studio projects', async () => {
+    const designArtifact = createArtifact({
+      id: 'design-studio-signal-desk',
+      title: 'Signal Desk',
+      kind: 'open-design-project',
+      files: [
+        {
+          path: 'DESIGN.md',
+          content: [
+            '---',
+            'name: Signal Desk',
+            'colors:',
+            '  accent: "#4dd0e1"',
+            '---',
+            '',
+            'Use quiet operations-dashboard styling.',
+          ].join('\n'),
+        },
+      ],
+    }, { now: () => '2026-05-11T14:00:00.000Z' });
+
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: ['agent-harness.ext.design-md-context'],
+      artifacts: [designArtifact],
+    });
+    const hook = runtime.hooks.find((candidate) => candidate.id === 'design-md.semantic-guidance');
+
+    const result = await hook?.run({
+      point: 'before-llm-messages',
+      payload: {
+        messages: [{ role: 'user', content: 'Polish the dashboard UI.' }],
+      },
+      metadata: { targetPath: 'src/App.tsx' },
+    });
+
+    expect(result?.output).toMatchObject({
+      applied: true,
+      designPath: '//artifacts/design-studio-signal-desk/DESIGN.md',
+    });
+    expect(result?.payload?.messages[0].content).toContain('DESIGN.md: Signal Desk');
+    expect(result?.payload?.messages[0].content).toContain('Use quiet operations-dashboard styling.');
+  });
+
   it('loads selected model provider extensions as metadata plugins', async () => {
     const runtime = await createDefaultExtensionRuntime([], {
       installedExtensionIds: [
@@ -302,7 +346,11 @@ describe('default extensions', () => {
     expect(openDesign).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
 
-    expect(getDefaultExtensionDependencyIds(openDesign!)).toEqual(['agent-harness.ext.design-md-context']);
+    expect(getDefaultExtensionDependencyIds(openDesign!)).toEqual([
+      'agent-harness.ext.design-md-context',
+      'agent-harness.ext.artifacts-context',
+      'agent-harness.ext.artifacts-worktree',
+    ]);
     expect(getDefaultExtensionDependencyIds(artifactsWorktree!)).toEqual(['agent-harness.ext.artifacts-context']);
 
     const plan = resolveDefaultExtensionDependencyPlan([
@@ -312,9 +360,9 @@ describe('default extensions', () => {
 
     expect(plan.extensionIds).toEqual([
       'agent-harness.ext.design-md-context',
-      'agent-harness.ext.open-design',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
+      'agent-harness.ext.open-design',
     ]);
     expect(plan.missingDependencyIds).toEqual([]);
     expect(plan.cyclicDependencyIds).toEqual([]);
@@ -324,6 +372,8 @@ describe('default extensions', () => {
     });
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.design-md-context',
+      'agent-harness.ext.artifacts-context',
+      'agent-harness.ext.artifacts-worktree',
       'agent-harness.ext.open-design',
     ]);
   });

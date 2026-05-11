@@ -36,7 +36,7 @@ describe('virtualFilesystemTree', () => {
       {
         marketplace: {
           id: 'agent-harness.ext.open-design',
-          name: 'OpenDesign DESIGN.md Studio',
+          name: 'Design Studio',
           version: '0.1.0',
           description: 'Visual design system studio.',
           source: { type: 'local', path: './ide/open-design' },
@@ -45,7 +45,7 @@ describe('virtualFilesystemTree', () => {
         manifest: {
           schemaVersion: 1,
           id: 'agent-harness.ext.open-design',
-          name: 'OpenDesign DESIGN.md Studio',
+          name: 'Design Studio',
           version: '0.1.0',
           description: 'Visual design system studio.',
           entrypoint: { module: './src/index.ts' },
@@ -77,7 +77,7 @@ describe('virtualFilesystemTree', () => {
             name: 'ide',
             children: [
               expect.objectContaining({
-                name: 'OpenDesign DESIGN.md Studio',
+                name: 'Design Studio',
                 children: [
                   expect.objectContaining({ name: 'manifest.json', type: 'file' }),
                 ],
