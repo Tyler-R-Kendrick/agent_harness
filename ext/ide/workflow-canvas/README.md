@@ -3,8 +3,8 @@
 Workflow Canvas is an Agent Harness extension for workflow orchestration backed
 by CNCF Serverless Workflow `1.0.0`.
 
-It provides a headless foundation for an n8n-class automation builder and a
-Higgsfield Canvas-style creative/media pipeline board:
+It provides an installable n8n-class automation builder and a Higgsfield
+Canvas-style creative/media pipeline board:
 
 - `workflow-canvas.inventory` returns researched feature parity targets and
   screenshot references.
@@ -15,8 +15,10 @@ Higgsfield Canvas-style creative/media pipeline board:
 - `workflow-canvas.export` exports stored canvases back to Serverless Workflow
   JSON.
 - `/workflow <goal>` drafts a prompt for a new DSL-backed canvas.
+- `WorkflowCanvasRenderer` renders the installed main-pane builder with node
+  catalog, graph canvas, inspector, replay controls, research references, and
+  workspace artifact save support.
 
-The first slice is intentionally headless and testable. Its manifest now
-declares the workflow canvas media type plus portable renderer implementations:
-a WASI Preview 2 component entry for cross-language renderer packages and a
-React fallback entry for the Agent Browser host.
+The manifest declares the workflow canvas media type plus portable renderer
+implementations: a WASI Preview 2 component entry for cross-language renderer
+packages and a React workbench entry for the Agent Browser host.

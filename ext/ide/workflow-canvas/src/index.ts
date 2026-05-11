@@ -4,6 +4,15 @@ import type {
   HarnessPlugin,
 } from 'harness-core';
 
+export {
+  WorkflowCanvasRenderer,
+  WorkflowCanvasWorkbench,
+} from './WorkflowCanvasWorkbench.js';
+export type {
+  WorkflowCanvasRendererProps,
+  WorkflowCanvasWorkspaceFile,
+} from './WorkflowCanvasWorkbench.js';
+
 export const WORKFLOW_CANVAS_MEDIA_TYPE = 'application/vnd.agent-harness.workflow-canvas+json';
 
 export type WorkflowCanvasNodeKind =
@@ -455,10 +464,6 @@ export function createWorkflowCanvasPlugin(): HarnessPlugin {
       });
     },
   };
-}
-
-export function WorkflowCanvasRenderer(): null {
-  return null;
 }
 
 async function readCanvasArtifact(

@@ -90,6 +90,10 @@ async function main() {
   assert.match(visualSmokeScript, /Tool-call interception mode/);
   assert.match(visualSmokeScript, /Evaluation-native observability/);
   assert.match(visualSmokeScript, /Live experiment/);
+  assert.match(visualSmokeScript, /Workflow canvas workbench/);
+  assert.match(visualSmokeScript, /workflow-canvas-plugin-renderer/);
+  assert.match(visualSmokeScript, /Generate campaign media/);
+  assert.match(visualSmokeScript, /agent-browser-workflow-canvas\.png/);
   assert.match(visualSmokeScript, /Scheduled automations/);
   assert.match(visualSmokeScript, /Enable Daily workspace audit/);
   assert.match(visualSmokeScript, /Chaptered sessions/);
