@@ -1,0 +1,20 @@
+slug: browsermcp
+name: BrowserMCP
+vendor: BrowserMCP
+segment: local-browser-control-mcp
+product_path: competition/browsermcp
+design_path: competition/browsermcp/design
+features_path: competition/browsermcp/features
+marketing_path: competition/browsermcp/marketing
+gossip_path: competition/browsermcp/gossip
+snapshot_date: 2026-05-11
+primary_sources:
+  - https://github.com/BrowserMCP/mcp
+  - https://mcp.directory/mcp/details/699/browser
+secondary_sources:
+  - https://github.com/BrowserMCP/mcp/issues
+  - https://forum.cursor.com/t/any-browser-mcp-tools-get-stuck-in-an-infinite-loop-and-burn-units/109175
+positioning: "Local MCP server plus Chrome extension that lets AI clients control a user's existing browser profile."
+customer_model: "Open-source/free developer tool that monetizes indirectly through distribution, mindshare, and potential hosted or marketplace extensions."
+competitive_threat_level: high
+notes: "Threatens agent-browser on setup simplicity and real-profile access, but has weaker product workspace, trace, and governance surfaces."

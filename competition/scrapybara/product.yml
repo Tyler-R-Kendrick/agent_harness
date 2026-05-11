@@ -1,0 +1,21 @@
+slug: scrapybara
+name: Scrapybara
+vendor: Scrapybara
+segment: remote-computer-use-infrastructure
+product_path: competition/scrapybara
+design_path: competition/scrapybara/design
+features_path: competition/scrapybara/features
+marketing_path: competition/scrapybara/marketing
+gossip_path: competition/scrapybara/gossip
+snapshot_date: 2026-05-11
+primary_sources:
+  - https://scrapybara.com/
+  - https://docs.scrapybara.com/
+  - https://docs.scrapybara.com/browser
+  - https://docs.scrapybara.com/act-sdk
+secondary_sources:
+  - https://www.kernel.sh/docs/migrations/scrapybara
+positioning: "Remote desktop and browser instances for computer-use agents, with model/tool integration, streaming, auth states, and SDK-driven action loops."
+customer_model: "Developer infrastructure with usage/credits around instances, actions, and agent execution."
+competitive_threat_level: medium
+notes: "Competes when buyers want whole-computer infrastructure rather than only browser control; public market signals conflict on service continuity."

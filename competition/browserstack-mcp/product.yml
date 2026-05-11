@@ -1,0 +1,21 @@
+slug: browserstack-mcp
+name: BrowserStack MCP
+vendor: BrowserStack
+segment: enterprise-ai-testing-mcp
+product_path: competition/browserstack-mcp
+design_path: competition/browserstack-mcp/design
+features_path: competition/browserstack-mcp/features
+marketing_path: competition/browserstack-mcp/marketing
+gossip_path: competition/browserstack-mcp/gossip
+snapshot_date: 2026-05-11
+primary_sources:
+  - https://www.browserstack.com/docs/browserstack-mcp-server/overview
+  - https://www.browserstack.com/test-platform/mcp
+  - https://github.com/browserstack/mcp-server
+secondary_sources:
+  - https://www.browserstack.com/docs/browserstack-mcp-server/faqs
+  - https://www.browserstack.com/pricing
+positioning: "Enterprise test platform exposed to AI agents through MCP for natural-language test execution, debugging, accessibility, and test management."
+customer_model: "Existing BrowserStack subscription and enterprise sales motion; MCP increases usage and stickiness for paid testing products."
+competitive_threat_level: medium
+notes: "Competes less as a general browser agent and more as the default AI testing control plane for organizations already buying BrowserStack."
