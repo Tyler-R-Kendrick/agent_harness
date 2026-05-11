@@ -290,19 +290,19 @@ test('captures the settings screen', async ({ browser }) => {
   await page.setViewportSize({ width: 1280, height: 420 });
   await page.goto('/');
   await page.getByLabel('Settings').click();
-  await expect(page.getByLabel('Hugging Face search')).toBeVisible();
+  const settingsWorkbench = page.getByRole('region', { name: 'Settings workbench' });
+  await expect(settingsWorkbench).toBeVisible();
+  await expect(page.getByLabel('Search settings')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Refresh status' })).toBeVisible();
-  await expect(page.locator('.chip.active')).toHaveCount(0);
-
-  await page.getByLabel('Hugging Face search').fill('qwen');
-  const resultsToggle = page.locator('.settings-result-list .section-toggle');
-  await expect(resultsToggle).toContainText('Results');
-  await expect(resultsToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('tab', { name: 'User' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Workspace' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Settings categories' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Runtime plugins settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Commonly Used' })).toBeVisible();
 
   const settingsPanel = page.locator('.settings-panel');
   const panelOverflowY = await settingsPanel.evaluate((element) => window.getComputedStyle(element).overflowY);
-  expect(['auto', 'scroll']).toContain(panelOverflowY);
+  expect(['hidden', 'auto', 'scroll']).toContain(panelOverflowY);
 
   // Chip-row must be a single horizontal scrollable row — no wrapping.
   const chipRow = page.locator('.settings-panel .chip-row');
@@ -318,37 +318,22 @@ test('captures the settings screen', async ({ browser }) => {
   expect(['auto', 'scroll']).toContain(chipRowStyles.overflowX);
   expect(chipRowStyles.rowCount).toBe('single');
 
-  // Local models body must scroll when content overflows.
-  const localModelsBody = page.locator('.local-models-body');
-  await expect(localModelsBody).toBeVisible();
-  const localModelsScrollState = await localModelsBody.evaluate((element) => ({
+  const settingsMain = page.locator('.settings-workbench-main');
+  const settingsMainScrollState = await settingsMain.evaluate((element) => ({
     scrollHeight: element.scrollHeight,
     clientHeight: element.clientHeight,
     overflowY: window.getComputedStyle(element).overflowY,
   }));
-  expect(localModelsScrollState.scrollHeight).toBeGreaterThan(localModelsScrollState.clientHeight);
-  expect(['auto', 'scroll']).toContain(localModelsScrollState.overflowY);
+  expect(settingsMainScrollState.scrollHeight).toBeGreaterThan(settingsMainScrollState.clientHeight);
+  expect(['auto', 'scroll']).toContain(settingsMainScrollState.overflowY);
 
-  const resultsBody = page.locator('.settings-result-list .settings-section-body');
-  await expect(resultsBody.locator('.model-card').nth(5)).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
 
-  const providersToggle = page.getByRole('button', { name: /Providers/i });
-  await expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
-  await providersToggle.click();
-  await expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
-  await providersToggle.click();
-  await expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
-
-  const recommendedToggle = page.locator('.collapsible-section .section-toggle[aria-expanded="true"]').first();
-  await expect(recommendedToggle).toBeVisible();
-
-  const registryToggle = page.locator('.settings-result-list .section-toggle');
-  await expect(registryToggle).toHaveAttribute('aria-expanded', 'true');
-
-  await expect(page.locator('.model-card').first()).toBeVisible();
+  await page.getByLabel('Search settings').fill('secrets');
+  await expect(page.getByRole('button', { name: 'Secrets (0)', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Runtime plugins', exact: true })).toHaveCount(0);
 
   assertNoRuntimeErrors();
-  await page.screenshot({ path: 'docs/screenshots/settings-screen.png', fullPage: true });
   await page.close();
 });
 

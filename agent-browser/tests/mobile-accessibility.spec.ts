@@ -101,12 +101,14 @@ async function openSidebarPanel(page: Page, panelName: 'History' | 'Extensions' 
   const openPanelButton = page.getByRole('button', { name: panelName, exact: true }).first();
   await openPanelButton.click();
 
-  if (await page.locator('aside.sidebar').count() === 0) {
+  if (panelName !== 'Settings' && await page.locator('aside.sidebar').count() === 0) {
     await page.getByRole('button', { name: 'Expand sidebar' }).click();
     await openPanelButton.click();
   }
 
-  const panel = page.locator(`aside.sidebar ${panelSelector}`);
+  const panel = panelName === 'Settings'
+    ? page.locator(panelSelector)
+    : page.locator(`aside.sidebar ${panelSelector}`);
   await expect(panel).toBeVisible();
   return panel;
 }
@@ -171,27 +173,26 @@ test.describe('mobile-first accessibility viewport matrix', () => {
       await page.goto('/');
 
       const extensionsPanel = await openSidebarPanel(page, 'Extensions', '.extensions-panel');
-      const marketplaceToggle = extensionsPanel.getByRole('button', { name: /Marketplace/i });
-      await expect(marketplaceToggle).toBeVisible();
-      await expect(marketplaceToggle).toHaveAttribute('aria-expanded', 'true');
-      await marketplaceToggle.click();
-      await expect(marketplaceToggle).toHaveAttribute('aria-expanded', 'false');
-      await marketplaceToggle.click();
+      await expect(page.getByRole('region', { name: 'Extension marketplace' })).toBeVisible();
+      const installedToggle = extensionsPanel.getByRole('button', { name: /Installed extensions/i });
+      await expect(installedToggle).toBeVisible();
+      await expect(installedToggle).toHaveAttribute('aria-expanded', 'true');
+      await installedToggle.click();
+      await expect(installedToggle).toHaveAttribute('aria-expanded', 'false');
+      await installedToggle.click();
       await expect(extensionsPanel.locator('.sidebar-section-body').first()).toBeVisible();
       await expect(extensionsPanel.locator('.badge')).toHaveCount(0);
-      await expect(extensionsPanel.locator('.marketplace-action').first()).toHaveText('');
+      await expect(extensionsPanel.locator('.marketplace-action')).toHaveCount(0);
 
       const settingsPanel = await openSidebarPanel(page, 'Settings', '.settings-panel');
-      await expect(settingsPanel.getByRole('button', { name: 'Providers' })).toHaveAttribute('aria-expanded', 'true');
-      await expect(settingsPanel.locator('.badge')).toHaveCount(0);
-      const providerActionText = await settingsPanel.locator('.provider-actions .sidebar-icon-button').evaluateAll((controls) => (
-        controls.map((control) => control.textContent?.trim() ?? '').filter(Boolean)
-      ));
-      expect(providerActionText).toEqual([]);
+      await expect(settingsPanel.getByLabel('Search settings')).toBeVisible();
+      await expect(settingsPanel.getByRole('tab', { name: 'User' })).toHaveAttribute('aria-selected', 'true');
+      await expect(settingsPanel.getByRole('navigation', { name: 'Settings categories' })).toBeVisible();
+      await expect(settingsPanel.getByRole('button', { name: 'Open Extensions settings category' })).toBeVisible();
 
       const historyPanel = await openSidebarPanel(page, 'History', '.history-panel');
-      const historyToggle = historyPanel.getByRole('button', { name: /Recent activity/i });
-      await expect(historyToggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(historyPanel.getByRole('heading', { name: 'History' })).toBeVisible();
+      await expect(historyPanel.getByText(/Timeline cursor/i)).toBeVisible();
       await expect(historyPanel.locator('.badge')).toHaveCount(0);
 
       await expectNoHorizontalViewportOverflow(page);

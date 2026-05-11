@@ -112,7 +112,9 @@ describe('HarnessDashboardPanel', () => {
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
     expect(within(dashboard).getByRole('heading', { name: 'Research harness' })).toBeInTheDocument();
     expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
-    expect(within(dashboard).getByRole('article', { name: 'Knowledge widget' })).toBeInTheDocument();
+    const knowledgeWidget = within(dashboard).getByRole('article', { name: 'Knowledge widget' });
+    expect(knowledgeWidget).toBeInTheDocument();
+    expect(within(knowledgeWidget).getByLabelText('Knowledge widget contents')).toHaveAttribute('tabindex', '0');
     expect(within(dashboard).getByText('Latest steering: keep the canvas clean')).toBeInTheDocument();
     expect(within(dashboard).queryByRole('article', { name: 'Session 1 widget' })).not.toBeInTheDocument();
     expect(within(dashboard).queryByRole('article', { name: 'Session 2 widget' })).not.toBeInTheDocument();

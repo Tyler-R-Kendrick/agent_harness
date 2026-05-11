@@ -1144,28 +1144,29 @@ async function main() {
     await expect(page.getByText(/No localhost sidecar/)).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
-    const harnessCoreToggle = page.getByRole('button', { name: 'Harness core' });
+    const settingToggle = (name) => page.getByRole('button', { name, exact: true });
+    const harnessCoreToggle = settingToggle('Harness core');
     if (await harnessCoreToggle.getAttribute('aria-expanded') === 'false') {
       await harnessCoreToggle.click();
     }
     await expect(page.getByText('Core active')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('thread lifecycle', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('event streaming', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Harness steering' }).click();
+    await settingToggle('Harness steering').click();
     await expect(page.getByLabel('Enable harness steering')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Auto-capture steering corrections')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('.steering/STEERING.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('.steering/tool.steering.md', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Harness evolution' }).click();
+    await settingToggle('Harness evolution').click();
     await expect(page.getByLabel('Enable harness evolution')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Fallback to safe mode on failure')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Require visual validation')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Harness evolution sandbox root')).toHaveValue('.harness-evolution/sandboxes', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Harness evolution patch command')).toHaveValue('npx patch-package', { timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Persistent memory graphs' }).click();
+    await settingToggle('Persistent memory graphs').click();
     const persistentMemoryGraphSection = page
       .locator('section.settings-section')
-      .filter({ has: page.getByRole('button', { name: 'Persistent memory graphs' }) });
+      .filter({ has: settingToggle('Persistent memory graphs') });
     await expect(persistentMemoryGraphSection.getByText('WASM-compatible local graph')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(persistentMemoryGraphSection.getByRole('button', { name: 'Load sample memory' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -1179,14 +1180,14 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await persistentMemoryGraphSection.screenshot({ path: persistentMemoryGraphOutputPath });
-    await page.getByRole('button', { name: 'Benchmark routing' }).click();
+    await settingToggle('Benchmark routing').click();
     await expect(page.getByRole('checkbox', { name: /benchmark routing/i })).toBeVisible({ timeout: shellTimeoutMs });
     const benchmarkObjective = page.getByLabel('Benchmark routing objective');
     await expect(benchmarkObjective).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText(/Fallback priors|benchmark source|Refreshing evidence/)).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await page.getByRole('button', { name: 'Workspace skill policies' }).click();
+    await settingToggle('Workspace skill policies').click();
     await expect(page.getByLabel('Enable workspace skill policies')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Least-privilege enforcement')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Versioned packages')).toBeVisible({ timeout: shellTimeoutMs });
@@ -1194,14 +1195,14 @@ async function main() {
     await expect(page.getByRole('listitem').filter({ has: page.getByText('Team reviewer', { exact: true }) })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await page.getByRole('button', { name: 'Shared agents' }).click();
+    await settingToggle('Shared agents').click();
     await expect(page.getByLabel('Enable shared-agent registry')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('1 published · 1 draft · 3 usage events', { exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('listitem').filter({ has: page.getByText('Release coordinator', { exact: true }) })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: sharedAgentsOutputPath, fullPage: true });
-    await page.getByRole('button', { name: 'Browser workflow skills' }).click();
+    await settingToggle('Browser workflow skills').click();
     await expect(page.getByText('Repeatable browser workflows')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('list', { name: 'Installable browser workflow skills' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -1221,14 +1222,14 @@ async function main() {
     await expect(page.getByRole('list', { name: 'Installed browser workflow skills' }).getByText('npm.cmd run visual:agent-browser')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await page.getByRole('button', { name: 'Branching conversations' }).click();
+    await settingToggle('Branching conversations').click();
     await expect(page.getByLabel('Enable conversation branching')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Inject branch summaries into prompt context')).toBeChecked({
       timeout: shellTimeoutMs,
     });
     await expect(page.getByText('Process graph branch nodes')).toBeVisible({ timeout: shellTimeoutMs });
 
-    await page.getByRole('button', { name: 'Spec-driven development' }).click();
+    await settingToggle('Spec-driven development').click();
     await expect(page.getByLabel('Enable spec-driven development')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Default spec format')).toHaveValue('json-schema', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Resolve ambiguities before implementation')).toBeChecked({ timeout: shellTimeoutMs });
@@ -1238,10 +1239,10 @@ async function main() {
     });
     await page
       .locator('section.settings-section')
-      .filter({ has: page.getByRole('button', { name: 'Spec-driven development' }) })
+      .filter({ has: settingToggle('Spec-driven development') })
       .screenshot({ path: specDrivenDevelopmentOutputPath });
 
-    await page.getByRole('button', { name: 'Media agent' }).click();
+    await settingToggle('Media agent').click();
     await expect(page.getByText('Media orchestration')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('list', { name: 'Media generation workflows' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -1254,21 +1255,21 @@ async function main() {
     await page.waitForTimeout(250);
     await page
       .locator('section.settings-section')
-      .filter({ has: page.getByRole('button', { name: 'Media agent' }) })
+      .filter({ has: settingToggle('Media agent') })
       .screenshot({ path: mediaAgentOutputPath });
-    await page.getByRole('button', { name: 'Partner agent control plane' }).click();
+    await settingToggle('Partner agent control plane').click();
     await expect(page.getByLabel('Enable partner-agent control plane')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Partner-agent audit level')).toHaveValue('standard', { timeout: shellTimeoutMs });
     await expect(page.getByText('Unified workflow')).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Runtime plugins' }).click();
+    await settingToggle('Runtime plugins').click();
     await expect(page.getByLabel('Enable runtime plugins')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Tool-call interception mode')).toHaveValue('observe', { timeout: shellTimeoutMs });
     await expect(page.getByText(/active plugins/i).first()).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Browser-agent run SDK' }).click();
+    await settingToggle('Browser-agent run SDK').click();
     await expect(page.getByText('Structured event stream')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Reconnect cursor')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Archive and delete lifecycle')).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'n8n capabilities' }).click();
+    await settingToggle('n8n capabilities').click();
     await expect(page.getByText('CNCF Serverless Workflow 1.0.3')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Workflow canvas')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('Executions and debugging')).toBeVisible({ timeout: shellTimeoutMs });
@@ -1276,10 +1277,10 @@ async function main() {
     await expect(page.getByText('manualTrigger')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('runLocalAction')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByText('queueReview')).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Graph knowledge' }).click();
+    await settingToggle('Graph knowledge').click();
     const graphKnowledgeSection = page
       .locator('section.settings-section')
-      .filter({ has: page.getByRole('button', { name: 'Graph knowledge' }) });
+      .filter({ has: settingToggle('Graph knowledge') });
     await expect(graphKnowledgeSection.getByRole('status').filter({ hasText: 'Offline-ready graph memory' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -1305,26 +1306,26 @@ async function main() {
     await expect(graphKnowledgeSection.getByText('Offline graph memory').first()).toBeVisible({ timeout: shellTimeoutMs });
     await page.waitForTimeout(250);
     await page.screenshot({ path: graphKnowledgeOutputPath, fullPage: true });
-    await page.getByRole('button', { name: 'Adversary tool review' }).click();
+    await settingToggle('Adversary tool review').click();
     await expect(page.getByLabel('Enable adversary tool-call review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Strictly block high-risk reviewed actions')).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Adversary agent' }).click();
+    await settingToggle('Adversary agent').click();
     await expect(page.getByLabel('Enable adversary candidate generation')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Maximum adversary candidates')).toHaveValue('3', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Rerun when adversary output wins')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Preserve judge feedback in AgentBus')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Hide adversary labels from voters')).toBeChecked({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Security review agents' }).click();
+    await settingToggle('Security review agents').click();
     await expect(page.getByLabel('Enable security review agents')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable inline PR security review')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Enable scheduled vulnerability scans')).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Suspend/resume checkpoints' }).click();
+    await settingToggle('Suspend/resume checkpoints').click();
     await expect(page.getByLabel('Default checkpoint timeout')).toHaveValue('240', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Require operator confirmation before resume')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByText('resume:visual-eval-session:2026-05-07T02:30:00.000Z')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await page.getByRole('button', { name: 'Chaptered sessions' }).click();
+    await settingToggle('Chaptered sessions').click();
     await expect(page.getByLabel('Enable chaptered sessions')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Automatic context compression')).toBeChecked({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Render compacted context summaries')).toBeChecked({ timeout: shellTimeoutMs });
@@ -1336,14 +1337,14 @@ async function main() {
     await expect(page.getByText(/1 session\s+.\s+1 chapter\s+.\s+\d+ audit events?/)).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await page.getByRole('button', { name: 'Scheduled automations' }).click();
+    await settingToggle('Scheduled automations').click();
     await expect(page.getByLabel('Enable Daily workspace audit')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByLabel('Daily workspace audit cadence')).toHaveValue('daily', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Daily workspace audit retry count')).toHaveValue('1', { timeout: shellTimeoutMs });
     await expect(page.getByLabel('Daily workspace audit notification route')).toHaveValue('inbox', {
       timeout: shellTimeoutMs,
     });
-    await page.getByRole('button', { name: 'Benchmark routing' }).scrollIntoViewIfNeeded();
+    await settingToggle('Benchmark routing').scrollIntoViewIfNeeded();
     await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     const symphonyApp = page.getByRole('region', { name: 'Symphony task management system' });
     const symphonySidePanel = page.getByRole('region', { name: 'Symphony activity summary' });
