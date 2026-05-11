@@ -193,7 +193,7 @@ export function useStoredState<T>(
 export const isString = (value: unknown): value is string => typeof value === 'string';
 
 const NODE_TYPES: NodeType[] = ['root', 'workspace', 'folder', 'tab', 'file'];
-const NODE_KINDS: NodeKind[] = ['dashboard', 'browser', 'terminal', 'agent', 'files', 'session', 'clipboard'];
+const NODE_KINDS: NodeKind[] = ['dashboard', 'browser', 'terminal', 'agent', 'files', 'artifact', 'session', 'clipboard'];
 const MESSAGE_ROLES: ChatMessage['role'][] = ['user', 'assistant', 'system'];
 const MESSAGE_STATUSES: NonNullable<ChatMessage['status']>[] = ['thinking', 'streaming', 'complete', 'error'];
 

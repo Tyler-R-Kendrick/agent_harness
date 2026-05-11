@@ -156,8 +156,8 @@
       "categories": ["ide-extension", "workspace-tree", "artifacts"],
       "metadata": {
         "marketplaceCategory": "ide",
-        "activityIcon": "layers",
         "driveName": "//artifacts",
+        "installSurface": "workspace-tree",
         "dependencies": ["agent-harness.ext.artifacts-context"],
         "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.artifacts-worktree.enabled"
       },

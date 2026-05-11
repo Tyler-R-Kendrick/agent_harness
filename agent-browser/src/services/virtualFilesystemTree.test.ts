@@ -4,6 +4,7 @@ import {
   ARTIFACTS_DRIVE_NAME,
   WORKSPACE_DRIVE_NAME,
   buildArtifactDriveNodes,
+  buildArtifactWorktreeNodes,
   buildInstalledExtensionDriveNodes,
   buildMountedTerminalDriveNodes,
   buildWorkspaceCapabilityDriveNodes,
@@ -148,6 +149,42 @@ describe('virtualFilesystemTree', () => {
         }),
       ],
     }));
+  });
+
+  it('builds artifact worktree nodes without an intermediate //artifacts drive', () => {
+    const styleguide = createArtifact({
+      id: 'artifact-styleguide',
+      title: 'Style guide',
+      files: [{ path: 'tokens.css', mediaType: 'text/css', content: ':root {}' }],
+    }, { now: () => '2026-05-03T12:00:00.000Z' });
+    const dashboard = createArtifact({
+      id: 'artifact-dashboard',
+      title: 'Launch dashboard',
+      references: [styleguide.id],
+      files: [
+        { path: 'index.html', mediaType: 'text/html', content: '<main></main>' },
+        { path: 'src/app.js', mediaType: 'text/javascript', content: 'console.log("launch")' },
+      ],
+    }, { now: () => '2026-05-03T12:00:00.000Z' });
+
+    const nodes = buildArtifactWorktreeNodes('artifact:ws-build', [dashboard, styleguide]);
+
+    expect(nodes).toEqual([
+      expect.objectContaining({
+        id: 'artifact:ws-build:artifact:artifact-dashboard',
+        name: 'Launch dashboard',
+        artifactId: 'artifact-dashboard',
+        children: expect.arrayContaining([
+          expect.objectContaining({ name: 'References', type: 'folder' }),
+          expect.objectContaining({ name: 'index.html', type: 'file', artifactId: 'artifact-dashboard', artifactFilePath: 'index.html' }),
+        ]),
+      }),
+      expect.objectContaining({
+        id: 'artifact:ws-build:artifact:artifact-styleguide',
+        name: 'Style guide',
+      }),
+    ]);
+    expect(nodes.map((node) => node.name)).not.toContain(ARTIFACTS_DRIVE_NAME);
   });
 
   it('keeps hidden workspace folders under //workspace while mounting non-hidden top-level directories as separate drives', () => {

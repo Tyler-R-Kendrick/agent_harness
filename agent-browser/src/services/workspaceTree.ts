@@ -23,6 +23,7 @@ const CATEGORY_LABELS: Record<NodeKind, string> = {
   session: 'Sessions',
   terminal: 'Terminal',
   agent: 'Agent',
+  artifact: 'Artifacts',
   files: 'Files',
   clipboard: 'Clipboard',
 };
@@ -263,6 +264,47 @@ export function syncWorkspaceDashboardNodes(workspace: TreeNode, widgets: readon
         : child
     )),
   };
+}
+
+export function syncWorkspaceArtifactNodes(
+  workspace: TreeNode,
+  artifactNodes: readonly TreeNode[],
+  options: { enabled?: boolean } = {},
+): TreeNode {
+  const enabled = options.enabled ?? true;
+  const normalized = ensureWorkspaceCategories(workspace);
+  const childrenWithoutArtifacts = (normalized.children ?? []).filter((child) => child.nodeKind !== 'artifact');
+  if (!enabled) {
+    return { ...normalized, children: childrenWithoutArtifacts };
+  }
+
+  const existingArtifactCategory = (normalized.children ?? [])
+    .find((child) => child.type === 'folder' && child.nodeKind === 'artifact');
+  const artifactCategory: TreeNode = {
+    ...(existingArtifactCategory ?? categoryNode(workspace.id, 'artifact', [])),
+    id: `${workspace.id}:category:artifact`,
+    name: CATEGORY_LABELS.artifact,
+    type: 'folder',
+    nodeKind: 'artifact',
+    expanded: true,
+    children: [...artifactNodes],
+  };
+  const nextChildren: TreeNode[] = [];
+  let inserted = false;
+  for (const child of childrenWithoutArtifacts) {
+    nextChildren.push(child);
+    if (child.nodeKind === 'session') {
+      nextChildren.push(artifactCategory);
+      inserted = true;
+    }
+  }
+  if (!inserted) {
+    const filesIndex = nextChildren.findIndex((child) => child.nodeKind === 'files');
+    if (filesIndex === -1) nextChildren.push(artifactCategory);
+    else nextChildren.splice(filesIndex, 0, artifactCategory);
+  }
+
+  return { ...normalized, children: nextChildren };
 }
 
 export function findFirstSessionId(workspace: TreeNode): string | null {

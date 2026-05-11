@@ -9,6 +9,7 @@ import {
   getDefaultExtensionOpenFeatureFlagKey,
   getDefaultExtensionDependencyIds,
   getExtensionMarketplaceCategory,
+  isDefaultExtensionActivityFeature,
   getInstalledDefaultExtensionDescriptors,
   resolveDefaultExtensionDependencyPlan,
   resolveDefaultExtensionDependentIds,
@@ -325,6 +326,22 @@ describe('default extensions', () => {
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.open-design',
     ]);
+  });
+
+  it('does not expose workspace-tree-only extensions as activity-bar features', () => {
+    const openDesign = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.open-design');
+    const symphony = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.symphony');
+    const workflowCanvas = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.workflow-canvas');
+    const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
+
+    expect(openDesign).toBeDefined();
+    expect(symphony).toBeDefined();
+    expect(workflowCanvas).toBeDefined();
+    expect(artifactsWorktree).toBeDefined();
+    expect(isDefaultExtensionActivityFeature(openDesign!)).toBe(true);
+    expect(isDefaultExtensionActivityFeature(symphony!)).toBe(true);
+    expect(isDefaultExtensionActivityFeature(workflowCanvas!)).toBe(true);
+    expect(isDefaultExtensionActivityFeature(artifactsWorktree!)).toBe(false);
   });
 
   it('finds installed dependents so uninstalling a base extension can remove derivatives', () => {

@@ -185,9 +185,9 @@ export function buildInstalledExtensionDriveNodes(
   return [{ ...extensionsDrive, children: extensionsDrive.children }];
 }
 
-export function buildArtifactDriveNodes(prefix: string, artifacts: readonly AgentArtifact[]): TreeNode[] {
-  const artifactDrive = createFolderNode(`${prefix}:drive:artifacts`, ARTIFACTS_DRIVE_NAME, true);
+function buildArtifactBundleNodes(prefix: string, artifacts: readonly AgentArtifact[]): TreeNode[] {
   const byId = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  const artifactNodes: TreeNode[] = [];
 
   for (const artifact of [...artifacts].sort((left, right) => left.title.localeCompare(right.title))) {
     const artifactNode = createFolderNode(`${prefix}:artifact:${artifact.id}`, artifact.title || artifact.id);
@@ -219,12 +219,19 @@ export function buildArtifactDriveNodes(prefix: string, artifacts: readonly Agen
       );
     }
 
-    artifactDrive.children = [
-      ...(artifactDrive.children ?? []),
-      { ...artifactNode, children: sortTreeNodes(artifactNode.children) },
-    ];
+    artifactNodes.push({ ...artifactNode, children: sortTreeNodes(artifactNode.children) });
   }
 
+  return sortTreeNodes(artifactNodes);
+}
+
+export function buildArtifactWorktreeNodes(prefix: string, artifacts: readonly AgentArtifact[]): TreeNode[] {
+  return buildArtifactBundleNodes(prefix, artifacts);
+}
+
+export function buildArtifactDriveNodes(prefix: string, artifacts: readonly AgentArtifact[]): TreeNode[] {
+  const artifactDrive = createFolderNode(`${prefix}:drive:artifacts`, ARTIFACTS_DRIVE_NAME, true);
+  artifactDrive.children = buildArtifactBundleNodes(prefix, artifacts);
   return [{ ...artifactDrive, children: sortTreeNodes(artifactDrive.children) }];
 }
 

@@ -8,6 +8,10 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "harness-core": ["../../harness-core-lint.d.ts"]
+    },
     "types": ["vitest/globals", "node"]
   },
   "include": ["src/**/*.ts"]

@@ -336,6 +336,7 @@ import {
   getExtensionMarketplaceCategory,
   getInstalledDefaultExtensionDescriptors,
   groupDefaultExtensionsByMarketplaceCategory,
+  isDefaultExtensionActivityFeature,
   normalizeDefaultExtensionIds,
   resolveDefaultExtensionDependencyPlan,
   resolveDefaultExtensionDependentIds,
@@ -370,7 +371,7 @@ import {
   resolveLocalInferenceDaemonDownload,
   type DaemonDownloadChoice,
 } from './services/windowsDaemonDownload';
-import { buildArtifactDriveNodes, buildInstalledExtensionDriveNodes, buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
+import { buildArtifactWorktreeNodes, buildInstalledExtensionDriveNodes, buildMountedTerminalDriveNodes, buildWorkspaceCapabilityDriveNodes } from './services/virtualFilesystemTree';
 import {
   buildArtifactPromptContext,
   createArtifact,
@@ -604,6 +605,7 @@ import {
   normalizeWorkspaceViewEntry,
   removeNodeById,
   renderPaneIdForNode,
+  syncWorkspaceArtifactNodes,
   syncWorkspaceDashboardNodes,
   totalMemoryMB,
   workspaceViewStateEquals,
@@ -13691,6 +13693,7 @@ function hasWorkspaceSectionContextMenu(node: TreeNode) {
   return node.type === 'folder' && (
     node.nodeKind === 'browser'
     || node.nodeKind === 'session'
+    || node.nodeKind === 'artifact'
     || node.nodeKind === 'files'
   );
 }
@@ -14198,6 +14201,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
                   {node.nodeKind === 'dashboard' ? <Icon name="panes" size={12} color="#67e8f9" /> : null}
                   {node.nodeKind === 'browser' ? <Icon name="globe" size={12} color="#93c5fd" /> : null}
                   {node.nodeKind === 'session' ? <Icon name="terminal" size={12} color="#86efac" /> : null}
+                  {node.nodeKind === 'artifact' ? <Icon name="layers" size={12} color="#a5b4fc" /> : null}
                   {node.nodeKind === 'files' ? <Icon name="cpu" size={12} color="#a5b4fc" /> : null}
                   {!node.nodeKind ? <Icon name={node.isDrive ? 'hardDrive' : node.expanded ? 'folderOpen' : 'folder'} size={isWorkspace ? 13 : 12} color={node.isDrive ? '#a5b4fc' : isWorkspace && node.activeMemory ? '#34d399' : node.color ?? '#60a5fa'} /> : null}
                 </>
@@ -15191,7 +15195,7 @@ function AgentBrowserApp() {
     [defaultExtensionRuntime, enabledDefaultExtensionIds],
   );
   const installedIdeExtensions = useMemo(
-    () => enabledDefaultExtensions.filter((extension) => getExtensionMarketplaceCategory(extension) === 'ide'),
+    () => enabledDefaultExtensions.filter(isDefaultExtensionActivityFeature),
     [enabledDefaultExtensions],
   );
   const extensionCatalog = defaultExtensionRuntime?.extensions ?? DEFAULT_EXTENSION_MANIFESTS;
@@ -15634,13 +15638,12 @@ function AgentBrowserApp() {
           expanded: node.expanded || expandedGeneratedNodeIds.has(node.id),
           ...(node.children ? { children: restoreExpandedNodes(node.children) } : {}),
         }));
+        rememberExpandedNodes(getWorkspaceCategory(normalizedWorkspace, 'artifact')?.children);
         rememberExpandedNodes(getWorkspaceCategory(normalizedWorkspace, 'files')?.children);
         const files = workspaceFilesByWorkspace[ws.id] ?? [];
         const extensionNodes = buildInstalledExtensionDriveNodes(`extensions:${ws.id}`, installedDefaultExtensions);
         const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
-        const artifactNodes = artifactWorktreeExtensionEnabled
-          ? buildArtifactDriveNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? [])
-          : [];
+        const artifactNodes = buildArtifactWorktreeNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? []);
         const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
         const mountedSessionIds = normalizeWorkspaceViewEntry(normalizedWorkspace, workspaceViewStateByWorkspace[ws.id]).mountedSessionFsIds;
         const terminalFsNodes: TreeNode[] = (sessionCategory?.children ?? [])
@@ -15655,9 +15658,13 @@ function AgentBrowserApp() {
             children: buildMountedTerminalDriveNodes(`vfs:${ws.id}:${terminalNode.id}`, terminalFsPathsBySession[terminalNode.id] ?? [], terminalFsFileContentsBySession[terminalNode.id]),
           }));
         const nextChildren = (normalizedWorkspace.children ?? []).map((child) => child.nodeKind === 'files'
-          ? { ...child, children: restoreExpandedNodes([...extensionNodes, ...artifactNodes, ...fileNodes, ...terminalFsNodes]) }
+          ? { ...child, children: restoreExpandedNodes([...extensionNodes, ...fileNodes, ...terminalFsNodes]) }
           : child);
-        return { ...normalizedWorkspace, children: nextChildren };
+        return syncWorkspaceArtifactNodes(
+          { ...normalizedWorkspace, children: nextChildren },
+          restoreExpandedNodes(artifactNodes),
+          { enabled: artifactWorktreeExtensionEnabled },
+        );
       });
       return { ...current, children: updated };
     });
@@ -16898,6 +16905,12 @@ function AgentBrowserApp() {
         entries,
       };
     }
+    if (node.nodeKind === 'artifact') {
+      return {
+        topButtons: [],
+        entries,
+      };
+    }
     return null;
   }
 
@@ -16987,7 +17000,9 @@ function AgentBrowserApp() {
         ? ['New tab']
         : node.nodeKind === 'session'
           ? ['New session']
-          : ['Add file'];
+          : node.nodeKind === 'files'
+            ? ['Add file']
+            : [];
       return {
         location: `${node.name} section`,
         sizeLabel: `${node.children?.length ?? 0} items`,

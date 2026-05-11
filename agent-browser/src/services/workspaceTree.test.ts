@@ -9,6 +9,7 @@ import {
   getWorkspaceCategory,
   normalizeWorkspaceViewEntry,
   renderPaneIdForNode,
+  syncWorkspaceArtifactNodes,
   syncWorkspaceDashboardNodes,
   workspaceViewStateEquals,
 } from './workspaceTree';
@@ -124,6 +125,49 @@ describe('workspaceTree', () => {
       expect.objectContaining({ name: 'Session summary', nodeKind: 'dashboard', dashboardWidgetId: 'session-summary-widget' }),
       expect.objectContaining({ name: 'Knowledge', nodeKind: 'dashboard', dashboardWidgetId: 'knowledge-widget' }),
     ]);
+  });
+
+  it('syncs artifact nodes as a top-level Artifacts section between Sessions and Files', () => {
+    const workspace = createWorkspaceNode({
+      id: 'ws-artifacts',
+      name: 'Artifacts workspace',
+      color: '#fff',
+      browserTabs: [],
+    });
+    const artifactNodes: TreeNode[] = [{
+      id: 'artifact:ws-artifacts:artifact:artifact-review',
+      name: 'Launch review',
+      type: 'folder',
+      artifactId: 'artifact-review',
+      children: [{
+        id: 'artifact:ws-artifacts:artifact:artifact-review:file:review.md',
+        name: 'review.md',
+        type: 'file',
+        artifactId: 'artifact-review',
+        artifactFilePath: 'review.md',
+      }],
+    }];
+
+    const synced = syncWorkspaceArtifactNodes(workspace, artifactNodes);
+    const artifactCategory = getWorkspaceCategory(synced, 'artifact');
+    const filesCategory = getWorkspaceCategory(synced, 'files');
+
+    expect(synced.children?.map((child) => child.name)).toEqual([
+      'Dashboard',
+      'Browser',
+      'Sessions',
+      'Artifacts',
+      'Files',
+      'Clipboard',
+    ]);
+    expect(artifactCategory).toEqual(expect.objectContaining({
+      id: 'ws-artifacts:category:artifact',
+      name: 'Artifacts',
+      nodeKind: 'artifact',
+      expanded: true,
+      children: artifactNodes,
+    }));
+    expect(filesCategory?.children?.some((child) => child.name === '//artifacts')).toBe(false);
   });
 
   it('derives stable render pane ids and compares workspace view state by value', () => {

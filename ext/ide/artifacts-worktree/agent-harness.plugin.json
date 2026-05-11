@@ -18,11 +18,6 @@
       "kind": "renderer",
       "id": "artifacts.worktree",
       "description": "Renders artifact bundles in the workspace tree."
-    },
-    {
-      "kind": "pane-item",
-      "id": "artifacts.worktree-pane",
-      "description": "Adds an artifact worktree browser pane."
     }
   ],
   "renderers": [
