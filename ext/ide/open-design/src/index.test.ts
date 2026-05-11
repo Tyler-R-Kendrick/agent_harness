@@ -6,20 +6,72 @@ import {
   approveOpenDesignTokenRevision,
   buildOpenDesignWorkspaceBundle,
   compileOpenDesignMd,
+  createOpenDesignProjectArtifactInput,
   createOpenDesignApprovalComposition,
   createOpenDesignExportArtifact,
   createOpenDesignPlugin,
   createOpenDesignStudioState,
+  findOpenDesignProjectNameCollision,
   getOpenDesignApprovalSummary,
   getOpenDesignResearchInventory,
   publishOpenDesignSystem,
   requestOpenDesignTokenRevision,
   runOpenDesignCritique,
   selectOpenDesignDirection,
+  type OpenDesignExportKind,
   updateOpenDesignBrief,
 } from './index';
 
-describe('OpenDesign studio model', () => {
+describe('Design Studio model', () => {
+  it('models Design Studio projects as named artifact bundles with collision checks', () => {
+    const state = updateOpenDesignBrief(createOpenDesignStudioState(), {
+      projectName: 'Signal Desk',
+      audience: 'Operations leads',
+      prompt: 'Create a quiet operations dashboard system.',
+    });
+
+    const artifact = createOpenDesignProjectArtifactInput(state, {
+      timestamp: '2026-05-11T14:00:00.000Z',
+    });
+    const defaultTimestampArtifact = createOpenDesignProjectArtifactInput(state);
+
+    expect(artifact).toMatchObject({
+      id: 'design-studio-signal-desk',
+      title: 'Signal Desk',
+      kind: 'open-design-project',
+      references: [],
+    });
+    expect(artifact.files.map((file) => file.path)).toEqual([
+      'DESIGN.md',
+      'research.json',
+      'system.json',
+      'token-review.json',
+      'preview.html',
+      'handoff.md',
+    ]);
+    expect(artifact.files.map((file) => file.path)).not.toContain('design/open-design/research.json');
+    expect(artifact.files.find((file) => file.path === 'DESIGN.md')?.content).toContain('name: Signal Desk');
+    expect(artifact.files.find((file) => file.path === 'research.json')?.mediaType).toBe('application/json');
+    expect(artifact.files.find((file) => file.path === 'preview.html')?.mediaType).toBe('text/html');
+    expect(defaultTimestampArtifact.files[0]?.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    expect(findOpenDesignProjectNameCollision(state, [
+      { id: 'artifact-1', title: 'Signal Desk' },
+    ])).toMatchObject({ id: 'artifact-1', title: 'Signal Desk', field: 'title' });
+    expect(findOpenDesignProjectNameCollision(state, [
+      { id: 'design-studio-signal-desk', title: 'Different title' },
+    ])).toMatchObject({ id: 'design-studio-signal-desk', title: 'Different title', field: 'id' });
+    expect(findOpenDesignProjectNameCollision(state, [
+      { id: 'open-design-signal-desk', title: 'Legacy title' },
+    ])).toMatchObject({ id: 'open-design-signal-desk', title: 'Legacy title', field: 'id' });
+    expect(findOpenDesignProjectNameCollision(state, [
+      { id: 'artifact-1', title: 'Signal Desk' },
+    ], 'artifact-1')).toBeNull();
+    expect(findOpenDesignProjectNameCollision(state, [
+      { id: 'artifact-without-title', title: null },
+    ])).toBeNull();
+  });
+
   it('captures research, directions, and a design brief into DESIGN.md', () => {
     const state = selectOpenDesignDirection(
       updateOpenDesignBrief(createOpenDesignStudioState({ workspaceName: 'Research' }), {
@@ -68,21 +120,21 @@ describe('OpenDesign studio model', () => {
     expect(critique.gate).toBe('pass');
     expect(bundle.map((file) => file.path)).toEqual(expect.arrayContaining([
       'DESIGN.md',
-      'design/open-design/research.json',
-      'design/open-design/token-review.json',
-      'design/open-design/preview.html',
-      'design/open-design/critique.json',
-      'design/open-design/handoff.md',
+      'research.json',
+      'token-review.json',
+      'preview.html',
+      'critique.json',
+      'handoff.md',
     ]));
-    expect(bundle.find((file) => file.path === 'design/open-design/preview.html')?.content)
+    expect(bundle.find((file) => file.path === 'preview.html')?.content)
       .toContain('data-design-widget="primary-action"');
-    expect(bundle.find((file) => file.path === 'design/open-design/token-review.json')?.content)
+    expect(bundle.find((file) => file.path === 'token-review.json')?.content)
       .toContain('"composition"');
-    expect(bundle.find((file) => file.path === 'design/open-design/token-review.json')?.content)
+    expect(bundle.find((file) => file.path === 'token-review.json')?.content)
       .toContain('"visualLabel": "Action command sample"');
-    expect(html.path).toBe('design/open-design/exports/signal-desk.html');
+    expect(html.path).toBe('exports/signal-desk.html');
     expect(html.content).toContain('<!doctype html>');
-    expect(handoff.path).toBe('design/open-design/exports/signal-desk-handoff.md');
+    expect(handoff.path).toBe('exports/signal-desk-handoff.md');
     expect(handoff.content).toContain('Use DESIGN.md as the source of truth.');
   });
 
@@ -105,13 +157,17 @@ describe('OpenDesign studio model', () => {
     const cloudflare = createOpenDesignExportArtifact('cloudflare', blankState, '2026-05-09T13:02:00.000Z');
     const pdf = createOpenDesignExportArtifact('pdf', blankState, '2026-05-09T13:03:00.000Z');
     const fallbackSlug = createOpenDesignExportArtifact('zip', punctuationState, '2026-05-09T13:04:00.000Z');
+    const pptx = createOpenDesignExportArtifact('pptx', blankState, '2026-05-09T13:05:00.000Z');
+    const markdown = createOpenDesignExportArtifact('markdown', blankState, '2026-05-09T13:06:00.000Z');
+    const unknown = createOpenDesignExportArtifact('txt' as OpenDesignExportKind, blankState, '2026-05-09T13:07:00.000Z');
+    const json = createOpenDesignExportArtifact('json' as OpenDesignExportKind, blankState, '2026-05-09T13:08:00.000Z');
 
     expect(OpenDesignStudio()).toBeNull();
     expect(blankDocument).toContain('name: Fallback DESIGN.md Studio');
     expect(blankDocument).toContain('No external sources attached yet.');
     expect(blankDocument).toContain('No special notes yet.');
-    expect(blankBundle.map((file) => file.path)).not.toContain('design/open-design/critique.json');
-    expect(escapedBundle.find((file) => file.path === 'design/open-design/preview.html')?.content)
+    expect(blankBundle.map((file) => file.path)).not.toContain('critique.json');
+    expect(escapedBundle.find((file) => file.path === 'preview.html')?.content)
       .toContain('A &amp; &lt;B&gt; &quot;C&quot; &#39;D&#39;');
     expect(critique.gate).toBe('revise');
     expect(critique.requiredFixes).toEqual([
@@ -119,10 +175,14 @@ describe('OpenDesign studio model', () => {
       'Approve every design-token review item before publishing DESIGN.md.',
     ]);
     expect(legacyReviewState.tokenReviews[0]?.sample.title).toBe('Display hierarchy');
-    expect(cloudflare.path).toBe('design/open-design/exports/fallback-design-md-studio-cloudflare-deploy.md');
+    expect(cloudflare.path).toBe('exports/fallback-design-md-studio-cloudflare-deploy.md');
     expect(cloudflare.content).toContain('Cloudflare Pages deployment');
     expect(pdf.content).toContain('# PDF export');
-    expect(fallbackSlug.path).toBe('design/open-design/exports/design-system.zip');
+    expect(fallbackSlug.path).toBe('exports/design-system.zip');
+    expect(pptx.mediaType).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(markdown.mediaType).toBe('text/markdown');
+    expect(unknown.mediaType).toBe('text/plain');
+    expect(json.mediaType).toBe('application/json');
   });
 
   it('models Claude Design token revision approval and publish flow', () => {
@@ -145,7 +205,7 @@ describe('OpenDesign studio model', () => {
     const requestedCritique = runOpenDesignCritique(requested);
     const document = compileOpenDesignMd({ ...published, defaultForWorkspace: true }, '2026-05-10T10:06:00.000Z');
     const tokenReview = buildOpenDesignWorkspaceBundle(published, '2026-05-10T10:07:00.000Z')
-      .find((file) => file.path === 'design/open-design/token-review.json');
+      .find((file) => file.path === 'token-review.json');
 
     expect(composition.title).toBe('Agent Browser approval composition');
     expect(composition.regions.map((region) => region.label)).toEqual([

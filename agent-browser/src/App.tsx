@@ -346,9 +346,11 @@ import {
   OPEN_DESIGN_DIRECTIONS,
   approveOpenDesignTokenRevision,
   buildOpenDesignWorkspaceBundle,
+  createOpenDesignProjectArtifactInput,
   createOpenDesignApprovalComposition,
   createOpenDesignExportArtifact,
   createOpenDesignStudioState,
+  findOpenDesignProjectNameCollision,
   getOpenDesignApprovalSummary,
   getOpenDesignResearchInventory,
   publishOpenDesignSystem,
@@ -359,8 +361,10 @@ import {
   type OpenDesignBrief,
   type OpenDesignApprovalComposition,
   type OpenDesignDirectionId,
+  type OpenDesignProjectArtifactInput,
   type OpenDesignStudioState,
   type OpenDesignTokenReviewItem,
+  type OpenDesignWorkspaceFile,
 } from '@agent-harness/ext-open-design';
 import {
   PORTABLE_DAEMON_SOURCE_DOWNLOAD,
@@ -688,6 +692,7 @@ type SessionMcpController = {
   writeSession: (input: WorkspaceMcpWriteSessionInput) => Promise<void>;
 };
 
+const EMPTY_AGENT_ARTIFACTS: AgentArtifact[] = [];
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
 type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
@@ -12008,7 +12013,7 @@ function getExtensionContributionRows(extension: DefaultExtensionDescriptor): Ar
 }
 
 function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string {
-  if (extension.manifest.id === 'agent-harness.ext.open-design') return 'OpenDesign Studio';
+  if (extension.manifest.id === 'agent-harness.ext.open-design') return 'Design Studio';
   if (extension.manifest.id === 'agent-harness.ext.symphony') return 'Symphony Board';
   if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') return 'Workflow Canvas';
   if (extension.manifest.id === 'agent-harness.ext.artifacts-worktree') return 'Artifact Worktree';
@@ -12017,7 +12022,7 @@ function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string
 
 function getExtensionFeatureSummary(extension: DefaultExtensionDescriptor): string {
   if (extension.manifest.id === 'agent-harness.ext.open-design') {
-    return 'Compose DESIGN.md systems, inspect token guidance, and keep design-system decisions visible as an IDE pane.';
+    return 'Compose DESIGN.md systems, inspect token guidance, and save each project as an artifact.';
   }
   if (extension.manifest.id === 'agent-harness.ext.symphony') {
     return 'Navigate WORKFLOW.md orchestration, runtime hooks, and the preserved Symphony board package from one feature pane.';
@@ -12613,6 +12618,81 @@ function ExtensionDetailPage({
   );
 }
 
+function formatDesignStudioProjectTimestamp(value: string | undefined): string {
+  if (!value) return 'Never saved';
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
+}
+
+function DesignStudioProjectsPanel({
+  artifacts,
+  onOpenProject,
+  onDownloadProject,
+}: {
+  artifacts: readonly AgentArtifact[];
+  onOpenProject: (artifact: AgentArtifact) => void;
+  onDownloadProject: (artifactId: string) => void;
+}) {
+  const projects = artifacts
+    .filter((artifact) => artifact.kind === 'open-design-project')
+    .sort((left, right) => {
+      const leftUpdated = Date.parse(left.updatedAt ?? left.createdAt);
+      const rightUpdated = Date.parse(right.updatedAt ?? right.createdAt);
+      return (Number.isNaN(rightUpdated) ? 0 : rightUpdated) - (Number.isNaN(leftUpdated) ? 0 : leftUpdated);
+    });
+
+  return (
+    <section className="panel-scroll design-studio-projects-panel" aria-label="Design Studio projects">
+      <div className="panel-section-header">
+        <div>
+          <h2>Design Studio</h2>
+          <p>{projects.length} {projects.length === 1 ? 'project' : 'projects'} saved as artifacts</p>
+        </div>
+      </div>
+      <SidebarSection title="Projects" summary={`${projects.length} saved`}>
+        {projects.length ? (
+          <div className="design-studio-project-list">
+            {projects.map((artifact) => (
+              <article key={artifact.id} className="design-studio-project-row">
+                <button
+                  type="button"
+                  className="design-studio-project-main"
+                  onClick={() => onOpenProject(artifact)}
+                  aria-label={`Open ${artifact.title} project artifact`}
+                  title={`Open ${artifact.title}`}
+                >
+                  <Icon name="layers" size={16} />
+                  <span>
+                    <strong>{artifact.title}</strong>
+                    <small>{artifact.files.length} files · {formatDesignStudioProjectTimestamp(artifact.updatedAt ?? artifact.createdAt)}</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-icon-button"
+                  onClick={() => onDownloadProject(artifact.id)}
+                  aria-label={`Download ${artifact.title} project artifact`}
+                  title={`Download ${artifact.title}`}
+                >
+                  <Icon name="download" size={14} />
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="sidebar-muted-text">No design projects yet. Save from Design Studio to create one.</p>
+        )}
+      </SidebarSection>
+    </section>
+  );
+}
+
 type OpenDesignStudioView = 'preview' | 'review' | 'files' | 'critique' | 'research';
 
 const OPEN_DESIGN_STUDIO_VIEWS: Array<{ id: OpenDesignStudioView; icon: keyof typeof icons; label: string }> = [
@@ -12625,12 +12705,12 @@ const OPEN_DESIGN_STUDIO_VIEWS: Array<{ id: OpenDesignStudioView; icon: keyof ty
 
 function OpenDesignStudioPane({
   workspaceName,
-  workspaceFiles,
-  onWorkspaceFilesChange,
+  artifacts,
+  onProjectArtifactSave,
 }: {
   workspaceName: string;
-  workspaceFiles: WorkspaceFile[];
-  onWorkspaceFilesChange: (files: WorkspaceFile[]) => void;
+  artifacts: AgentArtifact[];
+  onProjectArtifactSave: (input: OpenDesignProjectArtifactInput, existingArtifactId?: string | null) => AgentArtifact;
 }) {
   const [studioState, setStudioState] = useState<OpenDesignStudioState>(() => createOpenDesignStudioState({
     workspaceName,
@@ -12649,37 +12729,110 @@ function OpenDesignStudioPane({
   const [view, setView] = useState<OpenDesignStudioView>('preview');
   const [inspectMode, setInspectMode] = useState(true);
   const [status, setStatus] = useState('Ready to compile DESIGN.md');
+  const [projectArtifactId, setProjectArtifactId] = useState<string | null>(null);
+  const dirtyRef = useRef(false);
+  const latestStateRef = useRef(studioState);
+  const projectArtifactIdRef = useRef(projectArtifactId);
   const researchInventory = useMemo(() => getOpenDesignResearchInventory(), []);
-  const designFiles = workspaceFiles
-    .filter((file) => file.path === 'DESIGN.md' || file.path.startsWith('design/open-design/'))
-    .sort((left, right) => left.path.localeCompare(right.path));
+  const draftProjectArtifact = useMemo(
+    () => createOpenDesignProjectArtifactInput(studioState),
+    [studioState],
+  );
+  const currentProjectArtifact = projectArtifactId
+    ? artifacts.find((artifact) => artifact.id === projectArtifactId) ?? null
+    : null;
+  const projectArtifactDisplayId = currentProjectArtifact?.id ?? draftProjectArtifact.id;
+  const currentExportFiles: OpenDesignWorkspaceFile[] = currentProjectArtifact
+    ? currentProjectArtifact.files
+      .filter((file) => file.path.startsWith('exports/'))
+      .map((file) => ({
+        path: file.path,
+        content: file.content,
+        updatedAt: file.updatedAt ?? currentProjectArtifact.updatedAt ?? currentProjectArtifact.createdAt,
+        mediaType: file.mediaType,
+      }))
+    : [];
+  const designFiles = [
+    ...draftProjectArtifact.files,
+    ...currentExportFiles.filter((file) => !draftProjectArtifact.files.some((draftFile) => draftFile.path === file.path)),
+  ].sort((left, right) => left.path.localeCompare(right.path));
   const activeDirection = OPEN_DESIGN_DIRECTIONS.find((direction) => direction.id === studioState.directionId)
     ?? OPEN_DESIGN_DIRECTIONS[0]!;
   const approvalSummary = getOpenDesignApprovalSummary(studioState);
   const approvalComposition = createOpenDesignApprovalComposition(studioState);
-  const designDocument = workspaceFiles.find((file) => file.path === 'DESIGN.md')?.content
+  const designDocument = draftProjectArtifact.files.find((file) => file.path === 'DESIGN.md')?.content
     ?? buildOpenDesignWorkspaceBundle(studioState)[0].content;
+  const projectNameCollision = findOpenDesignProjectNameCollision(studioState, artifacts, projectArtifactId);
 
-  const commitFiles = (files: WorkspaceFile[], nextStatus: string) => {
-    onWorkspaceFilesChange(files);
-    setStatus(nextStatus);
-  };
+  useEffect(() => {
+    latestStateRef.current = studioState;
+  }, [studioState]);
 
-  const upsertFiles = (nextFiles: WorkspaceFile[], nextStatus: string) => {
-    commitFiles(nextFiles.reduce((current, file) => upsertWorkspaceFile(current, file), workspaceFiles), nextStatus);
-  };
+  useEffect(() => {
+    projectArtifactIdRef.current = projectArtifactId;
+  }, [projectArtifactId]);
+
+  useEffect(() => {
+    if (projectArtifactId) return;
+    const existingArtifact = artifacts.find((artifact) => (
+      artifact.kind === 'open-design-project'
+      && (artifact.id === draftProjectArtifact.id || artifact.title.trim().toLowerCase() === draftProjectArtifact.title.trim().toLowerCase())
+    ));
+    if (existingArtifact) {
+      setProjectArtifactId(existingArtifact.id);
+      projectArtifactIdRef.current = existingArtifact.id;
+    }
+  }, [artifacts, draftProjectArtifact.id, draftProjectArtifact.title, projectArtifactId]);
+
+  const markStudioStateDirty = useCallback((updater: (current: OpenDesignStudioState) => OpenDesignStudioState) => {
+    dirtyRef.current = true;
+    setStudioState(updater);
+  }, []);
+
+  const saveProjectArtifact = useCallback((
+    state = latestStateRef.current,
+    nextStatus = 'Project artifact auto-saved',
+    options: { updateStatus?: boolean } = {},
+  ) => {
+    const existingArtifactId = projectArtifactIdRef.current;
+    const collision = findOpenDesignProjectNameCollision(state, artifacts, existingArtifactId);
+    if (collision) {
+      if (options.updateStatus !== false) {
+        setStatus(`Project name collides with artifact "${collision.title}"`);
+      }
+      return null;
+    }
+
+    const artifact = onProjectArtifactSave(createOpenDesignProjectArtifactInput(state, {
+      artifactId: existingArtifactId ?? undefined,
+      timestamp: new Date().toISOString(),
+    }), existingArtifactId);
+    projectArtifactIdRef.current = artifact.id;
+    setProjectArtifactId(artifact.id);
+    dirtyRef.current = false;
+    if (options.updateStatus !== false) {
+      setStatus(nextStatus);
+    }
+    return artifact;
+  }, [artifacts, onProjectArtifactSave]);
+
+  useEffect(() => () => {
+    if (dirtyRef.current) {
+      saveProjectArtifact(latestStateRef.current, 'Project artifact auto-saved before navigation', { updateStatus: false });
+    }
+  }, [saveProjectArtifact]);
 
   const changeBrief = (field: keyof OpenDesignBrief, value: string) => {
-    setStudioState((current) => updateOpenDesignBrief(current, { [field]: value } as Partial<OpenDesignBrief>));
+    markStudioStateDirty((current) => updateOpenDesignBrief(current, { [field]: value } as Partial<OpenDesignBrief>));
   };
 
   const approveTokenReview = (item: OpenDesignTokenReviewItem) => {
-    setStudioState((current) => approveOpenDesignTokenRevision(current, item.id, 'Design lead', 'Looks good.'));
+    markStudioStateDirty((current) => approveOpenDesignTokenRevision(current, item.id, 'Design lead', 'Looks good.'));
     setStatus(`${item.label} approved`);
   };
 
   const requestTokenRevision = (item: OpenDesignTokenReviewItem) => {
-    setStudioState((current) => requestOpenDesignTokenRevision(
+    markStudioStateDirty((current) => requestOpenDesignTokenRevision(
       current,
       item.id,
       `${item.proposedValue} · revise`,
@@ -12691,58 +12844,114 @@ function OpenDesignStudioPane({
 
   const publishDesignSystem = (enabled: boolean) => {
     if (!enabled) {
-      setStudioState((current) => ({ ...current, published: false }));
+      markStudioStateDirty((current) => ({ ...current, published: false }));
       setStatus('Design system unpublished');
       return;
     }
-    setStudioState((current) => publishOpenDesignSystem(current, 'Design lead', 'Published approved DESIGN.md system.'));
+    markStudioStateDirty((current) => publishOpenDesignSystem(current, 'Design lead', 'Published approved DESIGN.md system.'));
     setStatus(approvalSummary.readyToPublish ? 'Design system published' : 'Publish blocked until token reviews are approved');
   };
 
   const setDefaultDesignSystem = (enabled: boolean) => {
-    setStudioState((current) => ({ ...current, defaultForWorkspace: enabled }));
+    markStudioStateDirty((current) => ({ ...current, defaultForWorkspace: enabled }));
     setStatus(enabled ? 'Design system marked as workspace default' : 'Workspace default cleared');
   };
 
   const compileDesignSystem = () => {
-    const timestamp = new Date().toISOString();
-    upsertFiles(buildOpenDesignWorkspaceBundle(studioState, timestamp), 'DESIGN.md compiled into workspace files');
+    saveProjectArtifact(studioState, 'DESIGN.md saved to project artifact');
     setView('files');
   };
 
   const runCritique = () => {
-    const timestamp = new Date().toISOString();
     const critique = runOpenDesignCritique(studioState);
     const nextState = { ...studioState, lastCritique: critique };
+    dirtyRef.current = true;
+    latestStateRef.current = nextState;
     setStudioState(nextState);
-    upsertFiles(buildOpenDesignWorkspaceBundle(nextState, timestamp), `Critique ${critique.gate} at ${critique.score}/10`);
+    saveProjectArtifact(nextState, `Critique ${critique.gate} at ${critique.score}/10`);
     setView('critique');
   };
 
   const exportHtml = () => {
-    const timestamp = new Date().toISOString();
-    upsertFiles([createOpenDesignExportArtifact('html', studioState, timestamp)], 'Standalone HTML export added');
+    const collision = findOpenDesignProjectNameCollision(studioState, artifacts, projectArtifactIdRef.current);
+    if (collision) {
+      setStatus(`Project name collides with artifact "${collision.title}"`);
+      return;
+    }
+    const exportFile = createOpenDesignExportArtifact('html', studioState, new Date().toISOString());
+    const nextState = latestStateRef.current;
+    const baseFiles = createOpenDesignProjectArtifactInput(nextState).files;
+    const preservedExportFiles = currentExportFiles.filter((file) => file.path !== exportFile.path);
+    const artifact = onProjectArtifactSave({
+      ...createOpenDesignProjectArtifactInput(nextState, {
+        artifactId: projectArtifactIdRef.current ?? undefined,
+        timestamp: new Date().toISOString(),
+      }),
+      files: [...baseFiles, ...preservedExportFiles, exportFile],
+    }, projectArtifactIdRef.current);
+    projectArtifactIdRef.current = artifact.id;
+    setProjectArtifactId(artifact.id);
+    dirtyRef.current = false;
+    setStatus('Standalone HTML export added to project artifact');
     setView('files');
   };
 
   const exportHandoff = () => {
-    const timestamp = new Date().toISOString();
-    upsertFiles([createOpenDesignExportArtifact('handoff', studioState, timestamp)], 'Claude Code handoff added');
+    const collision = findOpenDesignProjectNameCollision(studioState, artifacts, projectArtifactIdRef.current);
+    if (collision) {
+      setStatus(`Project name collides with artifact "${collision.title}"`);
+      return;
+    }
+    const exportFile = createOpenDesignExportArtifact('handoff', studioState, new Date().toISOString());
+    const nextState = latestStateRef.current;
+    const baseFiles = createOpenDesignProjectArtifactInput(nextState).files;
+    const preservedExportFiles = currentExportFiles.filter((file) => file.path !== exportFile.path);
+    const artifact = onProjectArtifactSave({
+      ...createOpenDesignProjectArtifactInput(nextState, {
+        artifactId: projectArtifactIdRef.current ?? undefined,
+        timestamp: new Date().toISOString(),
+      }),
+      files: [...baseFiles, ...preservedExportFiles, exportFile],
+    }, projectArtifactIdRef.current);
+    projectArtifactIdRef.current = artifact.id;
+    setProjectArtifactId(artifact.id);
+    dirtyRef.current = false;
+    setStatus('Claude Code handoff added to project artifact');
     setView('files');
   };
 
+  const switchOpenDesignView = (nextView: OpenDesignStudioView) => {
+    if (dirtyRef.current) {
+      saveProjectArtifact(studioState, 'Project artifact auto-saved before navigation');
+    }
+    setView(nextView);
+  };
+
+  const handleStudioBlur = (event: React.FocusEvent<HTMLElement>) => {
+    const nextFocused = event.relatedTarget;
+    if (nextFocused instanceof Node && event.currentTarget.contains(nextFocused)) return;
+    if (dirtyRef.current) {
+      saveProjectArtifact(studioState, 'Project artifact auto-saved on unfocus');
+    }
+  };
+
   return (
-    <section className="open-design-studio" role="region" aria-label="OpenDesign DESIGN.md Studio feature pane">
+    <section className="open-design-studio" role="region" aria-label="Design Studio feature pane" onBlurCapture={handleStudioBlur}>
       <header className="od-topbar">
         <div className="od-title-lockup">
           <span className="od-logo-mark"><Icon name="slidersHorizontal" size={20} /></span>
           <div>
             <span className="panel-eyebrow">DESIGN.md Studio</span>
-            <h2>OpenDesign Studio</h2>
+            <h2>Design Studio</h2>
             <p>Brief, review, approve, preview, critique, and export a design system that agents can apply.</p>
+            {projectNameCollision ? (
+              <p className="od-collision-warning" role="alert">
+                Project name collides with artifact "{projectNameCollision.title}".
+              </p>
+            ) : null}
           </div>
         </div>
-        <div className="od-toolbar" aria-label="OpenDesign studio actions">
+        <div className="od-toolbar" aria-label="Design Studio actions">
           <button type="button" className="od-icon-action" aria-label="Compile DESIGN.md" title="Compile DESIGN.md" onClick={compileDesignSystem}>
             <Icon name="save" size={15} />
           </button>
@@ -12769,36 +12978,36 @@ function OpenDesignStudioPane({
           </div>
           <label>
             <span>Project</span>
-            <input aria-label="OpenDesign project name" value={studioState.brief.projectName} onChange={(event) => changeBrief('projectName', event.target.value)} />
+            <input aria-label="Design Studio project name" value={studioState.brief.projectName} onChange={(event) => changeBrief('projectName', event.target.value)} />
           </label>
           <label>
             <span>Prompt</span>
-            <textarea aria-label="OpenDesign design prompt" value={studioState.brief.prompt} onChange={(event) => changeBrief('prompt', event.target.value)} />
+            <textarea aria-label="Design Studio design prompt" value={studioState.brief.prompt} onChange={(event) => changeBrief('prompt', event.target.value)} />
           </label>
           <label>
             <span>Audience</span>
-            <input aria-label="OpenDesign audience" value={studioState.brief.audience} onChange={(event) => changeBrief('audience', event.target.value)} />
+            <input aria-label="Design Studio audience" value={studioState.brief.audience} onChange={(event) => changeBrief('audience', event.target.value)} />
           </label>
           <label>
             <span>Surface</span>
-            <input aria-label="OpenDesign surface" value={studioState.brief.surface} onChange={(event) => changeBrief('surface', event.target.value)} />
+            <input aria-label="Design Studio surface" value={studioState.brief.surface} onChange={(event) => changeBrief('surface', event.target.value)} />
           </label>
           <label>
             <span>Code</span>
-            <input aria-label="OpenDesign local folder" value={studioState.brief.localFolder} onChange={(event) => changeBrief('localFolder', event.target.value)} />
+            <input aria-label="Design Studio local folder" value={studioState.brief.localFolder} onChange={(event) => changeBrief('localFolder', event.target.value)} />
           </label>
           <label>
             <span>Assets</span>
-            <input aria-label="OpenDesign assets" value={studioState.brief.assets} onChange={(event) => changeBrief('assets', event.target.value)} />
+            <input aria-label="Design Studio assets" value={studioState.brief.assets} onChange={(event) => changeBrief('assets', event.target.value)} />
           </label>
           <label>
             <span>Notes</span>
-            <textarea aria-label="OpenDesign notes" value={studioState.brief.notes} onChange={(event) => changeBrief('notes', event.target.value)} />
+            <textarea aria-label="Design Studio notes" value={studioState.brief.notes} onChange={(event) => changeBrief('notes', event.target.value)} />
           </label>
         </aside>
 
         <main className="od-main-stage">
-          <div className="od-stage-switcher" role="tablist" aria-label="OpenDesign studio views">
+          <div className="od-stage-switcher" role="tablist" aria-label="Design Studio views">
             {OPEN_DESIGN_STUDIO_VIEWS.map((item) => (
               <button
                 key={item.id}
@@ -12808,7 +13017,7 @@ function OpenDesignStudioPane({
                 className={view === item.id ? 'is-active' : ''}
                 aria-label={item.label}
                 title={item.label}
-                onClick={() => setView(item.id)}
+                onClick={() => switchOpenDesignView(item.id)}
               >
                 <Icon name={item.icon} size={15} />
               </button>
@@ -12825,7 +13034,7 @@ function OpenDesignStudioPane({
           </div>
 
           {view === 'preview' ? (
-            <section className="od-preview-plane" aria-label="OpenDesign preview">
+            <section className="od-preview-plane" aria-label="Design Studio preview">
               <div className="od-artifact-frame">
                 <div className="od-artifact-topline">
                   <span>Browser frame</span>
@@ -12841,7 +13050,7 @@ function OpenDesignStudioPane({
                   '--od-border': activeDirection.palette.border,
                 } as CSSProperties}>
                   <div className="od-artifact-copy">
-                    <span>OpenDesign seed</span>
+                    <span>Design Studio seed</span>
                     <h3>{studioState.brief.projectName || `${workspaceName} Design System`}</h3>
                     <p>{studioState.brief.prompt}</p>
                     <button type="button" aria-label="Preview primary action" title="Preview primary action">
@@ -12856,28 +13065,28 @@ function OpenDesignStudioPane({
                 </div>
               </div>
               {inspectMode ? (
-                <div className="od-inspect-strip" aria-label="OpenDesign inspect controls">
+                <div className="od-inspect-strip" aria-label="Design Studio inspect controls">
                   <label>
                     <span>Density</span>
                     <input
-                      aria-label="OpenDesign density"
+                      aria-label="Design Studio density"
                       type="range"
                       min="3"
                       max="6"
                       value={studioState.density}
-                      onChange={(event) => setStudioState((current) => ({ ...current, density: Number(event.target.value) }))}
+                      onChange={(event) => markStudioStateDirty((current) => ({ ...current, density: Number(event.target.value) }))}
                     />
                     <output>{studioState.density}</output>
                   </label>
                   <label>
                     <span>Radius</span>
                     <input
-                      aria-label="OpenDesign radius"
+                      aria-label="Design Studio radius"
                       type="range"
                       min="2"
                       max="10"
                       value={studioState.radius}
-                      onChange={(event) => setStudioState((current) => ({ ...current, radius: Number(event.target.value) }))}
+                      onChange={(event) => markStudioStateDirty((current) => ({ ...current, radius: Number(event.target.value) }))}
                     />
                     <output>{studioState.radius}px</output>
                   </label>
@@ -12886,12 +13095,12 @@ function OpenDesignStudioPane({
               ) : null}
             </section>
           ) : view === 'review' ? (
-            <section className="od-token-review-plane" aria-label="OpenDesign token review">
+            <section className="od-token-review-plane" aria-label="Design Studio token review">
               <div className="od-plane-heading">
                 <Icon name="clipboard" size={14} />
                 <strong>{approvalSummary.status === 'published' ? 'Published token system' : approvalSummary.readyToPublish ? 'Ready to publish' : 'Token review queue'}</strong>
               </div>
-              <div className="od-review-summary" aria-label="OpenDesign approval summary">
+              <div className="od-review-summary" aria-label="Design Studio approval summary">
                 <span>{approvalSummary.approved}/{approvalSummary.total} approved</span>
                 <span>{approvalSummary.needsReview} needs review</span>
                 <span>{approvalSummary.changesRequested} needs work</span>
@@ -12933,10 +13142,10 @@ function OpenDesignStudioPane({
                   </div>
                 ))}
               </div>
-              <div className="od-publish-strip" aria-label="OpenDesign publish controls">
+              <div className="od-publish-strip" aria-label="Design Studio publish controls">
                 <label>
                   <input
-                    aria-label="Publish approved OpenDesign system"
+                    aria-label="Publish approved Design Studio system"
                     type="checkbox"
                     checked={studioState.published}
                     onChange={(event) => publishDesignSystem(event.target.checked)}
@@ -12945,7 +13154,7 @@ function OpenDesignStudioPane({
                 </label>
                 <label>
                   <input
-                    aria-label="Use OpenDesign system as workspace default"
+                    aria-label="Use Design Studio system as workspace default"
                     type="checkbox"
                     checked={studioState.defaultForWorkspace}
                     onChange={(event) => setDefaultDesignSystem(event.target.checked)}
@@ -12953,14 +13162,14 @@ function OpenDesignStudioPane({
                   <span>Default</span>
                 </label>
               </div>
-              <div className="od-approval-event-list" aria-label="OpenDesign approval events">
+              <div className="od-approval-event-list" aria-label="Design Studio approval events">
                 {studioState.approvalEvents.length ? studioState.approvalEvents.slice(-5).map((event) => (
                   <span key={event.id}>{event.action} · {event.itemId} · {event.reviewer}</span>
                 )) : <span>No token decisions recorded yet.</span>}
               </div>
             </section>
           ) : view === 'files' ? (
-            <section className="od-file-plane" aria-label="OpenDesign generated files">
+            <section className="od-file-plane" aria-label="Design Studio generated files">
               <div className="od-plane-heading">
                 <Icon name="file" size={14} />
                 <strong>Generated files</strong>
@@ -12969,7 +13178,7 @@ function OpenDesignStudioPane({
                 {designFiles.length ? designFiles.map((file) => (
                   <div key={file.path} className="od-file-row">
                     <Icon name={file.path.endsWith('.md') ? 'file' : file.path.endsWith('.html') ? 'globe' : 'clipboard'} size={14} />
-                    <code>{file.path}</code>
+                    <code>{`//artifacts/${projectArtifactDisplayId}/${file.path}`}</code>
                     <span>{file.content.length.toLocaleString()} bytes</span>
                   </div>
                 )) : <p>No files generated yet. Compile DESIGN.md to write the studio bundle.</p>}
@@ -12977,7 +13186,7 @@ function OpenDesignStudioPane({
               <pre className="od-design-md-preview" aria-label="DESIGN.md preview">{designDocument}</pre>
             </section>
           ) : view === 'critique' ? (
-            <section className="od-critique-plane" aria-label="OpenDesign critique">
+            <section className="od-critique-plane" aria-label="Design Studio critique">
               <div className="od-plane-heading">
                 <Icon name="sparkles" size={14} />
                 <strong>{studioState.lastCritique ? `Gate ${studioState.lastCritique.gate} at ${studioState.lastCritique.score}/10` : 'Critique not run'}</strong>
@@ -12994,7 +13203,7 @@ function OpenDesignStudioPane({
               </div>
             </section>
           ) : (
-            <section className="od-research-plane" aria-label="OpenDesign research">
+            <section className="od-research-plane" aria-label="Design Studio research">
               <div className="od-plane-heading">
                 <Icon name="search" size={14} />
                 <strong>Captured research</strong>
@@ -13021,7 +13230,7 @@ function OpenDesignStudioPane({
           )}
         </main>
 
-        <aside className="od-token-rail" aria-label="OpenDesign token rail">
+        <aside className="od-token-rail" aria-label="Design Studio token rail">
           <div className="od-rail-header">
             <Icon name="slidersHorizontal" size={14} />
             <strong>Directions</strong>
@@ -13033,7 +13242,7 @@ function OpenDesignStudioPane({
                   type="button"
                   aria-label={`Select ${direction.label} direction`}
                   title={`Select ${direction.label}`}
-                  onClick={() => setStudioState((current) => selectOpenDesignDirection(current, direction.id as OpenDesignDirectionId))}
+                  onClick={() => markStudioStateDirty((current) => selectOpenDesignDirection(current, direction.id as OpenDesignDirectionId))}
                 >
                   <span style={{ background: direction.palette.accent }} />
                 </button>
@@ -13066,7 +13275,7 @@ function OpenDesignApprovalCompositionSample({
   return (
     <section
       className="od-approval-composition"
-      aria-label="OpenDesign approval composition sample"
+      aria-label="Design Studio approval composition sample"
       style={{
         '--od-sample-canvas': direction.palette.canvas,
         '--od-sample-surface': direction.palette.surface,
@@ -13203,21 +13412,25 @@ function ExtensionFeaturePane({
   extension,
   workspaceName,
   workspaceFiles,
+  artifacts,
   artifactCount,
   onWorkspaceFilesChange,
+  onProjectArtifactSave,
 }: {
   extension: DefaultExtensionDescriptor;
   workspaceName: string;
   workspaceFiles: WorkspaceFile[];
+  artifacts: AgentArtifact[];
   artifactCount: number;
   onWorkspaceFilesChange: (files: WorkspaceFile[]) => void;
+  onProjectArtifactSave: (input: OpenDesignProjectArtifactInput, existingArtifactId?: string | null) => AgentArtifact;
 }) {
   if (extension.manifest.id === 'agent-harness.ext.open-design') {
     return (
       <OpenDesignStudioPane
         workspaceName={workspaceName}
-        workspaceFiles={workspaceFiles}
-        onWorkspaceFilesChange={onWorkspaceFilesChange}
+        artifacts={artifacts}
+        onProjectArtifactSave={onProjectArtifactSave}
       />
     );
   }
@@ -15237,7 +15450,7 @@ function AgentBrowserApp() {
     }),
     [specDrivenDevelopmentSettings],
   );
-  const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? [];
+  const activeArtifacts = artifactsByWorkspace[activeWorkspaceId] ?? EMPTY_AGENT_ARTIFACTS;
   const activeWorkspaceSurfaces = workspaceSurfacesByWorkspace[activeWorkspaceId] ?? [];
   const activeWorkspaceSurfaceSummaries = useMemo(
     () => listWorkspaceSurfaceSummaries(activeWorkspaceSurfaces),
@@ -15381,6 +15594,7 @@ function AgentBrowserApp() {
     let mounted = true;
     void createDefaultExtensionRuntime(activeWorkspaceFiles, {
       installedExtensionIds: enabledDefaultExtensionIds,
+      artifacts: activeArtifacts,
     })
       .then((runtime) => {
         if (mounted) setDefaultExtensionRuntime(runtime);
@@ -15392,7 +15606,7 @@ function AgentBrowserApp() {
     return () => {
       mounted = false;
     };
-  }, [activeWorkspaceFiles, enabledDefaultExtensionIds]);
+  }, [activeArtifacts, activeWorkspaceFiles, enabledDefaultExtensionIds]);
   const defaultActiveHarnessSpec = useMemo(() => createDefaultHarnessAppSpec({
     workspaceId: activeWorkspaceId,
     workspaceName: activeWorkspace.name,
@@ -15561,6 +15775,12 @@ function AgentBrowserApp() {
     isActive: index === 0,
   })), [clipboardHistory]);
   const activePanelMeta = SIDEBAR_PANEL_META[activePanel];
+  const sidebarPanelMeta = activePanel === 'extensions' && activeExtensionFeature
+    ? {
+      label: getExtensionFeatureTitle(activeExtensionFeature),
+      icon: getDefaultExtensionIcon(activeExtensionFeature),
+    }
+    : activePanelMeta;
   const openActiveWorkspaceFileFromMcp = useCallback((path: string) => {
     setWorkspaceViewStateByWorkspace((current) => ({
       ...current,
@@ -17696,6 +17916,36 @@ function AgentBrowserApp() {
     return updatedArtifact;
   }, [activeArtifacts, activeWorkspace.name, activeWorkspaceId, openArtifactPanel, setArtifactsByWorkspace, setToast]);
 
+  const saveOpenDesignProjectArtifact = useCallback((
+    input: OpenDesignProjectArtifactInput,
+    existingArtifactId?: string | null,
+  ): AgentArtifact => {
+    const existingArtifact = existingArtifactId
+      ? activeArtifacts.find((candidate) => candidate.id === existingArtifactId) ?? null
+      : null;
+    const artifact = existingArtifact
+      ? updateArtifactFiles(existingArtifact, {
+        title: input.title,
+        description: input.description,
+        kind: input.kind,
+        references: input.references,
+        files: input.files,
+      }, { idFactory: createUniqueId })
+      : createArtifact(input, { idFactory: createUniqueId });
+
+    setArtifactsByWorkspace((current) => {
+      const artifacts = current[activeWorkspaceId] ?? [];
+      return {
+        ...current,
+        [activeWorkspaceId]: existingArtifact
+          ? artifacts.map((candidate) => candidate.id === artifact.id ? artifact : candidate)
+          : [artifact, ...artifacts.filter((candidate) => candidate.id !== artifact.id)],
+      };
+    });
+
+    return artifact;
+  }, [activeArtifacts, activeWorkspaceId, setArtifactsByWorkspace]);
+
   const createWorkspaceFileFromMcp = useCallback(async ({ path, content }: { path: string; content: string }) => {
     const nextFile: WorkspaceFile = {
       path,
@@ -19032,20 +19282,34 @@ function AgentBrowserApp() {
         />
       );
     }
-    if (activePanel === 'extensions') return (
-      <ExtensionsPanel
-        workspaceName={activeWorkspace.name}
-        capabilities={activeWorkspaceCapabilities}
-        defaultExtensions={defaultExtensionRuntime}
-        installedExtensionIds={installedDefaultExtensionIds}
-        enabledExtensionIds={enabledDefaultExtensionIds}
-        onOpenExtensionDetail={openExtensionDetail}
-        onInstallExtension={installDefaultExtension}
-        onUninstallExtension={uninstallDefaultExtension}
-        onSetExtensionEnabled={setDefaultExtensionEnabled}
-        onConfigureExtension={configureDefaultExtension}
-      />
-    );
+    if (activePanel === 'extensions') {
+      if (activeExtensionFeature?.manifest.id === 'agent-harness.ext.open-design') {
+        return (
+          <DesignStudioProjectsPanel
+            artifacts={activeArtifacts}
+            onOpenProject={(artifact) => {
+              const designFile = artifact.files.find((file) => file.path === 'DESIGN.md') ?? artifact.files[0] ?? null;
+              openArtifactPanel(artifact.id, designFile?.path ?? null, activeWorkspaceId);
+            }}
+            onDownloadProject={downloadArtifact}
+          />
+        );
+      }
+      return (
+        <ExtensionsPanel
+          workspaceName={activeWorkspace.name}
+          capabilities={activeWorkspaceCapabilities}
+          defaultExtensions={defaultExtensionRuntime}
+          installedExtensionIds={installedDefaultExtensionIds}
+          enabledExtensionIds={enabledDefaultExtensionIds}
+          onOpenExtensionDetail={openExtensionDetail}
+          onInstallExtension={installDefaultExtension}
+          onUninstallExtension={uninstallDefaultExtension}
+          onSetExtensionEnabled={setDefaultExtensionEnabled}
+          onConfigureExtension={configureDefaultExtension}
+        />
+      );
+    }
     if (activePanel === 'models') return (
       <ModelsPanel
         installedModels={installedModels}
@@ -19107,7 +19371,7 @@ function AgentBrowserApp() {
         <aside className="sidebar">
           <header className="sidebar-header">
             <div className="sidebar-title-row">
-              {activePanel !== 'workspaces' ? <span className="panel-eyebrow"><Icon name={activePanelMeta.icon} size={12} color="#8fa6c4" />{activePanelMeta.label}</span> : null}
+              {activePanel !== 'workspaces' ? <span className="panel-eyebrow"><Icon name={sidebarPanelMeta.icon} size={12} color="#8fa6c4" />{sidebarPanelMeta.label}</span> : null}
             </div>
             <div className="workspace-toolbar">
               <div className="workspace-nav-row">
@@ -19172,15 +19436,18 @@ function AgentBrowserApp() {
           />
         ) : activePanel === 'extensions' ? (
           activeExtensionFeature ? (
-            <ExtensionFeaturePane
-              extension={activeExtensionFeature}
-              workspaceName={activeWorkspace.name}
-              workspaceFiles={activeWorkspaceFiles}
-              artifactCount={activeArtifacts.length}
-              onWorkspaceFilesChange={(files) => {
-                setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: files }));
-              }}
-            />
+              <ExtensionFeaturePane
+                extension={activeExtensionFeature}
+                workspaceName={activeWorkspace.name}
+                workspaceFiles={activeWorkspaceFiles}
+                artifacts={activeArtifacts}
+                artifactCount={activeArtifacts.length}
+                onWorkspaceFilesChange={(files) => setWorkspaceFilesByWorkspace((current) => ({
+                  ...current,
+                  [activeWorkspaceId]: files,
+                }))}
+                onProjectArtifactSave={saveOpenDesignProjectArtifact}
+              />
           ) : selectedExtension ? (
             <ExtensionDetailPage
               extension={selectedExtension}

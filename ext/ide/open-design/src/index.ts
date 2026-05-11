@@ -149,6 +149,27 @@ export interface OpenDesignWorkspaceFile {
   path: string;
   content: string;
   updatedAt: string;
+  mediaType?: string;
+}
+
+export interface OpenDesignProjectArtifactInput {
+  id: string;
+  title: string;
+  description: string;
+  kind: 'open-design-project';
+  references: string[];
+  files: OpenDesignWorkspaceFile[];
+}
+
+export interface OpenDesignArtifactNameCandidate {
+  id: string;
+  title?: string | null;
+}
+
+export interface OpenDesignProjectNameCollision {
+  id: string;
+  title: string;
+  field: 'id' | 'title';
 }
 
 export interface OpenDesignStudioState {
@@ -733,19 +754,21 @@ export function buildOpenDesignWorkspaceBundle(
   const name = designName(state);
   const design = compileOpenDesignMd(state, timestamp);
   const files: OpenDesignWorkspaceFile[] = [
-    { path: 'DESIGN.md', content: design, updatedAt: timestamp },
+    { path: 'DESIGN.md', content: design, updatedAt: timestamp, mediaType: 'text/markdown' },
     {
-      path: 'design/open-design/research.json',
+      path: 'research.json',
       content: JSON.stringify(getOpenDesignResearchInventory(), null, 2),
       updatedAt: timestamp,
+      mediaType: 'application/json',
     },
     {
-      path: 'design/open-design/system.json',
+      path: 'system.json',
       content: JSON.stringify({ name, state, direction: directionFor(state.directionId) }, null, 2),
       updatedAt: timestamp,
+      mediaType: 'application/json',
     },
     {
-      path: 'design/open-design/token-review.json',
+      path: 'token-review.json',
       content: JSON.stringify({
         summary: getOpenDesignApprovalSummary(state),
         composition: createOpenDesignApprovalComposition(state),
@@ -753,26 +776,77 @@ export function buildOpenDesignWorkspaceBundle(
         approvalEvents: state.approvalEvents,
       }, null, 2),
       updatedAt: timestamp,
+      mediaType: 'application/json',
     },
     {
-      path: 'design/open-design/preview.html',
+      path: 'preview.html',
       content: previewHtml(name, state),
       updatedAt: timestamp,
+      mediaType: 'text/html',
     },
     {
-      path: 'design/open-design/handoff.md',
+      path: 'handoff.md',
       content: handoffMarkdown(name),
       updatedAt: timestamp,
+      mediaType: 'text/markdown',
     },
   ];
   if (state.lastCritique) {
     files.push({
-      path: 'design/open-design/critique.json',
+      path: 'critique.json',
       content: JSON.stringify(state.lastCritique, null, 2),
       updatedAt: timestamp,
+      mediaType: 'application/json',
     });
   }
   return files;
+}
+
+export function buildOpenDesignProjectArtifactId(projectName: string): string {
+  return `design-studio-${slugify(projectName)}`;
+}
+
+export function createOpenDesignProjectArtifactInput(
+  state: OpenDesignStudioState,
+  options: { timestamp?: string; artifactId?: string; references?: readonly string[] } = {},
+): OpenDesignProjectArtifactInput {
+  const timestamp = options.timestamp ?? new Date().toISOString();
+  const name = designName(state);
+  return {
+    id: options.artifactId?.trim() || buildOpenDesignProjectArtifactId(name),
+    title: name,
+    description: `Design Studio project artifacts for ${name}.`,
+    kind: 'open-design-project',
+    references: [...new Set(options.references ?? [])],
+    files: buildOpenDesignWorkspaceBundle(state, timestamp),
+  };
+}
+
+export function findOpenDesignProjectNameCollision(
+  state: OpenDesignStudioState,
+  artifacts: readonly OpenDesignArtifactNameCandidate[],
+  currentArtifactId?: string | null,
+): OpenDesignProjectNameCollision | null {
+  const projectName = designName(state);
+  const projectSlug = slugify(projectName);
+  const normalizedProjectName = normalizeComparable(projectName);
+  const normalizedProjectId = normalizeComparable(buildOpenDesignProjectArtifactId(projectName));
+  const normalizedLegacyProjectId = normalizeComparable(`open-design-${projectSlug}`);
+  const currentId = currentArtifactId ? normalizeComparable(currentArtifactId) : null;
+
+  for (const artifact of artifacts) {
+    if (currentId && normalizeComparable(artifact.id) === currentId) continue;
+    const title = artifact.title?.trim() || artifact.id;
+    if (normalizeComparable(title) === normalizedProjectName) {
+      return { id: artifact.id, title, field: 'title' };
+    }
+    const normalizedArtifactId = normalizeComparable(artifact.id);
+    if (normalizedArtifactId === normalizedProjectId || normalizedArtifactId === normalizedLegacyProjectId) {
+      return { id: artifact.id, title, field: 'id' };
+    }
+  }
+
+  return null;
 }
 
 export function runOpenDesignCritique(state: OpenDesignStudioState): OpenDesignCritiqueResult {
@@ -808,11 +882,12 @@ export function createOpenDesignExportArtifact(
   const slug = slugify(name);
   const extension = kind === 'handoff' || kind === 'canva' || kind === 'cloudflare' ? 'md' : kind;
   const suffix = kind === 'handoff' ? '-handoff' : kind === 'cloudflare' ? '-cloudflare-deploy' : '';
-  const path = `design/open-design/exports/${slug}${suffix}.${extension}`;
+  const path = `exports/${slug}${suffix}.${extension}`;
   return {
     path,
     updatedAt: timestamp,
     content: exportContent(kind, name, path),
+    mediaType: mediaTypeForOpenDesignPath(path),
   };
 }
 
@@ -822,7 +897,7 @@ export function createOpenDesignPlugin(): HarnessPlugin {
     register({ commands, tools }) {
       tools.register({
         id: 'open-design.inventory',
-        label: 'OpenDesign feature inventory',
+        label: 'Design Studio feature inventory',
         description: 'Return the Claude Design and Open Design feature inventory used by the DESIGN.md studio.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         execute: async () => getOpenDesignResearchInventory(),
@@ -831,7 +906,7 @@ export function createOpenDesignPlugin(): HarnessPlugin {
       tools.register({
         id: 'open-design.compile-design-md',
         label: 'Compile DESIGN.md',
-        description: 'Compile an OpenDesign studio brief into a DESIGN.md document.',
+        description: 'Compile a Design Studio brief into a DESIGN.md document.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -862,7 +937,7 @@ export function createOpenDesignPlugin(): HarnessPlugin {
       tools.register({
         id: 'open-design.critique',
         label: 'Critique DESIGN.md system',
-        description: 'Run the five-panel OpenDesign critique gate for a studio brief.',
+        description: 'Run the five-panel Design Studio critique gate for a studio brief.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -885,15 +960,15 @@ export function createOpenDesignPlugin(): HarnessPlugin {
 
       commands.register({
         id: 'open-design.new',
-        usage: '/opendesign <brief>',
-        description: 'Draft an OpenDesign DESIGN.md system brief.',
-        pattern: /^\/opendesign(?:\s+(?<brief>.+))?$/i,
+        usage: '/designstudio <brief>',
+        description: 'Draft a Design Studio DESIGN.md system brief.',
+        pattern: /^\/(?:designstudio|opendesign)(?:\s+(?<brief>.+))?$/i,
         target: {
           type: 'prompt-template',
           template: (_args, match) => {
             const brief = match.groups.brief?.trim() || 'a new AI-native design system';
             return [
-              `Create an OpenDesign studio brief for ${brief}.`,
+              `Create a Design Studio brief for ${brief}.`,
               'Lock the brief, select a visual direction, review design tokens, approve or request revisions, publish the approved DESIGN.md system, preview the artifact, critique it, and export a handoff.',
             ].join('\n');
           },
@@ -1093,7 +1168,7 @@ function previewHtml(name: string, state: OpenDesignStudioState): string {
   const direction = directionFor(state.directionId);
   return [
     '<!doctype html>',
-    '<html><head><meta charset="utf-8"><title>OpenDesign Preview</title>',
+    '<html><head><meta charset="utf-8"><title>Design Studio Preview</title>',
     '<style>',
     `body{margin:0;background:${direction.palette.canvas};color:${direction.palette.text};font-family:${direction.typography.ui},sans-serif}`,
     `main{min-height:100vh;display:grid;place-items:center;padding:48px}`,
@@ -1114,14 +1189,14 @@ function handoffMarkdown(name: string): string {
     `# ${name} handoff`,
     '',
     'Use DESIGN.md as the source of truth.',
-    'Generated preview and research assets live under design/open-design/.',
+    'Generated preview and research assets live in this project artifact.',
     'Apply data-design-widget attributes when mapping tokens into UI code.',
   ].join('\n');
 }
 
 function exportContent(kind: OpenDesignExportKind, name: string, path: string): string {
   if (kind === 'html') {
-    return '<!doctype html><html><body><main data-design-widget="preview-canvas">OpenDesign HTML export</main></body></html>';
+    return '<!doctype html><html><body><main data-design-widget="preview-canvas">Design Studio HTML export</main></body></html>';
   }
   if (kind === 'handoff') {
     return handoffMarkdown(name);
@@ -1134,6 +1209,21 @@ function exportContent(kind: OpenDesignExportKind, name: string, path: string): 
 
 function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'design-system';
+}
+
+function mediaTypeForOpenDesignPath(path: string): string {
+  const ext = path.toLowerCase().split('.').pop();
+  if (ext === 'html') return 'text/html';
+  if (ext === 'json') return 'application/json';
+  if (ext === 'md' || ext === 'markdown') return 'text/markdown';
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'pptx') return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  if (ext === 'zip') return 'application/zip';
+  return 'text/plain';
+}
+
+function normalizeComparable(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function roundScore(value: number): number {

@@ -877,14 +877,14 @@ describe('App smoke coverage', () => {
     expect(marketplace.querySelector('.badge')).toBeNull();
     expect(marketplace.querySelector('.chip')).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Install Design Studio' }));
       await Promise.resolve();
     });
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(installedSidebar).toHaveTextContent('DESIGN.md agent guidance');
-    expect(installedSidebar).toHaveTextContent('OpenDesign DESIGN.md Studio');
-    expect(installedSidebar).toHaveTextContent('Required by OpenDesign DESIGN.md Studio');
+    expect(installedSidebar).toHaveTextContent('Design Studio');
+    expect(installedSidebar).toHaveTextContent('Required by Design Studio');
     expect(installedSidebar.querySelector('.marketplace-card')).toBeNull();
     expect(installedSidebar.querySelector('.badge')).toBeNull();
     expect(installedSidebar.querySelector('.chip')).toBeNull();
@@ -900,10 +900,10 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
-    fireEvent.click(within(marketplace).getByRole('button', { name: 'Open details for OpenDesign DESIGN.md Studio' }));
+    fireEvent.click(within(marketplace).getByRole('button', { name: 'Open details for Design Studio' }));
 
     const detail = screen.getByRole('region', { name: 'Extension detail' });
-    expect(within(detail).getByRole('heading', { name: 'OpenDesign DESIGN.md Studio' })).toBeInTheDocument();
+    expect(within(detail).getByRole('heading', { name: 'Design Studio' })).toBeInTheDocument();
     expect(within(detail).getByRole('tab', { name: 'Details' })).toBeInTheDocument();
     expect(within(detail).getByRole('tab', { name: 'Features' })).toBeInTheDocument();
     expect(within(detail).getByRole('heading', { name: 'README.md' })).toBeInTheDocument();
@@ -938,7 +938,7 @@ describe('App smoke coverage', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     await act(async () => {
-      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Design Studio' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony internal task orchestration' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
     });
@@ -948,19 +948,30 @@ describe('App smoke coverage', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Design Studio extension' }));
     });
-    const studio = screen.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' });
-    expect(within(studio).getByRole('heading', { name: 'OpenDesign Studio' })).toBeInTheDocument();
-    expect(within(studio).getByLabelText('OpenDesign design prompt')).toHaveValue(
+    const projectsPanel = screen.getByRole('region', { name: 'Design Studio projects' });
+    expect(projectsPanel).toHaveTextContent('No design projects yet');
+    expect(screen.queryByRole('region', { name: 'Installed extensions' })).not.toBeInTheDocument();
+    const studio = screen.getByRole('region', { name: 'Design Studio feature pane' });
+    expect(within(studio).getByRole('heading', { name: 'Design Studio' })).toBeInTheDocument();
+    expect(within(studio).getByLabelText('Design Studio design prompt')).toHaveValue(
       'Build a sleek AI-native DESIGN.md studio for composing product design systems.',
     );
+    const notesField = within(studio).getByLabelText('Design Studio notes');
+    await act(async () => {
+      fireEvent.change(notesField, { target: { value: 'Autosave the project artifact when focus leaves the studio.' } });
+    });
+    await act(async () => {
+      fireEvent.blur(notesField, { relatedTarget: screen.getByLabelText('Extensions') });
+    });
+    expect(screen.getByRole('region', { name: 'Design Studio projects' })).toHaveTextContent('Research Design System');
     await act(async () => {
       fireEvent.click(within(studio).getByRole('tab', { name: 'Show token review' }));
     });
-    const review = screen.getByRole('region', { name: 'OpenDesign token review' });
-    expect(within(review).getByLabelText('OpenDesign approval summary')).toHaveTextContent('0/6 approved');
-    expect(within(review).getByLabelText('OpenDesign approval composition sample')).toHaveTextContent('Agent Browser approval composition');
+    const review = screen.getByRole('region', { name: 'Design Studio token review' });
+    expect(within(review).getByLabelText('Design Studio approval summary')).toHaveTextContent('0/6 approved');
+    expect(within(review).getByLabelText('Design Studio approval composition sample')).toHaveTextContent('Agent Browser approval composition');
     expect(within(review).getByLabelText('Display type visual sample')).toHaveTextContent('Aa');
     expect(within(review).getByLabelText('Action components visual sample')).toHaveTextContent('Run');
     for (const approveButton of within(review).getAllByRole('button', { name: /^Approve / })) {
@@ -968,26 +979,29 @@ describe('App smoke coverage', () => {
         fireEvent.click(approveButton);
       });
     }
-    expect(within(review).getByLabelText('OpenDesign approval summary')).toHaveTextContent('6/6 approved');
+    expect(within(review).getByLabelText('Design Studio approval summary')).toHaveTextContent('6/6 approved');
     await act(async () => {
-      fireEvent.click(within(review).getByLabelText('Publish approved OpenDesign system'));
-      fireEvent.click(within(review).getByLabelText('Use OpenDesign system as workspace default'));
+      fireEvent.click(within(review).getByLabelText('Publish approved Design Studio system'));
+      fireEvent.click(within(review).getByLabelText('Use Design Studio system as workspace default'));
     });
-    expect(within(review).getByLabelText('Publish approved OpenDesign system')).toBeChecked();
-    expect(within(review).getByLabelText('Use OpenDesign system as workspace default')).toBeChecked();
+    expect(within(review).getByLabelText('Publish approved Design Studio system')).toBeChecked();
+    expect(within(review).getByLabelText('Use Design Studio system as workspace default')).toBeChecked();
     await act(async () => {
       fireEvent.click(within(studio).getByRole('button', { name: 'Compile DESIGN.md' }));
     });
-    expect(screen.getByRole('region', { name: 'OpenDesign generated files' })).toHaveTextContent('DESIGN.md');
-    expect(screen.getByRole('region', { name: 'OpenDesign generated files' })).toHaveTextContent('design/open-design/research.json');
-    expect(screen.getByRole('region', { name: 'OpenDesign generated files' })).toHaveTextContent('design/open-design/token-review.json');
+    const generatedFiles = screen.getByRole('region', { name: 'Design Studio generated files' });
+    expect(generatedFiles).toHaveTextContent('//artifacts/design-studio-research-design-system/DESIGN.md');
+    expect(generatedFiles).toHaveTextContent('//artifacts/design-studio-research-design-system/research.json');
+    expect(generatedFiles).toHaveTextContent('//artifacts/design-studio-research-design-system/token-review.json');
+    expect(generatedFiles).not.toHaveTextContent('design/open-design');
+    expect(screen.getByRole('region', { name: 'Design Studio projects' })).toHaveTextContent('Research Design System');
     expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('## Source Inventory');
     expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('## Token Review And Approval');
     expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('status: published');
     await act(async () => {
       fireEvent.click(within(studio).getByRole('button', { name: 'Run design critique' }));
     });
-    expect(screen.getByRole('region', { name: 'OpenDesign critique' })).toHaveTextContent('Gate pass');
+    expect(screen.getByRole('region', { name: 'Design Studio critique' })).toHaveTextContent('Gate pass');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Symphony internal task orchestration extension' }));
@@ -1017,7 +1031,7 @@ describe('App smoke coverage', () => {
     fireEvent.click(screen.getByLabelText('Extensions'));
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     await act(async () => {
-      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Design Studio' }));
     });
 
     await act(async () => {
@@ -1025,23 +1039,23 @@ describe('App smoke coverage', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Design Studio extension' }));
     });
-    expect(screen.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Design Studio feature pane' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.keyDown(window, { altKey: true, key: '5' });
     });
 
     expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Design Studio feature pane' })).not.toBeInTheDocument();
 
     await act(async () => {
       fireEvent.keyDown(window, { altKey: true, key: '6' });
     });
 
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Design Studio feature pane' })).not.toBeInTheDocument();
   });
 
   it('installs the artifact worktree explorer as a workspace tree Artifacts node instead of an activity pane', async () => {

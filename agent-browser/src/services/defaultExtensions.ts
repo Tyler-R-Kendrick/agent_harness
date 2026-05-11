@@ -20,6 +20,7 @@ import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
 import { createSymphonyPlugin } from '@agent-harness/ext-symphony';
 import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
 import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
+import type { AgentArtifact } from './artifacts';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
 import { createGhcpModelProviderPlugin } from '../../../ext/ghcp-model-provider/src/index.ts';
@@ -77,6 +78,7 @@ export interface DefaultExtensionRuntime {
 
 export interface CreateDefaultExtensionRuntimeOptions {
   installedExtensionIds?: readonly string[];
+  artifacts?: readonly AgentArtifact[];
 }
 
 export type ExtensionMarketplaceCategory = 'ide' | 'harness' | 'worker' | 'provider';
@@ -156,9 +158,14 @@ export async function createDefaultExtensionRuntime(
 ): Promise<DefaultExtensionRuntime> {
   const context = createHarnessExtensionContext<MemoryMessage, InferenceMessagesPayload<MemoryMessage>>();
   const installedExtensionIds = selectInstalledDefaultExtensionIds(options.installedExtensionIds ?? []);
-  const designDocuments = workspaceFiles
-    .filter((file) => file.path === 'DESIGN.md' || file.path.endsWith('/Design.md') || file.path.endsWith('/DESIGN.md'))
-    .map((file) => ({ path: file.path, content: file.content }));
+  const designDocuments = [
+    ...workspaceFiles
+      .filter((file) => file.path === 'DESIGN.md' || file.path.endsWith('/Design.md') || file.path.endsWith('/DESIGN.md'))
+      .map((file) => ({ path: file.path, content: file.content })),
+    ...(options.artifacts ?? []).flatMap((artifact) => artifact.files
+      .filter((file) => file.path === 'DESIGN.md' || file.path.endsWith('/Design.md') || file.path.endsWith('/DESIGN.md'))
+      .map((file) => ({ path: `//artifacts/${artifact.id}/${file.path}`, content: file.content }))),
+  ];
 
   const pluginFactories = new Map<string, () => HarnessPlugin>([
     ['agent-harness.ext.agent-skills', () => createAgentSkillsPlugin(workspaceFiles, {

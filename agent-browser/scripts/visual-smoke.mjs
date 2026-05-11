@@ -197,7 +197,7 @@ async function captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, tim
     await tokenReview.evaluate((element) => {
       element.scrollTop = 0;
     });
-    await expect(tokenReview.getByLabel('OpenDesign approval composition sample')).toContainText(
+    await expect(tokenReview.getByLabel('Design Studio approval composition sample')).toContainText(
       'Agent Browser approval composition',
       { timeout: timeoutMs },
     );
@@ -205,7 +205,7 @@ async function captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, tim
       timeout: timeoutMs,
     });
     await page.screenshot({ path: viewportOutputPath, fullPage: true });
-    console.log(`agent-browser OpenDesign token review ${name} smoke passed: ${viewportOutputPath}`);
+    console.log(`agent-browser Design Studio token review ${name} smoke passed: ${viewportOutputPath}`);
   }
 }
 
@@ -1464,7 +1464,7 @@ async function main() {
     await expect(marketplace.getByText('Symphony internal task orchestration').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByText('OpenDesign DESIGN.md Studio').first()).toBeVisible({
+    await expect(marketplace.getByText('Design Studio').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByText('Requires DESIGN.md agent guidance').first()).toBeVisible({
@@ -1508,10 +1508,10 @@ async function main() {
     });
     await page.screenshot({ path: artifactWorktreeOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Extensions', exact: true }).click();
-    await marketplace.getByRole('button', { name: 'Open details for OpenDesign DESIGN.md Studio' }).click();
+    await marketplace.getByRole('button', { name: 'Open details for Design Studio' }).click();
     const extensionDetail = page.getByRole('region', { name: 'Extension detail' });
     await expect(extensionDetail).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(extensionDetail.getByRole('heading', { name: 'OpenDesign DESIGN.md Studio' })).toBeVisible({
+    await expect(extensionDetail.getByRole('heading', { name: 'Design Studio' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(extensionDetail.getByRole('heading', { name: 'README.md' })).toBeVisible({ timeout: shellTimeoutMs });
@@ -1519,23 +1519,26 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: extensionDetailOutputPath, fullPage: true });
-    await extensionDetail.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }).click();
-    await page.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }).click();
-    const extensionFeaturePane = page.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' });
+    await extensionDetail.getByRole('button', { name: 'Install Design Studio' }).click();
+    await page.getByRole('button', { name: 'Design Studio extension' }).click();
+    const designProjectsPanel = page.getByRole('region', { name: 'Design Studio projects' });
+    await expect(designProjectsPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('region', { name: 'Installed extensions' })).toHaveCount(0);
+    const extensionFeaturePane = page.getByRole('region', { name: 'Design Studio feature pane' });
     await expect(extensionFeaturePane).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(extensionFeaturePane.getByRole('heading', { name: 'OpenDesign Studio' })).toBeVisible({
+    await expect(extensionFeaturePane.getByRole('heading', { name: 'Design Studio' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(extensionFeaturePane.getByLabel('Design brief')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(extensionFeaturePane.getByLabel('OpenDesign preview')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(extensionFeaturePane.getByLabel('OpenDesign token rail')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByLabel('Design Studio preview')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(extensionFeaturePane.getByLabel('Design Studio token rail')).toBeVisible({ timeout: shellTimeoutMs });
     await extensionFeaturePane.getByRole('tab', { name: 'Show token review' }).click();
-    const tokenReview = extensionFeaturePane.getByRole('region', { name: 'OpenDesign token review' });
+    const tokenReview = extensionFeaturePane.getByRole('region', { name: 'Design Studio token review' });
     await expect(tokenReview).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(tokenReview.getByLabel('OpenDesign approval summary')).toContainText('0/6 approved', {
+    await expect(tokenReview.getByLabel('Design Studio approval summary')).toContainText('0/6 approved', {
       timeout: shellTimeoutMs,
     });
-    await expect(tokenReview.getByLabel('OpenDesign approval composition sample')).toContainText(
+    await expect(tokenReview.getByLabel('Design Studio approval composition sample')).toContainText(
       'Agent Browser approval composition',
       { timeout: shellTimeoutMs },
     );
@@ -1550,11 +1553,11 @@ async function main() {
     for (let index = 0; index < approveTokenButtonCount; index += 1) {
       await approveTokenButtons.nth(index).click();
     }
-    await expect(tokenReview.getByLabel('OpenDesign approval summary')).toContainText('6/6 approved', {
+    await expect(tokenReview.getByLabel('Design Studio approval summary')).toContainText('6/6 approved', {
       timeout: shellTimeoutMs,
     });
-    await tokenReview.getByLabel('Publish approved OpenDesign system').check();
-    await tokenReview.getByLabel('Use OpenDesign system as workspace default').check();
+    await tokenReview.getByLabel('Publish approved Design Studio system').check();
+    await tokenReview.getByLabel('Use Design Studio system as workspace default').check();
     await tokenReview.evaluate((element) => {
       element.scrollTop = 0;
     });
@@ -1562,18 +1565,18 @@ async function main() {
     await captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, shellTimeoutMs);
     await page.setViewportSize({ width: 1920, height: 1080 });
     await extensionFeaturePane.getByRole('button', { name: 'Compile DESIGN.md' }).click();
-    await expect(extensionFeaturePane.getByRole('region', { name: 'OpenDesign generated files' })).toBeVisible({
+    await expect(extensionFeaturePane.getByRole('region', { name: 'Design Studio generated files' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(extensionFeaturePane.getByText('DESIGN.md').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(extensionFeaturePane.getByText('design/open-design/research.json')).toBeVisible({
+    await expect(extensionFeaturePane.getByText('//artifacts/design-studio-research-design-system/research.json')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(extensionFeaturePane.getByText('design/open-design/token-review.json')).toBeVisible({
+    await expect(extensionFeaturePane.getByText('//artifacts/design-studio-research-design-system/token-review.json')).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await extensionFeaturePane.getByRole('button', { name: 'Run design critique' }).click();
-    await expect(extensionFeaturePane.getByRole('region', { name: 'OpenDesign critique' })).toBeVisible({
+    await expect(extensionFeaturePane.getByRole('region', { name: 'Design Studio critique' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(extensionFeaturePane.getByText('Gate pass')).toBeVisible({ timeout: shellTimeoutMs });
@@ -1750,7 +1753,7 @@ async function main() {
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
     console.log(`agent-browser artifact worktree smoke passed: ${artifactWorktreeOutputPath}`);
-    console.log(`agent-browser OpenDesign token review smoke passed: ${openDesignTokenReviewOutputPath}`);
+    console.log(`agent-browser Design Studio token review smoke passed: ${openDesignTokenReviewOutputPath}`);
     console.log(`agent-browser workflow canvas smoke passed: ${workflowCanvasOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);

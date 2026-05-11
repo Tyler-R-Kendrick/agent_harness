@@ -66,9 +66,9 @@
     },
     {
       "id": "agent-harness.ext.open-design",
-      "name": "OpenDesign DESIGN.md Studio",
+      "name": "Design Studio",
       "version": "0.1.0",
-      "description": "Provides an IDE design-system surface inspired by OpenDesign for visually composing systems that emit DESIGN.md files.",
+      "description": "Provides an IDE design-system surface for visually composing DESIGN.md systems as artifact-backed projects.",
       "manifest": "./ide/open-design/agent-harness.plugin.json",
       "source": {
         "type": "local",
@@ -78,7 +78,11 @@
       "metadata": {
         "marketplaceCategory": "ide",
         "activityIcon": "slidersHorizontal",
-        "dependencies": ["agent-harness.ext.design-md-context"],
+        "dependencies": [
+          "agent-harness.ext.design-md-context",
+          "agent-harness.ext.artifacts-context",
+          "agent-harness.ext.artifacts-worktree"
+        ],
         "standardRefs": [
           "https://open-design.ai/",
           "https://tr.designtokens.org/format/"
