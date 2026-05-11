@@ -13,6 +13,9 @@ const WIDGET_PROPS = [
   'sessionId',
   'size',
   'summary',
+  'widgetJson',
+  'widgetSampleData',
+  'changeHistory',
 ];
 const DASHBOARD_CANVAS_PROPS = [...WIDGET_PROPS, 'sessionWidgetLayouts'];
 const UNSAFE_PROPS = new Set(['className', 'style', 'dangerouslySetInnerHTML', 'html', 'script']);

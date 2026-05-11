@@ -750,7 +750,7 @@ describe('App', () => {
     }
   });
 
-  it('creates dashboard widgets from the canvas and commits widget-bound chat previews', async () => {
+  it('creates dashboard widgets from the canvas and saves live widget-editor JSON', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -764,30 +764,57 @@ describe('App', () => {
     fireEvent.contextMenu(screen.getByLabelText('Infinite session canvas'), { clientX: 260, clientY: 180 });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
 
-    expect(screen.getByLabelText('Widget-bound session')).toHaveTextContent('New widget');
+    const editor = screen.getByRole('region', { name: 'Widget editor' });
+    expect(within(editor).getByRole('heading', { name: 'New widget', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Widget-bound session')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Chat input'), {
-      target: { value: 'title: Project map. Summarize the dashboard work.' },
+    fireEvent.change(within(editor).getByLabelText('Sample data'), {
+      target: { value: '{ "metric": "9 work items", "owner": "Research" }' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(screen.getByLabelText('New widget widget preview')).toHaveTextContent('Project map');
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close chat panel' }));
+    fireEvent.change(within(editor).getByLabelText('Widget JSON'), {
+      target: {
+        value: JSON.stringify({
+          type: 'Card',
+          children: [
+            { type: 'Title', value: 'Project map' },
+            { type: 'Text', value: '{{metric}} for {{owner}}' },
+          ],
+        }, null, 2),
+      },
+    });
+    expect(within(editor).getByText('9 work items for Research')).toBeInTheDocument();
+    fireEvent.click(within(editor).getByRole('button', { name: 'Save widget JSON' }));
     await act(async () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole('article', { name: 'Project map widget' })).toBeInTheDocument();
-    expect(screen.getByRole('treeitem', { name: /Project map/ })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /New widget/ })).toBeInTheDocument();
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
     const persistedElements = Object.values(persisted['ws-research'].elements) as Array<{ type: string; props?: Record<string, unknown> }>;
-    const persistedWidget = persistedElements.find((element) => element.props?.title === 'Project map');
+    const persistedWidget = persistedElements.find((element) => element.props?.title === 'New widget');
     expect(persistedWidget).toMatchObject({
       type: 'SessionConversationSummary',
-      props: expect.objectContaining({ summary: 'title: Project map. Summarize the dashboard work.' }),
+      props: expect.objectContaining({
+        widgetJson: expect.objectContaining({ type: 'Card' }),
+        widgetSampleData: expect.objectContaining({ metric: '9 work items' }),
+      }),
     });
+  });
+
+  it('opens dashboard widget tree subnodes in the widget editor by default', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const workspaceTree = screen.getByRole('tree', { name: 'Workspace tree' });
+    fireEvent.click(within(workspaceTree).getByRole('button', { name: /^Session summary$/ }));
+
+    expect(screen.getByRole('region', { name: 'Widget editor' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Session summary', level: 2 })).toBeInTheDocument();
+    expect(screen.getByLabelText('Live widget preview')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Widget-bound session')).not.toBeInTheDocument();
   });
 
   it('tools picker shows one Built-In bucket with Browser/Sessions/Files/Clipboard/Renderer/Workspace/User Context/Settings sub-groups', async () => {

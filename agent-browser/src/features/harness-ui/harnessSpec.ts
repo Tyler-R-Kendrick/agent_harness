@@ -9,6 +9,7 @@ import type {
   WidgetSize,
 } from './types';
 import { assertHarnessElementAllowedByCatalog } from './harnessCatalog';
+import { createDefaultWidgetDocument } from './widgetComponents';
 
 const DEFAULT_SLOT: HarnessElementSlot = 'app';
 
@@ -322,6 +323,7 @@ export function addHarnessDashboardWidget(spec: HarnessAppSpec, input: AddHarnes
       {
         summary: 'Draft widget',
         emptyLabel: 'Nothing to show yet',
+        widgetJson: createDefaultWidgetDocument(input.title ?? 'New widget') as unknown as JsonValue,
         ...(input.props ?? {}),
       },
     ),

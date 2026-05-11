@@ -202,7 +202,7 @@ export interface WorkspaceMcpWorktreeContextMenuState {
   supported: boolean;
 }
 
-export type WorkspaceMcpRenderPaneType = 'dashboard' | 'browser-page' | 'session' | 'workspace-file' | 'artifact';
+export type WorkspaceMcpRenderPaneType = 'dashboard' | 'dashboard-widget' | 'browser-page' | 'session' | 'workspace-file' | 'artifact';
 
 export interface WorkspaceMcpRenderPane {
   id: string;

@@ -92,7 +92,7 @@ function StatefulDashboard({ onPatchElement }: { onPatchElement: (patch: Harness
 
 describe('HarnessDashboardPanel', () => {
   it('renders dashboard spec widgets through the JSON renderer instead of per-session cards', () => {
-    const onOpenWidgetSession = vi.fn();
+    const onOpenWidgetEditor = vi.fn();
 
     render(
       <HarnessDashboardPanel
@@ -105,7 +105,7 @@ describe('HarnessDashboardPanel', () => {
         browserPages={[{ id: 'b1', title: 'Docs', url: 'https://example.com' }]}
         files={[{ path: 'AGENTS.md', kind: 'agents' }]}
         knowledge={knowledge}
-        onOpenWidgetSession={onOpenWidgetSession}
+        onOpenWidgetEditor={onOpenWidgetEditor}
       />,
     );
 
@@ -119,9 +119,9 @@ describe('HarnessDashboardPanel', () => {
     expect(within(dashboard).queryByRole('article', { name: 'Session 1 widget' })).not.toBeInTheDocument();
     expect(within(dashboard).queryByRole('article', { name: 'Session 2 widget' })).not.toBeInTheDocument();
 
-    fireEvent.click(within(dashboard).getByRole('button', { name: 'Open Session summary widget session' }));
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Open widget editor for Session summary' }));
 
-    expect(onOpenWidgetSession).toHaveBeenCalledWith('session-summary-widget');
+    expect(onOpenWidgetEditor).toHaveBeenCalledWith('session-summary-widget');
   });
 
   it('does not render a separate titlebar or button strip above the infinite canvas', () => {

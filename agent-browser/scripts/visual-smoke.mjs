@@ -39,6 +39,7 @@ const repoWikiGraphOutputPath = path.resolve(repoRoot, 'output/playwright/agent-
 const repoWikiMemoryOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-memory.png');
 const repoWikiMobileOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-mobile.png');
 const dashboardCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas.png');
+const widgetEditorOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-widget-editor.png');
 const historyTimelineOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-history-unified-timeline.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
 const mediaAgentOutputPath = path.resolve(repoRoot, 'docs/superpowers/plans/2026-05-07-media-agent-visual-smoke.png');
@@ -1040,7 +1041,42 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await captureDashboardCanvasViewportMatrix(page, shellTimeoutMs);
+    await page.setViewportSize({ width: 1280, height: 820 });
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
+    await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
+    await workspaceTree.getByRole('button', { name: 'Session summary', exact: true }).click();
+    const widgetEditor = page.getByRole('region', { name: 'Widget editor' });
+    await expect(widgetEditor).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(widgetEditor.getByRole('heading', { name: 'Session summary', level: 2 })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(widgetEditor.getByRole('region', { name: 'Widget source editors' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(widgetEditor.getByRole('region', { name: 'Live widget preview' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(widgetEditor.getByRole('region', { name: 'Widget change history' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: widgetEditorOutputPath, fullPage: true });
+    await page.evaluate((activeWorkspaceId) => {
+      const key = 'agent-browser.workspace-view-state-by-workspace';
+      const current = JSON.parse(localStorage.getItem(key) || '{}');
+      current[activeWorkspaceId] = {
+        ...(current[activeWorkspaceId] || {}),
+        dashboardOpen: true,
+        activeDashboardWidgetId: null,
+        activeSessionIds: [],
+        openTabIds: [],
+        editingFilePath: null,
+        activeArtifactPanel: null,
+        panelOrder: [`dashboard:${activeWorkspaceId}`],
+      };
+      localStorage.setItem(key, JSON.stringify(current));
+    }, 'ws-research');
+    await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: navigationTimeoutMs });
+    await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Evaluation session', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Enable browser notifications' })).toBeVisible({
@@ -1079,7 +1115,7 @@ async function main() {
     });
     await page.screenshot({ path: evaluationOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Back to chat' }).click();
-    await page.getByRole('button', { name: 'Models', exact: true }).click();
+    await page.getByRole('button', { name: 'Models', exact: true }).click({ noWaitAfter: true });
     await expect(page.getByRole('region', { name: 'Installed models' }).getByRole('heading', { name: 'Models', exact: true })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(page.getByRole('region', { name: 'Model catalog' }).getByRole('heading', { name: 'Find the Right Model for Your AI Solution' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'History' }).click();
@@ -1136,7 +1172,7 @@ async function main() {
     await historyGraph.getByRole('button', { name: 'Inspect branch history for Daily workspace audit' }).click();
     await expect(historyDetail.getByText(/next run: 2026-05-06T09:00:00.000Z/)).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: typedSdkOutputPath, fullPage: true });
-    await page.getByRole('button', { name: 'Models', exact: true }).click();
+    await page.getByRole('button', { name: 'Models', exact: true }).click({ noWaitAfter: true });
     const installedModelsPanel = page.getByRole('region', { name: 'Installed models' });
     const modelCatalog = page.getByRole('region', { name: 'Model catalog' });
     await expect(installedModelsPanel.getByRole('heading', { name: 'Models', exact: true })).toBeVisible({ timeout: shellTimeoutMs });
@@ -1147,7 +1183,7 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await expect(modelCatalog.getByRole('heading', { name: /Local Browser Models \(\d+\)/ })).toBeVisible({ timeout: shellTimeoutMs });
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click({ noWaitAfter: true });
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
     const settingToggle = (name) => page.getByRole('button', { name, exact: true });
     const harnessCoreToggle = settingToggle('Harness core');
@@ -1758,6 +1794,7 @@ async function main() {
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser dashboard canvas smoke passed: ${dashboardCanvasOutputPath}`);
+    console.log(`agent-browser widget editor smoke passed: ${widgetEditorOutputPath}`);
     console.log(`agent-browser git stub smoke passed: ${gitStubOutputPath}`);
     console.log(`agent-browser history timeline smoke passed: ${historyTimelineOutputPath}`);
     console.log(`agent-browser typed run SDK smoke passed: ${typedSdkOutputPath}`);

@@ -189,9 +189,10 @@ describe('workspaceTree', () => {
 
     expect(renderPaneIdForNode(file)).toBe('file:AGENTS.md');
     expect(renderPaneIdForNode({ id: 'ws-test', name: 'Test', type: 'workspace' })).toBe('dashboard:ws-test');
-    expect(renderPaneIdForNode({ id: 'ws-test:dashboard:knowledge-widget', name: 'Knowledge', type: 'tab', nodeKind: 'dashboard' })).toBe('dashboard:ws-test');
+    expect(renderPaneIdForNode({ id: 'ws-test:dashboard:knowledge-widget', name: 'Knowledge', type: 'tab', nodeKind: 'dashboard', dashboardWidgetId: 'knowledge-widget' })).toBe('widget-editor:ws-test:knowledge-widget');
     expect(workspaceViewStateEquals(left, { ...left })).toBe(true);
     expect(workspaceViewStateEquals(left, { ...left, dashboardOpen: false })).toBe(false);
+    expect(workspaceViewStateEquals(left, { ...left, activeDashboardWidgetId: 'knowledge-widget' })).toBe(false);
     expect(workspaceViewStateEquals(left, { ...left, panelOrder: [] })).toBe(false);
   });
 
@@ -206,6 +207,7 @@ describe('workspaceTree', () => {
 
     expect(createWorkspaceViewEntry(workspace)).toEqual(expect.objectContaining({
       dashboardOpen: true,
+      activeDashboardWidgetId: null,
       activeSessionIds: [],
       mountedSessionFsIds: [firstSessionId],
     }));

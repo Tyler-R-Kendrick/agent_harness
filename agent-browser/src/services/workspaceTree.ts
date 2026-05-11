@@ -8,6 +8,7 @@ export type WorkspaceViewState = {
   openTabIds: string[];
   editingFilePath: string | null;
   dashboardOpen: boolean;
+  activeDashboardWidgetId?: string | null;
   activeMode: 'agent' | 'terminal';
   activeSessionIds: string[];
   mountedSessionFsIds: string[];
@@ -326,6 +327,7 @@ export function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewStat
     openTabIds: [],
     editingFilePath: null,
     dashboardOpen: true,
+    activeDashboardWidgetId: null,
     activeMode: 'agent',
     activeSessionIds: [],
     mountedSessionFsIds: sessionIds,
@@ -350,10 +352,19 @@ export function normalizeWorkspaceViewEntry(workspace: TreeNode, entry?: Workspa
     const tab = findNode(workspace, id);
     return tab?.type === 'tab' && (tab.nodeKind ?? 'browser') === 'browser';
   });
+  const dashboardWidgetIds = new Set(
+    (getWorkspaceCategory(workspace, 'dashboard')?.children ?? [])
+      .map((node) => node.dashboardWidgetId)
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0),
+  );
+  const activeDashboardWidgetId = typeof base.activeDashboardWidgetId === 'string' && dashboardWidgetIds.has(base.activeDashboardWidgetId)
+    ? base.activeDashboardWidgetId
+    : null;
   return {
     ...base,
     openTabIds: validOpenTabIds,
     dashboardOpen: base.dashboardOpen ?? true,
+    activeDashboardWidgetId,
     activeSessionIds,
     mountedSessionFsIds,
     panelOrder: (base.panelOrder ?? []).filter((id) => typeof id === 'string' && id.trim().length > 0),
@@ -374,6 +385,7 @@ export function workspaceViewStateEquals(left: WorkspaceViewState, right: Worksp
     && left.openTabIds.every((id, index) => id === right.openTabIds[index])
     && left.editingFilePath === right.editingFilePath
     && left.dashboardOpen === right.dashboardOpen
+    && (left.activeDashboardWidgetId ?? null) === (right.activeDashboardWidgetId ?? null)
     && left.activeMode === right.activeMode
     && left.activeSessionIds.length === right.activeSessionIds.length
     && left.activeSessionIds.every((id, index) => id === right.activeSessionIds[index])
@@ -411,7 +423,7 @@ export function renderPaneIdForNode(node: TreeNode): string | null {
   }
   if (node.type === 'tab' && node.nodeKind === 'dashboard') {
     const workspaceId = node.id.includes(':dashboard:') ? node.id.slice(0, node.id.indexOf(':dashboard:')) : node.id;
-    return `dashboard:${workspaceId}`;
+    return node.dashboardWidgetId ? `widget-editor:${workspaceId}:${node.dashboardWidgetId}` : `dashboard:${workspaceId}`;
   }
   if (node.type === 'file' && node.filePath) {
     return `file:${node.filePath}`;
