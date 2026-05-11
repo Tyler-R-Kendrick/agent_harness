@@ -1100,6 +1100,63 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('region', { name: 'Native text renderer' })).toHaveTextContent('Ready for workspace-tree review.');
   });
 
+  it('renders workflow canvas orchestration as a single-pane builder instead of manifest documentation', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    await act(async () => {
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));
+    });
+
+    const pane = screen.getByRole('region', { name: 'Workflow canvas orchestration feature pane' });
+    const workbench = within(pane).getByRole('region', { name: 'Workflow canvas workbench' });
+    expect(within(pane).getByTestId('workflow-canvas-plugin-renderer')).toHaveAttribute(
+      'data-plugin-id',
+      'agent-harness.ext.workflow-canvas',
+    );
+    expect(within(workbench).getByRole('region', { name: 'Workflow node catalog' })).toHaveTextContent('Webhook trigger');
+    expect(within(workbench).getByRole('region', { name: 'Workflow node catalog' })).toHaveTextContent('AI agent');
+    expect(within(workbench).getByRole('region', { name: 'Workflow node catalog' })).toHaveTextContent('Media generation');
+
+    const canvas = within(workbench).getByRole('region', { name: 'Workflow orchestration canvas' });
+    expect(within(canvas).getByRole('button', { name: 'Inspect Webhook intake' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Inspect Research agent' })).toBeInTheDocument();
+    expect(within(canvas).getByRole('button', { name: 'Inspect Generate campaign media' })).toBeInTheDocument();
+    expect(within(canvas).getByText('n8n replay')).toBeInTheDocument();
+    expect(within(canvas).getByText('OpenAI typed edge')).toBeInTheDocument();
+    expect(within(canvas).getByText('Higgsfield branch')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(within(canvas).getByRole('button', { name: 'Inspect Generate campaign media' }));
+    });
+    const inspector = within(workbench).getByRole('region', { name: 'Workflow node inspector' });
+    expect(inspector).toHaveTextContent('Generate campaign media');
+    expect(inspector).toHaveTextContent('Credit estimate');
+    expect(inspector).toHaveTextContent('Source: Higgsfield Canvas');
+
+    await act(async () => {
+      fireEvent.click(within(workbench).getByRole('button', { name: 'Run workflow' }));
+    });
+    expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' })).toHaveTextContent('Run complete');
+
+    await act(async () => {
+      fireEvent.click(within(workbench).getByRole('button', { name: 'Save canvas artifact' }));
+    });
+    expect(within(workbench).getByRole('status', { name: 'Workflow canvas save status' })).toHaveTextContent('Saved workflow-canvas/campaign-launch.json');
+    expect(within(workbench).getByRole('region', { name: 'Saved workflow canvases' })).toHaveTextContent('workflow-canvas/campaign-launch.json');
+  });
+
   it('renders partner agent control plane controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

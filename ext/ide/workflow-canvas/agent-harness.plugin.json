@@ -42,12 +42,12 @@
     {
       "kind": "renderer",
       "id": "workflow-canvas.renderer",
-      "description": "Placeholder renderer contribution for workflow canvas artifacts."
+      "description": "React workbench renderer for workflow canvas artifacts."
     },
     {
       "kind": "pane-item",
       "id": "workflow-canvas.main-pane",
-      "description": "Future main-pane contribution for opening workflow canvas artifacts."
+      "description": "Main-pane workflow canvas builder for installed extension workspaces."
     }
   ],
   "renderers": [

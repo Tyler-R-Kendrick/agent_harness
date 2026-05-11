@@ -6,6 +6,7 @@
     "moduleResolution": "bundler",
     "strict": true,
     "skipLibCheck": true,
+    "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "baseUrl": ".",
@@ -14,5 +15,5 @@
     },
     "types": ["vitest/globals"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

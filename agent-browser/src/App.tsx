@@ -111,6 +111,7 @@ import {
   SymphonyActivityPanel,
   SymphonyWorkspaceApp,
 } from './features/symphony/SymphonyOrchestrationPanel';
+import { WorkflowCanvasRenderer } from '@agent-harness/ext-workflow-canvas';
 // Unified per-turn process visualization surfaced via InlineProcess and
 // ProcessPanel below.
 import { MarkdownContent } from './utils/MarkdownContent';
@@ -13218,6 +13219,17 @@ function ExtensionFeaturePane({
         workspaceFiles={workspaceFiles}
         onWorkspaceFilesChange={onWorkspaceFilesChange}
       />
+    );
+  }
+  if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') {
+    return (
+      <section className="extension-feature-pane extension-feature-pane--workflow-canvas" role="region" aria-label={`${extension.manifest.name} feature pane`}>
+        <WorkflowCanvasRenderer
+          workspaceName={workspaceName}
+          workspaceFiles={workspaceFiles}
+          onWorkspaceFilesChange={onWorkspaceFilesChange}
+        />
+      </section>
     );
   }
 

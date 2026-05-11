@@ -349,7 +349,7 @@ describe('workflow-canvas extension', () => {
     await expect(brokenContext.tools.execute('workflow-canvas.read', { id: 'remote-canvas' })).rejects.toThrow('storage down');
   });
 
-  it('normalizes stored workflow canvas artifacts and exposes a renderer placeholder', () => {
+  it('normalizes stored workflow canvas artifacts and exposes an installable renderer component', () => {
     const canvas = createWorkflowCanvasFromServerlessWorkflow(serverlessWorkflow);
     const decoded = decodeWorkflowCanvasArtifact(JSON.stringify({
       canvas,
@@ -366,6 +366,7 @@ describe('workflow-canvas extension', () => {
     expect(() => decodeWorkflowCanvasArtifact('null')).toThrow('Workflow canvas artifact must be an object.');
     expect(() => decodeWorkflowCanvasArtifact(JSON.stringify({ canvas }))).toThrow('Workflow canvas artifact needs a Serverless Workflow document.');
     expect(() => createWorkflowCanvasFromServerlessWorkflow({ ...serverlessWorkflow, do: [] })).toThrow('Invalid Serverless Workflow document');
-    expect(WorkflowCanvasRenderer()).toBeNull();
+    expect(WorkflowCanvasRenderer).toBeTypeOf('function');
+    expect(WorkflowCanvasRenderer.name).toBe('WorkflowCanvasRenderer');
   });
 });

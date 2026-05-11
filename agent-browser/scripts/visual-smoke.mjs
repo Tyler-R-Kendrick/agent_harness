@@ -18,6 +18,7 @@ const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-br
 const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-detail.png');
 const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
 const artifactWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-artifact-worktree.png');
+const workflowCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-workflow-canvas.png');
 const openDesignTokenReviewOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review.png');
 const openDesignTokenReviewViewportOutputPaths = [
   {
@@ -1423,7 +1424,10 @@ async function main() {
     await page.getByRole('button', { name: 'History', exact: true }).click();
     const historyPanelAfterSymphony = page.getByRole('region', { name: 'History', exact: true });
     await expect(historyPanelAfterSymphony).toContainText('Symphony activity: Updated Symphony', { timeout: shellTimeoutMs });
-    await historyPanelAfterSymphony.getByRole('button', { name: /Inspect branch history for Symphony activity: Updated Symphony/ }).click();
+    await historyPanelAfterSymphony
+      .getByRole('button', { name: /Inspect branch history for Symphony activity: Updated Symphony/ })
+      .first()
+      .click();
     await expect(historyPanelAfterSymphony).toContainText(
       'Symphony event: workflow loaded - Loaded WORKFLOW.md and applied Symphony runtime defaults.',
       { timeout: shellTimeoutMs },
@@ -1574,6 +1578,41 @@ async function main() {
     });
     await expect(extensionFeaturePane.getByText('Gate pass')).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: extensionFeatureOutputPath, fullPage: true });
+    await page.getByRole('button', { name: 'Extensions', exact: true }).click();
+    const workflowMarketplace = page.getByRole('region', { name: 'Extension marketplace' });
+    await expect(workflowMarketplace).toBeVisible({ timeout: shellTimeoutMs });
+    await workflowMarketplace.getByRole('button', { name: 'Install Workflow canvas orchestration' }).click();
+    await page.getByRole('button', { name: 'Workflow canvas orchestration extension' }).click();
+    const workflowFeaturePane = page.getByRole('region', { name: 'Workflow canvas orchestration feature pane' });
+    const workflowWorkbench = workflowFeaturePane.getByRole('region', { name: 'Workflow canvas workbench' });
+    await expect(workflowWorkbench).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(workflowFeaturePane.getByTestId('workflow-canvas-plugin-renderer')).toHaveAttribute(
+      'data-plugin-id',
+      'agent-harness.ext.workflow-canvas',
+      { timeout: shellTimeoutMs },
+    );
+    await expect(workflowWorkbench.getByRole('region', { name: 'Workflow node catalog' }).getByText('Webhook trigger')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    const workflowCanvas = workflowWorkbench.getByRole('region', { name: 'Workflow orchestration canvas' });
+    await expect(workflowCanvas.getByRole('button', { name: 'Inspect Research agent' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(workflowCanvas.getByText('OpenAI typed edge')).toBeVisible({ timeout: shellTimeoutMs });
+    await workflowCanvas.getByRole('button', { name: 'Inspect Generate campaign media' }).click();
+    const workflowInspector = workflowWorkbench.getByRole('region', { name: 'Workflow node inspector' });
+    await expect(workflowInspector).toContainText('Generate campaign media', { timeout: shellTimeoutMs });
+    await expect(workflowInspector).toContainText('Credit estimate', { timeout: shellTimeoutMs });
+    await workflowWorkbench.getByRole('button', { name: 'Run workflow' }).click();
+    await expect(workflowWorkbench.getByRole('region', { name: 'Workflow execution replay' })).toContainText('Run complete', {
+      timeout: shellTimeoutMs,
+    });
+    await workflowWorkbench.getByRole('button', { name: 'Save canvas artifact' }).click();
+    await expect(workflowWorkbench.getByRole('status', { name: 'Workflow canvas save status' })).toContainText(
+      'Saved workflow-canvas/campaign-launch.json',
+      { timeout: shellTimeoutMs },
+    );
+    await page.screenshot({ path: workflowCanvasOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Wiki', exact: true }).click();
     const repoWikiPanel = page.getByRole('region', { name: 'Wiki explorer', exact: true });
     const repoWikiWorkbench = page.getByRole('region', { name: 'Workspace knowledgebase wiki', exact: true });
@@ -1712,6 +1751,7 @@ async function main() {
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
     console.log(`agent-browser artifact worktree smoke passed: ${artifactWorktreeOutputPath}`);
     console.log(`agent-browser OpenDesign token review smoke passed: ${openDesignTokenReviewOutputPath}`);
+    console.log(`agent-browser workflow canvas smoke passed: ${workflowCanvasOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);
     console.log(`agent-browser dashboard canvas smoke passed: ${dashboardCanvasOutputPath}`);
