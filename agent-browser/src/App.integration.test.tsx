@@ -480,6 +480,7 @@ describe('App', () => {
     expect(within(marketplace).getByText('Artifact context')).toBeInTheDocument();
     expect(within(marketplace).getByText('Artifact worktree explorer')).toBeInTheDocument();
     expect(within(marketplace).getByText('Hugging Face Browser Models')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Google AI Edge Browser Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('GitHub Copilot Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Cursor Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Codex Models')).toBeInTheDocument();
@@ -490,8 +491,8 @@ describe('App', () => {
     expect(within(marketplace).getByText('xAI Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Model Connector')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Inference Worker')).toBeInTheDocument();
-    expect(within(marketplace).getByText('19 extensions')).toBeInTheDocument();
-    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(14);
+    expect(within(marketplace).getByText('20 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(15);
     expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',

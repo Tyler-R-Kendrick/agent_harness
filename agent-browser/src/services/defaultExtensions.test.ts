@@ -44,6 +44,7 @@ describe('default extensions', () => {
     ]));
     expect(grouped.provider).toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.huggingface-model-provider' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.google-ai-edge-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.openai-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.azure-inference-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.aws-bedrock-model-provider' }) }),
@@ -64,6 +65,7 @@ describe('default extensions', () => {
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
       'agent-harness.ext.huggingface-model-provider',
+      'agent-harness.ext.google-ai-edge-model-provider',
       'agent-harness.ext.ghcp-model-provider',
       'agent-harness.ext.cursor-model-provider',
       'agent-harness.ext.codex-model-provider',
@@ -90,6 +92,7 @@ describe('default extensions', () => {
       'Artifact context',
       'Artifact worktree explorer',
       'Hugging Face Browser Models',
+      'Google AI Edge Browser Models',
       'GitHub Copilot Models',
       'Cursor Models',
       'Codex Models',
@@ -276,6 +279,54 @@ describe('default extensions', () => {
       'ghcp-model-provider',
       'codex-model-provider',
     ]);
+  });
+
+  it('lists Google AI Edge as a browser-local model provider with built-in AI API support', async () => {
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: ['agent-harness.ext.google-ai-edge-model-provider'],
+    });
+    const googleAiEdge = runtime.extensions.find((extension) => extension.manifest.id === 'agent-harness.ext.google-ai-edge-model-provider');
+
+    expect(googleAiEdge).toMatchObject({
+      marketplace: {
+        name: 'Google AI Edge Browser Models',
+        categories: expect.arrayContaining(['provider-extension', 'model-provider', 'browser-local']),
+        metadata: expect.objectContaining({
+          marketplaceCategory: 'provider',
+          accountConfig: 'google-ai-edge-browser',
+        }),
+        keywords: expect.arrayContaining(['google-ai-edge', 'mediapipe', 'built-in-ai']),
+      },
+      manifest: {
+        name: 'Google AI Edge Browser Models',
+        activationEvents: expect.arrayContaining([
+          'onModelProvider:google-ai-edge',
+          'onModelProvider:chrome-built-in-ai',
+        ]),
+        contributes: {
+          modelProviders: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'google-ai-edge',
+              label: 'Google AI Edge',
+              kind: 'browser-local',
+              providerIds: ['google-ai-edge'],
+            }),
+            expect.objectContaining({
+              id: 'chrome-built-in-ai',
+              label: 'Chrome Built-in AI',
+              kind: 'browser-local',
+              providerIds: ['chrome-built-in-ai'],
+            }),
+          ]),
+        },
+        capabilities: expect.arrayContaining([
+          expect.objectContaining({ kind: 'model-provider', id: 'google-ai-edge' }),
+          expect.objectContaining({ kind: 'model-provider', id: 'chrome-built-in-ai' }),
+        ]),
+      },
+    });
+    expect(runtime.installedExtensionIds).toEqual(['agent-harness.ext.google-ai-edge-model-provider']);
+    expect(runtime.plugins.map((plugin) => plugin.id)).toEqual(['google-ai-edge-model-provider']);
   });
 
   it('lists installed descriptors and keeps their marketplace categories', async () => {

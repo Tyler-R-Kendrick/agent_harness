@@ -31,6 +31,8 @@ import { createCodexModelProviderPlugin } from '../../../ext/codex-model-provide
 import codexModelProviderManifestSource from '../../../ext/codex-model-provider/agent-harness.plugin.json';
 import { createCodiBrowserModelProviderPlugin } from '../../../ext/codi-browser-model-provider/src/index.ts';
 import huggingFaceModelProviderManifestSource from '../../../ext/codi-browser-model-provider/agent-harness.plugin.json';
+import { createGoogleAiEdgeModelProviderPlugin } from '../../../ext/google-ai-edge-model-provider/src/index.ts';
+import googleAiEdgeModelProviderManifestSource from '../../../ext/google-ai-edge-model-provider/agent-harness.plugin.json';
 import localInferenceWorkerManifestSource from '../../../ext/worker/local-inference-worker/agent-harness.plugin.json';
 import agentSkillsManifestSource from '../../../ext/harness/agent-skills/agent-harness.plugin.json';
 import agentsMdManifestSource from '../../../ext/harness/agents-md/agent-harness.plugin.json';
@@ -116,6 +118,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.artifacts-context', parseHarnessPluginManifest(artifactsContextManifestSource)],
   ['agent-harness.ext.artifacts-worktree', parseHarnessPluginManifest(artifactsWorktreeManifestSource)],
   ['agent-harness.ext.huggingface-model-provider', parseHarnessPluginManifest(huggingFaceModelProviderManifestSource)],
+  ['agent-harness.ext.google-ai-edge-model-provider', parseHarnessPluginManifest(googleAiEdgeModelProviderManifestSource)],
   ['agent-harness.ext.ghcp-model-provider', parseHarnessPluginManifest(ghcpModelProviderManifestSource)],
   ['agent-harness.ext.cursor-model-provider', parseHarnessPluginManifest(cursorModelProviderManifestSource)],
   ['agent-harness.ext.codex-model-provider', parseHarnessPluginManifest(codexModelProviderManifestSource)],
@@ -185,6 +188,7 @@ export async function createDefaultExtensionRuntime(
     ['agent-harness.ext.cursor-model-provider', () => createCursorModelProviderPlugin()],
     ['agent-harness.ext.codex-model-provider', () => createCodexModelProviderPlugin()],
     ['agent-harness.ext.huggingface-model-provider', () => createCodiBrowserModelProviderPlugin()],
+    ['agent-harness.ext.google-ai-edge-model-provider', () => createGoogleAiEdgeModelProviderPlugin()],
   ]);
 
   await context.plugins.loadAll(installedExtensionIds.map((extensionId) => pluginFactories.get(extensionId)?.()).filter(isHarnessPlugin));
