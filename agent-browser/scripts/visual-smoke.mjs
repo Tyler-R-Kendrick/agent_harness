@@ -1481,12 +1481,14 @@ async function main() {
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(installedExtensions.getByText('1 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('2 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugin')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('20 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('21 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'Harness extensions' })).toBeVisible({
       timeout: shellTimeoutMs,

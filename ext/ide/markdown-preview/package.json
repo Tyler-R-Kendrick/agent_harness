@@ -1,0 +1,34 @@
+{
+  "name": "@agent-harness/ext-markdown-preview",
+  "version": "0.1.0",
+  "description": "Default Agent Harness renderer extension for Markdown and MDX artifact files.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "README.md",
+    "agent-harness.plugin.json",
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/__tests__/**"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./agent-harness.plugin.json"
+  },
+  "scripts": {
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "test": "node ../../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "peerDependencies": {
+    "harness-core": "0.1.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}

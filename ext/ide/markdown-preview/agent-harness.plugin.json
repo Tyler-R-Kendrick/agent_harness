@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.markdown-preview",
+  "name": "Markdown preview",
+  "version": "0.1.0",
+  "description": "Renders Markdown and MDX artifact files with a default sanitized preview.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createMarkdownPreviewPlugin"
+  },
+  "metadata": {
+    "installSurface": "file-renderer",
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.markdown-preview.enabled"
+  },
+  "capabilities": [
+    {
+      "kind": "renderer",
+      "id": "markdown-preview.renderer",
+      "description": "Default preview renderer for Markdown and MDX files."
+    }
+  ],
+  "renderers": [
+    {
+      "id": "markdown-preview.renderer",
+      "label": "Markdown preview",
+      "description": "Renders Markdown and MDX files as sanitized HTML preview content.",
+      "target": {
+        "kind": "file",
+        "fileExtensions": [".md", ".mdx", ".markdown", ".mdown", ".mkd"],
+        "mimeTypes": ["text/markdown", "text/mdx"]
+      },
+      "implementations": [
+        {
+          "id": "markdown-preview.react",
+          "label": "React markdown preview",
+          "runtime": "react",
+          "component": {
+            "module": "./src/index.ts",
+            "export": "MarkdownPreviewRenderer"
+          }
+        }
+      ],
+      "priority": 20
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read",
+      "reason": "Reads Markdown artifact content to render the preview."
+    }
+  ],
+  "compatibility": {
+    "agentBrowser": "^0.1.0",
+    "harnessCore": "^0.1.0"
+  }
+}

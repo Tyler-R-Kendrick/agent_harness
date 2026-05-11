@@ -1112,7 +1112,7 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
     expect(screen.getByText('//workspace/artifacts/artifact-launch-review/review-panel.md')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Native text renderer' })).toHaveTextContent('Ready for workspace-tree review.');
+    expect(screen.getByRole('region', { name: 'Markdown preview renderer' })).toHaveTextContent('Ready for workspace-tree review.');
   });
 
   it('renders workflow canvas orchestration as a single-pane builder instead of manifest documentation', async () => {

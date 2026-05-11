@@ -9,6 +9,7 @@ import type { ArtifactFile } from './artifacts';
 
 export const BOUNDED_CHAT_RENDERER_ID = 'agent-browser.fallback.bounded-chat';
 export const RAW_RENDERER_ID = 'agent-browser.raw-source';
+export const MARKDOWN_PREVIEW_RENDERER_ID = 'markdown-preview.renderer';
 
 export type NativeMediaRendererKind = 'iframe' | 'image' | 'audio' | 'video' | 'text';
 

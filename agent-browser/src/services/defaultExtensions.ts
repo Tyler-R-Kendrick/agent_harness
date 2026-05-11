@@ -40,6 +40,7 @@ import artifactsContextManifestSource from '../../../ext/harness/artifacts/agent
 import artifactsWorktreeManifestSource from '../../../ext/ide/artifacts-worktree/agent-harness.plugin.json';
 import designMdContextManifestSource from '../../../ext/harness/design-md/agent-harness.plugin.json';
 import designStudioManifestSource from '../../../ext/ide/design-studio/agent-harness.plugin.json';
+import markdownPreviewManifestSource from '../../../ext/ide/markdown-preview/agent-harness.plugin.json';
 import workflowCanvasManifestSource from '../../../ext/ide/workflow-canvas/agent-harness.plugin.json';
 import localModelConnectorManifestSource from '../../../ext/provider/local-model-connector/agent-harness.plugin.json';
 import openAiModelProviderManifestSource from '../../../ext/provider/openai-model-provider/agent-harness.plugin.json';
@@ -107,11 +108,13 @@ export const EXTENSION_MARKETPLACE_CATEGORY_LABELS: Record<ExtensionMarketplaceC
 
 export const DEFAULT_EXTENSION_MARKETPLACE = parseHarnessPluginMarketplaceManifest(marketplaceManifestSource);
 export const DEFAULT_EXTENSION_MARKETPLACES: HarnessPluginMarketplaceManifest[] = [DEFAULT_EXTENSION_MARKETPLACE];
+export const DEFAULT_INSTALLED_DEFAULT_EXTENSION_IDS = ['agent-harness.ext.markdown-preview'] as const;
 
 const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.agent-skills', parseHarnessPluginManifest(agentSkillsManifestSource)],
   ['agent-harness.ext.agents-md', parseHarnessPluginManifest(agentsMdManifestSource)],
   ['agent-harness.ext.design-md-context', parseHarnessPluginManifest(designMdContextManifestSource)],
+  ['agent-harness.ext.markdown-preview', parseHarnessPluginManifest(markdownPreviewManifestSource)],
   ['agent-harness.ext.design-studio', parseHarnessPluginManifest(designStudioManifestSource)],
   ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
@@ -248,7 +251,9 @@ export function isDefaultExtensionActivityFeature(extension: DefaultExtensionDes
   const workspaceTreeOnly = marketplaceCategories.includes('workspace-tree')
     || installSurface === 'workspace-tree'
     || workspaceItemOnlyRenderer;
-  return getExtensionMarketplaceCategory(extension) === 'ide' && !workspaceTreeOnly;
+  const fileRendererOnly = marketplaceCategories.includes('file-renderer')
+    || installSurface === 'file-renderer';
+  return getExtensionMarketplaceCategory(extension) === 'ide' && !workspaceTreeOnly && !fileRendererOnly;
 }
 
 export function groupDefaultExtensionsByMarketplaceCategory(
@@ -317,7 +322,10 @@ export function resolveEnabledDefaultExtensionIds(
   installedExtensionIds: readonly string[],
   flags: DefaultExtensionOpenFeatureFlags,
 ): string[] {
-  return resolveDefaultExtensionDependencyPlan(installedExtensionIds).extensionIds
+  return resolveDefaultExtensionDependencyPlan([
+    ...DEFAULT_INSTALLED_DEFAULT_EXTENSION_IDS,
+    ...installedExtensionIds,
+  ]).extensionIds
     .filter((extensionId) => flags[getDefaultExtensionOpenFeatureFlagKey(extensionId)] !== false);
 }
 
@@ -339,7 +347,10 @@ export function getDefaultExtensionAvailability(extension: DefaultExtensionDescr
 }
 
 function selectInstalledDefaultExtensionIds(installedExtensionIds: readonly string[]): string[] {
-  return resolveDefaultExtensionDependencyPlan(installedExtensionIds).extensionIds;
+  return resolveDefaultExtensionDependencyPlan([
+    ...DEFAULT_INSTALLED_DEFAULT_EXTENSION_IDS,
+    ...installedExtensionIds,
+  ]).extensionIds;
 }
 
 export function getDefaultExtensionDependencyIds(extension: DefaultExtensionDescriptor): string[] {

@@ -18,6 +18,7 @@ import {
   resolveEnabledDefaultExtensionIds,
 } from './defaultExtensions';
 import { createArtifact } from './artifacts';
+import { resolveArtifactFileRenderer } from './mediaRenderers';
 
 describe('default extensions', () => {
   it('defines the monorepo marketplace as the default marketplace source', () => {
@@ -28,6 +29,7 @@ describe('default extensions', () => {
 
     const grouped = groupDefaultExtensionsByMarketplaceCategory(DEFAULT_EXTENSION_MANIFESTS);
     expect(grouped.ide).toEqual(expect.arrayContaining([
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-preview' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-studio' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-worktree' }) }),
@@ -59,6 +61,7 @@ describe('default extensions', () => {
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md-context',
+      'agent-harness.ext.markdown-preview',
       'agent-harness.ext.design-studio',
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
@@ -86,6 +89,7 @@ describe('default extensions', () => {
       'Agent skills',
       'AGENTS.md workspace instructions',
       'DESIGN.md agent guidance',
+      'Markdown preview',
       'Design Studio',
       'Symphony internal task orchestration',
       'Workflow canvas orchestration',
@@ -104,12 +108,13 @@ describe('default extensions', () => {
       'Local Model Connector',
       'Local Inference Worker',
     ]);
-    expect(runtime.installedExtensionIds).toEqual([]);
+    expect(runtime.installedExtensionIds).toEqual(['agent-harness.ext.markdown-preview']);
     expect(runtime.plugins).toEqual([]);
     expect(runtime.hooks).toEqual([]);
     expect(runtime.commands.map((command) => command.id)).not.toContain('agent-skills');
     expect(runtime.commands.map((command) => command.id)).not.toContain('artifacts.new');
     expect(runtime.tools).toEqual([]);
+    expect(runtime.renderers.map((renderer) => renderer.id)).toContain('markdown-preview.renderer');
   });
 
   it('loads only marketplace extensions selected for installation', async () => {
@@ -122,6 +127,7 @@ describe('default extensions', () => {
     });
 
     expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.markdown-preview',
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts-context',
@@ -136,6 +142,7 @@ describe('default extensions', () => {
     ]);
     expect(runtime.commands.map((command) => command.id)).toContain('artifacts.new');
     expect(runtime.renderers.map((renderer) => renderer.id)).toEqual(expect.arrayContaining([
+      'markdown-preview.renderer',
       'workflow-canvas.renderer',
     ]));
     expect(runtime.tools.map((tool) => tool.id)).toEqual(expect.arrayContaining([
@@ -272,6 +279,7 @@ describe('default extensions', () => {
     });
 
     expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.markdown-preview',
       'agent-harness.ext.ghcp-model-provider',
       'agent-harness.ext.codex-model-provider',
     ]);
@@ -325,7 +333,10 @@ describe('default extensions', () => {
         ]),
       },
     });
-    expect(runtime.installedExtensionIds).toEqual(['agent-harness.ext.google-ai-edge-model-provider']);
+    expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.google-ai-edge-model-provider',
+    ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual(['google-ai-edge-model-provider']);
   });
 
@@ -343,11 +354,13 @@ describe('default extensions', () => {
     expect(installed.map((extension) => extension.manifest.id)).toEqual([
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md-context',
+      'agent-harness.ext.markdown-preview',
       'agent-harness.ext.symphony',
     ]);
     expect(installed.map(getExtensionMarketplaceCategory)).toEqual([
       'harness',
       'harness',
+      'ide',
       'ide',
     ]);
   });
@@ -375,7 +388,7 @@ describe('default extensions', () => {
       'agent-harness.ext.workflow-canvas',
     ], {
       [symphonyFlag]: false,
-    })).toEqual(['agent-harness.ext.workflow-canvas']);
+    })).toEqual(['agent-harness.ext.markdown-preview', 'agent-harness.ext.workflow-canvas']);
   });
 
   it('marks listed-but-unavailable provider extensions as disabled marketplace choices', () => {
@@ -393,8 +406,10 @@ describe('default extensions', () => {
 
   it('resolves transitive dependencies in dependency-first install order', async () => {
     const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
+    const markdownPreview = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-preview');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
     expect(designStudio).toBeDefined();
+    expect(markdownPreview).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
 
     expect(getDefaultExtensionDependencyIds(designStudio!)).toEqual([
@@ -402,6 +417,7 @@ describe('default extensions', () => {
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
     ]);
+    expect(getDefaultExtensionDependencyIds(markdownPreview!)).toEqual([]);
     expect(getDefaultExtensionDependencyIds(artifactsWorktree!)).toEqual(['agent-harness.ext.artifacts-context']);
 
     const plan = resolveDefaultExtensionDependencyPlan([
@@ -422,6 +438,7 @@ describe('default extensions', () => {
       installedExtensionIds: ['agent-harness.ext.design-studio'],
     });
     expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.markdown-preview',
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
@@ -431,14 +448,17 @@ describe('default extensions', () => {
 
   it('does not expose workspace-tree-only extensions as activity-bar features', () => {
     const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
+    const markdownPreview = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-preview');
     const symphony = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.symphony');
     const workflowCanvas = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.workflow-canvas');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
 
+    expect(markdownPreview).toBeDefined();
     expect(designStudio).toBeDefined();
     expect(symphony).toBeDefined();
     expect(workflowCanvas).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
+    expect(isDefaultExtensionActivityFeature(markdownPreview!)).toBe(false);
     expect(isDefaultExtensionActivityFeature(designStudio!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(symphony!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(workflowCanvas!)).toBe(true);
@@ -455,5 +475,39 @@ describe('default extensions', () => {
       ['agent-harness.ext.artifacts-context'],
       ['agent-harness.ext.artifacts-context', 'agent-harness.ext.artifacts-worktree'],
     )).toEqual(['agent-harness.ext.artifacts-worktree']);
+  });
+
+  it('binds default markdown files to the markdown preview renderer without Design Studio hijacking them', async () => {
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: ['agent-harness.ext.design-studio'],
+    });
+
+    expect(resolveArtifactFileRenderer({
+      path: 'canvas-ws-research-checklist/checklist.md',
+      mediaType: 'text/markdown',
+      content: '# Research Checklist\n\n- [ ] Capture task intent',
+    }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
+      kind: 'plugin',
+      rendererId: 'markdown-preview.renderer',
+      implementationRuntime: 'react',
+    }));
+    expect(resolveArtifactFileRenderer({
+      path: 'notes/decision.mdx',
+      mediaType: 'text/mdx',
+      content: '# Decision\n\n<Component />',
+    }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
+      kind: 'plugin',
+      rendererId: 'markdown-preview.renderer',
+      implementationRuntime: 'react',
+    }));
+    expect(resolveArtifactFileRenderer({
+      path: 'DESIGN.md',
+      mediaType: 'text/markdown',
+      content: '# DESIGN.md',
+    }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
+      kind: 'plugin',
+      rendererId: 'design-studio.studio',
+      implementationRuntime: 'react',
+    }));
   });
 });

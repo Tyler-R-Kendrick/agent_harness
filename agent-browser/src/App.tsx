@@ -322,6 +322,7 @@ import {
 } from './services/settingsFiles';
 import {
   DEFAULT_EXTENSION_MANIFESTS,
+  DEFAULT_INSTALLED_DEFAULT_EXTENSION_IDS,
   EXTENSION_MARKETPLACE_CATEGORIES,
   EXTENSION_MARKETPLACE_CATEGORY_LABELS,
   buildRuntimeExtensionPromptContext,
@@ -381,6 +382,7 @@ import {
   type ArtifactFile,
 } from './services/artifacts';
 import {
+  MARKDOWN_PREVIEW_RENDERER_ID,
   resolveArtifactFileRenderer,
   type ArtifactFileRendererBinding,
 } from './services/mediaRenderers';
@@ -2161,6 +2163,14 @@ function ArtifactRendererContent({
     );
   }
 
+  if (binding.kind === 'plugin' && binding.rendererId === MARKDOWN_PREVIEW_RENDERER_ID) {
+    return (
+      <section className="artifact-markdown-renderer" role="region" aria-label="Markdown preview renderer">
+        <MarkdownContent content={file.content} className="markdown-content artifact-markdown-content" />
+      </section>
+    );
+  }
+
   return (
     <section className="artifact-renderer-fallback" role="region" aria-label={binding.kind === 'plugin' ? 'Plugin media renderer' : 'Bounded artifact chat'}>
       <div className="artifact-renderer-fallback-copy">
@@ -2786,7 +2796,7 @@ function ChatPanel({
   secretSettings: SecretManagementSettings;
   onSessionMcpControllerChange?: (sessionId: string, controller: SessionMcpController | null) => void;
   onSessionRuntimeChange?: (sessionId: string, runtime: SessionMcpRuntimeState | null) => void;
-  onMultitaskRequest?: (request: string) => void;
+  onMultitaskRequest?: (request: string, options?: { openPanel?: boolean }) => void;
   conversationBranchPromptContext?: string;
   conversationBranchingState: ConversationBranchingState;
   onConversationBranchRequest?: (request: string, sessionId: string) => void;
@@ -3885,7 +3895,7 @@ function ChatPanel({
     setInput('');
     resetActiveInputHistoryCursor();
     if (isMultitaskSubagentRequest(trimmedText)) {
-      onMultitaskRequest?.(trimmedText);
+      onMultitaskRequest?.(trimmedText, { openPanel: false });
     }
     if (isConversationBranchingRequest(trimmedText)) {
       onConversationBranchRequest?.(trimmedText, activeChatSessionId);
@@ -9993,6 +10003,7 @@ function ModelCatalogCard({ model }: { model: ModelCatalogCardData }) {
         <button
           type="button"
           className={`catalog-model-action${model.action.disabled ? ' is-disabled' : ''}`}
+          aria-label={`${model.action.label} ${model.name}`}
           onClick={model.action.onClick}
           disabled={model.action.disabled}
         >
@@ -14758,7 +14769,7 @@ function AgentBrowserApp() {
     localStorageBackend,
     STORAGE_KEYS.installedDefaultExtensionIds,
     isStringArray,
-    [],
+    [...DEFAULT_INSTALLED_DEFAULT_EXTENSION_IDS],
   );
   const [defaultExtensionOpenFeatureFlags, setDefaultExtensionOpenFeatureFlags] = useStoredState<DefaultExtensionOpenFeatureFlags>(
     localStorageBackend,
@@ -14772,6 +14783,17 @@ function AgentBrowserApp() {
     isJsonRecord,
     {},
   );
+  useEffect(() => {
+    setInstalledDefaultExtensionIds((current) => {
+      const normalized = normalizeDefaultExtensionIds(current);
+      const requiredIds = normalizeDefaultExtensionIds(DEFAULT_INSTALLED_DEFAULT_EXTENSION_IDS);
+      if (requiredIds.every((extensionId) => normalized.includes(extensionId))) return current;
+      return [
+        ...requiredIds,
+        ...normalized.filter((extensionId) => !requiredIds.includes(extensionId)),
+      ];
+    });
+  }, [setInstalledDefaultExtensionIds]);
   const [repoWikiSnapshotsByWorkspace, setRepoWikiSnapshotsByWorkspace] = useStoredState<Record<string, RepoWikiSnapshot>>(
     localStorageBackend,
     STORAGE_KEYS.repoWikiSnapshotsByWorkspace,
@@ -15185,13 +15207,15 @@ function AgentBrowserApp() {
       },
     [activeWorkspace.name, activeWorkspaceId, multitaskSubagentState],
   );
-  const startMultitaskSubagents = useCallback((request: string) => {
+  const startMultitaskSubagents = useCallback((request: string, options?: { openPanel?: boolean }) => {
     setMultitaskSubagentState(createMultitaskSubagentState({
       workspaceId: activeWorkspaceId,
       workspaceName: activeWorkspace.name,
       request,
     }));
-    setActivePanel('symphony');
+    if (options?.openPanel !== false) {
+      setActivePanel('symphony');
+    }
   }, [activeWorkspace.name, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
   const promoteActiveMultitaskBranch = useCallback((branchId: string, actor: MultitaskApprovalActor = 'user') => {
     setMultitaskSubagentState((current) => {

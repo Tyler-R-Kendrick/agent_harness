@@ -260,8 +260,10 @@ describe('App', () => {
 
   const openDefaultSessionPanel = async () => {
     if (screen.queryByLabelText('Chat panel')) return;
-    fireEvent.click(screen.getByLabelText('Projects'));
-    await flushAsyncUpdates();
+    if (!screen.queryByLabelText('Workspace tree')) {
+      fireEvent.click(screen.getByLabelText('Projects'));
+      await flushAsyncUpdates();
+    }
     const openSessionButton = screen.queryByRole('button', { name: 'Open Session 1' })
       ?? screen.queryByRole('button', { name: 'Session 1' });
     if (!openSessionButton) return;
@@ -293,15 +295,24 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
   };
 
+  const selectModelCatalogSource = (name: string | RegExp) => {
+    const providerNav = screen.getByRole('navigation', { name: 'Model catalog providers' });
+    fireEvent.click(within(providerNav).getByRole('button', { name }));
+  };
+
+  const expectModelProviderStatus = (sectionName: RegExp, status: string) => {
+    const section = screen.getByRole('region', { name: sectionName });
+    expect(within(section).getByText(status)).toBeInTheDocument();
+    return section;
+  };
+
   const installLocalModel = async () => {
     fireEvent.click(screen.getByLabelText('Models'));
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await flushAsyncUpdates();
 
-    fireEvent.click(screen.getByLabelText('Projects'));
-    await flushAsyncUpdates();
     await openDefaultSessionPanel();
   };
 
@@ -458,9 +469,10 @@ describe('App', () => {
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(within(installedSidebar).getByRole('heading', { name: 'Installed extensions' })).toBeInTheDocument();
-    expect(within(installedSidebar).getAllByText('1 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getAllByText('2 installed')).toHaveLength(2);
     expect(within(installedSidebar).queryByText('No installed extensions')).not.toBeInTheDocument();
     expect(within(installedSidebar).queryByText(/Workspace plugins/i)).not.toBeInTheDocument();
+    expect(within(installedSidebar).getByText('Markdown preview')).toBeInTheDocument();
     expect(within(installedSidebar).getByText('Workspace plugin')).toBeInTheDocument();
     expect(within(installedSidebar).queryByText('Local Model Connector')).not.toBeInTheDocument();
 
@@ -474,6 +486,7 @@ describe('App', () => {
     expect(within(marketplace).getByText('Agent skills')).toBeInTheDocument();
     expect(within(marketplace).getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
     expect(within(marketplace).getByText('DESIGN.md agent guidance')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Markdown preview')).toBeInTheDocument();
     expect(within(marketplace).getByText('Design Studio')).toBeInTheDocument();
     expect(within(marketplace).getByText('Symphony internal task orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Workflow canvas orchestration')).toBeInTheDocument();
@@ -491,7 +504,7 @@ describe('App', () => {
     expect(within(marketplace).getByText('xAI Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Model Connector')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Inference Worker')).toBeInTheDocument();
-    expect(within(marketplace).getByText('20 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getByText('21 extensions')).toBeInTheDocument();
     expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(15);
     expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
@@ -546,7 +559,7 @@ describe('App', () => {
     });
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
-    expect(within(installedSidebar).getAllByText('2 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getAllByText('3 installed')).toHaveLength(2);
     expect(within(installedSidebar).getByText('Artifact context')).toBeInTheDocument();
     expect(within(installedSidebar).queryByText(/^Installed$/)).not.toBeInTheDocument();
     expect(within(marketplace).getByRole('button', { name: 'Disable Artifact context' })).toBeInTheDocument();
@@ -723,7 +736,7 @@ describe('App', () => {
 
     expect(runStagedToolPipelineMock).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
-    expect(screen.getByText(artifactCase.title)).toBeInTheDocument();
+    expect(screen.getAllByText(artifactCase.title).length).toBeGreaterThan(0);
     expect(screen.getByText(`//artifacts/artifact-${artifactCase.kind}/${artifactCase.path}`)).toBeInTheDocument();
     if (
       artifactCase.mediaType === 'text/html'
@@ -732,6 +745,12 @@ describe('App', () => {
       || artifactCase.mediaType.startsWith('image/')
     ) {
       expect(screen.getByTitle(`${artifactCase.title}: ${artifactCase.path}`)).toBeInTheDocument();
+    } else if (artifactCase.mediaType === 'text/markdown') {
+      const markdownRenderer = screen.getByRole('region', { name: 'Markdown preview renderer' });
+      expect(markdownRenderer).toHaveTextContent(artifactCase.title);
+      expect(markdownRenderer).toHaveTextContent(artifactCase.content.trim().split(/\s+/).at(-1) ?? '');
+      expect(screen.queryByRole('region', { name: 'Plugin media renderer' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Native text renderer' })).not.toBeInTheDocument();
     } else if (
       artifactCase.mediaType.startsWith('text/')
       || artifactCase.mediaType === 'application/json'
@@ -2046,16 +2065,17 @@ describe('App', () => {
     fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Providers/i })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('GitHub Copilot')).toBeInTheDocument();
-    expect(screen.getByLabelText('Codex ready')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Local models/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Find the Right Model for Your AI Solution' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Model catalog providers' })).toBeInTheDocument();
+    expectModelProviderStatus(/GitHub Copilot Models \(1\)/i, 'Ready');
+    expectModelProviderStatus(/Codex Models \(1\)/i, 'Ready');
+    expect(screen.getByRole('region', { name: /Local Browser Models/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Providers/i })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Hugging Face search')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Model catalog providers' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Search model catalog')).not.toBeInTheDocument();
   });
 
   it('renders models as a collapsible provider surface', async () => {
@@ -2082,15 +2102,20 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
 
-    const providersToggle = screen.getByRole('button', { name: /Providers/i });
-    expect(providersToggle).toHaveAttribute('aria-expanded', 'true');
+    const providerNav = screen.getByRole('navigation', { name: 'Model catalog providers' });
+    expect(within(providerNav).getByRole('button', { name: /Popular/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(providerNav).getByRole('button', { name: /GitHub Copilot/i })).toBeInTheDocument();
+    expect(within(providerNav).getByRole('button', { name: /Cursor/i })).toBeInTheDocument();
+    expect(within(providerNav).getByRole('button', { name: /Codex/i })).toBeInTheDocument();
+
+    fireEvent.click(within(providerNav).getByRole('button', { name: /GitHub Copilot/i }));
+
+    expect(within(providerNav).getByRole('button', { name: /GitHub Copilot/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Refresh Cursor status' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Refresh .* status/i }).length).toBeGreaterThanOrEqual(3);
 
-    fireEvent.click(providersToggle);
+    fireEvent.click(within(providerNav).getByRole('button', { name: /Local/i }));
 
-    expect(providersToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(providerNav).getByRole('button', { name: /Local/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('button', { name: 'Refresh GitHub Copilot status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh Cursor status' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh Codex status' })).not.toBeInTheDocument();
@@ -2276,10 +2301,10 @@ styles:
     expect(screen.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1');
 
     fireEvent.click(screen.getByLabelText('Models'));
-    expect(screen.getByLabelText('GitHub Copilot ready')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /GitHub Copilot models \(1\)/i }));
+    const ghcpSection = expectModelProviderStatus(/GitHub Copilot Models \(1\)/i, 'Ready');
+    selectModelCatalogSource(/GitHub Copilot/i);
 
-    expect(screen.getAllByText('GPT-4.1').length).toBeGreaterThanOrEqual(2);
+    expect(within(ghcpSection).getByText('GPT-4.1')).toBeInTheDocument();
   });
 
   it('defaults to Codi when a local model is installed even if GHCP is ready', async () => {
@@ -2314,7 +2339,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
@@ -2345,8 +2370,10 @@ styles:
 
     fireEvent.click(screen.getByLabelText('Models'));
 
-    expect(screen.getByRole('link', { name: 'Open GitHub Copilot sign-in docs' })).toHaveAttribute('href', 'https://docs.github.com/copilot/how-tos/copilot-cli');
-    expect(screen.getByLabelText('GitHub Copilot sign-in command')).toHaveValue('copilot login');
+    const ghcpSection = expectModelProviderStatus(/GitHub Copilot Models \(0\)/i, 'Needs auth');
+    expect(within(ghcpSection).getByText('Sign in or refresh to load GitHub Copilot models.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open GitHub Copilot sign-in docs' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('GitHub Copilot sign-in command')).not.toBeInTheDocument();
   });
 
   it('does not show the Copilot sign-in path when authenticated model listing fails', async () => {
@@ -2367,8 +2394,8 @@ styles:
 
     fireEvent.click(screen.getByLabelText('Models'));
 
-    expect(screen.getByLabelText('GitHub Copilot signed in')).toBeInTheDocument();
-    expect(screen.getByText('Failed to list GitHub Copilot models: models.list failed')).toBeInTheDocument();
+    const ghcpSection = expectModelProviderStatus(/GitHub Copilot Models \(0\)/i, 'Signed in');
+    expect(within(ghcpSection).getByText('Failed to list GitHub Copilot models: models.list failed')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open GitHub Copilot sign-in docs' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('GitHub Copilot sign-in command')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh GitHub Copilot status' })).toBeInTheDocument();
@@ -2846,7 +2873,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
@@ -2903,7 +2930,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
@@ -2972,7 +2999,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
@@ -3329,8 +3356,8 @@ styles:
     fireEvent.click(screen.getByLabelText('Models'));
 
     expect(screen.getAllByText('Codex').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByLabelText('Codex ready')).toBeInTheDocument();
-    expect(screen.getByText('Codex CLI 0.125.0 available.')).toBeInTheDocument();
+    const codexSection = expectModelProviderStatus(/Codex Models \(1\)/i, 'Ready');
+    expect(within(codexSection).getByText('Codex default')).toBeInTheDocument();
   });
 
   it('reuses the same GHCP session id across multiple sends in one chat session', async () => {
@@ -3985,9 +4012,9 @@ styles:
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
+    await openDefaultSessionPanel();
+    await flushAsyncUpdates();
 
     const activityTrigger = screen.queryByRole('button', { name: /Thought for|Process ·|Working…/i })
       ?? screen.getByRole('button', { name: /Coordinator brief|Mail|InfIn/i });
@@ -4119,9 +4146,9 @@ styles:
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
+    await openDefaultSessionPanel();
+    await flushAsyncUpdates();
 
     await act(async () => {
       vi.advanceTimersByTime(60_000);
@@ -4288,9 +4315,9 @@ styles:
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
+    await openDefaultSessionPanel();
+    await flushAsyncUpdates();
 
     expect(screen.getByRole('button', { name: /Process ·|Reviewers · 1 approved · 1 rejected/i })).toBeInTheDocument();
     expect(screen.getByText('Reviewer votes')).toBeInTheDocument();
@@ -4375,9 +4402,9 @@ styles:
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await flushAsyncUpdates();
+    await openDefaultSessionPanel();
+    await flushAsyncUpdates();
 
     const activityTrigger = screen.queryByRole('button', { name: /Thought for|Process ·|Working…/i })
       ?? screen.getByRole('button', { name: /Coordinator brief|AgentBus log|Mail|InfIn/i });
@@ -5261,7 +5288,7 @@ styles:
     expect(screen.getByRole('region', { name: 'Symphony task management system' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '3', altKey: true });
-    expect(screen.getByRole('region', { name: 'Repository wiki' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace knowledgebase wiki' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '4', altKey: true });
     expect(screen.getByRole('region', { name: 'History' })).toBeInTheDocument();
@@ -5270,7 +5297,7 @@ styles:
     expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '6', altKey: true });
-    expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
+    expect(screen.getByLabelText('Search model catalog')).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: '7', altKey: true });
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument();
@@ -5340,7 +5367,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    const input = screen.getByLabelText('Hugging Face search');
+    const input = screen.getByLabelText('Search model catalog');
     const firstSignal = searchBrowserModelsMock.mock.calls[0][3] as AbortSignal;
 
     fireEvent.change(input, { target: { value: 'q' } });
@@ -5423,12 +5450,11 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    // Registry section is collapsed by default — expand it first
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     const button = screen.getByRole('button', { name: /Test Model/i });
     fireEvent.click(button);
 
-    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.getByText('Loading')).toBeInTheDocument();
     expect(button).toBeDisabled();
 
     await act(async () => {
@@ -5467,7 +5493,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     fireEvent.click(screen.getByRole('button', { name: /Test Model/i }));
 
     await act(async () => {
@@ -5503,8 +5529,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Models'));
-    // Registry section is collapsed by default — expand it first
-    fireEvent.click(screen.getByRole('button', { name: /Registry/i }));
+    selectModelCatalogSource(/Local/i);
     const button = screen.getByRole('button', { name: /Test Model/i });
     fireEvent.click(button);
 
@@ -5528,7 +5553,7 @@ styles:
 
     // Models panel should not be visible initially
     expect(screen.queryByLabelText('Settings')).not.toBeNull();
-    expect(screen.queryByLabelText('Hugging Face search')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Search model catalog')).not.toBeInTheDocument();
 
     openDefaultSession();
 
@@ -5536,7 +5561,7 @@ styles:
     fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
 
     // The Models panel (model registry) should now be open
-    expect(screen.getByLabelText('Hugging Face search')).toBeInTheDocument();
+    expect(screen.getByLabelText('Search model catalog')).toBeInTheDocument();
   });
 
   it('renders an iframe with the tab URL when a browser tab is opened', async () => {
