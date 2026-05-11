@@ -2128,7 +2128,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    expect(screen.getByRole('button', { name: /Secrets \(0\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Secrets (0)' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Secret name'), { target: { value: 'STRIPE_SECRET_KEY' } });
     fireEvent.change(screen.getByLabelText('Secret value'), { target: { value: stripeLikeSecret } });
     fireEvent.click(screen.getByRole('button', { name: 'Add secret' }));
@@ -2137,7 +2137,7 @@ styles:
       await Promise.resolve();
     });
 
-    expect(screen.getByRole('button', { name: /Secrets \(1\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Secrets (1)' })).toBeInTheDocument();
     expect(screen.getByText('STRIPE_SECRET_KEY')).toBeInTheDocument();
     expect(screen.getByText('secret-ref://local/stripe-secret-key')).toBeInTheDocument();
     expect(screen.getByText('••••••••••••••••')).toBeInTheDocument();
@@ -2152,7 +2152,7 @@ styles:
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByRole('button', { name: /Secrets \(0\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Secrets (0)' })).toBeInTheDocument();
     expect(screen.queryByText('STRIPE_SECRET_KEY')).not.toBeInTheDocument();
   });
 
@@ -2166,7 +2166,7 @@ styles:
     });
 
     fireEvent.click(screen.getByLabelText('Settings'));
-    fireEvent.click(screen.getByRole('button', { name: /LogAct evaluation agents/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'LogAct evaluation agents (0)' }));
 
     fireEvent.change(screen.getByLabelText('Evaluation agent name'), { target: { value: 'Accessibility Teacher' } });
     fireEvent.change(screen.getByLabelText('Evaluation agent instructions'), { target: { value: 'Steer candidates toward accessible UI.' } });

@@ -460,7 +460,7 @@ export function HarnessDashboardPanel({
                       </div>
                       <span className="harness-widget-badge">{widget.type}</span>
                     </header>
-                    <div className="harness-widget-body">
+                    <div className="harness-widget-body" tabIndex={0} aria-label={`${title} widget contents`}>
                       <HarnessJsonRenderer spec={spec} rootId={widget.id} context={renderContext} />
                     </div>
                     <button

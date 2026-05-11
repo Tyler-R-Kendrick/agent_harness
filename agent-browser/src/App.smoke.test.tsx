@@ -966,6 +966,33 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('event streaming')).toBeInTheDocument();
   });
 
+  it('renders Settings as a scoped plugin workbench', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+
+    const workbench = screen.getByRole('region', { name: 'Settings workbench' });
+    expect(within(workbench).getByLabelText('Search settings')).toBeInTheDocument();
+    expect(within(workbench).getByRole('tab', { name: 'User' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(workbench).getByRole('tab', { name: 'Workspace' })).toBeInTheDocument();
+    expect(within(workbench).getByRole('tab', { name: 'Session' })).toBeInTheDocument();
+    expect(within(workbench).getByRole('navigation', { name: 'Settings categories' })).toBeInTheDocument();
+    expect(within(workbench).getByRole('button', { name: 'Open Runtime plugins settings' })).toBeInTheDocument();
+    expect(within(workbench).getByRole('heading', { name: 'Commonly Used' })).toBeInTheDocument();
+    expect(within(workbench).getAllByText('Extension').length).toBeGreaterThan(0);
+    expect(within(workbench).getAllByText('Workspace').length).toBeGreaterThan(0);
+
+    fireEvent.change(within(workbench).getByLabelText('Search settings'), { target: { value: 'secrets' } });
+
+    expect(within(workbench).getByRole('button', { name: 'Secrets (0)' })).toBeInTheDocument();
+    expect(within(workbench).queryByRole('button', { name: 'Runtime plugins' })).not.toBeInTheDocument();
+  });
+
   it('renders versioned workspace skill policy controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);

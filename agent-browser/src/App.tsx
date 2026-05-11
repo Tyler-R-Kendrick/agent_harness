@@ -9233,6 +9233,80 @@ function CodexModelCard({ model }: { model: CodexModelSummary }) {
   );
 }
 
+type SettingsScope = 'user' | 'workspace' | 'session';
+
+const SETTINGS_SCOPES: SettingsScope[] = ['user', 'workspace', 'session'];
+const SETTINGS_SCOPE_LABELS: Record<SettingsScope, string> = {
+  user: 'User',
+  workspace: 'Workspace',
+  session: 'Session',
+};
+
+type SettingsPluginType =
+  | 'Core'
+  | 'Agent'
+  | 'Workflow'
+  | 'Extension'
+  | 'Security'
+  | 'Memory'
+  | 'Automation'
+  | 'Integration';
+
+interface SettingsWorkbenchItem {
+  id: string;
+  title: string;
+  description: string;
+  pluginType: SettingsPluginType;
+  scopes: SettingsScope[];
+  keywords?: string[];
+  node: ReactNode;
+}
+
+interface SettingsWorkbenchGroup {
+  id: string;
+  title: string;
+  description: string;
+  items: SettingsWorkbenchItem[];
+}
+
+function matchesSettingsQuery(
+  query: string,
+  group: Pick<SettingsWorkbenchGroup, 'title' | 'description'>,
+  item?: Pick<SettingsWorkbenchItem, 'title' | 'description' | 'pluginType' | 'keywords'>,
+) {
+  if (!query) return true;
+  const haystack = [
+    group.title,
+    group.description,
+    item?.title,
+    item?.description,
+    item?.pluginType,
+    ...(item?.keywords ?? []),
+  ].filter(Boolean).join(' ').toLowerCase();
+  return haystack.includes(query);
+}
+
+function SettingsScopeBadges({
+  scopes,
+  activeScope,
+}: {
+  scopes: SettingsScope[];
+  activeScope: SettingsScope;
+}) {
+  return (
+    <span className="settings-scope-badges" aria-label={`Applies to ${scopes.map((scope) => SETTINGS_SCOPE_LABELS[scope]).join(', ')}`}>
+      {scopes.map((scope) => (
+        <span
+          key={scope}
+          className={`settings-scope-badge${scope === activeScope ? ' is-active' : ''}`}
+        >
+          {SETTINGS_SCOPE_LABELS[scope]}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 
 function SettingsSection({
   title,
@@ -10136,144 +10210,600 @@ function SettingsPanel({
   onDeleteSecret,
   onSecretSettingsChange,
 }: SettingsPanelProps) {
+  const [settingsQuery, setSettingsQuery] = useState('');
+  const [activeScope, setActiveScope] = useState<SettingsScope>('user');
+  const [activeSettingsGroup, setActiveSettingsGroup] = useState('common');
+  const query = settingsQuery.trim().toLowerCase();
+
+  const commonTiles = [
+    {
+      title: 'Core boundary',
+      detail: `${harnessCoreSummary.capabilityCount} capabilities`,
+      scopes: ['user', 'workspace'] as SettingsScope[],
+      pluginType: 'Core' as SettingsPluginType,
+    },
+    {
+      title: 'Policy scope',
+      detail: `${workspaceSkillPolicyInventory.packageCount} skill packages`,
+      scopes: ['workspace'] as SettingsScope[],
+      pluginType: 'Workflow' as SettingsPluginType,
+    },
+    {
+      title: 'Plugin runtime',
+      detail: `${runtimePluginRuntime.activePluginCount}/${runtimePluginRuntime.manifestCount} active`,
+      scopes: ['workspace'] as SettingsScope[],
+      pluginType: 'Extension' as SettingsPluginType,
+    },
+    {
+      title: 'Secret storage',
+      detail: `${secretRecords.length} stored refs`,
+      scopes: ['user'] as SettingsScope[],
+      pluginType: 'Security' as SettingsPluginType,
+    },
+  ];
+
+  const settingsGroups: SettingsWorkbenchGroup[] = [
+    {
+      id: 'harness',
+      title: 'Harness',
+      description: 'Core runtime, routing, steering, and evolution controls.',
+      items: [
+        {
+          id: 'harness-core',
+          title: 'Harness core',
+          description: 'Reusable browser-agent core status and capability inventory.',
+          pluginType: 'Core',
+          scopes: ['user', 'workspace'],
+          keywords: ['runtime', 'capabilities', 'events'],
+          node: <HarnessCoreSettingsPanel summary={harnessCoreSummary} />,
+        },
+        {
+          id: 'benchmark-routing',
+          title: 'Benchmark routing',
+          description: 'Benchmark-informed model routing and objective settings.',
+          pluginType: 'Core',
+          scopes: ['user'],
+          keywords: ['models', 'evidence', 'routing'],
+          node: (
+            <BenchmarkRoutingSettingsPanel
+              settings={benchmarkRoutingSettings}
+              candidates={benchmarkRoutingCandidates}
+              evidenceState={benchmarkEvidenceState}
+              onChange={onBenchmarkRoutingSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'harness-steering',
+          title: 'Harness steering',
+          description: 'Correction capture and scoped steering inventory.',
+          pluginType: 'Core',
+          scopes: ['user', 'workspace'],
+          keywords: ['corrections', 'guidance'],
+          node: (
+            <HarnessSteeringSettingsPanel
+              state={harnessSteeringState}
+              inventory={harnessSteeringInventory}
+              onChange={onHarnessSteeringStateChange}
+            />
+          ),
+        },
+        {
+          id: 'harness-evolution',
+          title: 'Harness evolution',
+          description: 'Safe-mode policy and evolution workflow plan.',
+          pluginType: 'Core',
+          scopes: ['workspace'],
+          keywords: ['safe mode', 'improvement'],
+          node: (
+            <HarnessEvolutionSettingsPanel
+              settings={harnessEvolutionSettings}
+              plan={harnessEvolutionPlan}
+              onChange={onHarnessEvolutionSettingsChange}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: 'agents',
+      title: 'Agents',
+      description: 'Shared agent governance, first-class agents, and review roles.',
+      items: [
+        {
+          id: 'shared-agents',
+          title: 'Shared agents',
+          description: 'Workspace-published agent registry and discovery controls.',
+          pluginType: 'Agent',
+          scopes: ['workspace'],
+          keywords: ['registry', 'governance'],
+          node: (
+            <SharedAgentsSettingsPanel
+              state={sharedAgentRegistryState}
+              catalog={sharedAgentCatalog}
+              onChange={onSharedAgentRegistryStateChange}
+            />
+          ),
+        },
+        {
+          id: 'adversary-agent',
+          title: 'Adversary agent',
+          description: 'Candidate generation and adversarial voting settings.',
+          pluginType: 'Agent',
+          scopes: ['user', 'workspace'],
+          keywords: ['judge', 'candidate', 'voter'],
+          node: (
+            <AdversaryAgentSettingsPanel
+              settings={adversaryAgentSettings}
+              onChange={onAdversaryAgentSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'security-review-agents',
+          title: 'Security review agents',
+          description: 'Security-review agent roster, severity, and run-plan settings.',
+          pluginType: 'Agent',
+          scopes: ['workspace'],
+          keywords: ['security', 'review', 'risk'],
+          node: (
+            <SecurityReviewAgentSettingsPanel
+              settings={securityReviewAgentSettings}
+              runPlan={securityReviewRunPlan}
+              onChange={onSecurityReviewAgentSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'media-agent',
+          title: 'Media agent',
+          description: 'Media-capable agent affordances.',
+          pluginType: 'Agent',
+          scopes: ['user', 'workspace'],
+          keywords: ['render', 'image', 'video'],
+          node: <MediaAgentSettingsPanel />,
+        },
+        {
+          id: 'partner-agent-control-plane',
+          title: 'Partner agent control plane',
+          description: 'Unified policy, audit, and evidence controls for partner agents.',
+          pluginType: 'Agent',
+          scopes: ['workspace'],
+          keywords: ['partners', 'audit', 'policy'],
+          node: (
+            <PartnerAgentControlPlaneSettingsPanel
+              settings={partnerAgentControlPlaneSettings}
+              controlPlane={partnerAgentControlPlane}
+              latestAuditEntry={latestPartnerAgentAuditEntry}
+              onChange={onPartnerAgentControlPlaneSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'evaluation-agents',
+          title: `LogAct evaluation agents (${evaluationAgents.length})`,
+          description: 'Custom voters, judges, and negative rubric hardening.',
+          pluginType: 'Agent',
+          scopes: ['user'],
+          keywords: ['eval', 'teacher', 'judge', 'rubric'],
+          node: (
+            <EvaluationAgentsSettings
+              agents={evaluationAgents}
+              negativeRubricTechniques={negativeRubricTechniques}
+              onSaveAgents={onSaveEvaluationAgents}
+              onResetAgents={onResetEvaluationAgents}
+              onResetNegativeRubric={onResetNegativeRubric}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: 'workflows',
+      title: 'Workflows',
+      description: 'Workspace skills, branch control, checkpoints, and automation behavior.',
+      items: [
+        {
+          id: 'workspace-skill-policies',
+          title: 'Workspace skill policies',
+          description: 'Versioned skill packages, least-privilege scopes, and draft publish.',
+          pluginType: 'Workflow',
+          scopes: ['workspace'],
+          keywords: ['skills', 'policy', 'least privilege'],
+          node: (
+            <WorkspaceSkillPolicySettingsPanel
+              state={workspaceSkillPolicyState}
+              inventory={workspaceSkillPolicyInventory}
+              onChange={onWorkspaceSkillPolicyStateChange}
+            />
+          ),
+        },
+        {
+          id: 'browser-workflow-skills',
+          title: 'Browser workflow skills',
+          description: 'Installable browser workflow skills and suggestion scope.',
+          pluginType: 'Workflow',
+          scopes: ['workspace'],
+          keywords: ['skills', 'browser', 'workflow'],
+          node: (
+            <BrowserWorkflowSkillSettingsPanel
+              installedSkills={browserWorkflowSkills}
+              onInstall={onInstallBrowserWorkflowSkill}
+            />
+          ),
+        },
+        {
+          id: 'symphony-autopilot',
+          title: 'Symphony autopilot',
+          description: 'Reviewer autopilot behavior for Symphony work branches.',
+          pluginType: 'Workflow',
+          scopes: ['workspace'],
+          keywords: ['reviewer', 'branches'],
+          node: (
+            <SymphonyAutopilotSettingsPanel
+              settings={symphonyAutopilotSettings}
+              onChange={onSymphonyAutopilotSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'branching-conversations',
+          title: 'Branching conversations',
+          description: 'Conversation branch context, merge summaries, and process graph nodes.',
+          pluginType: 'Workflow',
+          scopes: ['workspace', 'session'],
+          keywords: ['subthreads', 'branches', 'conversation'],
+          node: (
+            <BranchingConversationSettingsPanel
+              state={conversationBranchingState}
+              onChange={onConversationBranchSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'spec-driven-development',
+          title: 'Spec-driven development',
+          description: 'Spec-first implementation gates and workflow stages.',
+          pluginType: 'Workflow',
+          scopes: ['workspace'],
+          keywords: ['spec', 'plan', 'tests'],
+          node: (
+            <SpecDrivenDevelopmentSettingsPanel
+              settings={specDrivenDevelopmentSettings}
+              plan={specWorkflowPlan}
+              onChange={onSpecDrivenDevelopmentSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'run-checkpoints',
+          title: 'Suspend/resume checkpoints',
+          description: 'Durable checkpoint creation and resume controls.',
+          pluginType: 'Workflow',
+          scopes: ['workspace', 'session'],
+          keywords: ['checkpoint', 'resume', 'pause'],
+          node: (
+            <RunCheckpointSettingsPanel
+              state={runCheckpointState}
+              onChange={onRunCheckpointStateChange}
+            />
+          ),
+        },
+        {
+          id: 'session-chapters',
+          title: 'Chaptered sessions',
+          description: 'Session compression and chapter evidence settings.',
+          pluginType: 'Workflow',
+          scopes: ['session'],
+          keywords: ['compression', 'chapter', 'context'],
+          node: (
+            <SessionChapterSettingsPanel
+              state={sessionChapterState}
+              onChange={onSessionChapterStateChange}
+            />
+          ),
+        },
+        {
+          id: 'browser-agent-run-sdk',
+          title: 'Browser-agent run SDK',
+          description: 'Typed browser-agent run state exposed across history and settings.',
+          pluginType: 'Workflow',
+          scopes: ['workspace', 'session'],
+          keywords: ['sdk', 'run', 'typed state'],
+          node: <BrowserAgentRunSdkSettingsPanel state={browserAgentRunSdkState} />,
+        },
+      ],
+    },
+    {
+      id: 'extensions',
+      title: 'Extensions',
+      description: 'Runtime plugin manifests, integrations, and external capability adapters.',
+      items: [
+        {
+          id: 'runtime-plugins',
+          title: 'Runtime plugins',
+          description: 'Data-only manifests for tools, providers, events, and policy hooks.',
+          pluginType: 'Extension',
+          scopes: ['workspace'],
+          keywords: ['manifest', 'tools', 'hooks', 'provider'],
+          node: (
+            <RuntimePluginSettingsPanel
+              settings={runtimePluginSettings}
+              runtime={runtimePluginRuntime}
+              onChange={onRuntimePluginSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'n8n-capabilities',
+          title: 'n8n capabilities',
+          description: 'n8n workflow automation capabilities available to the workspace.',
+          pluginType: 'Integration',
+          scopes: ['workspace'],
+          keywords: ['integration', 'automation'],
+          node: <N8nCapabilitiesSettingsPanel />,
+        },
+      ],
+    },
+    {
+      id: 'memory',
+      title: 'Data And Memory',
+      description: 'Graph knowledge and persistent memory controls.',
+      items: [
+        {
+          id: 'graph-knowledge',
+          title: 'Graph knowledge',
+          description: 'Workspace graph knowledge ingestion, search, and consolidation.',
+          pluginType: 'Memory',
+          scopes: ['workspace'],
+          keywords: ['graph', 'knowledge', 'search'],
+          node: (
+            <GraphKnowledgeSettingsPanel
+              state={graphKnowledgeState}
+              onChange={onGraphKnowledgeStateChange}
+            />
+          ),
+        },
+        {
+          id: 'persistent-memory-graphs',
+          title: 'Persistent memory graphs',
+          description: 'Persistent memory graph import, export, and search controls.',
+          pluginType: 'Memory',
+          scopes: ['user', 'workspace'],
+          keywords: ['memory', 'graph', 'import', 'export'],
+          node: (
+            <PersistentMemoryGraphSettingsPanel
+              state={persistentMemoryGraphState}
+              onChange={onPersistentMemoryGraphStateChange}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: 'security',
+      title: 'Security',
+      description: 'Secrets, tool-call review, and high-risk action controls.',
+      items: [
+        {
+          id: 'secrets',
+          title: `Secrets (${secretRecords.length})`,
+          description: 'Local secret refs, redaction, and replacement settings.',
+          pluginType: 'Security',
+          scopes: ['user'],
+          keywords: ['secret', 'redaction', 'credentials'],
+          node: (
+            <SecretsSettings
+              records={secretRecords}
+              settings={secretSettings}
+              onSaveSecret={onSaveSecret}
+              onDeleteSecret={onDeleteSecret}
+              onSettingsChange={onSecretSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'adversary-tool-review',
+          title: 'Adversary tool review',
+          description: 'Tool-call review and strict blocking settings.',
+          pluginType: 'Security',
+          scopes: ['workspace'],
+          keywords: ['tool', 'review', 'block'],
+          node: (
+            <AdversaryToolReviewSettingsPanel
+              settings={adversaryToolReviewSettings}
+              onChange={onAdversaryToolReviewSettingsChange}
+            />
+          ),
+        },
+      ],
+    },
+    {
+      id: 'automation',
+      title: 'Automation',
+      description: 'Scheduled tasks and recurring automation state.',
+      items: [
+        {
+          id: 'scheduled-automations',
+          title: 'Scheduled automations',
+          description: 'Scheduled automation visibility and state controls.',
+          pluginType: 'Automation',
+          scopes: ['workspace'],
+          keywords: ['schedule', 'cron', 'automation'],
+          node: (
+            <ScheduledAutomationSettingsPanel
+              state={scheduledAutomationState}
+              onChange={onScheduledAutomationStateChange}
+            />
+          ),
+        },
+      ],
+    },
+  ];
+
+  const commonMatches = matchesSettingsQuery(query, {
+    title: 'Commonly Used',
+    description: 'Common cross-scope settings for core, policy, plugins, and secrets.',
+  });
+  const filteredGroups = settingsGroups
+    .map((group) => {
+      const groupMatches = matchesSettingsQuery(query, group);
+      return {
+        ...group,
+        items: group.items.filter((item) => groupMatches || matchesSettingsQuery(query, group, item)),
+      };
+    })
+    .filter((group) => group.items.length > 0);
+  const visibleSettingCount = filteredGroups.reduce((sum, group) => sum + group.items.length, 0);
+
+  const scrollToSettingsTarget = (targetId: string, groupId: string) => {
+    setActiveSettingsGroup(groupId);
+    const element = document.getElementById(targetId);
+    if (element && typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'start' });
+    }
+    const focusTarget = element?.querySelector<HTMLElement>('.section-toggle, button, input, select, textarea');
+    focusTarget?.focus();
+  };
+
   return (
-    <section className="panel-scroll settings-panel" aria-label="Settings">
-      <div className="panel-topbar">
-        <div className="settings-heading">
+    <section className="panel-scroll settings-panel settings-workbench" aria-label="Settings workbench">
+      <header className="settings-workbench-header">
+        <div className="settings-workbench-title">
+          <span className="panel-eyebrow"><Icon name="slidersHorizontal" size={12} color="#8fa6c4" />Settings</span>
           <h2>Settings</h2>
-          <p className="muted">Tune routing, review, secrets, and evaluation behavior.</p>
         </div>
-        <span className="badge">{evaluationAgents.length} eval agents · {secretRecords.length} secrets</span>
+        <label className="settings-search-shell shared-input-shell">
+          <Icon name="search" size={14} color="#7d8694" />
+          <input
+            type="search"
+            aria-label="Search settings"
+            placeholder="Search settings"
+            value={settingsQuery}
+            onChange={(event) => setSettingsQuery(event.target.value)}
+          />
+        </label>
+        <div className="settings-scope-tabs" role="tablist" aria-label="Settings scope">
+          {SETTINGS_SCOPES.map((scope) => (
+            <button
+              key={scope}
+              type="button"
+              role="tab"
+              className={`settings-scope-tab${activeScope === scope ? ' is-active' : ''}`}
+              aria-selected={activeScope === scope}
+              onClick={() => setActiveScope(scope)}
+            >
+              {SETTINGS_SCOPE_LABELS[scope]}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="settings-workbench-body">
+        <nav className="settings-category-nav" aria-label="Settings categories">
+          {!query || commonMatches ? (
+            <button
+              type="button"
+              className={`settings-category-button${activeSettingsGroup === 'common' ? ' is-active' : ''}`}
+              aria-label="Open Commonly Used settings category"
+              onClick={() => scrollToSettingsTarget('settings-group-common', 'common')}
+            >
+              <span>Commonly Used</span>
+              <small>{commonTiles.length} settings</small>
+            </button>
+          ) : null}
+          {filteredGroups.map((group) => (
+            <div key={group.id} className="settings-nav-group">
+              <button
+                type="button"
+                className={`settings-category-button${activeSettingsGroup === group.id ? ' is-active' : ''}`}
+                aria-label={`Open ${group.title} settings category`}
+                onClick={() => scrollToSettingsTarget(`settings-group-${group.id}`, group.id)}
+              >
+                <span>{group.title}</span>
+                <small>{group.items.length} setting{group.items.length === 1 ? '' : 's'}</small>
+              </button>
+              <div className="settings-nav-children">
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="settings-nav-child"
+                    aria-label={`Open ${item.title} settings`}
+                    onClick={() => scrollToSettingsTarget(`settings-item-${item.id}`, group.id)}
+                  >
+                    <Icon name="chevronRight" size={10} color="#71717a" />
+                    <span>{item.title} settings</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </nav>
+
+        <div className="settings-workbench-main" aria-label="Settings results">
+          {!query || commonMatches ? (
+            <section id="settings-group-common" className="settings-category-group settings-category-group--common" aria-labelledby="settings-heading-common">
+              <header className="settings-category-header">
+                <div>
+                  <h3 id="settings-heading-common">Commonly Used</h3>
+                  <p>High-traffic settings grouped by type and scope.</p>
+                </div>
+              </header>
+              <div className="settings-common-grid">
+                {commonTiles.map((tile) => (
+                  <article key={tile.title} className="settings-common-tile">
+                    <div>
+                      <strong>{tile.title}</strong>
+                      <p>{tile.detail}</p>
+                    </div>
+                    <div className="settings-common-meta">
+                      <span className="settings-plugin-type">{tile.pluginType}</span>
+                      <SettingsScopeBadges scopes={tile.scopes} activeScope={activeScope} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {filteredGroups.map((group) => (
+            <section
+              key={group.id}
+              id={`settings-group-${group.id}`}
+              className="settings-category-group"
+              aria-labelledby={`settings-heading-${group.id}`}
+            >
+              <header className="settings-category-header">
+                <div>
+                  <h3 id={`settings-heading-${group.id}`}>{group.title}</h3>
+                  <p>{group.description}</p>
+                </div>
+                <span className="settings-group-count">{group.items.length} setting{group.items.length === 1 ? '' : 's'}</span>
+              </header>
+              <div className="settings-entry-list">
+                {group.items.map((item) => (
+                  <article
+                    key={item.id}
+                    id={`settings-item-${item.id}`}
+                    className={`settings-workbench-entry${item.scopes.includes(activeScope) ? '' : ' is-other-scope'}`}
+                  >
+                    <div className="settings-entry-meta">
+                      <span className="settings-plugin-type">{item.pluginType}</span>
+                      <SettingsScopeBadges scopes={item.scopes} activeScope={activeScope} />
+                    </div>
+                    {item.node}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {visibleSettingCount === 0 && (!commonMatches || query) ? (
+            <p className="settings-empty-state muted">No settings match the current search.</p>
+          ) : null}
+        </div>
       </div>
-
-      <HarnessCoreSettingsPanel summary={harnessCoreSummary} />
-
-      <BenchmarkRoutingSettingsPanel
-        settings={benchmarkRoutingSettings}
-        candidates={benchmarkRoutingCandidates}
-        evidenceState={benchmarkEvidenceState}
-        onChange={onBenchmarkRoutingSettingsChange}
-      />
-
-      <WorkspaceSkillPolicySettingsPanel
-        state={workspaceSkillPolicyState}
-        inventory={workspaceSkillPolicyInventory}
-        onChange={onWorkspaceSkillPolicyStateChange}
-      />
-
-      <SharedAgentsSettingsPanel
-        state={sharedAgentRegistryState}
-        catalog={sharedAgentCatalog}
-        onChange={onSharedAgentRegistryStateChange}
-      />
-
-      <BrowserWorkflowSkillSettingsPanel
-        installedSkills={browserWorkflowSkills}
-        onInstall={onInstallBrowserWorkflowSkill}
-      />
-
-      <SymphonyAutopilotSettingsPanel
-        settings={symphonyAutopilotSettings}
-        onChange={onSymphonyAutopilotSettingsChange}
-      />
-
-      <BranchingConversationSettingsPanel
-        state={conversationBranchingState}
-        onChange={onConversationBranchSettingsChange}
-      />
-
-      <N8nCapabilitiesSettingsPanel />
-
-      <SpecDrivenDevelopmentSettingsPanel
-        settings={specDrivenDevelopmentSettings}
-        plan={specWorkflowPlan}
-        onChange={onSpecDrivenDevelopmentSettingsChange}
-      />
-
-      <GraphKnowledgeSettingsPanel
-        state={graphKnowledgeState}
-        onChange={onGraphKnowledgeStateChange}
-      />
-
-      <MediaAgentSettingsPanel />
-
-      <HarnessSteeringSettingsPanel
-        state={harnessSteeringState}
-        inventory={harnessSteeringInventory}
-        onChange={onHarnessSteeringStateChange}
-      />
-
-      <HarnessEvolutionSettingsPanel
-        settings={harnessEvolutionSettings}
-        plan={harnessEvolutionPlan}
-        onChange={onHarnessEvolutionSettingsChange}
-      />
-
-      <PersistentMemoryGraphSettingsPanel
-        state={persistentMemoryGraphState}
-        onChange={onPersistentMemoryGraphStateChange}
-      />
-
-      <PartnerAgentControlPlaneSettingsPanel
-        settings={partnerAgentControlPlaneSettings}
-        controlPlane={partnerAgentControlPlane}
-        latestAuditEntry={latestPartnerAgentAuditEntry}
-        onChange={onPartnerAgentControlPlaneSettingsChange}
-      />
-
-      <RuntimePluginSettingsPanel
-        settings={runtimePluginSettings}
-        runtime={runtimePluginRuntime}
-        onChange={onRuntimePluginSettingsChange}
-      />
-      <BrowserAgentRunSdkSettingsPanel state={browserAgentRunSdkState} />
-
-      <AdversaryAgentSettingsPanel
-        settings={adversaryAgentSettings}
-        onChange={onAdversaryAgentSettingsChange}
-      />
-
-      <AdversaryToolReviewSettingsPanel
-        settings={adversaryToolReviewSettings}
-        onChange={onAdversaryToolReviewSettingsChange}
-      />
-
-      <SecurityReviewAgentSettingsPanel
-        settings={securityReviewAgentSettings}
-        runPlan={securityReviewRunPlan}
-        onChange={onSecurityReviewAgentSettingsChange}
-      />
-
-      <RunCheckpointSettingsPanel
-        state={runCheckpointState}
-        onChange={onRunCheckpointStateChange}
-      />
-
-      <SessionChapterSettingsPanel
-        state={sessionChapterState}
-        onChange={onSessionChapterStateChange}
-      />
-
-      <ScheduledAutomationSettingsPanel
-        state={scheduledAutomationState}
-        onChange={onScheduledAutomationStateChange}
-      />
-
-      <SecretsSettings
-        records={secretRecords}
-        settings={secretSettings}
-        onSaveSecret={onSaveSecret}
-        onDeleteSecret={onDeleteSecret}
-        onSettingsChange={onSecretSettingsChange}
-      />
-
-      <EvaluationAgentsSettings
-        agents={evaluationAgents}
-        negativeRubricTechniques={negativeRubricTechniques}
-        onSaveAgents={onSaveEvaluationAgents}
-        onResetAgents={onResetEvaluationAgents}
-        onResetNegativeRubric={onResetNegativeRubric}
-      />
     </section>
   );
 }
@@ -18244,6 +18774,74 @@ function AgentBrowserApp() {
     writeWorkspaceFileFromMcp,
   ]);
 
+  function renderSettingsWorkbench() {
+    return (
+      <SettingsPanel
+        harnessCoreSummary={harnessCoreSummary}
+        benchmarkRoutingSettings={benchmarkRoutingSettings}
+        benchmarkRoutingCandidates={benchmarkRoutingCandidates}
+        benchmarkEvidenceState={benchmarkEvidenceState}
+        adversaryToolReviewSettings={adversaryToolReviewSettings}
+        adversaryAgentSettings={adversaryAgentSettings}
+        securityReviewAgentSettings={securityReviewAgentSettings}
+        securityReviewRunPlan={settingsSecurityReviewRunPlan}
+        scheduledAutomationState={scheduledAutomationState}
+        runCheckpointState={runCheckpointState}
+        sessionChapterState={sessionChapterState}
+        workspaceSkillPolicyState={workspaceSkillPolicyState}
+        workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
+        sharedAgentRegistryState={sharedAgentRegistryState}
+        sharedAgentCatalog={sharedAgentCatalog}
+        browserWorkflowSkills={browserWorkflowSkills}
+        symphonyAutopilotSettings={symphonyAutopilotSettings}
+        conversationBranchingState={activeConversationBranchingState}
+        harnessSteeringState={harnessSteeringState}
+        harnessSteeringInventory={harnessSteeringInventory}
+        harnessEvolutionSettings={harnessEvolutionSettings}
+        harnessEvolutionPlan={settingsHarnessEvolutionPlan}
+        persistentMemoryGraphState={persistentMemoryGraphState}
+        graphKnowledgeState={graphKnowledgeState}
+        browserAgentRunSdkState={browserAgentRunSdkState}
+        partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
+        partnerAgentControlPlane={settingsPartnerAgentControlPlane}
+        latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
+        runtimePluginSettings={runtimePluginSettings}
+        runtimePluginRuntime={settingsRuntimePluginRuntime}
+        specDrivenDevelopmentSettings={specDrivenDevelopmentSettings}
+        specWorkflowPlan={settingsSpecWorkflowPlan}
+        onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
+        onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
+        onAdversaryAgentSettingsChange={setAdversaryAgentSettings}
+        onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
+        onScheduledAutomationStateChange={setScheduledAutomationState}
+        onRunCheckpointStateChange={setRunCheckpointState}
+        onSessionChapterStateChange={setSessionChapterState}
+        onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
+        onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
+        onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
+        onSymphonyAutopilotSettingsChange={setSymphonyAutopilotSettings}
+        onConversationBranchSettingsChange={updateConversationBranchSettings}
+        onHarnessSteeringStateChange={setHarnessSteeringState}
+        onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
+        onPersistentMemoryGraphStateChange={setPersistentMemoryGraphState}
+        onGraphKnowledgeStateChange={setGraphKnowledgeState}
+        onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
+        onRuntimePluginSettingsChange={setRuntimePluginSettings}
+        onSpecDrivenDevelopmentSettingsChange={setSpecDrivenDevelopmentSettings}
+        evaluationAgents={evaluationAgents}
+        negativeRubricTechniques={negativeRubricTechniques}
+        onSaveEvaluationAgents={saveEvaluationAgents}
+        onResetEvaluationAgents={resetEvaluationAgents}
+        onResetNegativeRubric={resetNegativeRubric}
+        secretRecords={secretRecords}
+        secretSettings={secretSettings}
+        onSaveSecret={saveManualSecret}
+        onDeleteSecret={deleteManualSecret}
+        onSecretSettingsChange={updateSecretSettings}
+      />
+    );
+  }
+
   function renderSidebar() {
     if (activePanel === 'workspaces') {
       return (
@@ -18347,76 +18945,12 @@ function AgentBrowserApp() {
         onDelete={deleteModel}
       />
     );
-    if (activePanel === 'settings') return (
-      <SettingsPanel
-        harnessCoreSummary={harnessCoreSummary}
-        benchmarkRoutingSettings={benchmarkRoutingSettings}
-        benchmarkRoutingCandidates={benchmarkRoutingCandidates}
-        benchmarkEvidenceState={benchmarkEvidenceState}
-        adversaryToolReviewSettings={adversaryToolReviewSettings}
-        adversaryAgentSettings={adversaryAgentSettings}
-        securityReviewAgentSettings={securityReviewAgentSettings}
-        securityReviewRunPlan={settingsSecurityReviewRunPlan}
-        scheduledAutomationState={scheduledAutomationState}
-        runCheckpointState={runCheckpointState}
-        sessionChapterState={sessionChapterState}
-        workspaceSkillPolicyState={workspaceSkillPolicyState}
-        workspaceSkillPolicyInventory={workspaceSkillPolicyInventory}
-        sharedAgentRegistryState={sharedAgentRegistryState}
-        sharedAgentCatalog={sharedAgentCatalog}
-        browserWorkflowSkills={browserWorkflowSkills}
-        symphonyAutopilotSettings={symphonyAutopilotSettings}
-        conversationBranchingState={activeConversationBranchingState}
-        harnessSteeringState={harnessSteeringState}
-        harnessSteeringInventory={harnessSteeringInventory}
-        harnessEvolutionSettings={harnessEvolutionSettings}
-        harnessEvolutionPlan={settingsHarnessEvolutionPlan}
-        persistentMemoryGraphState={persistentMemoryGraphState}
-        graphKnowledgeState={graphKnowledgeState}
-        browserAgentRunSdkState={browserAgentRunSdkState}
-        partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
-        partnerAgentControlPlane={settingsPartnerAgentControlPlane}
-        latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
-        runtimePluginSettings={runtimePluginSettings}
-        runtimePluginRuntime={settingsRuntimePluginRuntime}
-        specDrivenDevelopmentSettings={specDrivenDevelopmentSettings}
-        specWorkflowPlan={settingsSpecWorkflowPlan}
-        onBenchmarkRoutingSettingsChange={setBenchmarkRoutingSettings}
-        onAdversaryToolReviewSettingsChange={setAdversaryToolReviewSettings}
-        onAdversaryAgentSettingsChange={setAdversaryAgentSettings}
-        onSecurityReviewAgentSettingsChange={setSecurityReviewAgentSettings}
-        onScheduledAutomationStateChange={setScheduledAutomationState}
-        onRunCheckpointStateChange={setRunCheckpointState}
-        onSessionChapterStateChange={setSessionChapterState}
-        onWorkspaceSkillPolicyStateChange={setWorkspaceSkillPolicyState}
-        onSharedAgentRegistryStateChange={setSharedAgentRegistryState}
-        onInstallBrowserWorkflowSkill={installBrowserWorkflowSkillForWorkspace}
-        onSymphonyAutopilotSettingsChange={setSymphonyAutopilotSettings}
-        onConversationBranchSettingsChange={updateConversationBranchSettings}
-        onHarnessSteeringStateChange={setHarnessSteeringState}
-        onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
-        onPersistentMemoryGraphStateChange={setPersistentMemoryGraphState}
-        onGraphKnowledgeStateChange={setGraphKnowledgeState}
-        onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
-        onRuntimePluginSettingsChange={setRuntimePluginSettings}
-        onSpecDrivenDevelopmentSettingsChange={setSpecDrivenDevelopmentSettings}
-        evaluationAgents={evaluationAgents}
-        negativeRubricTechniques={negativeRubricTechniques}
-        onSaveEvaluationAgents={saveEvaluationAgents}
-        onResetEvaluationAgents={resetEvaluationAgents}
-        onResetNegativeRubric={resetNegativeRubric}
-        secretRecords={secretRecords}
-        secretSettings={secretSettings}
-        onSaveSecret={saveManualSecret}
-        onDeleteSecret={deleteManualSecret}
-        onSecretSettingsChange={updateSecretSettings}
-      />
-    );
+    if (activePanel === 'settings') return renderSettingsWorkbench();
     return <AccountPanel defaultExtensions={defaultExtensionRuntime} />;
   }
 
   return (
-    <div className="app-shell" onContextMenu={handleAppContextMenu}>
+    <div className={`app-shell${activePanel === 'settings' ? ' app-shell--settings-workbench' : ''}`} onContextMenu={handleAppContextMenu}>
       <a className="skip-link" href="#workspace-content">Skip to workspace content</a>
       <nav className="activity-bar" aria-label="Primary navigation">
         <div className="activity-group">
@@ -18462,7 +18996,7 @@ function AgentBrowserApp() {
         </div>
         <button type="button" className="activity-button" onClick={() => setSidebarCollapsed((current) => !current, true)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Icon name="panelRight" size={16} color="#71717a" /></button>
       </nav>
-      {!collapsed ? (
+      {!collapsed && activePanel !== 'settings' ? (
         <aside className="sidebar">
           <header className="sidebar-header">
             <div className="sidebar-title-row">
@@ -18514,7 +19048,9 @@ function AgentBrowserApp() {
       </aside>
       ) : null}
       <main id="workspace-content" className="content-area" aria-label="Workspace content" tabIndex={-1}>
-        {activePanel === 'symphony' ? (
+        {activePanel === 'settings' ? (
+          renderSettingsWorkbench()
+        ) : activePanel === 'symphony' ? (
           <SymphonyWorkspaceApp
             snapshot={activeSymphonySnapshot}
             onApproveMerge={promoteActiveMultitaskBranch}
