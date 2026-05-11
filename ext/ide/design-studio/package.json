@@ -1,5 +1,5 @@
 {
-  "name": "@agent-harness/ext-open-design",
+  "name": "@agent-harness/ext-design-studio",
   "version": "0.1.0",
   "description": "Optional Agent Harness plugin for Design Studio DESIGN.md project artifacts.",
   "type": "module",

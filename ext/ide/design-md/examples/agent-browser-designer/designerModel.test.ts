@@ -13,7 +13,7 @@ import {
 const timestamp = '2026-05-02T12:00:00.000Z';
 
 describe('designerModel', () => {
-  it('creates a complete DESIGN.md-backed Claude Design workspace bundle', () => {
+  it('creates a complete DESIGN.md-backed Design Studio workspace bundle', () => {
     const files = buildDesignSystemArtifacts([], {
       companyBlurb: 'Agent Browser Design System for browser-native design agents',
       projectName: 'Agent Browser Design System',
@@ -21,7 +21,7 @@ describe('designerModel', () => {
       localFolder: 'agent-browser',
       figFile: 'agent-browser.fig',
       assets: 'logo.svg, Inter.ttf',
-      notes: 'Prefer the Claude Design warm canvas with dark Agent Browser themes.',
+      notes: 'Prefer the Design Studio warm canvas with dark Agent Browser themes.',
       fidelity: 'high',
     }, timestamp);
 

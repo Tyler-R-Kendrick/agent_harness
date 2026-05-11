@@ -65,16 +65,16 @@
       "keywords": ["design-md", "tokens", "css", "dtcg", "design-guidance"]
     },
     {
-      "id": "agent-harness.ext.open-design",
+      "id": "agent-harness.ext.design-studio",
       "name": "Design Studio",
       "version": "0.1.0",
       "description": "Provides an IDE design-system surface for visually composing DESIGN.md systems as artifact-backed projects.",
-      "manifest": "./ide/open-design/agent-harness.plugin.json",
+      "manifest": "./ide/design-studio/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./ide/open-design"
+        "path": "./ide/design-studio"
       },
-      "categories": ["ide-extension", "design", "design-system", "design-md", "opendesign"],
+      "categories": ["ide-extension", "design", "design-system", "design-md", "design-studio"],
       "metadata": {
         "marketplaceCategory": "ide",
         "activityIcon": "slidersHorizontal",
@@ -84,12 +84,11 @@
           "agent-harness.ext.artifacts-worktree"
         ],
         "standardRefs": [
-          "https://open-design.ai/",
           "https://tr.designtokens.org/format/"
         ],
-        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.open-design.enabled"
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.design-studio.enabled"
       },
-      "keywords": ["open-design", "opendesign", "design-md", "design-system", "tokens"]
+      "keywords": ["design-studio", "designstudio", "design-md", "design-system", "tokens"]
     },
     {
       "id": "agent-harness.ext.symphony",

@@ -85,9 +85,9 @@ Add Vitest coverage in agent-browser/src/services/defaultExtensions.test.ts and 
 - [ ] **Step 1: Write the failing dependency closure tests**
 
 ```ts
-expect(resolveDefaultExtensionDependencyPlan(['agent-harness.ext.open-design']).extensionIds).toEqual([
+expect(resolveDefaultExtensionDependencyPlan(['agent-harness.ext.design-studio']).extensionIds).toEqual([
   'agent-harness.ext.design-md-context',
-  'agent-harness.ext.open-design',
+  'agent-harness.ext.design-studio',
 ]);
 ```
 
@@ -119,7 +119,7 @@ Expected: PASS.
 ```ts
 fireEvent.click(screen.getByLabelText('Extensions'));
 expect(screen.getByText('Requires DESIGN.md agent guidance')).toBeInTheDocument();
-fireEvent.click(screen.getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+fireEvent.click(screen.getByRole('button', { name: 'Install Design Studio' }));
 expect(screen.getByRole('region', { name: 'Installed extensions' })).toHaveTextContent('DESIGN.md agent guidance');
 ```
 
@@ -147,7 +147,7 @@ Expected: PASS.
 
 - [ ] **Step 1: Add visual-smoke assertions**
 
-Assert that the extension marketplace shows dependency metadata for `OpenDesign DESIGN.md Studio` and that the UI remains visible.
+Assert that the extension marketplace shows dependency metadata for `Design Studio` and that the UI remains visible.
 
 - [ ] **Step 2: Run verification**
 

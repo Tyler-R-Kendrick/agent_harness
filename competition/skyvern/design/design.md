@@ -49,7 +49,7 @@ trust_controls:
 - Many controls are exposed as API options, which is powerful for engineers but less ergonomic for nontechnical workflow builders.
 - Community issues show setup and authentication errors can be confusing, especially in self-hosted and Windows environments.
 
-## Screenshot And Open Design References
+## Screenshot And Design Studio References
 
 - Run/task API and artifact model: https://www.skyvern.com/docs/running-tasks/api-spec
 - API reference shape: https://www.skyvern.com/docs/api-reference/api-reference/agent/run-task

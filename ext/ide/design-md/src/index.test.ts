@@ -96,8 +96,8 @@ styles:
       font-family: typography.ui.fontFamily
 ---
 
-## Claude Design
-Claude Design exports swappable shell and widget styling through DESIGN.md.
+## Design Studio
+Design Studio exports swappable shell and widget styling through DESIGN.md.
 `;
 
 describe('design.md extension plugin', () => {

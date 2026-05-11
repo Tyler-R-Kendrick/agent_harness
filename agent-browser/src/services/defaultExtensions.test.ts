@@ -28,7 +28,7 @@ describe('default extensions', () => {
 
     const grouped = groupDefaultExtensionsByMarketplaceCategory(DEFAULT_EXTENSION_MANIFESTS);
     expect(grouped.ide).toEqual(expect.arrayContaining([
-      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.open-design' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-studio' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-worktree' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.symphony' }) }),
@@ -58,7 +58,7 @@ describe('default extensions', () => {
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md-context',
-      'agent-harness.ext.open-design',
+      'agent-harness.ext.design-studio',
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts-context',
@@ -221,7 +221,7 @@ describe('default extensions', () => {
     const designArtifact = createArtifact({
       id: 'design-studio-signal-desk',
       title: 'Signal Desk',
-      kind: 'open-design-project',
+      kind: 'design-studio-project',
       files: [
         {
           path: 'DESIGN.md',
@@ -309,7 +309,7 @@ describe('default extensions', () => {
       'agent-harness.ext.unknown',
     ])).toEqual([
       'agent-harness.ext.design-md-context',
-      'agent-harness.ext.open-design',
+      'agent-harness.ext.design-studio',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
       'agent-harness.ext.symphony',
@@ -341,12 +341,12 @@ describe('default extensions', () => {
   });
 
   it('resolves transitive dependencies in dependency-first install order', async () => {
-    const openDesign = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.open-design');
+    const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
-    expect(openDesign).toBeDefined();
+    expect(designStudio).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
 
-    expect(getDefaultExtensionDependencyIds(openDesign!)).toEqual([
+    expect(getDefaultExtensionDependencyIds(designStudio!)).toEqual([
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
@@ -354,7 +354,7 @@ describe('default extensions', () => {
     expect(getDefaultExtensionDependencyIds(artifactsWorktree!)).toEqual(['agent-harness.ext.artifacts-context']);
 
     const plan = resolveDefaultExtensionDependencyPlan([
-      'agent-harness.ext.open-design',
+      'agent-harness.ext.design-studio',
       'agent-harness.ext.artifacts-worktree',
     ]);
 
@@ -362,33 +362,33 @@ describe('default extensions', () => {
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
-      'agent-harness.ext.open-design',
+      'agent-harness.ext.design-studio',
     ]);
     expect(plan.missingDependencyIds).toEqual([]);
     expect(plan.cyclicDependencyIds).toEqual([]);
 
     const runtime = await createDefaultExtensionRuntime([], {
-      installedExtensionIds: ['agent-harness.ext.open-design'],
+      installedExtensionIds: ['agent-harness.ext.design-studio'],
     });
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
-      'agent-harness.ext.open-design',
+      'agent-harness.ext.design-studio',
     ]);
   });
 
   it('does not expose workspace-tree-only extensions as activity-bar features', () => {
-    const openDesign = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.open-design');
+    const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
     const symphony = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.symphony');
     const workflowCanvas = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.workflow-canvas');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
 
-    expect(openDesign).toBeDefined();
+    expect(designStudio).toBeDefined();
     expect(symphony).toBeDefined();
     expect(workflowCanvas).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
-    expect(isDefaultExtensionActivityFeature(openDesign!)).toBe(true);
+    expect(isDefaultExtensionActivityFeature(designStudio!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(symphony!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(workflowCanvas!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(artifactsWorktree!)).toBe(false);
@@ -397,8 +397,8 @@ describe('default extensions', () => {
   it('finds installed dependents so uninstalling a base extension can remove derivatives', () => {
     expect(resolveDefaultExtensionDependentIds(
       ['agent-harness.ext.design-md-context'],
-      ['agent-harness.ext.design-md-context', 'agent-harness.ext.open-design'],
-    )).toEqual(['agent-harness.ext.open-design']);
+      ['agent-harness.ext.design-md-context', 'agent-harness.ext.design-studio'],
+    )).toEqual(['agent-harness.ext.design-studio']);
 
     expect(resolveDefaultExtensionDependentIds(
       ['agent-harness.ext.artifacts-context'],

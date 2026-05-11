@@ -50,7 +50,7 @@ information_density: high
 - Usage-based pricing is transparent but still cognitively heavy because tasks can combine browser time, proxy data, step costs, and model-token costs.
 - Hosted-infrastructure positioning may miss users who want the agent's reasoning, browser state, and artifacts to stay local.
 
-## Screenshot And Open Design References
+## Screenshot And Design Studio References
 
 - Product docs home and feature cards: https://www.hyperbrowser.ai/docs/introduction
 - Agent overview: https://www.hyperbrowser.ai/docs/agents/overview

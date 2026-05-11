@@ -19,17 +19,17 @@ const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agen
 const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
 const artifactWorktreeOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-artifact-worktree.png');
 const workflowCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-workflow-canvas.png');
-const openDesignTokenReviewOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review.png');
-const openDesignTokenReviewViewportOutputPaths = [
+const designStudioTokenReviewOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-design-studio-token-review.png');
+const designStudioTokenReviewViewportOutputPaths = [
   {
     name: 'mobile',
     viewport: { width: 390, height: 840 },
-    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review-mobile.png'),
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-design-studio-token-review-mobile.png'),
   },
   {
     name: 'tablet',
     viewport: { width: 768, height: 900 },
-    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-open-design-token-review-tablet.png'),
+    outputPath: path.resolve(repoRoot, 'output/playwright/agent-browser-design-studio-token-review-tablet.png'),
   },
 ];
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
@@ -191,8 +191,8 @@ async function captureDashboardCanvasViewportMatrix(page, timeoutMs) {
   }
 }
 
-async function captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, timeoutMs) {
-  for (const { name, viewport, outputPath: viewportOutputPath } of openDesignTokenReviewViewportOutputPaths) {
+async function captureDesignStudioTokenReviewViewportMatrix(page, tokenReview, timeoutMs) {
+  for (const { name, viewport, outputPath: viewportOutputPath } of designStudioTokenReviewViewportOutputPaths) {
     await page.setViewportSize(viewport);
     await expect(tokenReview).toBeVisible({ timeout: timeoutMs });
     await tokenReview.evaluate((element) => {
@@ -1539,7 +1539,7 @@ async function main() {
     await expect(page.getByRole('region', { name: 'Artifact viewer' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByText('//artifacts/artifact-ws-research-dashboard/dashboard.md')).toBeVisible({
+    await expect(page.getByText('//workspace/artifacts/artifact-ws-research-dashboard/dashboard.md')).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: artifactWorktreeOutputPath, fullPage: true });
@@ -1597,18 +1597,18 @@ async function main() {
     await tokenReview.evaluate((element) => {
       element.scrollTop = 0;
     });
-    await page.screenshot({ path: openDesignTokenReviewOutputPath, fullPage: true });
-    await captureOpenDesignTokenReviewViewportMatrix(page, tokenReview, shellTimeoutMs);
+    await page.screenshot({ path: designStudioTokenReviewOutputPath, fullPage: true });
+    await captureDesignStudioTokenReviewViewportMatrix(page, tokenReview, shellTimeoutMs);
     await page.setViewportSize({ width: 1920, height: 1080 });
     await extensionFeaturePane.getByRole('button', { name: 'Compile DESIGN.md' }).click();
-    await expect(extensionFeaturePane.getByRole('region', { name: 'Design Studio generated files' })).toBeVisible({
+    await expect(extensionFeaturePane.getByRole('region', { name: 'Design Studio generated artifacts' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(extensionFeaturePane.getByText('DESIGN.md').first()).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(extensionFeaturePane.getByText('//artifacts/design-studio-research-design-system/research.json')).toBeVisible({
+    await expect(extensionFeaturePane.getByText('//workspace/artifacts/design-studio-research-design-system/research.json')).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(extensionFeaturePane.getByText('//artifacts/design-studio-research-design-system/token-review.json')).toBeVisible({
+    await expect(extensionFeaturePane.getByText('//workspace/artifacts/design-studio-research-design-system/token-review.json')).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await extensionFeaturePane.getByRole('button', { name: 'Run design critique' }).click();
@@ -1789,7 +1789,7 @@ async function main() {
     console.log(`agent-browser visual smoke passed: ${outputPath}`);
     console.log(`agent-browser extensions marketplace smoke passed: ${marketplaceOutputPath}`);
     console.log(`agent-browser artifact worktree smoke passed: ${artifactWorktreeOutputPath}`);
-    console.log(`agent-browser Design Studio token review smoke passed: ${openDesignTokenReviewOutputPath}`);
+    console.log(`agent-browser Design Studio token review smoke passed: ${designStudioTokenReviewOutputPath}`);
     console.log(`agent-browser workflow canvas smoke passed: ${workflowCanvasOutputPath}`);
     console.log(`agent-browser evaluation observability smoke passed: ${evaluationOutputPath}`);
     console.log(`agent-browser repository wiki smoke passed: ${repoWikiOutputPath}`);

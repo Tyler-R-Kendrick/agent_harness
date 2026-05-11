@@ -10,6 +10,7 @@ const alias = {
   '@agent-harness/ext-agents-md': path.resolve(__dirname, '../ext/harness/agents-md/src/index.ts'),
   '@agent-harness/ext-artifacts': path.resolve(__dirname, '../ext/ide/artifacts/src/index.ts'),
   '@agent-harness/ext-design-md': path.resolve(__dirname, '../ext/ide/design-md/src/index.ts'),
+  '@agent-harness/ext-design-studio': path.resolve(__dirname, '../ext/ide/design-studio/src/index.ts'),
   '@agent-harness/ext-symphony': path.resolve(__dirname, '../ext/runtime/symphony/src/index.ts'),
   '@agent-harness/workgraph': path.resolve(__dirname, '../lib/workgraph/src/index.ts'),
   '@agent-harness/ext-workflow-canvas': path.resolve(__dirname, '../ext/ide/workflow-canvas/src/index.ts'),
