@@ -513,6 +513,9 @@ function validateTasks(tasks: unknown[], prefix = ''): string[] {
       return [`Task ${label} must contain exactly one named step.`];
     }
     const [[name, body]] = entries;
+    if (!name.trim()) {
+      return [`Task ${prefix || 'entry'} name is required.`];
+    }
     if (!isRecord(body)) {
       return [`Task "${prefix}${name}" must be an object.`];
     }
