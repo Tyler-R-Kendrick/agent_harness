@@ -830,7 +830,8 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Open Session/ })[0]);
+    const workspaceTree = screen.getByRole('tree', { name: 'Workspace tree' });
+    fireEvent.click(within(workspaceTree).getByRole('button', { name: /^Session 1$/ }));
     expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveTextContent('Adversary');
 
     fireEvent.click(screen.getByLabelText('Settings'));

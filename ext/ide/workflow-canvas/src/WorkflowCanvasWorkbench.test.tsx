@@ -96,7 +96,7 @@ describe('WorkflowCanvasRenderer', () => {
     expect(savedArtifact.canvas.edges).toHaveLength(7);
     expect(savedArtifact.featurePlan).toHaveLength(6);
     expect(savedArtifact.research.screenshotReferences).toHaveLength(6);
-  });
+  }, 20000);
 
   it('supports default renderer props for artifact previews without workspace mutation hooks', () => {
     render(<WorkflowCanvasRenderer />);

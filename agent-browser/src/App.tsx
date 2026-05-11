@@ -651,6 +651,7 @@ import {
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
+import { HarnessWidgetEditorPanel } from './features/harness-ui/HarnessWidgetEditorPanel';
 import {
   addHarnessDashboardWidget,
   applyHarnessElementPatch,
@@ -676,11 +677,12 @@ type ClipboardEntry = { id: string; text: string; label: string; timestamp: numb
 type SidebarPanel = 'workspaces' | 'symphony' | 'wiki' | 'history' | 'extensions' | 'models' | 'settings' | 'account';
 type RepoWikiView = 'pages' | 'graph' | 'memory' | 'chat' | 'sources';
 type DashboardPanel = { type: 'dashboard'; workspaceId: string };
+type WidgetEditorPanel = { type: 'widget-editor'; workspaceId: string; widgetId: string };
 type BrowserPanel = { type: 'browser'; tab: TreeNode };
 type SessionPanel = { type: 'session'; id: string };
 type FilePanel = { type: 'file'; file: WorkspaceFile };
 type ArtifactPanel = { type: 'artifact'; artifact: AgentArtifact; file: ArtifactFile | null };
-type Panel = DashboardPanel | BrowserPanel | SessionPanel | FilePanel | ArtifactPanel;
+type Panel = DashboardPanel | WidgetEditorPanel | BrowserPanel | SessionPanel | FilePanel | ArtifactPanel;
 type PanelDragHandleProps = React.HTMLAttributes<HTMLElement>;
 type WidgetSessionBinding = {
   widget: HarnessElement;
@@ -14562,6 +14564,7 @@ function Toast({ toast }: { toast: ToastState }) {
 
 function panelKey(panel: Panel): string {
   if (panel.type === 'dashboard') return `dashboard:${panel.workspaceId}`;
+  if (panel.type === 'widget-editor') return `widget-editor:${panel.workspaceId}:${panel.widgetId}`;
   if (panel.type === 'file') return `file:${panel.file.path}`;
   if (panel.type === 'artifact') return `artifact:${panel.artifact.id}:${panel.file?.path ?? ''}`;
   if (panel.type === 'browser') return `browser:${panel.tab.id}`;
@@ -15693,7 +15696,9 @@ function AgentBrowserApp() {
     [restoreActiveHarnessSpec],
   );
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
-  const hasActiveRenderPane = Boolean(editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
+  const activeDashboardWidgetId = activeWorkspaceViewState.activeDashboardWidgetId ?? null;
+  const activeDashboardWidget = activeDashboardWidgetId ? activeHarnessSpec.elements[activeDashboardWidgetId] ?? null : null;
+  const hasActiveRenderPane = Boolean(activeDashboardWidget || editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
   const shouldRenderDashboard = activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane;
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
@@ -15705,6 +15710,15 @@ function AgentBrowserApp() {
         paneType: 'dashboard',
         itemId: activeWorkspaceId,
         label: `${activeWorkspace.name} harness`,
+      });
+    }
+
+    if (activeDashboardWidget) {
+      panes.push({
+        id: `widget-editor:${activeWorkspaceId}:${activeDashboardWidget.id}`,
+        paneType: 'dashboard-widget',
+        itemId: activeDashboardWidget.id,
+        label: readHarnessElementTitle(activeDashboardWidget, activeDashboardWidget.id),
       });
     }
 
@@ -15756,12 +15770,14 @@ function AgentBrowserApp() {
     return orderRenderPanes(panes, activeWorkspaceViewState.panelOrder ?? []);
   }, [
     activeSessionIds,
+    activeDashboardWidget,
     activeArtifactPanelArtifact,
     activeArtifactPanelFile,
     activeWorkspace.name,
     activeWorkspaceSessions,
     activeWorkspaceId,
     activeWorkspaceViewState.panelOrder,
+    activeDashboardWidgetId,
     editingFile,
     openBrowserTabs,
     activeWorkspaceViewState.dashboardOpen,
@@ -16266,6 +16282,27 @@ function AgentBrowserApp() {
     addSessionToWorkspace(activeWorkspaceId, `Customize: ${widgetTitle}`, { open: true, boundWidgetId: widgetId });
   }, [activeHarnessSpec.elements, activeWorkspace, activeWorkspaceId, addSessionToWorkspace, setWorkspaceViewStateByWorkspace]);
 
+  const openDashboardWidgetEditor = useCallback((widgetId: string, ownerWorkspace = activeWorkspace) => {
+    if (ownerWorkspace.type !== 'workspace') return;
+    const paneId = `widget-editor:${ownerWorkspace.id}:${widgetId}`;
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[ownerWorkspace.id] ?? createWorkspaceViewEntry(ownerWorkspace);
+      return {
+        ...current,
+        [ownerWorkspace.id]: {
+          ...existing,
+          dashboardOpen: false,
+          activeDashboardWidgetId: widgetId,
+          activeSessionIds: [],
+          openTabIds: [],
+          editingFilePath: null,
+          activeArtifactPanel: null,
+          panelOrder: [paneId],
+        },
+      };
+    });
+  }, [activeWorkspace, setWorkspaceViewStateByWorkspace]);
+
   const createDashboardWidgetFromCanvas = useCallback((position: WidgetPosition) => {
     const widgetId = `dashboard-widget-${createUniqueId()}`;
     updateActiveHarnessSpec((spec) => addHarnessDashboardWidget(spec, {
@@ -16277,9 +16314,24 @@ function AgentBrowserApp() {
         summary: 'Describe the widget changes in the bound session.',
       },
     }));
-    addSessionToWorkspace(activeWorkspaceId, 'Customize: New widget', { open: true, boundWidgetId: widgetId });
-    setToast({ msg: 'Widget session created', type: 'success' });
-  }, [activeWorkspaceId, addSessionToWorkspace, setToast, updateActiveHarnessSpec]);
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          dashboardOpen: false,
+          activeDashboardWidgetId: widgetId,
+          activeSessionIds: [],
+          openTabIds: [],
+          editingFilePath: null,
+          activeArtifactPanel: null,
+          panelOrder: [`widget-editor:${activeWorkspaceId}:${widgetId}`],
+        },
+      };
+    });
+    setToast({ msg: 'Widget editor opened', type: 'success' });
+  }, [activeWorkspace, activeWorkspaceId, setToast, setWorkspaceViewStateByWorkspace, updateActiveHarnessSpec]);
 
   const startConversationBranch = useCallback((request: string, sessionId: string) => {
     const title = request.trim().replace(/\s+/g, ' ') || 'Active chat thread';
@@ -17625,6 +17677,10 @@ function AgentBrowserApp() {
       return ids.length > 1 ? ids.filter((id) => id !== nodeId) : ids;
     };
     if (node.nodeKind === 'dashboard') {
+      if (node.dashboardWidgetId) {
+        openDashboardWidgetEditor(node.dashboardWidgetId, workspace);
+        return;
+      }
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
         return {
@@ -17632,6 +17688,7 @@ function AgentBrowserApp() {
           [workspace.id]: {
             ...existing,
             dashboardOpen: true,
+            activeDashboardWidgetId: null,
             activeSessionIds: [],
             openTabIds: [],
             editingFilePath: null,
@@ -17640,9 +17697,6 @@ function AgentBrowserApp() {
           },
         };
       });
-      if (node.dashboardWidgetId) {
-        openDashboardWidgetSession(node.dashboardWidgetId);
-      }
       return;
     }
     if ((node.nodeKind ?? 'browser') === 'browser') {
@@ -18553,6 +18607,21 @@ function AgentBrowserApp() {
           [activeWorkspaceId]: {
             ...existing,
             dashboardOpen: false,
+            panelOrder: existing.panelOrder.filter((id) => id !== paneId),
+          },
+        };
+      });
+      return { paneId, closed: true };
+    }
+    if (paneId.startsWith(`widget-editor:${activeWorkspaceId}:`)) {
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+        return {
+          ...current,
+          [activeWorkspaceId]: {
+            ...existing,
+            dashboardOpen: true,
+            activeDashboardWidgetId: null,
             panelOrder: existing.panelOrder.filter((id) => id !== paneId),
           },
         };
@@ -19539,6 +19608,12 @@ function AgentBrowserApp() {
           if (shouldRenderDashboard) {
             panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
           }
+          if (activeDashboardWidget) {
+            panelEntries.push([
+              `widget-editor:${activeWorkspaceId}:${activeDashboardWidget.id}`,
+              { type: 'widget-editor', workspaceId: activeWorkspaceId, widgetId: activeDashboardWidget.id },
+            ]);
+          }
           if (editingFile) {
             panelEntries.push([`file:${editingFile.path}`, { type: 'file', file: editingFile }]);
           }
@@ -19575,9 +19650,27 @@ function AgentBrowserApp() {
                   }))}
                   knowledge={activeHarnessKnowledgeSummary}
                   onCreateDashboardWidget={createDashboardWidgetFromCanvas}
-                  onOpenWidgetSession={openDashboardWidgetSession}
+                  onOpenWidgetEditor={(widgetId) => openDashboardWidgetEditor(widgetId)}
                   onPatchElement={patchActiveHarnessElement}
                   dragHandleProps={dragHandleProps}
+                />
+              );
+            }
+            if (panel.type === 'widget-editor') {
+              return (
+                <HarnessWidgetEditorPanel
+                  key={panel.widgetId}
+                  spec={activeHarnessSpec}
+                  widgetId={panel.widgetId}
+                  workspaceName={activeWorkspace.name}
+                  files={activeWorkspaceFiles.map((file) => ({
+                    path: file.path,
+                    kind: detectWorkspaceFileKind(file.path) ?? undefined,
+                  }))}
+                  artifactCount={activeArtifacts.length}
+                  symphonyActive={activeMultitaskSubagentState.enabled}
+                  onPatchElement={patchActiveHarnessElement}
+                  onOpenAssistant={() => openDashboardWidgetSession(panel.widgetId)}
                 />
               );
             }

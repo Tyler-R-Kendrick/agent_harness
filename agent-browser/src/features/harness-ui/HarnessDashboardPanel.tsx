@@ -12,7 +12,7 @@ export type HarnessDashboardPanelProps = {
   files?: HarnessFileSummary[];
   knowledge: HarnessKnowledgeSummary;
   onCreateDashboardWidget?: (position: WidgetPosition) => void;
-  onOpenWidgetSession?: (widgetId: string) => void;
+  onOpenWidgetEditor?: (widgetId: string) => void;
   onPatchElement?: (patch: HarnessElementPatch) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
 };
@@ -187,7 +187,7 @@ export function HarnessDashboardPanel({
   files = [],
   knowledge,
   onCreateDashboardWidget,
-  onOpenWidgetSession,
+  onOpenWidgetEditor,
   onPatchElement,
   dragHandleProps,
 }: HarnessDashboardPanelProps) {
@@ -451,8 +451,8 @@ export function HarnessDashboardPanel({
                         <button
                           type="button"
                           className="harness-widget-title-button"
-                          aria-label={`Open ${title} widget session`}
-                          onClick={() => onOpenWidgetSession?.(widget.id)}
+                          aria-label={`Open widget editor for ${title}`}
+                          onClick={() => onOpenWidgetEditor?.(widget.id)}
                         >
                           {title}
                         </button>

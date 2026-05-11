@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { HarnessAppSpec, HarnessElement, SessionWidgetAsset, SessionWidgetMessage } from './types';
+import { WidgetDocumentRenderer } from './WidgetDocumentRenderer';
+import { readWidgetDocument } from './widgetComponents';
 
 export type HarnessSessionSummary = {
   id: string;
@@ -207,6 +209,20 @@ function renderKnowledgeGraphWidget(context: HarnessRenderContext, element: Harn
 }
 
 function renderElement(element: HarnessElement, context: HarnessRenderContext, children: ReactNode) {
+  if (element.props?.widgetJson) {
+    const title = readStringProp(element, 'title', element.id);
+    return (
+      <WidgetDocumentRenderer
+        document={readWidgetDocument(element.props.widgetJson, title)}
+        sampleData={element.props.widgetSampleData ?? {
+          summary: readStringProp(element, 'summary', 'Live widget preview'),
+          status: 'Live',
+          detail: context.workspaceName,
+        }}
+      />
+    );
+  }
+
   switch (element.type) {
     case 'WorkspaceSummary':
     case 'SessionConversationSummary':
