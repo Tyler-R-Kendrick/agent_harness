@@ -89,7 +89,41 @@ export function createSymphonyPlugin<TMessage extends MemoryMessage = MemoryMess
   };
 }
 
-export * from './board.js';
+export {
+  advanceSymphonyTask,
+  createDefaultSymphonyBoardState,
+  createSymphonyTask,
+  dispatchSymphonyTask,
+  getSymphonyBoardMetrics,
+  getSymphonyTasksByLane,
+  isSymphonyBoardRecord,
+  isSymphonyBoardState,
+  markSymphonyProofPassing,
+  moveSymphonyTask,
+  selectSymphonyTask,
+  SYMPHONY_ALL_LANES,
+  SYMPHONY_HIDDEN_LANES,
+  SYMPHONY_VISIBLE_LANES,
+  toggleSymphonyHiddenLanes,
+  toggleSymphonyQueuePaused,
+} from './board.js';
+export type {
+  CreateSymphonyTaskInput,
+  DispatchSymphonyTaskInput,
+  SymphonyActivityEvent,
+  SymphonyActivityKind,
+  SymphonyAgentHealth,
+  SymphonyAgentState,
+  SymphonyBoardMetrics,
+  SymphonyBoardState,
+  SymphonyLaneDefinition,
+  SymphonyLaneId,
+  SymphonyProof,
+  SymphonyProofStatus,
+  SymphonyTask,
+  SymphonyTaskAgent,
+  SymphonyTaskPriority,
+} from './board.js';
 export {
   INTERNAL_TASK_STORE_CONFIG,
   createHarnessTaskManager,
