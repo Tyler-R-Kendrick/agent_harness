@@ -13,6 +13,10 @@ const loadModelMock = vi.fn();
 const generateMock = vi.fn();
 const fetchCopilotStateMock = vi.fn();
 const streamCopilotChatMock = vi.fn();
+const fetchCursorStateMock = vi.fn();
+const streamCursorChatMock = vi.fn();
+const fetchCodexStateMock = vi.fn();
+const streamCodexRuntimeChatMock = vi.fn();
 const fetchGitWorktreeStatusMock = vi.fn();
 const fetchGitWorktreeDiffMock = vi.fn();
 
@@ -38,6 +42,16 @@ vi.mock('./services/browserInference', () => ({
 vi.mock('./services/copilotApi', () => ({
   fetchCopilotState: (...args: unknown[]) => fetchCopilotStateMock(...args),
   streamCopilotChat: (...args: unknown[]) => streamCopilotChatMock(...args),
+}));
+
+vi.mock('./services/cursorApi', () => ({
+  fetchCursorState: (...args: unknown[]) => fetchCursorStateMock(...args),
+  streamCursorChat: (...args: unknown[]) => streamCursorChatMock(...args),
+}));
+
+vi.mock('./services/codexApi', () => ({
+  fetchCodexState: (...args: unknown[]) => fetchCodexStateMock(...args),
+  streamCodexRuntimeChat: (...args: unknown[]) => streamCodexRuntimeChatMock(...args),
 }));
 
 vi.mock('./services/gitWorktreeApi', () => ({
@@ -85,6 +99,10 @@ beforeEach(() => {
   generateMock.mockReset();
   fetchCopilotStateMock.mockReset();
   streamCopilotChatMock.mockReset();
+  fetchCursorStateMock.mockReset();
+  streamCursorChatMock.mockReset();
+  fetchCodexStateMock.mockReset();
+  streamCodexRuntimeChatMock.mockReset();
   fetchGitWorktreeStatusMock.mockReset();
   fetchGitWorktreeDiffMock.mockReset();
   searchBrowserModelsMock.mockResolvedValue([]);
@@ -98,6 +116,22 @@ beforeEach(() => {
     signInDocsUrl: 'https://docs.github.com/copilot',
   });
   streamCopilotChatMock.mockResolvedValue(undefined);
+  fetchCursorStateMock.mockResolvedValue({
+    available: false,
+    authenticated: false,
+    models: [],
+    signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
+    signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
+  });
+  streamCursorChatMock.mockResolvedValue(undefined);
+  fetchCodexStateMock.mockResolvedValue({
+    available: false,
+    authenticated: false,
+    models: [],
+    signInCommand: 'codex login',
+    signInDocsUrl: 'https://developers.openai.com/codex/auth',
+  });
+  streamCodexRuntimeChatMock.mockResolvedValue(undefined);
   fetchGitWorktreeStatusMock.mockResolvedValue({
     available: true,
     cwd: 'C:/repo',
@@ -332,6 +366,91 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByLabelText('Qwen3-0.6B-ONNX installed')).toBeInTheDocument();
     expect(screen.getAllByText(/Qwen3-0\.6B-ONNX/i).length).toBeGreaterThan(0);
+  });
+
+  it('renders Models as a minimal installed sidebar plus provider catalog render pane', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      STORAGE_KEYS.installedModels,
+      JSON.stringify([{
+        id: 'onnx-community/Qwen3-0.6B-ONNX',
+        name: 'Qwen3-0.6B-ONNX',
+        author: 'onnx-community',
+        task: 'text-generation',
+        downloads: 5000,
+        likes: 30,
+        tags: ['onnx'],
+        sizeMB: 768,
+        contextWindow: 4096,
+        maxOutputTokens: 512,
+        status: 'installed',
+      }]),
+    );
+    fetchCopilotStateMock.mockResolvedValue({
+      available: true,
+      authenticated: true,
+      models: [
+        { id: 'gpt-5', name: 'OpenAI GPT-5', reasoning: true, vision: true, contextWindow: 128000, maxOutputTokens: 8192 },
+        { id: 'claude-sonnet-4.5', name: 'Claude Sonnet 4.5', reasoning: true, vision: false },
+      ],
+      signInCommand: 'copilot login',
+      signInDocsUrl: 'https://docs.github.com/copilot',
+    });
+    fetchCursorStateMock.mockResolvedValue({
+      available: true,
+      authenticated: true,
+      models: [{ id: 'cursor-small', name: 'Cursor Small', contextWindow: 64000, maxOutputTokens: 4096 }],
+      signInCommand: 'Set CURSOR_API_KEY in the dev server environment',
+      signInDocsUrl: 'https://cursor.com/blog/typescript-sdk',
+    });
+    fetchCodexStateMock.mockResolvedValue({
+      available: true,
+      authenticated: true,
+      version: '1.2.3',
+      models: [{ id: 'gpt-5.1-codex', name: 'GPT-5.1 Codex', reasoning: true, vision: false }],
+      signInCommand: 'codex login',
+      signInDocsUrl: 'https://developers.openai.com/codex/auth',
+    });
+    searchBrowserModelsMock.mockResolvedValue([{
+      id: 'onnx-community/Phi-4-mini-ONNX',
+      name: 'Phi-4-mini-ONNX',
+      author: 'onnx-community',
+      task: 'text-generation',
+      downloads: 4200,
+      likes: 18,
+      tags: ['onnx', 'transformers.js'],
+      sizeMB: 900,
+      contextWindow: 4096,
+      maxOutputTokens: 512,
+      status: 'available',
+    }]);
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Models'));
+
+    const installedSidebar = screen.getByRole('region', { name: 'Installed models' });
+    expect(within(installedSidebar).getByLabelText('Qwen3-0.6B-ONNX installed from Hugging Face')).toBeInTheDocument();
+    expect(installedSidebar).toHaveTextContent('Hugging Face');
+    expect(installedSidebar).not.toHaveTextContent('Providers');
+    expect(installedSidebar).not.toHaveTextContent('Built-in local inference');
+    expect(installedSidebar).not.toHaveTextContent('Search Hugging Face');
+
+    const catalog = screen.getByRole('region', { name: 'Model catalog' });
+    expect(within(catalog).getByRole('heading', { name: 'Find the Right Model for Your AI Solution' })).toBeInTheDocument();
+    expect(within(catalog).getByRole('heading', { name: 'GitHub Copilot Models (2)' })).toBeInTheDocument();
+    expect(within(catalog).getByRole('heading', { name: 'Cursor Models (1)' })).toBeInTheDocument();
+    expect(within(catalog).getByRole('heading', { name: 'Codex Models (1)' })).toBeInTheDocument();
+    expect(within(catalog).getByRole('heading', { name: 'Local Browser Models (6)' })).toBeInTheDocument();
+    expect(catalog).toHaveTextContent('OpenAI GPT-5');
+    expect(catalog).toHaveTextContent('Cursor Small');
+    expect(catalog).toHaveTextContent('GPT-5.1 Codex');
+    expect(catalog).toHaveTextContent('Phi-4-mini-ONNX');
   });
 
   it('hydrates the Symphony task system from durable session storage', async () => {
@@ -1649,7 +1768,7 @@ describe('App smoke coverage', () => {
     expect(screen.getAllByText(/"count": "5"/).length).toBeGreaterThan(0);
   });
 
-  it('shows built-in local inference readiness in Models', async () => {
+  it('shows installed local models in the sidebar and local catalog section', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
       STORAGE_KEYS.installedModels,
@@ -1676,9 +1795,13 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('Models'));
 
-    expect(screen.getByRole('button', { name: 'Built-in local inference' })).toBeInTheDocument();
-    expect(screen.getAllByText('Offline ready').length).toBeGreaterThan(0);
-    expect(screen.getByText('Active local model: Qwen3-0.6B-ONNX')).toBeInTheDocument();
-    expect(screen.getByText(/No localhost sidecar/)).toBeInTheDocument();
+    const installedSidebar = screen.getByRole('region', { name: 'Installed models' });
+    expect(within(installedSidebar).getByLabelText('Qwen3-0.6B-ONNX installed from Hugging Face')).toBeInTheDocument();
+    expect(installedSidebar).not.toHaveTextContent('Built-in local inference');
+
+    const catalog = screen.getByRole('region', { name: 'Model catalog' });
+    expect(within(catalog).getByRole('heading', { name: 'Local Browser Models (5)' })).toBeInTheDocument();
+    expect(within(catalog).getAllByText('Installed').length).toBeGreaterThan(0);
+    expect(catalog).toHaveTextContent('Installed from Hugging Face for in-browser inference.');
   });
 });
