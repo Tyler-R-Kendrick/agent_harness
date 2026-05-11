@@ -221,11 +221,6 @@ import {
 } from './services/browserAgentRunSdk';
 import { LocalLanguageModel } from './services/localLanguageModel';
 import {
-  assessLocalInferenceReadiness,
-  getBrowserLocalInferenceHardware,
-  type LocalInferenceReadiness,
-} from './services/localInferenceReadiness';
-import {
   DEFAULT_MEDIA_CAPABILITY_REQUIREMENTS,
   buildMediaCapabilityPrompt,
   planMediaCapabilities,
@@ -6825,66 +6820,49 @@ function ChatPanel({
   );
 }
 
-function ModelCard({ model, isInstalled, isLoading, onInstall, onDelete }: { model: HFModel; isInstalled: boolean; isLoading: boolean; onInstall: () => void; onDelete?: () => void }) {
+function getInstalledModelSource(model: HFModel): string {
+  if (model.id.includes('/') || model.tags.some((tag) => tag.toLowerCase().includes('transformers'))) {
+    return 'Hugging Face';
+  }
+  return model.author || 'Local';
+}
+
+function formatModelSize(model: Pick<HFModel, 'sizeMB'>): string | null {
+  if (!model.sizeMB) return null;
+  return model.sizeMB >= 1000 ? `${(model.sizeMB / 1000).toFixed(1)} GB` : `${model.sizeMB} MB`;
+}
+
+function formatTokenWindow(value: number | undefined, suffix: string): string | null {
+  return typeof value === 'number' ? `${value.toLocaleString()} ${suffix}` : null;
+}
+
+function InstalledModelRow({ model, onDelete }: { model: HFModel; onDelete: (id: string) => void }) {
+  const source = getInstalledModelSource(model);
   const taskLabel = HF_TASK_LABELS[model.task] ?? model.task;
+  const sizeLabel = formatModelSize(model);
+
   return (
-    <div className="model-card">
-      <div className="model-card-icon"><Icon name="layers" size={15} color={isInstalled ? '#34d399' : '#60a5fa'} /></div>
-      <div className="model-card-body">
+    <article className="installed-model-row" aria-label={`${model.name} installed from ${source}`}>
+      <span className="installed-model-icon" aria-hidden="true">
+        <Icon name="cpu" size={14} />
+      </span>
+      <span className="installed-model-copy">
         <strong>{model.name}</strong>
-        <span className="chip mini">{taskLabel}</span>
-        <p>{model.author}</p>
-        <small>{model.downloads.toLocaleString()} downloads · {model.likes.toLocaleString()} likes{model.sizeMB > 0 ? ` · ${model.sizeMB >= 1000 ? (model.sizeMB / 1000).toFixed(1) + 'GB' : model.sizeMB + 'MB'}` : ''}</small>
-      </div>
-      {isInstalled ? (
-        <div className="model-card-actions">
-          <StatusIndicator active label={`${model.name} installed`} />
-          <span className="sr-only">Installed</span>
-          {onDelete && (
-            <button
-              type="button"
-              className="sidebar-icon-button"
-              aria-label={`Remove ${model.name}`}
-              title={`Remove ${model.name}`}
-              onClick={onDelete}
-            >
-              <Icon name="trash" size={13} />
-            </button>
-          )}
-        </div>
-      ) : (
+        <small>{source}{taskLabel ? ` · ${taskLabel}` : ''}{sizeLabel ? ` · ${sizeLabel}` : ''}</small>
+      </span>
+      <span className="installed-model-status">
+        <StatusIndicator active label={`${model.name} installed`} />
         <button
           type="button"
           className="sidebar-icon-button"
-          aria-label={`${model.name} ${isLoading ? 'Loading' : 'Load'}`}
-          title={`${isLoading ? 'Loading' : 'Load'} ${model.name}`}
-          onClick={onInstall}
-          disabled={isLoading}
+          aria-label={`Remove ${model.name}`}
+          title={`Remove ${model.name}`}
+          onClick={() => onDelete(model.id)}
         >
-          <Icon name={isLoading ? 'loader' : 'download'} size={13} className={isLoading ? 'spin' : ''} />
-          <span className="sr-only">{isLoading ? 'Loading…' : 'Load'}</span>
+          <Icon name="trash" size={13} />
         </button>
-      )}
-    </div>
-  );
-}
-
-function CopilotModelCard({ model }: { model: CopilotModelSummary }) {
-  return (
-    <div className="model-card copilot-model-card">
-      <div className="model-card-icon"><Icon name="sparkles" size={15} color="#7dd3fc" /></div>
-      <div className="model-card-body">
-        <strong>{model.name}</strong>
-        <div className="copilot-model-meta">
-          <span className="chip mini">{model.id}</span>
-          {model.reasoning ? <span className="chip mini">Reasoning</span> : null}
-          {model.vision ? <span className="chip mini">Vision</span> : null}
-          {typeof model.billingMultiplier === 'number' ? <span className="chip mini">{model.billingMultiplier}x billing</span> : null}
-        </div>
-        <p>{model.policyState ? `Policy: ${model.policyState}` : 'Enabled for this Copilot account.'}</p>
-      </div>
-      <StatusIndicator active label={`${model.name} enabled`} />
-    </div>
+      </span>
+    </article>
   );
 }
 
@@ -9197,42 +9175,6 @@ function SecurityReviewAgentSettingsPanel({
   );
 }
 
-function CursorModelCard({ model }: { model: CursorModelSummary }) {
-  return (
-    <div className="model-card copilot-model-card">
-      <div className="model-card-icon"><Icon name="sparkles" size={15} color="#a78bfa" /></div>
-      <div className="model-card-body">
-        <strong>{model.name}</strong>
-        <div className="copilot-model-meta">
-          <span className="chip mini">{model.id}</span>
-          {typeof model.contextWindow === 'number' ? <span className="chip mini">{model.contextWindow.toLocaleString()} ctx</span> : null}
-          {typeof model.maxOutputTokens === 'number' ? <span className="chip mini">{model.maxOutputTokens.toLocaleString()} out</span> : null}
-        </div>
-        <p>Enabled through the Cursor SDK runtime for this environment.</p>
-      </div>
-      <StatusIndicator active label={`${model.name} enabled`} />
-    </div>
-  );
-}
-
-function CodexModelCard({ model }: { model: CodexModelSummary }) {
-  return (
-    <div className="model-card copilot-model-card">
-      <div className="model-card-icon"><Icon name="terminal" size={15} color="#86efac" /></div>
-      <div className="model-card-body">
-        <strong>{model.name}</strong>
-        <div className="copilot-model-meta">
-          <span className="chip mini">{model.id}</span>
-          {model.reasoning ? <span className="chip mini">Reasoning</span> : null}
-          {model.vision ? <span className="chip mini">Vision</span> : null}
-        </div>
-        <p>Runs through the local Codex CLI configuration.</p>
-      </div>
-      <StatusIndicator active label={`${model.name} enabled`} />
-    </div>
-  );
-}
-
 type SettingsScope = 'user' | 'workspace' | 'session';
 
 const SETTINGS_SCOPES: SettingsScope[] = ['user', 'workspace', 'session'];
@@ -9734,6 +9676,11 @@ function formatSecretUpdated(value: string): string {
 }
 
 interface ModelsPanelProps {
+  installedModels: HFModel[];
+  onDelete: (id: string) => void;
+}
+
+interface ModelCatalogPaneProps {
   copilotState: CopilotRuntimeState;
   isCopilotLoading: boolean;
   onRefreshCopilot: () => void;
@@ -9746,11 +9693,11 @@ interface ModelsPanelProps {
   registryModels: HFModel[];
   installedModels: HFModel[];
   task: string;
+  searchQuery: string;
   loadingModelId: string | null;
   onTaskChange: (task: string) => void;
   onSearch: (query: string) => void;
   onInstall: (model: HFModel) => Promise<void>;
-  onDelete: (id: string) => void;
 }
 
 interface SettingsPanelProps {
@@ -9831,284 +9778,432 @@ function summarizeChapteredSessionState(state: ChapteredSessionState) {
   };
 }
 
-function LocalInferenceReadinessCard({ readiness }: { readiness: LocalInferenceReadiness }) {
+function ModelsPanel({ installedModels, onDelete }: ModelsPanelProps) {
   return (
-    <article className="provider-card local-inference-card">
-      <div className="provider-card-header">
-        <div className="provider-body">
-          <strong>{readiness.title}</strong>
-          <p>{readiness.summary}</p>
+    <section className="panel-scroll models-installed-panel" aria-label="Installed models">
+      <div className="panel-topbar">
+        <div className="settings-heading">
+          <h2>Models</h2>
+          <p className="muted">{installedModels.length} installed</p>
         </div>
-        <span className={`badge${readiness.status === 'ready' ? ' connected' : ''}`}>{readiness.badge}</span>
       </div>
-      {readiness.activeModelName ? (
-        <p className="muted">Active local model: {readiness.activeModelName}</p>
+      <div className="installed-model-list">
+        {installedModels.map((model) => (
+          <InstalledModelRow key={model.id} model={model} onDelete={onDelete} />
+        ))}
+        {installedModels.length === 0 ? (
+          <p className="installed-model-empty">No local models installed.</p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+type ModelCatalogProviderId = 'popular' | 'ghcp' | 'cursor' | 'codex' | 'local' | 'custom';
+
+interface ModelCatalogAction {
+  label: string;
+  icon: keyof typeof icons;
+  disabled?: boolean;
+  onClick?: () => void;
+}
+
+interface ModelCatalogCardData {
+  id: string;
+  name: string;
+  providerId: ModelCatalogProviderId;
+  providerName: string;
+  description: string;
+  tags: string[];
+  action?: ModelCatalogAction;
+}
+
+interface ModelCatalogSectionData {
+  id: Exclude<ModelCatalogProviderId, 'popular'>;
+  title: string;
+  subtitle: string;
+  status: string;
+  statusActive: boolean;
+  statusLoading: boolean;
+  refreshLabel?: string;
+  onRefresh?: () => void;
+  models: ModelCatalogCardData[];
+}
+
+function providerIcon(providerId: ModelCatalogProviderId): { name: keyof typeof icons; color: string } {
+  switch (providerId) {
+    case 'ghcp':
+      return { name: 'sparkles', color: '#7dd3fc' };
+    case 'cursor':
+      return { name: 'pencil', color: '#c4b5fd' };
+    case 'codex':
+      return { name: 'terminal', color: '#86efac' };
+    case 'local':
+      return { name: 'cpu', color: '#facc15' };
+    case 'custom':
+      return { name: 'slidersHorizontal', color: '#fb923c' };
+    case 'popular':
+      return { name: 'layers', color: '#60a5fa' };
+  }
+}
+
+function modelSearchText(model: ModelCatalogCardData): string {
+  return `${model.name} ${model.providerName} ${model.description} ${model.tags.join(' ')}`.toLowerCase();
+}
+
+function buildCopilotCatalogModel(model: CopilotModelSummary): ModelCatalogCardData {
+  return {
+    id: `ghcp:${model.id}`,
+    name: model.name,
+    providerId: 'ghcp',
+    providerName: 'GitHub Copilot',
+    description: model.policyState ? `Policy: ${model.policyState}` : 'Available through the GitHub Copilot runtime for this environment.',
+    tags: [
+      model.id,
+      model.reasoning ? 'Reasoning' : null,
+      model.vision ? 'Vision' : null,
+      formatTokenWindow(model.contextWindow, 'ctx'),
+      typeof model.billingMultiplier === 'number' ? `${model.billingMultiplier}x billing` : null,
+    ].filter((tag): tag is string => Boolean(tag)),
+    action: { label: 'Available', icon: 'sparkles', disabled: true },
+  };
+}
+
+function buildCursorCatalogModel(model: CursorModelSummary): ModelCatalogCardData {
+  return {
+    id: `cursor:${model.id}`,
+    name: model.name,
+    providerId: 'cursor',
+    providerName: 'Cursor',
+    description: 'Available through the Cursor SDK runtime for this environment.',
+    tags: [
+      model.id,
+      formatTokenWindow(model.contextWindow, 'ctx'),
+      formatTokenWindow(model.maxOutputTokens, 'out'),
+    ].filter((tag): tag is string => Boolean(tag)),
+    action: { label: 'Available', icon: 'pencil', disabled: true },
+  };
+}
+
+function buildCodexCatalogModel(model: CodexModelSummary): ModelCatalogCardData {
+  return {
+    id: `codex:${model.id}`,
+    name: model.name,
+    providerId: 'codex',
+    providerName: 'Codex',
+    description: 'Available through the local Codex CLI configuration.',
+    tags: [
+      model.id,
+      model.reasoning ? 'Reasoning' : null,
+      model.vision ? 'Vision' : null,
+      formatTokenWindow(model.contextWindow, 'ctx'),
+    ].filter((tag): tag is string => Boolean(tag)),
+    action: { label: 'Available', icon: 'terminal', disabled: true },
+  };
+}
+
+function buildLocalCatalogModel({
+  model,
+  installed,
+  loading,
+  onInstall,
+}: {
+  model: HFModel;
+  installed: boolean;
+  loading: boolean;
+  onInstall: (model: HFModel) => Promise<void>;
+}): ModelCatalogCardData {
+  const source = getInstalledModelSource(model);
+  const taskLabel = HF_TASK_LABELS[model.task] ?? model.task;
+  const sizeLabel = formatModelSize(model);
+  const tags = [
+    taskLabel,
+    installed ? 'Installed' : 'Browser local',
+    formatTokenWindow(model.contextWindow, 'ctx'),
+    sizeLabel,
+  ].filter((tag): tag is string => Boolean(tag));
+
+  return {
+    id: `local:${model.id}`,
+    name: model.name,
+    providerId: 'local',
+    providerName: source,
+    description: installed
+      ? `Installed from ${source} for in-browser inference.`
+      : `${model.author} · ${model.downloads.toLocaleString()} downloads · ${model.likes.toLocaleString()} likes`,
+    tags,
+    action: installed
+      ? { label: 'Installed', icon: 'cpu', disabled: true }
+      : {
+        label: loading ? 'Loading' : 'Add Model',
+        icon: loading ? 'loader' : 'plus',
+        disabled: loading,
+        onClick: () => void onInstall(model),
+      },
+  };
+}
+
+function buildLocalCatalogModels({
+  installedModels,
+  registryModels,
+  loadingModelId,
+  onInstall,
+}: Pick<ModelCatalogPaneProps, 'installedModels' | 'registryModels' | 'loadingModelId' | 'onInstall'>): ModelCatalogCardData[] {
+  const installedIds = new Set(installedModels.map((model) => model.id));
+  const recommended = LOCAL_MODELS_SEED.filter((model) => !installedIds.has(model.id));
+  const recommendedIds = new Set(recommended.map((model) => model.id));
+  const registry = registryModels.filter((model) => !installedIds.has(model.id) && !recommendedIds.has(model.id));
+  return [
+    ...installedModels.map((model) => buildLocalCatalogModel({ model, installed: true, loading: false, onInstall })),
+    ...recommended.map((model) => buildLocalCatalogModel({ model, installed: false, loading: loadingModelId === model.id, onInstall })),
+    ...registry.map((model) => buildLocalCatalogModel({ model, installed: false, loading: loadingModelId === model.id, onInstall })),
+  ];
+}
+
+function ModelCatalogCard({ model }: { model: ModelCatalogCardData }) {
+  const icon = providerIcon(model.providerId);
+  return (
+    <article className="catalog-model-card" aria-label={`${model.name} from ${model.providerName}`}>
+      <div className="catalog-model-card-head">
+        <span className="catalog-model-icon" aria-hidden="true" style={{ color: icon.color }}>
+          <Icon name={icon.name} size={22} />
+        </span>
+        <span className="catalog-model-title">
+          <strong>{model.name}</strong>
+          <small>{model.providerName}</small>
+        </span>
+        <Icon name="panelRight" size={15} color="#8b949e" />
+      </div>
+      <p>{model.description}</p>
+      <div className="catalog-model-tags" aria-label={`${model.name} features`}>
+        {model.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
+        {model.tags.length > 4 ? <span>...</span> : null}
+      </div>
+      {model.action ? (
+        <button
+          type="button"
+          className={`catalog-model-action${model.action.disabled ? ' is-disabled' : ''}`}
+          onClick={model.action.onClick}
+          disabled={model.action.disabled}
+        >
+          <Icon name={model.action.icon} size={14} className={model.action.icon === 'loader' ? 'spin' : ''} />
+          {model.action.label}
+        </button>
       ) : null}
-      <div className="local-inference-badges" aria-label="Local inference properties">
-        {readiness.badges.map((badge) => (
-          <span key={badge} className={`badge${badge === 'Offline ready' ? ' connected' : ''}`}>{badge}</span>
-        ))}
-      </div>
-      <div className="local-inference-metrics" role="list" aria-label="Local inference hardware and model constraints">
-        {readiness.metrics.map((metric) => (
-          <span key={metric.label} role="listitem">
-            <strong>{metric.value}</strong>
-            <small>{metric.label}</small>
-          </span>
-        ))}
-      </div>
-      <ul className="local-inference-constraints">
-        {readiness.constraints.map((constraint) => <li key={constraint}>{constraint}</li>)}
-      </ul>
     </article>
   );
 }
 
-function ModelsPanel({ copilotState, isCopilotLoading, onRefreshCopilot, cursorState, isCursorLoading, onRefreshCursor, codexState, isCodexLoading, onRefreshCodex, registryModels, installedModels, task, loadingModelId, onTaskChange, onSearch, onInstall, onDelete }: ModelsPanelProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const installedIds = new Set(installedModels.map((m) => m.id));
-  const isFiltering = Boolean(searchQuery || task);
-  const copilotReady = hasGhcpAccess(copilotState);
-  const cursorReady = hasCursorAccess(cursorState);
-  const codexReady = hasCodexAccess(codexState);
-  const localInferenceReadiness = useMemo(
-    () => assessLocalInferenceReadiness({
-      installedModels,
-      hardware: getBrowserLocalInferenceHardware(typeof navigator === 'undefined' ? null : navigator),
-    }),
-    [installedModels],
+function ModelCatalogSection({ section, query }: { section: ModelCatalogSectionData; query: string }) {
+  const filteredModels = query
+    ? section.models.filter((model) => modelSearchText(model).includes(query))
+    : section.models;
+  return (
+    <section className="model-provider-section" aria-label={section.title}>
+      <header className="model-provider-section-header">
+        <span>
+          <h2>{section.title}</h2>
+          <p>{section.subtitle}</p>
+        </span>
+        <span className="model-provider-section-actions">
+          <span className={`badge${section.statusActive ? ' connected' : ''}`}>{section.status}</span>
+          {section.onRefresh && section.refreshLabel ? (
+            <button type="button" className="sidebar-icon-button" aria-label={section.refreshLabel} title={section.refreshLabel} onClick={section.onRefresh} disabled={section.statusLoading}>
+              <Icon name={section.statusLoading ? 'loader' : 'refresh'} size={13} className={section.statusLoading ? 'spin' : ''} />
+            </button>
+          ) : null}
+        </span>
+      </header>
+      {filteredModels.length > 0 ? (
+        <div className="catalog-model-grid">
+          {filteredModels.map((model) => <ModelCatalogCard key={model.id} model={model} />)}
+        </div>
+      ) : (
+        <p className="catalog-empty-state">No models match this view.</p>
+      )}
+    </section>
   );
-  // Recommended = seed models not yet installed, only shown when no filter active
-  const recommended = !isFiltering ? LOCAL_MODELS_SEED.filter((m) => !installedIds.has(m.id)) : [];
-  const recommendedIds = new Set(recommended.map((m) => m.id));
-  // HF results, deduped against installed + recommended
-  const hfResults = registryModels.filter((r) => !installedIds.has(r.id) && !recommendedIds.has(r.id));
-  function handleSearch(value: string) {
-    setSearchQuery(value);
-    onSearch(value);
-  }
+}
+
+function ModelCatalogPane({
+  copilotState,
+  isCopilotLoading,
+  onRefreshCopilot,
+  cursorState,
+  isCursorLoading,
+  onRefreshCursor,
+  codexState,
+  isCodexLoading,
+  onRefreshCodex,
+  registryModels,
+  installedModels,
+  task,
+  searchQuery,
+  loadingModelId,
+  onTaskChange,
+  onSearch,
+  onInstall,
+}: ModelCatalogPaneProps) {
+  const [activeSource, setActiveSource] = useState<ModelCatalogProviderId>('popular');
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const localModels = buildLocalCatalogModels({ installedModels, registryModels, loadingModelId, onInstall });
+  const sections: ModelCatalogSectionData[] = [
+    {
+      id: 'ghcp',
+      title: `GitHub Copilot Models (${copilotState.models.length})`,
+      subtitle: copilotState.models.length
+        ? 'Hosted models available through the GitHub Copilot runtime.'
+        : copilotState.error ?? 'Sign in or refresh to load GitHub Copilot models.',
+      status: isCopilotLoading ? 'Checking' : hasGhcpAccess(copilotState) ? 'Ready' : copilotState.authenticated ? 'Signed in' : 'Needs auth',
+      statusActive: hasGhcpAccess(copilotState),
+      statusLoading: isCopilotLoading,
+      refreshLabel: 'Refresh GitHub Copilot status',
+      onRefresh: onRefreshCopilot,
+      models: copilotState.models.map(buildCopilotCatalogModel),
+    },
+    {
+      id: 'cursor',
+      title: `Cursor Models (${cursorState.models.length})`,
+      subtitle: cursorState.models.length
+        ? 'Models exposed by the Cursor SDK runtime.'
+        : cursorState.error ?? 'Configure CURSOR_API_KEY or refresh to load Cursor models.',
+      status: isCursorLoading ? 'Checking' : hasCursorAccess(cursorState) ? 'Ready' : cursorState.authenticated ? 'Signed in' : 'Needs key',
+      statusActive: hasCursorAccess(cursorState),
+      statusLoading: isCursorLoading,
+      refreshLabel: 'Refresh Cursor status',
+      onRefresh: onRefreshCursor,
+      models: cursorState.models.map(buildCursorCatalogModel),
+    },
+    {
+      id: 'codex',
+      title: `Codex Models (${codexState.models.length})`,
+      subtitle: codexState.models.length
+        ? 'Models available through the local Codex CLI.'
+        : codexState.error ?? 'Sign in or refresh to load Codex models.',
+      status: isCodexLoading ? 'Checking' : hasCodexAccess(codexState) ? 'Ready' : codexState.authenticated ? 'Signed in' : 'Needs auth',
+      statusActive: hasCodexAccess(codexState),
+      statusLoading: isCodexLoading,
+      refreshLabel: 'Refresh Codex status',
+      onRefresh: onRefreshCodex,
+      models: codexState.models.map(buildCodexCatalogModel),
+    },
+    {
+      id: 'local',
+      title: `Local Browser Models (${localModels.length})`,
+      subtitle: 'Run models locally in the browser with Transformers.js-compatible ONNX weights.',
+      status: installedModels.length ? `${installedModels.length} installed` : 'Local ready',
+      statusActive: installedModels.length > 0,
+      statusLoading: Boolean(loadingModelId),
+      models: localModels,
+    },
+  ];
+  const totalModelCount = sections.reduce((total, section) => total + section.models.length, 0);
+  const popularModels = sections
+    .flatMap((section) => section.models.slice(0, section.id === 'local' ? 1 : 2))
+    .slice(0, 3);
+  const visibleSections = activeSource === 'popular'
+    ? sections
+    : sections.filter((section) => section.id === activeSource);
 
   return (
-    <section className="panel-scroll settings-panel" aria-label="Models">
-      <div className="panel-topbar">
-        <div className="settings-heading">
-          <h2>Models</h2>
-          <p className="muted">Install and configure model provider extensions for chat agents.</p>
+    <section className="model-catalog-pane" aria-label="Model catalog">
+      <header className="model-catalog-hero">
+        <span>
+          <h1>Find the Right Model for Your AI Solution</h1>
+          <p>Explore registered providers, local browser models, and custom endpoints from one catalog.</p>
+        </span>
+        <button type="button" className="catalog-bring-model-button" onClick={() => setActiveSource('custom')}>
+          <Icon name="plus" size={16} />
+          Bring Your Own Model
+        </button>
+      </header>
+      <div className="model-catalog-layout">
+        <aside className="model-catalog-filter" aria-label="Model catalog filters">
+          <nav aria-label="Model catalog providers">
+            {([
+              { id: 'popular' as const, label: 'Popular', count: popularModels.length },
+              { id: 'ghcp' as const, label: 'GitHub Copilot', count: copilotState.models.length },
+              { id: 'cursor' as const, label: 'Cursor', count: cursorState.models.length },
+              { id: 'codex' as const, label: 'Codex', count: codexState.models.length },
+              { id: 'local' as const, label: 'Local', count: localModels.length },
+              { id: 'custom' as const, label: 'Custom', count: 0 },
+            ]).map((entry) => {
+              const icon = providerIcon(entry.id);
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  className={`model-catalog-nav-button${activeSource === entry.id ? ' active' : ''}`}
+                  aria-pressed={activeSource === entry.id}
+                  onClick={() => setActiveSource(entry.id)}
+                >
+                  <Icon name={icon.name} size={16} />
+                  <span>{entry.label}</span>
+                  <small>{entry.count}</small>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="model-filter-group">
+            <strong>Model Type</strong>
+            <div className="catalog-chip-list">
+              {TASK_OPTIONS.slice(0, 8).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={`chip ${task === option ? 'active' : ''}`}
+                  aria-pressed={task === option}
+                  onClick={() => onTaskChange(task === option ? '' : option)}
+                >
+                  {HF_TASK_LABELS[option] ?? option}
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+        <div className="model-catalog-content">
+          <section className="model-popular-section" aria-label="Popular models">
+            <span>
+              <h2>Popular Models</h2>
+              <p>Explore prominent models from providers currently registered in Agent Browser.</p>
+            </span>
+            <div className="catalog-model-grid catalog-model-grid--popular">
+              {popularModels.length ? popularModels.map((model) => <ModelCatalogCard key={`popular:${model.id}`} model={model} />) : (
+                <p className="catalog-empty-state">No provider models are loaded yet.</p>
+              )}
+            </div>
+          </section>
+          <label className="shared-input-shell model-catalog-search">
+            <Icon name="search" size={15} color="#7d8594" />
+            <input
+              aria-label="Search model catalog"
+              value={searchQuery}
+              onChange={(event) => onSearch(event.target.value)}
+              placeholder={`Search ${totalModelCount} models...`}
+            />
+            {searchQuery ? (
+              <button type="button" className="sidebar-icon-button" aria-label="Clear model catalog search" onClick={() => onSearch('')}>
+                <Icon name="x" size={13} />
+              </button>
+            ) : null}
+          </label>
+          {activeSource === 'custom' ? (
+            <section className="model-provider-section model-provider-section--custom" aria-label="Custom provider setup">
+              <header className="model-provider-section-header">
+                <span>
+                  <h2>Custom Providers</h2>
+                  <p>Add an OpenAI-compatible endpoint for local sidecars or hosted gateways.</p>
+                </span>
+              </header>
+              <article className="catalog-custom-provider-card">
+                <LocalModelSettings />
+              </article>
+            </section>
+          ) : visibleSections.map((section) => (
+            <ModelCatalogSection key={section.id} section={section} query={normalizedQuery} />
+          ))}
         </div>
       </div>
-
-      <SettingsSection title="Providers" scrollBody>
-        <div className="provider-list">
-          <article className="provider-card">
-            <div className="provider-card-header">
-              <div className="provider-body">
-                <strong>GitHub Copilot</strong>
-                <p>Checks for ambient GitHub Copilot auth in this environment and exposes it as the GHCP chat agent when enabled models are available.</p>
-              </div>
-              <StatusIndicator
-                active={copilotReady}
-                warning={isCopilotLoading}
-                label={isCopilotLoading ? 'Checking GitHub Copilot' : (copilotReady ? 'GitHub Copilot ready' : (copilotState.authenticated ? 'GitHub Copilot signed in' : 'GitHub Copilot sign-in required'))}
-              />
-            </div>
-            {copilotState.statusMessage ? <p className="muted">{copilotState.statusMessage}</p> : null}
-            {copilotState.error ? <p className="file-editor-error">{copilotState.error}</p> : null}
-            {!copilotReady && !copilotState.authenticated ? (
-              <>
-                <div className="provider-actions">
-                  <a className="sidebar-icon-button" href={copilotState.signInDocsUrl} target="_blank" rel="noreferrer" aria-label="Open GitHub Copilot sign-in docs" title="Open sign-in docs">
-                    <Icon name="keyRound" size={13} />
-                  </a>
-                  <button type="button" className="sidebar-icon-button" aria-label="Refresh GitHub Copilot status" title="Refresh status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>
-                    <Icon name={isCopilotLoading ? 'loader' : 'refresh'} size={13} className={isCopilotLoading ? 'spin' : ''} />
-                  </button>
-                </div>
-                <label className="provider-command-field">
-                  <span>Run this in the dev container</span>
-                  <input aria-label="GitHub Copilot sign-in command" value={copilotState.signInCommand} readOnly />
-                </label>
-              </>
-            ) : !copilotReady ? (
-              <div className="provider-actions">
-                <button type="button" className="sidebar-icon-button" aria-label="Refresh GitHub Copilot status" title="Refresh status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>
-                  <Icon name={isCopilotLoading ? 'loader' : 'refresh'} size={13} className={isCopilotLoading ? 'spin' : ''} />
-                </button>
-              </div>
-            ) : (
-              <div className="provider-actions">
-                <button type="button" className="sidebar-icon-button" aria-label="Refresh GitHub Copilot status" title="Refresh status" onClick={onRefreshCopilot} disabled={isCopilotLoading}>
-                  <Icon name={isCopilotLoading ? 'loader' : 'refresh'} size={13} className={isCopilotLoading ? 'spin' : ''} />
-                </button>
-              </div>
-            )}
-          </article>
-          <article className="provider-card">
-            <div className="provider-card-header">
-              <div className="provider-body">
-                <strong>Cursor</strong>
-                <p>Uses the Cursor SDK with CURSOR_API_KEY to expose Cursor as a first-class chat agent provider.</p>
-              </div>
-              <StatusIndicator
-                active={cursorReady}
-                warning={isCursorLoading}
-                label={isCursorLoading ? 'Checking Cursor' : (cursorReady ? 'Cursor ready' : (cursorState.authenticated ? 'Cursor signed in' : 'Cursor API key required'))}
-              />
-            </div>
-            {cursorState.statusMessage ? <p className="muted">{cursorState.statusMessage}</p> : null}
-            {cursorState.error ? <p className="file-editor-error">{cursorState.error}</p> : null}
-            {!cursorReady && !cursorState.authenticated ? (
-              <>
-                <div className="provider-actions">
-                  <a className="sidebar-icon-button" href={cursorState.signInDocsUrl} target="_blank" rel="noreferrer" aria-label="Open Cursor SDK docs" title="Open Cursor SDK docs">
-                    <Icon name="link" size={13} />
-                  </a>
-                  <button type="button" className="sidebar-icon-button" aria-label="Refresh Cursor status" title="Refresh status" onClick={onRefreshCursor} disabled={isCursorLoading}>
-                    <Icon name={isCursorLoading ? 'loader' : 'refresh'} size={13} className={isCursorLoading ? 'spin' : ''} />
-                  </button>
-                </div>
-                <label className="provider-command-field">
-                  <span>Configure the dev server environment</span>
-                  <input aria-label="Cursor setup command" value={cursorState.signInCommand} readOnly />
-                </label>
-              </>
-            ) : !cursorReady ? (
-              <div className="provider-actions">
-                <button type="button" className="sidebar-icon-button" aria-label="Refresh Cursor status" title="Refresh status" onClick={onRefreshCursor} disabled={isCursorLoading}>
-                  <Icon name={isCursorLoading ? 'loader' : 'refresh'} size={13} className={isCursorLoading ? 'spin' : ''} />
-                </button>
-              </div>
-            ) : (
-              <div className="provider-actions">
-                <button type="button" className="sidebar-icon-button" aria-label="Refresh Cursor status" title="Refresh status" onClick={onRefreshCursor} disabled={isCursorLoading}>
-                  <Icon name={isCursorLoading ? 'loader' : 'refresh'} size={13} className={isCursorLoading ? 'spin' : ''} />
-                </button>
-              </div>
-            )}
-          </article>
-          <article className="provider-card">
-            <div className="provider-card-header">
-              <div className="provider-body">
-                <strong>Codex</strong>
-                <p>Checks for ambient Codex CLI auth in this environment and exposes it as the Codex chat agent when available.</p>
-              </div>
-              <StatusIndicator
-                active={codexReady}
-                warning={isCodexLoading}
-                label={isCodexLoading ? 'Checking Codex' : (codexReady ? 'Codex ready' : (codexState.authenticated ? 'Codex signed in' : 'Codex sign-in required'))}
-              />
-            </div>
-            {codexState.statusMessage ? <p className="muted">{codexState.statusMessage}</p> : null}
-            {codexState.error ? <p className="file-editor-error">{codexState.error}</p> : null}
-            {!codexReady && !codexState.authenticated ? (
-              <>
-                <div className="provider-actions">
-                  <a className="sidebar-icon-button" href={codexState.signInDocsUrl} target="_blank" rel="noreferrer" aria-label="Open Codex sign-in docs" title="Open sign-in docs">
-                    <Icon name="keyRound" size={13} />
-                  </a>
-                  <button type="button" className="sidebar-icon-button" aria-label="Refresh Codex status" title="Refresh status" onClick={onRefreshCodex} disabled={isCodexLoading}>
-                    <Icon name={isCodexLoading ? 'loader' : 'refresh'} size={13} className={isCodexLoading ? 'spin' : ''} />
-                  </button>
-                </div>
-                <label className="provider-command-field">
-                  <span>Run this in the dev container</span>
-                  <input aria-label="Codex sign-in command" value={codexState.signInCommand} readOnly />
-                </label>
-              </>
-            ) : !codexReady ? (
-              <div className="provider-actions">
-                <button type="button" className="sidebar-icon-button" aria-label="Refresh Codex status" title="Refresh status" onClick={onRefreshCodex} disabled={isCodexLoading}>
-                  <Icon name={isCodexLoading ? 'loader' : 'refresh'} size={13} className={isCodexLoading ? 'spin' : ''} />
-                </button>
-              </div>
-            ) : (
-              <div className="provider-actions">
-                <button type="button" className="sidebar-icon-button" aria-label="Refresh Codex status" title="Refresh status" onClick={onRefreshCodex} disabled={isCodexLoading}>
-                  <Icon name={isCodexLoading ? 'loader' : 'refresh'} size={13} className={isCodexLoading ? 'spin' : ''} />
-                </button>
-              </div>
-            )}
-          </article>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="Built-in local inference">
-        <LocalInferenceReadinessCard readiness={localInferenceReadiness} />
-      </SettingsSection>
-
-      <SettingsSection title="Local OpenAI-compatible endpoint" defaultOpen={false}>
-        <article className="provider-card">
-          <LocalModelSettings />
-        </article>
-      </SettingsSection>
-
-      {copilotState.models.length > 0 && (
-        <SettingsSection title={`GitHub Copilot models (${copilotState.models.length})`} defaultOpen={false} scrollBody>
-          {copilotState.models.map((model) => (
-            <CopilotModelCard key={model.id} model={model} />
-          ))}
-        </SettingsSection>
-      )}
-
-      {cursorState.models.length > 0 && (
-        <SettingsSection title={`Cursor models (${cursorState.models.length})`} defaultOpen={false} scrollBody>
-          {cursorState.models.map((model) => (
-            <CursorModelCard key={model.id} model={model} />
-          ))}
-        </SettingsSection>
-      )}
-
-      {codexState.models.length > 0 && (
-        <SettingsSection title={`Codex models (${codexState.models.length})`} defaultOpen={false} scrollBody>
-          {codexState.models.map((model) => (
-            <CodexModelCard key={model.id} model={model} />
-          ))}
-        </SettingsSection>
-      )}
-
-      <SettingsSection title="Local models" scrollBody bodyClassName="local-models-body">
-        <div className="local-model-controls">
-          <label className="shared-input-shell settings-search-shell">
-            <Icon name="search" size={13} color="#7d8594" />
-            <input aria-label="Hugging Face search" value={searchQuery} onChange={(event) => handleSearch(event.target.value)} placeholder="Search Hugging Face" />
-          </label>
-          <div className="chip-row">
-            {TASK_OPTIONS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                className={`chip ${task === option ? 'active' : ''}`}
-                aria-pressed={task === option}
-                onClick={() => onTaskChange(task === option ? '' : option)}
-              >
-                {HF_TASK_LABELS[option] ?? option}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {installedModels.length > 0 && (
-          <SettingsSection title={`Loaded (${installedModels.length})`} className="settings-subsection">
-            {installedModels.map((model) => (
-              <ModelCard key={model.id} model={model} isInstalled={true} isLoading={false} onInstall={() => undefined} onDelete={() => onDelete(model.id)} />
-            ))}
-          </SettingsSection>
-        )}
-
-        {!isFiltering && recommended.length > 0 && (
-          <SettingsSection title={`Recommended (${recommended.length})`} className="settings-subsection">
-            {recommended.map((model) => (
-              <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
-            ))}
-          </SettingsSection>
-        )}
-
-        <SettingsSection title={isFiltering ? `Results (${hfResults.length})` : `Registry (${hfResults.length})`} defaultOpen={isFiltering} forceOpen={isFiltering} className="settings-subsection settings-result-list">
-          {hfResults.map((model) => (
-            <ModelCard key={model.id} model={model} isInstalled={false} isLoading={loadingModelId === model.id} onInstall={() => void onInstall(model)} />
-          ))}
-          {!hfResults.length && !recommended.length && <p className="muted">No browser-runnable ONNX models match the current filter.</p>}
-        </SettingsSection>
-      </SettingsSection>
     </section>
   );
 }
@@ -18926,22 +19021,7 @@ function AgentBrowserApp() {
     );
     if (activePanel === 'models') return (
       <ModelsPanel
-        copilotState={copilotState}
-        isCopilotLoading={isCopilotStateLoading}
-        onRefreshCopilot={() => void refreshCopilotState(true)}
-        cursorState={cursorState}
-        isCursorLoading={isCursorStateLoading}
-        onRefreshCursor={() => void refreshCursorState(true)}
-        codexState={codexState}
-        isCodexLoading={isCodexStateLoading}
-        onRefreshCodex={() => void refreshCodexState(true)}
-        registryModels={registryModels}
         installedModels={installedModels}
-        task={registryTask}
-        loadingModelId={loadingModelId}
-        onTaskChange={setRegistryTask}
-        onSearch={setRegistryQuery}
-        onInstall={installModel}
         onDelete={deleteModel}
       />
     );
@@ -19108,6 +19188,26 @@ function AgentBrowserApp() {
             onCopyCitation={copyRepoWikiCitation}
             onRememberMemory={rememberRepoWikiMemory}
             onForgetMemory={forgetRepoWikiMemory}
+          />
+        ) : activePanel === 'models' ? (
+          <ModelCatalogPane
+            copilotState={copilotState}
+            isCopilotLoading={isCopilotStateLoading}
+            onRefreshCopilot={() => void refreshCopilotState(true)}
+            cursorState={cursorState}
+            isCursorLoading={isCursorStateLoading}
+            onRefreshCursor={() => void refreshCursorState(true)}
+            codexState={codexState}
+            isCodexLoading={isCodexStateLoading}
+            onRefreshCodex={() => void refreshCodexState(true)}
+            registryModels={registryModels}
+            installedModels={installedModels}
+            task={registryTask}
+            searchQuery={registryQuery}
+            loadingModelId={loadingModelId}
+            onTaskChange={setRegistryTask}
+            onSearch={setRegistryQuery}
+            onInstall={installModel}
           />
         ) : (() => {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {

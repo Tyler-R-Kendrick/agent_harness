@@ -1078,7 +1078,8 @@ async function main() {
     await page.screenshot({ path: evaluationOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Back to chat' }).click();
     await page.getByRole('button', { name: 'Models', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('region', { name: 'Installed models' }).getByRole('heading', { name: 'Models', exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('region', { name: 'Model catalog' }).getByRole('heading', { name: 'Find the Right Model for Your AI Solution' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'History' }).click();
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible({ timeout: shellTimeoutMs });
     const historyGraph = page.getByRole('region', { name: 'Workspace git graph' });
@@ -1134,14 +1135,16 @@ async function main() {
     await expect(historyDetail.getByText(/next run: 2026-05-06T09:00:00.000Z/)).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: typedSdkOutputPath, fullPage: true });
     await page.getByRole('button', { name: 'Models', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Models' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(page.getByLabel('Providers contents').getByText('Cursor', { exact: true })).toBeVisible({
+    const installedModelsPanel = page.getByRole('region', { name: 'Installed models' });
+    const modelCatalog = page.getByRole('region', { name: 'Model catalog' });
+    await expect(installedModelsPanel.getByRole('heading', { name: 'Models', exact: true })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(modelCatalog.getByRole('heading', { name: 'Find the Right Model for Your AI Solution' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByRole('button', { name: 'Built-in local inference' })).toBeVisible({
+    await expect(modelCatalog.getByRole('heading', { name: /Codex Models \(\d+\)/ })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(page.getByText(/No localhost sidecar/)).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(modelCatalog.getByRole('heading', { name: /Local Browser Models \(\d+\)/ })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: shellTimeoutMs });
     const settingToggle = (name) => page.getByRole('button', { name, exact: true });
