@@ -1,0 +1,18 @@
+slug: agent360-browser-mcp
+name: Agent360 Browser MCP
+vendor: Agent360
+segment: local-browser-control-mcp
+product_path: competition/agent360-browser-mcp
+design_path: competition/agent360-browser-mcp/design
+features_path: competition/agent360-browser-mcp/features
+marketing_path: competition/agent360-browser-mcp/marketing
+gossip_path: competition/agent360-browser-mcp/gossip
+snapshot_date: 2026-05-11
+primary_sources:
+  - https://browsermcp.dev/
+secondary_sources:
+  - https://browsermcp.dev/
+positioning: "Open-source browser MCP for controlling real Chrome from Claude Code with CAPTCHA solving, multi-session tab groups, and human-in-the-loop prompts."
+customer_model: "Free/open-source developer tool with potential services around integrations, support, and enterprise controls."
+competitive_threat_level: medium
+notes: "A sharp feature-led local MCP competitor; strongest where CAPTCHA, 2FA, and provider token extraction matter."
