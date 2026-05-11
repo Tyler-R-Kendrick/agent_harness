@@ -1,21 +1,21 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-10
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-11
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, Roo Code built-in Orchestrator plus cloud agent team, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents, Kimi AI Agent Swarm with a commander plus runtime-created specialists, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, Roo Code built-in Orchestrator plus cloud agent team, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
 
 ### 2. Persistent memory plus project instructions
 - Common pattern: harnesses retain repo, workflow, and user preferences across runs.
-- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Devin Knowledge with folders, triggers, macros, and suggestions, Gemini CLI layered `GEMINI.md` plus imports plus Auto Memory review inbox, Hermes persistent memory, Codex skills/team config, Cursor project rules plus memories plus `AGENTS.md` and commands, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
+- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory, DeerFlow long-term memory, Devin Knowledge with folders, triggers, macros, and suggestions, Gemini CLI layered `GEMINI.md` plus imports plus Auto Memory review inbox, Hermes persistent memory, Kimi Claw long-term memory and persona habits, Codex skills/team config, Cursor project rules plus memories plus `AGENTS.md` and commands, OpenClaw workspace identity/config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
 - Why it matters: repeated steering is turning into the main productivity tax.
 - One-shot build instruction:
   - Add layered memory with explicit scopes (`workspace`, `project`, `user`, `agent`) and clear precedence, plus a memory inspector/editor so users can see, edit, import, disable, and diff what the harness has learned.
@@ -36,14 +36,14 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 5. Browser use and computer control
 - Common pattern: harnesses are expanding from code/text to direct web and desktop action.
-- Seen in: ChatGPT agent mode, Claude in Chrome, Claude Cowork computer use, Cline web tools and browser automation, Cursor browser controls plus layout editor plus debug mode, DeerFlow AIO sandbox, Devin interactive browser inside the progress workspace, Goose Computer Controller with web interaction and desktop GUI control, Hermes browser/web control, Mastra browser providers with live Studio supervision, OpenClaw browser automation, Space Agent registered browser surfaces across popup and inline runtime widgets.
+- Seen in: ChatGPT agent mode, Claude in Chrome, Claude Cowork computer use, Cline web tools and browser automation, Cursor browser controls plus layout editor plus debug mode, DeerFlow AIO sandbox, Devin interactive browser inside the progress workspace, Goose Computer Controller with web interaction and desktop GUI control, Hermes browser/web control, Kimi WebBridge local browser control, Mastra browser providers with live Studio supervision, OpenClaw browser automation, Space Agent registered browser surfaces across popup and inline runtime widgets.
 - Why it matters: many valuable workflows still terminate in websites or GUI tools rather than APIs.
 - One-shot build instruction:
   - Ship a browser/desktop action layer that can inspect DOM, screenshots, console and network state, request confirmation for risky actions, and feed captured evidence back into the agent thread.
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Roo Code IDE + web dashboard + GitHub + Slack, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
+- Seen in: Codex app + CLI + IDE + cloud, Claude Code terminal + web + JetBrains, ChatGPT web/mobile/desktop/Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile/Telegram remote access, Hermes chat apps + CLI, Kimi web + mobile + desktop + Claw chat channels + linked OpenClaw instances, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Roo Code IDE + web dashboard + GitHub + Slack, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
@@ -139,133 +139,140 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Build reusable remote execution environments for browser agents with repo bootstrap, secrets, and dependency setup captured once, then let users bind those environments to schedules, issue events, chat commands, and CI triggers with clear audit history and replayable launch parameters.
 
-### 20. Mutable agent-built workspace surfaces
+### 20. Self-organizing swarm execution with context sharding
+- Common pattern: some harnesses are moving from human-authored specialist graphs toward runtime-created organizations that decide for themselves how wide to parallelize and how to partition context.
+- Seen in: Kimi AI Agent Swarm, where one commander spawns up to hundreds of sub-agents, avoids predefined role graphs, and uses per-agent notebooks with only conclusion-level reconciliation.
+- Why it matters: the next orchestration ceiling is not just launching more workers, but doing it without requiring users to predesign the entire delegation tree or collapse everything back into one giant context window.
+- One-shot build instruction:
+  - Build a self-organizing swarm mode for browser agents where an orchestrator can decide how many child agents to spawn, assign each one a bounded context shard and objective, reconcile their outputs into one result, and expose explicit controls for parallel width, shard summaries, and handoff back to a single-thread follow-up mode.
+
+### 21. Mutable agent-built workspace surfaces
 - Common pattern: a few harnesses are starting to treat the product surface itself as something the agent can construct and reshape, instead of limiting the agent to a fixed chat panel or detached tool result.
 - Seen in: Space Agent explicitly makes pages, widgets, workflows, and browser surfaces part of the live runtime the agent can build into; Cursor canvases and MCP Apps are a more constrained but increasingly durable version of the same direction; some browser agents are adjacent through tool-driven UI updates, but these two products currently make the idea clearest.
 - Why it matters: once the agent can create the working surface itself, the harness can evolve from chat UI into a dynamic workspace optimized around the task at hand.
 - One-shot build instruction:
   - Let browser agents create and persist task-specific workspace surfaces such as dashboards, widgets, guided flows, browser panes, and review panels inside the app itself, with clear ownership, permissions, and rollback for anything the agent adds or changes.
 
-### 21. Durable interactive agent artifacts
+### 22. Durable interactive agent artifacts
 - Common pattern: agent runs are starting to emit first-class interactive artifacts that stay attached to the operational workspace instead of disappearing into the transcript.
 - Seen in: Cursor canvases in the Agents Window, Goose Apps extension with chat-built MCP App resources, MCP Apps rendered inside chats, and Space Agent task-built widgets and pages.
 - Why it matters: planning, debugging, and review often benefit from a persistent dashboard, diagram, checklist, or custom interface that the user can return to after the run finishes.
 - One-shot build instruction:
   - Add durable agent-authored artifacts such as canvases, dashboards, diagrams, and review panels that live alongside transcript, terminal, browser, and diff views; make them addressable, persistable, and safe to update incrementally across follow-up turns.
 
-### 22. Reusable harness cores for agent-powered apps
+### 23. Reusable harness cores for agent-powered apps
 - Common pattern: some vendors are starting to expose the harness plumbing itself as a reusable product primitive instead of keeping it trapped inside one end-user surface.
 - Seen in: Mastra Core Harness with modes, state, built-in tools, memory, approvals, and subagents; Cursor SDK plus durable Cloud Agents API from the runtime side; Pi JSON-RPC plus SDK plus TUI modes; T3 Code headless serve.
 - Why it matters: teams increasingly want one agent runtime that can power the desktop app, automations, browser shells, operator consoles, and embedded product surfaces without duplicating orchestration logic.
 - One-shot build instruction:
   - Extract browser-agent into a reusable harness core package with mode and thread lifecycle management, built-in approval and planning tools, subagent support, memory hooks, and evented runtime telemetry so both the app UI and automations run on the same engine.
 
-### 23. Evaluation-native observability and live scoring
+### 24. Evaluation-native observability and live scoring
 - Common pattern: newer agent platforms are starting to fuse traces, quality scoring, and experiments into the same operational surface instead of treating evals as an offline research-only activity.
 - Seen in: Mastra Observability plus Scorers plus Studio experiments most explicitly; n8n light and metric-based evaluations add dataset-backed pre-deployment and post-deployment workflow scoring; OpenAI Symphony proof-of-work packets and operator telemetry are adjacent from the orchestration side.
 - Why it matters: once agents run continuously, teams need to see not only what happened, but whether quality, safety, and tool behavior are drifting over time.
 - One-shot build instruction:
   - Add evaluation-native observability for browser agents with trace capture, live scorer hooks, experiment datasets, issue-linked regression views, and operator dashboards that connect run evidence to quality signals.
 
-### 24. Verification-native critic stacks and adaptive retries
+### 25. Verification-native critic stacks and adaptive retries
 - Common pattern: some harnesses are starting to score trajectories during the run, using lightweight critics or verifiers to decide whether to continue, stop, refine, or compare multiple attempts before humans review a final diff.
 - Seen in: OpenHands trajectory-level critic model trained on production traces and sparse production outcomes such as PR merge and code survival; several other products have review or proof surfaces, but OpenHands currently states this runtime verification loop most directly.
 - Why it matters: browser and coding agents need cheap online quality checks so failures can be caught and redirected before they waste budget or open low-confidence changes.
 - One-shot build instruction:
   - Add a lightweight trajectory critic layer for browser-agent runs that scores tool traces and intermediate artifacts, decides whether to continue, stop, retry, or branch, and records the rationale beside validation output so humans can inspect why the harness trusted or rejected a run.
 
-### 25. Benchmark-informed model routing and task-aware model choice
+### 26. Benchmark-informed model routing and task-aware model choice
 - Common pattern: model-agnostic harnesses are beginning to expose benchmark surfaces that help users route planning, implementation, testing, and information-gathering work to different models based on cost, latency, and task fit.
 - Seen in: OpenHands Index with broad task coverage and explicit framing around choosing different models for planning, implementation, and review/testing; Pi, OpenCode, and other model-agnostic harnesses are adjacent on routing flexibility but not as benchmark-driven.
 - Why it matters: once a harness supports many models, the next product problem is choosing the right one for the job instead of pretending one model is universally best.
 - One-shot build instruction:
   - Build benchmark-informed model routing for browser agents by maintaining task-class evaluations, exposing cost and latency tradeoffs, and using those signals to recommend or auto-select different models for planning, execution, verification, and follow-up research.
 
-### 26. Review-native pull request understanding
+### 27. Review-native pull request understanding
 - Common pattern: some harnesses are investing in dedicated review surfaces that help humans understand, group, and challenge a change set after generation, instead of treating the PR as a generic diff viewer.
 - Seen in: Devin Review most explicitly, Cursor Bugbot and PR review surfaces, Codex diff review flows, and GitHub Copilot's growing PR-agent review posture.
 - Why it matters: once agents can produce code quickly, the next bottleneck is reviewer comprehension and confidence, not raw patch generation speed.
 - One-shot build instruction:
   - Build a review-native PR understanding surface for browser-agent work that groups related changes, summarizes intent, flags likely risks, links evidence such as tests or browser recordings, and supports comment-driven follow-up runs without forcing reviewers back into raw diff spelunking.
 
-### 27. Repository-grounded wiki generation and architecture views
+### 28. Repository-grounded wiki generation and architecture views
 - Common pattern: harnesses are beginning to turn live repositories into durable, code-grounded wiki artifacts with maps and diagrams rather than relying on repeated ad hoc explanation.
 - Seen in: Devin DeepWiki most directly; OpenHands large-codebase coordination and several memory-heavy harnesses are adjacent, but Devin currently makes the persistent repo-wiki surface the clearest product feature.
 - Why it matters: large-codebase work gets faster when onboarding context, architecture shape, and code navigation live in a maintained artifact that both humans and agents can reuse.
 - One-shot build instruction:
   - Add a repository-grounded knowledge surface for browser-agent projects that can generate and refresh codebase maps, architecture diagrams, grounded explanations, and navigable onboarding pages from the current repo state, then let agent runs cite and update those artifacts over time.
 
-### 28. Private local inference and offline-first execution
+### 29. Private local inference and offline-first execution
 - Common pattern: some harnesses are now bundling local inference directly into the product so users can run agents privately, offline, and without extra sidecar services.
 - Seen in: Goose built-in local inference powered by embedded `llama.cpp`; a few other harnesses support local models through external tools, but Goose currently makes the no-server, zero-dependency path the clearest product surface.
 - Why it matters: many teams want agent workflows to work on sensitive codebases or intermittent-network environments without assuming cloud APIs or a separate local model daemon.
 - One-shot build instruction:
   - Add a built-in local inference path for browser-agent sessions that can run offline, manage downloadable local models inside the app, expose clear capability limits, and let users switch between local and hosted execution without changing the rest of the harness workflow.
 
-### 29. Context-aware tool-call guardrails with adversary review
+### 30. Context-aware tool-call guardrails with adversary review
 - Common pattern: agent harnesses are starting to move beyond coarse approval modes by adding runtime reviewers that evaluate tool calls against task intent before execution.
 - Seen in: Goose permission modes plus Adversary Mode, where an independent reviewer checks proposed tool calls against the original task, recent context, and user rules before allowing or blocking them.
 - Why it matters: browser and desktop agents need stronger protection against prompt injection, goal drift, and unsafe automation than simple approve-once dialogs can provide.
 - One-shot build instruction:
   - Add an adversary-style runtime reviewer for browser-agent tool calls that scores each planned action against user intent, recent context, and policy, then allows, blocks, or escalates the action with inspectable rationale and a fail-safe operator experience.
 
-### 30. Chaptered session structure and automatic context compression
+### 31. Chaptered session structure and automatic context compression
 - Common pattern: some harnesses are starting to actively restructure and compress long-running sessions instead of leaving transcript growth and narrative coherence entirely to the model.
 - Seen in: Gemini CLI `Chapters Narrative Flow`, `Context Compression Service`, and the follow-on `ContextManager` work called out in the April and May 2026 changelogs.
 - Why it matters: long browser and coding sessions eventually become hard to navigate, expensive to continue, and easy to derail unless the harness manages session structure and context budget explicitly.
 - One-shot build instruction:
   - Add chaptered session structure and automatic context compression for browser-agent runs so long tasks are grouped into navigable sections, summaries stay inspectable and linked to the full trace, and the harness can keep working coherently without dragging the full raw transcript forward forever.
 
-### 31. Policy-governed partner-agent control planes
+### 32. Policy-governed partner-agent control planes
 - Common pattern: at least one major platform is turning its primary agent surface into a host for multiple vendors' coding agents under one shared governance, audit, and workflow layer.
 - Seen in: GitHub Copilot third-party agents for Claude and Codex, the shared agents tab and issue/PR/mobile/VS Code entry points, and per-agent model selection on github.com.
 - Why it matters: once teams want multiple agent vendors, the durable product advantage shifts toward unified policy, review, cost control, and workflow continuity rather than toward any single built-in model.
 - One-shot build instruction:
   - Add a partner-agent control plane for browser-agent work that can host multiple internal or external agent backends behind one session UX, unify permissions and audit logging, expose per-agent model selection, and preserve the same issue, diff, and review workflow regardless of which agent executes the task.
 
-### 32. Enterprise model governance and spend-aware operations
+### 33. Enterprise model governance and spend-aware operations
 - Common pattern: agent platforms are starting to expose org-level controls over which models can run, how budget is enforced, and how usage is analyzed across the growing set of agent surfaces.
 - Seen in: Cursor provider/model allow and block lists, default blocking of new model versions, soft spend limits with alerts, and per-surface usage analytics across clients, Cloud Agents, automations, Bugbot, and Security Review.
 - Why it matters: once a harness spans foreground chats, background agents, automations, and reviewers, enterprise rollout depends on policy and spend controls that work across all of them.
 - One-shot build instruction:
   - Add enterprise governance for browser-agent models with provider/model policy controls, soft and hard spend budgets, progressive usage alerts, and analytics broken down by user, agent surface, and automation type.
 
-### 33. Always-on specialist security review agents
+### 34. Always-on specialist security review agents
 - Common pattern: coding harnesses are starting to ship dedicated security agents that review PRs and run scheduled scans as first-class product surfaces instead of relying only on generic coding agents or external scanners.
 - Seen in: Cursor Security Review with `Security Reviewer` inline PR comments, `Vulnerability Scanner` scheduled scans, Slack delivery, and MCP-based customization for existing security tools.
 - Why it matters: specialized reviewer agents let teams operationalize security checks inside the same control plane already used for coding, orchestration, and policy.
 - One-shot build instruction:
   - Build specialized browser-agent security reviewers that can inspect diffs and scheduled repo state, leave inline severity-tagged findings with remediation, integrate external security tools, and deliver scan updates through the team channels already used for automation.
 
-### 34. Runtime plugin layers with tool-call interception
+### 35. Runtime plugin layers with tool-call interception
 - Common pattern: some harnesses are exposing a true runtime extension layer that can observe events, mutate tool calls, and enforce policy during execution instead of only packaging prompts or static tools.
 - Seen in: Kilo Code plugins that can add tools, intercept tool calls, block dangerous operations, register model and auth providers, react to session and permission events, and customize compaction or shell environments.
 - Why it matters: once agents touch terminals, browsers, and external services, extensibility needs to happen at execution time, not only at prompt construction time.
 - One-shot build instruction:
   - Add a browser-agent plugin runtime that can register tools and providers, subscribe to execution events, intercept or veto tool invocations, inject environment or transport behavior, and expose clear audit trails for every plugin-mediated action.
 
-### 35. AI adoption scoring for engineering organizations
+### 36. AI adoption scoring for engineering organizations
 - Common pattern: at least some harness vendors are moving beyond spend dashboards toward management metrics that quantify how deeply AI is woven into day-to-day engineering workflows.
 - Seen in: Kilo Code analytics plus AI Adoption Dashboard, including per-model and per-project usage breakdowns and a 0-100 adoption score split across frequency, depth, and coverage.
 - Why it matters: once agent usage becomes a budget line and a process change, teams need to measure behavioral adoption and workflow integration rather than only token spend.
 - One-shot build instruction:
   - Build an organization-facing browser-agent analytics surface that combines usage metrics with an adoption score across frequency, workflow depth, and team coverage, so leaders can see whether the harness is becoming operationally important or just occasionally sampled.
 
-### 36. Closed-loop PR feedback learning and autonomous refinement
+### 37. Closed-loop PR feedback learning and autonomous refinement
 - Common pattern: some harnesses are beginning to treat review feedback as training signal for future agent behavior instead of as one-off human correction.
 - Seen in: Roomote explicitly says it self-improves from PR feedback and keeps refining in the background with approval; Cursor learned rules and auto-fix behavior are adjacent signs that reviewer feedback is becoming a durable product input.
 - Why it matters: browser and coding harnesses stay expensive and noisy if every reviewer correction dies inside one PR thread instead of becoming reusable policy, heuristics, or prompts for the next run.
 - One-shot build instruction:
   - Add a reviewer-feedback learning loop for browser-agent work that captures accepted and rejected PR feedback, turns it into structured reusable guidance or heuristics after approval, replays it during planning and self-review, and lets operators inspect, edit, disable, or expire learned rules before they affect future runs.
 
-### 37. Mode-scoped execution profiles and sticky task inheritance
+### 38. Mode-scoped execution profiles and sticky task inheritance
 - Common pattern: some harnesses now let teams bind execution profiles to specialized agent modes, then keep those profile choices stable across resumes, parallel work, and delegated subtasks.
 - Seen in: Roo Code API Configuration Profiles can be pinned, linked to modes, and kept sticky per task; reopened tasks retain their original profile, multi-workspace runs avoid unexpected profile switches, and Orchestrator subtasks inherit the parent profile for their lifetime.
 - Why it matters: multi-model harnesses become hard to trust when provider, model, or budget settings drift silently between planning, execution, resume, and delegation steps.
 - One-shot build instruction:
   - Add execution profiles for browser-agent modes with explicit provider, model, thinking-budget, rate-limit, and tool-policy settings; let users bind profiles to agent roles, and keep a run's chosen profile sticky across resumes, child runs, worktrees, and remote execution unless a human explicitly changes it.
 
-### 38. Deterministic workflow graphs around agent steps
+### 39. Deterministic workflow graphs around agent steps
 - Common pattern: some harnesses are treating agents as nodes inside versioned workflows, with explicit deterministic steps, pause states, approvals, evaluations, and deployment-safe publishing around the agent core.
 - Seen in: n8n AI Workflow Builder, AI Agent and Chat nodes, workflow-as-tool composition, per-tool human review, dataset-backed evaluations, and versioned publishing with rollback and concurrency protection.
 - Why it matters: agent reliability improves when reasoning is embedded inside an inspectable workflow graph instead of being forced to carry branching logic, approvals, and recovery policy entirely inside the prompt.
