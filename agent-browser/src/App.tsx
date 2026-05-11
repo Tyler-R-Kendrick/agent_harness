@@ -15215,10 +15215,8 @@ function AgentBrowserApp() {
 
   const switchSidebarPanel = useCallback((panel: SidebarPanel) => {
     setActivePanel(panel);
-    if (panel !== 'extensions') {
-      setSelectedExtensionId(null);
-      setActiveExtensionFeatureId(null);
-    }
+    setSelectedExtensionId(null);
+    setActiveExtensionFeatureId(null);
     setSidebarCollapsed(false, true);
     setShowWorkspaces(false);
   }, [setSidebarCollapsed]);

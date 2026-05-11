@@ -893,6 +893,44 @@ describe('App smoke coverage', () => {
     expect(screen.queryByRole('region', { name: 'Artifact worktree explorer feature pane' })).not.toBeInTheDocument();
   });
 
+  it('clears an active IDE extension pane when keyboard navigation returns to Extensions', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    await act(async () => {
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install OpenDesign DESIGN.md Studio' }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'OpenDesign DESIGN.md Studio extension' }));
+    });
+    expect(screen.getByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.keyDown(window, { altKey: true, key: '5' });
+    });
+
+    expect(screen.getByRole('region', { name: 'Extension marketplace' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.keyDown(window, { altKey: true, key: '6' });
+    });
+
+    expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'OpenDesign DESIGN.md Studio feature pane' })).not.toBeInTheDocument();
+  });
+
   it('renders partner agent control plane controls in Settings', async () => {
     vi.useFakeTimers();
     render(<App />);
