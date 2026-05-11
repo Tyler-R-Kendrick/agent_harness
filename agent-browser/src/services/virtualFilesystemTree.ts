@@ -130,7 +130,7 @@ export function buildWorkspaceCapabilityDriveNodes(prefix: string, files: Worksp
     if (!segments.length) continue;
     const [rawDriveSegment, ...rest] = segments;
 
-    if (segments.length === 1 || rawDriveSegment.startsWith('.')) {
+    if (segments.length === 1 || rawDriveSegment.startsWith('.') || normalizeDriveName(rawDriveSegment) === 'artifacts') {
       appendWorkspacePath(workspaceDrive as WorkspaceBranchNode, `${prefix}:workspace`, segments, file.path);
       continue;
     }

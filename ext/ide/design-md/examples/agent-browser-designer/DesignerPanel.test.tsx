@@ -50,7 +50,7 @@ describe('DesignerPanel', () => {
   it('runs the design-system setup, generation, review, theme, and file browser flow end to end', () => {
     const { getFiles, handleThemeChange } = renderDesigner();
 
-    expect(screen.getByRole('heading', { name: 'Claude Design' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Design Studio' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Design systems' }));
     fireEvent.click(screen.getByRole('button', { name: 'Set up design system' }));
 
@@ -83,7 +83,7 @@ describe('DesignerPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review draft design system' }));
     expect(screen.getByText('Missing brand fonts')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Looks good for Buttons' }));
-    fireEvent.click(screen.getByLabelText('Apply Claude Design theme to Agent Browser'));
+    fireEvent.click(screen.getByLabelText('Apply Design Studio theme to Agent Browser'));
     expect(handleThemeChange).toHaveBeenCalledWith({ themeId: 'default', applyToShell: true });
 
     fireEvent.change(screen.getByLabelText("Describe what you'd prefer"), {
@@ -135,7 +135,7 @@ describe('DesignerPanel', () => {
     expect(within(menu).getByText('Teammates can edit')).toBeInTheDocument();
     fireEvent.click(within(menu).getByRole('button', { name: 'Export as standalone HTML' }));
     fireEvent.click(screen.getByRole('button', { name: 'Share' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Handoff to Claude Code...' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Agent handoff...' }));
 
     expect(getFiles().map((file) => file.path)).toEqual(expect.arrayContaining([
       'design/exports/sketchable-brand-system.html',

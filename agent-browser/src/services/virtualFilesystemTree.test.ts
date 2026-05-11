@@ -35,16 +35,16 @@ describe('virtualFilesystemTree', () => {
       },
       {
         marketplace: {
-          id: 'agent-harness.ext.open-design',
+          id: 'agent-harness.ext.design-studio',
           name: 'Design Studio',
           version: '0.1.0',
           description: 'Visual design system studio.',
-          source: { type: 'local', path: './ide/open-design' },
+          source: { type: 'local', path: './ide/design-studio' },
           metadata: { marketplaceCategory: 'ide' },
         },
         manifest: {
           schemaVersion: 1,
-          id: 'agent-harness.ext.open-design',
+          id: 'agent-harness.ext.design-studio',
           name: 'Design Studio',
           version: '0.1.0',
           description: 'Visual design system studio.',

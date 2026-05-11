@@ -37,7 +37,7 @@ import agentsMdManifestSource from '../../../ext/harness/agents-md/agent-harness
 import artifactsContextManifestSource from '../../../ext/harness/artifacts/agent-harness.plugin.json';
 import artifactsWorktreeManifestSource from '../../../ext/ide/artifacts-worktree/agent-harness.plugin.json';
 import designMdContextManifestSource from '../../../ext/harness/design-md/agent-harness.plugin.json';
-import openDesignManifestSource from '../../../ext/ide/open-design/agent-harness.plugin.json';
+import designStudioManifestSource from '../../../ext/ide/design-studio/agent-harness.plugin.json';
 import workflowCanvasManifestSource from '../../../ext/ide/workflow-canvas/agent-harness.plugin.json';
 import localModelConnectorManifestSource from '../../../ext/provider/local-model-connector/agent-harness.plugin.json';
 import openAiModelProviderManifestSource from '../../../ext/provider/openai-model-provider/agent-harness.plugin.json';
@@ -110,7 +110,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.agent-skills', parseHarnessPluginManifest(agentSkillsManifestSource)],
   ['agent-harness.ext.agents-md', parseHarnessPluginManifest(agentsMdManifestSource)],
   ['agent-harness.ext.design-md-context', parseHarnessPluginManifest(designMdContextManifestSource)],
-  ['agent-harness.ext.open-design', parseHarnessPluginManifest(openDesignManifestSource)],
+  ['agent-harness.ext.design-studio', parseHarnessPluginManifest(designStudioManifestSource)],
   ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
   ['agent-harness.ext.artifacts-context', parseHarnessPluginManifest(artifactsContextManifestSource)],
@@ -139,7 +139,7 @@ export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT
 const DEFAULT_EXTENSION_IDS = new Set(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id));
 
 const DEFAULT_EXTENSION_ID_ALIASES = new Map<string, readonly string[]>([
-  ['agent-harness.ext.design-md', ['agent-harness.ext.design-md-context', 'agent-harness.ext.open-design']],
+  ['agent-harness.ext.design-md', ['agent-harness.ext.design-md-context', 'agent-harness.ext.design-studio']],
   ['agent-harness.ext.artifacts', ['agent-harness.ext.artifacts-context', 'agent-harness.ext.artifacts-worktree']],
   ['agent-harness.ext.codi-browser-model-provider', ['agent-harness.ext.huggingface-model-provider']],
 ]);

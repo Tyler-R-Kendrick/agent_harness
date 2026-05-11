@@ -311,7 +311,7 @@ function buildDesignMd(name: string, input: DesignSystemSetupInput): string {
   return [
     '---',
     `name: ${name}`,
-    `description: ${input.companyBlurb || 'Claude Design style system for Agent Browser.'}`,
+    `description: ${input.companyBlurb || 'Design Studio style system for Agent Browser.'}`,
     'colors:',
     '  canvas: "#f8f5ef"',
     '  surface: "#ffffff"',
@@ -384,7 +384,7 @@ function buildDesignMd(name: string, input: DesignSystemSetupInput): string {
     '',
     `# ${name}`,
     '',
-    input.companyBlurb || 'This design system recreates Claude Design style workflows inside Agent Browser.',
+    input.companyBlurb || 'This design system recreates Design Studio style workflows inside Agent Browser.',
     '',
     '## Source Caveats',
     '',
@@ -485,7 +485,7 @@ function exportLabel(kind: DesignerExportKind): string {
     pptx: 'PPTX',
     canva: 'Canva handoff',
     html: 'Standalone HTML',
-    handoff: 'Claude Code handoff',
+    handoff: 'Agent handoff',
   };
   return labels[kind];
 }

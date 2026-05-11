@@ -1,8 +1,8 @@
-# Feature Spec: Claude Design for Agent Browser
+# Feature Spec: Design Studio for Agent Browser
 
 Status: Implemented v2
 
-Purpose: Define and verify the Agent Browser Designer feature: a Claude Design-inspired workspace for browser-native design systems, design files, previews, comments, token-driven styling, share/export records, sketches, and DESIGN.md-powered theme application.
+Purpose: Define and verify the Agent Browser Designer feature: a Design Studio-inspired workspace for browser-native design systems, design files, previews, comments, token-driven styling, share/export records, sketches, and DESIGN.md-powered theme application.
 
 ## 1. Problem Statement
 
@@ -20,12 +20,12 @@ This feature solves five problems:
 
 ### 2.1 Public Product Sources
 
-- Anthropic describes Claude Design as a research-preview Anthropic Labs product for designs, prototypes, slides, one-pagers, and more, powered by Claude Opus 4.7 and available on Pro, Max, Team, and Enterprise plans.
-- Anthropic's launch post says the core loop is: describe the desired artifact, receive a first version, refine through conversation, inline comments, direct edits, or custom sliders, then export to Canva/PDF/PPTX or hand off to Claude Code.
+- Anthropic describes Design Studio as a research-preview Anthropic Labs product for designs, prototypes, slides, one-pagers, and more, powered by Claude Opus 4.7 and available on Pro, Max, Team, and Enterprise plans.
+- Anthropic's launch post says the core loop is: describe the desired artifact, receive a first version, refine through conversation, inline comments, direct edits, or custom sliders, then export to Canva/PDF/PPTX or hand off to an agent.
 - Claude Help Center describes the primary UI as a left chat interface and right canvas, with project context from screenshots, images, assets, codebases, and design files.
 - Claude Help Center says design-system setup can ingest codebases, prototypes, screenshots, existing design files, slide decks, documents, logos, color palettes, and typography specimens; Claude then generates colors, typography, components, and layout patterns.
 - Claude Help Center documents export options: `.zip`, PDF, PPTX, Canva, and standalone HTML.
-- Public walkthroughs and user reports emphasize organization-published design systems, default design systems, custom tweak controls, known preview limitations, and a handoff bundle for Claude Code.
+- Public walkthroughs and user reports emphasize organization-published design systems, default design systems, custom tweak controls, known preview limitations, and a handoff bundle for agents.
 
 ### 2.2 User-Supplied Screenshot Requirements
 
@@ -39,9 +39,9 @@ Required shell anatomy:
 - A centered empty/generation canvas that can show `Creating your design system...` and a progress line.
 - A bottom-right thumbnail preview during generation and review.
 
-Required Claude Design home anatomy:
+Required Design Studio home anatomy:
 
-- Product identity: `Claude Design` by Anthropic Labs with a `Research Preview` badge.
+- Product identity: `Design Studio` by Anthropic Labs with a `Research Preview` badge.
 - Primary tabs: `Designs`, `Examples`, `Design systems`.
 - Left creation card with `Prototype`, `Slide deck`, `From template`, and `Other`.
 - Project name input, `Wireframe` and `High fidelity` selectors, and a primary `Create` button.
@@ -82,7 +82,7 @@ Required examples anatomy:
 
 ## 3. Goals
 
-- Provide a Symphony-style, implementation-neutral contract for Claude Design in Agent Browser.
+- Provide a Symphony-style, implementation-neutral contract for Design Studio in Agent Browser.
 - Use `DESIGN.md` as the canonical design-system document.
 - Let one design system define multiple token packs and style targets.
 - Support runtime switching between token packs for widgets and the full Agent Browser shell.
@@ -98,7 +98,7 @@ Required examples anatomy:
 - Production-quality vector drawing engine in v1.
 - LLM-generated code execution as part of the design-system review loop.
 
-External-service parity is represented by deterministic local artifacts in v2. For example, `Send to Canva`, PDF, PPTX, zip, standalone HTML, and Claude Code handoff actions create workspace export records and files, but they do not call third-party APIs.
+External-service parity is represented by deterministic local artifacts in v2. For example, `Send to Canva`, PDF, PPTX, zip, standalone HTML, and agent handoff actions create workspace export records and files, but they do not call third-party APIs.
 
 ## 5. File Contracts
 
@@ -178,7 +178,7 @@ Design rationale and exceptions live here.
 
 ### 5.2 Workspace File Layout
 
-Claude Design projects SHOULD use this workspace layout:
+Design Studio projects SHOULD use this workspace layout:
 
 ```text
 DESIGN.md
@@ -230,7 +230,7 @@ The home surface lists design projects, examples, and design systems. It MUST in
 
 Implementation:
 
-- `DesignerPanel` exposes a Claude Design home with product branding, research-preview badge, `Designs`, `Examples`, and `Design systems` tabs.
+- `DesignerPanel` exposes a Design Studio home with product branding, research-preview badge, `Designs`, `Examples`, and `Design systems` tabs.
 - The left rail includes `Prototype`, `Slide deck`, `From template`, and `Other`, a project-name field, `Wireframe`/`High fidelity` selectors, a primary create action, privacy copy, and the design-system CTA.
 - The Designs tab includes Recent/Your designs, tutorial card, prompt chip, and search. The Examples tab includes a calculator construction kit preview plus tweak controls. The Design systems tab includes create/default/template empty states.
 
@@ -328,7 +328,7 @@ V1 menu items:
 
 Implementation:
 
-- The Share menu includes access mode, copy link, file type, duplicate project/template, zip, PDF, PPTX, Canva, standalone HTML, and Claude Code handoff.
+- The Share menu includes access mode, copy link, file type, duplicate project/template, zip, PDF, PPTX, Canva, standalone HTML, and agent handoff.
 - Export actions create deterministic workspace artifacts under `design/exports/` and append export metadata to `design/manifest.json`.
 
 ## 7. Runtime Styling Contract
@@ -379,7 +379,7 @@ Settings MUST expose a local control to:
 
 Implementation:
 
-- Agent Browser Settings exposes Claude Design theme selection, shell application toggle, reset, diagnostics, and CSS preview.
+- Agent Browser Settings exposes Design Studio theme selection, shell application toggle, reset, diagnostics, and CSS preview.
 - Designer Review exposes the same active theme selector and shell application toggle in context.
 
 ### 8.2 DESIGN.md Apply Tool
@@ -429,7 +429,7 @@ Current checked-in coverage:
 - `DESIGN.md` can define root tokens, named themes, and target style mappings.
 - Generated CSS includes generic variables and target-specific variables.
 - `design-md.apply` can replace a managed block without duplicating markers.
-- Agent Browser Settings exposes a Claude Design section with theme selection, apply-to-shell toggle, and generated CSS preview.
+- Agent Browser Settings exposes a Design Studio section with theme selection, apply-to-shell toggle, and generated CSS preview.
 - Applying a theme updates the Agent Browser shell CSS variables at runtime.
 - Existing DESIGN.md guidance injection still works for design-facing model requests.
 
@@ -442,7 +442,7 @@ Current checked-in coverage:
 - Review parity covers published/default toggles, font warning, component approval/request-change loop, feedback history, CSS preview, and contextual theme application.
 - Files parity covers expected folder/file sections, selection preview, empty preview state, and import drop zone.
 - Sketch parity covers dotted canvas, floating toolbar, save behavior, and generated sketch artifacts.
-- Share/export parity covers access, copy link, file type, duplicate actions, zip/PDF/PPTX/Canva/HTML exports, and Claude Code handoff as local artifacts.
+- Share/export parity covers access, copy link, file type, duplicate actions, zip/PDF/PPTX/Canva/HTML exports, and agent handoff as local artifacts.
 - Runtime theme parity covers DESIGN.md-driven token parsing, CSS rendering, shell token swapping, widget target variables, diagnostics, and local persistence.
 
 ## 13. Future Work

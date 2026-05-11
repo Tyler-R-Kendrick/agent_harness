@@ -343,29 +343,29 @@ import {
   type DefaultExtensionRuntime,
 } from './services/defaultExtensions';
 import {
-  OPEN_DESIGN_DIRECTIONS,
-  approveOpenDesignTokenRevision,
-  buildOpenDesignWorkspaceBundle,
-  createOpenDesignProjectArtifactInput,
-  createOpenDesignApprovalComposition,
-  createOpenDesignExportArtifact,
-  createOpenDesignStudioState,
-  findOpenDesignProjectNameCollision,
-  getOpenDesignApprovalSummary,
-  getOpenDesignResearchInventory,
-  publishOpenDesignSystem,
-  requestOpenDesignTokenRevision,
-  runOpenDesignCritique,
-  selectOpenDesignDirection,
-  updateOpenDesignBrief,
-  type OpenDesignBrief,
-  type OpenDesignApprovalComposition,
-  type OpenDesignDirectionId,
-  type OpenDesignProjectArtifactInput,
-  type OpenDesignStudioState,
-  type OpenDesignTokenReviewItem,
-  type OpenDesignWorkspaceFile,
-} from '@agent-harness/ext-open-design';
+  DESIGN_STUDIO_DIRECTIONS,
+  approveDesignStudioTokenRevision,
+  buildDesignStudioArtifactFiles,
+  createDesignStudioProjectArtifactInput,
+  createDesignStudioApprovalComposition,
+  createDesignStudioExportArtifact,
+  createDesignStudioState,
+  findDesignStudioProjectNameCollision,
+  getDesignStudioApprovalSummary,
+  getDesignStudioResearchInventory,
+  publishDesignStudioSystem,
+  requestDesignStudioTokenRevision,
+  runDesignStudioCritique,
+  selectDesignStudioDirection,
+  updateDesignStudioBrief,
+  type DesignStudioBrief,
+  type DesignStudioApprovalComposition,
+  type DesignStudioDirectionId,
+  type DesignStudioProjectArtifactInput,
+  type DesignStudioState,
+  type DesignStudioTokenReviewItem,
+  type DesignStudioArtifactFile,
+} from '@agent-harness/ext-design-studio';
 import {
   PORTABLE_DAEMON_SOURCE_DOWNLOAD,
   resolveLocalInferenceDaemonDownload,
@@ -2052,7 +2052,7 @@ function ArtifactViewerPanel({
         <div className="file-editor-chrome">
           <div className="file-editor-pathbar file-editor-path-display shared-input-shell">
             <Icon name="file" size={12} color="#7d8590" />
-            <span className="file-editor-path-text">{file ? `//artifacts/${artifact.id}/${file.path}` : `//artifacts/${artifact.id}`}</span>
+            <span className="file-editor-path-text">{file ? `//workspace/artifacts/${artifact.id}/${file.path}` : `//workspace/artifacts/${artifact.id}`}</span>
           </div>
           <div className="file-editor-toolbar">
             <button type="button" className="file-editor-action" aria-label="Download artifact" title="Download artifact" onClick={onDownload}><Icon name="download" size={14} /></button>
@@ -11878,7 +11878,7 @@ function getDefaultExtensionIcon(extension: DefaultExtensionDescriptor | string)
   }
   if (extensionId.endsWith('.agent-skills')) return 'sparkles';
   if (extensionId.endsWith('.agents-md')) return 'file';
-  if (extensionId.endsWith('.design-md-context') || extensionId.endsWith('.open-design') || extensionId.endsWith('.design-md')) return 'slidersHorizontal';
+  if (extensionId.endsWith('.design-md-context') || extensionId.endsWith('.design-studio') || extensionId.endsWith('.design-md')) return 'slidersHorizontal';
   if (extensionId.endsWith('.artifacts-context') || extensionId.endsWith('.artifacts-worktree') || extensionId.endsWith('.artifacts')) return 'layers';
   if (extensionId.endsWith('-model-provider')) return 'cpu';
   if (extensionId.endsWith('.local-model-connector')) return 'cpu';
@@ -12013,7 +12013,7 @@ function getExtensionContributionRows(extension: DefaultExtensionDescriptor): Ar
 }
 
 function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string {
-  if (extension.manifest.id === 'agent-harness.ext.open-design') return 'Design Studio';
+  if (extension.manifest.id === 'agent-harness.ext.design-studio') return 'Design Studio';
   if (extension.manifest.id === 'agent-harness.ext.symphony') return 'Symphony Board';
   if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') return 'Workflow Canvas';
   if (extension.manifest.id === 'agent-harness.ext.artifacts-worktree') return 'Artifact Worktree';
@@ -12021,7 +12021,7 @@ function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string
 }
 
 function getExtensionFeatureSummary(extension: DefaultExtensionDescriptor): string {
-  if (extension.manifest.id === 'agent-harness.ext.open-design') {
+  if (extension.manifest.id === 'agent-harness.ext.design-studio') {
     return 'Compose DESIGN.md systems, inspect token guidance, and save each project as an artifact.';
   }
   if (extension.manifest.id === 'agent-harness.ext.symphony') {
@@ -12640,7 +12640,7 @@ function DesignStudioProjectsPanel({
   onDownloadProject: (artifactId: string) => void;
 }) {
   const projects = artifacts
-    .filter((artifact) => artifact.kind === 'open-design-project')
+    .filter((artifact) => artifact.kind === 'design-studio-project')
     .sort((left, right) => {
       const leftUpdated = Date.parse(left.updatedAt ?? left.createdAt);
       const rightUpdated = Date.parse(right.updatedAt ?? right.createdAt);
@@ -12693,9 +12693,9 @@ function DesignStudioProjectsPanel({
   );
 }
 
-type OpenDesignStudioView = 'preview' | 'review' | 'files' | 'critique' | 'research';
+type DesignStudioView = 'preview' | 'review' | 'files' | 'critique' | 'research';
 
-const OPEN_DESIGN_STUDIO_VIEWS: Array<{ id: OpenDesignStudioView; icon: keyof typeof icons; label: string }> = [
+const DESIGN_STUDIO_VIEWS: Array<{ id: DesignStudioView; icon: keyof typeof icons; label: string }> = [
   { id: 'preview', icon: 'canvas', label: 'Show preview' },
   { id: 'review', icon: 'clipboard', label: 'Show token review' },
   { id: 'files', icon: 'file', label: 'Show DESIGN.md files' },
@@ -12703,16 +12703,16 @@ const OPEN_DESIGN_STUDIO_VIEWS: Array<{ id: OpenDesignStudioView; icon: keyof ty
   { id: 'research', icon: 'search', label: 'Show research' },
 ];
 
-function OpenDesignStudioPane({
+function DesignStudioPane({
   workspaceName,
   artifacts,
   onProjectArtifactSave,
 }: {
   workspaceName: string;
   artifacts: AgentArtifact[];
-  onProjectArtifactSave: (input: OpenDesignProjectArtifactInput, existingArtifactId?: string | null) => AgentArtifact;
+  onProjectArtifactSave: (input: DesignStudioProjectArtifactInput, existingArtifactId?: string | null) => AgentArtifact;
 }) {
-  const [studioState, setStudioState] = useState<OpenDesignStudioState>(() => createOpenDesignStudioState({
+  const [studioState, setStudioState] = useState<DesignStudioState>(() => createDesignStudioState({
     workspaceName,
     brief: {
       projectName: `${workspaceName} Design System`,
@@ -12726,23 +12726,23 @@ function OpenDesignStudioPane({
       notes: 'Keep controls minimal, icon-led, and useful at phone, tablet, and desktop widths.',
     },
   }));
-  const [view, setView] = useState<OpenDesignStudioView>('preview');
+  const [view, setView] = useState<DesignStudioView>('preview');
   const [inspectMode, setInspectMode] = useState(true);
   const [status, setStatus] = useState('Ready to compile DESIGN.md');
   const [projectArtifactId, setProjectArtifactId] = useState<string | null>(null);
   const dirtyRef = useRef(false);
   const latestStateRef = useRef(studioState);
   const projectArtifactIdRef = useRef(projectArtifactId);
-  const researchInventory = useMemo(() => getOpenDesignResearchInventory(), []);
+  const researchInventory = useMemo(() => getDesignStudioResearchInventory(), []);
   const draftProjectArtifact = useMemo(
-    () => createOpenDesignProjectArtifactInput(studioState),
+    () => createDesignStudioProjectArtifactInput(studioState),
     [studioState],
   );
   const currentProjectArtifact = projectArtifactId
     ? artifacts.find((artifact) => artifact.id === projectArtifactId) ?? null
     : null;
   const projectArtifactDisplayId = currentProjectArtifact?.id ?? draftProjectArtifact.id;
-  const currentExportFiles: OpenDesignWorkspaceFile[] = currentProjectArtifact
+  const currentExportFiles: DesignStudioArtifactFile[] = currentProjectArtifact
     ? currentProjectArtifact.files
       .filter((file) => file.path.startsWith('exports/'))
       .map((file) => ({
@@ -12756,13 +12756,13 @@ function OpenDesignStudioPane({
     ...draftProjectArtifact.files,
     ...currentExportFiles.filter((file) => !draftProjectArtifact.files.some((draftFile) => draftFile.path === file.path)),
   ].sort((left, right) => left.path.localeCompare(right.path));
-  const activeDirection = OPEN_DESIGN_DIRECTIONS.find((direction) => direction.id === studioState.directionId)
-    ?? OPEN_DESIGN_DIRECTIONS[0]!;
-  const approvalSummary = getOpenDesignApprovalSummary(studioState);
-  const approvalComposition = createOpenDesignApprovalComposition(studioState);
+  const activeDirection = DESIGN_STUDIO_DIRECTIONS.find((direction) => direction.id === studioState.directionId)
+    ?? DESIGN_STUDIO_DIRECTIONS[0]!;
+  const approvalSummary = getDesignStudioApprovalSummary(studioState);
+  const approvalComposition = createDesignStudioApprovalComposition(studioState);
   const designDocument = draftProjectArtifact.files.find((file) => file.path === 'DESIGN.md')?.content
-    ?? buildOpenDesignWorkspaceBundle(studioState)[0].content;
-  const projectNameCollision = findOpenDesignProjectNameCollision(studioState, artifacts, projectArtifactId);
+    ?? buildDesignStudioArtifactFiles(studioState)[0].content;
+  const projectNameCollision = findDesignStudioProjectNameCollision(studioState, artifacts, projectArtifactId);
 
   useEffect(() => {
     latestStateRef.current = studioState;
@@ -12775,7 +12775,7 @@ function OpenDesignStudioPane({
   useEffect(() => {
     if (projectArtifactId) return;
     const existingArtifact = artifacts.find((artifact) => (
-      artifact.kind === 'open-design-project'
+      artifact.kind === 'design-studio-project'
       && (artifact.id === draftProjectArtifact.id || artifact.title.trim().toLowerCase() === draftProjectArtifact.title.trim().toLowerCase())
     ));
     if (existingArtifact) {
@@ -12784,7 +12784,7 @@ function OpenDesignStudioPane({
     }
   }, [artifacts, draftProjectArtifact.id, draftProjectArtifact.title, projectArtifactId]);
 
-  const markStudioStateDirty = useCallback((updater: (current: OpenDesignStudioState) => OpenDesignStudioState) => {
+  const markStudioStateDirty = useCallback((updater: (current: DesignStudioState) => DesignStudioState) => {
     dirtyRef.current = true;
     setStudioState(updater);
   }, []);
@@ -12795,7 +12795,7 @@ function OpenDesignStudioPane({
     options: { updateStatus?: boolean } = {},
   ) => {
     const existingArtifactId = projectArtifactIdRef.current;
-    const collision = findOpenDesignProjectNameCollision(state, artifacts, existingArtifactId);
+    const collision = findDesignStudioProjectNameCollision(state, artifacts, existingArtifactId);
     if (collision) {
       if (options.updateStatus !== false) {
         setStatus(`Project name collides with artifact "${collision.title}"`);
@@ -12803,7 +12803,7 @@ function OpenDesignStudioPane({
       return null;
     }
 
-    const artifact = onProjectArtifactSave(createOpenDesignProjectArtifactInput(state, {
+    const artifact = onProjectArtifactSave(createDesignStudioProjectArtifactInput(state, {
       artifactId: existingArtifactId ?? undefined,
       timestamp: new Date().toISOString(),
     }), existingArtifactId);
@@ -12822,17 +12822,17 @@ function OpenDesignStudioPane({
     }
   }, [saveProjectArtifact]);
 
-  const changeBrief = (field: keyof OpenDesignBrief, value: string) => {
-    markStudioStateDirty((current) => updateOpenDesignBrief(current, { [field]: value } as Partial<OpenDesignBrief>));
+  const changeBrief = (field: keyof DesignStudioBrief, value: string) => {
+    markStudioStateDirty((current) => updateDesignStudioBrief(current, { [field]: value } as Partial<DesignStudioBrief>));
   };
 
-  const approveTokenReview = (item: OpenDesignTokenReviewItem) => {
-    markStudioStateDirty((current) => approveOpenDesignTokenRevision(current, item.id, 'Design lead', 'Looks good.'));
+  const approveTokenReview = (item: DesignStudioTokenReviewItem) => {
+    markStudioStateDirty((current) => approveDesignStudioTokenRevision(current, item.id, 'Design lead', 'Looks good.'));
     setStatus(`${item.label} approved`);
   };
 
-  const requestTokenRevision = (item: OpenDesignTokenReviewItem) => {
-    markStudioStateDirty((current) => requestOpenDesignTokenRevision(
+  const requestTokenRevision = (item: DesignStudioTokenReviewItem) => {
+    markStudioStateDirty((current) => requestDesignStudioTokenRevision(
       current,
       item.id,
       `${item.proposedValue} · revise`,
@@ -12848,7 +12848,7 @@ function OpenDesignStudioPane({
       setStatus('Design system unpublished');
       return;
     }
-    markStudioStateDirty((current) => publishOpenDesignSystem(current, 'Design lead', 'Published approved DESIGN.md system.'));
+    markStudioStateDirty((current) => publishDesignStudioSystem(current, 'Design lead', 'Published approved DESIGN.md system.'));
     setStatus(approvalSummary.readyToPublish ? 'Design system published' : 'Publish blocked until token reviews are approved');
   };
 
@@ -12863,7 +12863,7 @@ function OpenDesignStudioPane({
   };
 
   const runCritique = () => {
-    const critique = runOpenDesignCritique(studioState);
+    const critique = runDesignStudioCritique(studioState);
     const nextState = { ...studioState, lastCritique: critique };
     dirtyRef.current = true;
     latestStateRef.current = nextState;
@@ -12873,17 +12873,17 @@ function OpenDesignStudioPane({
   };
 
   const exportHtml = () => {
-    const collision = findOpenDesignProjectNameCollision(studioState, artifacts, projectArtifactIdRef.current);
+    const collision = findDesignStudioProjectNameCollision(studioState, artifacts, projectArtifactIdRef.current);
     if (collision) {
       setStatus(`Project name collides with artifact "${collision.title}"`);
       return;
     }
-    const exportFile = createOpenDesignExportArtifact('html', studioState, new Date().toISOString());
+    const exportFile = createDesignStudioExportArtifact('html', studioState, new Date().toISOString());
     const nextState = latestStateRef.current;
-    const baseFiles = createOpenDesignProjectArtifactInput(nextState).files;
+    const baseFiles = createDesignStudioProjectArtifactInput(nextState).files;
     const preservedExportFiles = currentExportFiles.filter((file) => file.path !== exportFile.path);
     const artifact = onProjectArtifactSave({
-      ...createOpenDesignProjectArtifactInput(nextState, {
+      ...createDesignStudioProjectArtifactInput(nextState, {
         artifactId: projectArtifactIdRef.current ?? undefined,
         timestamp: new Date().toISOString(),
       }),
@@ -12897,17 +12897,17 @@ function OpenDesignStudioPane({
   };
 
   const exportHandoff = () => {
-    const collision = findOpenDesignProjectNameCollision(studioState, artifacts, projectArtifactIdRef.current);
+    const collision = findDesignStudioProjectNameCollision(studioState, artifacts, projectArtifactIdRef.current);
     if (collision) {
       setStatus(`Project name collides with artifact "${collision.title}"`);
       return;
     }
-    const exportFile = createOpenDesignExportArtifact('handoff', studioState, new Date().toISOString());
+    const exportFile = createDesignStudioExportArtifact('handoff', studioState, new Date().toISOString());
     const nextState = latestStateRef.current;
-    const baseFiles = createOpenDesignProjectArtifactInput(nextState).files;
+    const baseFiles = createDesignStudioProjectArtifactInput(nextState).files;
     const preservedExportFiles = currentExportFiles.filter((file) => file.path !== exportFile.path);
     const artifact = onProjectArtifactSave({
-      ...createOpenDesignProjectArtifactInput(nextState, {
+      ...createDesignStudioProjectArtifactInput(nextState, {
         artifactId: projectArtifactIdRef.current ?? undefined,
         timestamp: new Date().toISOString(),
       }),
@@ -12916,11 +12916,11 @@ function OpenDesignStudioPane({
     projectArtifactIdRef.current = artifact.id;
     setProjectArtifactId(artifact.id);
     dirtyRef.current = false;
-    setStatus('Claude Code handoff added to project artifact');
+    setStatus('agent handoff added to project artifact');
     setView('files');
   };
 
-  const switchOpenDesignView = (nextView: OpenDesignStudioView) => {
+  const switchDesignStudioView = (nextView: DesignStudioView) => {
     if (dirtyRef.current) {
       saveProjectArtifact(studioState, 'Project artifact auto-saved before navigation');
     }
@@ -12936,43 +12936,43 @@ function OpenDesignStudioPane({
   };
 
   return (
-    <section className="open-design-studio" role="region" aria-label="Design Studio feature pane" onBlurCapture={handleStudioBlur}>
-      <header className="od-topbar">
-        <div className="od-title-lockup">
-          <span className="od-logo-mark"><Icon name="slidersHorizontal" size={20} /></span>
+    <section className="design-studio-studio" role="region" aria-label="Design Studio feature pane" onBlurCapture={handleStudioBlur}>
+      <header className="ds-topbar">
+        <div className="ds-title-lockup">
+          <span className="ds-logo-mark"><Icon name="slidersHorizontal" size={20} /></span>
           <div>
             <span className="panel-eyebrow">DESIGN.md Studio</span>
             <h2>Design Studio</h2>
             <p>Brief, review, approve, preview, critique, and export a design system that agents can apply.</p>
             {projectNameCollision ? (
-              <p className="od-collision-warning" role="alert">
+              <p className="ds-collision-warning" role="alert">
                 Project name collides with artifact "{projectNameCollision.title}".
               </p>
             ) : null}
           </div>
         </div>
-        <div className="od-toolbar" aria-label="Design Studio actions">
-          <button type="button" className="od-icon-action" aria-label="Compile DESIGN.md" title="Compile DESIGN.md" onClick={compileDesignSystem}>
+        <div className="ds-toolbar" aria-label="Design Studio actions">
+          <button type="button" className="ds-icon-action" aria-label="Compile DESIGN.md" title="Compile DESIGN.md" onClick={compileDesignSystem}>
             <Icon name="save" size={15} />
           </button>
-          <button type="button" className="od-icon-action" aria-label="Run design critique" title="Run design critique" onClick={runCritique}>
+          <button type="button" className="ds-icon-action" aria-label="Run design critique" title="Run design critique" onClick={runCritique}>
             <Icon name="sparkles" size={15} />
           </button>
-          <button type="button" className="od-icon-action" aria-label="Publish approved design system" title="Publish approved design system" onClick={() => publishDesignSystem(true)}>
+          <button type="button" className="ds-icon-action" aria-label="Publish approved design system" title="Publish approved design system" onClick={() => publishDesignSystem(true)}>
             <Icon name="clipboard" size={15} />
           </button>
-          <button type="button" className="od-icon-action" aria-label="Export standalone HTML" title="Export standalone HTML" onClick={exportHtml}>
+          <button type="button" className="ds-icon-action" aria-label="Export standalone HTML" title="Export standalone HTML" onClick={exportHtml}>
             <Icon name="download" size={15} />
           </button>
-          <button type="button" className="od-icon-action" aria-label="Export Claude Code handoff" title="Export Claude Code handoff" onClick={exportHandoff}>
+          <button type="button" className="ds-icon-action" aria-label="Export agent handoff" title="Export agent handoff" onClick={exportHandoff}>
             <Icon name="share" size={15} />
           </button>
         </div>
       </header>
 
-      <div className="od-workbench">
-        <aside className="od-brief-rail" aria-label="Design brief">
-          <div className="od-rail-header">
+      <div className="ds-workbench">
+        <aside className="ds-brief-rail" aria-label="Design brief">
+          <div className="ds-rail-header">
             <Icon name="messageSquare" size={14} />
             <strong>Brief</strong>
           </div>
@@ -13006,9 +13006,9 @@ function OpenDesignStudioPane({
           </label>
         </aside>
 
-        <main className="od-main-stage">
-          <div className="od-stage-switcher" role="tablist" aria-label="Design Studio views">
-            {OPEN_DESIGN_STUDIO_VIEWS.map((item) => (
+        <main className="ds-main-stage">
+          <div className="ds-stage-switcher" role="tablist" aria-label="Design Studio views">
+            {DESIGN_STUDIO_VIEWS.map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -13017,7 +13017,7 @@ function OpenDesignStudioPane({
                 className={view === item.id ? 'is-active' : ''}
                 aria-label={item.label}
                 title={item.label}
-                onClick={() => switchOpenDesignView(item.id)}
+                onClick={() => switchDesignStudioView(item.id)}
               >
                 <Icon name={item.icon} size={15} />
               </button>
@@ -13034,22 +13034,22 @@ function OpenDesignStudioPane({
           </div>
 
           {view === 'preview' ? (
-            <section className="od-preview-plane" aria-label="Design Studio preview">
-              <div className="od-artifact-frame">
-                <div className="od-artifact-topline">
+            <section className="ds-preview-plane" aria-label="Design Studio preview">
+              <div className="ds-artifact-frame">
+                <div className="ds-artifact-topline">
                   <span>Browser frame</span>
                   <span>{studioState.fidelity}</span>
                   <span>{activeDirection.label}</span>
                 </div>
-                <div className="od-artifact-body" style={{
-                  '--od-canvas': activeDirection.palette.canvas,
-                  '--od-surface': activeDirection.palette.surface,
-                  '--od-text': activeDirection.palette.text,
-                  '--od-muted': activeDirection.palette.muted,
-                  '--od-accent': activeDirection.palette.accent,
-                  '--od-border': activeDirection.palette.border,
+                <div className="ds-artifact-body" style={{
+                  '--ds-canvas': activeDirection.palette.canvas,
+                  '--ds-surface': activeDirection.palette.surface,
+                  '--ds-text': activeDirection.palette.text,
+                  '--ds-muted': activeDirection.palette.muted,
+                  '--ds-accent': activeDirection.palette.accent,
+                  '--ds-border': activeDirection.palette.border,
                 } as CSSProperties}>
-                  <div className="od-artifact-copy">
+                  <div className="ds-artifact-copy">
                     <span>Design Studio seed</span>
                     <h3>{studioState.brief.projectName || `${workspaceName} Design System`}</h3>
                     <p>{studioState.brief.prompt}</p>
@@ -13057,7 +13057,7 @@ function OpenDesignStudioPane({
                       <Icon name="sparkles" size={14} />
                     </button>
                   </div>
-                  <div className="od-token-ladder" aria-label="Generated token swatches">
+                  <div className="ds-token-ladder" aria-label="Generated token swatches">
                     {Object.entries(activeDirection.palette).slice(0, 6).map(([name, value]) => (
                       <span key={name} title={`${name}: ${value}`} style={{ background: value }} />
                     ))}
@@ -13065,7 +13065,7 @@ function OpenDesignStudioPane({
                 </div>
               </div>
               {inspectMode ? (
-                <div className="od-inspect-strip" aria-label="Design Studio inspect controls">
+                <div className="ds-inspect-strip" aria-label="Design Studio inspect controls">
                   <label>
                     <span>Density</span>
                     <input
@@ -13095,43 +13095,43 @@ function OpenDesignStudioPane({
               ) : null}
             </section>
           ) : view === 'review' ? (
-            <section className="od-token-review-plane" aria-label="Design Studio token review">
-              <div className="od-plane-heading">
+            <section className="ds-token-review-plane" aria-label="Design Studio token review">
+              <div className="ds-plane-heading">
                 <Icon name="clipboard" size={14} />
                 <strong>{approvalSummary.status === 'published' ? 'Published token system' : approvalSummary.readyToPublish ? 'Ready to publish' : 'Token review queue'}</strong>
               </div>
-              <div className="od-review-summary" aria-label="Design Studio approval summary">
+              <div className="ds-review-summary" aria-label="Design Studio approval summary">
                 <span>{approvalSummary.approved}/{approvalSummary.total} approved</span>
                 <span>{approvalSummary.needsReview} needs review</span>
                 <span>{approvalSummary.changesRequested} needs work</span>
                 <span>{studioState.published ? 'Published' : 'Draft'}</span>
               </div>
-              <div className="od-font-warning">
+              <div className="ds-font-warning">
                 <Icon name="file" size={14} />
-                <span>Claude Design review parity: missing fonts and extracted tokens must be reviewed before publishing.</span>
+                <span>Design Studio review parity: missing fonts and extracted tokens must be reviewed before publishing.</span>
               </div>
-              <OpenDesignApprovalCompositionSample
+              <DesignStudioApprovalCompositionSample
                 composition={approvalComposition}
                 direction={activeDirection}
                 state={studioState}
               />
-              <div className="od-token-review-list">
+              <div className="ds-token-review-list">
                 {studioState.tokenReviews.map((item) => (
-                  <div key={item.id} className={`od-token-review-row od-token-review-row--${item.status}`}>
-                    <div className="od-token-review-copy">
+                  <div key={item.id} className={`ds-token-review-row ds-token-review-row--${item.status}`}>
+                    <div className="ds-token-review-copy">
                       <span>{item.group} · rev {item.revision}</span>
                       <strong>{item.label}</strong>
                       <code>{item.currentValue}</code>
                       <code>{item.proposedValue}</code>
                       <small>{item.note || item.source}</small>
                     </div>
-                    <OpenDesignTokenVisualSample
+                    <DesignStudioTokenVisualSample
                       direction={activeDirection}
                       item={item}
                       radius={studioState.radius}
                     />
-                    <span className="od-token-review-state">{item.status}</span>
-                    <div className="od-token-review-actions" aria-label={`${item.label} review actions`}>
+                    <span className="ds-token-review-state">{item.status}</span>
+                    <div className="ds-token-review-actions" aria-label={`${item.label} review actions`}>
                       <button type="button" aria-label={`Approve ${item.label}`} title={`Approve ${item.label}`} onClick={() => approveTokenReview(item)}>
                         <Icon name="save" size={14} />
                       </button>
@@ -13142,7 +13142,7 @@ function OpenDesignStudioPane({
                   </div>
                 ))}
               </div>
-              <div className="od-publish-strip" aria-label="Design Studio publish controls">
+              <div className="ds-publish-strip" aria-label="Design Studio publish controls">
                 <label>
                   <input
                     aria-label="Publish approved Design Studio system"
@@ -13162,38 +13162,38 @@ function OpenDesignStudioPane({
                   <span>Default</span>
                 </label>
               </div>
-              <div className="od-approval-event-list" aria-label="Design Studio approval events">
+              <div className="ds-approval-event-list" aria-label="Design Studio approval events">
                 {studioState.approvalEvents.length ? studioState.approvalEvents.slice(-5).map((event) => (
                   <span key={event.id}>{event.action} · {event.itemId} · {event.reviewer}</span>
                 )) : <span>No token decisions recorded yet.</span>}
               </div>
             </section>
           ) : view === 'files' ? (
-            <section className="od-file-plane" aria-label="Design Studio generated files">
-              <div className="od-plane-heading">
+            <section className="ds-file-plane" aria-label="Design Studio generated artifacts">
+              <div className="ds-plane-heading">
                 <Icon name="file" size={14} />
                 <strong>Generated files</strong>
               </div>
-              <div className="od-file-list">
+              <div className="ds-file-list">
                 {designFiles.length ? designFiles.map((file) => (
-                  <div key={file.path} className="od-file-row">
+                  <div key={file.path} className="ds-file-row">
                     <Icon name={file.path.endsWith('.md') ? 'file' : file.path.endsWith('.html') ? 'globe' : 'clipboard'} size={14} />
-                    <code>{`//artifacts/${projectArtifactDisplayId}/${file.path}`}</code>
+                    <code>{`//workspace/artifacts/${projectArtifactDisplayId}/${file.path}`}</code>
                     <span>{file.content.length.toLocaleString()} bytes</span>
                   </div>
                 )) : <p>No files generated yet. Compile DESIGN.md to write the studio bundle.</p>}
               </div>
-              <pre className="od-design-md-preview" aria-label="DESIGN.md preview">{designDocument}</pre>
+              <pre className="ds-design-md-preview" aria-label="DESIGN.md preview">{designDocument}</pre>
             </section>
           ) : view === 'critique' ? (
-            <section className="od-critique-plane" aria-label="Design Studio critique">
-              <div className="od-plane-heading">
+            <section className="ds-critique-plane" aria-label="Design Studio critique">
+              <div className="ds-plane-heading">
                 <Icon name="sparkles" size={14} />
                 <strong>{studioState.lastCritique ? `Gate ${studioState.lastCritique.gate} at ${studioState.lastCritique.score}/10` : 'Critique not run'}</strong>
               </div>
-              <div className="od-critique-list">
+              <div className="ds-critique-list">
                 {(studioState.lastCritique?.panelists ?? []).map((panelist) => (
-                  <div key={panelist.id} className="od-critique-row">
+                  <div key={panelist.id} className="ds-critique-row">
                     <strong>{panelist.label}</strong>
                     <span>{panelist.score}/10</span>
                     <p>{panelist.finding}</p>
@@ -13203,23 +13203,23 @@ function OpenDesignStudioPane({
               </div>
             </section>
           ) : (
-            <section className="od-research-plane" aria-label="Design Studio research">
-              <div className="od-plane-heading">
+            <section className="ds-research-plane" aria-label="Design Studio research">
+              <div className="ds-plane-heading">
                 <Icon name="search" size={14} />
                 <strong>Captured research</strong>
               </div>
-              <div className="od-research-list">
+              <div className="ds-research-list">
                 {researchInventory.sources.map((source) => (
-                  <a key={`${source.product}:${source.title}`} href={source.url} target="_blank" rel="noreferrer" className="od-research-row">
+                  <a key={`${source.product}:${source.title}`} href={source.url} target="_blank" rel="noreferrer" className="ds-research-row">
                     <span>{source.product}</span>
                     <strong>{source.title}</strong>
                     <small>{source.features.join(' / ')}</small>
                   </a>
                 ))}
               </div>
-              <div className="od-research-list od-screenshot-list">
+              <div className="ds-research-list ds-screenshot-list">
                 {researchInventory.screenshotReferences.map((screenshot) => (
-                  <a key={`${screenshot.product}:${screenshot.label}`} href={screenshot.url} target="_blank" rel="noreferrer" className="od-research-row">
+                  <a key={`${screenshot.product}:${screenshot.label}`} href={screenshot.url} target="_blank" rel="noreferrer" className="ds-research-row">
                     <span>{screenshot.product}</span>
                     <strong>{screenshot.label}</strong>
                     <small>{screenshot.userFlow}</small>
@@ -13230,19 +13230,19 @@ function OpenDesignStudioPane({
           )}
         </main>
 
-        <aside className="od-token-rail" aria-label="Design Studio token rail">
-          <div className="od-rail-header">
+        <aside className="ds-token-rail" aria-label="Design Studio token rail">
+          <div className="ds-rail-header">
             <Icon name="slidersHorizontal" size={14} />
             <strong>Directions</strong>
           </div>
-          <div className="od-direction-list">
-            {OPEN_DESIGN_DIRECTIONS.map((direction) => (
-              <div key={direction.id} className={`od-direction-row${direction.id === studioState.directionId ? ' is-active' : ''}`}>
+          <div className="ds-direction-list">
+            {DESIGN_STUDIO_DIRECTIONS.map((direction) => (
+              <div key={direction.id} className={`ds-direction-row${direction.id === studioState.directionId ? ' is-active' : ''}`}>
                 <button
                   type="button"
                   aria-label={`Select ${direction.label} direction`}
                   title={`Select ${direction.label}`}
-                  onClick={() => markStudioStateDirty((current) => selectOpenDesignDirection(current, direction.id as OpenDesignDirectionId))}
+                  onClick={() => markStudioStateDirty((current) => selectDesignStudioDirection(current, direction.id as DesignStudioDirectionId))}
                 >
                   <span style={{ background: direction.palette.accent }} />
                 </button>
@@ -13253,7 +13253,7 @@ function OpenDesignStudioPane({
               </div>
             ))}
           </div>
-          <div className="od-status-line" aria-live="polite">
+          <div className="ds-status-line" aria-live="polite">
             <Icon name="save" size={13} />
             <span>{status}</span>
           </div>
@@ -13263,60 +13263,60 @@ function OpenDesignStudioPane({
   );
 }
 
-function OpenDesignApprovalCompositionSample({
+function DesignStudioApprovalCompositionSample({
   composition,
   direction,
   state,
 }: {
-  composition: OpenDesignApprovalComposition;
-  direction: (typeof OPEN_DESIGN_DIRECTIONS)[number];
-  state: OpenDesignStudioState;
+  composition: DesignStudioApprovalComposition;
+  direction: (typeof DESIGN_STUDIO_DIRECTIONS)[number];
+  state: DesignStudioState;
 }) {
   return (
     <section
-      className="od-approval-composition"
+      className="ds-approval-composition"
       aria-label="Design Studio approval composition sample"
       style={{
-        '--od-sample-canvas': direction.palette.canvas,
-        '--od-sample-surface': direction.palette.surface,
-        '--od-sample-raised': direction.palette.surfaceRaised,
-        '--od-sample-text': direction.palette.text,
-        '--od-sample-muted': direction.palette.muted,
-        '--od-sample-accent': direction.palette.accent,
-        '--od-sample-border': direction.palette.border,
-        '--od-sample-radius': `${state.radius}px`,
+        '--ds-sample-canvas': direction.palette.canvas,
+        '--ds-sample-surface': direction.palette.surface,
+        '--ds-sample-raised': direction.palette.surfaceRaised,
+        '--ds-sample-text': direction.palette.text,
+        '--ds-sample-muted': direction.palette.muted,
+        '--ds-sample-accent': direction.palette.accent,
+        '--ds-sample-border': direction.palette.border,
+        '--ds-sample-radius': `${state.radius}px`,
       } as CSSProperties}
     >
-      <div className="od-composition-copy">
+      <div className="ds-composition-copy">
         <span>Aggregate sample</span>
         <strong>{composition.title}</strong>
         <small>{composition.description}</small>
       </div>
-      <div className="od-composition-frame" aria-hidden="true">
-        <div className="od-composition-rail">
+      <div className="ds-composition-frame" aria-hidden="true">
+        <div className="ds-composition-rail">
           <i />
           <i />
           <i />
           <i />
         </div>
-        <div className="od-composition-canvas">
-          <div className="od-composition-topline">
+        <div className="ds-composition-canvas">
+          <div className="ds-composition-topline">
             <b />
             <i />
           </div>
-          <div className="od-composition-message od-composition-message--user" />
-          <div className="od-composition-message od-composition-message--agent" />
-          <div className="od-composition-tool" />
-          <div className="od-composition-input" />
+          <div className="ds-composition-message ds-composition-message--user" />
+          <div className="ds-composition-message ds-composition-message--agent" />
+          <div className="ds-composition-tool" />
+          <div className="ds-composition-input" />
         </div>
-        <div className="od-composition-inspector">
+        <div className="ds-composition-inspector">
           <i />
           <i />
           <i />
           <i />
         </div>
       </div>
-      <div className="od-composition-region-list">
+      <div className="ds-composition-region-list">
         {composition.regions.map((region) => (
           <span key={region.id}>
             <strong>{region.label}</strong>
@@ -13328,38 +13328,38 @@ function OpenDesignApprovalCompositionSample({
   );
 }
 
-function OpenDesignTokenVisualSample({
+function DesignStudioTokenVisualSample({
   direction,
   item,
   radius,
 }: {
-  direction: (typeof OPEN_DESIGN_DIRECTIONS)[number];
-  item: OpenDesignTokenReviewItem;
+  direction: (typeof DESIGN_STUDIO_DIRECTIONS)[number];
+  item: DesignStudioTokenReviewItem;
   radius: number;
 }) {
   const style = {
-    '--od-sample-canvas': direction.palette.canvas,
-    '--od-sample-surface': direction.palette.surface,
-    '--od-sample-raised': direction.palette.surfaceRaised,
-    '--od-sample-text': direction.palette.text,
-    '--od-sample-muted': direction.palette.muted,
-    '--od-sample-accent': direction.palette.accent,
-    '--od-sample-border': direction.palette.border,
-    '--od-sample-radius': `${radius}px`,
-    '--od-sample-display': direction.typography.display,
-    '--od-sample-ui': direction.typography.ui,
-    '--od-sample-mono': direction.typography.mono,
+    '--ds-sample-canvas': direction.palette.canvas,
+    '--ds-sample-surface': direction.palette.surface,
+    '--ds-sample-raised': direction.palette.surfaceRaised,
+    '--ds-sample-text': direction.palette.text,
+    '--ds-sample-muted': direction.palette.muted,
+    '--ds-sample-accent': direction.palette.accent,
+    '--ds-sample-border': direction.palette.border,
+    '--ds-sample-radius': `${radius}px`,
+    '--ds-sample-display': direction.typography.display,
+    '--ds-sample-ui': direction.typography.ui,
+    '--ds-sample-mono': direction.typography.mono,
   } as CSSProperties;
 
   return (
     <div
-      className={`od-token-visual od-token-visual--${item.sample.kind}`}
+      className={`ds-token-visual ds-token-visual--${item.sample.kind}`}
       aria-label={`${item.label} visual sample`}
       style={style}
     >
       <span>{item.sample.visualLabel}</span>
       {item.sample.kind === 'palette' ? (
-        <div className="od-visual-palette">
+        <div className="ds-visual-palette">
           {[
             direction.palette.canvas,
             direction.palette.surface,
@@ -13370,19 +13370,19 @@ function OpenDesignTokenVisualSample({
           ].map((value) => <i key={value} style={{ background: value }} />)}
         </div>
       ) : item.sample.kind === 'spacing' ? (
-        <div className="od-visual-spacing">
+        <div className="ds-visual-spacing">
           <i />
           <i />
           <i />
         </div>
       ) : item.sample.kind === 'radius' ? (
-        <div className="od-visual-radius">
+        <div className="ds-visual-radius">
           <i />
           <i />
           <i />
         </div>
       ) : item.sample.kind === 'component' ? (
-        <div className="od-visual-component">
+        <div className="ds-visual-component">
           <button type="button" aria-label={`${item.label} sample primary action`} tabIndex={-1}>
             <Icon name="sparkles" size={12} />
           </button>
@@ -13392,13 +13392,13 @@ function OpenDesignTokenVisualSample({
           <small>Run</small>
         </div>
       ) : item.sample.kind === 'brand' ? (
-        <div className="od-visual-brand">
+        <div className="ds-visual-brand">
           <Icon name="slidersHorizontal" size={16} />
           <strong>{direction.label}</strong>
           <small>Use system</small>
         </div>
       ) : (
-        <div className="od-visual-type">
+        <div className="ds-visual-type">
           <strong>Aa</strong>
           <small>{direction.typography.ui}</small>
           <code>const token = value;</code>
@@ -13423,11 +13423,11 @@ function ExtensionFeaturePane({
   artifacts: AgentArtifact[];
   artifactCount: number;
   onWorkspaceFilesChange: (files: WorkspaceFile[]) => void;
-  onProjectArtifactSave: (input: OpenDesignProjectArtifactInput, existingArtifactId?: string | null) => AgentArtifact;
+  onProjectArtifactSave: (input: DesignStudioProjectArtifactInput, existingArtifactId?: string | null) => AgentArtifact;
 }) {
-  if (extension.manifest.id === 'agent-harness.ext.open-design') {
+  if (extension.manifest.id === 'agent-harness.ext.design-studio') {
     return (
-      <OpenDesignStudioPane
+      <DesignStudioPane
         workspaceName={workspaceName}
         artifacts={artifacts}
         onProjectArtifactSave={onProjectArtifactSave}
@@ -14432,7 +14432,7 @@ function makeAgentHook(basePath: string): { path: string; content: string } {
     path: `${basePath}/.agents/hooks/pre-tool.sh`,
     content: [
       '#!/usr/bin/env bash',
-      '# Pre-tool hook compatible with Claude Code, OpenAI Codex, GitHub Copilot',
+      '# Pre-tool hook compatible with agent, OpenAI Codex, GitHub Copilot',
       '# Environment variables:',
       '#   AGENT_TOOL  - name of the tool being called',
       '#   AGENT_INPUT - JSON-encoded input to the tool',
@@ -15720,8 +15720,8 @@ function AgentBrowserApp() {
 
     if (activeArtifactPanelArtifact) {
       const path = activeArtifactPanelFile
-        ? `//artifacts/${activeArtifactPanelArtifact.id}/${activeArtifactPanelFile.path}`
-        : `//artifacts/${activeArtifactPanelArtifact.id}`;
+        ? `//workspace/artifacts/${activeArtifactPanelArtifact.id}/${activeArtifactPanelFile.path}`
+        : `//workspace/artifacts/${activeArtifactPanelArtifact.id}`;
       panes.push({
         id: `artifact:${activeArtifactPanelArtifact.id}:${activeArtifactPanelFile?.path ?? ''}`,
         paneType: 'artifact',
@@ -17364,7 +17364,7 @@ function AgentBrowserApp() {
       const artifact = activeArtifacts.find((candidate) => candidate.id === artifactId);
       const file = artifact?.files.find((candidate) => candidate.path === node.artifactFilePath);
       return {
-        location: node.artifactFilePath ? `//artifacts/${artifactId}/${node.artifactFilePath}` : `//artifacts/${artifactId}`,
+        location: node.artifactFilePath ? `//workspace/artifacts/${artifactId}/${node.artifactFilePath}` : `//workspace/artifacts/${artifactId}`,
         sizeLabel: file ? `${file.content.length} bytes` : artifact ? `${artifact.files.length} files` : 'N/A',
         createdAt: artifact ? Date.parse(artifact.createdAt) : now,
         modifiedAt: artifact ? Date.parse(artifact.updatedAt) : now,
@@ -17916,8 +17916,8 @@ function AgentBrowserApp() {
     return updatedArtifact;
   }, [activeArtifacts, activeWorkspace.name, activeWorkspaceId, openArtifactPanel, setArtifactsByWorkspace, setToast]);
 
-  const saveOpenDesignProjectArtifact = useCallback((
-    input: OpenDesignProjectArtifactInput,
+  const saveDesignStudioProjectArtifact = useCallback((
+    input: DesignStudioProjectArtifactInput,
     existingArtifactId?: string | null,
   ): AgentArtifact => {
     const existingArtifact = existingArtifactId
@@ -19283,7 +19283,7 @@ function AgentBrowserApp() {
       );
     }
     if (activePanel === 'extensions') {
-      if (activeExtensionFeature?.manifest.id === 'agent-harness.ext.open-design') {
+      if (activeExtensionFeature?.manifest.id === 'agent-harness.ext.design-studio') {
         return (
           <DesignStudioProjectsPanel
             artifacts={activeArtifacts}
@@ -19446,7 +19446,7 @@ function AgentBrowserApp() {
                   ...current,
                   [activeWorkspaceId]: files,
                 }))}
-                onProjectArtifactSave={saveOpenDesignProjectArtifact}
+                onProjectArtifactSave={saveDesignStudioProjectArtifact}
               />
           ) : selectedExtension ? (
             <ExtensionDetailPage

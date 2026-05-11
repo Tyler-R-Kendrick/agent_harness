@@ -22,6 +22,7 @@
       "@agent-harness/ext-agents-md": ["../ext/harness/agents-md/src/index.ts"],
       "@agent-harness/ext-artifacts": ["../ext/ide/artifacts/src/index.ts"],
       "@agent-harness/ext-design-md": ["../ext/ide/design-md/src/index.ts"],
+      "@agent-harness/ext-design-studio": ["../ext/ide/design-studio/src/index.ts"],
       "@agent-harness/ext-symphony": ["../ext/runtime/symphony/src/index.ts"],
       "@agent-harness/workgraph": ["../lib/workgraph/src/index.ts"],
       "@agent-harness/ext-workflow-canvas": ["../ext/ide/workflow-canvas/src/index.ts"],

@@ -579,7 +579,7 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Design Studio extension' })).not.toBeInTheDocument();
     expect(within(marketplace).getByRole('button', { name: 'Enable Design Studio' })).toBeInTheDocument();
     expect(window.localStorage.getItem('agent-browser.default-extension-openfeature-flags')).toContain(
-      'agent-harness.extensions.agent-harness.ext.open-design.enabled',
+      'agent-harness.extensions.agent-harness.ext.design-studio.enabled',
     );
   });
 
@@ -1987,7 +1987,7 @@ describe('App', () => {
     });
 
     expect(screen.queryByLabelText('Designer')).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Claude Design' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Design Studio' })).not.toBeInTheDocument();
   });
 
   it('renders model providers in a dedicated Models sidepanel instead of Settings', async () => {
@@ -2111,9 +2111,9 @@ styles:
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
-    expect(screen.queryByLabelText('Claude Design theme')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Apply Claude Design theme to Agent Browser')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Generated Claude Design CSS')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Design Studio theme')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Apply Design Studio theme to Agent Browser')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Generated Design Studio CSS')).not.toBeInTheDocument();
     expect(document.documentElement.style.getPropertyValue('--app-bg')).toBe('');
   });
 

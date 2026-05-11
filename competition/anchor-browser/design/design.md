@@ -52,7 +52,7 @@ enterprise_controls:
 - Authentication infrastructure can feel invasive or high-risk for teams not ready to delegate logged-in third-party account access.
 - Credit, proxy, browser-hour, and step pricing may be hard to forecast for workflows that hit CAPTCHA, geolocation, or long-running sessions.
 
-## Screenshot And Open Design References
+## Screenshot And Design Studio References
 
 - Marketing and pricing surface: https://anchorbrowser.io/
 - Docs home and playground entry: https://docs.anchorbrowser.io/introduction

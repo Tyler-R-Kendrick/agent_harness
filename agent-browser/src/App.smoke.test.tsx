@@ -908,7 +908,7 @@ describe('App smoke coverage', () => {
     expect(within(detail).getByRole('tab', { name: 'Features' })).toBeInTheDocument();
     expect(within(detail).getByRole('heading', { name: 'README.md' })).toBeInTheDocument();
     expect(within(detail).getByText('Identifier')).toBeInTheDocument();
-    expect(within(detail).getByText('agent-harness.ext.open-design')).toBeInTheDocument();
+    expect(within(detail).getByText('agent-harness.ext.design-studio')).toBeInTheDocument();
   });
 
   it('merges workspace plugin manifests into installed extensions instead of a separate pane', async () => {
@@ -989,11 +989,11 @@ describe('App smoke coverage', () => {
     await act(async () => {
       fireEvent.click(within(studio).getByRole('button', { name: 'Compile DESIGN.md' }));
     });
-    const generatedFiles = screen.getByRole('region', { name: 'Design Studio generated files' });
-    expect(generatedFiles).toHaveTextContent('//artifacts/design-studio-research-design-system/DESIGN.md');
-    expect(generatedFiles).toHaveTextContent('//artifacts/design-studio-research-design-system/research.json');
-    expect(generatedFiles).toHaveTextContent('//artifacts/design-studio-research-design-system/token-review.json');
-    expect(generatedFiles).not.toHaveTextContent('design/open-design');
+    const generatedFiles = screen.getByRole('region', { name: 'Design Studio generated artifacts' });
+    expect(generatedFiles).toHaveTextContent('//workspace/artifacts/design-studio-research-design-system/DESIGN.md');
+    expect(generatedFiles).toHaveTextContent('//workspace/artifacts/design-studio-research-design-system/research.json');
+    expect(generatedFiles).toHaveTextContent('//workspace/artifacts/design-studio-research-design-system/token-review.json');
+    expect(generatedFiles).not.toHaveTextContent(['design', 'design-studio'].join('/'));
     expect(screen.getByRole('region', { name: 'Design Studio projects' })).toHaveTextContent('Research Design System');
     expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('## Source Inventory');
     expect(screen.getByLabelText('DESIGN.md preview')).toHaveTextContent('## Token Review And Approval');
@@ -1110,7 +1110,7 @@ describe('App smoke coverage', () => {
     fireEvent.click(artifactFileButton!);
 
     expect(screen.getByRole('region', { name: 'Artifact viewer' })).toBeInTheDocument();
-    expect(screen.getByText('//artifacts/artifact-launch-review/review-panel.md')).toBeInTheDocument();
+    expect(screen.getByText('//workspace/artifacts/artifact-launch-review/review-panel.md')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Native text renderer' })).toHaveTextContent('Ready for workspace-tree review.');
   });
 

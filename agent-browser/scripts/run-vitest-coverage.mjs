@@ -12,6 +12,11 @@ const COVERAGE_TEST_ROOTS = ['src', 'server'];
 const COVERAGE_BATCH_SIZE = 25;
 const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
 
+export function resolveCoverageBatchConcurrency(env = process.env) {
+  const parsed = Number.parseInt(String(env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY ?? ''), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_COVERAGE_BATCH_CONCURRENCY;
+}
+
 function defaultReportsDirectory() {
   return process.env.AGENT_BROWSER_COVERAGE_DIR
     ?? path.join(tmpdir(), 'agent-browser-coverage', `agent-browser-${process.pid}`);
@@ -154,7 +159,7 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
       label: `Vitest coverage batch ${index + 1}/${coverageBatches.length}`,
       args: buildVitestCoverageArgs([], path.join(reportsDirectory, `batch-${index + 1}`), files),
     })),
-    DEFAULT_COVERAGE_BATCH_CONCURRENCY,
+    resolveCoverageBatchConcurrency(),
   );
   if (coverageExitCode !== 0) {
     return coverageExitCode;

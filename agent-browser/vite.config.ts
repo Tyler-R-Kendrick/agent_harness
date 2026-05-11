@@ -103,6 +103,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../ext/ide/design-md/src/index.ts'),
       },
       {
+        find: '@agent-harness/ext-design-studio',
+        replacement: path.resolve(__dirname, '../ext/ide/design-studio/src/index.ts'),
+      },
+      {
         find: '@agent-harness/ext-symphony',
         replacement: path.resolve(__dirname, '../ext/runtime/symphony/src/index.ts'),
       },

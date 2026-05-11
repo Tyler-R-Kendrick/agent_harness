@@ -71,7 +71,7 @@ const initialSetupInput: DesignSystemSetupInput = {
 const generationSteps = [
   { title: 'Updated todos', detail: '+ Explore agent-browser UI and DESIGN.md' },
   { title: 'Reading source materials', detail: 'Reading App.css, DESIGN.md, icons, and screenshots' },
-  { title: 'Searching visual references', detail: 'Comparing Claude Design setup, review, files, and sketch flows' },
+  { title: 'Searching visual references', detail: 'Comparing Design Studio setup, review, files, and sketch flows' },
   { title: 'Viewing image metadata', detail: 'Sampling canvas, shell, toolbar, and share menu requirements' },
   { title: 'Set project title', detail: 'Agent Browser Design System' },
 ];
@@ -82,7 +82,7 @@ const shareActions: Array<{ kind: DesignerExportKind; label: string; icon: typeo
   { kind: 'pptx', label: 'Export as PPTX...', icon: FileText },
   { kind: 'canva', label: 'Send to Canva...', icon: Upload },
   { kind: 'html', label: 'Export as standalone HTML', icon: FileCode2 },
-  { kind: 'handoff', label: 'Handoff to Claude Code...', icon: ArrowUpRight },
+  { kind: 'handoff', label: 'Agent handoff...', icon: ArrowUpRight },
 ];
 
 export function DesignerPanel({
@@ -305,7 +305,7 @@ function HomeRail({
       <header className="designer-brand">
         <Palette size={24} />
         <div>
-          <h1>Claude Design</h1>
+          <h1>Design Studio</h1>
           <p>by Anthropic Labs <span>Research Preview</span></p>
         </div>
       </header>
@@ -396,7 +396,7 @@ function HomeStage({
           </div>
           <article className="designer-tutorial-card">
             <div className="tutorial-illustration" />
-            <strong>Learn about Claude Design</strong>
+            <strong>Learn about Design Studio</strong>
             <span>Quick tutorial</span>
           </article>
           {projectName ? <p className="designer-prompt-chip">Prompt ready: {projectName}</p> : null}
@@ -751,9 +751,9 @@ function ReviewStage({
       </article>
       <div className="designer-theme-review">
         <label>
-          <span>Claude Design theme</span>
+          <span>Design Studio theme</span>
           <select
-            aria-label="Claude Design theme"
+            aria-label="Design Studio theme"
             value={designThemeSettings.themeId}
             onChange={(event) => onThemeSettingsChange({ ...designThemeSettings, themeId: event.target.value })}
           >
@@ -762,7 +762,7 @@ function ReviewStage({
         </label>
         <label>
           <input
-            aria-label="Apply Claude Design theme to Agent Browser"
+            aria-label="Apply Design Studio theme to Agent Browser"
             type="checkbox"
             checked={designThemeSettings.applyToShell}
             onChange={(event) => onThemeSettingsChange({ ...designThemeSettings, applyToShell: event.target.checked })}
@@ -798,7 +798,7 @@ function ReviewStage({
       <div className="designer-feedback-list">
         {manifest?.review.feedback.map((item) => <p key={item}>{item}</p>)}
       </div>
-      <textarea className="designer-css-output" aria-label="Generated Claude Design CSS" readOnly value={designCss?.css ?? ''} />
+      <textarea className="designer-css-output" aria-label="Generated Design Studio CSS" readOnly value={designCss?.css ?? ''} />
     </section>
   );
 }

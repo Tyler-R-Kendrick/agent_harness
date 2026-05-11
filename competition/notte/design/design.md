@@ -53,7 +53,7 @@ trust_controls:
 - A "complete stack" can become platform lock-in if functions, vaults, identities, and studio are all adopted together.
 - The product is developer/platform oriented, so it does not directly solve the human-facing browser workspace problem.
 
-## Screenshot And Open Design References
+## Screenshot And Design Studio References
 
 - Marketing surface and plan cards: https://www.notte.cc/
 - Platform concept map: https://docs.notte.cc/concepts

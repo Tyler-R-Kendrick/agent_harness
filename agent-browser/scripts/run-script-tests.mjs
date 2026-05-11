@@ -310,6 +310,10 @@ async function main() {
   assert.match(coverageRunnerScript, /runVitestCommandsConcurrently/);
   assert.match(coverageRunnerScript, /runVitestCommandWithRetry/);
   assert.match(coverageRunnerScript, /retrying once/);
+  assert.equal(coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '1' }), 1);
+  assert.equal(coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: ' 3 ' }), 3);
+  assert.equal(coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '0' }), 4);
+  assert.equal(coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: 'nope' }), 4);
   assert.deepEqual(
     coverageRunner.buildVitestCoverageArgs(['--reporter=dot'], '../output/coverage/agent-browser-test'),
     [

@@ -1,13 +1,13 @@
 import type { HarnessPlugin } from 'harness-core';
 
-export type OpenDesignDirectionId =
+export type DesignStudioDirectionId =
   | 'editorial-monocle'
   | 'modern-minimal'
   | 'tech-utility'
   | 'brutalist-experimental'
   | 'warm-soft';
 
-export type OpenDesignExportKind =
+export type DesignStudioExportKind =
   | 'zip'
   | 'pdf'
   | 'pptx'
@@ -17,7 +17,7 @@ export type OpenDesignExportKind =
   | 'handoff'
   | 'cloudflare';
 
-export interface OpenDesignBrief {
+export interface DesignStudioBrief {
   projectName: string;
   audience: string;
   surface: string;
@@ -29,8 +29,8 @@ export interface OpenDesignBrief {
   notes: string;
 }
 
-export interface OpenDesignDirection {
-  id: OpenDesignDirectionId;
+export interface DesignStudioDirection {
+  id: DesignStudioDirectionId;
   label: string;
   description: string;
   palette: {
@@ -50,49 +50,49 @@ export interface OpenDesignDirection {
   };
 }
 
-export interface OpenDesignResearchSource {
-  product: 'Claude Design' | 'Open Design';
+export interface DesignStudioResearchSource {
+  product: 'Design Studio' | 'Design Studio';
   title: string;
   url: string;
   capturedAt: string;
   features: string[];
 }
 
-export interface OpenDesignScreenshotReference {
-  product: 'Claude Design' | 'Open Design';
+export interface DesignStudioScreenshotReference {
+  product: 'Design Studio' | 'Design Studio';
   label: string;
   url: string;
   userFlow: string;
 }
 
-export interface OpenDesignResearchInventory {
-  sources: OpenDesignResearchSource[];
-  screenshotReferences: OpenDesignScreenshotReference[];
+export interface DesignStudioResearchInventory {
+  sources: DesignStudioResearchSource[];
+  screenshotReferences: DesignStudioScreenshotReference[];
   userFlows: string[];
   studioFeatures: string[];
   designMdRequirements: string[];
 }
 
-export interface OpenDesignCritiquePanelist {
+export interface DesignStudioCritiquePanelist {
   id: string;
   label: string;
   score: number;
   finding: string;
 }
 
-export interface OpenDesignCritiqueResult {
+export interface DesignStudioCritiqueResult {
   gate: 'pass' | 'revise';
   score: number;
-  panelists: OpenDesignCritiquePanelist[];
+  panelists: DesignStudioCritiquePanelist[];
   requiredFixes: string[];
 }
 
-export type OpenDesignTokenReviewStatus = 'needs-review' | 'approved' | 'changes-requested';
-export type OpenDesignApprovalAction = 'approved' | 'changes-requested' | 'published' | 'unpublished';
-export type OpenDesignTokenReviewSampleKind = 'type-scale' | 'palette' | 'spacing' | 'radius' | 'component' | 'brand';
+export type DesignStudioTokenReviewStatus = 'needs-review' | 'approved' | 'changes-requested';
+export type DesignStudioApprovalAction = 'approved' | 'changes-requested' | 'published' | 'unpublished';
+export type DesignStudioTokenReviewSampleKind = 'type-scale' | 'palette' | 'spacing' | 'radius' | 'component' | 'brand';
 
-export interface OpenDesignTokenReviewSample {
-  kind: OpenDesignTokenReviewSampleKind;
+export interface DesignStudioTokenReviewSample {
+  kind: DesignStudioTokenReviewSampleKind;
   visualLabel: string;
   title: string;
   description: string;
@@ -100,30 +100,30 @@ export interface OpenDesignTokenReviewSample {
   cues: string[];
 }
 
-export interface OpenDesignTokenReviewItem {
+export interface DesignStudioTokenReviewItem {
   id: string;
   group: 'type' | 'colors' | 'spacing' | 'components' | 'brand';
   label: string;
   currentValue: string;
   proposedValue: string;
-  status: OpenDesignTokenReviewStatus;
+  status: DesignStudioTokenReviewStatus;
   reviewer: string;
   note: string;
   revision: number;
   source: string;
-  sample: OpenDesignTokenReviewSample;
+  sample: DesignStudioTokenReviewSample;
 }
 
-export interface OpenDesignApprovalEvent {
+export interface DesignStudioApprovalEvent {
   id: string;
   itemId: string;
-  action: OpenDesignApprovalAction;
+  action: DesignStudioApprovalAction;
   reviewer: string;
   note: string;
   createdAt: string;
 }
 
-export interface OpenDesignApprovalSummary {
+export interface DesignStudioApprovalSummary {
   total: number;
   approved: number;
   needsReview: number;
@@ -132,61 +132,61 @@ export interface OpenDesignApprovalSummary {
   status: 'reviewing' | 'ready' | 'published';
 }
 
-export interface OpenDesignApprovalCompositionRegion {
+export interface DesignStudioApprovalCompositionRegion {
   id: string;
   label: string;
   standard: string;
   sampleTokens: string[];
 }
 
-export interface OpenDesignApprovalComposition {
+export interface DesignStudioApprovalComposition {
   title: string;
   description: string;
-  regions: OpenDesignApprovalCompositionRegion[];
+  regions: DesignStudioApprovalCompositionRegion[];
 }
 
-export interface OpenDesignWorkspaceFile {
+export interface DesignStudioArtifactFile {
   path: string;
   content: string;
   updatedAt: string;
   mediaType?: string;
 }
 
-export interface OpenDesignProjectArtifactInput {
+export interface DesignStudioProjectArtifactInput {
   id: string;
   title: string;
   description: string;
-  kind: 'open-design-project';
+  kind: 'design-studio-project';
   references: string[];
-  files: OpenDesignWorkspaceFile[];
+  files: DesignStudioArtifactFile[];
 }
 
-export interface OpenDesignArtifactNameCandidate {
+export interface DesignStudioArtifactNameCandidate {
   id: string;
   title?: string | null;
 }
 
-export interface OpenDesignProjectNameCollision {
+export interface DesignStudioProjectNameCollision {
   id: string;
   title: string;
   field: 'id' | 'title';
 }
 
-export interface OpenDesignStudioState {
+export interface DesignStudioState {
   workspaceName: string;
-  brief: OpenDesignBrief;
-  directionId: OpenDesignDirectionId;
+  brief: DesignStudioBrief;
+  directionId: DesignStudioDirectionId;
   fidelity: 'wireframe' | 'high';
   density: number;
   radius: number;
-  lastCritique: OpenDesignCritiqueResult | null;
-  tokenReviews: OpenDesignTokenReviewItem[];
-  approvalEvents: OpenDesignApprovalEvent[];
+  lastCritique: DesignStudioCritiqueResult | null;
+  tokenReviews: DesignStudioTokenReviewItem[];
+  approvalEvents: DesignStudioApprovalEvent[];
   published: boolean;
   defaultForWorkspace: boolean;
 }
 
-export const OPEN_DESIGN_DIRECTIONS: OpenDesignDirection[] = [
+export const DESIGN_STUDIO_DIRECTIONS: DesignStudioDirection[] = [
   {
     id: 'editorial-monocle',
     label: 'Editorial Monocle',
@@ -289,7 +289,7 @@ export const OPEN_DESIGN_DIRECTIONS: OpenDesignDirection[] = [
   },
 ];
 
-const EMPTY_BRIEF: OpenDesignBrief = {
+const EMPTY_BRIEF: DesignStudioBrief = {
   projectName: '',
   audience: '',
   surface: '',
@@ -301,105 +301,105 @@ const EMPTY_BRIEF: OpenDesignBrief = {
   notes: '',
 };
 
-const RESEARCH_INVENTORY: OpenDesignResearchInventory = {
+const RESEARCH_INVENTORY: DesignStudioResearchInventory = {
   sources: [
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       title: 'Anthropic launch announcement',
-      url: 'https://www.anthropic.com/news/claude-design-anthropic-labs',
+      url: 'https://www.anthropic.com/news/design-studio-anthropic-labs',
       capturedAt: '2026-05-09',
       features: ['chat and canvas loop', 'inline comments', 'direct edits', 'custom sliders', 'team design systems'],
     },
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       title: 'Claude Help Center getting started guide',
-      url: 'https://support.claude.com/en/articles/14604416-get-started-with-claude-design',
+      url: 'https://support.claude.com/en/articles/14604416-get-started-with-design-studio',
       capturedAt: '2026-05-09',
       features: ['project context', 'codebase and design file intake', 'comments', 'versions', 'export and sharing'],
     },
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       title: 'Claude Help Center design-system setup guide',
-      url: 'https://support.claude.com/en/articles/14604397-set-up-your-design-system-in-claude-design',
+      url: 'https://support.claude.com/en/articles/14604397-set-up-your-design-system-in-design-studio',
       capturedAt: '2026-05-10',
       features: ['design-system extraction', 'review generated UI kit', 'published toggle', 'organization default', 'remix updates'],
     },
     {
-      product: 'Claude Design',
-      title: 'Claude Design design-system review walkthrough',
-      url: 'https://www.getmasset.com/resources/blog/building-a-landing-page-with-claude-design',
+      product: 'Design Studio',
+      title: 'Design Studio design-system review walkthrough',
+      url: 'https://www.getmasset.com/resources/blog/building-a-landing-page-with-design-studio',
       capturedAt: '2026-05-10',
       features: ['setup screenshots', 'missing font warning', 'looks good approval', 'needs work revision', 'published and default readiness'],
     },
     {
-      product: 'Open Design',
-      title: 'Open Design README demo and feature inventory',
-      url: 'https://github.com/nexu-io/open-design',
+      product: 'Design Studio',
+      title: 'Design Studio README demo and feature inventory',
+      url: 'https://github.com/nexu-io/design-studio',
       capturedAt: '2026-05-09',
       features: ['skill picker', 'discovery form', 'direction picker', 'sandboxed preview', 'design-system library'],
     },
     {
-      product: 'Open Design',
-      title: 'Open Design 0.6.0 release notes',
-      url: 'https://github.com/nexu-io/open-design/releases/tag/open-design-v0.6.0',
+      product: 'Design Studio',
+      title: 'Design Studio 0.6.0 release notes',
+      url: 'https://github.com/nexu-io/design-studio/releases/tag/design-studio-v0.6.0',
       capturedAt: '2026-05-09',
       features: ['external MCP client', 'Cloudflare artifact deployment', 'top bar redesign', 'direct PDF export', 'agent research search'],
     },
     {
-      product: 'Open Design',
-      title: 'Open Design 0.5.0 release notes',
-      url: 'https://github.com/nexu-io/open-design/releases/tag/open-design-v0.5.0',
+      product: 'Design Studio',
+      title: 'Design Studio 0.5.0 release notes',
+      url: 'https://github.com/nexu-io/design-studio/releases/tag/design-studio-v0.5.0',
       capturedAt: '2026-05-09',
       features: ['live dashboards', 'inspect mode', 'accent color control', 'critique theater', 'transcript export'],
     },
   ],
   screenshotReferences: [
     {
-      product: 'Open Design',
+      product: 'Design Studio',
       label: 'Entry view',
-      url: 'https://github.com/nexu-io/open-design/raw/main/docs/screenshots/01-entry-view.png',
+      url: 'https://github.com/nexu-io/design-studio/raw/main/docs/screenshots/01-entry-view.png',
       userFlow: 'Choose skill, design system, fidelity, then create',
     },
     {
-      product: 'Open Design',
+      product: 'Design Studio',
       label: 'Turn-1 discovery form',
-      url: 'https://github.com/nexu-io/open-design/raw/main/docs/screenshots/02-question-form.png',
+      url: 'https://github.com/nexu-io/design-studio/raw/main/docs/screenshots/02-question-form.png',
       userFlow: 'Lock brief, audience, brand context, and reference files before generation',
     },
     {
-      product: 'Open Design',
+      product: 'Design Studio',
       label: 'Direction picker',
-      url: 'https://github.com/nexu-io/open-design/raw/main/docs/screenshots/03-direction-picker.png',
+      url: 'https://github.com/nexu-io/design-studio/raw/main/docs/screenshots/03-direction-picker.png',
       userFlow: 'Select deterministic palette and font system instead of freeform styling',
     },
     {
-      product: 'Open Design',
+      product: 'Design Studio',
       label: 'Sandboxed preview',
-      url: 'https://github.com/nexu-io/open-design/raw/main/docs/screenshots/05-preview-iframe.png',
+      url: 'https://github.com/nexu-io/design-studio/raw/main/docs/screenshots/05-preview-iframe.png',
       userFlow: 'Review generated artifact with live todos, files, tweak mode, and share controls',
     },
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       label: 'Export menu',
-      url: 'https://support.claude.com/en/articles/14604416-get-started-with-claude-design',
-      userFlow: 'Export ZIP, PDF, PPTX, Canva, standalone HTML, or Claude Code handoff',
+      url: 'https://support.claude.com/en/articles/14604416-get-started-with-design-studio',
+      userFlow: 'Export ZIP, PDF, PPTX, Canva, standalone HTML, or agent handoff',
     },
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       label: 'Design system setup',
-      url: 'https://www.getmasset.com/images/blog/claude-design-setup-screen.png',
+      url: 'https://www.getmasset.com/images/blog/design-studio-setup-screen.png',
       userFlow: 'Collect company description, GitHub/code, local files, Figma, fonts, logos, and brand assets',
     },
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       label: 'Token review screen',
-      url: 'https://www.getmasset.com/images/blog/claude_design_looks_good.png',
+      url: 'https://www.getmasset.com/images/blog/design_studio_looks_good.png',
       userFlow: 'Review extracted type, color, spacing, component, and brand sections with Looks good or Needs work decisions',
     },
     {
-      product: 'Claude Design',
+      product: 'Design Studio',
       label: 'Published/default ready state',
-      url: 'https://www.getmasset.com/images/blog/claude_design_new_design.png',
+      url: 'https://www.getmasset.com/images/blog/design_studio_new_design.png',
       userFlow: 'Publish the approved design system and mark it as default before starting new projects',
     },
   ],
@@ -423,7 +423,7 @@ const RESEARCH_INVENTORY: OpenDesignResearchInventory = {
     'Preview canvas with device frames',
     'Inspector for color, spacing, type, density, and radius',
     'Design files browser and direct export artifacts',
-    'Claude Design-style token review queue with per-section approve or needs-work revisions',
+    'Design Studio-style token review queue with per-section approve or needs-work revisions',
     'Published/default governance before downstream projects consume the design system',
     'Five-panel critique gate for accessibility, brand fit, craft, hierarchy, and implementation',
   ],
@@ -435,7 +435,7 @@ const RESEARCH_INVENTORY: OpenDesignResearchInventory = {
   ],
 };
 
-export function createOpenDesignStudioState(options: Partial<OpenDesignStudioState> = {}): OpenDesignStudioState {
+export function createDesignStudioState(options: Partial<DesignStudioState> = {}): DesignStudioState {
   const directionId = options.directionId ?? 'tech-utility';
   const density = options.density ?? 4;
   const radius = options.radius ?? 6;
@@ -447,53 +447,53 @@ export function createOpenDesignStudioState(options: Partial<OpenDesignStudioSta
     density,
     radius,
     lastCritique: options.lastCritique ?? null,
-    tokenReviews: options.tokenReviews ? hydrateTokenReviewSamples(options.tokenReviews, directionId, density, radius) : createOpenDesignTokenReviewQueue(directionId, density, radius),
+    tokenReviews: options.tokenReviews ? hydrateTokenReviewSamples(options.tokenReviews, directionId, density, radius) : createDesignStudioTokenReviewQueue(directionId, density, radius),
     approvalEvents: options.approvalEvents ? clone(options.approvalEvents) : [],
     published: options.published ?? false,
     defaultForWorkspace: options.defaultForWorkspace ?? false,
   };
 }
 
-export function updateOpenDesignBrief(
-  state: OpenDesignStudioState,
-  patch: Partial<OpenDesignBrief>,
-): OpenDesignStudioState {
+export function updateDesignStudioBrief(
+  state: DesignStudioState,
+  patch: Partial<DesignStudioBrief>,
+): DesignStudioState {
   return { ...state, brief: { ...state.brief, ...patch } };
 }
 
-export function selectOpenDesignDirection(
-  state: OpenDesignStudioState,
-  directionId: OpenDesignDirectionId,
-): OpenDesignStudioState {
+export function selectDesignStudioDirection(
+  state: DesignStudioState,
+  directionId: DesignStudioDirectionId,
+): DesignStudioState {
   return {
     ...state,
     directionId,
     published: false,
-    tokenReviews: createOpenDesignTokenReviewQueue(directionId, state.density, state.radius),
+    tokenReviews: createDesignStudioTokenReviewQueue(directionId, state.density, state.radius),
   };
 }
 
-export function getOpenDesignResearchInventory(): OpenDesignResearchInventory {
+export function getDesignStudioResearchInventory(): DesignStudioResearchInventory {
   return clone(RESEARCH_INVENTORY);
 }
 
-export function createOpenDesignTokenReviewQueue(
-  directionId: OpenDesignDirectionId,
+export function createDesignStudioTokenReviewQueue(
+  directionId: DesignStudioDirectionId,
   density = 4,
   radius = 6,
-): OpenDesignTokenReviewItem[] {
+): DesignStudioTokenReviewItem[] {
   const direction = directionFor(directionId);
   return [
-    tokenReviewItem('type-display', 'type', 'Display type', 'Existing display type', `${direction.typography.display} / 28px / 650`, 'Claude Design review screen: Type', sampleForTokenReview('type-display', direction, density, radius)),
-    tokenReviewItem('color-core', 'colors', 'Core palette', 'Existing brand palette', `${direction.palette.canvas} canvas, ${direction.palette.accent} accent`, 'Claude Design review screen: Colors', sampleForTokenReview('color-core', direction, density, radius)),
-    tokenReviewItem('spacing-scale', 'spacing', 'Spacing scale', 'Existing spacing scale', `${Math.max(10, density * 3)}px md / ${Math.max(16, density * 5)}px lg`, 'Claude Design review screen: Spacing', sampleForTokenReview('spacing-scale', direction, density, radius)),
-    tokenReviewItem('radius-borders', 'spacing', 'Borders and radius', 'Existing radius', `${Math.max(2, radius - 2)}px sm / ${radius}px md / ${radius + 2}px lg`, 'Claude Design review screen: Borders & radius', sampleForTokenReview('radius-borders', direction, density, radius)),
-    tokenReviewItem('component-actions', 'components', 'Action components', 'Existing primary action', `Icon command, ${direction.palette.accent} fill, ${radius}px radius`, 'Claude Design review screen: Components', sampleForTokenReview('component-actions', direction, density, radius)),
-    tokenReviewItem('brand-voice', 'brand', 'Voice and iconography', 'Existing brand voice', `${direction.label}: ${direction.description}`, 'Claude Design review screen: Brand', sampleForTokenReview('brand-voice', direction, density, radius)),
+    tokenReviewItem('type-display', 'type', 'Display type', 'Existing display type', `${direction.typography.display} / 28px / 650`, 'Design Studio review screen: Type', sampleForTokenReview('type-display', direction, density, radius)),
+    tokenReviewItem('color-core', 'colors', 'Core palette', 'Existing brand palette', `${direction.palette.canvas} canvas, ${direction.palette.accent} accent`, 'Design Studio review screen: Colors', sampleForTokenReview('color-core', direction, density, radius)),
+    tokenReviewItem('spacing-scale', 'spacing', 'Spacing scale', 'Existing spacing scale', `${Math.max(10, density * 3)}px md / ${Math.max(16, density * 5)}px lg`, 'Design Studio review screen: Spacing', sampleForTokenReview('spacing-scale', direction, density, radius)),
+    tokenReviewItem('radius-borders', 'spacing', 'Borders and radius', 'Existing radius', `${Math.max(2, radius - 2)}px sm / ${radius}px md / ${radius + 2}px lg`, 'Design Studio review screen: Borders & radius', sampleForTokenReview('radius-borders', direction, density, radius)),
+    tokenReviewItem('component-actions', 'components', 'Action components', 'Existing primary action', `Icon command, ${direction.palette.accent} fill, ${radius}px radius`, 'Design Studio review screen: Components', sampleForTokenReview('component-actions', direction, density, radius)),
+    tokenReviewItem('brand-voice', 'brand', 'Voice and iconography', 'Existing brand voice', `${direction.label}: ${direction.description}`, 'Design Studio review screen: Brand', sampleForTokenReview('brand-voice', direction, density, radius)),
   ];
 }
 
-export function createOpenDesignApprovalComposition(state: OpenDesignStudioState): OpenDesignApprovalComposition {
+export function createDesignStudioApprovalComposition(state: DesignStudioState): DesignStudioApprovalComposition {
   const direction = directionFor(state.directionId);
   return {
     title: 'Agent Browser approval composition',
@@ -527,7 +527,7 @@ export function createOpenDesignApprovalComposition(state: OpenDesignStudioState
   };
 }
 
-export function getOpenDesignApprovalSummary(state: OpenDesignStudioState): OpenDesignApprovalSummary {
+export function getDesignStudioApprovalSummary(state: DesignStudioState): DesignStudioApprovalSummary {
   const approved = state.tokenReviews.filter((item) => item.status === 'approved').length;
   const changesRequested = state.tokenReviews.filter((item) => item.status === 'changes-requested').length;
   const needsReview = state.tokenReviews.length - approved - changesRequested;
@@ -542,34 +542,34 @@ export function getOpenDesignApprovalSummary(state: OpenDesignStudioState): Open
   };
 }
 
-export function approveOpenDesignTokenRevision(
-  state: OpenDesignStudioState,
+export function approveDesignStudioTokenRevision(
+  state: DesignStudioState,
   itemId: string,
   reviewer = 'Designer',
   note = 'Looks good.',
   timestamp = new Date().toISOString(),
-): OpenDesignStudioState {
+): DesignStudioState {
   return updateTokenReview(state, itemId, 'approved', reviewer, note, undefined, timestamp);
 }
 
-export function requestOpenDesignTokenRevision(
-  state: OpenDesignStudioState,
+export function requestDesignStudioTokenRevision(
+  state: DesignStudioState,
   itemId: string,
   proposedValue: string,
   reviewer = 'Designer',
   note = 'Needs work before this token can be locked.',
   timestamp = new Date().toISOString(),
-): OpenDesignStudioState {
+): DesignStudioState {
   return updateTokenReview(state, itemId, 'changes-requested', reviewer, note, proposedValue, timestamp);
 }
 
-export function publishOpenDesignSystem(
-  state: OpenDesignStudioState,
+export function publishDesignStudioSystem(
+  state: DesignStudioState,
   reviewer = 'Designer',
   note = 'Published approved design system.',
   timestamp = new Date().toISOString(),
-): OpenDesignStudioState {
-  const summary = getOpenDesignApprovalSummary(state);
+): DesignStudioState {
+  const summary = getDesignStudioApprovalSummary(state);
   return {
     ...state,
     published: summary.readyToPublish,
@@ -586,8 +586,8 @@ export function publishOpenDesignSystem(
   };
 }
 
-export function compileOpenDesignMd(
-  state: OpenDesignStudioState,
+export function compileDesignStudioMd(
+  state: DesignStudioState,
   timestamp = new Date().toISOString(),
 ): string {
   const direction = directionFor(state.directionId);
@@ -596,7 +596,7 @@ export function compileOpenDesignMd(
   const notes = state.brief.notes.trim() || 'No special notes yet.';
   const prompt = state.brief.prompt.trim() || 'Create a coherent AI-native design system.';
   const sourceSection = sourceLines.length ? sourceLines.map((line) => `- ${line}`) : ['- No external sources attached yet.'];
-  const approvalSummary = getOpenDesignApprovalSummary(state);
+  const approvalSummary = getDesignStudioApprovalSummary(state);
   const tokenReviewLines = state.tokenReviews.map((item) => [
     `### ${item.label}`,
     '',
@@ -747,17 +747,17 @@ export function compileOpenDesignMd(
   ].join('\n');
 }
 
-export function buildOpenDesignWorkspaceBundle(
-  state: OpenDesignStudioState,
+export function buildDesignStudioArtifactFiles(
+  state: DesignStudioState,
   timestamp = new Date().toISOString(),
-): OpenDesignWorkspaceFile[] {
+): DesignStudioArtifactFile[] {
   const name = designName(state);
-  const design = compileOpenDesignMd(state, timestamp);
-  const files: OpenDesignWorkspaceFile[] = [
+  const design = compileDesignStudioMd(state, timestamp);
+  const files: DesignStudioArtifactFile[] = [
     { path: 'DESIGN.md', content: design, updatedAt: timestamp, mediaType: 'text/markdown' },
     {
       path: 'research.json',
-      content: JSON.stringify(getOpenDesignResearchInventory(), null, 2),
+      content: JSON.stringify(getDesignStudioResearchInventory(), null, 2),
       updatedAt: timestamp,
       mediaType: 'application/json',
     },
@@ -770,8 +770,8 @@ export function buildOpenDesignWorkspaceBundle(
     {
       path: 'token-review.json',
       content: JSON.stringify({
-        summary: getOpenDesignApprovalSummary(state),
-        composition: createOpenDesignApprovalComposition(state),
+        summary: getDesignStudioApprovalSummary(state),
+        composition: createDesignStudioApprovalComposition(state),
         tokenReviews: state.tokenReviews,
         approvalEvents: state.approvalEvents,
       }, null, 2),
@@ -802,36 +802,36 @@ export function buildOpenDesignWorkspaceBundle(
   return files;
 }
 
-export function buildOpenDesignProjectArtifactId(projectName: string): string {
+export function buildDesignStudioProjectArtifactId(projectName: string): string {
   return `design-studio-${slugify(projectName)}`;
 }
 
-export function createOpenDesignProjectArtifactInput(
-  state: OpenDesignStudioState,
+export function createDesignStudioProjectArtifactInput(
+  state: DesignStudioState,
   options: { timestamp?: string; artifactId?: string; references?: readonly string[] } = {},
-): OpenDesignProjectArtifactInput {
+): DesignStudioProjectArtifactInput {
   const timestamp = options.timestamp ?? new Date().toISOString();
   const name = designName(state);
   return {
-    id: options.artifactId?.trim() || buildOpenDesignProjectArtifactId(name),
+    id: options.artifactId?.trim() || buildDesignStudioProjectArtifactId(name),
     title: name,
     description: `Design Studio project artifacts for ${name}.`,
-    kind: 'open-design-project',
+    kind: 'design-studio-project',
     references: [...new Set(options.references ?? [])],
-    files: buildOpenDesignWorkspaceBundle(state, timestamp),
+    files: buildDesignStudioArtifactFiles(state, timestamp),
   };
 }
 
-export function findOpenDesignProjectNameCollision(
-  state: OpenDesignStudioState,
-  artifacts: readonly OpenDesignArtifactNameCandidate[],
+export function findDesignStudioProjectNameCollision(
+  state: DesignStudioState,
+  artifacts: readonly DesignStudioArtifactNameCandidate[],
   currentArtifactId?: string | null,
-): OpenDesignProjectNameCollision | null {
+): DesignStudioProjectNameCollision | null {
   const projectName = designName(state);
   const projectSlug = slugify(projectName);
   const normalizedProjectName = normalizeComparable(projectName);
-  const normalizedProjectId = normalizeComparable(buildOpenDesignProjectArtifactId(projectName));
-  const normalizedLegacyProjectId = normalizeComparable(`open-design-${projectSlug}`);
+  const normalizedProjectId = normalizeComparable(buildDesignStudioProjectArtifactId(projectName));
+  const normalizedLegacyProjectId = normalizeComparable(`design-studio-${projectSlug}`);
   const currentId = currentArtifactId ? normalizeComparable(currentArtifactId) : null;
 
   for (const artifact of artifacts) {
@@ -849,11 +849,11 @@ export function findOpenDesignProjectNameCollision(
   return null;
 }
 
-export function runOpenDesignCritique(state: OpenDesignStudioState): OpenDesignCritiqueResult {
+export function runDesignStudioCritique(state: DesignStudioState): DesignStudioCritiqueResult {
   const hasBrief = Boolean(state.brief.projectName.trim() && state.brief.prompt.trim());
-  const approvalSummary = getOpenDesignApprovalSummary(state);
+  const approvalSummary = getDesignStudioApprovalSummary(state);
   const base = (hasBrief ? 8.7 : 7.6) - (approvalSummary.readyToPublish ? 0 : 0.8) - (approvalSummary.changesRequested ? 0.3 : 0);
-  const panelists: OpenDesignCritiquePanelist[] = [
+  const panelists: DesignStudioCritiquePanelist[] = [
     { id: 'accessibility', label: 'Accessibility', score: roundScore(base + 0.1), finding: 'Focus, contrast, and target-size rules are explicit in DESIGN.md.' },
     { id: 'brand-fit', label: 'Brand fit', score: roundScore(base), finding: 'Direction tokens create a repeatable brand surface.' },
     { id: 'craft', label: 'Craft', score: roundScore(base - 0.2), finding: 'Minimal chrome keeps attention on the artifact and inspector.' },
@@ -873,11 +873,11 @@ export function runOpenDesignCritique(state: OpenDesignStudioState): OpenDesignC
   };
 }
 
-export function createOpenDesignExportArtifact(
-  kind: OpenDesignExportKind,
-  state: OpenDesignStudioState,
+export function createDesignStudioExportArtifact(
+  kind: DesignStudioExportKind,
+  state: DesignStudioState,
   timestamp = new Date().toISOString(),
-): OpenDesignWorkspaceFile {
+): DesignStudioArtifactFile {
   const name = designName(state);
   const slug = slugify(name);
   const extension = kind === 'handoff' || kind === 'canva' || kind === 'cloudflare' ? 'md' : kind;
@@ -887,24 +887,24 @@ export function createOpenDesignExportArtifact(
     path,
     updatedAt: timestamp,
     content: exportContent(kind, name, path),
-    mediaType: mediaTypeForOpenDesignPath(path),
+    mediaType: mediaTypeForDesignStudioPath(path),
   };
 }
 
-export function createOpenDesignPlugin(): HarnessPlugin {
+export function createDesignStudioPlugin(): HarnessPlugin {
   return {
-    id: 'open-design',
+    id: 'design-studio',
     register({ commands, tools }) {
       tools.register({
-        id: 'open-design.inventory',
+        id: 'design-studio.inventory',
         label: 'Design Studio feature inventory',
-        description: 'Return the Claude Design and Open Design feature inventory used by the DESIGN.md studio.',
+        description: 'Return the Design Studio and Design Studio feature inventory used by the DESIGN.md studio.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-        execute: async () => getOpenDesignResearchInventory(),
+        execute: async () => getDesignStudioResearchInventory(),
       });
 
       tools.register({
-        id: 'open-design.compile-design-md',
+        id: 'design-studio.compile-design-md',
         label: 'Compile DESIGN.md',
         description: 'Compile a Design Studio brief into a DESIGN.md document.',
         inputSchema: {
@@ -918,8 +918,8 @@ export function createOpenDesignPlugin(): HarnessPlugin {
         },
         execute: async (rawArgs) => {
           const args = isRecord(rawArgs) ? rawArgs : {};
-          const directionId = isOpenDesignDirectionId(args.directionId) ? args.directionId : 'tech-utility';
-          const state = createOpenDesignStudioState({
+          const directionId = isDesignStudioDirectionId(args.directionId) ? args.directionId : 'tech-utility';
+          const state = createDesignStudioState({
             brief: {
               ...EMPTY_BRIEF,
               projectName: typeof args.projectName === 'string' ? args.projectName : '',
@@ -929,13 +929,13 @@ export function createOpenDesignPlugin(): HarnessPlugin {
           });
           return {
             path: 'DESIGN.md',
-            content: compileOpenDesignMd(state),
+            content: compileDesignStudioMd(state),
           };
         },
       });
 
       tools.register({
-        id: 'open-design.critique',
+        id: 'design-studio.critique',
         label: 'Critique DESIGN.md system',
         description: 'Run the five-panel Design Studio critique gate for a studio brief.',
         inputSchema: {
@@ -948,7 +948,7 @@ export function createOpenDesignPlugin(): HarnessPlugin {
         },
         execute: async (rawArgs) => {
           const args = isRecord(rawArgs) ? rawArgs : {};
-          return runOpenDesignCritique(createOpenDesignStudioState({
+          return runDesignStudioCritique(createDesignStudioState({
             brief: {
               ...EMPTY_BRIEF,
               projectName: typeof args.projectName === 'string' ? args.projectName : '',
@@ -959,10 +959,10 @@ export function createOpenDesignPlugin(): HarnessPlugin {
       });
 
       commands.register({
-        id: 'open-design.new',
+        id: 'design-studio.new',
         usage: '/designstudio <brief>',
         description: 'Draft a Design Studio DESIGN.md system brief.',
-        pattern: /^\/(?:designstudio|opendesign)(?:\s+(?<brief>.+))?$/i,
+        pattern: /^\/(?:designstudio|design-studio)(?:\s+(?<brief>.+))?$/i,
         target: {
           type: 'prompt-template',
           template: (_args, match) => {
@@ -978,23 +978,23 @@ export function createOpenDesignPlugin(): HarnessPlugin {
   };
 }
 
-export function OpenDesignStudio(): null {
+export function DesignStudio(): null {
   return null;
 }
 
-function directionFor(directionId: OpenDesignDirectionId): OpenDesignDirection {
-  return OPEN_DESIGN_DIRECTIONS.find((direction) => direction.id === directionId) ?? OPEN_DESIGN_DIRECTIONS[0];
+function directionFor(directionId: DesignStudioDirectionId): DesignStudioDirection {
+  return DESIGN_STUDIO_DIRECTIONS.find((direction) => direction.id === directionId) ?? DESIGN_STUDIO_DIRECTIONS[0];
 }
 
 function tokenReviewItem(
   id: string,
-  group: OpenDesignTokenReviewItem['group'],
+  group: DesignStudioTokenReviewItem['group'],
   label: string,
   currentValue: string,
   proposedValue: string,
   source: string,
-  sample: OpenDesignTokenReviewSample,
-): OpenDesignTokenReviewItem {
+  sample: DesignStudioTokenReviewSample,
+): DesignStudioTokenReviewItem {
   return {
     id,
     group,
@@ -1011,11 +1011,11 @@ function tokenReviewItem(
 }
 
 function hydrateTokenReviewSamples(
-  tokenReviews: OpenDesignTokenReviewItem[],
-  directionId: OpenDesignDirectionId,
+  tokenReviews: DesignStudioTokenReviewItem[],
+  directionId: DesignStudioDirectionId,
   density: number,
   radius: number,
-): OpenDesignTokenReviewItem[] {
+): DesignStudioTokenReviewItem[] {
   const direction = directionFor(directionId);
   return tokenReviews.map((item) => ({
     ...item,
@@ -1025,10 +1025,10 @@ function hydrateTokenReviewSamples(
 
 function sampleForTokenReview(
   itemId: string,
-  direction: OpenDesignDirection,
+  direction: DesignStudioDirection,
   density: number,
   radius: number,
-): OpenDesignTokenReviewSample {
+): DesignStudioTokenReviewSample {
   if (itemId === 'color-core') {
     return {
       kind: 'palette',
@@ -1090,14 +1090,14 @@ function sampleForTokenReview(
 }
 
 function updateTokenReview(
-  state: OpenDesignStudioState,
+  state: DesignStudioState,
   itemId: string,
-  status: OpenDesignTokenReviewStatus,
+  status: DesignStudioTokenReviewStatus,
   reviewer: string,
   note: string,
   proposedValue: string | undefined,
   timestamp: string,
-): OpenDesignStudioState {
+): DesignStudioState {
   let found = false;
   const nextReviews = state.tokenReviews.map((item) => {
     if (item.id !== itemId) return item;
@@ -1125,11 +1125,11 @@ function updateTokenReview(
 
 function approvalEvent(
   itemId: string,
-  action: OpenDesignApprovalAction,
+  action: DesignStudioApprovalAction,
   reviewer: string,
   note: string,
   createdAt: string,
-): OpenDesignApprovalEvent {
+): DesignStudioApprovalEvent {
   return {
     id: `${action}:${itemId}:${createdAt}`,
     itemId,
@@ -1140,15 +1140,15 @@ function approvalEvent(
   };
 }
 
-function isOpenDesignDirectionId(value: unknown): value is OpenDesignDirectionId {
-  return typeof value === 'string' && OPEN_DESIGN_DIRECTIONS.some((direction) => direction.id === value);
+function isDesignStudioDirectionId(value: unknown): value is DesignStudioDirectionId {
+  return typeof value === 'string' && DESIGN_STUDIO_DIRECTIONS.some((direction) => direction.id === value);
 }
 
-function designName(state: OpenDesignStudioState): string {
+function designName(state: DesignStudioState): string {
   return state.brief.projectName.trim() || `${state.workspaceName} DESIGN.md Studio`;
 }
 
-function designSourceLines(brief: OpenDesignBrief): string[] {
+function designSourceLines(brief: DesignStudioBrief): string[] {
   return [
     sourceLine('GitHub repo', brief.githubUrl),
     sourceLine('Local folder', brief.localFolder),
@@ -1164,7 +1164,7 @@ function sourceLine(label: string, value: string): string | null {
   return trimmed ? `${label}: ${trimmed}` : null;
 }
 
-function previewHtml(name: string, state: OpenDesignStudioState): string {
+function previewHtml(name: string, state: DesignStudioState): string {
   const direction = directionFor(state.directionId);
   return [
     '<!doctype html>',
@@ -1194,7 +1194,7 @@ function handoffMarkdown(name: string): string {
   ].join('\n');
 }
 
-function exportContent(kind: OpenDesignExportKind, name: string, path: string): string {
+function exportContent(kind: DesignStudioExportKind, name: string, path: string): string {
   if (kind === 'html') {
     return '<!doctype html><html><body><main data-design-widget="preview-canvas">Design Studio HTML export</main></body></html>';
   }
@@ -1211,7 +1211,7 @@ function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'design-system';
 }
 
-function mediaTypeForOpenDesignPath(path: string): string {
+function mediaTypeForDesignStudioPath(path: string): string {
   const ext = path.toLowerCase().split('.').pop();
   if (ext === 'html') return 'text/html';
   if (ext === 'json') return 'application/json';

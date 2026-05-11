@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "id": "agent-harness.ext.open-design",
+  "id": "agent-harness.ext.design-studio",
   "name": "Design Studio",
   "version": "0.1.0",
   "description": "Provides an IDE design-system surface for visually composing DESIGN.md systems as artifact-backed projects.",
-  "activationEvents": ["onCommand:opendesign.open"],
+  "activationEvents": ["onCommand:design-studio.open"],
   "entrypoint": {
     "module": "./src/index.ts",
-    "export": "createOpenDesignPlugin"
+    "export": "createDesignStudioPlugin"
   },
   "metadata": {
     "dependencies": [
@@ -17,41 +17,37 @@
     ],
     "standards": [
       {
-        "name": "Open Design reference",
-        "url": "https://open-design.ai/"
-      },
-      {
         "name": "Design Tokens Community Group Format Module",
         "url": "https://tr.designtokens.org/format/"
       }
     ],
-    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.open-design.enabled"
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.design-studio.enabled"
   },
   "capabilities": [
     {
       "kind": "renderer",
-      "id": "open-design.studio",
+      "id": "design-studio.studio",
       "description": "Renders a visual design-system studio for DESIGN.md files."
     },
     {
       "kind": "pane-item",
-      "id": "open-design.studio-pane",
+      "id": "design-studio.studio-pane",
       "description": "Adds the Design Studio pane item when DESIGN.md is selected."
     },
     {
       "kind": "command",
-      "id": "open-design.export-design-md",
+      "id": "design-studio.export-design-md",
       "description": "Exports visual design-system state to DESIGN.md."
     },
     {
       "kind": "setting",
-      "id": "open-design.project-artifacts",
+      "id": "design-studio.project-artifacts",
       "description": "Controls artifact-backed project autosave, collision handling, and DESIGN.md handoff defaults."
     }
   ],
   "renderers": [
     {
-      "id": "open-design.studio",
+      "id": "design-studio.studio",
       "label": "Design Studio",
       "description": "Interactive DESIGN.md design-system renderer and review workspace.",
       "target": {
@@ -61,13 +57,13 @@
       },
       "component": {
         "module": "./src/index.ts",
-        "export": "OpenDesignStudio"
+        "export": "DesignStudio"
       },
       "paneItem": {
-        "id": "open-design.studio-pane",
+        "id": "design-studio.studio-pane",
         "label": "Design Studio",
         "description": "Open DESIGN.md in the Design Studio pane.",
-        "rendererId": "open-design.studio",
+        "rendererId": "design-studio.studio",
         "preferredLocation": "side",
         "when": {
           "kind": "file",
@@ -75,7 +71,7 @@
         },
         "component": {
           "module": "./src/index.ts",
-          "export": "OpenDesignStudio"
+          "export": "DesignStudio"
         }
       }
     }
@@ -89,7 +85,7 @@
     {
       "scope": "workspace-files",
       "access": "read",
-      "reason": "Reads existing DESIGN.md context for migrations without creating //design workspace files."
+      "reason": "Reads existing DESIGN.md context for migrations without creating a separate design workspace drive."
     }
   ],
   "compatibility": {

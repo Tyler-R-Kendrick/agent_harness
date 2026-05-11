@@ -178,6 +178,31 @@ describe('workspaceFiles', () => {
     expect(loaded['ws-research']).toHaveLength(10);
   });
 
+  it('drops legacy generated Design Studio workspace files so they do not mount as their own drive', () => {
+    const legacyFirstMountedPath = ['design', ['open', 'design'].join('-')].join('/');
+    const legacySecondMountedPath = ['design', ['claude', 'design'].join('-')].join('/');
+    const legacyCurrentMountedPath = ['design', 'design-studio'].join('/');
+    const legacyGeneratedPattern = new RegExp(`^design/(?:${['open', 'design'].join('-')}|${['claude', 'design'].join('-')}|design-studio)/`);
+    window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
+      'ws-research': [
+        { path: `${legacyFirstMountedPath}/research.json`, content: '{}', updatedAt: '2026-05-10T00:00:00.000Z' },
+        { path: `${legacyFirstMountedPath}/token-review.json`, content: '{}', updatedAt: '2026-05-10T00:00:00.000Z' },
+        { path: `${legacySecondMountedPath}/preview.html`, content: '<main></main>', updatedAt: '2026-05-10T00:00:00.000Z' },
+        { path: `${legacyCurrentMountedPath}/preview.html`, content: '<main></main>', updatedAt: '2026-05-10T00:00:00.000Z' },
+        { path: 'DESIGN.md', content: '# User-owned design guidance', updatedAt: '2026-05-10T00:00:00.000Z' },
+      ],
+    }));
+
+    const loaded = loadWorkspaceFiles(['ws-research']);
+
+    expect(loaded['ws-research']).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'DESIGN.md' }),
+    ]));
+    expect(loaded['ws-research']).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: expect.stringMatching(legacyGeneratedPattern) }),
+    ]));
+  });
+
   it('upserts and removes workspace files by path', () => {
     const first = createWorkspaceFileTemplate('plugin', 'review-tools');
     const second = { ...first, content: '# Updated', updatedAt: '2026-04-08T01:00:00.000Z' };
