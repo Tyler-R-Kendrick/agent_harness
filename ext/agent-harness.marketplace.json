@@ -65,6 +65,24 @@
       "keywords": ["design-md", "tokens", "css", "dtcg", "design-guidance"]
     },
     {
+      "id": "agent-harness.ext.markdown-preview",
+      "name": "Markdown preview",
+      "version": "0.1.0",
+      "description": "Renders Markdown and MDX artifact files with a default sanitized preview.",
+      "manifest": "./ide/markdown-preview/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./ide/markdown-preview"
+      },
+      "categories": ["ide-extension", "file-renderer", "markdown", "mdx"],
+      "metadata": {
+        "marketplaceCategory": "ide",
+        "installSurface": "file-renderer",
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.markdown-preview.enabled"
+      },
+      "keywords": ["markdown", "md", "mdx", "preview", "artifact-renderer"]
+    },
+    {
       "id": "agent-harness.ext.design-studio",
       "name": "Design Studio",
       "version": "0.1.0",

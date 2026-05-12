@@ -52,9 +52,9 @@
       "description": "Interactive DESIGN.md design-system renderer and review workspace.",
       "target": {
         "kind": "file",
-        "fileNames": ["DESIGN.md"],
-        "mimeTypes": ["text/markdown"]
+        "fileNames": ["DESIGN.md"]
       },
+      "priority": 60,
       "component": {
         "module": "./src/index.ts",
         "export": "DesignStudio"

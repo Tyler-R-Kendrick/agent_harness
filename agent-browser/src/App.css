@@ -4178,11 +4178,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: rgba(15, 23, 42, 0.5);
 }
 .artifact-native-text-renderer,
+.artifact-markdown-renderer,
 .artifact-renderer-fallback {
   min-height: 220px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 8px;
   background: rgba(15, 23, 42, 0.34);
+}
+.artifact-markdown-renderer {
+  overflow: auto;
+  padding: 18px;
+}
+.artifact-markdown-content {
+  max-width: 860px;
 }
 .artifact-native-text-renderer {
   overflow: auto;
