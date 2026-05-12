@@ -1,10 +1,40 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-11
-Baseline: `.features/Summary.md` refreshed from the 2026-05-10 twenty-six-harness corpus.
-Diff type: additive update after Kimi AI research
+Updated: 2026-05-12
+Baseline: `.features/Summary.md` refreshed from the 2026-05-11 twenty-eight-harness corpus.
+Diff type: additive update after Conductor research
 
 ## Net new normalized features
+
+### Added: Turn-level checkpoints with chat-and-code rollback
+- Why now: Conductor makes rollback a visible workspace primitive tied to the conversation timeline rather than a hidden implementation detail or a manual git escape hatch.
+- Research delta:
+  - Conductor checkpoints are stored in private git refs instead of the visible branch history
+  - operators can restore from earlier chat turns inside the workspace flow
+  - the `v0.44.0` changelog explicitly calls out improved checkpoint support for Codex sessions
+  - Conductor pairs this rollback model with branch-isolated workspaces, so undo stays local to the task instead of mutating shared history
+
+### Expanded: Parallel agent orchestration
+- Why now: Conductor shows a more explicit topology choice than the simpler "spawn helpers" pattern by letting operators decide whether parallel agents should collaborate inside one workspace or stay split across isolated workspaces.
+- Research delta:
+  - Conductor documents both shared-workspace and separate-workspace parallelism
+  - the product ties those choices directly to branch and runtime isolation
+  - the workspace model makes parallelism feel like an operator decision about merge safety and coordination overhead, not just a background implementation detail
+
+### Expanded: Git/PR-native execution
+- Why now: Conductor's issue-to-PR flow is unusually explicit about the full delivery loop from tracked issue to validated diff, pull request, and archive.
+- Research delta:
+  - work starts from an issue-backed workspace, not just a freeform prompt
+  - inline diff review is a first-class surface before PR creation
+  - the checks tab combines validation commands and unresolved todos as a readiness gate
+  - archive is treated as the end of the workflow after the landing step
+
+### Expanded: External tool connectivity and actionability
+- Why now: Conductor is pushing MCP from static configuration toward inherited, inspectable runtime state.
+- Research delta:
+  - project-level MCP settings can now be inherited into workspaces
+  - `v0.50.0` adds `/mcp-status` for Codex sessions plus MCP-server indicators in chat
+  - the connectivity layer is being surfaced as a runtime health concept instead of only a setup file
 
 ### Added: Self-organizing swarm execution with context sharding
 - Why now: Kimi AI shows a stronger orchestration pattern than ordinary "launch a few helpers" subagents by letting the system invent its own specialist team structure at runtime and keep each worker on its own context shard.
@@ -40,6 +70,17 @@ Diff type: additive update after Kimi AI research
   - `agent-browser` can launch multiple agent runs, but it does not yet provide a swarm mode where an orchestrator decides how to decompose work at runtime, spins up many bounded child agents, shards context intentionally, and reconciles their outputs back into one inspectable result without human-authored role graphs.
 - One-shot instruction for an LLM:
   - Implement a self-organizing swarm mode for `agent-browser` where a commander agent can decide parallel width dynamically, spawn bounded child agents with explicit context shards and objectives, monitor sub-agent progress and tool use, merge findings into a structured final output, and let operators continue the same task in a single-agent follow-up mode after the swarm finishes.
+
+### Added: Add turn-level checkpoints with chat-and-code rollback
+- Why now: `agent-browser` supports durable artifacts, diffs, and long-running sessions, but it still lacks a first-class rollback layer that lets operators jump back to a prior turn without relying on branch surgery or manual cleanup.
+- Linear issue:
+  - `TK-61`
+- Linear issue title:
+  - `Add turn-level checkpoints with chat-and-code rollback`
+- Suggested problem statement:
+  - `agent-browser` can show transcript history and changed files, but it does not yet provide per-turn checkpoints that snapshot workspace state, keep rollback data separate from visible repository history, and let users safely restore an earlier point in the run from the UI.
+- One-shot instruction for an LLM:
+  - Implement turn-level checkpoints for `agent-browser` that snapshot code, artifacts, and relevant session state before each agent step, store those checkpoints outside the visible task branch, expose them in the transcript or timeline with restore and compare actions, and make rollback safe, inspectable, and compatible with long-running browser-agent workflows.
 
 ### Added: Mode-scoped execution profiles with sticky task inheritance
 - Why now: Roo Code shows a strong execution-control pattern for multi-model harnesses where profile choice is tied to agent mode and preserved across resumes, worktrees, and delegated subtasks.
@@ -193,4 +234,4 @@ Diff type: additive update after Kimi AI research
 
 ## Recommended next Linear batch
 
-1. `Add self-organizing swarm execution with context sharding`
+1. `Add turn-level checkpoints with chat-and-code rollback`
