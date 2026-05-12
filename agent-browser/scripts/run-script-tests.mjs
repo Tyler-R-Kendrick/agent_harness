@@ -118,6 +118,10 @@ async function main() {
   assert.equal(rootPackage.scripts['test:coverage:extensions'], 'node scripts/run-extension-workspaces.mjs test:coverage');
   assert.match(packageJson, /"verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
   assert.match(packageJson, /"check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
+  const verifyAgentBrowserScript = await readScript('scripts/verify-agent-browser.ps1');
+  assert.doesNotMatch(verifyAgentBrowserScript, /validate-evals/);
+  assert.doesNotMatch(verifyAgentBrowserScript, /test-evals/);
+  assert.doesNotMatch(verifyAgentBrowserScript, /eval-workflows/);
   for (const extensionPackagePath of [
     'ext/harness/agent-skills/package.json',
     'ext/harness/agents-md/package.json',
@@ -150,6 +154,7 @@ async function main() {
   const agentBrowserPackageJson = await readScript('agent-browser/package.json');
   assert.match(agentBrowserPackageJson, /"test:coverage": "node scripts\/run-vitest-coverage\.mjs"/);
   assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
+  assert.doesNotMatch(agentBrowserPackageJson, /"eval:hf-lighteval-chat"/);
   assert.match(agentBrowserPackageJson, /"smoke:git-stub": "node scripts\/git-stub-smoke\.mjs"/);
   assert.match(agentBrowserPackageJson, /"@agent-harness\/git-stub": "0\.1\.0"/);
   const gitStubPackageJson = JSON.parse(await readScript('lib/git-stub/package.json'));
@@ -470,26 +475,21 @@ async function main() {
 
   const verifyScript = await readScript('scripts/verify-agent-browser.ps1');
   const sourceHygieneIndex = verifyScript.indexOf("Label = 'source-hygiene'");
-  const validateEvalsIndex = verifyScript.indexOf("Label = 'validate-evals'");
   const testScriptsIndex = verifyScript.indexOf("Label = 'test-scripts'");
-  const evalWorkflowsIndex = verifyScript.indexOf("Label = 'eval-workflows'");
   const extensionLintIndex = verifyScript.indexOf("Label = 'extension-lint'");
   const extensionCoverageIndex = verifyScript.indexOf("Label = 'extension-coverage'");
   const extensionBuildIndex = verifyScript.indexOf("Label = 'extension-build'");
   const lintIndex = verifyScript.indexOf("Label = 'lint'");
   const buildIndex = verifyScript.indexOf("Label = 'build'");
   assert.notEqual(sourceHygieneIndex, -1);
-  assert.notEqual(validateEvalsIndex, -1);
   assert.notEqual(testScriptsIndex, -1);
-  assert.notEqual(evalWorkflowsIndex, -1);
   assert.notEqual(extensionLintIndex, -1);
   assert.notEqual(extensionCoverageIndex, -1);
   assert.notEqual(extensionBuildIndex, -1);
   assert.notEqual(lintIndex, -1);
   assert.notEqual(buildIndex, -1);
-  assert.ok(sourceHygieneIndex < validateEvalsIndex);
-  assert.ok(testScriptsIndex < evalWorkflowsIndex);
-  assert.ok(evalWorkflowsIndex < extensionLintIndex);
+  assert.ok(sourceHygieneIndex < testScriptsIndex);
+  assert.ok(testScriptsIndex < extensionLintIndex);
   assert.ok(extensionLintIndex < extensionCoverageIndex);
   assert.ok(extensionCoverageIndex < extensionBuildIndex);
   assert.ok(extensionBuildIndex < lintIndex);

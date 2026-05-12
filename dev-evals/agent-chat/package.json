@@ -1,0 +1,16 @@
+{
+  "name": "agent-chat-dev-evals",
+  "private": true,
+  "type": "module",
+  "description": "Dev-time heuristic evals for agent chat self-improvement. Not a CI workspace.",
+  "scripts": {
+    "eval:ifeval": "python scripts/run-huggingface-ifeval-chat-eval.py",
+    "eval:openevals": "node scripts/run-langchain-openevals-agent-chat.mjs"
+  },
+  "dependencies": {
+    "@langchain/core": "1.1.45",
+    "@langchain/langgraph": "1.3.0",
+    "agentevals": "0.0.7",
+    "openevals": "0.2.0"
+  }
+}

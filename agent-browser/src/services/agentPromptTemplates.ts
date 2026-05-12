@@ -56,6 +56,16 @@ export function buildAlignmentTemplate({
   ].filter(Boolean).join('\n');
 }
 
+export function buildInstructionFollowingTemplate(): string {
+  return [
+    '## Instruction Following Contract',
+    'Honor explicit user constraints exactly before optimizing for style or helpfulness.',
+    'Preserve requested format, length, punctuation, casing, language, delimiters, ordering, and section structure.',
+    'When the user asks for JSON, constrained words, no prose, no commas, quotations, bullets, placeholders, or exact endings, output only content that satisfies those constraints.',
+    'If constraints conflict, satisfy the highest-priority explicit user constraint and briefly state the conflict only when extra prose is allowed.',
+  ].join('\n');
+}
+
 export function buildMemoryRecallTemplate(): string {
   return [
     '## Memory / Recall Guidance',
@@ -266,7 +276,7 @@ export function buildAgentSystemPrompt({
   return composeAgentPrompt({
     persona: buildPersonaTemplate(),
     alignment: buildAlignmentTemplate({ workspaceName, goal, constraints }),
-    scenario: [buildScenarioGuidance(scenario), expertGuidance].filter(Boolean).join('\n\n'),
+    scenario: [buildInstructionFollowingTemplate(), buildScenarioGuidance(scenario), expertGuidance].filter(Boolean).join('\n\n'),
   });
 }
 

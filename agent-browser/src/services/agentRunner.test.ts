@@ -110,6 +110,69 @@ describe('runToolAgent', () => {
     expect(onDone).toHaveBeenCalledWith('final answer');
   });
 
+  it('fails closed with a fallback response when tool use stops without final text', async () => {
+    mockGenerateText.mockImplementationOnce(async ({ onStepFinish }) => {
+      onStepFinish?.({
+        toolCalls: [{ toolCallId: 'call-1', toolName: 'weather', input: { city: 'Boston' } }],
+        toolResults: [{
+          toolCallId: 'call-1',
+          toolName: 'weather',
+          input: { city: 'Boston' },
+          output: "It's 75 degrees and sunny in Boston.",
+          isError: false,
+        }],
+      });
+
+      return {
+        text: '',
+        toolCalls: [],
+        toolResults: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
+    });
+
+    const onDone = vi.fn();
+    const onToken = vi.fn();
+    const model = makeModel();
+    const result = await runToolAgent(
+      { model: model as never, tools: { echo: echoTool }, instructions: '', messages: [] },
+      { onDone, onToken },
+    );
+
+    expect(result).toEqual({
+      text: 'I ran the requested tools, but the model stopped before producing a final answer. Please retry or narrow the request.',
+      steps: 1,
+      failed: true,
+      error: 'Model stopped before producing a final answer after tool use.',
+    });
+    expect(onToken).toHaveBeenCalledWith(result.text);
+    expect(onDone).toHaveBeenCalledWith(result.text);
+  });
+
+  it('fails closed with a fallback response when the model returns empty chat text', async () => {
+    mockGenerateText.mockResolvedValueOnce({
+      text: '  ',
+      toolCalls: [],
+      toolResults: [],
+      finishReason: 'stop',
+      usage: { promptTokens: 0, completionTokens: 0 },
+    });
+
+    const model = makeModel();
+    const result = await runToolAgent(
+      { model: model as never, tools: {}, instructions: '', messages: [] },
+      {},
+    );
+
+    expect(result).toEqual({
+      text: 'The model stopped before producing a final answer. Please retry the request.',
+      steps: 1,
+      failed: true,
+      error: 'Model stopped before producing a final answer.',
+    });
+  });
+
   it('invokes onError and rejects when generateText throws', async () => {
     const error = new Error('LLM failed');
     mockGenerateText.mockRejectedValueOnce(error);
@@ -124,6 +187,18 @@ describe('runToolAgent', () => {
     ).rejects.toThrow('LLM failed');
 
     expect(onError).toHaveBeenCalledWith(error);
+  });
+
+  it('wraps non-error generateText rejections', async () => {
+    mockGenerateText.mockRejectedValueOnce('string failure');
+
+    const model = makeModel();
+    await expect(
+      runToolAgent(
+        { model: model as never, tools: {}, instructions: '', messages: [] },
+        {},
+      ),
+    ).rejects.toThrow('string failure');
   });
 
   it('passes abort signal to generateText', async () => {
@@ -167,6 +242,28 @@ describe('runToolAgent', () => {
     expect(call.stopWhen({ steps: [1, 2, 3] })).toBe(true);
   });
 
+  it('tracks generated step count when the provider does not return steps', async () => {
+    mockGenerateText.mockImplementationOnce(async ({ onStepFinish }) => {
+      onStepFinish?.({});
+      onStepFinish?.({ toolCalls: [], toolResults: [] });
+      return {
+        text: 'done',
+        toolCalls: [],
+        toolResults: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
+    });
+
+    const model = makeModel();
+    const result = await runToolAgent(
+      { model: model as never, tools: {}, instructions: '', messages: [] },
+      {},
+    );
+
+    expect(result).toEqual({ text: 'done', steps: 2 });
+  });
+
   it('returns the final text result', async () => {
     mockGenerateText.mockResolvedValueOnce({
       text: 'the answer',
@@ -183,6 +280,25 @@ describe('runToolAgent', () => {
     );
 
     expect(result.text).toBe('the answer');
+  });
+
+  it('prefers provider-reported step count when available', async () => {
+    mockGenerateText.mockResolvedValueOnce({
+      text: 'the answer',
+      steps: [{}, {}, {}],
+      toolCalls: [],
+      toolResults: [],
+      finishReason: 'stop',
+      usage: { promptTokens: 0, completionTokens: 0 },
+    });
+
+    const model = makeModel();
+    const result = await runToolAgent(
+      { model: model as never, tools: {}, instructions: '', messages: [] },
+      {},
+    );
+
+    expect(result.steps).toBe(3);
   });
 
   it('emits tool call and tool result callbacks from completed steps', async () => {
@@ -212,6 +328,43 @@ describe('runToolAgent', () => {
 
     expect(onToolCall).toHaveBeenCalledWith('cli', { command: 'echo hello' }, 'call-1');
     expect(onToolResult).toHaveBeenCalledWith('cli', { command: 'echo hello' }, { stdout: 'hello', stderr: '', exitCode: 0 }, false, 'call-1');
+  });
+
+  it('handles provider step payloads without optional tool metadata', async () => {
+    mockGenerateText.mockImplementationOnce(async ({ onStepFinish }) => {
+      onStepFinish?.({
+        toolCalls: [{ toolName: 'fallback-tool', input: { value: 1 } }],
+        toolResults: [
+          { result: 'fallback result', isError: true },
+          { result: 'default ok' },
+        ],
+      });
+
+      return {
+        text: undefined,
+        toolCalls: [],
+        toolResults: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 0, completionTokens: 0 },
+      };
+    });
+
+    const onToolCall = vi.fn();
+    const onToolResult = vi.fn();
+    const model = makeModel();
+
+    const result = await runToolAgent(
+      { model: model as never, tools: { echo: echoTool }, instructions: '', messages: [] },
+      { onToolCall, onToolResult },
+    );
+
+    expect(onToolCall).toHaveBeenCalledWith('fallback-tool', { value: 1 }, undefined);
+    expect(onToolResult).toHaveBeenCalledWith('unknown-tool', undefined, 'fallback result', true, undefined);
+    expect(onToolResult).toHaveBeenCalledWith('unknown-tool', undefined, 'default ok', false, undefined);
+    expect(result).toMatchObject({
+      failed: true,
+      error: 'Model stopped before producing a final answer after tool use.',
+    });
   });
 
   it('sanitizes model inputs and wraps tools so only tool execution receives resolved secrets', async () => {
