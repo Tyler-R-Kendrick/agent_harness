@@ -29,6 +29,7 @@ vsix_path="$tmp_dir/agent-browser-preview-extension.vsix"
 
 mkdir -p "$tmp_dir/extension"
 cp -R "$EXTENSION_SOURCE_DIR/." "$tmp_dir/extension/"
+rm -rf "$tmp_dir/extension/tests"
 
 (
   cd "$tmp_dir"

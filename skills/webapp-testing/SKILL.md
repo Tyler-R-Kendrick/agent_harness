@@ -16,7 +16,7 @@ To test local web applications, prefer deterministic, checked-in scripts before 
 **Deterministic-first rule**:
 - Check `package.json`, `scripts/`, and skill-local `scripts/` for an existing command before generating Playwright CLI snippets or temporary automation.
 - If you repeat a browser workflow, convert it into a committed script with a stable command name and run that script thereafter.
-- For `agent-browser`, use `npm run visual:agent-browser` for browser smoke validation and `npm run verify:agent-browser` for the full lint, coverage, build, audit, and visual check.
+- For `agent-browser`, use `npm run visual:agent-browser` for browser smoke validation when UI or browser behavior changed. Use focused project commands for related source, eval, and script changes; reserve `npm run verify:agent-browser` for multi-project, dependency/audit/CI/release, verifier, explicit full-gate, or pre-merge validation.
 
 ## Decision Tree: Choosing Your Approach
 
