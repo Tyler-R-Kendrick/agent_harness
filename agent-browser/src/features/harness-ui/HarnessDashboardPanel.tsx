@@ -11,7 +11,7 @@ export type HarnessDashboardPanelProps = {
   browserPages?: HarnessBrowserPageSummary[];
   files?: HarnessFileSummary[];
   knowledge: HarnessKnowledgeSummary;
-  onCreateDashboardWidget?: (position: WidgetPosition) => void;
+  onCreateDashboardWidget?: (position: WidgetPosition, prompt: string) => void;
   onOpenWidgetEditor?: (widgetId: string) => void;
   onPatchElement?: (patch: HarnessElementPatch) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
@@ -55,6 +55,7 @@ type MinimapInteraction = {
 };
 
 type DashboardInteraction = WidgetInteraction | PanInteraction | MinimapInteraction;
+type CanvasMenuState = { x: number; y: number; position: WidgetPosition; mode: 'menu' | 'prompt' };
 
 const DEFAULT_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 5, rows: 3 });
 const MIN_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 3, rows: 2 });
@@ -192,7 +193,8 @@ export function HarnessDashboardPanel({
   dragHandleProps,
 }: HarnessDashboardPanelProps) {
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 });
-  const [canvasMenu, setCanvasMenu] = useState<{ x: number; y: number; position: WidgetPosition } | null>(null);
+  const [canvasMenu, setCanvasMenu] = useState<CanvasMenuState | null>(null);
+  const [canvasWidgetPrompt, setCanvasWidgetPrompt] = useState('');
   const interactionRef = useRef<DashboardInteraction | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const minimapRef = useRef<HTMLDivElement>(null);
@@ -323,12 +325,12 @@ export function HarnessDashboardPanel({
   }, [commitWidgetLayout, navigateFromMinimap, viewport.zoom]);
 
   const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    setCanvasMenu(null);
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
     if (target.closest('.harness-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
       return;
     }
+    setCanvasMenu(null);
     interactionRef.current = {
       kind: 'pan',
       pointerId: event.pointerId,
@@ -350,7 +352,9 @@ export function HarnessDashboardPanel({
       x: event.clientX,
       y: event.clientY,
       position: canvasPositionFromClient(event.clientX, event.clientY),
+      mode: 'menu',
     });
+    setCanvasWidgetPrompt('');
   };
 
   const handleWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
@@ -485,7 +489,7 @@ export function HarnessDashboardPanel({
               ) : null}
             </div>
           </div>
-          {canvasMenu ? (
+          {canvasMenu?.mode === 'menu' ? (
             <div
               className="harness-dashboard-context-menu"
               role="menu"
@@ -496,13 +500,48 @@ export function HarnessDashboardPanel({
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  onCreateDashboardWidget?.(canvasMenu.position);
-                  setCanvasMenu(null);
+                  setCanvasWidgetPrompt('');
+                  setCanvasMenu({ ...canvasMenu, mode: 'prompt' });
                 }}
               >
                 Create widget
               </button>
             </div>
+          ) : null}
+          {canvasMenu?.mode === 'prompt' ? (
+            <form
+              className="harness-dashboard-context-menu harness-dashboard-widget-prompt"
+              role="dialog"
+              aria-label="Create canvas widget"
+              style={menuStyle(canvasMenu.x, canvasMenu.y)}
+              onSubmit={(event) => {
+                event.preventDefault();
+                const prompt = canvasWidgetPrompt.trim();
+                if (!prompt) return;
+                onCreateDashboardWidget?.(canvasMenu.position, prompt);
+                setCanvasMenu(null);
+                setCanvasWidgetPrompt('');
+              }}
+            >
+              <label>
+                <span>Widget prompt</span>
+                <input
+                  type="text"
+                  aria-label="Widget prompt"
+                  autoFocus
+                  value={canvasWidgetPrompt}
+                  onChange={(event) => setCanvasWidgetPrompt(event.target.value)}
+                />
+              </label>
+              <div className="harness-dashboard-widget-prompt-actions">
+                <button type="button" onClick={() => setCanvasMenu(null)}>
+                  Cancel
+                </button>
+                <button type="submit" disabled={!canvasWidgetPrompt.trim()}>
+                  Create widget
+                </button>
+              </div>
+            </form>
           ) : null}
           <div
             ref={minimapRef}

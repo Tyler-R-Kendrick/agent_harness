@@ -146,7 +146,7 @@ describe('HarnessDashboardPanel', () => {
     expect(within(canvas).queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument();
   });
 
-  it('opens a right-click canvas menu for creating a bound widget session', () => {
+  it('opens a right-click canvas prompt for creating a widget from natural language', () => {
     const onCreateDashboardWidget = vi.fn();
 
     render(
@@ -163,12 +163,21 @@ describe('HarnessDashboardPanel', () => {
 
     const canvas = screen.getByLabelText('Infinite session canvas');
     fireEvent.contextMenu(canvas, { clientX: 220, clientY: 160 });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
+    const createMenuItem = screen.getByRole('menuitem', { name: 'Create widget' });
+    fireEvent.pointerDown(createMenuItem, { pointerId: 1, button: 0 });
+    expect(screen.getByRole('menuitem', { name: 'Create widget' })).toBeInTheDocument();
+    fireEvent.click(createMenuItem);
+    const prompt = screen.getByRole('dialog', { name: 'Create canvas widget' });
+    expect(within(prompt).getByRole('button', { name: 'Create widget' })).toBeDisabled();
 
+    fireEvent.change(within(prompt).getByLabelText('Widget prompt'), {
+      target: { value: 'Track launch risks by owner and blocked item' },
+    });
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Create widget' }));
     expect(onCreateDashboardWidget).toHaveBeenCalledWith(expect.objectContaining({
       col: expect.any(Number),
       row: expect.any(Number),
-    }));
+    }), 'Track launch risks by owner and blocked item');
   });
 
   it('moves and resizes dashboard widgets by patching widget element props', () => {

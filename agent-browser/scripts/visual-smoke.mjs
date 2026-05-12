@@ -40,6 +40,7 @@ const repoWikiGraphOutputPath = path.resolve(repoRoot, 'output/playwright/agent-
 const repoWikiMemoryOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-memory.png');
 const repoWikiMobileOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-mobile.png');
 const dashboardCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas.png');
+const widgetPromptOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-widget-prompt.png');
 const widgetEditorOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-widget-editor.png');
 const historyTimelineOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-history-unified-timeline.png');
 const typedSdkOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-typed-run-sdk.png');
@@ -1046,6 +1047,24 @@ async function main() {
     });
     await captureDashboardCanvasViewportMatrix(page, shellTimeoutMs);
     await page.setViewportSize({ width: 1280, height: 820 });
+    const canvas = page.getByLabel('Infinite session canvas');
+    await canvas.click({ button: 'right', position: { x: 520, y: 620 } });
+    await page.getByRole('menuitem', { name: 'Create widget' }).click();
+    const widgetPrompt = page.getByRole('dialog', { name: 'Create canvas widget' });
+    await expect(widgetPrompt).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByRole('button', { name: 'Create widget' })).toBeDisabled({ timeout: shellTimeoutMs });
+    await widgetPrompt.getByLabel('Widget prompt').fill('Track launch risks by owner and blocked item');
+    await expect(widgetPrompt.getByRole('button', { name: 'Create widget' })).toBeEnabled({ timeout: shellTimeoutMs });
+    await page.screenshot({ path: widgetPromptOutputPath, fullPage: true });
+    await widgetPrompt.getByRole('button', { name: 'Create widget' }).click();
+    const promptedWidgetEditor = page.getByRole('region', { name: 'Widget editor' });
+    await expect(promptedWidgetEditor.getByRole('heading', { name: 'Launch risks', level: 2 })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(promptedWidgetEditor.getByRole('region', { name: 'Live widget preview' })).toContainText(
+      'Track launch risks by owner and blocked item',
+      { timeout: shellTimeoutMs },
+    );
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Session summary', exact: true }).click();

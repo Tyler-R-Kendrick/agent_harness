@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   assertWidgetNodeAllowedByCatalog,
   createDefaultWidgetDocument,
+  createPromptedWidgetDocument,
+  deriveWidgetTitleFromPrompt,
   getDefaultWidgetComponent,
   listDefaultWidgetComponents,
 } from './widgetComponents';
@@ -56,5 +58,21 @@ describe('widget component catalog', () => {
       value: 'Hello',
       style: 'color:red',
     })).toThrow(/style/);
+  });
+
+  it('creates safe starter widget documents from natural-language prompts', () => {
+    expect(deriveWidgetTitleFromPrompt('Track launch risks by owner and blocked item')).toBe('Launch risks');
+
+    const document = createPromptedWidgetDocument('Track launch risks by owner and blocked item');
+
+    expect(document).toMatchObject({
+      type: 'Card',
+      children: expect.arrayContaining([
+        expect.objectContaining({ type: 'Title', value: 'Launch risks' }),
+        expect.objectContaining({ type: 'Text', value: '{{summary}}' }),
+      ]),
+    });
+    expect(() => assertWidgetNodeAllowedByCatalog(document)).not.toThrow();
+    expect(JSON.stringify(document)).not.toContain('Track launch risks by owner and blocked item');
   });
 });

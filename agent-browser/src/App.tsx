@@ -667,6 +667,7 @@ import {
   regenerateHarnessAppSpec,
   restoreDefaultHarnessAppSpec,
 } from './features/harness-ui/harnessRegeneration';
+import { createPromptedWidgetDocument, deriveWidgetTitleFromPrompt } from './features/harness-ui/widgetComponents';
 import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, JsonValue, WidgetPosition } from './features/harness-ui/types';
 import type { HarnessKnowledgeSummary } from './features/harness-ui/HarnessJsonRenderer';
 import { createUniqueId } from './utils/uniqueId';
@@ -16333,15 +16334,26 @@ function AgentBrowserApp() {
     });
   }, [activeWorkspace, setWorkspaceViewStateByWorkspace]);
 
-  const createDashboardWidgetFromCanvas = useCallback((position: WidgetPosition) => {
+  const createDashboardWidgetFromCanvas = useCallback((position: WidgetPosition, prompt: string) => {
+    const normalizedPrompt = prompt.trim();
+    if (!normalizedPrompt) return;
     const widgetId = `dashboard-widget-${createUniqueId()}`;
+    const widgetTitle = deriveWidgetTitleFromPrompt(normalizedPrompt);
     updateActiveHarnessSpec((spec) => addHarnessDashboardWidget(spec, {
       id: widgetId,
-      title: 'New widget',
+      title: widgetTitle,
       position,
       size: { cols: 5, rows: 3 },
       props: {
-        summary: 'Describe the widget changes in the bound session.',
+        summary: normalizedPrompt,
+        widgetJson: createPromptedWidgetDocument(normalizedPrompt) as unknown as JsonValue,
+        widgetSampleData: {
+          summary: normalizedPrompt,
+          status: 'Draft',
+          detail: 'Generated from canvas prompt',
+          metric: 'Prompt-backed widget',
+          owner: `workspace/${activeWorkspace.name}`,
+        },
       },
     }));
     setWorkspaceViewStateByWorkspace((current) => {
@@ -16360,7 +16372,7 @@ function AgentBrowserApp() {
         },
       };
     });
-    setToast({ msg: 'Widget editor opened', type: 'success' });
+    setToast({ msg: `${widgetTitle} widget created`, type: 'success' });
   }, [activeWorkspace, activeWorkspaceId, setToast, setWorkspaceViewStateByWorkspace, updateActiveHarnessSpec]);
 
   const startConversationBranch = useCallback((request: string, sessionId: string) => {
