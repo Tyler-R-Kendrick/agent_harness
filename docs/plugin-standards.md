@@ -75,6 +75,43 @@ Plugins marked `default: true` are intended for hosts to preinstall in new
 workspace state while still loading through the plugin system rather than as
 compiled-in product panels.
 
+## Channel contributions
+
+Plugins may contribute chat channels for share-dialog delegation and
+continuation flows. The built-in `WebRTC peer` channel stays available without a
+plugin and uses QR-signaled WebRTC DataChannels. External channels declare their
+transport and capabilities so Agent Browser can add them to the share options
+and pass a structured handoff payload to the provider implementation:
+
+```json
+{
+  "contributes": {
+    "channels": [{
+      "id": "slack",
+      "label": "Slack",
+      "kind": "slack",
+      "capabilities": ["delegate", "continue", "notify", "handoff-link"],
+      "description": "Delegate or continue an Agent Browser chat through a Slack bot.",
+      "configuration": {
+        "type": "object",
+        "properties": {
+          "workspaceId": { "type": "string" },
+          "botUserId": { "type": "string" }
+        }
+      }
+    }]
+  },
+  "capabilities": [{ "kind": "channel", "id": "slack" }]
+}
+```
+
+Channel kinds are `webrtc`, `slack`, `telegram`, `sms`, `email`, `webhook`,
+`discord`, `teams`, and `custom`. Channel capabilities are `delegate`,
+`continue`, `notify`, `presence`, and `handoff-link`. External providers should
+keep provider tokens in the host secret store and treat inbound channel messages
+as untrusted until the plugin validates identity, session scope, and replay
+state.
+
 ## Renderer and pane contributions
 
 Plugins may contribute custom renderers and pane items, similar to editor

@@ -117,6 +117,7 @@ import { WorkflowCanvasRenderer } from '@agent-harness/ext-workflow-canvas';
 import { MarkdownContent } from './utils/MarkdownContent';
 import { getFaviconBadgeLabel, normalizeHostname } from './utils/favicon';
 import { SharedChatModal, type SharedChatApi } from './shared-chat/SharedChatModal';
+import { buildChatChannelOptions } from './services/chatChannels';
 import {
   DEFAULT_SHARED_SESSION_CONTROL_STATE,
   buildSharedSessionControlPromptContext,
@@ -2926,6 +2927,10 @@ function ChatPanel({
   );
   const runtimeExtensionPromptContext = useMemo(
     () => buildRuntimeExtensionPromptContext(defaultExtensions),
+    [defaultExtensions],
+  );
+  const chatChannelOptions = useMemo(
+    () => buildChatChannelOptions(defaultExtensions),
     [defaultExtensions],
   );
   const sharedSessionControlPromptContext = useMemo(
@@ -6643,6 +6648,7 @@ function ChatPanel({
         open={shareDialogOpen}
         sessionId={activeChatSessionId}
         workspaceName={workspaceName}
+        channelOptions={chatChannelOptions}
         onClose={() => setShareDialogOpen(false)}
         onApiChange={handleSharedChatApiChange}
         onRemoteMessage={appendRemoteSharedChatMessage}

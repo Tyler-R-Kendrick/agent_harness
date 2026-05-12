@@ -285,10 +285,14 @@ describe('App smoke coverage', () => {
 
   it('opens the secure shared chat QR pairing dialog from the chat header', async () => {
     vi.useFakeTimers();
+    window.localStorage.setItem(STORAGE_KEYS.installedDefaultExtensionIds, JSON.stringify([
+      'agent-harness.ext.external-channels',
+    ]));
     render(<App />);
 
     await act(async () => {
       vi.advanceTimersByTime(350);
+      await Promise.resolve();
     });
 
     fireEvent.click(screen.getByLabelText('Add session to Research'));
@@ -296,6 +300,10 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByRole('dialog', { name: 'Share chat session' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Start shared session/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('Channel share options')).toHaveTextContent('WebRTC peer');
+    expect(screen.getByRole('button', { name: 'Share with Slack' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share with Telegram' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share with SMS' })).toBeInTheDocument();
     expect(screen.getByText(/QR is untrusted signaling/i)).toBeInTheDocument();
   });
 

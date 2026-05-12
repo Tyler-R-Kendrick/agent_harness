@@ -14,6 +14,7 @@ const outputPath = path.resolve(
   process.env.AGENT_BROWSER_VISUAL_SMOKE_SCREENSHOT
     ?? 'output/playwright/agent-browser-visual-smoke.png',
 );
+const chatChannelsOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-chat-channels-share-dialog.png');
 const marketplaceOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extensions-marketplace.png');
 const extensionDetailOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-detail.png');
 const extensionFeatureOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-extension-feature.png');
@@ -1028,6 +1029,9 @@ async function main() {
           },
         ],
       }));
+      localStorage.setItem('agent-browser.installed-default-extension-ids', JSON.stringify([
+        'agent-harness.ext.external-channels',
+      ]));
       sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
     });
@@ -1088,6 +1092,15 @@ async function main() {
     await expect(sharedControlBanner).toContainText('iPad Pro', { timeout: shellTimeoutMs });
     await expect(sharedControlBanner).toContainText('Remote control enabled', { timeout: shellTimeoutMs });
     await expect(sharedControlBanner).toContainText('3 signed events', { timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Share chat session' }).click();
+    const channelShareOptions = page.getByLabel('Channel share options');
+    await expect(channelShareOptions).toContainText('WebRTC peer', { timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Share with Slack' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Share with Telegram' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('button', { name: 'Share with SMS' })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.screenshot({ path: chatChannelsOutputPath, fullPage: true });
+    console.log(`agent-browser chat channels share smoke passed: ${chatChannelsOutputPath}`);
+    await page.getByRole('button', { name: 'Close share dialog' }).click();
     await expect(page.getByText('Choose how the agent should continue.').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -1481,13 +1494,15 @@ async function main() {
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(installedExtensions.getByText('2 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('3 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Channel extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('External Chat Channels')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugin')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('21 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('22 extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'Harness extensions' })).toBeVisible({
@@ -1497,6 +1512,9 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByRole('heading', { name: 'Provider extensions' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(marketplace.getByRole('heading', { name: 'Channel extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(marketplace.getByText('Symphony internal task orchestration').first()).toBeVisible({

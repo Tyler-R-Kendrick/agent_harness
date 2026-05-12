@@ -416,6 +416,24 @@
         "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.local-inference-daemon.enabled"
       },
       "keywords": ["local-models", "openai-compatible", "webrtc", "websocket", "deno", "background-worker"]
+    },
+    {
+      "id": "agent-harness.ext.external-channels",
+      "name": "External Chat Channels",
+      "version": "0.1.0",
+      "description": "Adds Slack, Telegram, and SMS as installable chat delegation and continuation channels.",
+      "manifest": "./channel/external-channels/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./channel/external-channels"
+      },
+      "categories": ["channel-extension", "chat-channel", "handoff", "messaging"],
+      "metadata": {
+        "marketplaceCategory": "channel",
+        "installSurface": "share-dialog",
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.external-channels.enabled"
+      },
+      "keywords": ["channels", "slack", "telegram", "sms", "handoff", "delegate", "continue"]
     }
   ]
 }

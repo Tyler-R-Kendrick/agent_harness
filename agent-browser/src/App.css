@@ -13167,10 +13167,41 @@ kbd {
 .shared-chat-footer,
 .shared-chat-payload-actions,
 .shared-chat-pairing span,
+.shared-chat-channel-summary span,
+.shared-chat-channel-row span,
 .shared-chat-active p,
 .shared-chat-ended p {
   color: #b8c7c0;
   font-size: 13px;
+}
+.shared-chat-channel-options {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+.shared-chat-channel-summary,
+.shared-chat-channel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.shared-chat-channel-summary strong,
+.shared-chat-channel-row strong,
+.shared-chat-channel-row span {
+  display: block;
+}
+.shared-chat-channel-list {
+  display: grid;
+  gap: 8px;
+}
+.shared-chat-channel-row {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.08);
 }
 .shared-chat-payload-panel,
 .shared-chat-scan,
@@ -13381,7 +13412,9 @@ kbd {
   .shared-chat-grid { grid-template-columns: 1fr; }
   .shared-chat-modal-header,
   .shared-chat-footer,
-  .shared-chat-payload-actions { align-items: stretch; flex-direction: column; }
+  .shared-chat-payload-actions,
+  .shared-chat-channel-summary,
+  .shared-chat-channel-row { align-items: stretch; flex-direction: column; }
   .conversation-subthread-banner {
     grid-template-columns: 1fr;
     align-items: stretch;

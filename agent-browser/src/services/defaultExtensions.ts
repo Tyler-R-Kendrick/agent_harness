@@ -23,6 +23,8 @@ import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 import type { AgentArtifact } from './artifacts';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
+import { createExternalChannelsPlugin } from '../../../ext/channel/external-channels/src/index.ts';
+import externalChannelsManifestSource from '../../../ext/channel/external-channels/agent-harness.plugin.json';
 import { createGhcpModelProviderPlugin } from '../../../ext/ghcp-model-provider/src/index.ts';
 import ghcpModelProviderManifestSource from '../../../ext/ghcp-model-provider/agent-harness.plugin.json';
 import { createCursorModelProviderPlugin } from '../../../ext/cursor-model-provider/src/index.ts';
@@ -84,7 +86,7 @@ export interface CreateDefaultExtensionRuntimeOptions {
   artifacts?: readonly AgentArtifact[];
 }
 
-export type ExtensionMarketplaceCategory = 'ide' | 'harness' | 'worker' | 'provider';
+export type ExtensionMarketplaceCategory = 'ide' | 'harness' | 'worker' | 'provider' | 'channel';
 
 export type DefaultExtensionAvailability =
   | { state: 'available' }
@@ -97,6 +99,7 @@ export const EXTENSION_MARKETPLACE_CATEGORIES: ExtensionMarketplaceCategory[] = 
   'harness',
   'worker',
   'provider',
+  'channel',
 ];
 
 export const EXTENSION_MARKETPLACE_CATEGORY_LABELS: Record<ExtensionMarketplaceCategory, string> = {
@@ -104,6 +107,7 @@ export const EXTENSION_MARKETPLACE_CATEGORY_LABELS: Record<ExtensionMarketplaceC
   harness: 'Harness extensions',
   worker: 'Worker extensions',
   provider: 'Provider extensions',
+  channel: 'Channel extensions',
 };
 
 export const DEFAULT_EXTENSION_MARKETPLACE = parseHarnessPluginMarketplaceManifest(marketplaceManifestSource);
@@ -132,6 +136,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.xai-model-provider', parseHarnessPluginManifest(xaiModelProviderManifestSource)],
   ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
   ['agent-harness.ext.local-inference-daemon', parseHarnessPluginManifest(localInferenceWorkerManifestSource)],
+  ['agent-harness.ext.external-channels', parseHarnessPluginManifest(externalChannelsManifestSource)],
 ]);
 
 export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
@@ -192,6 +197,7 @@ export async function createDefaultExtensionRuntime(
     ['agent-harness.ext.codex-model-provider', () => createCodexModelProviderPlugin()],
     ['agent-harness.ext.huggingface-model-provider', () => createCodiBrowserModelProviderPlugin()],
     ['agent-harness.ext.google-ai-edge-model-provider', () => createGoogleAiEdgeModelProviderPlugin()],
+    ['agent-harness.ext.external-channels', () => createExternalChannelsPlugin()],
   ]);
 
   await context.plugins.loadAll(installedExtensionIds.map((extensionId) => pluginFactories.get(extensionId)?.()).filter(isHarnessPlugin));
@@ -237,6 +243,7 @@ export function getExtensionMarketplaceCategory(extension: DefaultExtensionDescr
   }
 
   if (extension.manifest.capabilities?.some((capability) => capability.kind === 'model-provider')) return 'provider';
+  if (extension.manifest.capabilities?.some((capability) => capability.kind === 'channel')) return 'channel';
   if (extension.manifest.assets?.some((asset) => asset.kind === 'runtime')) return 'worker';
   if (extension.manifest.renderers?.length || extension.manifest.paneItems?.length || extension.manifest.capabilities?.some((capability) => capability.kind === 'renderer' || capability.kind === 'pane-item')) return 'ide';
   return 'harness';
@@ -264,6 +271,7 @@ export function groupDefaultExtensionsByMarketplaceCategory(
     harness: [],
     worker: [],
     provider: [],
+    channel: [],
   };
 
   for (const extension of extensions) {

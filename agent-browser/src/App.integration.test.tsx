@@ -482,6 +482,7 @@ describe('App', () => {
     expect(within(marketplace).getByRole('heading', { name: 'Harness extensions' })).toBeInTheDocument();
     expect(within(marketplace).getByRole('heading', { name: 'Worker extensions' })).toBeInTheDocument();
     expect(within(marketplace).getByRole('heading', { name: 'Provider extensions' })).toBeInTheDocument();
+    expect(within(marketplace).getByRole('heading', { name: 'Channel extensions' })).toBeInTheDocument();
     expect(within(marketplace).queryByRole('heading', { name: 'Runtime extensions' })).not.toBeInTheDocument();
     expect(within(marketplace).getByText('Agent skills')).toBeInTheDocument();
     expect(within(marketplace).getByText('AGENTS.md workspace instructions')).toBeInTheDocument();
@@ -504,8 +505,9 @@ describe('App', () => {
     expect(within(marketplace).getByText('xAI Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Model Connector')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Inference Worker')).toBeInTheDocument();
-    expect(within(marketplace).getByText('21 extensions')).toBeInTheDocument();
-    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(15);
+    expect(within(marketplace).getByText('External Chat Channels')).toBeInTheDocument();
+    expect(within(marketplace).getByText('22 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(16);
     expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',

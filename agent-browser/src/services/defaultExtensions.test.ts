@@ -57,6 +57,20 @@ describe('default extensions', () => {
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.codex-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.local-model-connector' }) }),
     ]));
+    expect(grouped.channel).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        manifest: expect.objectContaining({
+          id: 'agent-harness.ext.external-channels',
+          contributes: {
+            channels: expect.arrayContaining([
+              expect.objectContaining({ id: 'slack', kind: 'slack' }),
+              expect.objectContaining({ id: 'telegram', kind: 'telegram' }),
+              expect.objectContaining({ id: 'sms', kind: 'sms' }),
+            ]),
+          },
+        }),
+      }),
+    ]));
     expect(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id)).toEqual([
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
@@ -79,6 +93,7 @@ describe('default extensions', () => {
       'agent-harness.ext.xai-model-provider',
       'agent-harness.ext.local-model-connector',
       'agent-harness.ext.local-inference-daemon',
+      'agent-harness.ext.external-channels',
     ]);
   });
 
@@ -107,6 +122,7 @@ describe('default extensions', () => {
       'xAI Models',
       'Local Model Connector',
       'Local Inference Worker',
+      'External Chat Channels',
     ]);
     expect(runtime.installedExtensionIds).toEqual(['agent-harness.ext.markdown-preview']);
     expect(runtime.plugins).toEqual([]);

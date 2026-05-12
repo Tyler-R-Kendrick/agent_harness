@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.external-channels",
+  "name": "External Chat Channels",
+  "version": "0.1.0",
+  "description": "Adds Slack, Telegram, and SMS as installable chat delegation and continuation channels.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createExternalChannelsPlugin"
+  },
+  "contributes": {
+    "channels": [
+      {
+        "id": "slack",
+        "label": "Slack",
+        "kind": "slack",
+        "capabilities": ["delegate", "continue", "notify", "handoff-link"],
+        "description": "Delegate or continue an Agent Browser chat through a Slack bot or workflow.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "workspaceId": { "type": "string" },
+            "botUserId": { "type": "string" }
+          }
+        }
+      },
+      {
+        "id": "telegram",
+        "label": "Telegram",
+        "kind": "telegram",
+        "capabilities": ["delegate", "continue", "notify", "handoff-link"],
+        "description": "Delegate or continue an Agent Browser chat through a Telegram bot.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "botUsername": { "type": "string" },
+            "allowedChatIds": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      },
+      {
+        "id": "sms",
+        "label": "SMS",
+        "kind": "sms",
+        "capabilities": ["delegate", "continue", "notify", "handoff-link"],
+        "description": "Delegate or continue an Agent Browser chat through a phone-number backed SMS gateway.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "fromNumber": { "type": "string" },
+            "provider": { "type": "string" }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "channel",
+      "id": "slack",
+      "description": "Slack chat session channel."
+    },
+    {
+      "kind": "channel",
+      "id": "telegram",
+      "description": "Telegram chat session channel."
+    },
+    {
+      "kind": "channel",
+      "id": "sms",
+      "description": "SMS chat session channel."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "External channel plugins send and receive chat handoff messages through configured provider APIs."
+    },
+    {
+      "scope": "secrets",
+      "access": "read",
+      "reason": "Provider tokens and signing secrets must stay in the configured secret store."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}
