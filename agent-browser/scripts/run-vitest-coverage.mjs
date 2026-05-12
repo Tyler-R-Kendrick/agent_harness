@@ -11,11 +11,7 @@ const APP_TEST_FILES = ['src/App.integration.test.tsx', 'src/App.smoke.test.tsx'
 const COVERAGE_TEST_ROOTS = ['src', 'server'];
 const COVERAGE_BATCH_SIZE = 25;
 const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
-
-export function resolveCoverageBatchConcurrency(env = process.env) {
-  const parsed = Number.parseInt(String(env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY ?? ''), 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : DEFAULT_COVERAGE_BATCH_CONCURRENCY;
-}
+const COVERAGE_BATCH_CONCURRENCY_ENV = 'AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY';
 
 function defaultReportsDirectory() {
   return process.env.AGENT_BROWSER_COVERAGE_DIR
@@ -93,6 +89,20 @@ export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
 
   return (completedTests && completedCoverage && !failedTests && coverageTmpMissing)
     || coverageReporterCrash;
+}
+
+export function resolveCoverageBatchConcurrency(options = {}) {
+  const hasOptionShape = 'platform' in options || 'env' in options;
+  const platform = hasOptionShape ? options.platform ?? process.platform : process.platform;
+  const env = hasOptionShape ? options.env ?? process.env : options;
+  const configured = env[COVERAGE_BATCH_CONCURRENCY_ENV];
+  if (configured) {
+    const parsed = Number.parseInt(configured, 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return platform === 'win32' ? 1 : DEFAULT_COVERAGE_BATCH_CONCURRENCY;
 }
 
 export function chunkTestFiles(files, batchSize = COVERAGE_BATCH_SIZE) {
