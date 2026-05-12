@@ -468,6 +468,7 @@ import {
   requestMultitaskBranchChanges,
   selectMultitaskProject,
   selectMultitaskTask,
+  startMultitaskBranchRun,
   type MultitaskApprovalActor,
   type MultitaskBranchLifecycleAction,
   type MultitaskSubagentState,
@@ -15247,7 +15248,9 @@ function AgentBrowserApp() {
       const source = current.enabled && current.workspaceId === activeWorkspaceId
         ? current
         : activeMultitaskSubagentState;
-      return addMultitaskTask(source, { title, projectId });
+      const withTask = addMultitaskTask(source, { title, projectId });
+      if (withTask === source || !withTask.selectedBranchId) return withTask;
+      return startMultitaskBranchRun(withTask, withTask.selectedBranchId);
     });
     setActivePanel('symphony');
   }, [activeMultitaskSubagentState, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);

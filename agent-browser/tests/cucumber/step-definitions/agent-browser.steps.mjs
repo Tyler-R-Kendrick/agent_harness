@@ -139,6 +139,23 @@ When('the user opens {string}', async function(panelName) {
   await openPanel(this.page, panelName);
 });
 
+When('the user starts a Symphony workspace request {string}', async function(request) {
+  const app = this.page.getByRole('region', { name: 'Symphony task management system' });
+  await expect(app).toBeVisible();
+  await app.getByLabel('Symphony task request').fill(request);
+  await app.getByRole('button', { name: 'Start Symphony task' }).click();
+  this.lastSymphonyTaskTitle = null;
+});
+
+When('the user creates a Symphony task named {string}', async function(taskTitle) {
+  const app = this.page.getByRole('region', { name: 'Symphony task management system' });
+  const queue = app.getByRole('region', { name: 'Symphony work queue' });
+  await expect(queue).toBeVisible();
+  await queue.getByLabel('New task title').fill(taskTitle);
+  await queue.getByRole('button', { name: 'Create Symphony task' }).click();
+  this.lastSymphonyTaskTitle = taskTitle;
+});
+
 When('the user enables the {string} task filter', async function(filterName) {
   const requestsBefore = (await getRegistryRequests(this.page)).length;
   await this.page.getByRole('button', { name: filterName }).click();
@@ -273,6 +290,30 @@ When('the user edits the file and saves it', async function() {
 
 Then('the {string} field is visible', async function(fieldLabel) {
   await expect(this.page.getByLabel(fieldLabel)).toBeVisible();
+});
+
+Then('the Symphony work queue shows {string} as running', async function(taskTitle) {
+  const app = this.page.getByRole('region', { name: 'Symphony task management system' });
+  const queue = app.getByRole('region', { name: 'Symphony work queue' });
+  const taskButton = queue.getByRole('button', { name: new RegExp(`Open task .* ${escapeRegExp(taskTitle)}$`) });
+  await expect(taskButton).toBeVisible();
+  const taskRow = taskButton.locator('xpath=ancestor::tr');
+  await expect(taskRow).toContainText('Running');
+  await expect(taskRow).toContainText('StreamingTurn');
+  await this.attach(await app.screenshot(), 'image/png');
+});
+
+Then('the Symphony task detail shows session phase {string}', async function(phase) {
+  const app = this.page.getByRole('region', { name: 'Symphony task management system' });
+  const detail = app.getByRole('region', { name: 'Symphony task detail' });
+  await expect(detail).toContainText(this.lastSymphonyTaskTitle ?? '');
+  await expect(detail).toContainText(phase);
+});
+
+Then('the Symphony new task field is cleared', async function() {
+  const app = this.page.getByRole('region', { name: 'Symphony task management system' });
+  const queue = app.getByRole('region', { name: 'Symphony work queue' });
+  await expect(queue.getByLabel('New task title')).toHaveValue('');
 });
 
 Then('no model task filters are selected', async function() {

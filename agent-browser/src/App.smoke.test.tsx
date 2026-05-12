@@ -684,6 +684,48 @@ describe('App smoke coverage', () => {
       .branches.some((branch: { branchName: string }) => branch.branchName === 'agent/research/frontend-1')).toBe(false);
   });
 
+  it('starts newly created Symphony work-queue tasks instead of leaving them preparing', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
+    const taskState = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentState, JSON.stringify(taskState));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    const queue = within(app).getByRole('region', { name: 'Symphony work queue' });
+    fireEvent.change(within(queue).getByLabelText('New task title'), {
+      target: { value: 'make a new widget' },
+    });
+    fireEvent.click(within(queue).getByRole('button', { name: 'Create Symphony task' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    expect(within(queue).getByRole('button', { name: 'Open task SYM-004 make a new widget' })).toBeInTheDocument();
+    expect(within(queue).getByLabelText('New task title')).toHaveValue('');
+    expect(within(app).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('make a new widget');
+    expect(within(app).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('Running');
+    expect(within(app).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('StreamingTurn');
+
+    const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
+    expect(persisted.selectedBranchId).toBe('multitask:ws-research:make-a-new-widget-4');
+    expect(persisted.branches.find((branch: { title: string }) => branch.title === 'make a new widget')).toMatchObject({
+      branchName: 'agent/research/make-a-new-widget-4',
+      status: 'running',
+      progress: 10,
+    });
+  });
+
   it('rolls Symphony task events and session summaries into History', async () => {
     vi.useFakeTimers();
     window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
