@@ -7,7 +7,7 @@ const {
   openInSimpleBrowser,
   resolveTargetUrl,
   waitForServer,
-} = require('../extension/logic');
+} = require('../logic');
 
 test('getCodespacesUriScriptPath points at the bundled script', () => {
   assert.equal(

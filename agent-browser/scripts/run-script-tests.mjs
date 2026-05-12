@@ -138,6 +138,8 @@ async function main() {
   assert.match(linearCanceledIssueScript, /state-type/);
   const linearCanceledIssueWrapper = await readScript('scripts/list-linear-canceled-issues.mjs');
   assert.match(linearCanceledIssueWrapper, /linear-list-canceled-active-issues\.mjs/);
+  const previewExtensionInstaller = await readScript('scripts/install-agent-browser-preview-extension.sh');
+  assert.match(previewExtensionInstaller, /rm -rf "\$tmp_dir\/extension\/tests"/);
   const daemonBuildWorkflow = await readScript('.github/workflows/daemon-build.yml');
   assert.match(daemonBuildWorkflow, /denoland\/setup-deno@v2/);
   assert.match(daemonBuildWorkflow, /--target x86_64-pc-windows-msvc/);
@@ -158,6 +160,7 @@ async function main() {
   const previewExtensionPackageJson = JSON.parse(
     await readScript('tools/agent-browser-preview-extension/extension/package.json'),
   );
+  assert.equal(previewExtensionPackageJson.scripts.test, 'node --test tests/*.test.js');
   assert.deepEqual(previewExtensionPackageJson.files, [
     'main.js',
     'logic.js',

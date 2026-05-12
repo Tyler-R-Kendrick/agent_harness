@@ -10,6 +10,9 @@
   "categories": [
     "Other"
   ],
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
   "files": [
     "main.js",
     "logic.js"
