@@ -4884,6 +4884,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: rgba(14, 116, 144, 0.26);
   color: #ecfeff;
 }
+.harness-dashboard-widget-prompt {
+  display: grid;
+  gap: 10px;
+  width: min(320px, calc(100vw - 24px));
+  padding: 10px;
+}
+.harness-dashboard-widget-prompt label {
+  display: grid;
+  gap: 6px;
+}
+.harness-dashboard-widget-prompt label span {
+  color: #cbd5e1;
+  font-size: 11px;
+}
+.harness-dashboard-widget-prompt input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 5px;
+  padding: 0 9px;
+  background: rgba(8, 13, 18, 0.86);
+  color: #f8fafc;
+  font-size: 12px;
+}
+.harness-dashboard-widget-prompt input:focus {
+  outline: 2px solid rgba(34, 211, 238, 0.54);
+  outline-offset: 1px;
+}
+.harness-dashboard-widget-prompt-actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px;
+}
+.harness-dashboard-widget-prompt-actions button[type="submit"] {
+  background: rgba(14, 116, 144, 0.72);
+  color: #ecfeff;
+  text-align: center;
+}
+.harness-dashboard-widget-prompt-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
 .harness-render-fallback {
   overflow: auto;
   margin: 0;

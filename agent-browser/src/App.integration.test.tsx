@@ -770,7 +770,7 @@ describe('App', () => {
     }
   });
 
-  it('creates dashboard widgets from the canvas and saves live widget-editor JSON', async () => {
+  it('creates dashboard widgets from a natural-language canvas prompt and saves live widget-editor JSON', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -783,9 +783,15 @@ describe('App', () => {
 
     fireEvent.contextMenu(screen.getByLabelText('Infinite session canvas'), { clientX: 260, clientY: 180 });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
+    const prompt = screen.getByRole('dialog', { name: 'Create canvas widget' });
+    fireEvent.change(within(prompt).getByLabelText('Widget prompt'), {
+      target: { value: 'Track launch risks by owner and blocked item' },
+    });
+    fireEvent.click(within(prompt).getByRole('button', { name: 'Create widget' }));
 
     const editor = screen.getByRole('region', { name: 'Widget editor' });
-    expect(within(editor).getByRole('heading', { name: 'New widget', level: 2 })).toBeInTheDocument();
+    expect(within(editor).getByRole('heading', { name: 'Launch risks', level: 2 })).toBeInTheDocument();
+    expect(within(editor).getByRole('region', { name: 'Live widget preview' })).toHaveTextContent('Track launch risks by owner and blocked item');
     expect(screen.queryByLabelText('Widget-bound session')).not.toBeInTheDocument();
 
     fireEvent.change(within(editor).getByLabelText('Sample data'), {
@@ -808,13 +814,14 @@ describe('App', () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole('treeitem', { name: /New widget/ })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /Launch risks/ })).toBeInTheDocument();
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
     const persistedElements = Object.values(persisted['ws-research'].elements) as Array<{ type: string; props?: Record<string, unknown> }>;
-    const persistedWidget = persistedElements.find((element) => element.props?.title === 'New widget');
+    const persistedWidget = persistedElements.find((element) => element.props?.title === 'Launch risks');
     expect(persistedWidget).toMatchObject({
       type: 'SessionConversationSummary',
       props: expect.objectContaining({
+        summary: 'Track launch risks by owner and blocked item',
         widgetJson: expect.objectContaining({ type: 'Card' }),
         widgetSampleData: expect.objectContaining({ metric: '9 work items' }),
       }),

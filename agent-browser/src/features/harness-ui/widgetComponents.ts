@@ -223,6 +223,55 @@ export function createDefaultWidgetDocument(title: string): WidgetDocument {
   };
 }
 
+const TITLE_PREFIX_PATTERN = /^(please\s+)?(create|make|build|add|generate|show|display|surface|summarize|monitor|track)\s+(me\s+|a\s+|an\s+|the\s+)?/iu;
+const TITLE_SPLIT_PATTERN = /\b(with|for|from|using|that|which|where|by|and|including)\b/iu;
+
+function toSentenceTitle(value: string): string {
+  const normalized = value.trim().replace(/\s+/gu, ' ');
+  if (!normalized) return 'New widget';
+  const words = normalized.split(' ').slice(0, 5).map((word) => word.toLowerCase());
+  return words.map((word, index) => {
+    if (index > 0 && /^[A-Z0-9]{2,}$/u.test(word)) return word;
+    return index === 0 ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : word;
+  }).join(' ');
+}
+
+export function deriveWidgetTitleFromPrompt(prompt: string): string {
+  const normalizedPrompt = prompt.trim().replace(/\s+/gu, ' ');
+  if (!normalizedPrompt) return 'New widget';
+  const promptWithoutWidgetWords = normalizedPrompt
+    .replace(TITLE_PREFIX_PATTERN, '')
+    .replace(/\b(dashboard\s+)?widget\b/giu, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .trim();
+  const [titleSeed] = promptWithoutWidgetWords.split(TITLE_SPLIT_PATTERN);
+  return toSentenceTitle((titleSeed ?? '').trim() || normalizedPrompt);
+}
+
+export function createPromptedWidgetDocument(prompt: string): WidgetDocument {
+  const title = deriveWidgetTitleFromPrompt(prompt);
+  return {
+    type: 'Card',
+    size: 'md',
+    theme: 'dark',
+    children: [
+      { type: 'Title', value: title, size: 'lg' },
+      { type: 'Text', value: '{{summary}}', color: 'secondary' },
+      {
+        type: 'Row',
+        gap: 2,
+        children: [
+          { type: 'Badge', label: '{{status}}', color: 'info', variant: 'soft' },
+          { type: 'Text', value: '{{detail}}', color: 'tertiary' },
+        ],
+      },
+      { type: 'Text', value: '{{owner}}', color: 'tertiary', size: 'sm' },
+    ],
+    confirm: { label: 'Apply', action: { type: 'widget.apply' } },
+    cancel: { label: 'Dismiss', action: { type: 'widget.dismiss' } },
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
