@@ -1486,7 +1486,7 @@ async function main() {
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('19 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('20 extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'Harness extensions' })).toBeVisible({
       timeout: shellTimeoutMs,

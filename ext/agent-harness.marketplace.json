@@ -185,6 +185,24 @@
       "keywords": ["hugging-face", "transformers-js", "onnx", "local-models", "codi"]
     },
     {
+      "id": "agent-harness.ext.google-ai-edge-model-provider",
+      "name": "Google AI Edge Browser Models",
+      "version": "0.1.0",
+      "description": "Adds Google AI Edge MediaPipe LLM Inference and Chrome built-in AI APIs as installable browser-local model-provider surfaces.",
+      "manifest": "./google-ai-edge-model-provider/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./google-ai-edge-model-provider"
+      },
+      "categories": ["provider-extension", "model-provider", "browser-local"],
+      "metadata": {
+        "marketplaceCategory": "provider",
+        "accountConfig": "google-ai-edge-browser",
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.google-ai-edge-model-provider.enabled"
+      },
+      "keywords": ["google-ai-edge", "mediapipe", "built-in-ai", "gemma", "gemini-nano", "webgpu", "local-models"]
+    },
+    {
       "id": "agent-harness.ext.ghcp-model-provider",
       "name": "GitHub Copilot Models",
       "version": "0.1.0",

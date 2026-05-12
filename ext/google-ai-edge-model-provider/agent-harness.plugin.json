@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.google-ai-edge-model-provider",
+  "name": "Google AI Edge Browser Models",
+  "version": "0.1.0",
+  "description": "Adds Google AI Edge MediaPipe LLM Inference and Chrome built-in AI APIs as installable browser-local model-provider surfaces.",
+  "activationEvents": [
+    "onModelProvider:google-ai-edge",
+    "onModelProvider:chrome-built-in-ai"
+  ],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createGoogleAiEdgeModelProviderPlugin"
+  },
+  "contributes": {
+    "modelProviders": [
+      {
+        "id": "google-ai-edge",
+        "label": "Google AI Edge",
+        "kind": "browser-local",
+        "providerIds": ["google-ai-edge"],
+        "description": "Uses MediaPipe LLM Inference for Web to run WebGPU-compatible Google AI Edge and Gemma browser models locally.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "enum": ["mediapipe-llm-inference"],
+              "default": "mediapipe-llm-inference"
+            },
+            "wasmBaseUrl": {
+              "type": "string",
+              "default": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-genai@latest/wasm"
+            },
+            "modelAssetPath": {
+              "type": "string"
+            },
+            "maxTokens": {
+              "type": "number",
+              "default": 1000
+            },
+            "topK": {
+              "type": "number",
+              "default": 40
+            },
+            "temperature": {
+              "type": "number",
+              "default": 0.8
+            },
+            "randomSeed": {
+              "type": "number",
+              "default": 0
+            },
+            "maxNumImages": {
+              "type": "number",
+              "default": 0
+            },
+            "supportAudio": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      },
+      {
+        "id": "chrome-built-in-ai",
+        "label": "Chrome Built-in AI",
+        "kind": "browser-local",
+        "providerIds": ["chrome-built-in-ai"],
+        "description": "Uses Chrome built-in AI APIs such as LanguageModel, Summarizer, Writer, Rewriter, Proofreader, Translator, and LanguageDetector when available in the browser.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "api": {
+              "type": "string",
+              "enum": [
+                "LanguageModel",
+                "Summarizer",
+                "Writer",
+                "Rewriter",
+                "Proofreader",
+                "Translator",
+                "LanguageDetector"
+              ],
+              "default": "LanguageModel"
+            },
+            "expectedInputs": {
+              "type": "array"
+            },
+            "expectedOutputs": {
+              "type": "array"
+            },
+            "requiresUserActivation": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "model-provider",
+      "id": "google-ai-edge",
+      "description": "MediaPipe LLM Inference browser-local language models."
+    },
+    {
+      "kind": "model-provider",
+      "id": "chrome-built-in-ai",
+      "description": "Chrome built-in AI API browser-local models."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Stores selected local model asset paths, runtime preferences, and built-in AI readiness metadata."
+    },
+    {
+      "scope": "network",
+      "access": "read",
+      "reason": "Loads MediaPipe WebAssembly files and user-selected web-converted model assets when they are not bundled locally."
+    },
+    {
+      "scope": "browser",
+      "access": "execute",
+      "reason": "Runs WebGPU-backed MediaPipe inference and invokes browser-provided built-in AI APIs."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}
