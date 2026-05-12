@@ -321,6 +321,57 @@ describe('plugin manifest standards', () => {
     }).issues).toContain('Contribution sources must stay inside the plugin package.');
   });
 
+  it('validates channel contributions for external chat handoffs', () => {
+    const manifest = {
+      ...pluginManifest,
+      id: 'agent-harness.ext.external-channels',
+      name: 'External chat channels',
+      description: 'Adds Slack, Telegram, and SMS chat handoff channels.',
+      contributes: {
+        channels: [
+          {
+            id: 'slack',
+            label: 'Slack',
+            kind: 'slack',
+            capabilities: ['delegate', 'continue', 'notify'],
+            description: 'Delegate or continue a chat session through a Slack bot.',
+            source: './channels/slack.json',
+            configuration: {
+              type: 'object',
+              properties: {
+                workspaceId: { type: 'string' },
+              },
+            },
+          },
+        ],
+      },
+      capabilities: [
+        { kind: 'channel', id: 'slack', description: 'Slack chat session channel.' },
+      ],
+    };
+
+    expect(validateHarnessPluginManifest(manifest)).toEqual({ success: true, issues: [] });
+    expect(parseHarnessPluginManifest(manifest)).toEqual(manifest);
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        channels: [{ ...manifest.contributes.channels[0], kind: 'unsupported' }],
+      },
+    }).issues).toContain('Channel kind "unsupported" is not part of the core extension standard.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        channels: [{ ...manifest.contributes.channels[0], capabilities: ['delegate', 'unknown'] }],
+      },
+    }).issues).toContain('Channel capability "unknown" is not part of the core extension standard.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      contributes: {
+        channels: [{ ...manifest.contributes.channels[0], source: '../slack.json' }],
+      },
+    }).issues).toContain('Contribution sources must stay inside the plugin package.');
+  });
+
   it('keeps the DESIGN.md example renderer manifest valid', () => {
     const manifest = JSON.parse(readFileSync(
       new URL('../../../ext/ide/design-md/agent-harness.plugin.json', import.meta.url),

@@ -30,6 +30,7 @@ export type HarnessPluginCapabilityKind =
   | 'extension'
   | 'renderer'
   | 'pane-item'
+  | 'channel'
   | 'asset'
   | 'event';
 
@@ -59,6 +60,24 @@ export type HarnessPluginToolContributionKind =
   | 'agent-skill'
   | 'a2a'
   | 'command';
+
+export type HarnessPluginChannelKind =
+  | 'webrtc'
+  | 'slack'
+  | 'telegram'
+  | 'sms'
+  | 'email'
+  | 'webhook'
+  | 'discord'
+  | 'teams'
+  | 'custom';
+
+export type HarnessPluginChannelCapability =
+  | 'delegate'
+  | 'continue'
+  | 'notify'
+  | 'presence'
+  | 'handoff-link';
 
 export interface HarnessPluginModelProviderContribution {
   id: string;
@@ -98,11 +117,23 @@ export interface HarnessPluginToolContribution {
   configuration?: Record<string, unknown>;
 }
 
+export interface HarnessPluginChannelContribution {
+  id: string;
+  label: string;
+  kind: HarnessPluginChannelKind;
+  capabilities: HarnessPluginChannelCapability[];
+  description?: string;
+  source?: string;
+  configuration?: Record<string, unknown>;
+  defaultConfiguration?: unknown;
+}
+
 export interface HarnessPluginContributions {
   modelProviders?: HarnessPluginModelProviderContribution[];
   harnesses?: HarnessPluginHarnessContribution[];
   agents?: HarnessPluginAgentContribution[];
   tools?: HarnessPluginToolContribution[];
+  channels?: HarnessPluginChannelContribution[];
 }
 
 export interface HarnessPluginComponentContributions {
@@ -244,6 +275,7 @@ const CAPABILITY_KINDS = new Set<HarnessPluginCapabilityKind>([
   'extension',
   'renderer',
   'pane-item',
+  'channel',
   'asset',
   'event',
 ]);
@@ -305,6 +337,26 @@ const TOOL_CONTRIBUTION_KINDS = new Set<HarnessPluginToolContributionKind>([
   'agent-skill',
   'a2a',
   'command',
+]);
+
+const CHANNEL_KINDS = new Set<HarnessPluginChannelKind>([
+  'webrtc',
+  'slack',
+  'telegram',
+  'sms',
+  'email',
+  'webhook',
+  'discord',
+  'teams',
+  'custom',
+]);
+
+const CHANNEL_CAPABILITIES = new Set<HarnessPluginChannelCapability>([
+  'delegate',
+  'continue',
+  'notify',
+  'presence',
+  'handoff-link',
 ]);
 
 const modelProviderContributionSchema = z.object({
@@ -369,11 +421,40 @@ const toolContributionSchema = z.object({
   }
 });
 
+const channelContributionSchema = z.object({
+  id: contributionIdSchema,
+  label: z.string().min(1, 'Channel labels are required.'),
+  kind: z.string(),
+  capabilities: z.array(z.string()),
+  description: z.string().optional(),
+  source: contributionSourceSchema.optional(),
+  configuration: z.record(z.string(), z.unknown()).optional(),
+  defaultConfiguration: z.unknown().optional(),
+}).superRefine((value, context) => {
+  if (!CHANNEL_KINDS.has(value.kind as HarnessPluginChannelKind)) {
+    context.addIssue({
+      code: 'custom',
+      path: ['kind'],
+      message: `Channel kind "${value.kind}" is not part of the core extension standard.`,
+    });
+  }
+  for (const capability of value.capabilities) {
+    if (!CHANNEL_CAPABILITIES.has(capability as HarnessPluginChannelCapability)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['capabilities'],
+        message: `Channel capability "${capability}" is not part of the core extension standard.`,
+      });
+    }
+  }
+});
+
 const contributesSchema = z.object({
   modelProviders: z.array(modelProviderContributionSchema).optional(),
   harnesses: z.array(harnessContributionSchema).optional(),
   agents: z.array(agentContributionSchema).optional(),
   tools: z.array(toolContributionSchema).optional(),
+  channels: z.array(channelContributionSchema).optional(),
 }).optional();
 
 const componentsSchema = z.object({

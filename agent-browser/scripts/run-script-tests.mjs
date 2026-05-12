@@ -307,6 +307,7 @@ async function main() {
   assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
   assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
+  assert.match(coverageRunnerScript, /resolveCoverageBatchConcurrency/);
   assert.match(coverageRunnerScript, /runVitestCommandsConcurrently/);
   assert.match(coverageRunnerScript, /runVitestCommandWithRetry/);
   assert.match(coverageRunnerScript, /retrying once/);

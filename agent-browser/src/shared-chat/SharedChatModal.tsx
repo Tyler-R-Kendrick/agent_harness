@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  DEFAULT_WEBRTC_CHAT_CHANNEL,
+  buildChatChannelHandoffPayload,
+  formatChatChannelHandoffMessage,
+  type ChatChannelOption,
+} from '../services/chatChannels';
+import {
   MAX_QUEUED_OUTBOUND_BYTES,
   PeerRateLimiter,
   compressSdp,
@@ -56,10 +62,12 @@ export function SharedChatModal({
   onStatusMessage,
   onToast,
   onCopyToClipboard,
+  channelOptions = [DEFAULT_WEBRTC_CHAT_CHANNEL],
 }: {
   open: boolean;
   sessionId: string;
   workspaceName: string;
+  channelOptions?: readonly ChatChannelOption[];
   onClose: () => void;
   onApiChange: (api: SharedChatApi | null) => void;
   onRemoteMessage: (text: string, peerLabel: string) => void;
@@ -92,6 +100,8 @@ export function SharedChatModal({
     answerHash: string;
   } | null>(null);
   const rateLimiterRef = useRef(new PeerRateLimiter());
+  const normalizedChannelOptions = channelOptions.length ? channelOptions : [DEFAULT_WEBRTC_CHAT_CHANNEL];
+  const externalChannelOptions = normalizedChannelOptions.filter((channel) => channel.kind !== 'webrtc');
 
   const closePeer = useCallback(() => {
     for (const channel of Object.values(channelsRef.current)) channel?.close();
@@ -443,6 +453,20 @@ export function SharedChatModal({
     onToast(`${label} copied`, 'success');
   }, [onCopyToClipboard, onToast]);
 
+  const shareViaExternalChannel = useCallback(async (channel: ChatChannelOption) => {
+    const payload = buildChatChannelHandoffPayload(channel, { sessionId, workspaceName });
+    const message = formatChatChannelHandoffMessage(payload);
+    try {
+      await onCopyToClipboard(message, `${channel.label} channel handoff`);
+      const statusMessage = `${channel.label} handoff copied. Send it through the configured channel extension to delegate or continue this chat.`;
+      setStatus(statusMessage);
+      onStatusMessage(statusMessage);
+      onToast(`${channel.label} handoff copied`, 'success');
+    } catch {
+      fail(`Failed to copy ${channel.label} handoff.`);
+    }
+  }, [fail, onCopyToClipboard, onStatusMessage, onToast, sessionId, workspaceName]);
+
   return open ? (
     <div className="shared-chat-backdrop" role="dialog" aria-modal="true" aria-label="Share chat session">
       <section className="shared-chat-modal">
@@ -457,10 +481,13 @@ export function SharedChatModal({
         {error ? <div className="shared-chat-error">{error}</div> : null}
         <div className="shared-chat-body">
           {phase === 'home' ? (
-            <div className="shared-chat-grid">
-              <ActionCard title="Start shared session" body="Create an invite QR on this device. The peer scans it, then shows a signed answer QR." onClick={() => void startOwnerInvite()} />
-              <ActionCard title="Join shared session" body="Scan or paste the owner invite. This device creates a signed answer QR." onClick={() => { setPhase('join-scan'); setQrDataUrl(null); }} />
-            </div>
+            <>
+              <div className="shared-chat-grid">
+                <ActionCard title="Start shared session" body="Create an invite QR on this device. The peer scans it, then shows a signed answer QR." onClick={() => void startOwnerInvite()} />
+                <ActionCard title="Join shared session" body="Scan or paste the owner invite. This device creates a signed answer QR." onClick={() => { setPhase('join-scan'); setQrDataUrl(null); }} />
+              </div>
+              <ChannelOptionsPanel channels={normalizedChannelOptions} externalChannels={externalChannelOptions} onShareExternal={(channel) => void shareViaExternalChannel(channel)} />
+            </>
           ) : null}
           {phase === 'owner-invite' ? (
             <QrPayloadPanel title="Invite QR" qrDataUrl={qrDataUrl} code={inviteCode} expiresAt={expiresAt} onCopy={(value) => void copyCode(value, 'Invite code')}>
@@ -489,6 +516,30 @@ export function SharedChatModal({
 
 function ActionCard({ title, body, onClick }: { title: string; body: string; onClick: () => void }) {
   return <button type="button" className="shared-chat-action-card" onClick={onClick}><strong>{title}</strong><span>{body}</span></button>;
+}
+
+function ChannelOptionsPanel({ channels, externalChannels, onShareExternal }: { channels: readonly ChatChannelOption[]; externalChannels: readonly ChatChannelOption[]; onShareExternal: (channel: ChatChannelOption) => void }) {
+  return (
+    <section className="shared-chat-channel-options" aria-label="Channel share options">
+      <div className="shared-chat-channel-summary">
+        <strong>Channels</strong>
+        <span>{channels.map((channel) => channel.label).join(' · ')}</span>
+      </div>
+      {externalChannels.length ? (
+        <div className="shared-chat-channel-list" role="list">
+          {externalChannels.map((channel) => (
+            <article key={channel.id} className="shared-chat-channel-row" role="listitem">
+              <div>
+                <strong>{channel.label}</strong>
+                <span>{channel.capabilities.join(', ')}</span>
+              </div>
+              <button type="button" className="secondary-button" onClick={() => onShareExternal(channel)}>Share with {channel.label}</button>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function QrPayloadPanel({ title, qrDataUrl, code, expiresAt, onCopy, children }: { title: string; qrDataUrl: string | null; code: string; expiresAt: number | null; onCopy: (code: string) => void; children: React.ReactNode }) {

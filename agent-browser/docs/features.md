@@ -14,6 +14,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 - Default workspace memory: every workspace starts with `.memory/` files only; optional AGENTS.md, agent-skills, and DESIGN.md behavior is provided by installable plugin examples under `ext/`.
 - Project switching and creation: `Research` and `Build` are project entries backed by isolated workspaces, and users can switch, cycle, rename, or create projects without losing project-scoped state.
 - Clipboard history via Clip-Board: each workspace tree shows a non-expandable **Clip-Board** node after Files. Right-clicking it opens a History context menu item that launches the clipboard history modal, where users can browse previous clipboard entries (captured when copying URIs or session links within the app) and restore any prior item back to the clipboard.
+- Chat channels: the chat share button always exposes the built-in QR/WebRTC peer option and adds installed `channel` extension contributions such as Slack, Telegram, and SMS to the same share options.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
 
 ## Workspace shell
