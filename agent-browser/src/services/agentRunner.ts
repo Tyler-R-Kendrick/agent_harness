@@ -65,6 +65,21 @@ export type AgentRunResult = {
   searchTurnContext?: SearchTurnContext;
 };
 
+const EMPTY_FINAL_AFTER_TOOL_USE_ERROR = 'Model stopped before producing a final answer after tool use.';
+const EMPTY_FINAL_ERROR = 'Model stopped before producing a final answer.';
+
+function buildEmptyFinalResponse(hadToolActivity: boolean): { text: string; error: string } {
+  return hadToolActivity
+    ? {
+      text: 'I ran the requested tools, but the model stopped before producing a final answer. Please retry or narrow the request.',
+      error: EMPTY_FINAL_AFTER_TOOL_USE_ERROR,
+    }
+    : {
+      text: 'The model stopped before producing a final answer. Please retry the request.',
+      error: EMPTY_FINAL_ERROR,
+    };
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────────
 
 /**
@@ -87,6 +102,8 @@ export async function runToolAgent(
   const instructions = (await secrets.sanitizeText(options.instructions)).text;
   const messages = await secrets.sanitizeModelMessages(options.messages);
   const tools = secrets.wrapTools(options.tools);
+  let observedSteps = 0;
+  let hadToolActivity = false;
 
   try {
     const result = await generateText({
@@ -97,13 +114,16 @@ export async function runToolAgent(
       stopWhen: stepCountIs(maxSteps),
       abortSignal: signal,
       onStepFinish: (step) => {
+        observedSteps += 1;
         if (step.toolCalls?.length) {
+          hadToolActivity = true;
           for (const call of step.toolCalls) {
             callbacks.onToolCall?.(call.toolName, call.input, 'toolCallId' in call ? call.toolCallId : undefined);
           }
         }
 
         if (step.toolResults?.length) {
+          hadToolActivity = true;
           for (const result of step.toolResults) {
             const toolCallId = 'toolCallId' in result ? result.toolCallId : undefined;
             const toolName = 'toolName' in result ? result.toolName : 'unknown-tool';
@@ -119,11 +139,18 @@ export async function runToolAgent(
       },
     });
 
-    const text = result.text ?? '';
+    const rawText = result.text ?? '';
+    const emptyFinal = rawText.trim().length === 0;
+    const finalResponse = emptyFinal ? buildEmptyFinalResponse(hadToolActivity) : null;
+    const text = finalResponse?.text ?? rawText;
     callbacks.onToken?.(text);
     callbacks.onDone?.(text);
 
-    return { text, steps: result.steps?.length ?? 1 };
+    return {
+      text,
+      steps: result.steps?.length ?? Math.max(observedSteps, 1),
+      ...(finalResponse ? { failed: true, error: finalResponse.error } : {}),
+    };
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     callbacks.onError?.(error);

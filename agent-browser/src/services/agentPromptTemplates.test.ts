@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAgentSystemPrompt,
+  buildInstructionFollowingTemplate,
   buildSelfReflectionTemplate,
   buildResearchTemplate,
   buildDelegationWorkerPrompt,
@@ -21,6 +22,17 @@ describe('agentPromptTemplates', () => {
     expect(template).toContain('single most useful clarifying question');
     expect(template).toContain('collaborator');
     expect(template).toContain('uncertainty');
+  });
+
+  it('builds an explicit instruction-following contract for chat eval constraints', () => {
+    const template = buildInstructionFollowingTemplate();
+
+    expect(template).toContain('Honor explicit user constraints exactly');
+    expect(template).toContain('format');
+    expect(template).toContain('length');
+    expect(template).toContain('punctuation');
+    expect(template).toContain('casing');
+    expect(template).toContain('JSON');
   });
 
   it('resolves prompt scenarios from user text', () => {
@@ -145,6 +157,7 @@ describe('agentPromptTemplates', () => {
   it('builds scenario-specific system prompts', () => {
     const prompt = buildAgentSystemPrompt({ workspaceName: 'Research', goal: 'Write code safely.', scenario: 'coding' });
     expect(prompt).toContain('## Coding Guidance');
+    expect(prompt).toContain('## Instruction Following Contract');
     expect(prompt).toContain('## Goal');
     expect(prompt).toContain('Write code safely.');
   });
