@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_EXTENSIONS_DIRECTORY = 'ext';
+const SKIPPED_EXTENSION_DISCOVERY_DIRECTORIES = new Set(['node_modules']);
 
 function repoRootFromScript() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,6 +30,10 @@ export async function discoverExtensionWorkspaces(repoRoot = repoRootFromScript(
   const workspaces = [];
 
   async function visit(directory) {
+    if (SKIPPED_EXTENSION_DISCOVERY_DIRECTORIES.has(path.basename(directory))) {
+      return;
+    }
+
     try {
       const packageJson = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'));
       if (typeof packageJson.name === 'string') {
@@ -43,7 +48,7 @@ export async function discoverExtensionWorkspaces(repoRoot = repoRootFromScript(
 
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isDirectory()) {
+      if (entry.isDirectory() && !SKIPPED_EXTENSION_DISCOVERY_DIRECTORIES.has(entry.name)) {
         await visit(path.join(directory, entry.name));
       }
     }
