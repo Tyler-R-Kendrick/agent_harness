@@ -83,6 +83,7 @@ export interface SymphonyLiveSession {
   lastCodexEvent: string | null;
   lastCodexTimestamp: string | null;
   lastCodexMessage: string;
+  lastActivitySummary: string;
   codexInputTokens: number;
   codexOutputTokens: number;
   codexTotalTokens: number;
@@ -252,6 +253,15 @@ export interface CreateSymphonyRuntimeSnapshotInput {
 const WORKSPACE_ROOT = '.symphony/workspaces';
 const MAX_CONCURRENT_AGENTS = 4;
 const DEFAULT_CREATED_AT = '2026-05-07T10:00:00.000Z';
+const CODEX_STALL_TIMEOUT_MS = 300000;
+
+interface BranchRunRuntime {
+  startedAt: Date;
+  lastActivityAt: Date;
+  lastActivitySummary: string;
+  stalled: boolean;
+  stalledMessage: string | null;
+}
 
 export function createSymphonyRuntimeSnapshot({
   state,
@@ -261,18 +271,33 @@ export function createSymphonyRuntimeSnapshot({
 }: CreateSymphonyRuntimeSnapshotInput): SymphonyRuntimeSnapshot {
   const effectiveNow = normalizeDate(now ?? new Date(state.createdAt));
   const projects = projectsForState(state);
+  const branchRuntime = new Map(state.branches.map((branch) => [
+    branch.id,
+    createBranchRunRuntime(branch, state.createdAt, effectiveNow),
+  ] as const));
   const issues = state.branches.map((branch, index) => createIssue(branch, index, effectiveNow));
   const workspaces = state.branches.map((branch, index) => createWorkspace(branch, index));
-  const runAttempts = state.branches.map((branch, index) => createRunAttempt(branch, index, effectiveNow));
+  const runAttempts = state.branches.map((branch, index) =>
+    createRunAttempt(branch, index, branchRuntime.get(branch.id) as BranchRunRuntime));
   const liveSessions = state.branches.flatMap((branch, index) =>
-    branch.status === 'running' ? [createLiveSession(branch, issueIdentifierForBranch(branch, index), effectiveNow)] : []);
+    branch.status === 'running'
+      ? [createLiveSession(branch, issueIdentifierForBranch(branch, index), branchRuntime.get(branch.id) as BranchRunRuntime)]
+      : []);
   const retryEntries = state.branches
     .map((branch, index) => branch.status === 'blocked' ? createRetryEntry(branch, index, effectiveNow) : null)
     .filter((entry): entry is SymphonyRetryEntry => entry !== null);
   const running = new Map<string, SymphonyRunningEntry>(
-    state.branches.flatMap((branch, index) =>
-      branch.status === 'running' ? [[branch.id, createRunningEntry(branch, index, effectiveNow)] as const] : []),
+    state.branches.flatMap((branch, index) => {
+      const runtime = branchRuntime.get(branch.id) as BranchRunRuntime;
+      return branch.status === 'running' && !runtime.stalled
+        ? [[branch.id, createRunningEntry(branch, index, runtime)] as const]
+        : [];
+    }),
   );
+  const stalledRuns = state.branches.flatMap((branch, index) => {
+    const runtime = branchRuntime.get(branch.id) as BranchRunRuntime;
+    return runtime.stalled ? [runAttempts[index]] : [];
+  });
   const retryAttempts = new Map(retryEntries.map((entry) => [entry.issueId, entry]));
   const completed = state.branches
     .filter((branch) => branch.status === 'ready' || branch.status === 'promoted' || branch.status === 'cancelled')
@@ -328,8 +353,8 @@ export function createSymphonyRuntimeSnapshot({
       })),
       report,
     },
-    logs: createLogs(state, report, effectiveNow, running, retryEntries),
-    layers: createLayers(notPassingValidationCount, running.size),
+    logs: createLogs(state, report, effectiveNow, running, retryEntries, stalledRuns),
+    layers: createLayers(notPassingValidationCount, running.size, stalledRuns.length),
   };
 }
 
@@ -339,7 +364,8 @@ export function isSymphonyAutopilotSettings(value: unknown): value is SymphonyAu
 
 export function summarizeSymphonyRuntime(snapshot: SymphonyRuntimeSnapshot): SymphonyRuntimeSummary {
   const availableSlots = Math.max(0, snapshot.orchestrator.maxConcurrentAgents - snapshot.orchestrator.running.size);
-  const blockedBranches = snapshot.review.branches.filter((branch) => branch.status === 'blocked').length;
+  const stalledBranches = snapshot.runAttempts.filter(isStalledCodexAttempt).length;
+  const blockedBranches = snapshot.review.branches.filter((branch) => branch.status === 'blocked').length + stalledBranches;
   return {
     totalIssues: snapshot.issues.length,
     running: snapshot.orchestrator.running.size,
@@ -473,7 +499,7 @@ function createWorkspace(branch: MultitaskSubagentBranch, index: number): Sympho
   };
 }
 
-function createRunAttempt(branch: MultitaskSubagentBranch, index: number, now: Date): SymphonyRunAttempt {
+function createRunAttempt(branch: MultitaskSubagentBranch, index: number, runtime: BranchRunRuntime): SymphonyRunAttempt {
   const issueIdentifier = issueIdentifierForBranch(branch, index);
   const evidence = branch.executionEvents ?? [];
   return {
@@ -481,15 +507,15 @@ function createRunAttempt(branch: MultitaskSubagentBranch, index: number, now: D
     issueIdentifier,
     attempt: branch.status === 'queued' ? null : Math.max(1, branch.runAttempt ?? 1),
     workspacePath: `${WORKSPACE_ROOT}/${issueIdentifier}`,
-    startedAt: branch.lastRunAt ?? now.toISOString(),
-    phase: phaseFor(branch.status),
-    status: runStatusFor(branch.status),
-    error: branch.status === 'blocked' ? 'agent branch blocked' : null,
+    startedAt: runtime.startedAt.toISOString(),
+    phase: runtime.stalled ? 'Stalled' : phaseFor(branch.status),
+    status: runtime.stalled ? 'failed' : runStatusFor(branch.status),
+    error: runtime.stalledMessage ?? (branch.status === 'blocked' ? 'agent branch blocked' : null),
     evidence,
   };
 }
 
-function createLiveSession(branch: MultitaskSubagentBranch, issueIdentifier: string, now: Date): SymphonyLiveSession {
+function createLiveSession(branch: MultitaskSubagentBranch, issueIdentifier: string, runtime: BranchRunRuntime): SymphonyLiveSession {
   const threadId = `thread-${issueIdentifier}`;
   const turnId = 'turn-1';
   const inputTokens = 1800 + Math.round(branch.confidence * 100);
@@ -501,9 +527,10 @@ function createLiveSession(branch: MultitaskSubagentBranch, issueIdentifier: str
     threadId,
     turnId,
     codexAppServerPid: 'local-app-server',
-    lastCodexEvent: lastEvidence?.type ?? 'turn_delta',
-    lastCodexTimestamp: lastEvidence?.at ?? branch.lastHeartbeatAt ?? now.toISOString(),
-    lastCodexMessage: lastEvidence?.summary ?? branch.summary,
+    lastCodexEvent: runtime.stalled ? 'session_stalled' : lastEvidence?.type ?? 'turn_delta',
+    lastCodexTimestamp: runtime.lastActivityAt.toISOString(),
+    lastCodexMessage: runtime.stalledMessage ?? runtime.lastActivitySummary,
+    lastActivitySummary: runtime.lastActivitySummary,
     codexInputTokens: inputTokens,
     codexOutputTokens: outputTokens,
     codexTotalTokens: inputTokens + outputTokens,
@@ -524,14 +551,14 @@ function createRetryEntry(branch: MultitaskSubagentBranch, index: number, now: D
   };
 }
 
-function createRunningEntry(branch: MultitaskSubagentBranch, index: number, now: Date): SymphonyRunningEntry {
+function createRunningEntry(branch: MultitaskSubagentBranch, index: number, runtime: BranchRunRuntime): SymphonyRunningEntry {
   const issueIdentifier = issueIdentifierForBranch(branch, index);
   return {
     issueId: branch.id,
     identifier: issueIdentifier,
     branchName: branch.branchName,
     workspacePath: `${WORKSPACE_ROOT}/${issueIdentifier}`,
-    startedAt: branch.lastRunAt ?? now.toISOString(),
+    startedAt: runtime.startedAt.toISOString(),
     phase: 'StreamingTurn',
     sessionId: branch.sessionId ?? `thread-${issueIdentifier}-turn-1`,
   };
@@ -543,6 +570,7 @@ function createLogs(
   now: Date,
   running: Map<string, SymphonyRunningEntry>,
   retryEntries: SymphonyRetryEntry[],
+  stalledRuns: SymphonyRunAttempt[],
 ): SymphonyRuntimeSnapshot['logs'] {
   if (state.branches.length === 0) {
     return [{
@@ -592,6 +620,17 @@ function createLogs(
       });
     }
   }
+  for (const stalledRun of stalledRuns) {
+    logs.push({
+      ts: now.toISOString(),
+      level: 'error',
+      event: 'session_stalled',
+      issueId: stalledRun.issueId,
+      issueIdentifier: stalledRun.issueIdentifier,
+      sessionId: state.branches.find((branch) => branch.id === stalledRun.issueId)?.sessionId ?? `thread-${stalledRun.issueIdentifier}-turn-1`,
+      message: stalledRun.error ?? 'Codex session stopped reporting events.',
+    });
+  }
   if (retryEntries[0]) {
     logs.push({
       ts: now.toISOString(),
@@ -628,15 +667,40 @@ function formatEventName(value: string): string {
   return value.replace(/[_-]+/g, ' ');
 }
 
-function createLayers(notPassingValidationCount: number, runningCount: number): SymphonyRuntimeSnapshot['layers'] {
+function createLayers(notPassingValidationCount: number, runningCount: number, stalledCount: number): SymphonyRuntimeSnapshot['layers'] {
   return [
     { name: 'Policy Layer', detail: 'WORKFLOW.md prompt body and team handoff policy', status: notPassingValidationCount > 0 ? 'blocked' : 'ready' },
     { name: 'Configuration Layer', detail: 'Typed config, defaults, environment indirection', status: 'ready' },
-    { name: 'Coordination Layer', detail: 'Polling, claims, retries, reconciliation', status: runningCount > 0 ? 'active' : 'ready' },
-    { name: 'Execution Layer', detail: 'Per-issue workspaces and Codex app-server sessions', status: runningCount > 0 ? 'active' : 'ready' },
+    { name: 'Coordination Layer', detail: 'Polling, claims, retries, reconciliation', status: stalledCount > 0 ? 'blocked' : runningCount > 0 ? 'active' : 'ready' },
+    { name: 'Execution Layer', detail: 'Per-issue workspaces and Codex app-server sessions', status: stalledCount > 0 ? 'blocked' : runningCount > 0 ? 'active' : 'ready' },
     { name: 'Integration Layer', detail: 'Internal task normalization, IndexedDB state, worker/outbox refresh', status: 'ready' },
     { name: 'Observability Layer', detail: 'Structured logs, status surface, token totals', status: 'ready' },
   ];
+}
+
+function createBranchRunRuntime(
+  branch: MultitaskSubagentBranch,
+  stateCreatedAt: string,
+  now: Date,
+): BranchRunRuntime {
+  const fallbackStartedAt = parseDateOrNull(stateCreatedAt) ?? new Date(DEFAULT_CREATED_AT);
+  const lastEvidence = branch.executionEvents?.at(-1) ?? null;
+  const startedAt = parseDateOrNull(branch.lastRunAt) ?? fallbackStartedAt;
+  const lastActivityAt = parseDateOrNull(lastEvidence?.at) ?? parseDateOrNull(branch.lastHeartbeatAt) ?? startedAt;
+  const elapsedMs = Math.max(0, now.getTime() - lastActivityAt.getTime());
+  const stalled = branch.status === 'running' && elapsedMs >= CODEX_STALL_TIMEOUT_MS;
+  const stalledMessage = stalled ? `No Codex events received for ${formatDuration(elapsedMs)}.` : null;
+  return {
+    startedAt,
+    lastActivityAt,
+    lastActivitySummary: lastEvidence?.summary ?? branch.summary,
+    stalled,
+    stalledMessage,
+  };
+}
+
+function isStalledCodexAttempt(attempt: SymphonyRunAttempt): boolean {
+  return attempt.phase === 'Stalled' && attempt.error?.startsWith('No Codex events received') === true;
 }
 
 function createTokenTotals(liveSessions: SymphonyLiveSession[]) {
@@ -779,6 +843,20 @@ function slugify(value: string): string {
 
 function normalizeDate(value: Date): Date {
   return Number.isNaN(value.getTime()) ? new Date(DEFAULT_CREATED_AT) : value;
+}
+
+function parseDateOrNull(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  return `${minutes}m ${seconds}s`;
 }
 
 function uniqueStrings(values: string[]): string[] {

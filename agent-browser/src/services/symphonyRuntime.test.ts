@@ -141,6 +141,67 @@ describe('symphonyRuntime', () => {
     );
   });
 
+  it('marks idle running sessions as stalled instead of refreshing synthetic activity', () => {
+    const state = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research Lab',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    const runningState = {
+      ...state,
+      branches: state.branches.map((branch) => branch.branchName.endsWith('/frontend-1')
+        ? {
+            ...branch,
+            status: 'running' as const,
+            progress: 42,
+            runAttempt: 1,
+            sessionId: 'symphony:ws-research:frontend-1',
+            lastRunAt: '2026-05-07T10:00:00.000Z',
+            lastHeartbeatAt: '2026-05-07T10:00:00.000Z',
+            executionEvents: [{
+              id: 'multitask:ws-research:frontend-1:heartbeat:2026-05-07T10:00:00.000Z',
+              type: 'heartbeat' as const,
+              at: '2026-05-07T10:00:00.000Z',
+              summary: 'Frontend agent entered StreamingTurn.',
+            }],
+          }
+        : branch),
+    };
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Research Lab'));
+
+    const snapshot = createSymphonyRuntimeSnapshot({
+      state: runningState,
+      report,
+      now: new Date('2026-05-07T10:06:00.000Z'),
+    });
+
+    expect(snapshot.orchestrator.running.size).toBe(0);
+    expect(snapshot.runAttempts[0]).toMatchObject({
+      phase: 'Stalled',
+      status: 'failed',
+      error: 'No Codex events received for 6m 0s.',
+    });
+    expect(snapshot.liveSessions[0]).toMatchObject({
+      lastCodexEvent: 'session_stalled',
+      lastCodexTimestamp: '2026-05-07T10:00:00.000Z',
+      lastCodexMessage: 'No Codex events received for 6m 0s.',
+      lastActivitySummary: 'Frontend agent entered StreamingTurn.',
+    });
+    expect(snapshot.logs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        level: 'error',
+        event: 'session_stalled',
+        issueIdentifier: 'SYM-001',
+        message: 'No Codex events received for 6m 0s.',
+      }),
+    ]));
+    expect(summarizeSymphonyRuntime(snapshot)).toMatchObject({ running: 0, blocked: 1 });
+    expect(buildSymphonyHistorySessionSummaries(snapshot)).toContain(
+      'Symphony session: SYM-001 agent/research-lab/frontend-1 Stalled failed 1 turn, 1 evidence event',
+    );
+  });
+
   it('keeps Symphony issue identifiers stable when earlier tasks are closed', () => {
     const state = createMultitaskSubagentState({
       workspaceId: 'ws-research',

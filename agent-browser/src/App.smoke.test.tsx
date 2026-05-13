@@ -636,7 +636,7 @@ describe('App smoke coverage', () => {
     expect(app).toBeInTheDocument();
     expect(screen.getByText('Isolated Workspaces')).toBeInTheDocument();
     expect(screen.getAllByText('agent/research/frontend-1').length).toBeGreaterThan(0);
-    expect(screen.getByText(/SYM-001/)).toBeInTheDocument();
+    expect(within(app).getByRole('button', { name: 'Open task SYM-001 Frontend branch' })).toBeInTheDocument();
     expect(screen.getByText('Review Gate')).toBeInTheDocument();
     expect(screen.getAllByText('Reviewer Feedback').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Send reviewer agent feedback for agent/research/tests-2' })).toBeInTheDocument();

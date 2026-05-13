@@ -143,16 +143,34 @@ describe('multitaskSubagents', () => {
     });
     const branchId = initial.branches[0].id;
 
-    const running = startMultitaskBranchRun(initial, branchId);
+    const running = startMultitaskBranchRun(initial, branchId, { now: new Date('2026-05-07T11:46:00.000Z') });
     const stopped = stopMultitaskBranchRun(running, branchId);
     const retried = retryMultitaskBranch(stopped, branchId);
     const disposed = disposeMultitaskBranch(retried, branchId);
 
-    expect(running.branches[0]).toMatchObject({ status: 'running', progress: 10 });
+    expect(running.branches[0]).toMatchObject({
+      status: 'running',
+      progress: 10,
+      runAttempt: 1,
+      lastRunAt: '2026-05-07T11:46:00.000Z',
+      lastHeartbeatAt: '2026-05-07T11:46:00.000Z',
+    });
+    expect(running.branches[0].executionEvents?.map((event) => event.type)).toEqual([
+      'claimed',
+      'workspace_prepared',
+      'agent_session_queued',
+    ]);
     expect(running.branches[0].validation).toContain('Session started in .worktrees/agent/ops-lab/frontend-1.');
     expect(stopped.branches[0]).toMatchObject({ status: 'stopped', progress: 10 });
     expect(stopped.branches[0].validation).toContain('Session stopped; workspace resources are preserved for resume.');
-    expect(retried.branches[0]).toMatchObject({ status: 'queued', progress: 0 });
+    expect(retried.branches[0]).toMatchObject({
+      status: 'queued',
+      progress: 0,
+      sessionId: null,
+      sessionName: null,
+      lastHeartbeatAt: null,
+    });
+    expect(retried.branches[0].executionEvents?.at(-1)).toMatchObject({ type: 'retry_queued' });
     expect(disposed.branches.map((branch) => branch.id)).not.toContain(branchId);
     const cancelled = cancelMultitaskBranch(retried, branchId);
     expect(cancelled.branches[0]).toMatchObject({ status: 'cancelled' });
@@ -420,6 +438,39 @@ describe('multitaskSubagents', () => {
     expect(isMultitaskSubagentState({ ...state, foregroundBranchId: 42 })).toBe(false);
     expect(isMultitaskSubagentState({ ...state, foregroundBranchApprovedBy: 'reviewer-agent' })).toBe(true);
     expect(isMultitaskSubagentState({ ...state, foregroundBranchApprovedBy: 'robot' })).toBe(false);
+    expect(isMultitaskSubagentState({
+      ...state,
+      branches: [{
+        ...state.branches[0],
+        runAttempt: 1,
+        sessionId: 'symphony:ws-research:frontend-1',
+        sessionName: 'SYM-001',
+        lastRunAt: '2026-05-07T11:46:00.000Z',
+        lastHeartbeatAt: '2026-05-07T11:47:00.000Z',
+        executionEvents: [{
+          id: 'multitask:ws-research:frontend-1:heartbeat:2026-05-07T11:47:00.000Z',
+          type: 'heartbeat',
+          at: '2026-05-07T11:47:00.000Z',
+          summary: 'Agent streamed a turn delta.',
+        }],
+      }],
+    })).toBe(true);
+    expect(isMultitaskSubagentState({
+      ...state,
+      branches: [{ ...state.branches[0], lastHeartbeatAt: 'not-a-date' }],
+    })).toBe(false);
+    expect(isMultitaskSubagentState({
+      ...state,
+      branches: [{
+        ...state.branches[0],
+        executionEvents: [{
+          id: 'event-1',
+          type: 'unknown',
+          at: '2026-05-07T11:47:00.000Z',
+          summary: 'Agent streamed a turn delta.',
+        }],
+      }],
+    })).toBe(false);
     expect(isMultitaskSubagentState({
       ...state,
       branches: [{ ...state.branches[0], status: 'unknown' }],
