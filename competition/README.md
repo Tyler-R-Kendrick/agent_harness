@@ -27,8 +27,11 @@ competition/<product-slug>/
 | Perplexity Comet | End-user AI browser | `competition/perplexity-comet` |
 | Dia | End-user AI browser | `competition/dia` |
 | BrowserOS | Open-source AI browser | `competition/browseros` |
+| VibeBrowser Co-Pilot | Local browser-agent MCP | `competition/vibebrowser-copilot` |
+| dassi | Consumer browser-agent extension | `competition/dassi` |
 | Browserbase + Stagehand | Developer browser-agent platform | `competition/browserbase-stagehand` |
 | Browser Use Cloud | Developer browser-agent platform | `competition/browser-use-cloud` |
+| WebRun | Cloud desktop browser-agent infrastructure | `competition/webrun` |
 | Browserless | Browser automation infrastructure | `competition/browserless` |
 | Playwright MCP | Open-source browser automation MCP | `competition/playwright-mcp` |
 | BrowserMCP | Local browser-control MCP | `competition/browsermcp` |
@@ -43,6 +46,7 @@ competition/<product-slug>/
 | Hyperbrowser | Developer browser-agent infrastructure | `competition/hyperbrowser` |
 | Notte | Developer browser-agent platform | `competition/notte` |
 | Anchor Browser | Authenticated browser-agent infrastructure | `competition/anchor-browser` |
+| Simular | Frontier computer-use agent | `competition/simular` |
 | Fellou | End-user agentic productivity browser | `competition/fellou` |
 | Opera Neon | End-user agentic AI browser | `competition/opera-neon` |
 | Gemini in Chrome | Incumbent browser AI assistant | `competition/gemini-in-chrome` |
@@ -60,4 +64,6 @@ competition/<product-slug>/
 - The most repeated negative signal across the category is not "AI cannot browse"; it is that autonomous browsing widens the security, privacy, and verification surface. Prompt injection, wrong clicks, hidden page instructions, logged-in account access, and opaque billing/time costs are recurrent complaints.
 - `agent-browser` can compete by being visibly inspectable: explicit agent traces, local-first state, regression/eval artifacts, user-controlled approvals, and first-class developer extension surfaces.
 - Incumbent browsers are now absorbing the same sidecar, cross-tab, history, voice, and autonomous-action patterns. They will capture mainstream distribution, but their AI-first UI pressure creates a wedge for products that feel less intrusive and more auditable.
+- Newer local extension products such as VibeBrowser and dassi are attacking the "logged-in real browser" wedge directly. Their strength is low-friction authenticated context; their risk is that real-profile access makes audit, approval, secret handling, and prompt-injection recovery much more important.
+- Fast cloud desktop products such as WebRun and whole-computer agents such as Simular broaden the competitive field beyond browser tabs. They make speed, filesystems, OS actions, and persistent environments table stakes, but they also create a stronger need for replayable evidence and policy boundaries.
 

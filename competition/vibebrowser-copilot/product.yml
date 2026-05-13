@@ -1,0 +1,20 @@
+slug: vibebrowser-copilot
+name: VibeBrowser Co-Pilot
+vendor: VibeBrowser
+segment: local-browser-agent-mcp
+product_path: competition/vibebrowser-copilot
+design_path: competition/vibebrowser-copilot/design
+features_path: competition/vibebrowser-copilot/features
+marketing_path: competition/vibebrowser-copilot/marketing
+gossip_path: competition/vibebrowser-copilot/gossip
+snapshot_date: 2026-05-12
+primary_sources:
+  - https://www.vibebrowser.app/
+  - https://www.vibebrowser.app/mcp
+  - https://docs.vibebrowser.app/mcp-integration
+secondary_sources:
+  - https://www.vibebrowser.com/
+positioning: "Local-first browser co-pilot and MCP bridge that lets agents operate inside the user's real logged-in browser session."
+customer_model: "Free extension/open MCP package motion with likely managed relay, team, and assistant monetization."
+competitive_threat_level: high
+notes: "Strong direct competitor to agent-browser's inspectable local browser-control and agent-skill story."

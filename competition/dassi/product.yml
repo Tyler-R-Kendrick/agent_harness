@@ -1,0 +1,20 @@
+slug: dassi
+name: dassi
+vendor: Omnify Labs
+segment: consumer-browser-agent-extension
+product_path: competition/dassi
+design_path: competition/dassi/design
+features_path: competition/dassi/features
+marketing_path: competition/dassi/marketing
+gossip_path: competition/dassi/gossip
+snapshot_date: 2026-05-12
+primary_sources:
+  - https://www.dassi.ai/
+  - https://docs.dassi.ai/
+  - https://www.dassi.ai/use-cases/ai-browser-agent/
+  - https://www.dassi.ai/about/
+secondary_sources: []
+positioning: "Browser-native AI coworker in a Chrome sidebar that sees pages, acts locally, saves workflows as skills, and lets users choose models."
+customer_model: "14-day free trial, Chrome extension adoption, managed credits or BYOK model usage."
+competitive_threat_level: medium
+notes: "Competes for mainstream extension users who want browser automation without MCP or developer setup."
