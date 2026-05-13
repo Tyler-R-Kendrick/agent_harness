@@ -151,29 +151,74 @@ describe('registerClipboardTools', () => {
     expect(getModelContextRegistry(modelContext).list()).toHaveLength(0);
   });
 
-  it('covers ?? fallback in read_clipboard_entry when entryId is absent (throws)', async () => {
+  it('normalizes clipboard entry ids before reading and rejects missing or blank ids', async () => {
     const modelContext = new ModelContext();
     registerClipboardTools(modelContext, {
       workspaceName: 'Research',
       clipboardEntries: CLIPBOARD_ENTRIES,
     });
     const tool = createWebMcpTool(modelContext);
-    // omitting entryId triggers `entryId ?? ''` → empty string → NotFoundError
+
+    const entry = await tool.execute?.({
+      tool: 'read_clipboard_entry',
+      args: { entryId: '  entry-2\t' },
+    }, {} as never);
+    expect(entry).toEqual(CLIPBOARD_ENTRIES[1]);
+
+    await expect(
+      tool.execute?.({ tool: 'read_clipboard_entry', args: { entryId: '   ' } }, {} as never),
+    ).rejects.toMatchObject({
+      name: 'NotFoundError',
+      message: 'Clipboard entry "" is not available.',
+    });
     await expect(
       tool.execute?.({ tool: 'read_clipboard_entry', args: {} }, {} as never),
-    ).rejects.toMatchObject({ name: 'NotFoundError' });
+    ).rejects.toMatchObject({
+      name: 'NotFoundError',
+      message: 'Clipboard entry "" is not available.',
+    });
   });
 
-  it('covers ?? fallback in restore_clipboard_entry when entryId is absent (throws)', async () => {
+  it('normalizes restored clipboard entry ids and skips callbacks for missing or blank ids', async () => {
     const modelContext = new ModelContext();
+    const onRestoreClipboardEntry = vi.fn(async (id: string) => ({
+      id,
+      text: 'Restored from normalized id',
+      createdAt: '2026-04-20T00:04:00Z',
+      isActive: true,
+    }));
+
     registerClipboardTools(modelContext, {
       workspaceName: 'Research',
       clipboardEntries: CLIPBOARD_ENTRIES,
-      onRestoreClipboardEntry: vi.fn(async () => undefined),
+      onRestoreClipboardEntry,
     });
     const tool = createWebMcpTool(modelContext);
+
+    const result = await tool.execute?.({
+      tool: 'restore_clipboard_entry',
+      args: { entryId: '\nentry-1 ' },
+    }, {} as never);
+    expect(result).toEqual({
+      id: 'entry-1',
+      text: 'Restored from normalized id',
+      createdAt: '2026-04-20T00:04:00Z',
+      isActive: true,
+    });
+    expect(onRestoreClipboardEntry).toHaveBeenCalledWith('entry-1');
+
+    await expect(
+      tool.execute?.({ tool: 'restore_clipboard_entry', args: { entryId: '   ' } }, {} as never),
+    ).rejects.toMatchObject({
+      name: 'NotFoundError',
+      message: 'Clipboard entry "" is not available.',
+    });
     await expect(
       tool.execute?.({ tool: 'restore_clipboard_entry', args: {} }, {} as never),
-    ).rejects.toMatchObject({ name: 'NotFoundError' });
+    ).rejects.toMatchObject({
+      name: 'NotFoundError',
+      message: 'Clipboard entry "" is not available.',
+    });
+    expect(onRestoreClipboardEntry).toHaveBeenCalledTimes(1);
   });
 });
