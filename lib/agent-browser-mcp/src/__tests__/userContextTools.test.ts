@@ -185,6 +185,9 @@ describe('registerUserContextTools', () => {
             required: true,
             defaultValue: 'soon',
             options: [
+              null,
+              'bad-option',
+              [],
               { label: 'Soon', value: 'soon' },
               { label: 'Later', value: 'later' },
               { label: '', value: 'missing-label' },
