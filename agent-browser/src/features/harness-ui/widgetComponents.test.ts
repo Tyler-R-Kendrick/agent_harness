@@ -62,6 +62,7 @@ describe('widget component catalog', () => {
 
   it('creates safe starter widget documents from natural-language prompts', () => {
     expect(deriveWidgetTitleFromPrompt('Track launch risks by owner and blocked item')).toBe('Launch risks');
+    expect(deriveWidgetTitleFromPrompt('Build an API latency widget for LLM gateways')).toBe('API latency');
 
     const document = createPromptedWidgetDocument('Track launch risks by owner and blocked item');
 
