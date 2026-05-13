@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MULTITASK_SUBAGENT_STATE,
   createMultitaskSubagentState,
+  reconcileMultitaskSubagentRuns,
+  reduceMultitaskBranchLifecycle,
 } from '../../services/multitaskSubagents';
 import { buildPullRequestReview, createSamplePullRequestReviewInput } from '../../services/prReviewUnderstanding';
 import { createSymphonyRuntimeSnapshot } from '../../services/symphonyRuntime';
@@ -231,6 +233,77 @@ describe('Symphony system surfaces', () => {
     expect(onManageBranch).toHaveBeenCalledWith('multitask:ws-control:documentation-3', 'retry');
     expect(onManageBranch).toHaveBeenCalledWith('multitask:ws-control:tests-2', 'dispose');
     expect(within(app).queryByRole('button', { name: /Cancel task/ })).not.toBeInTheDocument();
+  });
+
+  it('shows execution evidence for a dispatched task instead of reporting that it did not run', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-recover',
+      workspaceName: 'Recover Lab',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+    const { state } = reconcileMultitaskSubagentRuns(initial, {
+      maxConcurrentAgents: 1,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    });
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Recover Lab'));
+    const snapshot = createSymphonyRuntimeSnapshot({ state, report });
+
+    render(
+      <SymphonyWorkspaceApp
+        snapshot={snapshot}
+        onApproveMerge={vi.fn()}
+        onManageBranch={vi.fn()}
+        onRequestChanges={vi.fn()}
+        onStartTask={vi.fn()}
+        onStartFollowUp={vi.fn()}
+      />,
+    );
+
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    const runningTask = within(app).getByRole('button', { name: 'Open task SYM-001 Frontend branch' }).closest('tr') as HTMLElement;
+    expect(runningTask).toHaveTextContent('Running');
+    expect(runningTask).toHaveTextContent('agent active');
+    expect(runningTask).toHaveTextContent('3 events');
+    expect(runningTask).not.toHaveTextContent('not run');
+
+    fireEvent.click(within(app).getByRole('button', { name: 'Open task SYM-001 Frontend branch' }));
+    const detail = within(app).getByRole('region', { name: 'Symphony task detail' });
+    expect(detail).toHaveTextContent('agent active');
+    expect(detail).not.toHaveTextContent('not run');
+  });
+
+  it('keeps stopped agent-session evidence visible instead of falling back to not run', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-recover',
+      workspaceName: 'Recover Lab',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+    const recovered = reconcileMultitaskSubagentRuns(initial, {
+      maxConcurrentAgents: 1,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    }).state;
+    const state = reduceMultitaskBranchLifecycle(recovered, recovered.branches[0].id, 'stop');
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Recover Lab'));
+    const snapshot = createSymphonyRuntimeSnapshot({ state, report });
+
+    render(
+      <SymphonyWorkspaceApp
+        snapshot={snapshot}
+        onApproveMerge={vi.fn()}
+        onManageBranch={vi.fn()}
+        onRequestChanges={vi.fn()}
+        onStartTask={vi.fn()}
+        onStartFollowUp={vi.fn()}
+      />,
+    );
+
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    const stoppedTask = within(app).getByRole('button', { name: 'Open task SYM-001 Frontend branch' }).closest('tr') as HTMLElement;
+    expect(stoppedTask).toHaveTextContent('stopped');
+    expect(stoppedTask).toHaveTextContent('4 events');
+    expect(stoppedTask).not.toHaveTextContent('not run');
   });
 
   it('exposes Linear-style project and task management in the render area', () => {

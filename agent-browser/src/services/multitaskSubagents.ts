@@ -3,6 +3,21 @@ import type { WorkGraphActor, WorkGraphCommand } from '@agent-harness/workgraph'
 export type MultitaskSubagentStatus = 'queued' | 'running' | 'stopped' | 'blocked' | 'ready' | 'promoted' | 'cancelled';
 export type MultitaskApprovalActor = 'user' | 'reviewer-agent';
 export type MultitaskBranchLifecycleAction = 'start' | 'stop' | 'retry' | 'dispose';
+export type MultitaskBranchExecutionEventType =
+  | 'claimed'
+  | 'workspace_prepared'
+  | 'agent_session_queued'
+  | 'heartbeat'
+  | 'self_heal_requeued'
+  | 'stopped'
+  | 'retry_queued';
+
+export interface MultitaskBranchExecutionEvent {
+  id: string;
+  type: MultitaskBranchExecutionEventType;
+  at: string;
+  summary: string;
+}
 
 export interface MultitaskSubagentBranch {
   id: string;
@@ -17,6 +32,12 @@ export interface MultitaskSubagentBranch {
   summary: string;
   validation: string[];
   confidence: number;
+  runAttempt?: number;
+  sessionId?: string | null;
+  sessionName?: string | null;
+  lastRunAt?: string | null;
+  lastHeartbeatAt?: string | null;
+  executionEvents?: MultitaskBranchExecutionEvent[];
 }
 
 export interface MultitaskProject {
@@ -62,6 +83,36 @@ export interface CreateMultitaskSubagentStateInput {
 
 export interface BuildMultitaskWorkGraphCommandsOptions {
   actor?: WorkGraphActor;
+}
+
+export interface StartMultitaskBranchRunOptions {
+  now?: Date;
+  sessionId?: string | null;
+  sessionName?: string | null;
+  reason?: 'manual' | 'self-heal';
+}
+
+export interface MultitaskBranchDispatch {
+  branchId: string;
+  branchName: string;
+  title: string;
+  sessionName: string;
+  worktreePath: string;
+  prompt: string;
+  attempt: number;
+  reason: 'manual' | 'self-heal';
+}
+
+export interface ReconcileMultitaskSubagentRunsOptions {
+  now?: Date;
+  maxConcurrentAgents?: number;
+  staleAfterMs?: number;
+}
+
+export interface ReconcileMultitaskSubagentRunsResult {
+  state: MultitaskSubagentState;
+  dispatches: MultitaskBranchDispatch[];
+  healedBranchIds: string[];
 }
 
 type TrackDefinition = {
@@ -137,6 +188,17 @@ const FALLBACK_TRACKS: TrackDefinition[] = [
 ];
 
 const STATUS_VALUES: MultitaskSubagentStatus[] = ['queued', 'running', 'stopped', 'blocked', 'ready', 'promoted', 'cancelled'];
+const EXECUTION_EVENT_TYPES: MultitaskBranchExecutionEventType[] = [
+  'claimed',
+  'workspace_prepared',
+  'agent_session_queued',
+  'heartbeat',
+  'self_heal_requeued',
+  'stopped',
+  'retry_queued',
+];
+const DEFAULT_MAX_CONCURRENT_RUNS = 4;
+const DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000;
 
 export function createMultitaskSubagentState({
   workspaceId,
@@ -173,6 +235,12 @@ export function createMultitaskSubagentState({
         `Merge only from ${branchName}.`,
       ],
       confidence: Math.max(0.55, 0.86 - index * 0.08),
+      runAttempt: 0,
+      sessionId: null,
+      sessionName: null,
+      lastRunAt: null,
+      lastHeartbeatAt: null,
+      executionEvents: [],
     };
   });
 
@@ -263,6 +331,12 @@ export function addMultitaskTask(
       `Merge only from ${branchName}.`,
     ],
     confidence: 0.72,
+    runAttempt: 0,
+    sessionId: null,
+    sessionName: null,
+    lastRunAt: null,
+    lastHeartbeatAt: null,
+    executionEvents: [],
   };
   return {
     ...state,
@@ -344,15 +418,12 @@ export function promoteMultitaskBranch(
 export function startMultitaskBranchRun(
   state: MultitaskSubagentState,
   branchId: string,
+  options: StartMultitaskBranchRunOptions = {},
 ): MultitaskSubagentState {
   const branch = state.branches.find((candidate) => candidate.id === branchId);
   if (!branch || !['queued', 'stopped'].includes(branch.status)) return state;
-  return updateBranch(state, branchId, (current) => ({
-    ...current,
-    status: 'running',
-    progress: Math.max(current.progress, 10),
-    validation: appendValidation(current.validation, `Session started in ${current.worktreePath}.`),
-  }));
+  const nowIso = safeIso(options.now ?? new Date());
+  return updateBranch(state, branchId, (current) => startBranchRun(current, state, nowIso, options.reason ?? 'manual', options));
 }
 
 export function stopMultitaskBranchRun(
@@ -361,9 +432,12 @@ export function stopMultitaskBranchRun(
 ): MultitaskSubagentState {
   const branch = state.branches.find((candidate) => candidate.id === branchId);
   if (!branch || branch.status !== 'running') return state;
+  const nowIso = safeIso(new Date());
   return updateBranch(state, branchId, (current) => ({
     ...current,
     status: 'stopped',
+    lastHeartbeatAt: nowIso,
+    executionEvents: appendExecutionEvent(current.executionEvents, current.id, 'stopped', nowIso, 'Session stopped; workspace resources are preserved for resume.'),
     validation: appendValidation(current.validation, 'Session stopped; workspace resources are preserved for resume.'),
   }));
 }
@@ -383,6 +457,10 @@ export function retryMultitaskBranch(
           ...current,
           status: 'queued',
           progress: 0,
+          sessionId: null,
+          sessionName: null,
+          lastHeartbeatAt: null,
+          executionEvents: appendExecutionEvent(current.executionEvents, current.id, 'retry_queued', safeIso(new Date()), 'Retry queued for the isolated workspace.'),
           validation: appendValidation(current.validation, 'Retry queued for the isolated workspace.'),
         }
       : current),
@@ -440,6 +518,117 @@ export function reduceMultitaskBranchLifecycle(
   if (action === 'stop') return stopMultitaskBranchRun(state, branchId);
   if (action === 'retry') return retryMultitaskBranch(state, branchId);
   return disposeMultitaskBranch(state, branchId);
+}
+
+export function reconcileMultitaskSubagentRuns(
+  state: MultitaskSubagentState,
+  options: ReconcileMultitaskSubagentRunsOptions = {},
+): ReconcileMultitaskSubagentRunsResult {
+  if (!state.enabled || state.branches.length === 0) {
+    return { state, dispatches: [], healedBranchIds: [] };
+  }
+
+  const now = options.now ?? new Date();
+  const nowIso = safeIso(now);
+  const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+  const maxConcurrentAgents = Math.max(0, options.maxConcurrentAgents ?? DEFAULT_MAX_CONCURRENT_RUNS);
+  let changed = false;
+  const healedBranchIds: string[] = [];
+  let branches = state.branches.map((branch) => {
+    if (branch.status !== 'running') return branch;
+    if (!isRunningBranchStale(branch, now, staleAfterMs)) return branch;
+    changed = true;
+    healedBranchIds.push(branch.id);
+    return {
+      ...branch,
+      status: 'queued' as const,
+      progress: 0,
+      sessionId: null,
+      sessionName: null,
+      lastHeartbeatAt: null,
+      executionEvents: appendExecutionEvent(
+        branch.executionEvents,
+        branch.id,
+        'self_heal_requeued',
+        nowIso,
+        'Self-heal requeued a stale running session before dispatching a fresh agent run.',
+      ),
+      validation: appendValidation(branch.validation, 'Self-heal requeued a stale running session before dispatching a fresh agent run.'),
+    };
+  });
+
+  let runningCount = branches.filter((branch) => branch.status === 'running').length;
+  const dispatches: MultitaskBranchDispatch[] = [];
+  branches = branches.map((branch, index) => {
+    if (branch.status !== 'queued' || runningCount >= maxConcurrentAgents) return branch;
+    runningCount += 1;
+    changed = true;
+    const reason: MultitaskBranchDispatch['reason'] = healedBranchIds.includes(branch.id) ? 'self-heal' : 'manual';
+    const running = startBranchRun(branch, state, nowIso, reason, {
+      now,
+      sessionName: issueIdentifierForBranch(branch, index),
+    });
+    dispatches.push(buildMultitaskBranchDispatch(state, running, index, reason));
+    return running;
+  });
+
+  if (!changed) {
+    return { state, dispatches: [], healedBranchIds: [] };
+  }
+
+  return {
+    state: {
+      ...state,
+      branches,
+      selectedBranchId: state.selectedBranchId ?? branches[0]?.id ?? null,
+    },
+    dispatches,
+    healedBranchIds,
+  };
+}
+
+export function buildMultitaskBranchDispatch(
+  state: MultitaskSubagentState,
+  branch: MultitaskSubagentBranch,
+  index: number,
+  reason: MultitaskBranchDispatch['reason'] = 'manual',
+): MultitaskBranchDispatch {
+  const sessionName = branch.sessionName || issueIdentifierForBranch(branch, index);
+  return {
+    branchId: branch.id,
+    branchName: branch.branchName,
+    title: branch.title,
+    sessionName,
+    worktreePath: branch.worktreePath,
+    prompt: buildMultitaskBranchRunPrompt(state, branch, sessionName, reason),
+    attempt: Math.max(1, branch.runAttempt ?? 1),
+    reason,
+  };
+}
+
+export function buildMultitaskBranchRunPrompt(
+  state: MultitaskSubagentState,
+  branch: MultitaskSubagentBranch,
+  sessionName = branch.sessionName || branch.title,
+  reason: MultitaskBranchDispatch['reason'] = 'manual',
+): string {
+  const reasonLine = reason === 'self-heal'
+    ? 'This is a Symphony self-heal redispatch after a stale or unobservable run.'
+    : 'This is a Symphony dispatched agent run.';
+  return [
+    `${reasonLine}`,
+    `Session: ${sessionName}.`,
+    `Task request: ${state.request || branch.summary}`,
+    `Assigned task: ${branch.title}.`,
+    `Role: ${branch.role}.`,
+    `Isolated branch: ${branch.branchName}.`,
+    `Workspace path: ${branch.worktreePath}.`,
+    '',
+    'Do the assigned work end to end in the isolated workspace.',
+    'Record the plan, edits, tool trajectory, validation commands, and review evidence in the session.',
+    'Run validation and attach concrete evidence before review.',
+    'Do not merge into the common branch; stop at the Symphony review gate.',
+  ].join('\n');
 }
 
 export function buildMultitaskWorkGraphCommands(
@@ -625,6 +814,23 @@ function isMultitaskSubagentBranch(value: unknown): value is MultitaskSubagentBr
     && typeof value.summary === 'string'
     && Array.isArray(value.validation)
     && value.validation.every((entry) => typeof entry === 'string')
+    && (value.runAttempt === undefined || (typeof value.runAttempt === 'number' && Number.isInteger(value.runAttempt) && value.runAttempt >= 0))
+    && (value.sessionId === undefined || value.sessionId === null || typeof value.sessionId === 'string')
+    && (value.sessionName === undefined || value.sessionName === null || typeof value.sessionName === 'string')
+    && (value.lastRunAt === undefined || value.lastRunAt === null || isIsoDateString(value.lastRunAt))
+    && (value.lastHeartbeatAt === undefined || value.lastHeartbeatAt === null || isIsoDateString(value.lastHeartbeatAt))
+    && (value.executionEvents === undefined || (Array.isArray(value.executionEvents) && value.executionEvents.every(isMultitaskBranchExecutionEvent)))
+  );
+}
+
+function isMultitaskBranchExecutionEvent(value: unknown): value is MultitaskBranchExecutionEvent {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string'
+    && typeof value.type === 'string'
+    && (EXECUTION_EVENT_TYPES as string[]).includes(value.type)
+    && isIsoDateString(value.at)
+    && typeof value.summary === 'string'
   );
 }
 
@@ -649,8 +855,85 @@ function updateBranch(
   };
 }
 
+function startBranchRun(
+  branch: MultitaskSubagentBranch,
+  state: MultitaskSubagentState,
+  nowIso: string,
+  reason: MultitaskBranchDispatch['reason'],
+  options: StartMultitaskBranchRunOptions,
+): MultitaskSubagentBranch {
+  const runAttempt = (branch.runAttempt ?? 0) + 1;
+  const branchIndex = state.branches.findIndex((candidate) => candidate.id === branch.id);
+  const sessionName = options.sessionName || branch.sessionName || issueIdentifierForBranch(branch, branchIndex >= 0 ? branchIndex : 0);
+  const sessionId = options.sessionId ?? branch.sessionId ?? `symphony:${branch.id}:attempt-${runAttempt}`;
+  const claimedSummary = reason === 'self-heal'
+    ? `Self-heal claimed ${branch.title} for attempt ${runAttempt}.`
+    : `Claimed ${branch.title} for attempt ${runAttempt}.`;
+  const workspaceSummary = `Prepared isolated workspace ${branch.worktreePath} for ${branch.branchName}.`;
+  const sessionSummary = `Queued agent prompt in ${sessionName}.`;
+  const executionEvents = appendExecutionEvents(branch.executionEvents, branch.id, nowIso, [
+    ['claimed', claimedSummary],
+    ['workspace_prepared', workspaceSummary],
+    ['agent_session_queued', sessionSummary],
+  ]);
+  return {
+    ...branch,
+    status: 'running',
+    progress: Math.max(branch.progress, 10),
+    runAttempt,
+    sessionId,
+    sessionName,
+    lastRunAt: nowIso,
+    lastHeartbeatAt: nowIso,
+    executionEvents,
+    validation: appendValidations(branch.validation, [
+      `Session started in ${branch.worktreePath}.`,
+      `Agent prompt queued in ${sessionName}.`,
+      'Run validation and attach concrete evidence before review.',
+    ]),
+  };
+}
+
 function appendValidation(validation: string[], entry: string): string[] {
   return validation.includes(entry) ? validation : [...validation, entry];
+}
+
+function appendValidations(validation: string[], entries: string[]): string[] {
+  return entries.reduce((current, entry) => appendValidation(current, entry), validation);
+}
+
+function appendExecutionEvent(
+  events: MultitaskBranchExecutionEvent[] | undefined,
+  branchId: string,
+  type: MultitaskBranchExecutionEventType,
+  at: string,
+  summary: string,
+): MultitaskBranchExecutionEvent[] {
+  return appendExecutionEvents(events, branchId, at, [[type, summary]]);
+}
+
+function appendExecutionEvents(
+  events: MultitaskBranchExecutionEvent[] | undefined,
+  branchId: string,
+  at: string,
+  entries: Array<[MultitaskBranchExecutionEventType, string]>,
+): MultitaskBranchExecutionEvent[] {
+  const existing = events ?? [];
+  return [
+    ...existing,
+    ...entries.map(([type, summary], index) => ({
+      id: `${branchId}:${type}:${at}:${existing.length + index + 1}`,
+      type,
+      at,
+      summary,
+    })),
+  ];
+}
+
+function isRunningBranchStale(branch: MultitaskSubagentBranch, now: Date, staleAfterMs: number): boolean {
+  const reference = Date.parse(branch.lastHeartbeatAt ?? branch.lastRunAt ?? '');
+  if (!Number.isFinite(reference)) return !branch.executionEvents?.length;
+  return now.getTime() - reference > staleAfterMs;
 }
 
 function selectTracks(text: string): TrackDefinition[] {
@@ -715,6 +998,24 @@ function workGraphStatusForBranch(status: MultitaskSubagentStatus): string {
 function workGraphKey(value: string): string {
   const key = value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase();
   return key || 'WRK';
+}
+
+function issueIdentifierFor(index: number): string {
+  return `SYM-${String(index + 1).padStart(3, '0')}`;
+}
+
+function issueIdentifierForBranch(branch: MultitaskSubagentBranch, index: number): string {
+  const match = /-(\d+)$/.exec(branch.id);
+  const ordinal = match ? Number.parseInt(match[1], 10) : index + 1;
+  return Number.isFinite(ordinal) && ordinal > 0 ? issueIdentifierFor(ordinal - 1) : issueIdentifierFor(index);
+}
+
+function safeIso(date: Date): string {
+  return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
+}
+
+function isIsoDateString(value: unknown): value is string {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

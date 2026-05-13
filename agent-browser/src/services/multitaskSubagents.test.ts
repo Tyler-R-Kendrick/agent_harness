@@ -10,6 +10,7 @@ import {
   disposeMultitaskBranch,
   isMultitaskSubagentState,
   promoteMultitaskBranch,
+  reconcileMultitaskSubagentRuns,
   retryMultitaskBranch,
   requestMultitaskBranchChanges,
   startMultitaskBranchRun,
@@ -161,6 +162,77 @@ describe('multitaskSubagents', () => {
     });
     expect(startMultitaskBranchRun(initial, 'missing')).toBe(initial);
     expect(stopMultitaskBranchRun(initial, branchId)).toBe(initial);
+  });
+
+  it('self-heals queued branches into dispatchable agent runs with durable evidence', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-recover',
+      workspaceName: 'Recover Lab',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+
+    const firstPass = reconcileMultitaskSubagentRuns(initial, {
+      maxConcurrentAgents: 2,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    });
+
+    expect(initial.branches.every((branch) => branch.status === 'queued')).toBe(true);
+    expect(firstPass.dispatches.map((dispatch) => dispatch.branchId)).toEqual([
+      'multitask:ws-recover:frontend-1',
+      'multitask:ws-recover:tests-2',
+    ]);
+    expect(firstPass.state.branches.map((branch) => branch.status)).toEqual(['running', 'running', 'queued']);
+    expect(firstPass.state.branches[0]).toMatchObject({
+      status: 'running',
+      progress: 10,
+      runAttempt: 1,
+      lastRunAt: '2026-05-12T14:01:00.000Z',
+      lastHeartbeatAt: '2026-05-12T14:01:00.000Z',
+    });
+    expect(firstPass.state.branches[0].executionEvents?.map((event) => event.type)).toEqual([
+      'claimed',
+      'workspace_prepared',
+      'agent_session_queued',
+    ]);
+    expect(firstPass.state.branches[0].validation).toContain('Agent prompt queued in SYM-001.');
+    expect(firstPass.dispatches[0].prompt).toContain('Task request: parallelize the frontend, tests, and documentation work');
+    expect(firstPass.dispatches[0].prompt).toContain('Isolated branch: agent/recover-lab/frontend-1');
+    expect(firstPass.dispatches[0].prompt).toContain('Run validation and attach concrete evidence before review.');
+
+    const secondPass = reconcileMultitaskSubagentRuns(firstPass.state, {
+      maxConcurrentAgents: 2,
+      now: new Date('2026-05-12T14:01:05.000Z'),
+    });
+    expect(secondPass.state).toBe(firstPass.state);
+    expect(secondPass.dispatches).toEqual([]);
+  });
+
+  it('requeues stale running branches before redispatching them', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-stale',
+      workspaceName: 'Stale Lab',
+      request: 'split frontend and tests work',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+    const running = startMultitaskBranchRun(initial, initial.branches[0].id, {
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+
+    const recovered = reconcileMultitaskSubagentRuns(running, {
+      maxConcurrentAgents: 1,
+      staleAfterMs: 60_000,
+      now: new Date('2026-05-12T14:02:01.000Z'),
+    });
+
+    expect(recovered.dispatches).toHaveLength(1);
+    expect(recovered.dispatches[0].reason).toBe('self-heal');
+    expect(recovered.state.branches[0]).toMatchObject({
+      status: 'running',
+      runAttempt: 2,
+      lastRunAt: '2026-05-12T14:02:01.000Z',
+    });
+    expect(recovered.state.branches[0].executionEvents?.map((event) => event.type)).toContain('self_heal_requeued');
   });
 
   it('maps Symphony branch work into durable WorkGraph commands without Linear', () => {

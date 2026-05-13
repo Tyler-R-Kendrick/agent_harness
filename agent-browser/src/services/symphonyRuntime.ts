@@ -4,6 +4,7 @@ import {
   buildMultitaskWorkGraphCommands,
   type MultitaskApprovalActor,
   type MultitaskSubagentBranch,
+  type MultitaskBranchExecutionEvent,
   type MultitaskProject,
   type MultitaskSubagentState,
 } from './multitaskSubagents';
@@ -70,6 +71,7 @@ export interface SymphonyRunAttempt {
   phase: SymphonyAttemptPhase;
   status: 'pending' | 'active' | 'complete' | 'failed' | 'stopped' | 'cancelled';
   error: string | null;
+  evidence: MultitaskBranchExecutionEvent[];
 }
 
 export interface SymphonyLiveSession {
@@ -366,10 +368,11 @@ export function buildSymphonyHistorySessionSummaries(snapshot: SymphonyRuntimeSn
     const liveSession = snapshot.liveSessions.find((candidate) => candidate.issueId === workspace.issueId);
     const phase = attempt?.phase ?? 'PreparingWorkspace';
     const status = attempt?.status ?? 'pending';
+    const evidenceCount = attempt?.evidence.length ?? 0;
     const turnSummary = liveSession
       ? `${liveSession.turnCount} turn${liveSession.turnCount === 1 ? '' : 's'}`
       : 'no live session';
-    return `Symphony session: ${workspace.issueIdentifier} ${workspace.branchName} ${phase} ${status} ${turnSummary}`;
+    return `Symphony session: ${workspace.issueIdentifier} ${workspace.branchName} ${phase} ${status} ${turnSummary}, ${evidenceCount} evidence event${evidenceCount === 1 ? '' : 's'}`;
   });
 }
 
@@ -472,15 +475,17 @@ function createWorkspace(branch: MultitaskSubagentBranch, index: number): Sympho
 
 function createRunAttempt(branch: MultitaskSubagentBranch, index: number, now: Date): SymphonyRunAttempt {
   const issueIdentifier = issueIdentifierForBranch(branch, index);
+  const evidence = branch.executionEvents ?? [];
   return {
     issueId: branch.id,
     issueIdentifier,
-    attempt: branch.status === 'queued' ? null : 1,
+    attempt: branch.status === 'queued' ? null : Math.max(1, branch.runAttempt ?? 1),
     workspacePath: `${WORKSPACE_ROOT}/${issueIdentifier}`,
-    startedAt: now.toISOString(),
+    startedAt: branch.lastRunAt ?? now.toISOString(),
     phase: phaseFor(branch.status),
     status: runStatusFor(branch.status),
     error: branch.status === 'blocked' ? 'agent branch blocked' : null,
+    evidence,
   };
 }
 
@@ -489,15 +494,16 @@ function createLiveSession(branch: MultitaskSubagentBranch, issueIdentifier: str
   const turnId = 'turn-1';
   const inputTokens = 1800 + Math.round(branch.confidence * 100);
   const outputTokens = 700 + Math.max(0, Math.round(branch.progress));
+  const lastEvidence = branch.executionEvents?.at(-1) ?? null;
   return {
     issueId: branch.id,
-    sessionId: `${threadId}-${turnId}`,
+    sessionId: branch.sessionId ?? `${threadId}-${turnId}`,
     threadId,
     turnId,
     codexAppServerPid: 'local-app-server',
-    lastCodexEvent: 'turn_delta',
-    lastCodexTimestamp: now.toISOString(),
-    lastCodexMessage: branch.summary,
+    lastCodexEvent: lastEvidence?.type ?? 'turn_delta',
+    lastCodexTimestamp: lastEvidence?.at ?? branch.lastHeartbeatAt ?? now.toISOString(),
+    lastCodexMessage: lastEvidence?.summary ?? branch.summary,
     codexInputTokens: inputTokens,
     codexOutputTokens: outputTokens,
     codexTotalTokens: inputTokens + outputTokens,
@@ -525,9 +531,9 @@ function createRunningEntry(branch: MultitaskSubagentBranch, index: number, now:
     identifier: issueIdentifier,
     branchName: branch.branchName,
     workspacePath: `${WORKSPACE_ROOT}/${issueIdentifier}`,
-    startedAt: now.toISOString(),
+    startedAt: branch.lastRunAt ?? now.toISOString(),
     phase: 'StreamingTurn',
-    sessionId: `thread-${issueIdentifier}-turn-1`,
+    sessionId: branch.sessionId ?? `thread-${issueIdentifier}-turn-1`,
   };
 }
 
@@ -571,6 +577,20 @@ function createLogs(
       sessionId: firstRunning.sessionId,
       message: `Dispatched ${firstRunning.identifier} into ${firstRunning.workspacePath}.`,
     });
+  }
+  for (const branch of state.branches) {
+    const issueIdentifier = issueIdentifierForBranch(branch, state.branches.indexOf(branch));
+    for (const evidence of branch.executionEvents ?? []) {
+      logs.push({
+        ts: evidence.at,
+        level: evidence.type === 'self_heal_requeued' ? 'warn' : 'info',
+        event: evidence.type,
+        issueId: branch.id,
+        issueIdentifier,
+        sessionId: branch.sessionId ?? undefined,
+        message: evidence.summary,
+      });
+    }
   }
   if (retryEntries[0]) {
     logs.push({

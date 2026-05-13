@@ -498,7 +498,8 @@ describe('App smoke coverage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start Symphony task' }));
 
     expect(screen.getByText('agent/research/frontend-1')).toBeInTheDocument();
-    expect(screen.getAllByText('Queued').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('agent active').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('3 events').length).toBeGreaterThan(0);
   });
 
   it('renders the repository wiki as a navigation sidebar plus knowledgebase workbench', async () => {
@@ -646,8 +647,9 @@ describe('App smoke coverage', () => {
 
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
     expect(persisted.branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/tests-2')).toMatchObject({
-      status: 'queued',
-      progress: 0,
+      status: 'running',
+      progress: 10,
+      runAttempt: 1,
     });
   });
 
@@ -669,14 +671,13 @@ describe('App smoke coverage', () => {
     });
 
     const app = screen.getByRole('region', { name: 'Symphony task management system' });
-    fireEvent.click(within(app).getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }));
-    await act(async () => {
-      vi.advanceTimersByTime(150);
-    });
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}')
       .branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/frontend-1')).toMatchObject({
         status: 'running',
+        runAttempt: 1,
       });
+    expect(within(app).getAllByText('agent active').length).toBeGreaterThan(0);
+    expect(within(app).getAllByText('3 events').length).toBeGreaterThan(0);
 
     fireEvent.click(within(app).getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' }));
     await act(async () => {
@@ -765,7 +766,7 @@ describe('App smoke coverage', () => {
     expect(historyPanel).toHaveTextContent('Symphony activity: Updated Symphony');
     fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Symphony activity: Updated Symphony' }));
     expect(historyPanel).toHaveTextContent('Symphony event: workflow loaded - Loaded WORKFLOW.md and applied Symphony runtime defaults.');
-    expect(historyPanel).toHaveTextContent('Symphony session: SYM-001 agent/research/frontend-1 PreparingWorkspace pending no live session');
+    expect(historyPanel).toHaveTextContent('Symphony session: SYM-001 agent/research/frontend-1 StreamingTurn active 1 turn, 3 evidence events');
   });
 
   it('enables Symphony reviewer autopilot by default and persists disabling it from Settings', async () => {

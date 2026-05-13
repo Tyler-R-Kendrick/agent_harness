@@ -1482,15 +1482,21 @@ async function main() {
     await expect(symphonyApp.getByText(/SYM-001/).first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(symphonyApp.getByText('Queued').first()).toBeVisible({
+    await expect(symphonyApp.getByText('agent active').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }).click();
+    await expect(symphonyApp.getByText('3 events').first()).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
     await expect(symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' }).click();
     await expect(symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }).click();
+    await expect(symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await expect(symphonyApp.getByRole('button', { name: /Cancel task/ })).toHaveCount(0);

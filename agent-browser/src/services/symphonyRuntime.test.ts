@@ -4,6 +4,7 @@ import {
   createMultitaskSubagentState,
   disposeMultitaskBranch,
   promoteMultitaskBranch,
+  reconcileMultitaskSubagentRuns,
 } from './multitaskSubagents';
 import { buildPullRequestReview, createSamplePullRequestReviewInput } from './prReviewUnderstanding';
 import {
@@ -96,9 +97,48 @@ describe('symphonyRuntime', () => {
       'Symphony review: SYM-001 agent/research-lab/frontend-1 blocked/not-ready',
     ]));
     expect(buildSymphonyHistorySessionSummaries(snapshot)).toEqual(expect.arrayContaining([
-      'Symphony session: SYM-001 agent/research-lab/frontend-1 StreamingTurn active 1 turn',
-      'Symphony session: SYM-002 agent/research-lab/tests-2 PreparingWorkspace pending no live session',
+      'Symphony session: SYM-001 agent/research-lab/frontend-1 StreamingTurn active 1 turn, 0 evidence events',
+      'Symphony session: SYM-002 agent/research-lab/tests-2 PreparingWorkspace pending no live session, 0 evidence events',
     ]));
+  });
+
+  it('self-heals the stuck Agent Workspaces repro into observable execution evidence', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize the frontend, tests, and documentation work',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+    const { state } = reconcileMultitaskSubagentRuns(initial, {
+      maxConcurrentAgents: 3,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    });
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Research'));
+
+    const snapshot = createSymphonyRuntimeSnapshot({
+      state,
+      report,
+      now: new Date('2026-05-12T14:01:30.000Z'),
+    });
+
+    expect(snapshot.orchestrator.running.size).toBe(3);
+    expect(snapshot.liveSessions).toHaveLength(3);
+    expect(snapshot.runAttempts[0]).toMatchObject({
+      phase: 'StreamingTurn',
+      status: 'active',
+      evidence: [
+        expect.objectContaining({ type: 'claimed' }),
+        expect.objectContaining({ type: 'workspace_prepared' }),
+        expect.objectContaining({ type: 'agent_session_queued' }),
+      ],
+    });
+    expect(snapshot.logs.map((entry) => entry.event)).toEqual(expect.arrayContaining([
+      'agent_session_queued',
+      'workspace_prepared',
+    ]));
+    expect(buildSymphonyHistorySessionSummaries(snapshot)).toContain(
+      'Symphony session: SYM-001 agent/research/frontend-1 StreamingTurn active 1 turn, 3 evidence events',
+    );
   });
 
   it('keeps Symphony issue identifiers stable when earlier tasks are closed', () => {
