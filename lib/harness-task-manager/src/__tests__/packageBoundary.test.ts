@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
 
+import * as publicApi from '../index.js';
+
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
 function readPackageFile(path: string): string {
@@ -36,5 +38,22 @@ describe('harness task manager package boundary', () => {
     expect(readme).toContain('## Package boundary');
     expect(readme).toContain("import { createHarnessTaskManager } from '@agent-harness/task-manager';");
     expect(readme).toContain('@agent-harness/task-manager/src/*');
+  });
+
+  test('keeps root exports explicit so implementation exports do not leak', () => {
+    const source = readPackageFile('src/index.ts');
+
+    expect(source).not.toContain('export * from');
+    expect(source).toContain("export { createHarnessTaskManager, isHarnessManagedTask } from './manager.js';");
+    expect(source).toMatch(/export\s+\{\s*INTERNAL_TASK_STORE_CONFIG\s*\}\s+from '\.\/types\.js';/);
+    expect(source).toMatch(/export\s+type\s+\{[\s\S]*HarnessTaskManager[\s\S]*HarnessTaskSnapshot[\s\S]*\}\s+from '\.\/types\.js';/);
+  });
+
+  test('preserves the current runtime value API from the root entry point', () => {
+    expect(Object.keys(publicApi).sort()).toEqual([
+      'INTERNAL_TASK_STORE_CONFIG',
+      'createHarnessTaskManager',
+      'isHarnessManagedTask',
+    ]);
   });
 });

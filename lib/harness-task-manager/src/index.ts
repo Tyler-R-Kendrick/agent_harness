@@ -1,2 +1,26 @@
-export * from './types.js';
-export * from './manager.js';
+export { createHarnessTaskManager, isHarnessManagedTask } from './manager.js';
+export { INTERNAL_TASK_STORE_CONFIG } from './types.js';
+export type {
+  CompleteHarnessTaskInput,
+  CreateHarnessTaskInput,
+  DispatchHarnessTaskInput,
+  HarnessActor,
+  HarnessActorType,
+  HarnessManagedTask,
+  HarnessReviewStatus,
+  HarnessTaskActivity,
+  HarnessTaskAssignee,
+  HarnessTaskLane,
+  HarnessTaskManager,
+  HarnessTaskManagerOptions,
+  HarnessTaskManagerSettings,
+  HarnessTaskMerge,
+  HarnessTaskMetadata,
+  HarnessTaskPriority,
+  HarnessTaskReview,
+  HarnessTaskSnapshot,
+  HarnessTaskSummary,
+  RejectReviewInput,
+  RequestHarnessReviewInput,
+  ReviewDecisionInput,
+} from './types.js';
