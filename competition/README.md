@@ -24,9 +24,13 @@ competition/<product-slug>/
 | Product | Segment | Product path |
 |---|---|---|
 | ChatGPT Atlas | End-user AI browser | `competition/chatgpt-atlas` |
+| ChatGPT Agent | Model-owner computer-use agent | `competition/chatgpt-agent` |
 | Perplexity Comet | End-user AI browser | `competition/perplexity-comet` |
 | Dia | End-user AI browser | `competition/dia` |
+| Gemini Agent | Model-owner browser agent | `competition/gemini-agent` |
+| Claude Computer Use | Model-provider computer-use API | `competition/claude-computer-use` |
 | BrowserOS | Open-source AI browser | `competition/browseros` |
+| Nanobrowser | Open-source browser-agent extension | `competition/nanobrowser` |
 | VibeBrowser Co-Pilot | Local browser-agent MCP | `competition/vibebrowser-copilot` |
 | dassi | Consumer browser-agent extension | `competition/dassi` |
 | Browserbase + Stagehand | Developer browser-agent platform | `competition/browserbase-stagehand` |
@@ -66,4 +70,6 @@ competition/<product-slug>/
 - Incumbent browsers are now absorbing the same sidecar, cross-tab, history, voice, and autonomous-action patterns. They will capture mainstream distribution, but their AI-first UI pressure creates a wedge for products that feel less intrusive and more auditable.
 - Newer local extension products such as VibeBrowser and dassi are attacking the "logged-in real browser" wedge directly. Their strength is low-friction authenticated context; their risk is that real-profile access makes audit, approval, secret handling, and prompt-injection recovery much more important.
 - Fast cloud desktop products such as WebRun and whole-computer agents such as Simular broaden the competitive field beyond browser tabs. They make speed, filesystems, OS actions, and persistent environments table stakes, but they also create a stronger need for replayable evidence and policy boundaries.
+- Model-owner agents such as ChatGPT Agent, Gemini Agent, and Claude Computer Use compete above the browser UI by making web action one tool inside a broader work assistant. Their weakness is inspectability: product surfaces often summarize progress better than they preserve deterministic, reviewable evidence.
+- Open-source extension products such as Nanobrowser keep the user in their existing logged-in browser, which is a strong adoption wedge. The risk is that extension permissions, BYOK setup, and real-profile automation raise the bar for plain-language trust controls.
 

@@ -1,0 +1,20 @@
+slug: chatgpt-agent
+name: ChatGPT Agent
+vendor: OpenAI
+segment: model-owner-computer-use-agent
+product_path: competition/chatgpt-agent
+design_path: competition/chatgpt-agent/design
+features_path: competition/chatgpt-agent/features
+marketing_path: competition/chatgpt-agent/marketing
+gossip_path: competition/chatgpt-agent/gossip
+snapshot_date: 2026-05-13
+primary_sources:
+  - https://openai.com/index/introducing-chatgpt-agent/
+  - https://help.openai.com/en/articles/11752874-chatgpt-agent
+secondary_sources:
+  - https://help.openai.com/en/articles/11752874-chatgpt-agent#h_06f96b8891
+  - https://www.reddit.com/r/ChatGPT/search/?q=ChatGPT%20agent&restrict_sr=1
+positioning: "General-purpose ChatGPT task agent that combines browsing, code execution, connectors, file work, and user-supervised actions."
+customer_model: "Included in paid ChatGPT tiers with usage caps and enterprise controls; OpenAI monetizes through subscriptions and workspace plans."
+competitive_threat_level: high
+notes: "Competes above the browser: users may ask ChatGPT to finish a web task instead of opening a dedicated browser-agent product."
