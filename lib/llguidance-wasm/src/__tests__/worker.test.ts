@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LlguidanceSession } from '../index.js';
 import { installLlguidanceWorker } from '../worker.js';
 import { LlguidanceWorkerClient } from '../worker-client.js';
 
@@ -43,6 +44,10 @@ class FakeClientWorker {
 }
 
 describe('worker protocol', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('handles session lifecycle messages and errors', async () => {
     const scope = new FakeWorkerScope();
     await installLlguidanceWorker(scope);
@@ -83,5 +88,27 @@ describe('worker protocol', () => {
     worker.emit({ id: 3, ok: false, error: 'boom' });
     worker.emit({ id: 999, ok: true, result: null });
     await expect(rejected).rejects.toThrow('boom');
+
+    const commit = client.commitToken(1, 0);
+    worker.emit({ id: 4, ok: true, result: { stopped: true } });
+    await expect(commit).resolves.toEqual({ stopped: true });
+
+    const free = client.freeMatcher(1);
+    worker.emit({ id: 5, ok: true, result: { freed: true } });
+    await expect(free).resolves.toEqual({ freed: true });
+  });
+
+  it('stringifies non-error worker failures', async () => {
+    const scope = new FakeWorkerScope();
+    await installLlguidanceWorker(scope);
+    scope.send({ id: 1, op: 'init', tokenizerJson });
+
+    vi.spyOn(LlguidanceSession.prototype, 'createMatcher').mockImplementation(() => {
+      throw 'string failure';
+    });
+
+    scope.send({ id: 2, op: 'createMatcher', input: { kind: 'regex', regex: 'red' } });
+
+    expect(scope.messages.at(-1)).toEqual({ id: 2, ok: false, error: 'string failure' });
   });
 });

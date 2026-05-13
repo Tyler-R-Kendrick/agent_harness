@@ -23,4 +23,24 @@ describe('mask helpers', () => {
     expect(first).toEqual([1, -Infinity, 3, -Infinity]);
     expect(second).toEqual([-Infinity, 6, -Infinity, -Infinity]);
   });
+
+  it('resets marker storage when the generation counter wraps', () => {
+    const applier = new TokenMaskApplier(3);
+    (applier as unknown as { generation: number }).generation = 0xfffffffe;
+    const logits = [1, 2, 3];
+
+    applier.apply(logits, new Uint32Array([2]));
+
+    expect(logits).toEqual([-Infinity, -Infinity, 3]);
+    expect((applier as unknown as { generation: number }).generation).toBe(1);
+  });
+
+  it('ignores allowed token ids outside the marker storage range', () => {
+    const applier = new TokenMaskApplier(2);
+    const logits = [1, 2];
+
+    applier.apply(logits, new Uint32Array([0, 99]));
+
+    expect(logits).toEqual([1, -Infinity]);
+  });
 });
