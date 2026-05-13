@@ -315,7 +315,9 @@ async function main() {
   assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
   assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
+  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 10/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchConcurrency/);
+  assert.match(coverageRunnerScript, /resolveCoverageBatchSize/);
   assert.match(coverageRunnerScript, /runVitestCommandsConcurrently/);
   assert.match(coverageRunnerScript, /runVitestCommandWithRetry/);
   assert.match(coverageRunnerScript, /retrying once/);
@@ -362,6 +364,36 @@ async function main() {
       env: { AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '0' },
     }),
     1,
+  );
+  assert.equal(
+    coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: '6' }),
+    6,
+  );
+  assert.equal(
+    coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: ' 8 ' }),
+    8,
+  );
+  assert.equal(
+    coverageRunner.resolveCoverageBatchSize({
+      platform: 'linux',
+      env: { AGENT_BROWSER_COVERAGE_BATCH_SIZE: '0' },
+    }),
+    25,
+  );
+  assert.equal(
+    coverageRunner.resolveCoverageBatchSize({
+      platform: 'win32',
+      env: { AGENT_BROWSER_COVERAGE_BATCH_SIZE: '0' },
+    }),
+    10,
+  );
+  assert.equal(
+    coverageRunner.resolveCoverageBatchSize({ platform: 'win32', env: {} }),
+    10,
+  );
+  assert.equal(
+    coverageRunner.resolveCoverageBatchSize({ platform: 'linux', env: {} }),
+    25,
   );
   assert.deepEqual(
     coverageRunner.buildVitestCoverageArgs(['--reporter=dot'], '../output/coverage/agent-browser-test'),

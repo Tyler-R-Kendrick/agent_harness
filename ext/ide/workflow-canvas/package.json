@@ -21,9 +21,9 @@
   "scripts": {
     "lint": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json --noEmit",
-    "test": "node ../../../scripts/run-package-bin.mjs vitest run",
-    "test:watch": "node ../../../scripts/run-package-bin.mjs vitest",
-    "test:coverage": "node ../../../scripts/run-package-bin.mjs vitest run --coverage"
+    "test": "node -e \"console.log('workflow-canvas tests are isolated in @agent-harness/ext-workflow-canvas-tests')\"",
+    "test:watch": "node -e \"console.log('workflow-canvas tests are isolated in @agent-harness/ext-workflow-canvas-tests')\"",
+    "test:coverage": "node -e \"console.log('workflow-canvas coverage is enforced by @agent-harness/ext-workflow-canvas-tests')\""
   },
   "peerDependencies": {
     "harness-core": "0.1.0",

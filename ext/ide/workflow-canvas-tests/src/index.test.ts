@@ -9,8 +9,8 @@ import {
   decodeWorkflowCanvasArtifact,
   getWorkflowCanvasFeatureInventory,
   validateServerlessWorkflowDocument,
-} from './index.js';
-import type { ServerlessWorkflowDocument } from './index.js';
+} from '@agent-harness/ext-workflow-canvas';
+import type { ServerlessWorkflowDocument } from '@agent-harness/ext-workflow-canvas';
 
 const serverlessWorkflow = {
   dsl: '1.0.0',

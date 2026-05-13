@@ -7,11 +7,13 @@ import { resolvePackageBin } from './search-eval-target.mjs';
 
 const DEFAULT_COVERAGE_SHARD_COUNT = 8;
 const DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4;
+const DEFAULT_COVERAGE_BATCH_SIZE = 25;
+const DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 10;
 const APP_TEST_FILES = ['src/App.integration.test.tsx', 'src/App.smoke.test.tsx'];
 const COVERAGE_TEST_ROOTS = ['src', 'server'];
-const COVERAGE_BATCH_SIZE = 25;
 const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
 const COVERAGE_BATCH_CONCURRENCY_ENV = 'AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY';
+const COVERAGE_BATCH_SIZE_ENV = 'AGENT_BROWSER_COVERAGE_BATCH_SIZE';
 
 function defaultReportsDirectory() {
   if (process.env.AGENT_BROWSER_COVERAGE_DIR) {
@@ -112,7 +114,21 @@ export function resolveCoverageBatchConcurrency(options = {}) {
   return platform === 'win32' ? 1 : DEFAULT_COVERAGE_BATCH_CONCURRENCY;
 }
 
-export function chunkTestFiles(files, batchSize = COVERAGE_BATCH_SIZE) {
+export function resolveCoverageBatchSize(options = {}) {
+  const hasOptionShape = 'platform' in options || 'env' in options;
+  const platform = hasOptionShape ? options.platform ?? process.platform : process.platform;
+  const env = hasOptionShape ? options.env ?? process.env : options;
+  const configured = env[COVERAGE_BATCH_SIZE_ENV];
+  if (configured) {
+    const parsed = Number.parseInt(configured, 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return platform === 'win32' ? DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE : DEFAULT_COVERAGE_BATCH_SIZE;
+}
+
+export function chunkTestFiles(files, batchSize = resolveCoverageBatchSize()) {
   if (!Number.isInteger(batchSize) || batchSize < 1) {
     throw new TypeError('Coverage batch size must be a positive integer.');
   }
@@ -169,7 +185,7 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
 
   const reportsDirectory = defaultReportsDirectory();
   const coverageTestFiles = await discoverCoverageTestFiles();
-  const coverageBatches = chunkTestFiles(coverageTestFiles);
+  const coverageBatches = chunkTestFiles(coverageTestFiles, resolveCoverageBatchSize());
   const coverageExitCode = await runVitestCommandsConcurrently(
     vitestBin,
     coverageBatches.map((files, index) => ({
