@@ -20,7 +20,15 @@ import {
   validateWorkspaceFile as validateCoreWorkspaceFile,
 } from 'harness-core';
 
-import type { WorkspaceCapabilities, WorkspaceFile, WorkspaceFileKind, WorkspaceHook, WorkspacePlugin, WorkspaceTool } from '../types';
+import type {
+  WorkspaceCapabilities,
+  WorkspaceFile,
+  WorkspaceFileExtensionOwnership,
+  WorkspaceFileKind,
+  WorkspaceHook,
+  WorkspacePlugin,
+  WorkspaceTool,
+} from '../types';
 
 export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
 export const WORKSPACE_FILE_STORAGE_DEBOUNCE_MS = 120;
@@ -31,6 +39,10 @@ const LEGACY_DESIGN_STUDIO_GENERATED_PREFIXES = [
   ['design', ['claude', 'design'].join('-')].join('/'),
   ['design', 'design-studio'].join('/'),
 ];
+
+export interface RemoveWorkspaceFileOptions {
+  allowExtensionLocked?: boolean;
+}
 
 function slugify(value: string) {
   return value
@@ -253,14 +265,53 @@ export function loadWorkspaceFiles(workspaceIds: string[]): Record<string, Works
   }
 }
 
+export function getWorkspaceFileExtensionOwnership(file: WorkspaceFile): WorkspaceFileExtensionOwnership | null {
+  const ownership = file.extensionOwnership;
+  if (!ownership || typeof ownership.extensionId !== 'string' || !ownership.extensionId.trim()) return null;
+  return {
+    extensionId: ownership.extensionId,
+    ...(typeof ownership.extensionName === 'string' && ownership.extensionName.trim()
+      ? { extensionName: ownership.extensionName }
+      : {}),
+    ...(ownership.locked === true ? { locked: true } : {}),
+  };
+}
+
+export function isWorkspaceFileLockedByExtension(file: WorkspaceFile): boolean {
+  return getWorkspaceFileExtensionOwnership(file)?.locked === true;
+}
+
+export function getWorkspaceFileRemovalBlocker(file: WorkspaceFile): string | null {
+  const ownership = getWorkspaceFileExtensionOwnership(file);
+  if (!ownership?.locked) return null;
+  const label = ownership.extensionName ?? ownership.extensionId;
+  return `${file.path} is locked by ${label}. Uninstall the extension to remove it.`;
+}
+
 export function upsertWorkspaceFile(files: WorkspaceFile[], file: WorkspaceFile): WorkspaceFile[] {
   const next = [...files];
   const index = next.findIndex((entry) => entry.path === file.path);
   if (index === -1) return [...next, file];
-  next[index] = file;
+  const existing = next[index]!;
+  next[index] = file.extensionOwnership === undefined && existing.extensionOwnership
+    ? { ...file, extensionOwnership: existing.extensionOwnership }
+    : file;
   return next;
 }
 
-export function removeWorkspaceFile(files: WorkspaceFile[], path: string): WorkspaceFile[] {
+export function removeWorkspaceFile(files: WorkspaceFile[], path: string, options: RemoveWorkspaceFileOptions = {}): WorkspaceFile[] {
+  const target = files.find((file) => file.path === path);
+  if (target && isWorkspaceFileLockedByExtension(target) && options.allowExtensionLocked !== true) {
+    return files;
+  }
   return files.filter((file) => file.path !== path);
+}
+
+export function removeWorkspaceFilesForExtensions(files: WorkspaceFile[], extensionIds: readonly string[]): WorkspaceFile[] {
+  const removedIds = new Set(extensionIds);
+  if (!removedIds.size) return files;
+  return files.filter((file) => {
+    const ownership = getWorkspaceFileExtensionOwnership(file);
+    return !ownership || !removedIds.has(ownership.extensionId);
+  });
 }

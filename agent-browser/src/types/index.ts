@@ -387,10 +387,17 @@ export interface IntegrationSurface {
   constraint?: string;
 }
 
+export interface WorkspaceFileExtensionOwnership {
+  extensionId: string;
+  extensionName?: string;
+  locked?: boolean;
+}
+
 export interface WorkspaceFile {
   path: string;
   content: string;
   updatedAt: string;
+  extensionOwnership?: WorkspaceFileExtensionOwnership;
 }
 
 export interface WorkspaceSkill {

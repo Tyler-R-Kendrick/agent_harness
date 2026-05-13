@@ -85,6 +85,13 @@ describe('WorkflowCanvasRenderer', () => {
 
     expect(savedFileSets).toHaveLength(2);
     expect(savedFileSets.at(-1)).toHaveLength(1);
+    expect(savedFileSets.at(-1)![0]).toMatchObject({
+      extensionOwnership: {
+        extensionId: 'agent-harness.ext.workflow-canvas',
+        extensionName: 'Workflow canvas orchestration',
+        locked: true,
+      },
+    });
     const savedArtifact = JSON.parse(savedFileSets.at(-1)![0]!.content) as {
       mediaType: string;
       canvas: { nodes: unknown[]; edges: unknown[] };
