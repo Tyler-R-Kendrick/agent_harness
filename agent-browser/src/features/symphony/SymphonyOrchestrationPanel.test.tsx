@@ -367,6 +367,102 @@ describe('Symphony system surfaces', () => {
     expect(detail).toHaveTextContent('Review');
   });
 
+  it('shows the selected task live feed and makes idle running work visibly stalled', () => {
+    const state = createMultitaskSubagentState({
+      workspaceId: 'ws-feed',
+      workspaceName: 'Feed Lab',
+      request: 'parallelize the frontend and tests work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    const runningState = {
+      ...state,
+      branches: state.branches.map((branch) => {
+        if (branch.branchName.endsWith('/frontend-1')) {
+          return {
+            ...branch,
+            status: 'running' as const,
+            progress: 40,
+            runAttempt: 1,
+            sessionId: 'symphony:ws-feed:frontend-1',
+            lastRunAt: '2026-05-07T10:00:00.000Z',
+            lastHeartbeatAt: '2026-05-07T10:00:00.000Z',
+            executionEvents: [{
+              id: 'multitask:ws-feed:frontend-1:heartbeat:2026-05-07T10:00:00.000Z',
+              type: 'heartbeat' as const,
+              at: '2026-05-07T10:00:00.000Z',
+              summary: 'Frontend agent entered StreamingTurn.',
+            }],
+          };
+        }
+        if (branch.branchName.endsWith('/tests-2')) {
+          return {
+            ...branch,
+            status: 'running' as const,
+            progress: 55,
+            runAttempt: 1,
+            sessionId: 'symphony:ws-feed:tests-2',
+            lastRunAt: '2026-05-07T10:04:30.000Z',
+            lastHeartbeatAt: '2026-05-07T10:05:45.000Z',
+            executionEvents: [{
+              id: 'multitask:ws-feed:tests-2:heartbeat:2026-05-07T10:05:45.000Z',
+              type: 'heartbeat' as const,
+              at: '2026-05-07T10:05:45.000Z',
+              summary: 'Tests agent is streaming npm output.',
+            }],
+          };
+        }
+        return branch;
+      }),
+    };
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Feed Lab'));
+    const snapshot = createSymphonyRuntimeSnapshot({
+      state: runningState,
+      report,
+      now: new Date('2026-05-07T10:06:00.000Z'),
+    });
+    const onSelectTask = vi.fn();
+    const { rerender } = render(
+      <SymphonyWorkspaceApp
+        snapshot={snapshot}
+        onApproveMerge={vi.fn()}
+        onManageBranch={vi.fn()}
+        onRequestChanges={vi.fn()}
+        onStartTask={vi.fn()}
+        onSelectTask={onSelectTask}
+        onStartFollowUp={vi.fn()}
+      />,
+    );
+
+    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    const detail = within(app).getByRole('region', { name: 'Symphony task detail' });
+    expect(detail).toHaveTextContent('Stalled');
+    expect(detail).toHaveTextContent('Live chat feed');
+    expect(detail).toHaveTextContent('No Codex events received for 6m 0s.');
+    expect(detail).toHaveTextContent('Frontend agent entered StreamingTurn.');
+    expect(within(app).getAllByText('Stalled').length).toBeGreaterThan(0);
+
+    fireEvent.click(within(app).getByRole('button', { name: 'Open task SYM-002 Tests branch' }));
+    expect(onSelectTask).toHaveBeenCalledWith('multitask:ws-feed:tests-2');
+
+    rerender(
+      <SymphonyWorkspaceApp
+        snapshot={{ ...snapshot, selectedIssueId: 'multitask:ws-feed:tests-2' }}
+        onApproveMerge={vi.fn()}
+        onManageBranch={vi.fn()}
+        onRequestChanges={vi.fn()}
+        onStartTask={vi.fn()}
+        onSelectTask={onSelectTask}
+        onStartFollowUp={vi.fn()}
+      />,
+    );
+
+    const selectedDetail = within(app).getByRole('region', { name: 'Symphony task detail' });
+    expect(selectedDetail).toHaveTextContent('Tests branch');
+    expect(selectedDetail).toHaveTextContent('Running');
+    expect(selectedDetail).toHaveTextContent('Tests agent is streaming npm output.');
+    expect(selectedDetail).not.toHaveTextContent('No Codex events received for 6m 0s.');
+  });
+
   it('renders ready, approved, blocked, and empty review states without sidebar duplication', () => {
     const initial = createMultitaskSubagentState({
       workspaceId: 'ws-ready',

@@ -8218,6 +8218,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .symphony-system-title h1,
 .symphony-section-heading h2,
+.symphony-section-heading h3,
 .symphony-activity-header h2,
 .symphony-review-feedback h3 {
   margin: 0;
@@ -8230,6 +8231,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 22px;
 }
 .symphony-section-heading h2,
+.symphony-section-heading h3,
 .symphony-activity-header h2 {
   font-size: 14px;
 }
@@ -8621,6 +8623,56 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .symphony-detail-list dd {
   margin: 0;
   color: #d1d5db;
+}
+.symphony-live-feed {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 4px;
+}
+.symphony-live-feed-list {
+  display: grid;
+  gap: 7px;
+}
+.symphony-live-feed-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.symphony-live-feed-item--error {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.16);
+}
+.symphony-live-feed-item > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.symphony-live-feed-item strong,
+.symphony-live-feed-item p,
+.symphony-live-feed-item small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.symphony-live-feed-item strong {
+  color: #f3f4f6;
+  font-size: 12px;
+}
+.symphony-live-feed-item p {
+  margin: 0;
+  color: #d1d5db;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.symphony-live-feed-item small {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 .symphony-review-actions {
   display: grid;

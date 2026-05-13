@@ -15257,6 +15257,14 @@ function AgentBrowserApp() {
       },
     [activeWorkspace.name, activeWorkspaceId, multitaskSubagentState],
   );
+  const hasRunningSymphonyTasks = activeMultitaskSubagentState.branches.some((branch) => branch.status === 'running');
+  const [symphonyRuntimeNowMs, setSymphonyRuntimeNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (activePanel !== 'symphony' || !hasRunningSymphonyTasks) return undefined;
+    setSymphonyRuntimeNowMs(Date.now());
+    const timer = window.setInterval(() => setSymphonyRuntimeNowMs(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, [activePanel, hasRunningSymphonyTasks]);
   const startMultitaskSubagents = useCallback((request: string, options?: { openPanel?: boolean }) => {
     setMultitaskSubagentState(createMultitaskSubagentState({
       workspaceId: activeWorkspaceId,
@@ -15425,8 +15433,9 @@ function AgentBrowserApp() {
       state: activeMultitaskSubagentState,
       report: activePrReviewReport,
       autopilotSettings: symphonyAutopilotSettings,
+      now: new Date(symphonyRuntimeNowMs),
     }),
-    [activeMultitaskSubagentState, activePrReviewReport, symphonyAutopilotSettings],
+    [activeMultitaskSubagentState, activePrReviewReport, symphonyAutopilotSettings, symphonyRuntimeNowMs],
   );
   useEffect(() => {
     if (!activeMultitaskSubagentState.enabled) return;

@@ -389,6 +389,7 @@ function WorkspaceRunTable({
             const issue = snapshot.issues.find((entry) => entry.id === workspace.issueId);
             const attempt = snapshot.runAttempts.find((entry) => entry.issueId === workspace.issueId);
             const reviewBranch = snapshot.review.branches.find((branch) => branch.branchId === workspace.issueId);
+            const displayState = getTaskDisplayState(reviewBranch?.status ?? 'queued', attempt);
             const reviewerDecision = reviewBranch?.reviewerAgentDecision ?? null;
             const isApproved = reviewBranch?.approvalState === 'approved';
             const reviewerState = reviewerDecision?.state ?? 'not-ready';
@@ -419,10 +420,10 @@ function WorkspaceRunTable({
                   </button>
                 </th>
                 <td>
-                  <span className={`symphony-status-line symphony-status-line--${reviewBranch?.status ?? 'queued'}`}>
-                    {formatBranchStatus(reviewBranch?.status ?? 'queued')}
+                  <span className={`symphony-status-line symphony-status-line--${displayState.statusClass}`}>
+                    {displayState.label}
                   </span>
-                  <small>{attempt?.phase ?? 'PreparingWorkspace'}</small>
+                  <small>{displayState.detail}</small>
                 </td>
                 <td>
                   <span>{reviewerDecisionLabel(reviewerState)}</span>
@@ -485,6 +486,8 @@ function TaskDetailPanel({
   const issue = snapshot.issues.find((entry) => entry.id === workspace.issueId) ?? null;
   const project = snapshot.projects.find((entry) => entry.id === issue?.projectId) ?? null;
   const attempt = snapshot.runAttempts.find((entry) => entry.issueId === workspace.issueId) ?? null;
+  const liveSession = snapshot.liveSessions.find((entry) => entry.issueId === workspace.issueId) ?? null;
+  const displayState = getTaskDisplayState(reviewBranch?.status ?? 'queued', attempt);
   const evidence = summarizeWorkspaceEvidence(snapshot, workspace.issueId);
 
   return (
@@ -504,11 +507,11 @@ function TaskDetailPanel({
         </div>
         <div>
           <dt>Status</dt>
-          <dd>{formatBranchStatus(reviewBranch?.status ?? 'queued')}</dd>
+          <dd>{displayState.label}</dd>
         </div>
         <div>
           <dt>Session</dt>
-          <dd>{attempt?.phase ?? 'PreparingWorkspace'}</dd>
+          <dd>{displayState.detail}</dd>
         </div>
         <div>
           <dt>Review</dt>
@@ -519,6 +522,91 @@ function TaskDetailPanel({
           <dd>{evidence.label}</dd>
         </div>
       </dl>
+      <TaskLiveFeed
+        snapshot={snapshot}
+        workspace={workspace}
+        attempt={attempt}
+        liveSession={liveSession}
+      />
+    </section>
+  );
+}
+
+function TaskLiveFeed({
+  snapshot,
+  workspace,
+  attempt,
+  liveSession,
+}: {
+  snapshot: SymphonyRuntimeSnapshot;
+  workspace: SymphonyRuntimeSnapshot['workspaces'][number];
+  attempt: SymphonyRuntimeSnapshot['runAttempts'][number] | null;
+  liveSession: SymphonyRuntimeSnapshot['liveSessions'][number] | null;
+}) {
+  const taskLogs = snapshot.logs.filter((entry) =>
+    entry.issueId === workspace.issueId
+    || entry.issueIdentifier === workspace.issueIdentifier
+    || (liveSession?.sessionId && entry.sessionId === liveSession.sessionId))
+    .filter((entry) => !(liveSession
+      && entry.event === liveSession.lastCodexEvent
+      && entry.message === liveSession.lastCodexMessage));
+  const feedItems = [
+    ...(liveSession ? [{
+      id: `${liveSession.sessionId}:codex`,
+      level: attempt?.phase === 'Stalled' ? 'error' as const : 'info' as const,
+      title: liveSession.lastCodexEvent ? formatEventLabel(liveSession.lastCodexEvent) : 'Codex session',
+      meta: [
+        liveSession.lastCodexTimestamp ? formatTimestamp(liveSession.lastCodexTimestamp) : null,
+        `${liveSession.turnCount} turn${liveSession.turnCount === 1 ? '' : 's'}`,
+        `${NUMBER_FORMATTER.format(liveSession.codexTotalTokens)} tokens`,
+      ].filter(Boolean).join(' · '),
+      body: liveSession.lastCodexMessage,
+      detail: liveSession.lastActivitySummary !== liveSession.lastCodexMessage
+        ? liveSession.lastActivitySummary
+        : null,
+    }] : []),
+    ...(attempt && !liveSession ? [{
+      id: `${workspace.issueId}:attempt`,
+      level: attempt.status === 'failed' ? 'error' as const : 'info' as const,
+      title: attempt.phase,
+      meta: formatTimestamp(attempt.startedAt),
+      body: attempt.error ?? `Workspace attempt is ${attempt.status}.`,
+      detail: null,
+    }] : []),
+    ...taskLogs.map((entry) => ({
+      id: `${entry.ts}:${entry.event}:${entry.issueId ?? ''}:${entry.sessionId ?? ''}`,
+      level: entry.level,
+      title: formatEventLabel(entry.event),
+      meta: formatTimestamp(entry.ts),
+      body: entry.message,
+      detail: entry.sessionId ? `Session ${entry.sessionId}` : null,
+    })),
+  ];
+
+  return (
+    <section className="symphony-live-feed" role="region" aria-label="Symphony task live feed">
+      <div className="symphony-section-heading">
+        <MessageSquare size={15} aria-hidden="true" />
+        <h3>Live chat feed</h3>
+      </div>
+      <div className="symphony-live-feed-list" role="list">
+        {feedItems.length > 0 ? feedItems.map((item) => (
+          <article
+            key={item.id}
+            className={`symphony-live-feed-item symphony-live-feed-item--${item.level}`}
+            role="listitem"
+          >
+            <span>
+              <strong>{item.title}</strong>
+              <small>{item.meta}</small>
+            </span>
+            <p>{item.body}</p>
+            {item.detail ? <small>{item.detail}</small> : null}
+          </article>
+        )) : (
+          <p className="symphony-empty-state">No live session events captured for this task.</p>
+        )}
+      </div>
     </section>
   );
 }
@@ -783,6 +871,12 @@ function summarizeWorkspaceEvidence(snapshot: SymphonyRuntimeSnapshot, issueId: 
   const liveSession = snapshot.liveSessions.find((entry) => entry.issueId === issueId) ?? null;
   const validationCount = snapshot.review.report.validations.length;
   const evidenceCount = attempt?.evidence.length ?? 0;
+  if (attempt?.phase === 'Stalled' && attempt.error?.startsWith('No Codex events received')) {
+    return {
+      label: 'stalled',
+      detail: `${evidenceCount} event${evidenceCount === 1 ? '' : 's'}`,
+    };
+  }
   if (liveSession || attempt?.status === 'active') {
     return {
       label: 'agent active',
@@ -819,11 +913,50 @@ function summarizeWorkspaceEvidence(snapshot: SymphonyRuntimeSnapshot, issueId: 
   };
 }
 
+function getTaskDisplayState(
+  status: string,
+  attempt: SymphonyRuntimeSnapshot['runAttempts'][number] | null | undefined,
+): { label: string; detail: string; statusClass: string } {
+  if (attempt?.phase === 'Stalled' && attempt.error?.startsWith('No Codex events received')) {
+    return {
+      label: 'Stalled',
+      detail: attempt.error,
+      statusClass: 'blocked',
+    };
+  }
+  if (attempt?.status === 'failed') {
+    return {
+      label: 'Failed',
+      detail: attempt.error ?? attempt.phase,
+      statusClass: 'blocked',
+    };
+  }
+  return {
+    label: formatBranchStatus(status),
+    detail: attempt?.phase ?? 'PreparingWorkspace',
+    statusClass: status,
+  };
+}
+
 function formatBranchStatus(status: string): string {
   return status
     .split('-')
     .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)
     .join(' ');
+}
+
+function formatEventLabel(value: string): string {
+  return formatBranchStatus(value.replace(/[_-]+/g, ' '));
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 function reviewerActionLabel(branchName: string, state: 'approved' | 'rejected' | 'disabled' | 'not-ready'): string {
