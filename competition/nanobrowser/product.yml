@@ -1,0 +1,20 @@
+slug: nanobrowser
+name: Nanobrowser
+vendor: Nanobrowser
+segment: open-source-browser-agent-extension
+product_path: competition/nanobrowser
+design_path: competition/nanobrowser/design
+features_path: competition/nanobrowser/features
+marketing_path: competition/nanobrowser/marketing
+gossip_path: competition/nanobrowser/gossip
+snapshot_date: 2026-05-13
+primary_sources:
+  - https://nanobrowser.ai/
+  - https://github.com/nanobrowser/nanobrowser
+secondary_sources:
+  - https://github.com/nanobrowser/nanobrowser/issues
+  - https://chromewebstore.google.com/search/nanobrowser
+positioning: "Open-source Chrome extension for multi-agent browser automation in the user's existing browser."
+customer_model: "Free/open-source extension; users bring their own model/API keys or configured providers."
+competitive_threat_level: medium
+notes: "Attacks the same real-browser-context wedge as local MCP extensions, but with a consumer-installable Chrome extension story."

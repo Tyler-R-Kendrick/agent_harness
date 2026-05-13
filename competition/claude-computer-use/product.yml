@@ -1,0 +1,20 @@
+slug: claude-computer-use
+name: Claude Computer Use
+vendor: Anthropic
+segment: model-provider-computer-use-api
+product_path: competition/claude-computer-use
+design_path: competition/claude-computer-use/design
+features_path: competition/claude-computer-use/features
+marketing_path: competition/claude-computer-use/marketing
+gossip_path: competition/claude-computer-use/gossip
+snapshot_date: 2026-05-13
+primary_sources:
+  - https://www.anthropic.com/news/3-5-models-and-computer-use
+  - https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/computer-use-tool
+secondary_sources:
+  - https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/computer-use-tool#security-considerations
+  - https://github.com/anthropics/anthropic-quickstarts/tree/main/computer-use-demo
+positioning: "API-level computer-use capability that lets Claude view screens, move the cursor, click, type, and operate software through developer-built sandboxes."
+customer_model: "Usage-based Anthropic API capability consumed by developers and enterprises; product UX is supplied by the integrating app."
+competitive_threat_level: medium
+notes: "Less a packaged browser than a capability platform; dangerous because it can power many competitors and internal tools."

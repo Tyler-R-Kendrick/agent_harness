@@ -1,0 +1,20 @@
+slug: gemini-agent
+name: Gemini Agent
+vendor: Google
+segment: model-owner-browser-agent
+product_path: competition/gemini-agent
+design_path: competition/gemini-agent/design
+features_path: competition/gemini-agent/features
+marketing_path: competition/gemini-agent/marketing
+gossip_path: competition/gemini-agent/gossip
+snapshot_date: 2026-05-13
+primary_sources:
+  - https://deepmind.google/discover/blog/project-mariner-exploring-the-future-of-human-agent-interaction-starting-with-your-browser/
+  - https://blog.google/products/gemini/google-gemini-update-may-2025/
+secondary_sources:
+  - https://gemini.google/overview/video-generation/
+  - https://www.reddit.com/r/GoogleGeminiAI/search/?q=agent&restrict_sr=1
+positioning: "Google's Gemini agent lineage from Project Mariner toward agentic browsing and task execution across Google surfaces."
+customer_model: "Bundled into Gemini/Google subscriptions and platform distribution, with premium capabilities tied to paid Google AI plans."
+competitive_threat_level: high
+notes: "Distribution threat is Chrome, Android, Search, Gmail, Docs, and Gemini account surfaces, even when browser-agent features are staged gradually."
