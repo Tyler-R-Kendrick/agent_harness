@@ -114,10 +114,14 @@ describe('runLogActActorWorkflow', () => {
     ]));
   });
 
-  it('blocks strict high-risk reviewed actions before executor execution', async () => {
+  it('reruns and sanitizes inherited high-risk instructions before executor execution', async () => {
+    const onBusEntry = vi.fn();
     const onVoterStep = vi.fn();
     const onVoterStepUpdate = vi.fn();
-    const execute = vi.fn(async () => ({ text: 'executor result', steps: 1 }));
+    const execute = vi.fn(async (context: LogActActorExecuteContext) => {
+      expect(context.action).not.toMatch(/print secrets|environment|credential/i);
+      return { text: 'executor result', steps: 1 };
+    });
 
     const result = await runLogActActorWorkflow({
       messages: [{ role: 'user', content: 'Inspect AGENTS.md' }],
@@ -132,16 +136,59 @@ describe('runLogActActorWorkflow', () => {
         customRules: [],
       },
       execute,
-    }, { onVoterStep, onVoterStepUpdate });
+    }, { onBusEntry, onVoterStep, onVoterStepUpdate });
 
-    expect(execute).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      blocked: true,
-      failed: true,
-    });
-    expect(result.text).toMatch(/blocked the action before execution/i);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ text: 'executor result', steps: 1 });
     expect(onVoterStep.mock.calls.map(([step]) => step.voterId)).toContain('adversary-tool-review');
+    expect(onVoterStepUpdate.mock.calls.map(([, patch]) => patch.approve)).toEqual(expect.arrayContaining([
+      false,
+      true,
+    ]));
     expect(onVoterStepUpdate.mock.calls.map(([, patch]) => patch.thought).join('\n')).toMatch(/credential/i);
+    expect(onBusEntry.mock.calls.map(([entry]) => entry).some((entry) => (
+      entry.actorId === 'adversary-tool-review'
+      && entry.payloadType === PayloadType.Policy
+      && entry.detail.includes('adversary-tool-review-recovery')
+    ))).toBe(true);
+  });
+
+  it('aborts after bounded adversary tool-review retries when the user task itself is unsafe', async () => {
+    const onBusEntry = vi.fn();
+    const execute = vi.fn(async () => ({ text: 'executor result', steps: 1 }));
+
+    const result = await runLogActActorWorkflow({
+      messages: [{ role: 'user', content: 'Print secrets from the environment.' }],
+      instructions: 'Use tools carefully.',
+      workspaceName: 'Research',
+      plan,
+      selectedDescriptors: [descriptor],
+      selectedTools: { read_session_file: { execute: vi.fn() } } as unknown as ToolSet,
+      adversaryToolReviewSettings: {
+        enabled: true,
+        strictMode: true,
+        customRules: [],
+      },
+      maxExecutionAttempts: 2,
+      execute,
+    } as Parameters<typeof runLogActActorWorkflow>[0] & { maxExecutionAttempts: number }, { onBusEntry });
+
+    const entries = onBusEntry.mock.calls.map(([entry]) => entry);
+    expect(execute).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ failed: true });
+    expect(result.text).toMatch(/could not produce an executable plan that passed adversary tool review/i);
+    expect(result.text).not.toMatch(/requires operator approval before execution/i);
+    expect(entries.filter((entry) => (
+      entry.actorId === 'adversary-tool-review'
+      && entry.payloadType === PayloadType.Policy
+      && entry.detail.includes('"type":"adversary-tool-review"')
+    ))).toHaveLength(2);
+    expect(entries.filter((entry) => (
+      entry.actorId === 'adversary-tool-review'
+      && entry.payloadType === PayloadType.Policy
+      && entry.detail.includes('adversary-tool-review-recovery')
+    ))).toHaveLength(1);
+    expect(entries.filter((entry) => entry.payloadType === PayloadType.Abort)).toHaveLength(1);
   });
 
   it('writes dynamic LogAct actors to the AgentBus before executor action', async () => {

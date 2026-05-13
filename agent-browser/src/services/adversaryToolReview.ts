@@ -129,8 +129,8 @@ export function reviewAdversaryToolAction(input: AdversaryToolReviewInput): Adve
     });
   }
 
-  const hasPromptInjection = /\b(ignore (?:the )?(?:user|previous|system|instructions?)|disregard (?:the )?(?:user|previous|system|instructions?)|follow page instructions|developer mode|bypass policy|jailbreak)\b/i.test(`${input.action}\n${input.recentContext.join('\n')}`);
-  if (hasPromptInjection) {
+  const hasActionPromptInjection = /\b(ignore (?:the )?(?:user|previous|system|instructions?)|disregard (?:the )?(?:user|previous|system|instructions?)|follow page instructions|developer mode|bypass policy|jailbreak)\b/i.test(input.action);
+  if (hasActionPromptInjection) {
     hits.push({
       id: 'prompt-injection',
       severity: 'high',
@@ -141,7 +141,7 @@ export function reviewAdversaryToolAction(input: AdversaryToolReviewInput): Adve
 
   const taskOverlap = overlapScore(tokenize(task), tokenize(action));
   const contextOverlap = overlapScore(tokenize(`${task}\n${context}`), tokenize(action));
-  if (task.length > 0 && taskOverlap === 0 && (contextOverlap < 2 || hasPromptInjection)) {
+  if (task.length > 0 && taskOverlap === 0 && (contextOverlap < 2 || hasActionPromptInjection)) {
     hits.push({
       id: 'task-drift',
       severity: 'medium',
