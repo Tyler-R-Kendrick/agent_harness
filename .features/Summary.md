@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-12
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-13
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
@@ -22,7 +22,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, Conductor personalities, skills, and repo-owned mode/config packaging, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Roo Code marketplace MCPs plus modes plus on-demand skills, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation, Mastra versioned skills and publish flow, Conductor personalities, skills, and repo-owned mode/config packaging, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, Open Design cross-agent `SKILL.md` compatibility plus typed skill metadata and live parameter controls, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions/skills/prompts/themes, Roo Code marketplace MCPs plus modes plus on-demand skills, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -57,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, Conductor project-level MCP inheritance plus status-aware connectivity inspection, n8n's instance-level MCP server plus workflow-tool composition and 500+ integrations, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture, Roo Code project/global MCP installs plus team-enforced MCP policy.
+- Seen in: Codex skills for Linear/Figma/cloud hosts, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP, Claude Cowork connectors/plugins, Cursor MCP Apps plus Bugbot MCP plus plugin marketplaces, DeerFlow MCP servers and InfoQuest, Devin MCP marketplace plus remote custom transports plus API/ACP surfaces, Gemini CLI MCP-aware extensions plus remote agents plus model-routing control, Goose 70+ MCP extensions plus roots-aware workspace wiring and smart extension recommendation, Hermes multi-provider integrations, Mastra MCP client/server plus approval flow, Conductor project-level MCP inheritance plus status-aware connectivity inspection, n8n's instance-level MCP server plus workflow-tool composition and 500+ integrations, OpenAI Symphony `linear_graphql` tool bridge, OpenClaw integrations, OpenCode MCP servers and custom tools, Open Design shipping both an MCP server and an external MCP client with daemon-managed OAuth, OpenHands GitHub/GitLab/Bitbucket/Slack/Jira integrations plus API and SDK surfaces, Roomote GitHub + Slack + Linear + docs + logs integrations as a default operating posture, Roo Code project/global MCP installs plus team-enforced MCP policy.
 - Why it matters: standalone agents plateau quickly without live context or write access.
 - One-shot build instruction:
   - Build a secure tool-connectivity layer with read/write scopes, audited invocation logs, secret isolation, per-skill tool policies, and reusable integrations for issue trackers, docs, storage, and deploy targets.
@@ -155,7 +155,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 22. Durable interactive agent artifacts
 - Common pattern: agent runs are starting to emit first-class interactive artifacts that stay attached to the operational workspace instead of disappearing into the transcript.
-- Seen in: Cursor canvases in the Agents Window, Goose Apps extension with chat-built MCP App resources, MCP Apps rendered inside chats, and Space Agent task-built widgets and pages.
+- Seen in: Cursor canvases in the Agents Window, Goose Apps extension with chat-built MCP App resources, MCP Apps rendered inside chats, Open Design sandboxed live artifacts with direct export and publish paths, and Space Agent task-built widgets and pages.
 - Why it matters: planning, debugging, and review often benefit from a persistent dashboard, diagram, checklist, or custom interface that the user can return to after the run finishes.
 - One-shot build instruction:
   - Add durable agent-authored artifacts such as canvases, dashboards, diagrams, and review panels that live alongside transcript, terminal, browser, and diff views; make them addressable, persistable, and safe to update incrementally across follow-up turns.
@@ -286,6 +286,13 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Add a workflow-graph orchestration layer for browser-agent work that composes deterministic steps, agent nodes, reusable workflow-tools, human approval checkpoints, evaluation nodes, and versioned publish or rollback semantics so long-running automations can be built, debugged, and governed as operational systems.
 
+### 40. Schema-driven skill contracts with typed intake and live parameter controls
+- Common pattern: some harnesses are beginning to declare enough structured metadata around a skill that the product can generate intake forms, tweak controls, preview behavior, output manifests, and capability gates around the agent automatically.
+- Seen in: Open Design `od:` skill metadata with typed `inputs`, live `parameters`, preview and output metadata, and capability requirements; n8n's typed AI parameter binding is adjacent at the workflow-tool level, but Open Design currently makes the skill-to-UI contract clearest.
+- Why it matters: free-text prompting is a weak fit for repeatable artifact generation when the harness could collect structured inputs once, render the right controls, and keep follow-up refinements inside bounded parameters instead of re-prompting from scratch.
+- One-shot build instruction:
+  - Add schema-driven skill contracts for browser-agent workflows that define typed intake fields, live tweak controls, preview and export metadata, required capabilities, and output manifests, then use that contract to generate the surrounding UI, validation, and refinement behavior automatically.
+
 ## Highest-signal opportunities for `agent-browser`
 
 1. Multi-agent orchestration around browser tasks.
@@ -320,3 +327,4 @@ Method: current-product research from first-party product pages, help centers, d
 30. Add reviewer-feedback learning loops that refine future agent runs.
 31. Bind model and provider profiles to agent roles, and keep them sticky across resumes and child runs.
 32. Add workflow-graph orchestration that mixes deterministic steps, agent nodes, approvals, and versioned releases.
+33. Add schema-driven skill contracts with typed intake forms and live tweak controls.

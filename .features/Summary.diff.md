@@ -1,10 +1,50 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-12
-Baseline: `.features/Summary.md` refreshed from the 2026-05-11 twenty-eight-harness corpus.
-Diff type: additive update after Conductor research
+Updated: 2026-05-13
+Baseline: `.features/Summary.md` refreshed from the 2026-05-12 twenty-eight-harness corpus.
+Diff type: additive update after Open Design research
 
 ## Net new normalized features
+
+### Added: Schema-driven skill contracts with typed intake and live parameter controls
+- Why now: Open Design is showing a more explicit way to turn reusable agent skills into product surfaces by letting skill metadata generate the form, sliders, preview behavior, output contract, and capability gates around the model.
+- Research delta:
+  - Open Design extends the Claude Code `SKILL.md` format instead of replacing it, then adds an `od:` contract layer for typed `inputs`, live `parameters`, preview metadata, output manifests, and required capabilities
+  - the same skill can stay compatible across agent ecosystems while still driving Open Design's richer UI
+  - per-skill metadata decides whether design-system context is injected and which sections to prune for token savings
+  - the product's discovery flow, tweak panels, and export behavior are all tied back to that structured skill contract rather than being generic chat affordances
+
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: Open Design sharpens the packaging story by making the skill definition rich enough to drive the surrounding user experience instead of only the prompt body.
+- Research delta:
+  - skill contracts can define typed form fields, live sliders, preview entrypoints, output files, and capability requirements
+  - one canonical skill can be discovered across project, repo, and user scopes and optionally symlinked into multiple agent ecosystems
+  - Open Design keeps compatibility with existing Claude Code skills while still adding product-specific affordances
+
+### Expanded: External tool connectivity and actionability
+- Why now: Open Design's latest release moves MCP from passive compatibility to a bidirectional integration layer with managed auth.
+- Research delta:
+  - the May 9, 2026 `0.6.0` release adds an external MCP client with daemon-managed OAuth
+  - Open Design already ships its own MCP server, so the product now both exposes and consumes MCP capabilities
+  - reconnect handling preserves OAuth state and advertised tool counts, which makes tool connectivity more operationally durable
+
+### Expanded: Durable interactive agent artifacts
+- Why now: Open Design is treating artifacts as publishable operational outputs rather than only local previews.
+- Research delta:
+  - artifacts render in a sandboxed iframe and stay editable through the workspace
+  - the latest release adds direct PDF export
+  - generated artifacts can now be deployed to Cloudflare Pages and attached to custom domains
+
+### Added: Add schema-driven skill contracts with typed intake forms and live tweak controls
+- Why now: `agent-browser` already has skills, widgets, and generated UI surfaces, but it does not yet provide a contract layer that can turn a skill into a structured intake and refinement experience instead of an ad hoc chat-plus-panel flow.
+- Linear issue:
+  - `TK-62`
+- Linear issue title:
+  - `Add schema-driven skill contracts with typed intake forms and live tweak controls`
+- Suggested problem statement:
+  - `agent-browser` can launch specialized agents and render durable surfaces, but it does not yet let a workflow or skill declare typed intake fields, live refinement controls, preview behavior, output manifests, and capability requirements that the product can enforce and render automatically.
+- One-shot instruction for an LLM:
+  - Implement schema-driven skill contracts for `agent-browser` so each workflow or skill can declare typed input fields, live tweak parameters, preview and export metadata, required capabilities, and output manifests; use that contract to generate intake UI, validation, refinement controls, and artifact handling automatically across local runs, automations, and review flows.
 
 ### Added: Turn-level checkpoints with chat-and-code rollback
 - Why now: Conductor makes rollback a visible workspace primitive tied to the conversation timeline rather than a hidden implementation detail or a manual git escape hatch.
