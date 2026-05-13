@@ -47,6 +47,7 @@ export function compileValidationContract(options: CompileValidationContractOpti
   const prefix = inferNameBoundary(resolvedTaskText, 'start');
   const suffix = inferNameBoundary(resolvedTaskText, 'end');
   const rhyme = inferRhymeTarget(resolvedTaskText);
+  const formatConstraints = inferFormatConstraints(resolvedTaskText);
   const exclusions = uniqueStrings([
     ...(options.excludedCandidateNames ?? []),
     ...inferExclusions(taskText),
@@ -157,6 +158,7 @@ export function compileValidationContract(options: CompileValidationContractOpti
       failureMessage: `Result names must rhyme with ${rhyme}.`,
     }));
   }
+  constraints.push(...formatConstraints.map((constraint) => createConstraint(constraint)));
   if (exclusions.length > 0) {
     constraints.push(createConstraint({
       id: 'exclude:prior-candidates',
@@ -227,9 +229,9 @@ export function evaluateAnswerAgainstValidationContract({
   const failures: ConstraintEvaluationFailure[] = [];
   const acknowledged = answerAcknowledgesShortfall(answer, contract);
   for (const constraint of contract.constraints) {
-    const passed = evaluateConstraint(constraint, acceptedCandidates, labels);
+    const passed = evaluateConstraint(constraint, acceptedCandidates, labels, answer);
     if (passed) continue;
-    if (acknowledged && contract.successSemantics === 'allow-partial-with-acknowledgement') continue;
+    if (constraint.type !== 'format' && acknowledged && contract.successSemantics === 'allow-partial-with-acknowledgement') continue;
     failures.push({
       constraintId: constraint.id,
       reason: constraint.failureMessage,
@@ -289,6 +291,7 @@ function evaluateConstraint(
   constraint: ValidationConstraint,
   candidates: ConstraintEvaluationCandidate[],
   labels: string[],
+  answer: string,
 ): boolean {
   const names = labels.length > 0 ? labels : candidates.map((candidate) => candidate.name);
   switch (constraint.type) {
@@ -314,6 +317,8 @@ function evaluateConstraint(
     }
     case 'page_chrome':
       return names.every((name) => !looksLikeGenericPageLabel(name));
+    case 'format':
+      return evaluateFormatConstraint(constraint, answer);
     default:
       return true;
   }
@@ -362,6 +367,97 @@ function inferRhymeTarget(text: string): string | undefined {
   return text.match(/\brhymes?\s+with\s+["']?([A-Za-z0-9]+)["']?/i)?.[1];
 }
 
+function inferFormatConstraints(text: string): Array<Omit<ValidationConstraint, 'required' | 'confidence' | 'validationMethod'>> {
+  const constraints: Array<Omit<ValidationConstraint, 'required' | 'confidence' | 'validationMethod'>> = [];
+  if (/\b(?:return|respond|output)\s+(?:only\s+)?json\b|\bjson\s+only\b|\bbare\s+json\b/i.test(text)) {
+    constraints.push({
+      id: 'format:json-object',
+      sourceText: text,
+      type: 'format',
+      operator: 'json_object',
+      target: 'finalAnswer',
+      value: true,
+      failureMessage: 'Final answer must be a bare JSON object.',
+    });
+  }
+
+  const exactLineCount = inferExactLineCount(text);
+  if (exactLineCount !== undefined) {
+    constraints.push({
+      id: 'format:line-count',
+      sourceText: text,
+      type: 'format',
+      operator: 'exact_line_count',
+      target: 'finalAnswer.lines',
+      value: exactLineCount,
+      failureMessage: `Final answer must contain exactly ${exactLineCount} non-empty line${exactLineCount === 1 ? '' : 's'}.`,
+    });
+  }
+
+  const requiredJsonKey = inferRequiredJsonKey(text);
+  if (requiredJsonKey) {
+    constraints.push({
+      id: 'format:required-json-key',
+      sourceText: text,
+      type: 'format',
+      operator: 'json_object_key',
+      target: 'finalAnswer',
+      value: requiredJsonKey,
+      failureMessage: `Final answer JSON object must include the ${requiredJsonKey} key.`,
+    });
+  }
+
+  const requiredKeyword = inferRequiredKeyword(text);
+  if (requiredKeyword) {
+    constraints.push({
+      id: 'format:required-keyword',
+      sourceText: text,
+      type: 'format',
+      operator: 'must_include',
+      target: 'finalAnswer',
+      value: requiredKeyword,
+      failureMessage: `Final answer must include ${requiredKeyword}.`,
+    });
+  }
+
+  return constraints;
+}
+
+function inferExactLineCount(text: string): number | undefined {
+  const match = text.match(/\b(?:exactly|on exactly)\s+(one|two|three|four|five|\d{1,2})\s+(?:non-empty\s+)?lines?\b/i)
+    ?? text.match(/\b(?:in|on)\s+(?:a\s+)?single\s+line\b/i);
+  if (!match) return undefined;
+  if (!match[1]) return 1;
+  return wordOrNumberToInteger(match[1]);
+}
+
+function inferRequiredJsonKey(text: string): string | undefined {
+  const quoted = text.match(/\binclude\s+(?:the\s+)?key\s+["']([^"']+)["']/i)?.[1];
+  if (quoted) return quoted.trim();
+  const bare = text.match(/\binclude\s+(?:the\s+)?key\s+([A-Za-z0-9_-]+)\b/i)?.[1];
+  return bare?.trim();
+}
+
+function inferRequiredKeyword(text: string): string | undefined {
+  const quoted = text.match(/\binclude\s+(?:the\s+)?(?:word|keyword|phrase)\s+["']([^"']+)["']/i)?.[1];
+  if (quoted) return quoted.trim();
+  const bare = text.match(/\binclude\s+(?:the\s+)?(?:word|keyword|phrase)\s+([A-Za-z0-9_-]+)\b/i)?.[1];
+  return bare?.trim();
+}
+
+function wordOrNumberToInteger(value: string): number | undefined {
+  const normalized = value.toLocaleLowerCase();
+  const words: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+  };
+  const parsed = words[normalized] ?? Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
 function inferExclusions(text: string): string[] {
   const match = text.match(/\bnot\s+([^,.;]+?)(?:\s+(?:show|give|find|list|suggest|recommend)\b|,|;|\.|$)/i);
   return match?.[1] ? [normalizeWhitespace(match[1])] : [];
@@ -406,6 +502,49 @@ function answerAcknowledgesShortfall(answer: string, contract: ValidationContrac
       if (constraint.value === undefined) return answer.toLocaleLowerCase().includes(constraint.type.replace('_', ' '));
       return answer.toLocaleLowerCase().includes(String(constraint.value).toLocaleLowerCase());
     });
+}
+
+function evaluateFormatConstraint(constraint: ValidationConstraint, answer: string): boolean {
+  switch (constraint.operator) {
+    case 'json_object':
+      return isBareJsonObject(answer);
+    case 'json_object_key':
+      return jsonObjectHasKey(answer, String(constraint.value ?? ''));
+    case 'exact_line_count': {
+      const expected = Number(constraint.value ?? 0);
+      if (!Number.isFinite(expected) || expected < 1) return true;
+      return answer.split(/\r?\n/).filter((line) => line.trim().length > 0).length === expected;
+    }
+    case 'must_include': {
+      const required = String(constraint.value ?? '');
+      return required.length === 0 || answer.includes(required);
+    }
+    default:
+      return true;
+  }
+}
+
+function jsonObjectHasKey(answer: string, key: string): boolean {
+  if (!key) return true;
+  const parsed = parseBareJsonObject(answer);
+  return parsed !== undefined && Object.hasOwn(parsed, key);
+}
+
+function isBareJsonObject(answer: string): boolean {
+  return parseBareJsonObject(answer) !== undefined;
+}
+
+function parseBareJsonObject(answer: string): Record<string, unknown> | undefined {
+  const trimmed = answer.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return undefined;
+  try {
+    const parsed = JSON.parse(trimmed);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function rhymesWith(value: string, target: string): boolean {

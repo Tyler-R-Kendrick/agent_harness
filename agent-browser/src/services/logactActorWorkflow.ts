@@ -374,7 +374,7 @@ export async function runLogActActorWorkflow(
   let lastExecutionError: string | undefined;
   let lastExecutionText: string | undefined;
   let lastExecutionSteps = 0;
-  let lastFailureKind: 'executor' | 'verification' = 'executor';
+  let lastFailureKind: 'executor' | 'verification' | 'adversary-tool-review' = 'executor';
 
   for (let executionAttempt = 1; executionAttempt <= maxExecutionAttempts; executionAttempt += 1) {
     let selected: Candidate | undefined;
@@ -483,7 +483,28 @@ export async function runLogActActorWorkflow(
       callbacks,
     );
     if (adversaryReview) {
-      return adversaryReview;
+      lastFailureKind = 'adversary-tool-review';
+      lastExecutionSteps = adversaryReview.steps;
+      lastExecutionError = adversaryReview.error ?? adversaryReview.text;
+      lastExecutionText = undefined;
+      if (executionAttempt < maxExecutionAttempts) {
+        await bus.append({
+          type: PayloadType.Policy,
+          target: 'adversary-tool-review-recovery',
+          value: {
+            type: 'adversary-tool-review-recovery',
+            executionAttempt,
+            maxExecutionAttempts,
+            failedIntentId: executePlanIntentId,
+            reason: 'Adversary tool review rejected the executable action; rerunning student/teacher solution design with the review feedback in AgentBus context.',
+            review: adversaryReview.text,
+          },
+          meta: actorMeta('adversary-tool-review', selected.passIndex, {
+            parentActorId: 'execute-plan',
+          }),
+        });
+      }
+      continue;
     }
 
     const result = await runExecutorAttempt(options, {
@@ -673,15 +694,25 @@ export async function runLogActActorWorkflow(
   const attemptLabel = maxExecutionAttempts === 1 ? 'attempt' : 'attempts';
   const text = lastFailureKind === 'verification'
     ? verificationFailureUserText(validationContract, maxExecutionAttempts, attemptLabel, lastExecutionError)
+    : lastFailureKind === 'adversary-tool-review'
+      ? `I could not produce an executable plan that passed adversary tool review after ${maxExecutionAttempts} ${attemptLabel}. ${lastExecutionError ?? 'The proposed action remained unsafe or unapproved.'}`
     : lastExecutionText && !/^Executor failed:/i.test(lastExecutionText)
       ? lastExecutionText
       : `Execution aborted after ${maxExecutionAttempts} executor ${attemptLabel}: ${lastExecutionError ?? 'execution failed'}.`;
   await bus.append({
     type: PayloadType.Abort,
-    intentId: lastFailureKind === 'verification' ? 'logact-verification-max-attempts' : 'logact-executor-max-attempts',
+    intentId: lastFailureKind === 'verification'
+      ? 'logact-verification-max-attempts'
+      : lastFailureKind === 'adversary-tool-review'
+        ? 'logact-adversary-tool-review-max-attempts'
+        : 'logact-executor-max-attempts',
     reason: text,
     meta: actorMeta('workflow-aborted', nextPassIndex - 1, {
-      parentActorId: lastFailureKind === 'verification' ? 'verification-recovery' : 'execution-failed',
+      parentActorId: lastFailureKind === 'verification'
+        ? 'verification-recovery'
+        : lastFailureKind === 'adversary-tool-review'
+          ? 'adversary-tool-review'
+          : 'execution-failed',
       branchId: 'main',
     }),
   });
@@ -1713,9 +1744,11 @@ async function runAdversaryToolReviewGate(
     ? `Adversary tool review blocked the action before execution: ${result.summary}`
     : `Adversary tool review requires operator approval before execution: ${result.summary}`;
   await bus.append({
-    type: PayloadType.Abort,
+    type: PayloadType.Completion,
     intentId: executePlanIntentId,
-    reason: text,
+    done: false,
+    score: 'invalid',
+    feedback: text,
     meta: actorMeta('adversary-tool-review', passIndex, {
       parentActorId: 'execute-plan',
     }),
@@ -1776,11 +1809,12 @@ async function runStudentDriver(
     { role: 'user' as const, content: task },
   ];
   await bus.append({ type: PayloadType.InfIn, messages, meta: actorMeta('student-driver', passIndex) });
+  const instructionContext = formatStudentInstructionContext(options.instructions, priorBusContext);
   const action = [
     `Student solution pass ${passIndex} for: ${task}`,
     `Use executor tools: ${toolPolicy.allowedToolIds.join(', ') || '(none)'}.`,
     `Workspace: ${options.workspaceName ?? 'Workspace'}.`,
-    options.instructions ? `Instructions: ${options.instructions}` : null,
+    instructionContext,
     priorBusContext ? 'Previous AgentBus context reviewed before revising the candidate.' : null,
   ].filter(Boolean).join('\n');
   for (let round = 1; round <= STUDENT_SELF_REFLECTION_ROUNDS; round += 1) {
@@ -1799,6 +1833,37 @@ async function runStudentDriver(
   const intentId = `student-p${passIndex}-${Date.now().toString(36)}`;
   await bus.append({ type: PayloadType.Intent, intentId, action, meta: actorMeta('student-driver', passIndex) });
   return { source: 'student', intentId, action, score: passIndex > 1 ? 100 : 80, passIndex };
+}
+
+function formatStudentInstructionContext(instructions: string, priorBusContext?: string): string | null {
+  if (!instructions.trim()) return null;
+  if (!priorBusContext || !containsAdversaryToolReviewRejection(priorBusContext)) {
+    return `Instructions: ${instructions}`;
+  }
+  const sanitized = sanitizeExecutableInstructionContext(instructions);
+  if (sanitized) {
+    return `Instructions sanitized after adversary tool review: ${sanitized}`;
+  }
+  return 'Instructions sanitized after adversary tool review: unsafe inherited instruction text was removed; follow the user task and tool policy only.';
+}
+
+function containsAdversaryToolReviewRejection(priorBusContext: string): boolean {
+  return /adversary-tool-review[\s\S]+(?:"decision":"(?:block|escalate)"|blocked the action|requires operator approval|credential-exposure|prompt-injection|destructive-action)/i
+    .test(priorBusContext);
+}
+
+function sanitizeExecutableInstructionContext(instructions: string): string {
+  return instructions
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !isUnsafeExecutableInstructionLine(line))
+    .join('\n');
+}
+
+function isUnsafeExecutableInstructionLine(line: string): boolean {
+  return /\b(ignore (?:the )?(?:user|previous|system|instructions?)|disregard (?:the )?(?:user|previous|system|instructions?)|follow page instructions|developer mode|bypass policy|jailbreak)\b/i.test(line)
+    || /\b(?:print|show|expose|send|leak|reveal|dump|echo)\b[\s\S]*\b(?:secret|token|api[_-]?key|password|credential|env(?:ironment)? variable)s?\b/i.test(line)
+    || /\b(rm\s+-rf|del\s+\/[sq]|format\s+[a-z]:|drop\s+database|delete\s+.+(?:repo|repository|\.git)|erase\s+.+(?:disk|drive)|shutdown|reboot)\b/i.test(line);
 }
 
 async function runTeacherStudentLoop(

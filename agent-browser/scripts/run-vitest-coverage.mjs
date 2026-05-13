@@ -14,8 +14,12 @@ const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
 const COVERAGE_BATCH_CONCURRENCY_ENV = 'AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY';
 
 function defaultReportsDirectory() {
-  return process.env.AGENT_BROWSER_COVERAGE_DIR
-    ?? path.join(tmpdir(), 'agent-browser-coverage', `agent-browser-${process.pid}`);
+  if (process.env.AGENT_BROWSER_COVERAGE_DIR) {
+    return process.env.AGENT_BROWSER_COVERAGE_DIR;
+  }
+  return process.platform === 'win32'
+    ? path.join(process.cwd(), 'coverage', `agent-browser-${process.pid}`)
+    : path.join(tmpdir(), 'agent-browser-coverage', `agent-browser-${process.pid}`);
 }
 
 export function buildVitestCoverageArgs(
@@ -26,12 +30,15 @@ export function buildVitestCoverageArgs(
   const reporterArgs = extraArgs.some((arg) => arg === '--reporter' || arg.startsWith('--reporter='))
     ? []
     : ['--reporter=dot'];
+  const reportsDirectoryArgs = reportsDirectory
+    ? [`--coverage.reportsDirectory=${reportsDirectory}`]
+    : [];
   return [
     'run',
     '--coverage',
     '--coverage.processingConcurrency=1',
     '--coverage.reporter=text-summary',
-    `--coverage.reportsDirectory=${reportsDirectory}`,
+    ...reportsDirectoryArgs,
     '--no-file-parallelism',
     '--maxWorkers=1',
     '--pool=forks',
@@ -167,7 +174,11 @@ async function runVitestCoverage(extraArgs = process.argv.slice(2)) {
     vitestBin,
     coverageBatches.map((files, index) => ({
       label: `Vitest coverage batch ${index + 1}/${coverageBatches.length}`,
-      args: buildVitestCoverageArgs([], path.join(reportsDirectory, `batch-${index + 1}`), files),
+      args: buildVitestCoverageArgs(
+        [],
+        reportsDirectory ? path.join(reportsDirectory, `batch-${index + 1}`) : undefined,
+        files,
+      ),
     })),
     resolveCoverageBatchConcurrency(),
   );

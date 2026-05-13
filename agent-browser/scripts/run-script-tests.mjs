@@ -403,6 +403,25 @@ async function main() {
     ],
   );
   assert.deepEqual(
+    coverageRunner.buildVitestCoverageArgs([], null, ['src/services/workspaceFiles.test.ts']),
+    [
+      'run',
+      '--coverage',
+      '--coverage.processingConcurrency=1',
+      '--coverage.reporter=text-summary',
+      '--no-file-parallelism',
+      '--maxWorkers=1',
+      '--pool=forks',
+      '--teardownTimeout=60000',
+      '--exclude',
+      'src/App.integration.test.tsx',
+      '--exclude',
+      'src/App.smoke.test.tsx',
+      '--reporter=dot',
+      'src/services/workspaceFiles.test.ts',
+    ],
+  );
+  assert.deepEqual(
     coverageRunner.chunkTestFiles(['a.test.ts', 'b.test.ts', 'c.test.ts'], 2),
     [['a.test.ts', 'b.test.ts'], ['c.test.ts']],
   );
