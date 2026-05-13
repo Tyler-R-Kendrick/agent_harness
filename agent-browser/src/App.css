@@ -9299,6 +9299,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 .workflow-canvas-stagebar {
   display: grid;
@@ -9379,6 +9380,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workflow-canvas-node--media-generation { box-shadow: inset 3px 0 0 var(--wc-violet); }
 .workflow-canvas-node--human-review { box-shadow: inset 3px 0 0 var(--wc-red); }
 .workflow-canvas-node--branch { box-shadow: inset 3px 0 0 #e5e7eb; }
+.workflow-canvas-node--widget { box-shadow: inset 3px 0 0 #38bdf8; }
 .workflow-canvas-node-topline {
   display: flex;
   align-items: center;
@@ -9524,6 +9526,85 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border: 1px solid rgba(166, 184, 204, 0.14);
   padding: 4px 6px;
   background: rgba(17, 24, 32, 0.54);
+}
+
+.workflow-canvas-context-menu,
+.workflow-canvas-widget-dialog {
+  position: absolute;
+  z-index: 20;
+  width: min(320px, calc(100% - 24px));
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+  padding: 8px;
+}
+
+.workflow-canvas-context-menu button,
+.workflow-canvas-widget-dialog button {
+  min-height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #e5e7eb;
+}
+
+.workflow-canvas-context-menu button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 8px 10px;
+}
+
+.workflow-canvas-context-menu button:hover,
+.workflow-canvas-widget-dialog button:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+}
+
+.workflow-canvas-context-menu button:focus-visible,
+.workflow-canvas-widget-dialog button:focus-visible,
+.workflow-canvas-widget-dialog textarea:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.55);
+  outline-offset: 2px;
+}
+
+.workflow-canvas-widget-dialog form {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-canvas-widget-dialog label {
+  display: grid;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.workflow-canvas-widget-dialog textarea {
+  min-height: 74px;
+  resize: vertical;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.86);
+  color: #e5e7eb;
+  padding: 8px;
+}
+
+.workflow-canvas-widget-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workflow-canvas-widget-dialog button {
+  padding: 7px 10px;
+}
+
+.workflow-canvas-widget-dialog button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 @media (max-width: 1080px) {
   .workflow-canvas-layout {

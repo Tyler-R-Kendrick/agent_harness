@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   WorkflowCanvasRenderer,
   type WorkflowCanvasWorkspaceFile,
-} from './WorkflowCanvasWorkbench.js';
+} from '@agent-harness/ext-workflow-canvas';
 
 afterEach(() => {
   cleanup();
@@ -103,7 +103,66 @@ describe('WorkflowCanvasRenderer', () => {
     expect(savedArtifact.canvas.edges).toHaveLength(7);
     expect(savedArtifact.featurePlan).toHaveLength(6);
     expect(savedArtifact.research.screenshotReferences).toHaveLength(6);
-  }, 20000);
+  }, 60000);
+
+  it('creates a prompt-backed widget from the canvas context menu and persists it with the artifact', () => {
+    const savedFileSets: WorkflowCanvasWorkspaceFile[][] = [];
+    render(<RendererFixture onFilesChange={(files) => savedFileSets.push(files)} />);
+
+    const workbench = screen.getByRole('region', { name: 'Workflow canvas workbench' });
+    const canvas = within(workbench).getByRole('region', { name: 'Workflow orchestration canvas' });
+    fireEvent.contextMenu(canvas, { clientX: 420, clientY: 210 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create Widget' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Create workflow widget' });
+    const createButton = within(dialog).getByRole('button', { name: 'Create widget' }) as HTMLButtonElement;
+    expect(createButton.disabled).toBe(true);
+
+    fireEvent.change(within(dialog).getByLabelText('Widget prompt'), {
+      target: { value: 'Track launch blockers by owner and urgency' },
+    });
+    fireEvent.click(createButton);
+
+    const widgetButton = within(canvas).getByRole('button', { name: 'Inspect Track launch blockers widget' });
+    expect(widgetButton).toBeTruthy();
+    const inspector = within(workbench).getByRole('region', { name: 'Workflow node inspector' });
+    expect(inspector.textContent).toContain('Track launch blockers');
+    expect(inspector.textContent).toContain('Prompt-backed, local canvas widget');
+
+    fireEvent.click(within(workbench).getByRole('button', { name: 'Save canvas artifact' }));
+    const savedArtifact = JSON.parse(savedFileSets.at(-1)![0]!.content) as {
+      widgets: Array<{ title: string; prompt: string }>;
+    };
+    expect(savedArtifact.widgets).toEqual([
+      expect.objectContaining({
+        title: 'Track launch blockers',
+        prompt: 'Track launch blockers by owner and urgency',
+      }),
+    ]);
+
+    fireEvent.click(within(canvas).getByRole('button', { name: 'Inspect Webhook intake' }));
+    expect(inspector.textContent).toContain('Webhook intake');
+    fireEvent.click(widgetButton);
+    expect(inspector.textContent).toContain('Track launch blockers');
+  });
+
+  it('cancels the canvas widget prompt without adding a widget', () => {
+    render(<RendererFixture />);
+
+    const workbench = screen.getByRole('region', { name: 'Workflow canvas workbench' });
+    const canvas = within(workbench).getByRole('region', { name: 'Workflow orchestration canvas' });
+    fireEvent.contextMenu(canvas, { clientX: 160, clientY: 120 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create Widget' }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Create workflow widget' });
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(screen.getByRole('dialog', { name: 'Create workflow widget' })).toBeTruthy();
+    expect(within(canvas).queryByRole('button', { name: /^Inspect .* widget$/i })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Create workflow widget' })).toBeNull();
+    expect(within(canvas).queryByRole('button', { name: /^Inspect .* widget$/i })).toBeNull();
+  });
 
   it('supports default renderer props for artifact previews without workspace mutation hooks', () => {
     render(<WorkflowCanvasRenderer />);

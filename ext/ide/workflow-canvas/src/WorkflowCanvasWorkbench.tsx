@@ -1,10 +1,11 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import {
   Bot,
   CheckCircle2,
   CircleDot,
   GitBranch,
   Image,
+  Plus,
   Play,
   RefreshCcw,
   Save,
@@ -34,6 +35,15 @@ export interface WorkflowCanvasWorkspaceFile {
   };
 }
 
+interface WorkflowCanvasWidget {
+  id: string;
+  title: string;
+  prompt: string;
+  x: number;
+  y: number;
+  createdAt: string;
+}
+
 export interface WorkflowCanvasRendererProps {
   workspaceName?: string;
   workspaceFiles?: WorkflowCanvasWorkspaceFile[];
@@ -57,6 +67,11 @@ interface WorkflowCanvasCatalogItem {
   group: string;
   detail: string;
 }
+
+type WorkflowCanvasContextMenu =
+  | { mode: 'menu'; x: number; y: number }
+  | { mode: 'widget'; x: number; y: number }
+  | null;
 
 const WORKFLOW_CANVAS_ARTIFACT_PATH = 'workflow-canvas/campaign-launch.json';
 
@@ -312,6 +327,15 @@ function savedWorkflowCanvasFiles(workspaceFiles: readonly WorkflowCanvasWorkspa
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function widgetTitleFromPrompt(prompt: string): string {
+  return prompt.trim().replace(/\s+/g, ' ').split(' ').slice(0, 3).join(' ');
+}
+
+function widgetIdFromTitle(title: string, index: number): string {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `widget-${index + 1}-${slug}`;
+}
+
 export function WorkflowCanvasRenderer({
   workspaceName = 'Workflow workspace',
   workspaceFiles = [],
@@ -326,20 +350,31 @@ export function WorkflowCanvasRenderer({
   );
   const inventory = useMemo(() => getWorkflowCanvasFeatureInventory(), []);
   const [selectedNodeId, setSelectedNodeId] = useState(canvas.nodes[0]!.id);
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
+  const [widgets, setWidgets] = useState<WorkflowCanvasWidget[]>([]);
   const [runState, setRunState] = useState<WorkflowCanvasRunState>('idle');
   const [saveStatus, setSaveStatus] = useState('Ready to save workflow-canvas/campaign-launch.json');
+  const [contextMenu, setContextMenu] = useState<WorkflowCanvasContextMenu>(null);
+  const [widgetPrompt, setWidgetPrompt] = useState('');
+  const widgetPromptRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedNode = canvas.nodes.find((node) => node.id === selectedNodeId)!;
+  const selectedWidget = widgets.find((widget) => widget.id === selectedWidgetId) ?? null;
   const selectedMeta = nodeMeta(selectedNode);
   const savedFiles = savedWorkflowCanvasFiles(workspaceFiles);
   const completedCount = canvas.nodes.filter((node) => nodeStatus(node, runState) === 'complete').length;
   const retryLabel = { true: 'retry-aware', false: 'single pass' }[String(canvas.executionModel.retryable)];
   const timeoutLabel = { true: 'timeout-aware', false: 'no timeout' }[String(canvas.executionModel.timeoutAware)];
 
+  useEffect(() => {
+    if (contextMenu?.mode === 'widget') widgetPromptRef.current?.focus();
+  }, [contextMenu]);
+
   const saveCanvas = () => {
     const updatedAt = new Date().toISOString();
     const artifact = {
       mediaType: WORKFLOW_CANVAS_MEDIA_TYPE,
       canvas,
+      widgets,
       workflow: canvas.workflow,
       featurePlan: WORKFLOW_CANVAS_FEATURE_PLAN,
       research: {
@@ -358,6 +393,41 @@ export function WorkflowCanvasRenderer({
       },
     }));
     setSaveStatus(`Saved ${WORKFLOW_CANVAS_ARTIFACT_PATH}`);
+  };
+
+  const openCanvasContextMenu = (event: MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setWidgetPrompt('');
+    setContextMenu({
+      mode: 'menu',
+      x: Math.max(12, event.clientX - rect.left),
+      y: Math.max(12, event.clientY - rect.top),
+    });
+  };
+
+  const openWidgetDialog = () => {
+    setContextMenu({ ...contextMenu!, mode: 'widget' });
+  };
+
+  const createWidget = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const prompt = widgetPrompt.trim().replace(/\s+/g, ' ');
+    if (!prompt) return;
+    const title = widgetTitleFromPrompt(prompt);
+    const menu = contextMenu!;
+    const nextWidget: WorkflowCanvasWidget = {
+      id: widgetIdFromTitle(title, widgets.length),
+      title,
+      prompt,
+      x: Math.max(24, Math.min(1490, menu.x - 95)),
+      y: Math.max(24, Math.min(276, menu.y - 54)),
+      createdAt: new Date().toISOString(),
+    };
+    setWidgets((current) => [...current, nextWidget]);
+    setSelectedWidgetId(nextWidget.id);
+    setContextMenu(null);
+    setWidgetPrompt('');
   };
 
   return (
@@ -418,7 +488,11 @@ export function WorkflowCanvasRenderer({
           </div>
         </section>
 
-        <section className="workflow-canvas-stage" aria-label="Workflow orchestration canvas">
+        <section
+          className="workflow-canvas-stage"
+          aria-label="Workflow orchestration canvas"
+          onContextMenu={openCanvasContextMenu}
+        >
           <div className="workflow-canvas-stagebar">
             <div className="workflow-canvas-legend">
               <span>n8n replay</span>
@@ -452,11 +526,14 @@ export function WorkflowCanvasRenderer({
                   <button
                     key={node.id}
                     type="button"
-                    className={`workflow-canvas-node workflow-canvas-node--${node.kind}${node.id === selectedNode.id ? ' is-selected' : ''}`}
+                    className={`workflow-canvas-node workflow-canvas-node--${node.kind}${!selectedWidget && node.id === selectedNode.id ? ' is-selected' : ''}`}
                     style={{ left: position.x, top: position.y } as CSSProperties}
                     aria-label={`Inspect ${meta.title}`}
-                    aria-pressed={node.id === selectedNode.id}
-                    onClick={() => setSelectedNodeId(node.id)}
+                    aria-pressed={!selectedWidget && node.id === selectedNode.id}
+                    onClick={() => {
+                      setSelectedNodeId(node.id);
+                      setSelectedWidgetId(null);
+                    }}
                   >
                     <span className="workflow-canvas-node-topline">
                       <small>{meta.shortKind}</small>
@@ -467,8 +544,63 @@ export function WorkflowCanvasRenderer({
                   </button>
                 );
               })}
+              {widgets.map((widget) => (
+                <button
+                  key={widget.id}
+                  type="button"
+                  className={`workflow-canvas-node workflow-canvas-node--widget${selectedWidget?.id === widget.id ? ' is-selected' : ''}`}
+                  style={{ left: widget.x, top: widget.y } as CSSProperties}
+                  aria-label={`Inspect ${widget.title} widget`}
+                  aria-pressed={selectedWidget?.id === widget.id}
+                  onClick={() => setSelectedWidgetId(widget.id)}
+                >
+                  <span className="workflow-canvas-node-topline">
+                    <small>Widget</small>
+                    <i data-status="ready">ready</i>
+                  </span>
+                  <strong>{widget.title}</strong>
+                  <span>{widget.prompt}</span>
+                </button>
+              ))}
             </div>
           </div>
+          {contextMenu?.mode === 'menu' ? (
+            <div
+              className="workflow-canvas-context-menu"
+              role="menu"
+              aria-label="Workflow canvas context menu"
+              style={{ left: contextMenu.x, top: contextMenu.y } as CSSProperties}
+            >
+              <button type="button" role="menuitem" onClick={openWidgetDialog}>
+                <Plus size={14} aria-hidden="true" />
+                <span>Create Widget</span>
+              </button>
+            </div>
+          ) : null}
+          {contextMenu?.mode === 'widget' ? (
+            <div
+              className="workflow-canvas-widget-dialog"
+              role="dialog"
+              aria-label="Create workflow widget"
+              style={{ left: contextMenu.x, top: contextMenu.y } as CSSProperties}
+            >
+              <form onSubmit={createWidget}>
+                <label>
+                  <span>Widget prompt</span>
+                  <textarea
+                    ref={widgetPromptRef}
+                    aria-label="Widget prompt"
+                    value={widgetPrompt}
+                    onChange={(event) => setWidgetPrompt(event.target.value)}
+                  />
+                </label>
+                <div className="workflow-canvas-widget-dialog-actions">
+                  <button type="button" onClick={() => setContextMenu(null)}>Cancel</button>
+                  <button type="submit" disabled={!widgetPrompt.trim()}>Create widget</button>
+                </div>
+              </form>
+            </div>
+          ) : null}
         </section>
 
         <section className="workflow-canvas-inspector" aria-label="Workflow node inspector">
@@ -477,21 +609,43 @@ export function WorkflowCanvasRenderer({
             <strong>Inspector</strong>
           </div>
           <div className="workflow-canvas-inspector-card">
-            <span>{selectedMeta.shortKind}</span>
-            <h3>{selectedMeta.title}</h3>
-            <p>{selectedMeta.intent}</p>
-            <dl>
-              <dt>Input</dt>
-              <dd>{selectedMeta.input}</dd>
-              <dt>Output</dt>
-              <dd>{selectedMeta.output}</dd>
-              <dt>Policy</dt>
-              <dd>{selectedMeta.requirement}</dd>
-              <dt>Cost</dt>
-              <dd>{selectedMeta.cost}</dd>
-              <dt>Source</dt>
-              <dd>Source: {selectedMeta.source}</dd>
-            </dl>
+            {selectedWidget ? (
+              <>
+                <span>Widget</span>
+                <h3>{selectedWidget.title}</h3>
+                <p>{selectedWidget.prompt}</p>
+                <dl>
+                  <dt>Input</dt>
+                  <dd>Canvas context prompt</dd>
+                  <dt>Output</dt>
+                  <dd>{selectedWidget.title} widget</dd>
+                  <dt>Policy</dt>
+                  <dd>Prompt-backed, local canvas widget</dd>
+                  <dt>Cost</dt>
+                  <dd>No generation credit</dd>
+                  <dt>Source</dt>
+                  <dd>Source: Agent Harness</dd>
+                </dl>
+              </>
+            ) : (
+              <>
+                <span>{selectedMeta.shortKind}</span>
+                <h3>{selectedMeta.title}</h3>
+                <p>{selectedMeta.intent}</p>
+                <dl>
+                  <dt>Input</dt>
+                  <dd>{selectedMeta.input}</dd>
+                  <dt>Output</dt>
+                  <dd>{selectedMeta.output}</dd>
+                  <dt>Policy</dt>
+                  <dd>{selectedMeta.requirement}</dd>
+                  <dt>Cost</dt>
+                  <dd>{selectedMeta.cost}</dd>
+                  <dt>Source</dt>
+                  <dd>Source: {selectedMeta.source}</dd>
+                </dl>
+              </>
+            )}
           </div>
           <section className="workflow-canvas-saved" aria-label="Saved workflow canvases">
             <strong>Saved workflow canvases</strong>
