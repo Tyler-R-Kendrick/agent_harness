@@ -146,6 +146,42 @@ describe('LogActAgent – BooleanAnd with ClassicVoter (reject)', () => {
     // First turn aborted, second turn gets empty inference → stops.
     expect(results).toHaveLength(0);
     expect(executed).not.toHaveBeenCalled();
+
+    const entries = await bus.read(0, await bus.tail());
+    const intentPayloads = entries
+      .map((entry) => entry.payload)
+      .filter((payload) => payload.type === PayloadType.Intent);
+    expect(intentPayloads).toHaveLength(1);
+
+    const { intentId } = intentPayloads[0]!;
+    const payloadsForRejectedIntent = entries
+      .map((entry) => entry.payload)
+      .filter((payload) => 'intentId' in payload && payload.intentId === intentId);
+
+    expect(payloadsForRejectedIntent.map((payload) => payload.type)).toEqual([
+      PayloadType.Intent,
+      PayloadType.Vote,
+      PayloadType.Abort,
+    ]);
+    expect(payloadsForRejectedIntent).toEqual([
+      expect.objectContaining({
+        type: PayloadType.Intent,
+        intentId,
+        action: 'rm -rf /',
+      }),
+      expect.objectContaining({
+        type: PayloadType.Vote,
+        intentId,
+        voterId: 'v1',
+        approve: false,
+        reason: 'blocked',
+      }),
+      expect.objectContaining({
+        type: PayloadType.Abort,
+        intentId,
+        reason: 'blocked',
+      }),
+    ]);
   });
 });
 
