@@ -372,10 +372,6 @@ function WorkspaceRunTable({
   onManageBranch: (branchId: string, action: MultitaskBranchLifecycleAction) => void;
   onRequestChanges: (branchId: string, prompt: string) => void;
 }) {
-  const readiness = snapshot.review.report.readiness;
-  const validationCount = snapshot.review.report.validations.length;
-  const evidenceLabel = validationCount > 0 ? `${readiness.passedValidations}/${validationCount} checks` : 'not run';
-
   return (
     <div className="symphony-table-shell">
       <table className="symphony-workspace-table">
@@ -397,6 +393,7 @@ function WorkspaceRunTable({
             const isApproved = reviewBranch?.approvalState === 'approved';
             const reviewerState = reviewerDecision?.state ?? 'not-ready';
             const branchName = reviewBranch?.branchName ?? workspace.branchName;
+            const evidence = summarizeWorkspaceEvidence(snapshot, workspace.issueId);
             const canApprove = Boolean(
               reviewBranch
               && reviewBranch.approvalState === 'waiting'
@@ -432,8 +429,8 @@ function WorkspaceRunTable({
                   <small>{reviewBranch?.approvedBy ?? (canApprove ? 'waiting' : 'not ready')}</small>
                 </td>
                 <td>
-                  <span>{evidenceLabel}</span>
-                  <small>{readiness.browserEvidenceCount} evidence</small>
+                  <span>{evidence.label}</span>
+                  <small>{evidence.detail}</small>
                 </td>
                 <td>
                   <RowActions
@@ -488,10 +485,7 @@ function TaskDetailPanel({
   const issue = snapshot.issues.find((entry) => entry.id === workspace.issueId) ?? null;
   const project = snapshot.projects.find((entry) => entry.id === issue?.projectId) ?? null;
   const attempt = snapshot.runAttempts.find((entry) => entry.issueId === workspace.issueId) ?? null;
-  const validationCount = snapshot.review.report.validations.length;
-  const evidence = validationCount > 0
-    ? `${snapshot.review.report.readiness.passedValidations}/${validationCount} checks`
-    : 'not run';
+  const evidence = summarizeWorkspaceEvidence(snapshot, workspace.issueId);
 
   return (
     <section className="symphony-task-detail">
@@ -522,7 +516,7 @@ function TaskDetailPanel({
         </div>
         <div>
           <dt>Evidence</dt>
-          <dd>{evidence}</dd>
+          <dd>{evidence.label}</dd>
         </div>
       </dl>
     </section>
@@ -782,6 +776,47 @@ function reviewerDecisionLabel(state: 'approved' | 'rejected' | 'disabled' | 'no
   if (state === 'disabled') return 'autopilot off';
   if (state === 'not-ready') return 'not ready';
   return 'feedback';
+}
+
+function summarizeWorkspaceEvidence(snapshot: SymphonyRuntimeSnapshot, issueId: string): { label: string; detail: string } {
+  const attempt = snapshot.runAttempts.find((entry) => entry.issueId === issueId) ?? null;
+  const liveSession = snapshot.liveSessions.find((entry) => entry.issueId === issueId) ?? null;
+  const validationCount = snapshot.review.report.validations.length;
+  const evidenceCount = attempt?.evidence.length ?? 0;
+  if (liveSession || attempt?.status === 'active') {
+    return {
+      label: 'agent active',
+      detail: `${evidenceCount} event${evidenceCount === 1 ? '' : 's'}`,
+    };
+  }
+  if (validationCount > 0 && (attempt?.status === 'complete' || attempt?.status === 'failed')) {
+    return {
+      label: `${snapshot.review.report.readiness.passedValidations}/${validationCount} checks`,
+      detail: `${snapshot.review.report.readiness.browserEvidenceCount} evidence`,
+    };
+  }
+  if (attempt?.status === 'pending') {
+    return {
+      label: 'queued',
+      detail: `${evidenceCount} evidence`,
+    };
+  }
+  if (attempt?.status === 'stopped') {
+    return {
+      label: 'stopped',
+      detail: `${evidenceCount} event${evidenceCount === 1 ? '' : 's'}`,
+    };
+  }
+  if (attempt?.status === 'cancelled') {
+    return {
+      label: 'cancelled',
+      detail: `${evidenceCount} event${evidenceCount === 1 ? '' : 's'}`,
+    };
+  }
+  return {
+    label: evidenceCount > 0 ? 'recorded' : 'not run',
+    detail: `${evidenceCount} event${evidenceCount === 1 ? '' : 's'}`,
+  };
 }
 
 function formatBranchStatus(status: string): string {
