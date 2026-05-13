@@ -297,6 +297,11 @@ async function main() {
     name: '@agent-harness/ext-alpha',
     scripts: { test: 'vitest run' },
   });
+  await mkdir(path.join(extensionFixture, 'ext', 'ide', 'not-a-package', 'node_modules', 'generated-package'), { recursive: true });
+  await writeJson(path.join(extensionFixture, 'ext', 'ide', 'not-a-package', 'node_modules', 'generated-package', 'package.json'), {
+    name: '@agent-harness/generated-package',
+    scripts: { test: 'vitest run' },
+  });
   await writeJson(path.join(extensionFixture, 'ext', 'runtime', 'beta', 'package.json'), {
     name: '@agent-harness/ext-beta',
     scripts: { test: 'vitest run' },
