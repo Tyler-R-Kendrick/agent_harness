@@ -306,8 +306,12 @@ import {
   createWorkspaceFileTemplate,
   detectWorkspaceFileKind,
   discoverWorkspaceCapabilities,
+  getWorkspaceFileExtensionOwnership,
+  getWorkspaceFileRemovalBlocker,
+  isWorkspaceFileLockedByExtension,
   loadWorkspaceFiles,
   removeWorkspaceFile,
+  removeWorkspaceFilesForExtensions,
   upsertWorkspaceFile,
   validateWorkspaceFile,
   WORKSPACE_FILES_STORAGE_KEY,
@@ -1925,6 +1929,8 @@ function FileEditorPanel({
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [isPathEditing, setIsPathEditing] = useState(false);
   const pathInputRef = useRef<HTMLInputElement | null>(null);
+  const extensionOwnership = getWorkspaceFileExtensionOwnership(file);
+  const removalBlocker = getWorkspaceFileRemovalBlocker(file);
 
   useEffect(() => {
     setEditorPath(file.path);
@@ -1942,7 +1948,12 @@ function FileEditorPanel({
   }, [isPathEditing]);
 
   function handleSave() {
+    if (removalBlocker && editorPath.trim() !== file.path) {
+      setValidationMessage(removalBlocker);
+      return;
+    }
     const nextFile: WorkspaceFile = {
+      ...file,
       path: editorPath.trim(),
       content: editorContent,
       updatedAt: new Date().toISOString(),
@@ -2008,12 +2019,39 @@ function FileEditorPanel({
             {isPathEditing ? (
               <button type="button" className="secondary-button file-editor-inline-button" onClick={handleCancelPathEdit}>Cancel</button>
             ) : (
-              <button type="button" className="secondary-button file-editor-inline-button" aria-label="Edit file name" title="Edit file name" onClick={() => setIsPathEditing(true)}>Edit</button>
+              <button
+                type="button"
+                className="secondary-button file-editor-inline-button"
+                aria-label="Edit file name"
+                title={removalBlocker ?? 'Edit file name'}
+                disabled={Boolean(removalBlocker)}
+                onClick={() => setIsPathEditing(true)}
+              >
+                Edit
+              </button>
             )}
             <button type="button" className="file-editor-action file-editor-action-save" aria-label="Save file" title="Save file" onClick={handleSave}><Icon name="save" size={14} /></button>
-            <button type="button" className="file-editor-action file-editor-action-delete" aria-label="Delete file" title="Delete file" onClick={() => { onDelete(file.path); onClose(); onToast({ msg: `Removed ${file.path}`, type: 'info' }); }}><Icon name="trash" size={14} /></button>
+            <button
+              type="button"
+              className="file-editor-action file-editor-action-delete"
+              aria-label="Delete file"
+              title={removalBlocker ?? 'Delete file'}
+              disabled={Boolean(removalBlocker)}
+              onClick={() => {
+                if (removalBlocker) {
+                  onToast({ msg: removalBlocker, type: 'warning' });
+                  return;
+                }
+                onDelete(file.path);
+                onClose();
+                onToast({ msg: `Removed ${file.path}`, type: 'info' });
+              }}
+            >
+              <Icon name="trash" size={14} />
+            </button>
           </div>
         </div>
+        {extensionOwnership?.locked ? <p className="file-editor-error">{removalBlocker}</p> : null}
         {validationMessage ? <p className="file-editor-error">{validationMessage}</p> : null}
         <label className="file-editor-field file-editor-content-field">
           <span className="sr-only">Content</span>
@@ -15592,6 +15630,14 @@ function AgentBrowserApp() {
       for (const id of removedIds) delete next[id];
       return next;
     });
+    setWorkspaceFilesByWorkspace((current) => Object.fromEntries(
+      Object.entries(current).map(([workspaceId, files]) => [
+        workspaceId,
+        removeWorkspaceFilesForExtensions(files, [...removedIds]),
+      ]),
+    ));
+    setActiveExtensionFeatureId((current) => current && removedIds.has(current) ? null : current);
+    setSelectedExtensionId((current) => current && removedIds.has(current) ? null : current);
   }, [installedDefaultExtensionIds, setDefaultExtensionConfigurationById, setDefaultExtensionOpenFeatureFlags, setInstalledDefaultExtensionIds]);
   const setDefaultExtensionEnabled = useCallback((extensionId: string, enabled: boolean) => {
     const extensionIds = enabled
@@ -16608,9 +16654,17 @@ function AgentBrowserApp() {
     }
 
     if (filesToMove.length) {
+      const movableFiles = filesToMove.filter(({ file }) => !isWorkspaceFileLockedByExtension(file));
+      const blockedFiles = filesToMove.filter(({ file }) => isWorkspaceFileLockedByExtension(file));
+      if (blockedFiles.length) {
+        setToast({
+          msg: `${blockedFiles.length} extension-locked file${blockedFiles.length === 1 ? '' : 's'} stayed in place. Uninstall the owning extension to remove them.`,
+          type: 'warning',
+        });
+      }
       setWorkspaceFilesByWorkspace((current) => {
         const next = { ...current };
-        for (const { file, sourceWorkspaceId } of filesToMove) {
+        for (const { file, sourceWorkspaceId } of movableFiles) {
           next[sourceWorkspaceId] = removeWorkspaceFile(next[sourceWorkspaceId] ?? [], file.path);
           next[workspaceId] = upsertWorkspaceFile(next[workspaceId] ?? [], file);
         }
@@ -17472,13 +17526,20 @@ function AgentBrowserApp() {
     // VFS node — use node.name which may be '//session-1-fs' or sub-path name
     const vfsArgs = node.id.startsWith('vfs:') ? parseVfsNodeId(node.id) : null;
     if (node.type === 'file') {
+      const ownerWorkspace = findWorkspaceForNode(root, node.id);
+      const workspaceFile = ownerWorkspace && node.filePath
+        ? (workspaceFilesByWorkspace[ownerWorkspace.id] ?? []).find((file) => file.path === node.filePath)
+        : null;
+      const actions = workspaceFile && isWorkspaceFileLockedByExtension(workspaceFile)
+        ? ['Symlink', 'Duplicate']
+        : ['Move', 'Symlink', 'Duplicate', 'Remove'];
       return {
         location: node.filePath ?? node.name,
         sizeLabel: 'N/A',
         createdAt: now,
         modifiedAt: now,
         accessedAt: now,
-        identityPermissions: defaultPermissionsFor(['Move', 'Symlink', 'Duplicate', 'Remove']),
+        identityPermissions: defaultPermissionsFor(actions),
       };
     }
     return {
@@ -17556,6 +17617,12 @@ function AgentBrowserApp() {
     const ownerWorkspace = findWorkspaceForNode(root, nodeId);
     if (node.type === 'file' && node.filePath) {
       if (!ownerWorkspace) return;
+      const file = (workspaceFilesByWorkspace[ownerWorkspace.id] ?? []).find((entry) => entry.path === node.filePath);
+      const removalBlocker = file ? getWorkspaceFileRemovalBlocker(file) : null;
+      if (removalBlocker) {
+        setToast({ msg: removalBlocker, type: 'warning' });
+        return;
+      }
       setWorkspaceFilesByWorkspace((current) => ({
         ...current,
         [ownerWorkspace.id]: removeWorkspaceFile(current[ownerWorkspace.id] ?? [], node.filePath!),
@@ -17632,6 +17699,13 @@ function AgentBrowserApp() {
     const newPath = targetDir.trim() ? `${targetDir.trim()}/${fileName}` : fileName;
     const ownerWorkspace = findWorkspaceForNode(root, node.id);
     if (!ownerWorkspace) return;
+    const file = (workspaceFilesByWorkspace[ownerWorkspace.id] ?? []).find((entry) => entry.path === node.filePath);
+    const removalBlocker = file ? getWorkspaceFileRemovalBlocker(file) : null;
+    if (removalBlocker) {
+      setFileOpModal(null);
+      setToast({ msg: removalBlocker, type: 'warning' });
+      return;
+    }
     setWorkspaceFilesByWorkspace((prev) => ({
       ...prev,
       [ownerWorkspace.id]: (prev[ownerWorkspace.id] ?? []).map((f) =>
@@ -18080,6 +18154,11 @@ function AgentBrowserApp() {
   }, [activeWorkspaceId]);
 
   const deleteWorkspaceFileFromMcp = useCallback(async ({ path }: { path: string }) => {
+    const existingFile = (workspaceFilesByWorkspace[activeWorkspaceId] ?? []).find((file) => file.path === path);
+    const removalBlocker = existingFile ? getWorkspaceFileRemovalBlocker(existingFile) : null;
+    if (removalBlocker) {
+      throw new DOMException(removalBlocker, 'NoModificationAllowedError');
+    }
     setWorkspaceFilesByWorkspace((current) => ({
       ...current,
       [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path),
@@ -18096,12 +18175,16 @@ function AgentBrowserApp() {
       };
     });
     return { path, deleted: true };
-  }, [activeWorkspace, activeWorkspaceId]);
+  }, [activeWorkspace, activeWorkspaceId, workspaceFilesByWorkspace]);
 
   const moveWorkspaceFileFromMcp = useCallback(async ({ path, targetPath }: { path: string; targetPath: string }) => {
     const existingFile = (workspaceFilesByWorkspace[activeWorkspaceId] ?? []).find((file) => file.path === path);
     if (!existingFile) {
       throw new DOMException(`Workspace file "${path}" is not available in ${activeWorkspace.name}.`, 'NotFoundError');
+    }
+    const removalBlocker = getWorkspaceFileRemovalBlocker(existingFile);
+    if (removalBlocker) {
+      throw new DOMException(removalBlocker, 'NoModificationAllowedError');
     }
 
     const nextFile: WorkspaceFile = {
@@ -19621,6 +19704,14 @@ function AgentBrowserApp() {
           const filePanelOnSave = (nextFile: WorkspaceFile, previousPath?: string) => {
             setWorkspaceFilesByWorkspace((current) => {
               const existing = current[activeWorkspaceId] ?? [];
+              const previousFile = previousPath ? existing.find((file) => file.path === previousPath) : null;
+              const removalBlocker = previousFile && previousPath !== nextFile.path
+                ? getWorkspaceFileRemovalBlocker(previousFile)
+                : null;
+              if (removalBlocker) {
+                setToast({ msg: removalBlocker, type: 'warning' });
+                return current;
+              }
               const withoutPrevious = previousPath && previousPath !== nextFile.path ? removeWorkspaceFile(existing, previousPath) : existing;
               return { ...current, [activeWorkspaceId]: upsertWorkspaceFile(withoutPrevious, nextFile) };
             });
@@ -19633,7 +19724,16 @@ function AgentBrowserApp() {
             }));
           };
           const filePanelOnDelete = (path: string) => {
-            setWorkspaceFilesByWorkspace((current) => ({ ...current, [activeWorkspaceId]: removeWorkspaceFile(current[activeWorkspaceId] ?? [], path) }));
+            setWorkspaceFilesByWorkspace((current) => {
+              const existing = current[activeWorkspaceId] ?? [];
+              const file = existing.find((entry) => entry.path === path);
+              const removalBlocker = file ? getWorkspaceFileRemovalBlocker(file) : null;
+              if (removalBlocker) {
+                setToast({ msg: removalBlocker, type: 'warning' });
+                return current;
+              }
+              return { ...current, [activeWorkspaceId]: removeWorkspaceFile(existing, path) };
+            });
             setWorkspaceViewStateByWorkspace((current) => ({
               ...current,
               [activeWorkspaceId]: {

@@ -212,6 +212,16 @@ async function captureDesignStudioTokenReviewViewportMatrix(page, tokenReview, t
   }
 }
 
+async function submitBashCommand(bashInput, command) {
+  await bashInput.fill(command);
+  await bashInput.evaluate((input) => {
+    if (!(input instanceof HTMLInputElement) || !input.form) {
+      throw new Error('Bash input is not attached to a terminal form.');
+    }
+    input.form.requestSubmit();
+  });
+}
+
 async function main() {
   const port = Number(process.env.AGENT_BROWSER_VISUAL_SMOKE_PORT) || await findFreePort();
   const baseURL = `http://127.0.0.1:${port}`;
@@ -1189,7 +1199,11 @@ async function main() {
     await expect(page.getByLabel('Read-only file version')).toContainText(/draft\s+ready/, { timeout: shellTimeoutMs });
     await page.screenshot({ path: historyTimelineOutputPath, fullPage: true });
     const historyDetail = page.getByRole('region', { name: 'Selected history detail' });
-    await historyGraph.getByRole('button', { name: /Inspect branch history for App actions: Opened Models/ }).click();
+    const seededAppActionsRow = historyGraph
+      .getByRole('listitem')
+      .filter({ hasText: /App actions: Opened Models/ })
+      .filter({ hasText: /2 app actions captured for Research\./ });
+    await seededAppActionsRow.getByRole('button', { name: 'Inspect branch history for App actions: Opened Models' }).click();
     await expect(historyDetail.getByText('Opened History').first()).toBeVisible({ timeout: shellTimeoutMs });
     await historyGraph.getByRole('button', { name: 'Inspect branch history for Squash merge: Agent proof branch' }).click();
     await expect(historyDetail.getByText('Captured branch proof and returned the latest summary to main.').first()).toBeVisible({
@@ -1815,13 +1829,11 @@ async function main() {
     await page.getByRole('tab', { name: 'Terminal mode' }).click();
     const bashInput = page.getByLabel('Bash input');
     await expect(bashInput).toBeVisible({ timeout: shellTimeoutMs });
-    await bashInput.fill('git init');
-    await bashInput.press('Enter');
+    await submitBashCommand(bashInput, 'git init');
     await expect(page.getByLabel('Terminal output')).toContainText('Initialized empty git-stub repository', {
       timeout: shellTimeoutMs,
     });
-    await bashInput.fill('git status --short');
-    await bashInput.press('Enter');
+    await submitBashCommand(bashInput, 'git status --short');
     await expect(page.getByLabel('Terminal output')).toContainText('?? settings.json', { timeout: shellTimeoutMs });
     await page.screenshot({ path: gitStubOutputPath, fullPage: true });
     await page.screenshot({ path: outputPath, fullPage: true });

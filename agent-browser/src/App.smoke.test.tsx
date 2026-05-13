@@ -7,6 +7,10 @@ import {
   appendWorkspaceFileCrdtDiff,
   createWorkspaceFileCrdtHistory,
 } from './services/workspaceFileCrdtHistory';
+import {
+  WORKSPACE_FILES_STORAGE_KEY,
+  WORKSPACE_FILE_STORAGE_DEBOUNCE_MS,
+} from './services/workspaceFiles';
 
 const searchBrowserModelsMock = vi.fn();
 const loadModelMock = vi.fn();
@@ -1220,6 +1224,61 @@ describe('App smoke coverage', () => {
     });
     expect(within(workbench).getByRole('status', { name: 'Workflow canvas save status' })).toHaveTextContent('Saved workflow-canvas/campaign-launch.json');
     expect(within(workbench).getByRole('region', { name: 'Saved workflow canvases' })).toHaveTextContent('workflow-canvas/campaign-launch.json');
+  });
+
+  it('locks workflow canvas extension files and removes them only when the extension is uninstalled', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    await act(async () => {
+      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));
+    });
+
+    const pane = screen.getByRole('region', { name: 'Workflow canvas orchestration feature pane' });
+    await act(async () => {
+      fireEvent.click(within(pane).getByRole('button', { name: 'Save canvas artifact' }));
+    });
+    expect(within(pane).getByRole('region', { name: 'Saved workflow canvases' })).toHaveTextContent('workflow-canvas/campaign-launch.json');
+    await act(async () => {
+      vi.advanceTimersByTime(WORKSPACE_FILE_STORAGE_DEBOUNCE_MS + 1);
+    });
+
+    const storedAfterSave = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, unknown[]>;
+    expect(storedAfterSave['ws-research']).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        path: 'workflow-canvas/campaign-launch.json',
+        extensionOwnership: {
+          extensionId: 'agent-harness.ext.workflow-canvas',
+          extensionName: 'Workflow canvas orchestration',
+          locked: true,
+        },
+      }),
+    ]));
+
+    fireEvent.click(screen.getByLabelText('Extensions'));
+    const refreshedMarketplace = screen.getByRole('region', { name: 'Extension marketplace' });
+    await act(async () => {
+      fireEvent.click(within(refreshedMarketplace).getByRole('button', { name: 'Uninstall Workflow canvas orchestration' }));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(WORKSPACE_FILE_STORAGE_DEBOUNCE_MS + 1);
+    });
+
+    const storedAfterUninstall = JSON.parse(window.localStorage.getItem(WORKSPACE_FILES_STORAGE_KEY) ?? '{}') as Record<string, unknown[]>;
+    expect(storedAfterUninstall['ws-research']).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'workflow-canvas/campaign-launch.json' }),
+    ]));
   });
 
   it('renders partner agent control plane controls in Settings', async () => {

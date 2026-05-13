@@ -213,4 +213,54 @@ describe('workspaceFiles', () => {
     expect(replaced).toEqual([second]);
     expect(removeWorkspaceFile(replaced, second.path)).toEqual([]);
   });
+
+  it('keeps extension-locked workspace files unless extension uninstall removes them', () => {
+    const lockedByExtension = {
+      path: 'workflow-canvas/campaign-launch.json',
+      content: '{"workflow":"campaign"}',
+      updatedAt: '2026-05-12T00:00:00.000Z',
+      extensionOwnership: {
+        extensionId: 'agent-harness.ext.workflow-canvas',
+        extensionName: 'Workflow canvas orchestration',
+        locked: true,
+      },
+    } as WorkspaceFile;
+    const regularFile: WorkspaceFile = {
+      path: 'notes/freeform.md',
+      content: '# Notes',
+      updatedAt: '2026-05-12T00:00:00.000Z',
+    };
+
+    const files = [lockedByExtension, regularFile];
+
+    expect(removeWorkspaceFile(files, lockedByExtension.path)).toEqual(files);
+    expect(removeWorkspaceFile(files, regularFile.path)).toEqual([lockedByExtension]);
+  });
+
+  it('preserves extension lock metadata when an owned file is saved in place', () => {
+    const lockedByExtension = {
+      path: 'workflow-canvas/campaign-launch.json',
+      content: '{"workflow":"campaign"}',
+      updatedAt: '2026-05-12T00:00:00.000Z',
+      extensionOwnership: {
+        extensionId: 'agent-harness.ext.workflow-canvas',
+        extensionName: 'Workflow canvas orchestration',
+        locked: true,
+      },
+    } as WorkspaceFile;
+
+    const updated = upsertWorkspaceFile([lockedByExtension], {
+      path: lockedByExtension.path,
+      content: '{"workflow":"updated"}',
+      updatedAt: '2026-05-12T00:01:00.000Z',
+    });
+
+    expect(updated).toEqual([
+      {
+        ...lockedByExtension,
+        content: '{"workflow":"updated"}',
+        updatedAt: '2026-05-12T00:01:00.000Z',
+      },
+    ]);
+  });
 });

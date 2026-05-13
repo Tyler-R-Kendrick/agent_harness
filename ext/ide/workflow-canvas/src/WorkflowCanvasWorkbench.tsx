@@ -27,6 +27,11 @@ export interface WorkflowCanvasWorkspaceFile {
   path: string;
   content: string;
   updatedAt: string;
+  extensionOwnership?: {
+    extensionId: string;
+    extensionName?: string;
+    locked?: boolean;
+  };
 }
 
 export interface WorkflowCanvasRendererProps {
@@ -346,6 +351,11 @@ export function WorkflowCanvasRenderer({
       path: WORKFLOW_CANVAS_ARTIFACT_PATH,
       updatedAt,
       content: JSON.stringify(artifact, null, 2),
+      extensionOwnership: {
+        extensionId: 'agent-harness.ext.workflow-canvas',
+        extensionName: 'Workflow canvas orchestration',
+        locked: true,
+      },
     }));
     setSaveStatus(`Saved ${WORKFLOW_CANVAS_ARTIFACT_PATH}`);
   };
