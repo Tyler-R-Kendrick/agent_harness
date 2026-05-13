@@ -1,0 +1,20 @@
+slug: simular
+name: Simular
+vendor: Simular
+segment: frontier-computer-use-agent
+product_path: competition/simular
+design_path: competition/simular/design
+features_path: competition/simular/features
+marketing_path: competition/simular/marketing
+gossip_path: competition/simular/gossip
+snapshot_date: 2026-05-12
+primary_sources:
+  - https://www.simular.ai/
+  - https://www.simular.ai/articles/introducing-simular
+  - https://www.simular.ai/simular
+secondary_sources:
+  - https://www.wired.com/story/google-shakes-up-project-mariner-team-web-browsing-agents
+positioning: "Autonomous computer-use agent company spanning browser, desktop, and smartphone automation with a developer platform and Simulang DSL."
+customer_model: "macOS download, Windows waitlist, web app launch, developer platform, and likely enterprise/production automation motion."
+competitive_threat_level: high
+notes: "Not browser-only, but dangerous because it competes above the browser layer with benchmark-led computer-use positioning."

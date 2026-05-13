@@ -1,0 +1,19 @@
+slug: webrun
+name: WebRun
+vendor: WebRun
+segment: cloud-desktop-browser-agent-infrastructure
+product_path: competition/webrun
+design_path: competition/webrun/design
+features_path: competition/webrun/features
+marketing_path: competition/webrun/marketing
+gossip_path: competition/webrun/gossip
+snapshot_date: 2026-05-12
+primary_sources:
+  - https://webrun.ai/
+  - https://www.webrun.ai/
+  - https://docs.webrun.ai/getting-started/overview
+secondary_sources: []
+positioning: "Fast real-time browser and desktop automation infrastructure for AI agents, exposed through API, MCP, WebSocket, and OpenAI-compatible endpoints."
+customer_model: "Public beta with pay-as-you-go token pricing, free trial, no setup fee, and volume discounts."
+competitive_threat_level: high
+notes: "Competes on speed, persistent desktop environments, policy guardrails, live session viewing, and integration breadth."
