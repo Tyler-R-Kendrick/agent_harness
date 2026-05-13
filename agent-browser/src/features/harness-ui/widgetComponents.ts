@@ -229,10 +229,11 @@ const TITLE_SPLIT_PATTERN = /\b(with|for|from|using|that|which|where|by|and|incl
 function toSentenceTitle(value: string): string {
   const normalized = value.trim().replace(/\s+/gu, ' ');
   if (!normalized) return 'New widget';
-  const words = normalized.split(' ').slice(0, 5).map((word) => word.toLowerCase());
+  const words = normalized.split(' ').slice(0, 5);
   return words.map((word, index) => {
-    if (index > 0 && /^[A-Z0-9]{2,}$/u.test(word)) return word;
-    return index === 0 ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : word;
+    if (/^[A-Z0-9]{2,}$/u.test(word)) return word;
+    const normalizedWord = word.toLowerCase();
+    return index === 0 ? `${normalizedWord.charAt(0).toUpperCase()}${normalizedWord.slice(1)}` : normalizedWord;
   }).join(' ');
 }
 
