@@ -4,6 +4,14 @@ vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
 
+vi.mock('driver.js', () => ({
+  driver: vi.fn(() => ({
+    drive: vi.fn(),
+  })),
+}), { virtual: true });
+
+vi.mock('driver.js/dist/driver.css', () => ({}), { virtual: true });
+
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
