@@ -5,26 +5,26 @@ import {
   buildChatChannelOptions,
   formatChatChannelHandoffMessage,
 } from './chatChannels';
-import type { DefaultExtensionRuntime } from './defaultExtensions';
+import { createDefaultExtensionRuntime, type DefaultExtensionRuntime } from './defaultExtensions';
 
 const slackRuntime: DefaultExtensionRuntime = {
   extensions: [{
     marketplace: {
-      id: 'agent-harness.ext.external-channels',
-      name: 'External chat channels',
+      id: 'agent-harness.ext.slack-channel',
+      name: 'Slack chat channel',
       version: '0.1.0',
-      description: 'Adds external chat channels.',
-      manifest: './channel/external-channels/agent-harness.plugin.json',
-      source: { type: 'local', path: './channel/external-channels' },
-      categories: ['channel-extension'],
+      description: 'Adds Slack chat handoffs.',
+      manifest: './channel/slack/agent-harness.plugin.json',
+      source: { type: 'local', path: './channel/slack' },
+      categories: ['channel-extension', 'slack'],
     },
     manifest: {
       schemaVersion: 1,
-      id: 'agent-harness.ext.external-channels',
-      name: 'External chat channels',
+      id: 'agent-harness.ext.slack-channel',
+      name: 'Slack chat channel',
       version: '0.1.0',
       description: 'Adds Slack chat session handoffs.',
-      entrypoint: { module: './src/index.ts', export: 'createExternalChannelsPlugin' },
+      entrypoint: { module: './src/index.ts', export: 'createSlackChannelPlugin' },
       contributes: {
         channels: [{
           id: 'slack',
@@ -38,7 +38,7 @@ const slackRuntime: DefaultExtensionRuntime = {
       capabilities: [{ kind: 'channel', id: 'slack' }],
     },
   }],
-  installedExtensionIds: ['agent-harness.ext.external-channels'],
+  installedExtensionIds: ['agent-harness.ext.slack-channel'],
   plugins: [],
   hooks: [],
   tools: [],
@@ -64,12 +64,30 @@ describe('chat channel share options', () => {
 
     expect(options.map((option) => option.label)).toEqual(['WebRTC peer', 'Slack']);
     expect(options[1]).toMatchObject({
-      id: 'agent-harness.ext.external-channels:slack',
-      extensionId: 'agent-harness.ext.external-channels',
+      id: 'agent-harness.ext.slack-channel:slack',
+      extensionId: 'agent-harness.ext.slack-channel',
       kind: 'slack',
       capabilities: ['delegate', 'continue', 'notify'],
       description: 'Send a chat handoff to a Slack bot.',
     });
+  });
+
+  it('keeps Slack, Telegram, and SMS independently installable', async () => {
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: [
+        'agent-harness.ext.slack-channel',
+        'agent-harness.ext.sms-channel',
+      ],
+    });
+
+    const options = buildChatChannelOptions(runtime);
+
+    expect(options.map((option) => option.label)).toEqual(['WebRTC peer', 'Slack', 'SMS']);
+    expect(options.map((option) => option.extensionId).filter(Boolean)).toEqual([
+      'agent-harness.ext.slack-channel',
+      'agent-harness.ext.sms-channel',
+    ]);
+    expect(options.some((option) => option.kind === 'telegram')).toBe(false);
   });
 
   it('formats channel handoff payloads for external transports', () => {
@@ -84,10 +102,10 @@ describe('chat channel share options', () => {
       type: 'agent-harness.chat-channel-handoff',
       version: 1,
       channel: {
-        id: 'agent-harness.ext.external-channels:slack',
+        id: 'agent-harness.ext.slack-channel:slack',
         label: 'Slack',
         kind: 'slack',
-        extensionId: 'agent-harness.ext.external-channels',
+        extensionId: 'agent-harness.ext.slack-channel',
       },
       session: {
         id: 'session-1',

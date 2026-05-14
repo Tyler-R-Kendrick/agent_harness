@@ -339,7 +339,9 @@ describe('App smoke coverage', () => {
   it('opens the secure shared chat QR pairing dialog from the chat header', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(STORAGE_KEYS.installedDefaultExtensionIds, JSON.stringify([
-      'agent-harness.ext.external-channels',
+      'agent-harness.ext.slack-channel',
+      'agent-harness.ext.telegram-channel',
+      'agent-harness.ext.sms-channel',
     ]));
     render(<App />);
 

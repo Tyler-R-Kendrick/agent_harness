@@ -58,20 +58,15 @@ describe('default extensions', () => {
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.codex-model-provider' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.local-model-connector' }) }),
     ]));
-    expect(grouped.channel).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        manifest: expect.objectContaining({
-          id: 'agent-harness.ext.external-channels',
-          contributes: {
-            channels: expect.arrayContaining([
-              expect.objectContaining({ id: 'slack', kind: 'slack' }),
-              expect.objectContaining({ id: 'telegram', kind: 'telegram' }),
-              expect.objectContaining({ id: 'sms', kind: 'sms' }),
-            ]),
-          },
-        }),
-      }),
-    ]));
+    expect(grouped.channel.map((extension) => extension.manifest.id)).toEqual([
+      'agent-harness.ext.slack-channel',
+      'agent-harness.ext.telegram-channel',
+      'agent-harness.ext.sms-channel',
+    ]);
+    for (const extension of grouped.channel) {
+      expect(extension.manifest.contributes?.channels).toHaveLength(1);
+      expect(extension.manifest.capabilities?.filter((capability) => capability.kind === 'channel')).toHaveLength(1);
+    }
     expect(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id)).toEqual([
       'agent-harness.ext.agent-skills',
       'agent-harness.ext.agents-md',
@@ -95,7 +90,9 @@ describe('default extensions', () => {
       'agent-harness.ext.xai-model-provider',
       'agent-harness.ext.local-model-connector',
       'agent-harness.ext.local-inference-daemon',
-      'agent-harness.ext.external-channels',
+      'agent-harness.ext.slack-channel',
+      'agent-harness.ext.telegram-channel',
+      'agent-harness.ext.sms-channel',
     ]);
   });
 
@@ -125,7 +122,9 @@ describe('default extensions', () => {
       'xAI Models',
       'Local Model Connector',
       'Local Inference Worker',
-      'External Chat Channels',
+      'Slack Chat Channel',
+      'Telegram Chat Channel',
+      'SMS Chat Channel',
     ]);
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.markdown-preview',
@@ -398,6 +397,7 @@ describe('default extensions', () => {
     expect(normalizeDefaultExtensionIds([
       'agent-harness.ext.design-md',
       'agent-harness.ext.artifacts',
+      'agent-harness.ext.external-channels',
       'agent-harness.ext.symphony',
       'agent-harness.ext.unknown',
     ])).toEqual([
@@ -405,6 +405,9 @@ describe('default extensions', () => {
       'agent-harness.ext.design-studio',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
+      'agent-harness.ext.slack-channel',
+      'agent-harness.ext.telegram-channel',
+      'agent-harness.ext.sms-channel',
       'agent-harness.ext.symphony',
     ]);
   });

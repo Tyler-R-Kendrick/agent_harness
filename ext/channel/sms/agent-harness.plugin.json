@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.sms-channel",
+  "name": "SMS Chat Channel",
+  "version": "0.1.0",
+  "description": "Adds SMS as an installable chat delegation and continuation channel.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createSmsChannelPlugin"
+  },
+  "contributes": {
+    "channels": [
+      {
+        "id": "sms",
+        "label": "SMS",
+        "kind": "sms",
+        "capabilities": ["delegate", "continue", "notify", "handoff-link"],
+        "description": "Delegate or continue an Agent Browser chat through a phone-number backed SMS gateway.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "fromNumber": { "type": "string" },
+            "provider": { "type": "string" }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "channel",
+      "id": "sms",
+      "description": "SMS chat session channel."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "The SMS channel sends and receives chat handoff messages through a configured SMS gateway API."
+    },
+    {
+      "scope": "secrets",
+      "access": "read",
+      "reason": "Provider tokens and signing secrets must stay in the configured secret store."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}
