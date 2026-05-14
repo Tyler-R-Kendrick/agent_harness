@@ -1,0 +1,16 @@
+{
+  "title": "Deep Research",
+  "views": [
+    { "id": "research-brief", "label": "Brief" },
+    { "id": "evidence-board", "label": "Evidence" },
+    { "id": "claim-ledger", "label": "Claims" },
+    { "id": "review-loop", "label": "Adversarial Review" },
+    { "id": "assurance", "label": "Assurance" }
+  ],
+  "quickActions": [
+    "Start research run",
+    "Request adversarial review",
+    "Run claim audit",
+    "Generate final report"
+  ]
+}

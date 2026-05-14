@@ -1,0 +1,10 @@
+{
+  "apps": [
+    {
+      "id": "deep-research-harness.ide",
+      "name": "Deep Research",
+      "entry": "./apps/deep-research-panel.json",
+      "placement": "sidebar"
+    }
+  ]
+}

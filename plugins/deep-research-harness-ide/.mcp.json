@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "deep-research-harness": {
+      "command": "node",
+      "args": [
+        "./scripts/deep-research-mcp-server.mjs"
+      ],
+      "env": {
+        "RESEARCH_WIKI_DIR": "${workspaceRoot}/.research/wiki",
+        "CLAIM_LEDGER_PATH": "${workspaceRoot}/.research/claim-ledger.jsonl"
+      }
+    }
+  }
+}
