@@ -7,6 +7,7 @@ import { formatOperationDuration } from '../operation-pane';
 import type { ProcessEntry, ProcessEntryKind } from '../../services/processLog';
 import { scoreEvaluationRun, type EvaluationRunScore } from '../../services/evaluationObservability';
 import type { RunCheckpoint } from '../../services/runCheckpoints';
+import { loadRoutingDecisionRecords } from '../../services/routingObservability';
 
 /**
  * Derives ProcessEntry rows from legacy ChatMessage fields so the unified
@@ -165,6 +166,35 @@ function CheckpointStrip({ checkpoints }: { checkpoints: RunCheckpoint[] }) {
   );
 }
 
+
+function RoutingDiagnosticsStrip() {
+  const latest = useMemo(() => {
+    const records = loadRoutingDecisionRecords();
+    return records.at(-1);
+  }, []);
+  if (!latest) return null;
+  return (
+    <section className="checkpoint-process-strip" aria-label="Routing diagnostics">
+      <header>
+        <span>Routing diagnostics</span>
+        <strong>{latest.selectedProvider}/{latest.selectedModel}</strong>
+      </header>
+      <div className="checkpoint-process-grid">
+        <article className="checkpoint-process-card">
+          <div className="checkpoint-process-row">
+            <strong>Task class</strong>
+            <span className="badge connected">{latest.taskClass}</span>
+          </div>
+          <p>Complexity {latest.complexityTier} ({latest.complexityScore}) @ {latest.complexityConfidence}</p>
+          <p>Evidence: {latest.benchmarkEvidenceSource}</p>
+          <p>Safeguards: {latest.safeguardsTriggered.length ? latest.safeguardsTriggered.join(', ') : 'none'}</p>
+          <code>Δ cost {latest.estimatedCostDelta} · Δ latency {latest.estimatedLatencyDelta}</code>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 /**
  * Full-pane overlay rendering the unified ProcessLog graph + drill-down.
  */
@@ -227,6 +257,7 @@ export function ProcessPanel({
         <div className="pg-panel-body">
           <EvaluationScoreStrip score={evaluationScore} />
           <CheckpointStrip checkpoints={checkpointEntries} />
+          <RoutingDiagnosticsStrip />
           <ProcessGraph
             entries={entries}
             selectedEntryId={selectedId ?? undefined}
