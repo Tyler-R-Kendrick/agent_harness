@@ -16979,6 +16979,22 @@ function AgentBrowserApp() {
     });
   }, [activeWorkspace, setWorkspaceViewStateByWorkspace]);
 
+  const closeActiveDashboardWidgetEditor = useCallback(() => {
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      const paneId = activeDashboardWidgetId ? `widget-editor:${activeWorkspaceId}:${activeDashboardWidgetId}` : null;
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          dashboardOpen: true,
+          activeDashboardWidgetId: null,
+          panelOrder: paneId ? existing.panelOrder.filter((id) => id !== paneId) : existing.panelOrder,
+        },
+      };
+    });
+  }, [activeDashboardWidgetId, activeWorkspace, activeWorkspaceId, setWorkspaceViewStateByWorkspace]);
+
   const createDashboardWidgetFromCanvas = useCallback((position: WidgetPosition, prompt: string) => {
     const normalizedPrompt = prompt.trim();
     if (!normalizedPrompt) return;
@@ -20811,6 +20827,8 @@ function AgentBrowserApp() {
                   symphonyActive={activeMultitaskSubagentState.enabled}
                   onPatchElement={patchActiveHarnessElement}
                   onOpenAssistant={() => openDashboardWidgetSession(panel.widgetId)}
+                  onClose={closeActiveDashboardWidgetEditor}
+                  dragHandleProps={dragHandleProps}
                 />
               );
             }

@@ -1895,15 +1895,19 @@ test('split session panes keep close buttons inside their own titlebars', async 
 test('title bar controls remain clickable while split panels are draggable', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   const fileEditorPanel = page.locator('section[aria-label="File editor"]');
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   await page.getByLabel('Add file to Research').click();
-  await page.getByRole('button', { name: 'AGENTS.md' }).click();
+  const addFileDialog = page.getByRole('dialog', { name: 'Add file' });
+  await expect(addFileDialog).toBeVisible();
+  await addFileDialog.getByLabel('Capability name').fill('titlebar-close-proof');
+  await addFileDialog.getByRole('button', { name: 'Memory' }).click();
   await expect(fileEditorPanel).toBeVisible();
 
   await page.getByRole('button', { name: 'Hugging Face' }).first().click();
   await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
-  await expect(page.locator('.panel-drag-cell')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Session 1', exact: true }).click({ force: true });
+  await expect(page.locator('.panel-drag-cell')).toHaveCount(3);
 
   await page.getByRole('tab', { name: 'Terminal mode' }).click();
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
@@ -1916,4 +1920,27 @@ test('title bar controls remain clickable while split panels are draggable', asy
   await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
 
   assertNoRuntimeErrors();
+});
+
+test('widget editor close button returns to the dashboard canvas', async ({ page }) => {
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.setViewportSize({ width: 1440, height: 820 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  await expect(page.getByLabel('Workspace tree')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Session summary', exact: true }).click({ force: true });
+
+  const widgetEditor = page.getByRole('region', { name: 'Widget editor' });
+  await expect(widgetEditor).toBeVisible();
+  await expect(widgetEditor.getByRole('heading', { name: 'Session summary', level: 2 })).toBeVisible();
+
+  await widgetEditor.getByRole('button', { name: 'Close widget editor' }).click();
+
+  await expect(widgetEditor).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible();
+  await expect(page.getByLabel('Infinite session canvas')).toBeVisible();
+  await expect(page.getByLabel('Dashboard widgets')).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/widget-editor-close-dashboard-canvas.png', fullPage: true });
 });
