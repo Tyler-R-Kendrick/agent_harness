@@ -1,0 +1,18 @@
+slug: moonrepo
+name: moonrepo v2
+vendor: moonrepo
+segment: developer-build-toolchain
+product_path: competition/moonrepo
+design_path: competition/moonrepo/design
+features_path: competition/moonrepo/features
+marketing_path: competition/moonrepo/marketing
+gossip_path: competition/moonrepo/gossip
+snapshot_date: 2026-05-14
+primary_sources:
+  - https://www.infoq.com/news/2026/05/moonrepo-2-release/
+  - https://moonrepo.dev/blog/moon-v2.0
+secondary_sources: []
+positioning: "A TypeScript-first monorepo and task orchestration toolchain with incremental builds, workspace graphing, and a plugin-extensible execution model."
+customer_model: "Open-source toolchain with commercial adoption via engineering productivity and platform standardization."
+competitive_threat_level: medium
+notes: "Important directional signal for agent-harness: unify tool registration/execution with portable WASM+WASI providers and standards-based tool schemas."
