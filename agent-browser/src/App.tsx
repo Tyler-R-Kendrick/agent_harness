@@ -12148,8 +12148,42 @@ function WorkspaceHistoryGraphRow({
             <span>Inspect branch history ({detailLabel})</span>
           </button>
         ) : null}
+        {expanded ? <WorkspaceHistoryExpandedDetails row={row} /> : null}
       </div>
     </li>
+  );
+}
+
+function WorkspaceHistoryExpandedDetails({ row }: { row: WorkspaceHistoryRow }) {
+  if (row.children?.length) {
+    return (
+      <ol className="workspace-history-branch-details" aria-label={`Expanded history details for ${row.title}`}>
+        {row.children.map((child) => (
+          <li key={child.id} className="workspace-history-branch-detail-node">
+            <span className="workspace-history-detail-dot" aria-hidden="true" />
+            <span className="workspace-history-branch-detail-copy">
+              <strong>{child.title}</strong>
+              <span>{child.summary}</span>
+              {child.detailRows.map((detail) => (
+                <code key={detail.id}>{detail.label}</code>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  if (!row.detailRows.length) return null;
+  return (
+    <ol className="workspace-history-branch-details" aria-label={`Expanded history details for ${row.title}`}>
+      {row.detailRows.map((detail) => (
+        <li key={detail.id}>
+          <span className="workspace-history-detail-dot" aria-hidden="true" />
+          <code>{detail.label}</code>
+        </li>
+      ))}
+    </ol>
   );
 }
 
