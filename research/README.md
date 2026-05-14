@@ -22,6 +22,7 @@ This directory stores paper-by-paper research packets.
 - `hybrid-memory-agent-marktechpost-2026`
 - `lambda-hermes-agent-reasoning-traces-2026-05`
 - `memprivacy-2605.09530`
+- `modular-skill-agent-dynamic-routing-2026-05-05`
 - `nadirclaw-cost-aware-routing-2026-05-10`
 - `production-agent-eval-harness-12-metrics`
 - `proxy-pointer-framework-tds`
