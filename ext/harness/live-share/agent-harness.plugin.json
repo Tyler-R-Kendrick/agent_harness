@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.live-share",
+  "name": "Live Share",
+  "version": "0.1.0",
+  "description": "Policy-governed WebRTC live-share sessions with explicit viewer/controller authorization.",
+  "activationEvents": ["onCommand:live-share.start", "onCommand:live-share.authorize"],
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createLiveSharePlugin"
+  },
+  "contributes": {
+    "tools": [
+      {
+        "id": "live-share.start",
+        "label": "Start Live Share",
+        "kind": "function",
+        "description": "Create a policy-bound live-share session for WebRTC clients."
+      },
+      {
+        "id": "live-share.authorize",
+        "label": "Authorize Participant",
+        "kind": "function",
+        "description": "Authorize a participant and issue signed constraints for viewer/control permissions."
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "tool",
+      "id": "live-share.start",
+      "description": "Provision policy-based live-share sessions."
+    },
+    {
+      "kind": "tool",
+      "id": "live-share.authorize",
+      "description": "Authorize role-based live-share control access."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Persists live-share session policies and access grants."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}
