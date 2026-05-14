@@ -1,0 +1,42 @@
+{
+  "targetAgentFamilies": ["web-search-agent", "composite-search-agent"],
+  "gates": {
+    "minRouteHitRate": 0.8,
+    "maxFallbackRate": 0.25,
+    "maxLatencyRegressionRate": 0.15
+  },
+  "cases": [
+    {
+      "id": "local-best-theaters",
+      "request": "what are the best movie theaters near me?",
+      "family": "web-search-agent",
+      "expectedRoute": "search-local-entity",
+      "legacy": {"route": "search-generic", "usedFallback": true, "latencyMs": 1240},
+      "dsr": {"route": "search-local-entity", "usedFallback": false, "latencyMs": 910}
+    },
+    {
+      "id": "compare-two-theaters",
+      "request": "compare AMC Randhurst 12 and CMX Arlington Heights with current ratings",
+      "family": "composite-search-agent",
+      "expectedRoute": "composite-compare",
+      "legacy": {"route": "composite-compare", "usedFallback": false, "latencyMs": 1380},
+      "dsr": {"route": "composite-compare", "usedFallback": false, "latencyMs": 1300}
+    },
+    {
+      "id": "hours-and-distance",
+      "request": "find three nearby theaters and include tonight closing times and distance",
+      "family": "web-search-agent",
+      "expectedRoute": "search-local-entity",
+      "legacy": {"route": "search-local-entity", "usedFallback": false, "latencyMs": 1560},
+      "dsr": {"route": "search-local-entity", "usedFallback": false, "latencyMs": 1405}
+    },
+    {
+      "id": "chain-and-independent-mix",
+      "request": "give me one chain and one independent theater near Arlington Heights",
+      "family": "composite-search-agent",
+      "expectedRoute": "composite-diversified",
+      "legacy": {"route": "search-generic", "usedFallback": true, "latencyMs": 1195},
+      "dsr": {"route": "composite-diversified", "usedFallback": false, "latencyMs": 1010}
+    }
+  ]
+}
