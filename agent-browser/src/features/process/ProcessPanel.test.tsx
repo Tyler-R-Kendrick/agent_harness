@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatMessage } from '../../types';
 import { ProcessPanel } from './ProcessPanel';
+import { buildRoutingDecisionRecord, persistRoutingDecisionRecord } from '../../services/routingObservability';
 
 describe('ProcessPanel', () => {
   it('renders the process graph without a browser trajectory critic verdict', () => {
@@ -117,4 +118,30 @@ describe('ProcessPanel', () => {
     expect(screen.getByText('approval')).toBeInTheDocument();
     expect(screen.getByText('resume:session-1:2026-05-07T03:00:00.000Z')).toBeInTheDocument();
   });
+
+  it('renders routing diagnostics from persisted routing observability records', () => {
+    window.localStorage.clear();
+    persistRoutingDecisionRecord(buildRoutingDecisionRecord({
+      requestId: 'routing-1',
+      requestText: 'Please investigate latency and security issues with this workflow and auth policies.',
+      selectedProvider: 'ghcp',
+      selectedModel: 'gpt-5',
+      benchmarkEvidenceSource: 'benchmark-router',
+      routingDecision: { reasonCode: 'low-confidence-premium-escalation', confidence: 0.42, tier: 'premium', selectedBy: 'router' },
+    }));
+
+    const message: ChatMessage = {
+      id: 'message-routing',
+      role: 'assistant',
+      content: 'Routed with diagnostics',
+      processEntries: [],
+    };
+
+    render(<ProcessPanel message={message} onClose={vi.fn()} />);
+
+    expect(screen.getByLabelText('Routing diagnostics')).toBeInTheDocument();
+    expect(screen.getByText('Task class')).toBeInTheDocument();
+    expect(screen.getByText(/benchmark-router/i)).toBeInTheDocument();
+  });
+
 });
