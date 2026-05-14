@@ -1,6 +1,7 @@
 import type { AgentProvider } from '../chat-agents/types';
 import type { CopilotModelSummary } from './copilotApi';
 import type { HFModel } from '../types';
+import { classifyPrompt, type ClassifiedPrompt } from './requestComplexityRouting';
 
 export type BenchmarkTaskClassId = 'planning' | 'browser-action' | 'verification' | 'research' | 'review';
 export type BenchmarkRoutingObjective = 'balanced' | 'quality' | 'cost' | 'latency';
@@ -41,6 +42,14 @@ export type BenchmarkRouteRecommendation = {
   candidate: BenchmarkRoutingCandidate;
   score: number;
   reason: string;
+};
+
+export type HybridRouteRecommendation = {
+  taskClass: BenchmarkTaskClassId;
+  candidate: BenchmarkRoutingCandidate;
+  benchmark: BenchmarkRouteRecommendation;
+  complexity: ClassifiedPrompt;
+  mergedReason: string;
 };
 
 export type BenchmarkEvidenceMetric = {
@@ -628,6 +637,75 @@ export function inferBenchmarkTaskClass({
     return 'research';
   }
   return toolsEnabled ? 'browser-action' : 'planning';
+}
+
+export function recommendHybridRoute({
+  prompt,
+  provider,
+  toolsEnabled,
+  settings,
+  candidates,
+}: {
+  prompt: string;
+  provider: AgentProvider;
+  toolsEnabled: boolean;
+  settings: BenchmarkRoutingSettings;
+  candidates: BenchmarkRoutingCandidate[];
+}): HybridRouteRecommendation | null {
+  if (!settings.enabled || candidates.length === 0) return null;
+
+  const taskClass = inferBenchmarkTaskClass({
+    provider,
+    latestUserInput: prompt,
+    toolsEnabled,
+  });
+  const benchmark = recommendBenchmarkRoute({ taskClass, candidates, settings });
+  if (!benchmark) return null;
+
+  const complexity = classifyPrompt(prompt);
+  const hasEscalationKeyword = settings.escalationKeywords.some((keyword) =>
+    complexity.reasons.includes(`escalation:${keyword.toLowerCase()}`),
+  );
+  const isCritical = complexity.tier === 'complex' && complexity.score >= settings.complexityThreshold;
+  const isLowConfidence = complexity.confidence < settings.minConfidence;
+  const requiresPremiumSafeSet = hasEscalationKeyword || isCritical || isLowConfidence;
+
+  if (!requiresPremiumSafeSet) {
+    return {
+      taskClass,
+      candidate: benchmark.candidate,
+      benchmark,
+      complexity,
+      mergedReason: `Objective-weighted route selected (${settings.objective}).`,
+    };
+  }
+
+  const [premiumSafeCandidate] = candidates
+    .filter((candidate) => candidate.costTier >= 3)
+    .map((candidate) => ({ candidate, score: objectiveScore(candidate, taskClass, 'quality') }))
+    .sort(compareCandidates);
+
+  if (!premiumSafeCandidate) {
+    return {
+      taskClass,
+      candidate: benchmark.candidate,
+      benchmark,
+      complexity,
+      mergedReason: 'Premium-safe fallback unavailable; used benchmark objective candidate.',
+    };
+  }
+
+  return {
+    taskClass,
+    candidate: premiumSafeCandidate.candidate,
+    benchmark,
+    complexity,
+    mergedReason: [
+      hasEscalationKeyword ? 'escalation' : null,
+      isCritical ? 'critical' : null,
+      isLowConfidence ? 'low_confidence' : null,
+    ].filter(Boolean).join('+') + ' policy override to premium-safe candidate set.',
+  };
 }
 
 export function getBenchmarkTaskClass(id: BenchmarkTaskClassId): BenchmarkTaskClass {
