@@ -10,7 +10,12 @@ This directory stores paper-by-paper research packets.
   - `reference-architecture.md` — system design and integration points.
   - `experiments/` — reproducible implementation attempts and logs.
 
-## Current papers
+## Current papers (alphabetical)
 
+- `act-wisely-2604.08545`
 - `continual-harness-2605.09998`
+- `cost-aware-llm-routing-nadirclaw-2026-05-10`
+- `hybrid-memory-agent-marktechpost-2026`
+- `lambda-hermes-agent-reasoning-traces-2026-05`
 - `memprivacy-2605.09530`
+- `proxy-pointer-rag-tds-2026`
