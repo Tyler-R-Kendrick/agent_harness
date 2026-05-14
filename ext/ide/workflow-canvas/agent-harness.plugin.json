@@ -21,6 +21,21 @@
     },
     {
       "kind": "tool",
+      "id": "workflow-canvas.bindings",
+      "description": "Resolves expression bindings and node-to-node data flow for workflow canvases."
+    },
+    {
+      "kind": "tool",
+      "id": "workflow-canvas.integrations",
+      "description": "Checks adapter readiness, credential references, and integration setup gaps."
+    },
+    {
+      "kind": "tool",
+      "id": "workflow-canvas.run",
+      "description": "Runs deterministic local workflow replays with bindings, integration traces, and persisted execution history."
+    },
+    {
+      "kind": "tool",
       "id": "workflow-canvas.create",
       "description": "Stores workflow canvas artifacts from Serverless Workflow documents."
     },

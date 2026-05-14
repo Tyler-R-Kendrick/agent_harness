@@ -265,7 +265,7 @@ textarea {
 
 .workflow-canvas-runner ol {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 8px;
   padding: 0;
   list-style: none;
@@ -273,11 +273,25 @@ textarea {
 
 .workflow-canvas-runner li {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 3px;
+}
+
+.workflow-canvas-runner li strong,
+.workflow-canvas-runner li small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workflow-canvas-source-list {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.workflow-canvas-runtime-list {
+  display: grid;
+  gap: 6px;
 }

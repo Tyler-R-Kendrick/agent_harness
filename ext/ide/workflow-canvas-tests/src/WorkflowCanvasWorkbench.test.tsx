@@ -66,9 +66,15 @@ describe('WorkflowCanvasRenderer', () => {
     expect(inspector.textContent).toContain('Source: Higgsfield Canvas');
 
     expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' }).textContent).toContain('Execution replay');
+    expect(within(workbench).getByRole('region', { name: 'Workflow integration readiness' }).textContent).toContain('6/6 ready');
+    expect(within(workbench).getByRole('region', { name: 'Workflow binding map' }).textContent).toContain('9 data bindings');
     expect(within(canvas).getByText('Draft ready')).toBeTruthy();
     fireEvent.click(within(workbench).getByRole('button', { name: 'Run workflow' }));
     expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' }).textContent).toContain('Run complete');
+    expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' }).textContent).toContain('researchAgent');
+    expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' }).textContent).toContain('publishCampaign');
+    expect(within(workbench).getByRole('region', { name: 'Workflow binding map' }).textContent).toContain('with.goal');
+    expect(within(workbench).getByRole('region', { name: 'Workflow binding map' }).textContent).toContain('Launch workflow canvas runtime');
     expect(within(canvas).getByText('7/8 complete')).toBeTruthy();
     fireEvent.click(within(workbench).getByRole('button', { name: 'Reset workflow replay' }));
     expect(within(canvas).getByText('Draft ready')).toBeTruthy();
@@ -96,14 +102,66 @@ describe('WorkflowCanvasRenderer', () => {
       mediaType: string;
       canvas: { nodes: unknown[]; edges: unknown[] };
       featurePlan: unknown[];
+      runtimePlan: { integrationCount: number; bindingCount: number };
+      lastRun: { status: string } | null;
       research: { screenshotReferences: unknown[] };
     };
     expect(savedArtifact.mediaType).toBe('application/vnd.agent-harness.workflow-canvas+json');
     expect(savedArtifact.canvas.nodes).toHaveLength(8);
     expect(savedArtifact.canvas.edges).toHaveLength(7);
     expect(savedArtifact.featurePlan).toHaveLength(6);
+    expect(savedArtifact.runtimePlan).toMatchObject({ integrationCount: 6, bindingCount: 9 });
+    expect(savedArtifact.lastRun).toBeNull();
     expect(savedArtifact.research.screenshotReferences).toHaveLength(6);
   }, 60000);
+
+  it('runs a deterministic workflow with binding and integration evidence and saves the replay', () => {
+    const savedFileSets: WorkflowCanvasWorkspaceFile[][] = [];
+    render(<RendererFixture onFilesChange={(files) => savedFileSets.push(files)} />);
+
+    const workbench = screen.getByRole('region', { name: 'Workflow canvas workbench' });
+    const canvas = within(workbench).getByRole('region', { name: 'Workflow orchestration canvas' });
+
+    fireEvent.click(within(workbench).getByRole('button', { name: 'Run workflow' }));
+    expect(within(canvas).getByText('7/8 complete')).toBeTruthy();
+    expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' }).textContent).toContain('Run complete');
+    expect(within(workbench).getByRole('region', { name: 'Workflow execution replay' }).textContent).toContain('success');
+    expect(within(workbench).getByRole('region', { name: 'Workflow integration readiness' }).textContent).toContain('Higgsfield Canvas');
+    expect(within(workbench).getByRole('region', { name: 'Workflow integration readiness' }).textContent).toContain('model:gpt-image');
+    expect(within(workbench).getByRole('region', { name: 'Workflow binding map' }).textContent).toContain('.request.goal');
+    expect(within(workbench).getByRole('region', { name: 'Workflow binding map' }).textContent).toContain('Launch workflow canvas runtime');
+
+    fireEvent.click(within(canvas).getByRole('button', { name: 'Inspect Research agent' }));
+    const inspector = within(workbench).getByRole('region', { name: 'Workflow node inspector' });
+    expect(inspector.textContent).toContain('Binding with.goal');
+    expect(inspector.textContent).toContain('.request.goal');
+    expect(inspector.textContent).toContain('Integration Agent Harness');
+    expect(inspector.textContent).toContain('agent.research');
+
+    fireEvent.click(within(canvas).getByRole('button', { name: 'Inspect Route decision' }));
+    expect(inspector.textContent).toContain('Binding switch.0.when');
+    expect(inspector.textContent).toContain('null');
+
+    fireEvent.click(within(workbench).getByRole('button', { name: 'Save canvas artifact' }));
+    const savedArtifact = JSON.parse(savedFileSets.at(-1)![0]!.content) as {
+      runtimePlan: { integrations: Array<{ credentialRef?: string }>; bindings: Array<{ sourcePath: string }> };
+      lastRun: { status: string; finalState: { approved: boolean; publishResult: { status: number } } };
+    };
+    expect(savedArtifact.runtimePlan.integrations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ credentialRef: 'model:gpt-image' }),
+      expect.objectContaining({ credentialRef: 'credential:cms-production' }),
+    ]));
+    expect(savedArtifact.runtimePlan.bindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourcePath: '.request.goal' }),
+    ]));
+    expect(savedArtifact.lastRun).toMatchObject({
+      status: 'success',
+      finalState: {
+        approved: true,
+        publishResult: { status: 202 },
+      },
+    });
+  });
 
   it('creates a prompt-backed widget from the canvas context menu and persists it with the artifact', () => {
     const savedFileSets: WorkflowCanvasWorkspaceFile[][] = [];

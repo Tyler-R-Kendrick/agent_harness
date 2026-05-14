@@ -6,8 +6,10 @@ import {
   WorkflowCanvasRenderer,
   createWorkflowCanvasFromServerlessWorkflow,
   createWorkflowCanvasPlugin,
+  createWorkflowCanvasRuntimePlan,
   decodeWorkflowCanvasArtifact,
   getWorkflowCanvasFeatureInventory,
+  runWorkflowCanvasLocally,
   validateServerlessWorkflowDocument,
 } from '@agent-harness/ext-workflow-canvas';
 import type { ServerlessWorkflowDocument } from '@agent-harness/ext-workflow-canvas';
@@ -59,6 +61,86 @@ const serverlessWorkflow = {
               {
                 requestRevision: {
                   set: { status: 'needs-revision' },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ],
+};
+
+const executableWorkflow = {
+  dsl: '1.0.0',
+  namespace: 'agent-harness.automation',
+  name: 'competitive-campaign-launch',
+  version: '1.0.0',
+  description: 'Campaign workflow with real bindings, integration references, and deterministic replay.',
+  do: [
+    {
+      webhookIntake: {
+        listen: { to: 'campaign.requested' },
+        output: { as: '.request' },
+      },
+    },
+    {
+      researchAgent: {
+        call: { ref: 'agent.research' },
+        with: { goal: '${ .request.goal }', channels: '${ .request.channels }' },
+        retry: { limit: 2 },
+        output: { as: '.research' },
+      },
+    },
+    {
+      normalizeBrief: {
+        set: {
+          audience: '${ .research.audience }',
+          visualPrompt: '${ .research.visualPrompt }',
+          channels: '${ .request.channels }',
+        },
+      },
+    },
+    {
+      generateCampaignMedia: {
+        call: { ref: 'image.generate' },
+        with: { model: 'gpt-image', prompt: '${ .visualPrompt }', aspectRatio: '16:9' },
+        timeout: 'PT3M',
+        output: { as: '.campaign.media' },
+      },
+    },
+    {
+      humanApproval: {
+        call: 'human.review',
+        with: { channel: 'slack', message: 'Approve campaign media and copy.' },
+        output: { as: '.approved' },
+      },
+    },
+    {
+      routeDecision: {
+        switch: [
+          {
+            when: '${ .approved == true }',
+            then: [
+              {
+                publishCampaign: {
+                  call: 'http.post',
+                  with: {
+                    url: 'https://cms.example/campaigns',
+                    credentialRef: 'credential:cms-production',
+                    body: '${ .campaign }',
+                  },
+                  output: { as: '.publishResult' },
+                },
+              },
+            ],
+          },
+          {
+            when: '${ .approved != true }',
+            then: [
+              {
+                requestRevision: {
+                  set: { status: 'needs-revision', owner: 'creative-ops' },
                 },
               },
             ],
@@ -361,6 +443,383 @@ describe('workflow-canvas extension', () => {
     const brokenContext = createHarnessExtensionContext({ artifacts: brokenArtifacts });
     await brokenContext.plugins.load(createWorkflowCanvasPlugin());
     await expect(brokenContext.tools.execute('workflow-canvas.read', { id: 'remote-canvas' })).rejects.toThrow('storage down');
+  });
+
+  it('registers bindings, integration readiness, and deterministic workflow run tools', async () => {
+    const context = createHarnessExtensionContext();
+    await context.plugins.load(createWorkflowCanvasPlugin());
+
+    await context.tools.execute('workflow-canvas.create', {
+      id: 'competitive-canvas',
+      title: 'Competitive campaign launch',
+      workflow: executableWorkflow,
+    });
+
+    const runtimePlan = await context.tools.execute('workflow-canvas.bindings', {
+      id: 'competitive-canvas',
+      input: {
+        goal: 'Launch workflow canvas runtime',
+        channels: ['email', 'social'],
+      },
+      credentials: {
+        'credential:cms-production': 'configured',
+        'model:gpt-image': 'configured',
+      },
+    });
+
+    expect(runtimePlan).toMatchObject({
+      workflowName: 'competitive-campaign-launch',
+      bindingCount: 9,
+      integrationCount: 6,
+      readyIntegrationCount: 6,
+      gaps: [],
+    });
+    expect(runtimePlan).toEqual(expect.objectContaining({
+      bindings: expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'researchAgent',
+          target: 'with.goal',
+          expression: '${ .request.goal }',
+          sourcePath: '.request.goal',
+          sourceNodeId: 'webhookIntake',
+          preview: 'Launch workflow canvas runtime',
+        }),
+        expect.objectContaining({
+          nodeId: 'routeDecision',
+          target: 'switch.0.when',
+          expression: '${ .approved == true }',
+          sourcePath: '.approved',
+          sourceNodeId: 'humanApproval',
+          preview: null,
+        }),
+      ]),
+      integrations: expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'generateCampaignMedia',
+          provider: 'Higgsfield Canvas',
+          kind: 'model',
+          credentialRef: 'model:gpt-image',
+          status: 'ready',
+        }),
+        expect.objectContaining({
+          nodeId: 'routeDecision.publishCampaign',
+          provider: 'n8n',
+          kind: 'http',
+          credentialRef: 'credential:cms-production',
+          status: 'ready',
+        }),
+      ]),
+    }));
+
+    const missingCredentials = await context.tools.execute('workflow-canvas.integrations', {
+      workflow: executableWorkflow,
+    });
+    expect(missingCredentials).toEqual(expect.objectContaining({
+      readyIntegrationCount: 4,
+      gaps: [
+        'Integration generateCampaignMedia needs credential reference model:gpt-image.',
+        'Integration routeDecision.publishCampaign needs credential reference credential:cms-production.',
+      ],
+    }));
+
+    const run = await context.tools.execute('workflow-canvas.run', {
+      id: 'competitive-canvas',
+      input: {
+        goal: 'Launch workflow canvas runtime',
+        channels: ['email', 'social'],
+      },
+      approvals: { humanApproval: true },
+      credentials: {
+        'credential:cms-production': 'configured',
+        'model:gpt-image': 'configured',
+      },
+      now: '2026-05-14T12:00:00.000Z',
+    });
+
+    expect(run).toMatchObject({
+      runId: 'competitive-campaign-launch-2026-05-14T12-00-00-000Z',
+      status: 'success',
+      stepCount: 7,
+      finalState: {
+        request: {
+          goal: 'Launch workflow canvas runtime',
+          channels: ['email', 'social'],
+        },
+        research: {
+          audience: 'Campaign operators',
+          visualPrompt: 'Launch workflow canvas runtime for email, social',
+        },
+        visualPrompt: 'Launch workflow canvas runtime for email, social',
+        approved: true,
+        publishResult: {
+          status: 202,
+          url: 'https://cms.example/campaigns',
+        },
+      },
+      executionArtifactId: 'competitive-canvas-run-competitive-campaign-launch-2026-05-14T12-00-00-000Z',
+    });
+    expect(run).toEqual(expect.objectContaining({
+      steps: expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: 'researchAgent',
+          status: 'success',
+          integrationId: 'researchAgent:agent',
+          bindings: [
+            expect.objectContaining({ target: 'with.goal', value: 'Launch workflow canvas runtime' }),
+            expect.objectContaining({ target: 'with.channels', value: ['email', 'social'] }),
+          ],
+        }),
+        expect.objectContaining({
+          nodeId: 'routeDecision.requestRevision',
+          status: 'skipped',
+          skippedReason: 'Branch condition did not match: ${ .approved != true }',
+        }),
+      ]),
+    }));
+
+    const runArtifact = await context.artifacts.read('competitive-canvas-run-competitive-campaign-launch-2026-05-14T12-00-00-000Z');
+    expect(runArtifact).toMatchObject({
+      mediaType: WORKFLOW_CANVAS_MEDIA_TYPE,
+      metadata: {
+        artifactKind: 'workflow-canvas-run',
+        workflowName: 'competitive-campaign-launch',
+        status: 'success',
+      },
+    });
+    expect(JSON.parse(runArtifact!.data as string)).toMatchObject({
+      run: expect.objectContaining({
+        status: 'success',
+        finalState: expect.objectContaining({ approved: true }),
+      }),
+    });
+
+    await expect(context.tools.execute('workflow-canvas.run', {})).rejects.toThrow('Workflow canvas run needs a workflow or canvas id.');
+    await expect(context.tools.execute('workflow-canvas.bindings', { id: 'missing' })).rejects.toThrow('Unknown workflow canvas: missing');
+  });
+
+  it('covers runtime adapter fallbacks, blocked runs, default outputs, and branch behavior', () => {
+    const fallbackWorkflow: ServerlessWorkflowDocument = {
+      dsl: '1.0.0',
+      name: 'runtime-fallbacks',
+      version: '1.0.0',
+      do: [
+        {
+          intake: {
+            listen: {},
+          },
+        },
+        {
+          arrayBindings: {
+            call: { ref: 'agent.research' },
+            with: {
+              goal: '${ .event.goal.deep }',
+              tags: ['${ .event.goal }'],
+            },
+          },
+        },
+        {
+          mediaFallback: {
+            call: { ref: 'image.generate' },
+            with: { prompt: '${ .research.visualPrompt }' },
+          },
+        },
+        {
+          mediaAlt: {
+            call: { ref: 'image.generate' },
+            with: { prompt: 'alternate asset' },
+            output: { as: '.campaign.alt' },
+          },
+        },
+        {
+          approveDefault: {
+            call: 'human.review',
+          },
+        },
+        {
+          noCredentialHttp: {
+            call: 'http.post',
+            with: { url: '', body: null },
+          },
+        },
+        {
+          unknownCall: {
+            call: {},
+          },
+        },
+        {
+          passiveEvent: {},
+        },
+        {
+          scalarSet: {
+            set: '${ .publishResult.status }',
+          },
+        },
+        {
+          chooseNoMatch: {
+            switch: [
+              {
+                when: '${ .approved === true }',
+                then: [
+                  {
+                    unreachable: {
+                      switch: [
+                        {
+                          then: [{ deepUnreachable: { set: { never: true } } }],
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+              {
+                when: 'manual condition',
+                then: [{ alsoUnreachable: { set: { never: 'manual' } } }],
+              },
+            ],
+          },
+        },
+        {
+          chooseElse: {
+            switch: [
+              {
+                then: [{ fallbackPath: { set: { status: 'else-ran' } } }],
+              },
+            ],
+          },
+        },
+        {
+          sourceLessBinding: {
+            call: 'http.post',
+            with: { url: '${ true }' },
+          },
+        },
+      ],
+    };
+
+    const blocked = runWorkflowCanvasLocally(fallbackWorkflow, {
+      input: { goal: 'fallback launch' },
+      now: 'bad timestamp',
+    });
+    expect(blocked.status).toBe('blocked');
+    expect(blocked.steps).toHaveLength(0);
+    expect(blocked.issues).toEqual([
+      'Integration mediaFallback needs credential reference model:gpt-image.',
+      'Integration mediaAlt needs credential reference model:gpt-image.',
+      'Integration noCredentialHttp needs credential reference credential:nocredentialhttp.',
+      'Integration sourceLessBinding needs credential reference credential:sourcelessbinding.',
+    ]);
+
+    const plan = createWorkflowCanvasRuntimePlan(fallbackWorkflow, {
+      input: { goal: 'fallback launch' },
+      credentials: {
+        'model:gpt-image': 'configured',
+        'credential:nocredentialhttp': 'configured',
+        'credential:sourcelessbinding': 'configured',
+      },
+    });
+    expect(plan.bindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: 'arrayBindings',
+        target: 'with.goal',
+        sourcePath: '.event.goal.deep',
+        sourceNodeId: 'intake',
+        preview: null,
+      }),
+      expect.objectContaining({
+        nodeId: 'arrayBindings',
+        target: 'with.tags.0',
+        sourcePath: '.event.goal',
+        preview: 'fallback launch',
+      }),
+      expect.objectContaining({
+        nodeId: 'chooseNoMatch',
+        target: 'switch.0.when',
+        sourcePath: '.approved',
+      }),
+      expect.objectContaining({
+        nodeId: 'sourceLessBinding',
+        target: 'with.url',
+        sourcePath: '',
+        sourceNodeId: null,
+        preview: null,
+      }),
+    ]));
+    expect(plan.integrations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: 'intake', operation: 'manual.trigger' }),
+      expect.objectContaining({ nodeId: 'mediaFallback', credentialRef: 'model:gpt-image', status: 'ready' }),
+      expect.objectContaining({ nodeId: 'noCredentialHttp', credentialRef: 'credential:nocredentialhttp' }),
+      expect.objectContaining({ nodeId: 'unknownCall', operation: 'unknown.call' }),
+    ]));
+
+    const run = runWorkflowCanvasLocally(fallbackWorkflow, {
+      input: { goal: 'fallback launch' },
+      credentials: {
+        'model:gpt-image': 'configured',
+        'credential:nocredentialhttp': 'configured',
+        'credential:sourcelessbinding': 'configured',
+      },
+      now: '2026-05-14T13:00:00.000Z',
+    });
+
+    expect(run).toMatchObject({
+      status: 'success',
+      runId: 'runtime-fallbacks-2026-05-14T13-00-00-000Z',
+      finalState: {
+        event: { goal: 'fallback launch' },
+        approved: true,
+        status: 'else-ran',
+      },
+    });
+    expect(run.steps).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: 'arrayBindings',
+        output: expect.objectContaining({
+          visualPrompt: 'Launch workflow canvas runtime for owned channels',
+        }),
+        bindings: expect.arrayContaining([
+          expect.objectContaining({ target: 'with.tags.0', value: 'fallback launch' }),
+        ]),
+      }),
+      expect.objectContaining({
+        nodeId: 'noCredentialHttp',
+        output: {
+          status: 202,
+          url: 'https://example.invalid',
+          body: null,
+          credentialRef: null,
+        },
+      }),
+      expect.objectContaining({
+        nodeId: 'unknownCall',
+        output: { ref: 'unknown.call', nodeId: 'unknownCall', args: {} },
+      }),
+      expect.objectContaining({
+        nodeId: 'chooseNoMatch',
+        output: { branch: null },
+      }),
+      expect.objectContaining({
+        nodeId: 'chooseNoMatch.unreachable',
+        status: 'skipped',
+        skippedReason: 'Branch condition did not match: ${ .approved === true }',
+      }),
+      expect.objectContaining({
+        nodeId: 'chooseNoMatch.unreachable.deepUnreachable',
+        status: 'skipped',
+      }),
+      expect.objectContaining({
+        nodeId: 'chooseNoMatch.alsoUnreachable',
+        status: 'skipped',
+        skippedReason: 'Branch condition did not match: manual condition',
+      }),
+      expect.objectContaining({
+        nodeId: 'chooseElse.fallbackPath',
+        status: 'success',
+      }),
+      expect.objectContaining({
+        nodeId: 'sourceLessBinding',
+        bindings: [expect.objectContaining({ target: 'with.url', value: null })],
+      }),
+    ]));
   });
 
   it('normalizes stored workflow canvas artifacts and exposes an installable renderer component', () => {

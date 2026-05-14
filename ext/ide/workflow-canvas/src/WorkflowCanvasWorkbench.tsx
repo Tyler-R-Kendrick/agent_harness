@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
 import {
   Bot,
   CheckCircle2,
@@ -16,9 +16,12 @@ import {
 import {
   WORKFLOW_CANVAS_MEDIA_TYPE,
   createWorkflowCanvasFromServerlessWorkflow,
+  createWorkflowCanvasRuntimePlan,
   getWorkflowCanvasFeatureInventory,
+  runWorkflowCanvasLocally,
   type ServerlessWorkflowDocument,
   type WorkflowCanvasDocument,
+  type WorkflowCanvasRunResult,
   type WorkflowCanvasNode,
 } from './index.js';
 
@@ -74,6 +77,14 @@ type WorkflowCanvasContextMenu =
   | null;
 
 const WORKFLOW_CANVAS_ARTIFACT_PATH = 'workflow-canvas/campaign-launch.json';
+const WORKFLOW_CANVAS_RUNTIME_INPUT = {
+  goal: 'Launch workflow canvas runtime',
+  channels: ['email', 'social'],
+};
+const WORKFLOW_CANVAS_RUNTIME_CREDENTIALS = {
+  'credential:cms-production': 'configured',
+  'model:gpt-image': 'configured',
+};
 
 const WORKFLOW_CANVAS_SAMPLE_WORKFLOW: ServerlessWorkflowDocument = {
   dsl: '1.0.0',
@@ -91,8 +102,9 @@ const WORKFLOW_CANVAS_SAMPLE_WORKFLOW: ServerlessWorkflowDocument = {
     {
       researchAgent: {
         call: { ref: 'agent.research' },
-        with: { goal: '${ .request.goal }', sources: ['web', 'workspace', 'brand'] },
+        with: { goal: '${ .request.goal }', channels: '${ .request.channels }' },
         retry: { limit: 2 },
+        output: { as: '.research' },
       },
     },
     {
@@ -109,12 +121,14 @@ const WORKFLOW_CANVAS_SAMPLE_WORKFLOW: ServerlessWorkflowDocument = {
         call: { ref: 'image.generate' },
         with: { model: 'gpt-image', prompt: '${ .visualPrompt }', aspectRatio: '16:9' },
         timeout: 'PT3M',
+        output: { as: '.campaign.media' },
       },
     },
     {
       humanApproval: {
         call: 'human.review',
         with: { channel: 'slack', message: 'Approve campaign media and copy.' },
+        output: { as: '.approved' },
       },
     },
     {
@@ -126,7 +140,12 @@ const WORKFLOW_CANVAS_SAMPLE_WORKFLOW: ServerlessWorkflowDocument = {
               {
                 publishCampaign: {
                   call: 'http.post',
-                  with: { url: 'https://cms.example/campaigns', body: '${ .campaign }' },
+                  with: {
+                    url: 'https://cms.example/campaigns',
+                    credentialRef: 'credential:cms-production',
+                    body: '${ .campaign }',
+                  },
+                  output: { as: '.publishResult' },
                 },
               },
             ],
@@ -278,8 +297,8 @@ const WORKFLOW_CANVAS_FEATURE_PLAN = [
   },
   {
     title: 'Runtime adapters',
-    userStory: 'As a production owner, I can connect real HTTP, model, secret, worker, and approval adapters.',
-    status: 'Next implementation slice',
+    userStory: 'As a production owner, I can resolve HTTP, model, credential, worker, approval, and binding adapters before a run.',
+    status: 'Implemented with local adapter readiness',
   },
 ];
 
@@ -336,6 +355,12 @@ function widgetIdFromTitle(title: string, index: number): string {
   return `widget-${index + 1}-${slug}`;
 }
 
+function formatRuntimeValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(', ');
+  if (value === null || value === undefined) return 'null';
+  return String(value);
+}
+
 export function WorkflowCanvasRenderer({
   workspaceName = 'Workflow workspace',
   workspaceFiles = [],
@@ -349,10 +374,18 @@ export function WorkflowCanvasRenderer({
     [],
   );
   const inventory = useMemo(() => getWorkflowCanvasFeatureInventory(), []);
+  const runtimePlan = useMemo(
+    () => createWorkflowCanvasRuntimePlan(canvas, {
+      input: WORKFLOW_CANVAS_RUNTIME_INPUT,
+      credentials: WORKFLOW_CANVAS_RUNTIME_CREDENTIALS,
+    }),
+    [canvas],
+  );
   const [selectedNodeId, setSelectedNodeId] = useState(canvas.nodes[0]!.id);
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
   const [widgets, setWidgets] = useState<WorkflowCanvasWidget[]>([]);
   const [runState, setRunState] = useState<WorkflowCanvasRunState>('idle');
+  const [lastRun, setLastRun] = useState<WorkflowCanvasRunResult | null>(null);
   const [saveStatus, setSaveStatus] = useState('Ready to save workflow-canvas/campaign-launch.json');
   const [contextMenu, setContextMenu] = useState<WorkflowCanvasContextMenu>(null);
   const [widgetPrompt, setWidgetPrompt] = useState('');
@@ -360,6 +393,8 @@ export function WorkflowCanvasRenderer({
   const selectedNode = canvas.nodes.find((node) => node.id === selectedNodeId)!;
   const selectedWidget = widgets.find((widget) => widget.id === selectedWidgetId) ?? null;
   const selectedMeta = nodeMeta(selectedNode);
+  const selectedBindings = runtimePlan.bindings.filter((binding) => binding.nodeId === selectedNodeId);
+  const selectedIntegration = runtimePlan.integrations.find((integration) => integration.nodeId === selectedNodeId) ?? null;
   const savedFiles = savedWorkflowCanvasFiles(workspaceFiles);
   const completedCount = canvas.nodes.filter((node) => nodeStatus(node, runState) === 'complete').length;
   const retryLabel = { true: 'retry-aware', false: 'single pass' }[String(canvas.executionModel.retryable)];
@@ -377,6 +412,8 @@ export function WorkflowCanvasRenderer({
       widgets,
       workflow: canvas.workflow,
       featurePlan: WORKFLOW_CANVAS_FEATURE_PLAN,
+      runtimePlan,
+      lastRun,
       research: {
         sources: inventory.sources,
         screenshotReferences: inventory.screenshotReferences,
@@ -393,6 +430,21 @@ export function WorkflowCanvasRenderer({
       },
     }));
     setSaveStatus(`Saved ${WORKFLOW_CANVAS_ARTIFACT_PATH}`);
+  };
+
+  const runWorkflow = () => {
+    const run = runWorkflowCanvasLocally(canvas, {
+      input: WORKFLOW_CANVAS_RUNTIME_INPUT,
+      credentials: WORKFLOW_CANVAS_RUNTIME_CREDENTIALS,
+      approvals: { humanApproval: true },
+    });
+    setLastRun(run);
+    setRunState('complete');
+  };
+
+  const resetWorkflow = () => {
+    setRunState('idle');
+    setLastRun(null);
   };
 
   const openCanvasContextMenu = (event: MouseEvent<HTMLElement>) => {
@@ -445,10 +497,10 @@ export function WorkflowCanvasRenderer({
           <p>Campaign launch workflow · Serverless Workflow 1.0 · {canvas.nodes.length} nodes · {canvas.edges.length} edges</p>
         </div>
         <div className="workflow-canvas-actions">
-          <button type="button" onClick={() => setRunState('complete')} aria-label="Run workflow">
+          <button type="button" onClick={runWorkflow} aria-label="Run workflow">
             <Play size={15} aria-hidden="true" />
           </button>
-          <button type="button" onClick={() => setRunState('idle')} aria-label="Reset workflow replay">
+          <button type="button" onClick={resetWorkflow} aria-label="Reset workflow replay">
             <RefreshCcw size={15} aria-hidden="true" />
           </button>
           <button type="button" onClick={saveCanvas} aria-label="Save canvas artifact">
@@ -643,6 +695,18 @@ export function WorkflowCanvasRenderer({
                   <dd>{selectedMeta.cost}</dd>
                   <dt>Source</dt>
                   <dd>Source: {selectedMeta.source}</dd>
+                  {selectedIntegration ? (
+                    <>
+                      <dt>Integration {selectedIntegration.provider}</dt>
+                      <dd>{selectedIntegration.operation} · {selectedIntegration.status}</dd>
+                    </>
+                  ) : null}
+                  {selectedBindings.map((binding) => (
+                    <Fragment key={binding.id}>
+                      <dt>Binding {binding.target}</dt>
+                      <dd>{binding.sourcePath}{' -> '}{formatRuntimeValue(binding.preview)}</dd>
+                    </Fragment>
+                  ))}
                 </dl>
               </>
             )}
@@ -657,21 +721,51 @@ export function WorkflowCanvasRenderer({
       <footer className="workflow-canvas-runner">
         <section aria-label="Workflow execution replay">
           <div className="workflow-canvas-runner-heading">
-            <strong>{runState === 'complete' ? 'Run complete' : 'Execution replay'}</strong>
-            <span>{retryLabel} · {timeoutLabel}</span>
+            <strong>{lastRun || runState === 'complete' ? 'Run complete' : 'Execution replay'}</strong>
+            <span>{lastRun ? `${lastRun.status} · ` : ''}{retryLabel} · {timeoutLabel}</span>
           </div>
           <ol>
-            {canvas.nodes.map((node) => {
+            {(lastRun?.steps ?? canvas.nodes).map((entry) => {
+              const node = 'nodeId' in entry
+                ? canvas.nodes.find((candidate) => candidate.id === entry.nodeId)!
+                : entry;
               const meta = nodeMeta(node);
+              const status = 'nodeId' in entry ? entry.status : nodeStatus(node, runState);
               return (
                 <li key={node.id}>
-                  <span data-status={nodeStatus(node, runState)} />
-                  <strong>{meta.title}</strong>
-                  <small>{nodeStatus(node, runState)}</small>
+                  <span data-status={status === 'success' ? 'complete' : status} />
+                  <strong>{'nodeId' in entry ? entry.nodeId : meta.title}</strong>
+                  <small>{status}</small>
                 </li>
               );
             })}
           </ol>
+        </section>
+        <section aria-label="Workflow integration readiness">
+          <div className="workflow-canvas-runner-heading">
+            <strong>Integration readiness</strong>
+            <span>{runtimePlan.readyIntegrationCount}/{runtimePlan.integrationCount} ready</span>
+          </div>
+          <div className="workflow-canvas-runtime-list">
+            {runtimePlan.integrations.map((integration) => (
+              <span key={integration.id}>
+                {integration.provider} · {integration.operation}{integration.credentialRef ? ` · ${integration.credentialRef}` : ''}
+              </span>
+            ))}
+          </div>
+        </section>
+        <section aria-label="Workflow binding map">
+          <div className="workflow-canvas-runner-heading">
+            <strong>Binding map</strong>
+            <span>{runtimePlan.bindingCount} data bindings</span>
+          </div>
+          <div className="workflow-canvas-runtime-list">
+            {runtimePlan.bindings.slice(0, 6).map((binding) => (
+              <span key={binding.id}>
+                {binding.target} · {binding.sourcePath} · {formatRuntimeValue(binding.preview)}
+              </span>
+            ))}
+          </div>
         </section>
         <section aria-label="Workflow canvas research sources">
           <div className="workflow-canvas-runner-heading">
