@@ -1,7 +1,7 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-13
-Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
+Updated: 2026-05-14
+Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
 ## Normalized feature themes
@@ -127,7 +127,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 18. Embeddable agent runtimes and protocol surfaces
 - Common pattern: some harnesses are no longer just end-user apps and are instead exposing stable runtime layers other products can embed directly.
-- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, Gemini CLI headless mode plus JSON and streaming automation surfaces, Goose desktop plus CLI plus API plus ACP server and ACP provider bridge, n8n's built-in MCP server that can search, test, create, and edit workflows and data tables from external clients, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
+- Seen in: Pi interactive plus print/JSON plus JSON-RPC plus SDK modes, Cursor SDK plus durable Cloud Agents API, DeepSeek OpenAI-compatible plus Anthropic-compatible APIs and first-party harness migration guides, Gemini CLI headless mode plus JSON and streaming automation surfaces, Goose desktop plus CLI plus API plus ACP server and ACP provider bridge, n8n's built-in MCP server that can search, test, create, and edit workflows and data tables from external clients, OpenAI Symphony operator APIs, OpenHands SDK plus API and large-codebase coordination, T3 Code headless serve, and GitHub Copilot's growing cross-surface agent presence.
 - Why it matters: product teams increasingly want the same agent core available in the terminal, in the browser, in IDEs, and inside orchestrators without re-implementing session, transport, and tool behavior each time.
 - One-shot build instruction:
   - Expose browser-agent sessions through a reusable runtime contract with both in-process and subprocess transports, including a typed SDK, a documented streaming protocol, request correlation, session lifecycle controls, and enough stability that other internal surfaces can embed the harness instead of screen-scraping it.
@@ -258,35 +258,42 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Build an organization-facing browser-agent analytics surface that combines usage metrics with an adoption score across frequency, workflow depth, and team coverage, so leaders can see whether the harness is becoming operationally important or just occasionally sampled.
 
-### 37. Turn-level checkpoints with chat-and-code rollback
+### 37. Dual-mode reasoning backends with tool-aware state plumbing
+- Common pattern: some agent backends are making reasoning mode an explicit runtime contract that affects UI, API parameters, transcript state, and tool-loop correctness rather than just exposing a separate "smart model."
+- Seen in: DeepSeek V4 and V3.1 Thinking versus Non-Thinking modes across app, web, and API, plus explicit `reasoning_content` replay rules for tool-call turns and automatic effort escalation for some agent requests.
+- Why it matters: once harnesses support multiple providers and long-running tool use, they need to preserve provider-specific reasoning state correctly instead of assuming every backend behaves like a plain chat-completions stream.
+- One-shot build instruction:
+  - Add backend-aware reasoning modes for browser agents so a provider can declare whether it supports explicit think/non-think execution, what effort controls are valid, how intermediate reasoning state should be stored or replayed across tool turns, and how the operator can switch modes without breaking the session contract.
+
+### 38. Turn-level checkpoints with chat-and-code rollback
 - Common pattern: some harnesses are snapshotting agent work outside normal branch history so users can rewind to an earlier turn without manual git surgery or destructive resets.
 - Seen in: Conductor checkpoints stored in private git refs and restorable from earlier chat turns, Cline checkpoints stored in a shadow Git repository, and Gemini CLI checkpointing plus restore for long-running sessions.
 - Why it matters: high-agency agents are easier to trust when experimentation is cheap to undo and rollback is tied to the conversation history that caused the change.
 - One-shot build instruction:
   - Add turn-level checkpoints for browser-agent runs that snapshot code, artifacts, and key session state before each agent step, let operators inspect and restore earlier points from the transcript or timeline, and keep rollback state separate from the repository's visible branch history.
 
-### 37. Closed-loop PR feedback learning and autonomous refinement
+### 39. Closed-loop PR feedback learning and autonomous refinement
 - Common pattern: some harnesses are beginning to treat review feedback as training signal for future agent behavior instead of as one-off human correction.
 - Seen in: Roomote explicitly says it self-improves from PR feedback and keeps refining in the background with approval; Cursor learned rules and auto-fix behavior are adjacent signs that reviewer feedback is becoming a durable product input.
 - Why it matters: browser and coding harnesses stay expensive and noisy if every reviewer correction dies inside one PR thread instead of becoming reusable policy, heuristics, or prompts for the next run.
 - One-shot build instruction:
   - Add a reviewer-feedback learning loop for browser-agent work that captures accepted and rejected PR feedback, turns it into structured reusable guidance or heuristics after approval, replays it during planning and self-review, and lets operators inspect, edit, disable, or expire learned rules before they affect future runs.
 
-### 38. Mode-scoped execution profiles and sticky task inheritance
+### 40. Mode-scoped execution profiles and sticky task inheritance
 - Common pattern: some harnesses now let teams bind execution profiles to specialized agent modes, then keep those profile choices stable across resumes, parallel work, and delegated subtasks.
 - Seen in: Roo Code API Configuration Profiles can be pinned, linked to modes, and kept sticky per task; reopened tasks retain their original profile, multi-workspace runs avoid unexpected profile switches, and Orchestrator subtasks inherit the parent profile for their lifetime.
 - Why it matters: multi-model harnesses become hard to trust when provider, model, or budget settings drift silently between planning, execution, resume, and delegation steps.
 - One-shot build instruction:
   - Add execution profiles for browser-agent modes with explicit provider, model, thinking-budget, rate-limit, and tool-policy settings; let users bind profiles to agent roles, and keep a run's chosen profile sticky across resumes, child runs, worktrees, and remote execution unless a human explicitly changes it.
 
-### 39. Deterministic workflow graphs around agent steps
+### 41. Deterministic workflow graphs around agent steps
 - Common pattern: some harnesses are treating agents as nodes inside versioned workflows, with explicit deterministic steps, pause states, approvals, evaluations, and deployment-safe publishing around the agent core.
 - Seen in: n8n AI Workflow Builder, AI Agent and Chat nodes, workflow-as-tool composition, per-tool human review, dataset-backed evaluations, and versioned publishing with rollback and concurrency protection.
 - Why it matters: agent reliability improves when reasoning is embedded inside an inspectable workflow graph instead of being forced to carry branching logic, approvals, and recovery policy entirely inside the prompt.
 - One-shot build instruction:
   - Add a workflow-graph orchestration layer for browser-agent work that composes deterministic steps, agent nodes, reusable workflow-tools, human approval checkpoints, evaluation nodes, and versioned publish or rollback semantics so long-running automations can be built, debugged, and governed as operational systems.
 
-### 40. Schema-driven skill contracts with typed intake and live parameter controls
+### 42. Schema-driven skill contracts with typed intake and live parameter controls
 - Common pattern: some harnesses are beginning to declare enough structured metadata around a skill that the product can generate intake forms, tweak controls, preview behavior, output manifests, and capability gates around the agent automatically.
 - Seen in: Open Design `od:` skill metadata with typed `inputs`, live `parameters`, preview and output metadata, and capability requirements; n8n's typed AI parameter binding is adjacent at the workflow-tool level, but Open Design currently makes the skill-to-UI contract clearest.
 - Why it matters: free-text prompting is a weak fit for repeatable artifact generation when the harness could collect structured inputs once, render the right controls, and keep follow-up refinements inside bounded parameters instead of re-prompting from scratch.

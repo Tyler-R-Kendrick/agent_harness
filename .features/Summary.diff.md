@@ -1,10 +1,43 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-13
-Baseline: `.features/Summary.md` refreshed from the 2026-05-12 twenty-eight-harness corpus.
-Diff type: additive update after Open Design research
+Updated: 2026-05-14
+Baseline: `.features/Summary.md` refreshed from the 2026-05-13 twenty-nine-harness corpus.
+Diff type: additive update after DeepSeek research
 
 ## Net new normalized features
+
+### Added: Dual-mode reasoning backends with tool-aware state plumbing
+- Why now: DeepSeek is exposing a stronger agent-backend contract than a normal model switch by making thinking versus non-thinking a first-class runtime mode with explicit replay rules when tool calls are involved.
+- Research delta:
+  - DeepSeek V4 exposes both `Expert Mode` and `Instant Mode` on the product side while keeping both `Thinking` and `Non-Thinking` modes on the API side
+  - the `Thinking Mode` docs separate `reasoning_content` from the final answer instead of hiding reasoning inside one opaque response field
+  - when a thinking-mode turn performs tool calls, DeepSeek requires the harness to pass `reasoning_content` back on all future turns or the API will reject the request
+  - DeepSeek also exposes valid effort controls and automatically bumps some agent requests such as `Claude Code` and `OpenCode` to `max`
+
+### Expanded: Embeddable agent runtimes and protocol surfaces
+- Why now: DeepSeek is turning backend portability into a first-party product surface instead of leaving harness integration to community snippets.
+- Research delta:
+  - the API is documented as compatible with both OpenAI and Anthropic client ecosystems
+  - the V4 release keeps the same base URL and only swaps the model name, which lowers migration friction
+  - DeepSeek now publishes official setup or migration guides for harnesses such as GitHub Copilot, OpenCode, Hermes Agent, and Reasonix
+  - the Copilot guide explicitly says users keep agent mode, tool calling, skills, and MCP while changing only the backend
+
+### Expanded: Long-running context economics
+- Why now: DeepSeek treats long-context agent loops as an operational system problem with explicit cache accounting instead of only a bigger context window.
+- Research delta:
+  - context caching is enabled by default for all users
+  - overlapping request prefixes are fetched from disk cache instead of recomputed
+  - responses expose `prompt_cache_hit_tokens` and `prompt_cache_miss_tokens`
+  - the cache is documented as a best-effort persistent layer for repeated long-text and multi-turn workloads
+
+### Added: Add dual-mode reasoning backends with tool-aware state plumbing
+- Why now: `agent-browser` can already route across models, but it still treats most providers like interchangeable chat endpoints and does not yet preserve provider-specific reasoning state or tool-loop replay requirements.
+- Linear issue title:
+  - `Add dual-mode reasoning backends with tool-aware state plumbing`
+- Suggested problem statement:
+  - `agent-browser` supports multiple providers and long-running tool use, but it does not yet provide a backend contract for explicit think versus non-think execution, valid reasoning-effort controls, persisted intermediate reasoning state, and provider-specific replay rules after tool-calling turns.
+- One-shot instruction for an LLM:
+  - Implement backend-aware reasoning modes for `agent-browser` so providers can declare explicit thinking and non-thinking execution modes, allowed effort controls, reasoning-state persistence rules, and tool-turn replay requirements; use that contract to drive model routing, session storage, transcript rendering, and request serialization so switching between providers or modes does not corrupt long-running agent sessions.
 
 ### Added: Schema-driven skill contracts with typed intake and live parameter controls
 - Why now: Open Design is showing a more explicit way to turn reusable agent skills into product surfaces by letting skill metadata generate the form, sliders, preview behavior, output contract, and capability gates around the model.
