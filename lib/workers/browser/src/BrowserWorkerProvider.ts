@@ -46,6 +46,18 @@ interface SkillCreateInput {
   prompt?: string;
   seedFiles?: Array<{ path: string; content: string | Uint8Array }>;
   commands?: string[];
+  sshTunnel?: SshTunnelInput;
+}
+interface SshTunnelInput {
+  host?: string;
+  port?: number;
+  user?: string;
+  localPort?: number;
+  remotePort?: number;
+  keyPath?: string;
+  strictHostKeyChecking?: boolean;
+  knownHostsPath?: string;
+  proxyCommand?: string;
 }
 
 const textEncoder = new TextEncoder();
@@ -94,8 +106,44 @@ function parseInput(input: unknown): SkillCreateInput {
   return {
     prompt: typeof candidate.prompt === 'string' ? candidate.prompt : undefined,
     seedFiles: Array.isArray(candidate.seedFiles) ? candidate.seedFiles : [],
-    commands: Array.isArray(candidate.commands) ? candidate.commands.filter((command) => typeof command === 'string') : [],
+    commands: Array.isArray(candidate.commands) ? candidate.commands.filter((command) => typeof command === 'string') : undefined,
+    sshTunnel: candidate.sshTunnel && typeof candidate.sshTunnel === 'object' ? candidate.sshTunnel : undefined,
   };
+}
+
+const SAFE_HOST = /^[a-zA-Z0-9.-]+$/;
+const SAFE_USER = /^[a-zA-Z0-9._-]+$/;
+const SAFE_PATH = /^\/[a-zA-Z0-9._/-]+$/;
+
+function buildSshTunnelCommand(input: SshTunnelInput): { command?: string; error?: string } {
+  const host = input.host?.trim();
+  const user = input.user?.trim();
+  const localPort = input.localPort;
+  const remotePort = input.remotePort;
+  const keyPath = input.keyPath?.trim();
+  if (!host || !SAFE_HOST.test(host)) return { error: 'Invalid sshTunnel configuration: host must be a safe hostname.' };
+  if (!user || !SAFE_USER.test(user)) return { error: 'Invalid sshTunnel configuration: user must be a safe value.' };
+  if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) return { error: 'Invalid sshTunnel configuration: localPort must be 1-65535.' };
+  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) return { error: 'Invalid sshTunnel configuration: remotePort must be 1-65535.' };
+  if (!keyPath || !SAFE_PATH.test(keyPath)) return { error: 'Invalid sshTunnel configuration: keyPath must be an absolute safe path.' };
+  if (input.strictHostKeyChecking !== true) return { error: 'Invalid sshTunnel configuration: strictHostKeyChecking must be true.' };
+
+  const port = Number.isInteger(input.port) && input.port > 0 && input.port <= 65535 ? input.port : 22;
+  const knownHosts = input.knownHostsPath?.trim();
+  const proxyCommand = input.proxyCommand?.trim();
+
+  let command = 'ssh -N -T -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes';
+  if (knownHosts) {
+    if (!SAFE_PATH.test(knownHosts)) return { error: 'Invalid sshTunnel configuration: knownHostsPath must be an absolute safe path.' };
+    command += ` -o UserKnownHostsFile=${knownHosts}`;
+  }
+  command += ` -i ${keyPath}`;
+  if (proxyCommand) {
+    if (/[^a-zA-Z0-9 ._:/-]/.test(proxyCommand)) return { error: 'Invalid sshTunnel configuration: proxyCommand contains unsafe characters.' };
+    command += ` -o ProxyCommand=\"${proxyCommand}\"`;
+  }
+  command += ` -L ${localPort}:127.0.0.1:${remotePort} -p ${port} ${user}@${host}`;
+  return { command };
 }
 
 function encodeContent(content: string | Uint8Array): Uint8Array {
@@ -225,6 +273,21 @@ export class BrowserWorker implements Worker {
       emit(EventSandboxCreated, { sandbox: lease.sandbox.ref });
 
       const input = parseInput(job.input);
+      if (input.sshTunnel) {
+        const { command, error } = buildSshTunnelCommand(input.sshTunnel);
+        if (error) {
+          diagnostics.push({ severity: 'error', message: error });
+          emit(EventJobFailed, { jobId: job.id, error });
+          return {
+            runId,
+            worker: this.ref,
+            status: 'failed',
+            output: outputs.join('\n'),
+            diagnostics,
+          };
+        }
+        input.commands = [...(input.commands ?? []), command as string];
+      }
       if (input.seedFiles?.length) {
         if (!lease.sandbox.uploadFiles) {
           throw new Error('Selected sandbox does not support seed file upload.');
