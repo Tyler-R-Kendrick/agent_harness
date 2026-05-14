@@ -14987,14 +14987,14 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
           onNodeContextMenu(rect.right, rect.bottom, node);
         };
         return (
-          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} data-tree-node-id={node.id} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile || isActiveArtifact ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
+          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} aria-expanded={isFolder ? Boolean(node.expanded) : undefined} aria-level={depth + 1} data-tree-node-id={node.id} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile || isActiveArtifact ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
             onContextMenu={hasContextMenu ? (e) => {
               e.preventDefault();
               e.stopPropagation();
               onNodeContextMenu(e.clientX, e.clientY, node);
             } : undefined}
           >
-            <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
+            <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" aria-expanded={isFolder ? Boolean(node.expanded) : undefined} style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
               {isFile ? (
                 <><span className="tree-chevron-spacer" /><Icon name={node.isReference ? 'link' : 'file'} size={12} color={node.isReference ? '#fbbf24' : '#a5b4fc'} /></>
               ) : isFolder ? (

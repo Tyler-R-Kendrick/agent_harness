@@ -212,6 +212,64 @@ test('captures categorized worktree with agent and terminal instances', async ({
   await page.screenshot({ path: 'docs/screenshots/worktree-categories.png', fullPage: true });
 });
 
+test('expands and opens artifact worktree items with mouse and keyboard interactions', async ({ page }) => {
+  test.setTimeout(60_000);
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.addInitScript(() => {
+    window.localStorage.setItem('agent-browser.installed-default-extension-ids', JSON.stringify([
+      'agent-harness.ext.artifacts-worktree',
+    ]));
+    window.localStorage.setItem('agent-browser.artifacts-by-workspace', JSON.stringify({
+      'ws-research': [{
+        id: 'artifact-research-checklist',
+        title: 'Research checklist',
+        kind: 'markdown',
+        createdAt: '2026-05-14T12:00:00.000Z',
+        updatedAt: '2026-05-14T12:00:00.000Z',
+        files: [{
+          path: 'planning/checklist.md',
+          mediaType: 'text/markdown',
+          content: '# Research checklist\n\nArtifact navigation is working.',
+        }],
+        references: [],
+        versions: [],
+      }],
+    }));
+  });
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  const tree = page.getByRole('tree', { name: 'Workspace tree' });
+  await expect(tree).toBeVisible();
+
+  const artifactsItem = tree.getByRole('treeitem', { name: /^Artifacts/ });
+  await expect(artifactsItem).toHaveAttribute('aria-expanded', 'true');
+  await expect(tree.getByRole('treeitem', { name: /^Research checklist/ })).toBeVisible();
+
+  await tree.getByRole('button', { name: 'Artifacts', exact: true }).click();
+  await expect(artifactsItem).toHaveAttribute('aria-expanded', 'false');
+  await expect(tree.getByRole('treeitem', { name: /^Research checklist/ })).toHaveCount(0);
+
+  await tree.getByRole('button', { name: 'Artifacts', exact: true }).click();
+  await expect(artifactsItem).toHaveAttribute('aria-expanded', 'true');
+
+  const bundleButton = tree.getByRole('button', { name: 'Research checklist', exact: true });
+  await bundleButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(tree.getByRole('treeitem', { name: /^Research checklist/ })).toHaveAttribute('aria-expanded', 'true');
+  await expect(tree.getByRole('treeitem', { name: /^planning/ })).toBeVisible();
+
+  await tree.getByRole('button', { name: 'planning', exact: true }).click();
+  await expect(tree.getByRole('treeitem', { name: /^checklist\.md/ })).toBeVisible();
+  await tree.getByRole('button', { name: 'checklist.md', exact: true }).click();
+
+  await expect(page.getByRole('region', { name: 'Artifact viewer' })).toBeVisible();
+  await expect(page.getByText('//workspace/artifacts/artifact-research-checklist/planning/checklist.md')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Markdown preview renderer' })).toContainText('Artifact navigation is working.');
+
+  assertNoRuntimeErrors();
+});
+
 test('autocompletes workspace skills and recalls terminal input history', async ({ page }) => {
   await mockCopilotStatus(page, {
     authenticated: true,
