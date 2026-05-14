@@ -36,6 +36,16 @@ const snapshot = graph.getSnapshot();
 const results = searchWorkGraph(snapshot, 'review gate');
 ```
 
+## Package boundary
+
+Import WorkGraph through the stable package root:
+
+```ts
+import { createWorkGraph } from '@agent-harness/workgraph';
+```
+
+Files under `@agent-harness/workgraph/src/*` are implementation details. Do not deep-import them from consumers; add explicit root exports in `src/index.ts` when a new API needs to be public.
+
 ## Validation
 
 Run:
