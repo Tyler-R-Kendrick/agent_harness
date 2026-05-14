@@ -22,6 +22,35 @@ import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './To
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
 
+export type RuntimeRoutingDecision = {
+  reasonCode: 'router-disabled' | 'router-selected' | 'user-pinned' | 'low-confidence-premium-escalation';
+  confidence: number;
+  tier: 'standard' | 'premium';
+  selectedBy: 'default' | 'router' | 'user';
+};
+
+export type RuntimeRoutingConfig = {
+  enabled?: boolean;
+  forcePremiumWhenLowConfidence?: boolean;
+  lowConfidenceThreshold?: number;
+  route?: (input: {
+    provider: AgentProvider;
+    modelId?: string;
+    latestUserInput: string;
+    workspaceName: string;
+    sessionId?: string;
+  }) => Promise<{
+    runtimeProvider: ModelBackedAgentProvider;
+    modelId?: string;
+    confidence: number;
+    tier: 'standard' | 'premium';
+  } | null>;
+  premiumFallback?: {
+    runtimeProvider: ModelBackedAgentProvider;
+    modelId?: string;
+  };
+};
+
 export { CODI_LABEL, buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from './Codi';
 export { CODEX_LABEL, buildCodexPrompt, hasCodexAccess, resolveCodexModelId, streamCodexChat } from './Codex';
 export {
@@ -205,7 +234,59 @@ export type StreamAgentChatOptions = {
   secrets?: SecretsManagerAgent;
   secretSettings?: SecretManagementSettings;
   skipSelfReflection?: boolean;
+  runtimeRouting?: RuntimeRoutingConfig;
+  userPinnedModel?: boolean;
 };
+
+export async function resolveRuntimeModelSelection(options: StreamAgentChatOptions & { latestUserInputText: string }): Promise<{
+  runtimeProvider: ModelBackedAgentProvider;
+  modelId?: string;
+  routingDecision: RuntimeRoutingDecision;
+}> {
+  const defaultRuntimeProvider = options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi');
+  const defaultResult = {
+    runtimeProvider: defaultRuntimeProvider,
+    modelId: options.modelId,
+    routingDecision: {
+      reasonCode: 'router-disabled' as const,
+      confidence: 1,
+      tier: 'standard' as const,
+      selectedBy: 'default' as const,
+    },
+  };
+  if (!options.runtimeRouting?.enabled || !options.runtimeRouting.route) {
+    return defaultResult;
+  }
+  if (options.userPinnedModel && options.modelId) {
+    return {
+      ...defaultResult,
+      routingDecision: { reasonCode: 'user-pinned', confidence: 1, tier: 'standard', selectedBy: 'user' },
+    };
+  }
+  const decision = await options.runtimeRouting.route({
+    provider: options.provider,
+    modelId: options.modelId,
+    latestUserInput: options.latestUserInputText,
+    workspaceName: options.workspaceName,
+    sessionId: options.sessionId,
+  });
+  if (!decision) return defaultResult;
+  const threshold = options.runtimeRouting.lowConfidenceThreshold ?? 0.5;
+  const mustEscalate = Boolean(options.runtimeRouting.forcePremiumWhenLowConfidence) && decision.confidence < threshold;
+  if (mustEscalate) {
+    const premium = options.runtimeRouting.premiumFallback ?? { runtimeProvider: 'ghcp', modelId: options.modelId };
+    return {
+      runtimeProvider: premium.runtimeProvider,
+      modelId: premium.modelId,
+      routingDecision: { reasonCode: 'low-confidence-premium-escalation', confidence: decision.confidence, tier: 'premium', selectedBy: 'router' },
+    };
+  }
+  return {
+    runtimeProvider: decision.runtimeProvider,
+    modelId: decision.modelId ?? options.modelId,
+    routingDecision: { reasonCode: 'router-selected', confidence: decision.confidence, tier: decision.tier, selectedBy: 'router' },
+  };
+}
 
 export async function streamAgentChat(
   options: StreamAgentChatOptions,
@@ -219,6 +300,17 @@ export async function streamAgentChat(
     ? undefined
     : (await secrets.sanitizeText(options.latestUserInput, options.secretSettings)).text;
   const latestRequest = latestUserInput ?? messages.at(-1)?.content ?? '';
+  const runtimeSelection = await resolveRuntimeModelSelection({ ...options, latestUserInputText: latestRequest });
+  callbacks.onReasoningStep?.({
+    id: `routing-${Date.now()}`,
+    kind: 'thinking',
+    title: 'Model routing',
+    body: `${runtimeSelection.runtimeProvider}/${runtimeSelection.modelId ?? 'default'} · ${runtimeSelection.routingDecision.reasonCode}`,
+    transcript: JSON.stringify(runtimeSelection.routingDecision),
+    startedAt: Date.now(),
+    endedAt: Date.now(),
+    status: 'done',
+  });
 
   if (!options.skipSelfReflection && isSelfReflectionTaskText(latestRequest)) {
     const answer = buildWorkspaceSelfReflectionAnswer({
@@ -233,12 +325,12 @@ export async function streamAgentChat(
   }
 
   if (options.provider === 'ghcp') {
-    if (!options.modelId || !options.sessionId) {
+    if (!runtimeSelection.modelId || !options.sessionId) {
       throw new Error('GHCP chat requires a modelId and sessionId.');
     }
 
     await streamGhcpChat({
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -250,12 +342,12 @@ export async function streamAgentChat(
   }
 
   if (options.provider === 'cursor') {
-    if (!options.modelId || !options.sessionId) {
+    if (!runtimeSelection.modelId || !options.sessionId) {
       throw new Error('Cursor chat requires a modelId and sessionId.');
     }
 
     await streamCursorAgentChat({
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -267,12 +359,12 @@ export async function streamAgentChat(
   }
 
   if (options.provider === 'codex') {
-    if (!options.modelId || !options.sessionId) {
+    if (!runtimeSelection.modelId || !options.sessionId) {
       throw new Error('Codex chat requires a modelId and sessionId.');
     }
 
     await streamCodexChat({
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -285,9 +377,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'researcher') {
     await streamResearcherChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -300,9 +392,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'debugger') {
     await streamDebuggerChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -315,9 +407,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'planner') {
     await streamPlannerChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -330,9 +422,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'context-manager') {
     await streamContextManagerChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -345,9 +437,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'security') {
     await streamSecurityReviewChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -360,9 +452,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'steering') {
     await streamSteeringChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -375,9 +467,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'adversary') {
     await streamAdversaryChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -390,9 +482,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'media') {
     await streamMediaChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,
@@ -405,9 +497,9 @@ export async function streamAgentChat(
 
   if (options.provider === 'swarm') {
     await streamAgentSwarmChat({
-      runtimeProvider: options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi'),
+      runtimeProvider: runtimeSelection.runtimeProvider,
       model: options.model,
-      modelId: options.modelId,
+      modelId: runtimeSelection.modelId,
       sessionId: options.sessionId,
       workspaceName: options.workspaceName,
       workspacePromptContext,

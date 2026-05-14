@@ -178,6 +178,56 @@ describe('streamAgentChat', () => {
     }), {}, undefined);
   });
 
+
+
+  it('keeps behavior unchanged when router is disabled', async () => {
+    const streamGhcpChatSpy = vi.spyOn(GhcpModule, 'streamGhcpChat').mockResolvedValueOnce();
+    await streamAgentChat({
+      provider: 'ghcp', modelId: 'gpt-4.1', sessionId: 'session-1', latestUserInput: 'hello',
+      messages: [{ id: 'u1', role: 'user', content: 'hello' }], workspaceName: 'Research', workspacePromptContext: '',
+      runtimeRouting: { enabled: false },
+    }, {});
+    expect(streamGhcpChatSpy).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'gpt-4.1' }), {}, undefined);
+  });
+
+  it('switches models when router is enabled', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+    await streamAgentChat({
+      provider: 'debugger', modelId: 'gpt-4.1', sessionId: 'session-1', latestUserInput: 'debug this',
+      messages: [{ id: 'u1', role: 'user', content: 'debug this' }], workspaceName: 'Build', workspacePromptContext: '',
+      runtimeRouting: { enabled: true, route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.9, tier: 'standard' }) },
+    }, {});
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet' }), {}, undefined);
+  });
+
+  it('preserves user model pin over router decision', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+    await streamAgentChat({
+      provider: 'debugger', modelId: 'gpt-4.1', sessionId: 'session-1', latestUserInput: 'debug this', userPinnedModel: true,
+      messages: [{ id: 'u1', role: 'user', content: 'debug this' }], workspaceName: 'Build', workspacePromptContext: '',
+      runtimeRouting: { enabled: true, route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.9, tier: 'standard' }) },
+    }, {});
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-4.1' }), {}, undefined);
+  });
+
+  it('escalates to premium when routing confidence is low', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+    const onReasoningStep = vi.fn();
+    await streamAgentChat({
+      provider: 'debugger', modelId: 'gpt-4.1', sessionId: 'session-1', latestUserInput: 'debug this',
+      messages: [{ id: 'u1', role: 'user', content: 'debug this' }], workspaceName: 'Build', workspacePromptContext: '',
+      runtimeRouting: {
+        enabled: true,
+        forcePremiumWhenLowConfidence: true,
+        lowConfidenceThreshold: 0.6,
+        premiumFallback: { runtimeProvider: 'ghcp', modelId: 'gpt-5' },
+        route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.2, tier: 'standard' }),
+      },
+    }, { onReasoningStep });
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), {}, undefined);
+    expect(onReasoningStep).toHaveBeenCalledWith(expect.objectContaining({ transcript: expect.stringContaining('low-confidence-premium-escalation') }));
+  });
+
   it('answers workspace self-reflection directly from the current capability context', async () => {
     const onToken = vi.fn();
     const onDone = vi.fn();
