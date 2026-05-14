@@ -1,4 +1,3 @@
-import { Perplexity } from '@perplexity-ai/perplexity_ai';
 import { normalizeSearchResults } from './searchResultNormalizer';
 import { SearxngSearchProvider } from './searxng';
 import { withTimeout } from './timeout';
@@ -280,7 +279,17 @@ async function createPerplexityClient({
   timeoutMs,
   fetchImpl,
 }: PerplexityClientFactoryOptions): Promise<PerplexitySearchClient> {
-  return new Perplexity({
+  let PerplexityCtor: new (options: {
+    apiKey: string;
+    timeout?: number;
+    fetch?: never;
+  }) => PerplexitySearchClient;
+  try {
+    ({ Perplexity: PerplexityCtor } = await import('@perplexity-ai/perplexity_ai'));
+  } catch {
+    throw new Error('Perplexity SDK is not installed. Install "@perplexity-ai/perplexity_ai" to use the PerplexitySearchProvider.');
+  }
+  return new PerplexityCtor({
     apiKey,
     ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
     ...(fetchImpl ? { fetch: fetchImpl as never } : {}),
