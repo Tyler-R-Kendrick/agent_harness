@@ -291,4 +291,163 @@ describe('BrowserWorkerProvider', () => {
     expect(sandboxBroker.sandbox.uploaded).toEqual([{ path: '/bytes.bin', content: 'AB' }]);
     expect(sandboxBroker.sandbox.executed).toEqual(['empty', 'fail']);
   });
+
+  it('establishes secure ssh tunnel commands for browser-virtualized remote workers', async () => {
+    const sandboxBroker = new RecordingSandboxBroker();
+    const worker = await new BrowserWorkerProvider().createWorker?.({}, createContext(sandboxBroker));
+
+    const run = await worker!.submit({
+      id: 'job-ssh-1',
+      intent: jobIntentId('remote.session.connect'),
+      input: {
+        sshTunnel: {
+          host: 'worker.internal.example',
+          port: 2222,
+          user: 'runner',
+          localPort: 9000,
+          remotePort: 22,
+          keyPath: '/secrets/id_ed25519',
+          strictHostKeyChecking: true,
+          knownHostsPath: '/secrets/known_hosts',
+          proxyCommand: 'websockify --target worker.internal.example:2222',
+        },
+      },
+    });
+
+    await expect(run.result()).resolves.toMatchObject({ status: 'succeeded' });
+    expect(sandboxBroker.sandbox.executed).toEqual([
+      'ssh -N -T -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/secrets/known_hosts -i /secrets/id_ed25519 -o ProxyCommand="websockify --target worker.internal.example:2222" -L 9000:127.0.0.1:22 -p 2222 runner@worker.internal.example',
+    ]);
+  });
+
+  it('rejects insecure ssh tunnel configuration', async () => {
+    const sandboxBroker = new RecordingSandboxBroker();
+    const worker = await new BrowserWorkerProvider().createWorker?.({}, createContext(sandboxBroker));
+
+    const run = await worker!.submit({
+      id: 'job-ssh-2',
+      intent: jobIntentId('remote.session.connect'),
+      input: {
+        sshTunnel: {
+          host: 'worker.internal.example;rm -rf /',
+          user: 'runner',
+          localPort: 0,
+          remotePort: 22,
+          keyPath: '',
+          strictHostKeyChecking: false,
+        },
+      },
+    });
+
+    await expect(run.result()).resolves.toMatchObject({
+      status: 'failed',
+      diagnostics: [
+        {
+          message: expect.stringContaining('Invalid sshTunnel configuration'),
+        },
+      ],
+    });
+    expect(sandboxBroker.sandbox.executed).toEqual([]);
+  });
+
+  it('rejects unsafe optional ssh tunnel fields', async () => {
+    const worker = await new BrowserWorkerProvider().createWorker?.({}, createContext(new RecordingSandboxBroker()));
+    const badKnownHostsRun = await worker!.submit({
+      id: 'job-ssh-3',
+      intent: jobIntentId('remote.session.connect'),
+      input: {
+        sshTunnel: {
+          host: 'worker.internal.example',
+          user: 'runner',
+          localPort: 9000,
+          remotePort: 22,
+          keyPath: '/secrets/id_ed25519',
+          strictHostKeyChecking: true,
+          knownHostsPath: './relative',
+        },
+      },
+    });
+    await expect(badKnownHostsRun.result()).resolves.toMatchObject({
+      status: 'failed',
+      diagnostics: [{ message: expect.stringContaining('knownHostsPath') }],
+    });
+
+    const badProxyRun = await worker!.submit({
+      id: 'job-ssh-4',
+      intent: jobIntentId('remote.session.connect'),
+      input: {
+        sshTunnel: {
+          host: 'worker.internal.example',
+          user: 'runner',
+          localPort: 9000,
+          remotePort: 22,
+          keyPath: '/secrets/id_ed25519',
+          strictHostKeyChecking: true,
+          proxyCommand: 'websockify;rm -rf /',
+        },
+      },
+    });
+    await expect(badProxyRun.result()).resolves.toMatchObject({
+      status: 'failed',
+      diagnostics: [{ message: expect.stringContaining('proxyCommand') }],
+    });
+  });
+
+  it('rejects invalid required ssh tunnel fields', async () => {
+    const worker = await new BrowserWorkerProvider().createWorker?.({}, createContext(new RecordingSandboxBroker()));
+    const invalidInputs = [
+      { user: 'bad user', expected: 'user' },
+      { localPort: 70000, expected: 'localPort' },
+      { remotePort: 0, expected: 'remotePort' },
+      { keyPath: 'relative/key', expected: 'keyPath' },
+      { strictHostKeyChecking: false, expected: 'strictHostKeyChecking' },
+    ];
+
+    for (const invalid of invalidInputs) {
+      const run = await worker!.submit({
+        id: `job-ssh-required-${invalid.expected}`,
+        intent: jobIntentId('remote.session.connect'),
+        input: {
+          sshTunnel: {
+            host: 'worker.internal.example',
+            user: 'runner',
+            localPort: 9000,
+            remotePort: 22,
+            keyPath: '/secrets/id_ed25519',
+            strictHostKeyChecking: true,
+            ...invalid,
+          },
+        },
+      });
+      await expect(run.result()).resolves.toMatchObject({
+        status: 'failed',
+        diagnostics: [{ message: expect.stringContaining(invalid.expected) }],
+      });
+    }
+  });
+
+  it('supports ssh tunnel with default options and appends to existing commands', async () => {
+    const sandboxBroker = new RecordingSandboxBroker();
+    const worker = await new BrowserWorkerProvider().createWorker?.({}, createContext(sandboxBroker));
+    const run = await worker!.submit({
+      id: 'job-ssh-commands',
+      intent: jobIntentId('remote.session.connect'),
+      input: {
+        commands: ['echo ready'],
+        sshTunnel: {
+          host: 'worker.internal.example',
+          user: 'runner',
+          localPort: 9443,
+          remotePort: 443,
+          keyPath: '/secrets/id_ed25519',
+          strictHostKeyChecking: true,
+        },
+      },
+    });
+    await expect(run.result()).resolves.toMatchObject({ status: 'succeeded' });
+    expect(sandboxBroker.sandbox.executed).toEqual([
+      'echo ready',
+      'ssh -N -T -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -i /secrets/id_ed25519 -L 9443:127.0.0.1:443 -p 22 runner@worker.internal.example',
+    ]);
+  });
 });
