@@ -26,6 +26,7 @@ const DEFAULTS = {
   defaultModel: 'llama3.1:8b',
   searchCacheTtlMs: 10 * 60 * 1000,
   extractCacheTtlMs: 24 * 60 * 60 * 1000,
+  maxPointerBudget: 32,
 };
 
 export class LocalWebResearchAgent {
@@ -37,7 +38,7 @@ export class LocalWebResearchAgent {
 
   async run(request: WebResearchRunRequest): Promise<WebResearchRunResult> {
     const started = Date.now();
-    const timings: Partial<Record<AgentWorkflowStep, number>> = {};
+    const timings: WebResearchRunResult['timings'] = {};
     const createdAt = new Date(started).toISOString();
     const question = request.question.trim();
     if (!question && (!request.queries || request.queries.length === 0)) {
@@ -62,12 +63,23 @@ export class LocalWebResearchAgent {
       request,
       errors,
     }));
+    const graphBuildStartedAt = Date.now();
     const { evidence, citations } = timeStage(timings, 'ranking', () => buildCitations(rankEvidenceChunks({
       question,
       chunks: chunkExtractedPages({ pages: extractedPages }),
       maxChunks: maxEvidenceChunks,
       strategy: request.retrievalStrategy ?? 'baseline',
     })));
+    timings.graphBuildMs = Date.now() - graphBuildStartedAt;
+
+    const pointerMetrics = this.validatePpgrPointers({
+      retrievalStrategy: request.retrievalStrategy,
+      evidence,
+      citations,
+      metadata: request.metadata,
+      errors,
+      timings,
+    });
 
     let answer: string | undefined;
     const shouldSynthesize = request.synthesize ?? false;
@@ -102,7 +114,9 @@ export class LocalWebResearchAgent {
       timings,
       elapsedMs: Date.now() - started,
       createdAt,
-      ...(request.metadata ? { metadata: request.metadata } : {}),
+      ...((request.metadata || pointerMetrics.pointerCount > 0 || pointerMetrics.droppedPointers > 0)
+        ? { metadata: { ...(request.metadata ?? {}), ...pointerMetrics } }
+        : {}),
     };
   }
 
@@ -141,6 +155,46 @@ export class LocalWebResearchAgent {
     return this.config.extractor ?? new FetchPageExtractor({
       allowPrivateUrlExtraction: this.config.allowPrivateUrlExtraction,
     });
+  }
+
+
+
+  private validatePpgrPointers(args: {
+    retrievalStrategy: WebResearchRunRequest['retrievalStrategy'];
+    evidence: WebResearchRunResult['evidence'];
+    citations: WebResearchRunResult['citations'];
+    metadata: WebResearchRunRequest['metadata'];
+    errors: AgentErrorInfo[];
+    timings: WebResearchRunResult['timings'];
+  }): { pointerCount: number; droppedPointers: number } {
+    if (args.retrievalStrategy !== 'ppgr') return { pointerCount: 0, droppedPointers: 0 };
+    const started = Date.now();
+    const pointers = readPointerBundles(args.metadata);
+    const maxPointerBudget = readNumeric(args.metadata?.maxPointerBudget) ?? DEFAULTS.maxPointerBudget;
+    let pointerCount = 0;
+    let droppedPointers = 0;
+    let hasTextEvidenceSpan = false;
+    for (const pointer of pointers) {
+      pointerCount += 1;
+      const assetUri = typeof pointer.assetUri === 'string' ? pointer.assetUri.trim() : '';
+      if (!assetUri || !isResolvableAssetUri(assetUri)) {
+        droppedPointers += 1;
+        args.errors.push({ stage: 'ranking', message: 'PPGR pointer dropped: missing or non-resolvable assetUri.', recoverable: true });
+        continue;
+      }
+      const textSpans = Array.isArray(pointer.textEvidenceSpans) ? pointer.textEvidenceSpans : [];
+      if (textSpans.some((span) => typeof span === 'string' && span.trim().length > 0)) hasTextEvidenceSpan = true;
+    }
+    if (pointerCount > maxPointerBudget) {
+      droppedPointers += pointerCount - maxPointerBudget;
+      args.errors.push({ stage: 'ranking', message: `PPGR pointer budget exceeded: ${pointerCount} pointers > ${maxPointerBudget} max.`, recoverable: true });
+      pointerCount = maxPointerBudget;
+    }
+    if (pointerCount > 0 && !hasTextEvidenceSpan && (args.evidence.length > 0 || args.citations.length > 0)) {
+      args.errors.push({ stage: 'ranking', message: 'PPGR validation: pointer-backed claims require at least one text evidence span.', recoverable: true });
+    }
+    args.timings.pointerExpansionMs = Date.now() - started;
+    return { pointerCount, droppedPointers };
   }
 
   private async searchMany(args: {
@@ -268,4 +322,18 @@ async function timeStageAsync<T>(
   } finally {
     timings[stage] = Date.now() - start;
   }
+}
+
+
+function readPointerBundles(metadata: WebResearchRunRequest['metadata']): Array<Record<string, unknown>> {
+  const value = metadata?.pointerBundles;
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null) : [];
+}
+
+function readNumeric(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function isResolvableAssetUri(assetUri: string): boolean {
+  return assetUri.startsWith('http://') || assetUri.startsWith('https://') || assetUri.startsWith('file://') || assetUri.startsWith('asset://');
 }
