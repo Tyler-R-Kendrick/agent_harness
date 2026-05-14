@@ -21,6 +21,7 @@ import { AGENT_SWARM_LABEL, isAgentSwarmTaskText, streamAgentSwarmChat } from '.
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
+import { buildRoutingDecisionRecord, persistRoutingDecisionRecord } from '../services/routingObservability';
 
 export type RuntimeRoutingDecision = {
   reasonCode: 'router-disabled' | 'router-selected' | 'user-pinned' | 'low-confidence-premium-escalation';
@@ -301,6 +302,16 @@ export async function streamAgentChat(
     : (await secrets.sanitizeText(options.latestUserInput, options.secretSettings)).text;
   const latestRequest = latestUserInput ?? messages.at(-1)?.content ?? '';
   const runtimeSelection = await resolveRuntimeModelSelection({ ...options, latestUserInputText: latestRequest });
+  const routingRecord = buildRoutingDecisionRecord({
+    requestId: `routing-${Date.now()}`,
+    requestText: latestRequest,
+    selectedProvider: runtimeSelection.runtimeProvider,
+    selectedModel: runtimeSelection.modelId,
+    routingDecision: runtimeSelection.routingDecision,
+    benchmarkEvidenceSource: options.runtimeRouting?.enabled ? 'benchmark-router' : 'default-router',
+  });
+  persistRoutingDecisionRecord(routingRecord);
+
   callbacks.onReasoningStep?.({
     id: `routing-${Date.now()}`,
     kind: 'thinking',
