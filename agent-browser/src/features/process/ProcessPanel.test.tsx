@@ -128,6 +128,14 @@ describe('ProcessPanel', () => {
       selectedModel: 'gpt-5',
       benchmarkEvidenceSource: 'benchmark-router',
       routingDecision: { reasonCode: 'low-confidence-premium-escalation', confidence: 0.42, tier: 'premium', selectedBy: 'router' },
+      skillRouteTrace: {
+        selectedSkill: 'security-review',
+        topAlternatives: [
+          { skill: 'debugger', score: 0.73, reasonCode: 'insufficient-auth-focus' },
+          { skill: 'planner', score: 0.62, reasonCode: 'workflow-priority' },
+        ],
+        reasonCodes: ['security-keyword-match', 'policy-scope-match'],
+      },
     }));
 
     const message: ChatMessage = {
@@ -142,6 +150,7 @@ describe('ProcessPanel', () => {
     expect(screen.getByLabelText('Routing diagnostics')).toBeInTheDocument();
     expect(screen.getByText('Task class')).toBeInTheDocument();
     expect(screen.getByText(/benchmark-router/i)).toBeInTheDocument();
+    expect(screen.getByText(/Skill route trace/i)).toBeInTheDocument();
   });
 
 });
