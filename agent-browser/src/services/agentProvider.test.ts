@@ -32,11 +32,42 @@ vi.mock('@ai-sdk/openai-compatible', () => ({
   })),
 }));
 
+vi.mock('./localLanguageModel', () => ({
+  LocalLanguageModel: class LocalLanguageModel {
+    specificationVersion = 'v3' as const;
+    provider = 'local';
+    constructor(public modelId: string, public task = 'text-generation') {}
+    doGenerate = vi.fn();
+    doStream = vi.fn();
+  },
+}));
+
+vi.mock('./copilotLanguageModel', () => ({
+  CopilotLanguageModel: class CopilotLanguageModel {
+    specificationVersion = 'v3' as const;
+    provider = 'copilot';
+    constructor(public modelId: string, public sessionId: string) {}
+    doGenerate = vi.fn();
+    doStream = vi.fn();
+  },
+}));
+
+vi.mock('./cursorLanguageModel', () => ({
+  CursorLanguageModel: class CursorLanguageModel {
+    specificationVersion = 'v3' as const;
+    provider = 'cursor';
+    constructor(public modelId: string, public sessionId: string) {}
+    doGenerate = vi.fn();
+    doStream = vi.fn();
+  },
+}));
+
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import {
   resolveLanguageModel,
   createAutoProvider,
   getModelCapabilities,
+  routeAgentModelConfig,
   type AgentModelConfig,
 } from './agentProvider';
 import { defineModelProviderCatalog } from 'harness-core';
@@ -267,6 +298,57 @@ describe('createAutoProvider', () => {
         installedModels: [],
       }),
     ).toThrow(/no.*provider/i);
+  });
+});
+
+
+describe('routeAgentModelConfig', () => {
+  it('routes deterministically to the only local candidate when pools are sparse', () => {
+    const config = routeAgentModelConfig({
+      latestUserTurn: 'Summarize this file',
+      providerTaskMetadata: { sessionId: 's1', preferredTask: 'text-generation' },
+      installedModels: [installedHfModel],
+      copilotState: unauthenticatedCopilotState,
+      cursorModels: [],
+      routingSettings: { preferredProviders: ['cursor', 'local', 'copilot'] },
+    });
+    expect(config).toEqual({
+      kind: 'local',
+      modelId: installedHfModel.id,
+      task: 'text-generation',
+    });
+  });
+
+  it('uses cursor first when configured and available', () => {
+    const config = routeAgentModelConfig({
+      latestUserTurn: 'Write code',
+      providerTaskMetadata: { sessionId: 'cursor-session' },
+      installedModels: [installedHfModel],
+      copilotState: authenticatedCopilotState,
+      cursorModels: [{ id: 'composer-2', name: 'Composer 2' }],
+      routingSettings: { preferredProviders: ['cursor', 'local', 'copilot'] },
+    });
+    expect(config).toEqual({ kind: 'cursor', modelId: 'composer-2', sessionId: 'cursor-session' });
+  });
+
+  it('honors preferred copilot model when available', () => {
+    const config = routeAgentModelConfig({
+      latestUserTurn: 'Explain this bug',
+      providerTaskMetadata: { sessionId: 'copilot-session' },
+      installedModels: [],
+      copilotState: {
+        ...authenticatedCopilotState,
+        models: [
+          { id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true },
+          { id: 'gpt-5-mini', name: 'GPT-5 mini', reasoning: true, vision: true },
+        ],
+      },
+      routingSettings: {
+        preferredProviders: ['copilot'],
+        preferredCopilotModelId: 'gpt-5-mini',
+      },
+    });
+    expect(config).toEqual({ kind: 'copilot', modelId: 'gpt-5-mini', sessionId: 'copilot-session' });
   });
 });
 

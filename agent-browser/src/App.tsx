@@ -136,6 +136,7 @@ import {
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
+  areStagedRoutingChecksPassing,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
   inferBenchmarkTaskClass,
