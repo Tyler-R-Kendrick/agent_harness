@@ -102,6 +102,25 @@
       "keywords": ["markdown", "md", "mdx", "mermaid", "diagram", "flowchart", "artifact-renderer"]
     },
     {
+      "id": "agent-harness.ext.hyperframes",
+      "name": "HyperFrames IDE",
+      "version": "0.1.0",
+      "description": "Adds a HyperFrames editor pane with sidebar config controls and generated artifact previews.",
+      "manifest": "./ide/hyperframes/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./ide/hyperframes"
+      },
+      "categories": ["ide-extension", "artifacts", "creative", "video"],
+      "metadata": {
+        "marketplaceCategory": "ide",
+        "activityIcon": "sparkles",
+        "dependencies": ["agent-harness.ext.artifacts-context"],
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.hyperframes.enabled"
+      },
+      "keywords": ["hyperframes", "heygen", "artifact-preview", "editor-pane", "creative"]
+    },
+    {
       "id": "agent-harness.ext.design-studio",
       "name": "Design Studio",
       "version": "0.1.0",
