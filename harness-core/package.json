@@ -19,6 +19,7 @@
     "test:coverage": "node ../scripts/run-package-bin.mjs vitest run --coverage"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@toon-format/toon": "^2.1.0",
     "guidance-ts": "github:guidance-ai/guidance-ts",
     "logact": "0.1.0",

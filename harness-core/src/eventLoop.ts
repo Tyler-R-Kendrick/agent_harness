@@ -1,4 +1,5 @@
 import { assign, createActor, fromPromise, setup } from 'xstate';
+import { withHarnessTelemetrySpan } from './telemetry.js';
 
 export type AgentLoopActorMode = 'serial' | 'parallel';
 
@@ -187,12 +188,32 @@ export async function runAgentEventLoop(
     dispatchedEvents: [],
   };
   const maxTransitions = options.maxTransitions ?? 100;
-  let stateName = definition.initial;
+  return withHarnessTelemetrySpan('harness.agent_event_loop.workflow', {
+    attributes: {
+      'agent.workflow.id': runtime.workflowId,
+      'agent.workflow.run_id': runtime.runId,
+      'agent.workflow.max_transitions': maxTransitions,
+    },
+  }, async (span) => {
+    const result = await runAgentEventLoopRuntime(runtime, maxTransitions);
+    span.setAttributes({
+      'agent.workflow.final_state': result.finalState,
+      'agent.workflow.transitions': result.transitions,
+    });
+    return result;
+  });
+}
+
+async function runAgentEventLoopRuntime(
+  runtime: AgentEventLoopRuntime,
+  maxTransitions: number,
+): Promise<AgentEventLoopResult> {
+  let stateName = runtime.definition.initial;
   let transitions = 0;
 
   await publishRuntimeEvent(runtime, 'agent-loop.workflow.started');
   while (true) {
-    const state = definition.states[stateName];
+    const state = runtime.definition.states[stateName];
     if (!state) {
       await publishRuntimeEvent(runtime, 'agent-loop.workflow.failed', { state: stateName });
       throw new Error(`Unknown workflow state: ${stateName}`);
@@ -200,7 +221,7 @@ export async function runAgentEventLoop(
     if (state.type === 'final') {
       await publishRuntimeEvent(runtime, 'agent-loop.workflow.completed', { state: stateName, transitions });
       return {
-        workflowId: definition.id,
+        workflowId: runtime.definition.id,
         runId: runtime.runId,
         finalState: stateName,
         transitions,
@@ -374,56 +395,68 @@ async function runRegisteredActor(
   parentActorId?: string,
   input: unknown = invocation.input,
 ): Promise<AgentLoopActorResult> {
-  await publishRuntimeEvent(runtime, 'agent-loop.actor.started', { input }, {
-    state: stateName,
-    actorId: actor.id,
-    parentActorId,
-  });
-  try {
-    const result = await actor.run({
-      workflowId: runtime.workflowId,
-      runId: runtime.runId,
+  return withHarnessTelemetrySpan('harness.agent_event_loop.actor', {
+    attributes: {
+      'agent.workflow.id': runtime.workflowId,
+      'agent.workflow.run_id': runtime.runId,
+      'agent.workflow.state': stateName,
+      'agent.actor.id': actor.id,
+      'agent.event.type': invocation.type,
+      ...(parentActorId !== undefined ? { 'agent.actor.parent_id': parentActorId } : {}),
+    },
+  }, async (span) => {
+    await publishRuntimeEvent(runtime, 'agent-loop.actor.started', { input }, {
       state: stateName,
-      eventType: invocation.type,
       actorId: actor.id,
       parentActorId,
-      input,
-      signal: runtime.signal,
-      publish: (type, payload) => publishRuntimeEvent(runtime, type, payload, {
+    });
+    try {
+      const result = await actor.run({
+        workflowId: runtime.workflowId,
+        runId: runtime.runId,
+        state: stateName,
+        eventType: invocation.type,
+        actorId: actor.id,
+        parentActorId,
+        input,
+        signal: runtime.signal,
+        publish: (type, payload) => publishRuntimeEvent(runtime, type, payload, {
+          state: stateName,
+          actorId: actor.id,
+          parentActorId,
+        }),
+        runSubagent: async <TOutput = unknown>(actorId: string, subagentInput?: unknown) => {
+          const subagent = runtime.actors.get(actorId);
+          if (!subagent) {
+            throw new Error(`Unknown subagent actor: ${actorId}`);
+          }
+          return await runRegisteredActor(
+            runtime,
+            stateName,
+            { type: subagent.event, input: subagentInput },
+            subagent,
+            actor.id,
+            subagentInput,
+          ) as AgentLoopActorResult<TOutput>;
+        },
+      });
+      const output = result ?? {};
+      span.setAttribute('agent.actor.dispatched_event', output.event?.type ?? '');
+      await publishRuntimeEvent(runtime, 'agent-loop.actor.completed', { output: output.output }, {
         state: stateName,
         actorId: actor.id,
         parentActorId,
-      }),
-      runSubagent: async <TOutput = unknown>(actorId: string, subagentInput?: unknown) => {
-        const subagent = runtime.actors.get(actorId);
-        if (!subagent) {
-          throw new Error(`Unknown subagent actor: ${actorId}`);
-        }
-        return await runRegisteredActor(
-          runtime,
-          stateName,
-          { type: subagent.event, input: subagentInput },
-          subagent,
-          actor.id,
-          subagentInput,
-        ) as AgentLoopActorResult<TOutput>;
-      },
-    });
-    const output = result ?? {};
-    await publishRuntimeEvent(runtime, 'agent-loop.actor.completed', { output: output.output }, {
-      state: stateName,
-      actorId: actor.id,
-      parentActorId,
-    });
-    return output;
-  } catch (error) {
-    await publishRuntimeEvent(runtime, 'agent-loop.actor.failed', { error }, {
-      state: stateName,
-      actorId: actor.id,
-      parentActorId,
-    });
-    throw error;
-  }
+      });
+      return output;
+    } catch (error) {
+      await publishRuntimeEvent(runtime, 'agent-loop.actor.failed', { error }, {
+        state: stateName,
+        actorId: actor.id,
+        parentActorId,
+      });
+      throw error;
+    }
+  });
 }
 
 async function publishRuntimeEvent(

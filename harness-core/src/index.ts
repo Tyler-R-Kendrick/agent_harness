@@ -207,6 +207,14 @@ export {
   type SerializableAgentLoopStateDefinition,
 } from './eventLoop.js';
 export {
+  HARNESS_OTEL_TRACER_NAME,
+  HARNESS_OTEL_TRACER_VERSION,
+  setHarnessTelemetryAttributes,
+  toHarnessTelemetryError,
+  withHarnessTelemetrySpan,
+  type HarnessTelemetrySpanOptions,
+} from './telemetry.js';
+export {
   WorkflowAgentBus,
   createLogActWorkflowDefinition,
   runLogActAgentLoop,

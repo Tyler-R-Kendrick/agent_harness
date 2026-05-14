@@ -1,4 +1,5 @@
 import { PendingMessageQueue, type QueueMode } from './queue.js';
+import { SpanKind, type Span } from '@opentelemetry/api';
 import {
   AGENT_LOOP_HOOK_EVENTS,
   LLM_HOOK_EVENTS,
@@ -6,6 +7,7 @@ import {
   type HarnessHookRunOptions,
   HookRegistry,
 } from './hooks.js';
+import { setHarnessTelemetryAttributes, withHarnessTelemetrySpan } from './telemetry.js';
 
 export interface HarnessMessage {
   role: string;
@@ -111,11 +113,31 @@ export async function runHarnessLoop<TMessage>(
   emit: HarnessEventSink<TMessage>,
   signal?: AbortSignal,
 ): Promise<TMessage[]> {
-  const newMessages: TMessage[] = [];
   const session = normalizeSession(config.session);
+  return withHarnessTelemetrySpan('harness.agent.loop', {
+    attributes: {
+      'agent.session.id': session.id,
+      'agent.session.mode': session.mode as string,
+      'agent.loop.prompt.count': prompts.length,
+      'agent.loop.context.messages.count': context.messages.length,
+    },
+  }, (span) => runHarnessLoopBody(prompts, context, config, emit, session, span, signal));
+}
+
+async function runHarnessLoopBody<TMessage>(
+  prompts: TMessage[],
+  context: HarnessContext<TMessage>,
+  config: HarnessLoopConfig<TMessage>,
+  emit: HarnessEventSink<TMessage>,
+  session: AgentSessionRef,
+  telemetrySpan: Span,
+  signal?: AbortSignal,
+): Promise<TMessage[]> {
+  const newMessages: TMessage[] = [];
   const resolveActor = config.resolveMessageActor ?? resolveDefaultMessageActor;
   const hooks = config.hooks;
   let eventIndex = 0;
+  let turnCount = 0;
   let pendingMessages = [
     ...prompts,
     ...await drainMessages(config.getSteeringMessages),
@@ -130,6 +152,7 @@ export async function runHarnessLoop<TMessage>(
     if (hooks) {
       await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.turnStart, { pendingMessages, session }, signal);
     }
+    turnCount += 1;
     await emit({ type: 'turn_start' });
     for (const message of pendingMessages) {
       context.messages.push(message);
@@ -171,7 +194,19 @@ export async function runHarnessLoop<TMessage>(
     const llmInput = hooks
       ? await runHarnessHook(hooks, LLM_HOOK_EVENTS.input, rawLlmInput, signal)
       : rawLlmInput;
-    const rawAssistantMessage = await config.runTurn(llmInput, signal);
+    const rawAssistantMessage = await withHarnessTelemetrySpan('harness.llm.run_turn', {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        'agent.session.id': session.id,
+        'agent.session.mode': session.mode as string,
+        'llm.input.messages.count': llmInput.messages.length,
+        'llm.input.characters': sumMessageContentCharacters(llmInput.messages),
+      },
+    }, async (span) => {
+      const message = await config.runTurn(llmInput, signal);
+      span.setAttribute('llm.output.characters', sumMessageContentCharacters([message]));
+      return message;
+    });
     const rawLlmOutput = {
       message: rawAssistantMessage,
       messages: llmInput.messages,
@@ -228,6 +263,10 @@ export async function runHarnessLoop<TMessage>(
   if (hooks) {
     await runHarnessHook(hooks, AGENT_LOOP_HOOK_EVENTS.loopEnd, { messages: newMessages, session }, signal);
   }
+  setHarnessTelemetryAttributes(telemetrySpan, {
+    'agent.loop.turns': turnCount,
+    'agent.loop.output.messages.count': newMessages.length,
+  });
   await emit({ type: 'agent_end', messages: newMessages });
   return newMessages;
 }
@@ -484,4 +523,16 @@ function getMessageTimestamp(message: unknown): number {
     ? (message as { timestamp?: unknown }).timestamp
     : undefined;
   return typeof timestamp === 'number' ? timestamp : Date.now();
+}
+
+function sumMessageContentCharacters(messages: readonly unknown[]): number {
+  return messages.reduce<number>((total, message) => total + messageContentCharacters(message), 0);
+}
+
+function messageContentCharacters(message: unknown): number {
+  if (typeof message !== 'object' || message === null || !('content' in message)) {
+    return 0;
+  }
+  const content = (message as { content?: unknown }).content;
+  return typeof content === 'string' ? content.length : 0;
 }

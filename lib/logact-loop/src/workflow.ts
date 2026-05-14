@@ -1,4 +1,5 @@
 import { InMemoryAgentBus, QuorumPolicy, evaluateQuorum } from 'logact';
+import { SpanKind } from '@opentelemetry/api';
 import type {
   CompletionPayload,
   Entry,
@@ -31,8 +32,12 @@ import {
 } from 'harness-core';
 import { wrapCompletionCheckerWithCallbacks } from './chat-agents/completionChecker.js';
 import { wrapVoterWithCallbacks } from './chat-agents/voter.js';
-import type { CoreInferenceClient } from 'harness-core';
-import { buildSketchOfThoughtConstrainedDecoding, buildSketchOfThoughtExpertAgentPrompt } from 'harness-core';
+import type { CoreInferenceClient, CoreMessage } from 'harness-core';
+import {
+  buildSketchOfThoughtConstrainedDecoding,
+  buildSketchOfThoughtExpertAgentPrompt,
+  withHarnessTelemetrySpan,
+} from 'harness-core';
 import { LOGACT_AGENT_LOOP_HOOK_EVENTS } from './hooks.js';
 import type { CoreAgentLoopCallbacks, LogActAgentLoopOptions } from './logactLoopTypes.js';
 
@@ -463,7 +468,19 @@ async function runDriverAgent(runtime: WorkflowRuntime): Promise<{ terminal: boo
     meta: { actorId: 'driver', actorRole: 'agent' },
   });
 
-  const rawText = await runtime.inferenceClient.infer(messages);
+  const rawText = await withHarnessTelemetrySpan('harness.llm.infer', {
+    kind: SpanKind.CLIENT,
+    attributes: {
+      'gen_ai.operation.name': 'infer',
+      'agent.actor.id': 'driver',
+      'llm.input.messages.count': messages.length,
+      'llm.input.characters': sumCoreMessageContentCharacters(messages),
+    },
+  }, async (span) => {
+    const text = await runtime.inferenceClient.infer(messages);
+    span.setAttribute('llm.output.characters', text.length);
+    return text;
+  });
   const outputPayload = await runLogActHook(runtime.hooks, LLM_HOOK_EVENTS.output, {
     text: rawText,
     actorId: 'driver',
@@ -670,6 +687,10 @@ function buildMessages(entries: Entry[]): Array<{ role: 'user' | 'assistant' | '
     }
   }
   return messages;
+}
+
+function sumCoreMessageContentCharacters(messages: readonly CoreMessage[]): number {
+  return messages.reduce((total, message) => total + message.content.length, 0);
 }
 
 function getTaskFromHistory(entries: Entry[]): string | undefined {

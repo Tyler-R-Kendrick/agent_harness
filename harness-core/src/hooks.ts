@@ -1,3 +1,5 @@
+import { withHarnessTelemetrySpan } from './telemetry.js';
+
 export type HarnessHookKind = 'deterministic' | 'inference';
 export type HarnessHookMode = 'middleware' | 'pipe';
 export type HarnessHookFormat = 'code' | 'semantic';
@@ -233,14 +235,7 @@ export class HookRegistry<TPayload = unknown> {
     const metadata = options.metadata ?? {};
     const results = await Promise.all(this.forPoint<TSpecificPayload>(point, 'middleware').map(async (hook) => ({
       hook,
-      result: await hook.run({
-        point,
-        event: event ?? hook.event,
-        payload,
-        metadata,
-        signal: options.signal,
-        semantic: semanticForHook(hook),
-      }),
+      result: await runHookWithTelemetry(hook, point, event, payload, metadata, options.signal),
     })));
     const outputs = results
       .filter(({ result }) => result && Object.prototype.hasOwnProperty.call(result, 'output'))
@@ -286,14 +281,7 @@ export class HookRegistry<TPayload = unknown> {
     const metadata = options.metadata ?? {};
 
     for (const hook of this.forPoint<TSpecificPayload>(point, 'pipe')) {
-      const result = await hook.run({
-        point,
-        event: event ?? hook.event,
-        payload: currentPayload,
-        metadata,
-        signal: options.signal,
-        semantic: semanticForHook(hook),
-      });
+      const result = await runHookWithTelemetry(hook, point, event, currentPayload, metadata, options.signal);
       if (!result) continue;
       if (result.payload !== undefined) currentPayload = result.payload;
       if (Object.prototype.hasOwnProperty.call(result, 'output')) {
@@ -429,4 +417,53 @@ function semanticForHook<TPayload>(hook: HarnessHook<TPayload>): HarnessSemantic
   return hook.format === 'semantic' && hook.prompt !== undefined
     ? { prompt: hook.prompt }
     : undefined;
+}
+
+async function runHookWithTelemetry<TPayload>(
+  hook: HarnessHook<TPayload>,
+  point: HarnessHookPoint,
+  event: HarnessHookEventDescriptor | undefined,
+  payload: TPayload,
+  metadata: Record<string, unknown>,
+  signal: AbortSignal | undefined,
+): Promise<HarnessHookResult<TPayload> | void> {
+  const hookEvent = event ?? hook.event;
+  return withHarnessTelemetrySpan('harness.hook.run', {
+    attributes: {
+      'harness.hook.id': hook.id,
+      'harness.hook.point': point,
+      'harness.hook.mode': hook.mode as HarnessHookMode,
+      'harness.hook.kind': hook.kind,
+      ...(hook.format !== undefined ? { 'harness.hook.format': hook.format } : {}),
+      ...(hook.priority !== undefined ? { 'harness.hook.priority': hook.priority } : {}),
+      ...(hookEvent !== undefined
+        ? {
+          'harness.hook.event.type': hookEvent.type,
+          'harness.hook.event.name': hookEvent.name,
+        }
+        : {}),
+    },
+  }, async (span) => {
+    const result = await hook.run({
+      point,
+      event: hookEvent,
+      payload,
+      metadata,
+      signal,
+      semantic: semanticForHook(hook),
+    });
+    if (result?.pass !== undefined) {
+      span.setAttribute('harness.hook.result.pass', result.pass);
+    }
+    if (result?.cancel !== undefined) {
+      span.setAttribute('harness.hook.result.cancel', result.cancel);
+    }
+    if (result?.stop !== undefined) {
+      span.setAttribute('harness.hook.result.stop', result.stop);
+    }
+    if (result?.bubble !== undefined) {
+      span.setAttribute('harness.hook.result.bubble', result.bubble);
+    }
+    return result;
+  });
 }

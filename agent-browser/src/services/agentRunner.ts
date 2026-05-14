@@ -19,6 +19,9 @@
 
 import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai';
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import { SpanKind } from '@opentelemetry/api';
+import type { Attributes } from '@opentelemetry/api';
+import { withHarnessTelemetrySpan } from 'harness-core';
 import type { SearchTurnContext } from '../types';
 import { getDefaultSecretsManagerAgent, type SecretsManagerAgent } from '../chat-agents/Secrets';
 
@@ -106,37 +109,62 @@ export async function runToolAgent(
   let hadToolActivity = false;
 
   try {
-    const result = await generateText({
-      model,
-      tools,
-      system: instructions,
-      messages,
-      stopWhen: stepCountIs(maxSteps),
-      abortSignal: signal,
-      onStepFinish: (step) => {
-        observedSteps += 1;
-        if (step.toolCalls?.length) {
-          hadToolActivity = true;
-          for (const call of step.toolCalls) {
-            callbacks.onToolCall?.(call.toolName, call.input, 'toolCallId' in call ? call.toolCallId : undefined);
-          }
-        }
-
-        if (step.toolResults?.length) {
-          hadToolActivity = true;
-          for (const result of step.toolResults) {
-            const toolCallId = 'toolCallId' in result ? result.toolCallId : undefined;
-            const toolName = 'toolName' in result ? result.toolName : 'unknown-tool';
-            const args = 'input' in result ? result.input : undefined;
-            const resultRecord = result as { output?: unknown; result?: unknown };
-            const output = 'output' in result
-              ? resultRecord.output
-              : resultRecord.result;
-            const isError = 'isError' in result ? Boolean(result.isError) : false;
-            callbacks.onToolResult?.(toolName, args, output, isError, toolCallId);
-          }
-        }
+    const result = await withHarnessTelemetrySpan('harness.llm.generate_text', {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        'gen_ai.operation.name': 'generateText',
+        ...modelTelemetryAttributes(model),
+        'llm.input.messages.count': messages.length,
+        'llm.input.characters': sumModelMessageContentCharacters(messages),
+        'llm.system.characters': instructions.length,
+        'agent.max_steps': maxSteps,
+        'agent.tools.count': Object.keys(tools).length,
       },
+    }, async (span) => {
+      const generated = await generateText({
+        model,
+        tools,
+        system: instructions,
+        messages,
+        stopWhen: stepCountIs(maxSteps),
+        abortSignal: signal,
+        onStepFinish: (step) => {
+          observedSteps += 1;
+          if (step.toolCalls?.length) {
+            hadToolActivity = true;
+            for (const call of step.toolCalls) {
+              const toolCallId = 'toolCallId' in call ? call.toolCallId : undefined;
+              span.addEvent('harness.llm.tool_call', toolTelemetryAttributes(call.toolName, toolCallId));
+              callbacks.onToolCall?.(call.toolName, call.input, toolCallId);
+            }
+          }
+
+          if (step.toolResults?.length) {
+            hadToolActivity = true;
+            for (const result of step.toolResults) {
+              const toolCallId = 'toolCallId' in result ? result.toolCallId : undefined;
+              const toolName = 'toolName' in result ? result.toolName : 'unknown-tool';
+              const args = 'input' in result ? result.input : undefined;
+              const resultRecord = result as { output?: unknown; result?: unknown };
+              const output = 'output' in result
+                ? resultRecord.output
+                : resultRecord.result;
+              const isError = 'isError' in result ? Boolean(result.isError) : false;
+              span.addEvent('harness.llm.tool_result', {
+                ...toolTelemetryAttributes(toolName, toolCallId),
+                'tool.result.error': isError,
+              });
+              callbacks.onToolResult?.(toolName, args, output, isError, toolCallId);
+            }
+          }
+        },
+      });
+      span.setAttributes({
+        ...usageTelemetryAttributes(generated.usage),
+        'agent.steps': generated.steps?.length ?? Math.max(observedSteps, 1),
+        'llm.output.characters': (generated.text ?? '').length,
+      });
+      return generated;
     });
 
     const rawText = result.text ?? '';
@@ -156,4 +184,68 @@ export async function runToolAgent(
     callbacks.onError?.(error);
     throw error;
   }
+}
+
+function modelTelemetryAttributes(model: LanguageModel): Attributes {
+  const modelRef = model as { provider?: unknown; modelId?: unknown };
+  return {
+    ...(typeof modelRef.provider === 'string' ? { 'gen_ai.provider.name': modelRef.provider } : {}),
+    ...(typeof modelRef.modelId === 'string' ? { 'gen_ai.request.model': modelRef.modelId } : {}),
+  };
+}
+
+function usageTelemetryAttributes(usage: unknown): Attributes {
+  const usageRecord = usage as {
+    promptTokens?: unknown;
+    completionTokens?: unknown;
+    totalTokens?: unknown;
+    inputTokens?: { total?: unknown };
+    outputTokens?: { total?: unknown };
+  } | undefined;
+  const promptTokens = numberAttribute(usageRecord?.promptTokens)
+    ?? numberAttribute(usageRecord?.inputTokens?.total);
+  const completionTokens = numberAttribute(usageRecord?.completionTokens)
+    ?? numberAttribute(usageRecord?.outputTokens?.total);
+  const totalTokens = numberAttribute(usageRecord?.totalTokens)
+    ?? (promptTokens !== undefined && completionTokens !== undefined ? promptTokens + completionTokens : undefined);
+
+  return {
+    ...(promptTokens !== undefined ? { 'llm.usage.prompt_tokens': promptTokens } : {}),
+    ...(completionTokens !== undefined ? { 'llm.usage.completion_tokens': completionTokens } : {}),
+    ...(totalTokens !== undefined ? { 'llm.usage.total_tokens': totalTokens } : {}),
+  };
+}
+
+function numberAttribute(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function toolTelemetryAttributes(toolName: string, toolCallId: string | undefined): Attributes {
+  return {
+    'tool.name': toolName,
+    ...(toolCallId !== undefined ? { 'tool.call.id': toolCallId } : {}),
+  };
+}
+
+function sumModelMessageContentCharacters(messages: readonly ModelMessage[]): number {
+  return messages.reduce((total, message) => total + modelMessageContentCharacters(message), 0);
+}
+
+function modelMessageContentCharacters(message: ModelMessage): number {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === 'string') {
+    return content.length;
+  }
+  if (!Array.isArray(content)) {
+    return 0;
+  }
+  return content.reduce((total, part) => {
+    const text = typeof part === 'object'
+      && part !== null
+      && 'text' in part
+      && typeof (part as { text?: unknown }).text === 'string'
+      ? (part as { text: string }).text
+      : '';
+    return total + text.length;
+  }, 0);
 }

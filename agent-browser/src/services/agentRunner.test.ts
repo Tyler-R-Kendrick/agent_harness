@@ -1,6 +1,14 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { tool } from 'ai';
 import { z } from 'zod/v4';
+import {
+  trace,
+  SpanKind,
+  SpanStatusCode,
+  type Attributes,
+  type Span,
+  type SpanOptions,
+} from '@opentelemetry/api';
 
 // Mock AI SDK generateText so we don't hit a real LLM
 vi.mock('ai', async (importOriginal: () => Promise<typeof import('ai')>) => {
@@ -35,11 +43,79 @@ const echoTool = tool({
   execute: async ({ message }: { message: string }) => `echoed: ${message}`,
 });
 
+type RecordedSpan = {
+  name: string;
+  options: SpanOptions;
+  attributes: Attributes;
+  events: Array<{ name: string; attributes?: Attributes }>;
+  status?: { code: SpanStatusCode; message?: string };
+  ended: boolean;
+};
+
+function installRecordingTracer(): RecordedSpan[] {
+  trace.disable();
+  const spans: RecordedSpan[] = [];
+  const tracer = {
+    startSpan(name: string, options: SpanOptions = {}): Span {
+      const record: RecordedSpan = {
+        name,
+        options,
+        attributes: { ...(options.attributes ?? {}) },
+        events: [],
+        ended: false,
+      };
+      spans.push(record);
+      const span = {
+        spanContext: () => ({
+          traceId: '00000000000000000000000000000001',
+          spanId: '0000000000000001',
+          traceFlags: 1,
+        }),
+        setAttribute: (key: string, value: unknown) => {
+          record.attributes[key] = value as never;
+          return span;
+        },
+        setAttributes: (attributes: Attributes) => {
+          Object.assign(record.attributes, attributes);
+          return span;
+        },
+        addEvent: (name: string, attributes?: Attributes) => {
+          record.events.push({ name, attributes });
+          return span;
+        },
+        addLink: () => span,
+        addLinks: () => span,
+        setStatus: (status: { code: SpanStatusCode; message?: string }) => {
+          record.status = status;
+          return span;
+        },
+        updateName: (updatedName: string) => {
+          record.name = updatedName;
+          return span;
+        },
+        end: () => {
+          record.ended = true;
+        },
+        isRecording: () => true,
+        recordException: () => undefined,
+      } as Span;
+      return span;
+    },
+  };
+  trace.setGlobalTracerProvider({ getTracer: () => tracer } as never);
+  return spans;
+}
+
 // ── runToolAgent ──────────────────────────────────────────────────────────────
 
 describe('runToolAgent', () => {
   beforeEach(() => {
+    trace.disable();
     mockGenerateText.mockReset();
+  });
+
+  afterEach(() => {
+    trace.disable();
   });
 
   it('calls generateText with model, tools, system, and messages', async () => {
@@ -70,6 +146,60 @@ describe('runToolAgent', () => {
         stopWhen: expect.any(Function),
       }),
     );
+  });
+
+  it('emits an OpenTelemetry span with AI SDK usage and tool events', async () => {
+    const spans = installRecordingTracer();
+    mockGenerateText.mockImplementationOnce(async ({ onStepFinish }) => {
+      onStepFinish?.({
+        toolCalls: [{ toolCallId: 'call-1', toolName: 'echo', input: { message: 'hello' } }],
+        toolResults: [{ toolCallId: 'call-1', toolName: 'echo', input: { message: 'hello' }, output: 'echoed: hello', isError: false }],
+      });
+      return {
+        text: 'done',
+        steps: [{}],
+        toolCalls: [],
+        toolResults: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 10, completionTokens: 5 },
+      };
+    });
+
+    const model = makeModel();
+    await runToolAgent(
+      {
+        model: model as never,
+        tools: { echo: echoTool },
+        instructions: 'You are a helpful agent.',
+        messages: [{ role: 'user', content: 'Please echo hello' }],
+        maxSteps: 4,
+      },
+      {},
+    );
+
+    expect(spans.find((span) => span.name === 'harness.llm.generate_text')).toMatchObject({
+      options: { kind: SpanKind.CLIENT },
+      attributes: {
+        'gen_ai.operation.name': 'generateText',
+        'gen_ai.provider.name': 'test',
+        'gen_ai.request.model': 'test-model',
+        'llm.input.messages.count': 1,
+        'llm.input.characters': 17,
+        'llm.output.characters': 4,
+        'llm.usage.prompt_tokens': 10,
+        'llm.usage.completion_tokens': 5,
+        'llm.usage.total_tokens': 15,
+        'agent.max_steps': 4,
+        'agent.steps': 1,
+        'agent.tools.count': 1,
+      },
+      events: [
+        { name: 'harness.llm.tool_call', attributes: { 'tool.name': 'echo', 'tool.call.id': 'call-1' } },
+        { name: 'harness.llm.tool_result', attributes: { 'tool.name': 'echo', 'tool.call.id': 'call-1', 'tool.result.error': false } },
+      ],
+      status: { code: SpanStatusCode.OK },
+      ended: true,
+    });
   });
 
   it('invokes onToken callback for each text chunk', async () => {
