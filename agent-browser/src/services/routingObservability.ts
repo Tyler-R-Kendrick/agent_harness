@@ -20,6 +20,11 @@ export interface RoutingDecisionRecord {
   estimatedCostDelta: CostTierDelta;
   estimatedLatencyDelta: LatencyTierDelta;
   routingDecision: RuntimeRoutingDecision;
+  skillRouteTrace?: {
+    selectedSkill: string;
+    topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
+    reasonCodes: string[];
+  };
 }
 
 const STORAGE_KEY = 'agent-browser.routing-observability';
@@ -43,6 +48,7 @@ export function buildRoutingDecisionRecord(input: {
   selectedModel?: string;
   routingDecision: RuntimeRoutingDecision;
   benchmarkEvidenceSource?: string;
+  skillRouteTrace?: RoutingDecisionRecord['skillRouteTrace'];
 }): RoutingDecisionRecord {
   const complexityScore = Math.min(1, Number((input.requestText.length / 500).toFixed(2)));
   const complexityTier: ComplexityTier = complexityScore >= 0.75 ? 'high' : complexityScore >= 0.35 ? 'medium' : 'low';
@@ -64,6 +70,7 @@ export function buildRoutingDecisionRecord(input: {
     estimatedCostDelta: input.routingDecision.tier === 'premium' ? 'up' : 'flat',
     estimatedLatencyDelta: input.routingDecision.tier === 'premium' ? 'up' : 'flat',
     routingDecision: input.routingDecision,
+    ...(input.skillRouteTrace ? { skillRouteTrace: input.skillRouteTrace } : {}),
   };
 }
 
@@ -108,6 +115,7 @@ export function exportRoutingDecisionRecordsForEval(records: RoutingDecisionReco
         latency_tier: record.estimatedLatencyDelta,
       },
       routing_decision: record.routingDecision,
+      skill_route_trace: record.skillRouteTrace,
     }))
     .join('\n');
 }
