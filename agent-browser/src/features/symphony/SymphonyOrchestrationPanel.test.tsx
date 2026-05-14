@@ -154,6 +154,50 @@ describe('Symphony system surfaces', () => {
     expect(onStartFollowUp).not.toHaveBeenCalled();
   });
 
+  it('shows a complete sidebar phase when every Symphony branch is done', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-done',
+      workspaceName: 'Done Lab',
+      request: 'add 1+1.',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+    const state = {
+      ...initial,
+      branches: [
+        {
+          ...initial.branches[0],
+          status: 'promoted' as const,
+          progress: 100,
+          changedFiles: [],
+        },
+      ],
+    };
+    const report = buildPullRequestReview({
+      title: 'Direct task',
+      author: 'agent-browser',
+      changedFiles: [],
+      validations: [],
+      browserEvidence: [],
+      reviewerComments: [],
+    });
+    const snapshot = createSymphonyRuntimeSnapshot({ state, report });
+
+    render(
+      <SymphonyActivityPanel
+        snapshot={snapshot}
+        onApproveMerge={vi.fn()}
+        onRequestChanges={vi.fn()}
+        onStartTask={vi.fn()}
+        onStartFollowUp={vi.fn()}
+      />,
+    );
+
+    const panel = screen.getByRole('region', { name: 'Symphony activity summary' });
+    expect(panel).toHaveTextContent('Complete');
+    expect(panel).toHaveTextContent('tasks_completed');
+    expect(panel).not.toHaveTextContent('Review waiting');
+  });
+
   it('starts the needs-review rework flow from the render-area review gate', () => {
     const state = createMultitaskSubagentState({
       workspaceId: 'ws-review',

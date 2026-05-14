@@ -98,15 +98,12 @@ test.describe('Symphony task start visual behavior', () => {
     const newTask = refreshedQueue.getByRole('button', { name: 'Open task SYM-001 add 1+1.' });
     await expect(newTask).toBeVisible({ timeout: 20_000 });
     await expect(refreshedQueue.getByLabel('New task title')).toHaveValue('');
-    const taskRow = newTask.locator('xpath=ancestor::tr');
-    await expect(taskRow).toContainText('Ready');
-    await expect(taskRow).toContainText('Succeeded');
-    await expect(taskRow).toContainText('recorded');
 
     const taskDetail = refreshedApp.getByRole('region', { name: 'Symphony task detail' });
     await expect(taskDetail).toContainText('add 1+1.');
-    await expect(taskDetail).toContainText('Ready');
-    await expect(taskDetail).toContainText('Succeeded');
+    await expect(taskDetail).toContainText('Done');
+    await expect(taskDetail).toContainText('Finishing');
+    await expect(taskDetail).toContainText('recorded');
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
     assertNoRuntimeErrors();

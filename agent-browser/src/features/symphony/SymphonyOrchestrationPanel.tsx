@@ -183,10 +183,14 @@ export function SymphonyActivityPanel({
   const latestLog = snapshot.logs[snapshot.logs.length - 1] ?? null;
   const reviewerDisabled = snapshot.review.branches.some((branch) => branch.reviewerAgentDecision.state === 'disabled');
   const hasWorkspaces = snapshot.workspaces.length > 0;
+  const allTasksDone = hasWorkspaces
+    && snapshot.review.branches.length > 0
+    && snapshot.review.branches.every((branch) => branch.status === 'promoted');
   const currentPhase = reviewerDisabled
     ? 'Reviewer disabled'
-    : !hasWorkspaces ? 'Idle'
-      : snapshot.review.readinessStatus === 'ready' ? 'Approval ready' : 'Review waiting';
+    : allTasksDone ? 'Complete'
+      : !hasWorkspaces ? 'Idle'
+        : snapshot.review.readinessStatus === 'ready' ? 'Approval ready' : 'Review waiting';
 
   return (
     <section className="panel-scroll symphony-activity-panel" role="region" aria-label="Symphony activity summary">
@@ -1048,6 +1052,7 @@ function getTaskDisplayState(
 }
 
 function formatBranchStatus(status: string): string {
+  if (status === 'promoted') return 'Done';
   return status
     .split('-')
     .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)

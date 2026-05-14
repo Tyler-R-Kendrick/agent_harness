@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MULTITASK_SUBAGENT_STATE,
   addMultitaskTask,
+  buildMultitaskBranchDispatch,
   buildMultitaskWorkGraphCommands,
   buildMultitaskPromptContext,
   cancelMultitaskBranch,
@@ -244,6 +245,7 @@ describe('multitaskSubagents', () => {
       sessionName: 'SYM-001',
       now: new Date('2026-05-12T14:02:00.000Z'),
     });
+    const dispatch = buildMultitaskBranchDispatch(running, running.branches[0], 0);
 
     const stillStreaming = reconcileMultitaskBranchSessionCompletions(running, {
       'session-add-one-plus-one': [
@@ -263,7 +265,7 @@ describe('multitaskSubagents', () => {
     const branch = completed.branches.find((candidate) => candidate.id === taskId);
 
     expect(branch).toMatchObject({
-      status: 'ready',
+      status: 'promoted',
       progress: 100,
       lastHeartbeatAt: '2026-05-12T14:04:00.000Z',
     });
@@ -274,6 +276,10 @@ describe('multitaskSubagents', () => {
       'agent_completed',
     ]);
     expect(branch?.validation).toContain('Agent completed in SYM-001: 1 + 1 = 2');
+    expect(dispatch.prompt).toContain('This task has no expected file changes.');
+    expect(dispatch.prompt).toContain('answer with the final result and stop');
+    expect(dispatch.prompt).toContain('Symphony can mark the task done without merge review.');
+    expect(dispatch.prompt).not.toContain('Run validation and attach concrete evidence before review.');
   });
 
   it('requeues stale running branches before redispatching them', () => {
