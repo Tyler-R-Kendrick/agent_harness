@@ -1,5 +1,8 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   addWorkspaceCapability,
   basename,
@@ -21,6 +24,9 @@ import {
   switchWorkspace,
   urlForTabName,
 } from '../support/helpers.mjs';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
+const visualEvidenceDir = path.join(repoRoot, 'output', 'playwright');
 
 async function ensureModelInstalled(world, modelName) {
   const model = modelFixtureByName(modelName);
@@ -103,6 +109,20 @@ Given('Terminal mode is open for the active workspace', async function() {
 Given('the active workspace has a second terminal session named {string}', async function(sessionName) {
   await ensureSecondTerminalSession(this.page, this.currentWorkspace, sessionName);
   this.lastTerminalSession = sessionName;
+});
+
+Given('the {string} session render pane is open', async function(sessionName) {
+  const tree = this.page.getByRole('tree', { name: 'Workspace tree' });
+  await tree.getByRole('button', { name: sessionName, exact: true }).click();
+  await expect(this.page.getByRole('region', { name: 'Chat panel' }).first()).toBeVisible();
+});
+
+Given('the active workspace has two visible chat session render panes', async function() {
+  const tree = this.page.getByRole('tree', { name: 'Workspace tree' });
+  await this.page.getByLabel(`Add session to ${this.currentWorkspace}`).click();
+  await expect(tree.getByRole('button', { name: 'Session 2', exact: true })).toBeVisible();
+  await tree.getByRole('button', { name: 'Session 1', exact: true }).click();
+  await expect(this.page.getByRole('region', { name: 'Chat panel' })).toHaveCount(2);
 });
 
 Given('Terminal mode is open for {string}', async function(sessionName) {
@@ -276,6 +296,19 @@ When('the user opens the {string} browser tab from the workspace tree', async fu
 
 When('the user closes the page overlay', async function() {
   await this.page.getByLabel('Close page overlay').dispatchEvent('click');
+});
+
+When('the user closes the active chat session panel', async function() {
+  await this.page.getByRole('button', { name: 'Close chat panel' }).first().click();
+  await expect(this.page.getByRole('region', { name: 'Chat panel' })).toHaveCount(0);
+});
+
+When('the user closes every visible chat session panel', async function() {
+  const closeButtons = this.page.getByRole('button', { name: 'Close chat panel' });
+  for (let remaining = await closeButtons.count(); remaining > 0; remaining = await closeButtons.count()) {
+    await closeButtons.first().click();
+    await expect(closeButtons).toHaveCount(remaining - 1);
+  }
 });
 
 When('the user opens that workspace file from the workspace tree', async function() {
@@ -455,6 +488,24 @@ Then('the {string} page overlay is restored', async function(tabName) {
 
 Then('the {string} surface is visible', async function(surfaceName) {
   await expect(this.page.getByRole('region', { name: surfaceName })).toBeVisible();
+});
+
+Then('the dashboard is the visible default render pane', async function() {
+  const dashboard = this.page.getByRole('region', { name: 'Harness dashboard' });
+  await expect(dashboard).toBeVisible();
+  await expect(dashboard.getByRole('heading', { name: `${this.currentWorkspace} harness` })).toBeVisible();
+});
+
+Then('the empty render pane placeholder is hidden', async function() {
+  await expect(this.page.getByRole('region', { name: 'No panels open' })).toHaveCount(0);
+});
+
+Then('the dashboard render pane visual evidence is captured as {string}', async function(fileName) {
+  const dashboard = this.page.getByRole('region', { name: 'Harness dashboard' });
+  await expect(dashboard).toBeVisible();
+  await mkdir(visualEvidenceDir, { recursive: true });
+  await this.page.screenshot({ path: path.join(visualEvidenceDir, fileName), fullPage: true });
+  await this.attach(await dashboard.screenshot(), 'image/png');
 });
 
 Then('the address field shows {string}', async function(url) {
