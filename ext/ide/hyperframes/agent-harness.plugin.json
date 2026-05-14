@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.hyperframes",
+  "name": "HyperFrames IDE",
+  "version": "0.1.0",
+  "description": "Adds a HyperFrames editor pane with sidebar configuration controls and generated artifact previews.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createHyperframesPlugin"
+  },
+  "capabilities": [
+    { "kind": "renderer", "id": "hyperframes.artifact-preview" },
+    { "kind": "pane-item", "id": "hyperframes.editor-pane" },
+    { "kind": "tool", "id": "hyperframes.generate" },
+    { "kind": "artifact", "id": "hyperframes-artifact" }
+  ],
+  "renderers": [
+    {
+      "id": "hyperframes.artifact-preview",
+      "label": "HyperFrames artifact preview",
+      "description": "Preview renderer for generated HyperFrames artifacts.",
+      "target": {
+        "kind": "artifact",
+        "artifactKinds": ["hyperframe", "hyperframes-project"]
+      },
+      "component": {
+        "module": "./src/index.ts",
+        "export": "HyperframesPreviewRenderer"
+      }
+    }
+  ],
+  "paneItems": [
+    {
+      "id": "hyperframes.editor-pane",
+      "label": "HyperFrames",
+      "rendererId": "hyperframes.artifact-preview",
+      "preferredLocation": "side",
+      "component": {
+        "module": "./src/index.ts",
+        "export": "HyperframesEditorPane"
+      }
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "storage",
+      "access": "read-write",
+      "reason": "Stores generated HyperFrames artifacts and revision metadata."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0"
+  }
+}
