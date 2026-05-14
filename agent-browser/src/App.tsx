@@ -494,6 +494,7 @@ import {
   type MultitaskApprovalActor,
   type MultitaskBranchLifecycleAction,
   type MultitaskBranchDispatch,
+  type MultitaskSessionTranscriptMessage,
   type MultitaskSubagentState,
 } from './services/multitaskSubagents';
 import {
@@ -15161,6 +15162,34 @@ function isAgentProviderRecord(value: unknown): value is Record<string, AgentPro
 const sessionStorageBackend = typeof window !== 'undefined' ? window.sessionStorage : null;
 const localStorageBackend = typeof window !== 'undefined' ? window.localStorage : null;
 
+function buildMultitaskSessionMessagesById(
+  durableMessagesBySession: Record<string, ChatMessage[]>,
+  runtimeSessions: Record<string, SessionMcpRuntimeState>,
+): Record<string, MultitaskSessionTranscriptMessage[]> {
+  const sessionMessagesById: Record<string, MultitaskSessionTranscriptMessage[]> = Object.fromEntries(
+    Object.entries(durableMessagesBySession).map(([sessionId, messages]) => [
+      sessionId,
+      messages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        streamedContent: message.streamedContent,
+        status: message.status,
+        isError: message.isError,
+      })),
+    ]),
+  );
+  for (const [sessionId, runtime] of Object.entries(runtimeSessions)) {
+    sessionMessagesById[sessionId] = runtime.messages.map((message, index) => ({
+      id: `${sessionId}:${index}`,
+      role: message.role,
+      content: message.content,
+      status: message.status ?? undefined,
+    }));
+  }
+  return sessionMessagesById;
+}
+
 function AgentBrowserApp() {
   const { toast, setToast } = useToast();
   const initialRootRef = useRef<TreeNode | null>(null);
@@ -15827,24 +15856,36 @@ function AgentBrowserApp() {
   );
   useEffect(() => {
     if (!activeMultitaskSubagentState.enabled) return;
-    const reconciliation = reconcileMultitaskSubagentRuns(activeMultitaskSubagentState, {
+    const durableMessagesBySession = localStorageBackend
+      ? loadJson<Record<string, ChatMessage[]>>(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, {})
+      : {};
+    const completionReconciled = reconcileMultitaskBranchSessionCompletions(
+      activeMultitaskSubagentState,
+      buildMultitaskSessionMessagesById(durableMessagesBySession, harnessCoreState.sessions),
+      { now: new Date(symphonyRuntimeNowMs) },
+    );
+    const nextReconciliation = reconcileMultitaskSubagentRuns(completionReconciled, {
       maxConcurrentAgents: activeSymphonySnapshot.orchestrator.maxConcurrentAgents,
+      now: new Date(symphonyRuntimeNowMs),
     });
-    if (reconciliation.state === activeMultitaskSubagentState) return;
+    if (nextReconciliation.state === activeMultitaskSubagentState) return;
     setMultitaskSubagentState((current) => (
       current.enabled && current.workspaceId === activeWorkspaceId
-        ? reconciliation.state
+        ? nextReconciliation.state
         : current
     ));
-    if (reconciliation.dispatches.length > 0) {
-      setPendingSymphonyDispatches((current) => [...current, ...reconciliation.dispatches]);
+    if (nextReconciliation.dispatches.length > 0) {
+      setPendingSymphonyDispatches((current) => [...current, ...nextReconciliation.dispatches]);
     }
   }, [
     activeMultitaskSubagentState,
     activeSymphonySnapshot.orchestrator.maxConcurrentAgents,
     activeWorkspaceId,
+    harnessCoreState.sessions,
+    localStorageBackend,
     setMultitaskSubagentState,
     setPendingSymphonyDispatches,
+    symphonyRuntimeNowMs,
   ]);
   useEffect(() => {
     if (!activeMultitaskSubagentState.enabled) {
@@ -15927,17 +15968,10 @@ function AgentBrowserApp() {
   ]);
   useEffect(() => {
     if (!activeMultitaskSubagentState.enabled) return;
-    const sessionMessagesById = Object.fromEntries(
-      Object.entries(harnessCoreState.sessions).map(([sessionId, runtime]) => [
-        sessionId,
-        runtime.messages.map((message, index) => ({
-          id: `${sessionId}:${index}`,
-          role: message.role,
-          content: message.content,
-          status: message.status ?? undefined,
-        })),
-      ]),
-    );
+    const durableMessagesBySession = localStorageBackend
+      ? loadJson<Record<string, ChatMessage[]>>(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, {})
+      : {};
+    const sessionMessagesById = buildMultitaskSessionMessagesById(durableMessagesBySession, harnessCoreState.sessions);
     setMultitaskSubagentState((current) => {
       if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
       return reconcileMultitaskBranchSessionCompletions(current, sessionMessagesById);
@@ -15946,6 +15980,7 @@ function AgentBrowserApp() {
     activeMultitaskSubagentState.enabled,
     activeWorkspaceId,
     harnessCoreState.sessions,
+    localStorageBackend,
     setMultitaskSubagentState,
   ]);
   const workspaceActionSnapshot = useMemo<WorkspaceActionSnapshot>(() => {

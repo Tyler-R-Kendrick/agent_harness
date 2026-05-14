@@ -641,6 +641,15 @@ function createLogs(
       message: retryEntries[0].error as string,
     });
   }
+  if (hasOnlyCompletedDirectTasks(state)) {
+    logs.push({
+      ts: now.toISOString(),
+      level: 'info',
+      event: 'tasks_completed',
+      message: 'All direct Symphony tasks completed without file changes or merge review.',
+    });
+    return logs;
+  }
   logs.push({
     ts: now.toISOString(),
     level: report.readiness.status === 'ready' ? 'info' : 'warn',
@@ -650,6 +659,11 @@ function createLogs(
       : 'Review needs validation evidence before merge approval.',
   });
   return logs;
+}
+
+function hasOnlyCompletedDirectTasks(state: MultitaskSubagentState): boolean {
+  return state.branches.length > 0
+    && state.branches.every((branch) => branch.status === 'promoted' && branch.changedFiles.length === 0);
 }
 
 function projectsForState(state: MultitaskSubagentState): MultitaskProject[] {
@@ -736,6 +750,13 @@ function createReviewerDecision(
   report: PullRequestReviewReport,
   autopilotEnabled: boolean,
 ): SymphonyRuntimeSnapshot['review']['branches'][number]['reviewerAgentDecision'] {
+  if (branch.status === 'promoted' && branch.changedFiles.length === 0) {
+    return {
+      state: 'approved',
+      feedback: ['Task completed directly without file changes or merge review.'],
+    };
+  }
+
   if (branch.status === 'queued' || branch.status === 'running' || branch.status === 'stopped' || branch.status === 'cancelled') {
     return {
       state: 'not-ready',

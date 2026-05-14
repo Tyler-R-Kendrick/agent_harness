@@ -291,6 +291,65 @@ describe('symphonyRuntime', () => {
     });
   });
 
+  it('treats completed no-file local tasks as done instead of review-gate blocked', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'add 1+1.',
+      now: new Date('2026-05-12T14:00:00.000Z'),
+    });
+    const withTask = addMultitaskTask({
+      ...initial,
+      branches: [],
+      selectedBranchId: null,
+    }, {
+      title: 'add 1+1.',
+      projectId: initial.projects[0].id,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    });
+    const state = {
+      ...withTask,
+      branches: withTask.branches.map((branch) => ({
+        ...branch,
+        status: 'promoted' as const,
+        progress: 100,
+        executionEvents: [{
+          id: `${branch.id}:agent_completed:2026-05-12T14:04:00.000Z:1`,
+          type: 'agent_completed' as const,
+          at: '2026-05-12T14:04:00.000Z',
+          summary: 'Agent completed in SYM-001: 1 + 1 = 2',
+        }],
+      })),
+    };
+    const report = buildPullRequestReview({
+      title: 'Direct local task',
+      author: 'agent-browser',
+      summary: 'Completed without file changes.',
+      changedFiles: [],
+      validations: [],
+      browserEvidence: [],
+      reviewerComments: [],
+    });
+
+    const snapshot = createSymphonyRuntimeSnapshot({
+      state,
+      report,
+      now: new Date('2026-05-12T14:44:08.000Z'),
+    });
+
+    expect(snapshot.logs.map((entry) => entry.event)).toContain('tasks_completed');
+    expect(snapshot.logs.map((entry) => entry.event)).not.toContain('review_gate_waiting');
+    expect(snapshot.review.branches[0].reviewerAgentDecision).toEqual({
+      state: 'approved',
+      feedback: ['Task completed directly without file changes or merge review.'],
+    });
+    expect(summarizeSymphonyRuntime(snapshot)).toMatchObject({
+      blocked: 0,
+      approved: 1,
+      readyForReview: 0,
+    });
+  });
+
   it('keeps empty workspace names and invalid timestamps deterministic', () => {
     const state = createMultitaskSubagentState({
       workspaceId: '',

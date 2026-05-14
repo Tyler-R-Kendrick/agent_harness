@@ -1,7 +1,13 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
-import { createMultitaskSubagentState } from './services/multitaskSubagents';
+import {
+  DEFAULT_MULTITASK_SUBAGENT_STATE,
+  addMultitaskTask,
+  createMultitaskProject,
+  createMultitaskSubagentState,
+  startMultitaskBranchRun,
+} from './services/multitaskSubagents';
 import { STORAGE_KEYS } from './services/sessionState';
 import {
   appendWorkspaceFileCrdtDiff,
@@ -808,6 +814,56 @@ describe('App smoke coverage', () => {
       status: 'running',
       progress: 10,
     });
+  });
+
+  it('completes no-tool Symphony tasks from durable chat output instead of leaving them stalled', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-12T14:44:08.000Z'));
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
+    const project = createMultitaskProject({
+      ...DEFAULT_MULTITASK_SUBAGENT_STATE,
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+    }, 'Research', new Date('2026-05-12T14:00:00.000Z'));
+    const withTask = addMultitaskTask(project, {
+      title: 'add 1+1.',
+      projectId: project.projects[0].id,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    });
+    const taskId = withTask.selectedBranchId as string;
+    const running = startMultitaskBranchRun(withTask, taskId, {
+      sessionId: 'session-add-one-plus-one',
+      sessionName: 'SYM-001',
+      now: new Date('2026-05-12T14:02:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentState, JSON.stringify(running));
+    window.localStorage.setItem(STORAGE_KEYS.chatMessagesBySession, JSON.stringify({
+      'session-add-one-plus-one': [
+        { id: 'user-1', role: 'user', content: 'Assigned task: add 1+1.' },
+        { id: 'assistant-1', role: 'assistant', content: '1 + 1 = 2', status: 'complete' },
+      ],
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const app = await returnToSymphonyPanel();
+    const detail = within(app).getByRole('region', { name: 'Symphony task detail' });
+    const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
+    const task = persisted.branches.find((branch: { id: string }) => branch.id === taskId);
+
+    expect(task).toMatchObject({
+      status: 'promoted',
+      progress: 100,
+      lastHeartbeatAt: '2026-05-12T14:44:08.000Z',
+    });
+    expect(task.executionEvents.map((event: { type: string }) => event.type)).toContain('agent_completed');
+    expect(detail).toHaveTextContent('Done');
+    expect(detail).toHaveTextContent('1 + 1 = 2');
+    expect(detail).not.toHaveTextContent('No Codex events received');
   });
 
   it('rolls Symphony task events and session summaries into History', async () => {

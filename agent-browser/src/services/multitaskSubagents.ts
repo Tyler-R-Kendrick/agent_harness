@@ -642,12 +642,13 @@ export function reconcileMultitaskBranchSessionCompletions(
     const outputSummary = summarizeSessionOutput(terminalMessage);
     const sessionLabel = branch.sessionName || branch.sessionId;
     const failed = terminalMessage.status === 'error' || terminalMessage.isError === true;
+    const completedStatus = completedStatusForBranch(branch);
     const summary = failed
       ? `Agent failed in ${sessionLabel}: ${outputSummary}`
       : `Agent completed in ${sessionLabel}: ${outputSummary}`;
     return {
       ...branch,
-      status: failed ? 'blocked' as const : 'ready' as const,
+      status: failed ? 'blocked' as const : completedStatus,
       progress: failed ? branch.progress : 100,
       lastHeartbeatAt: nowIso,
       executionEvents: appendExecutionEvent(
@@ -692,6 +693,17 @@ export function buildMultitaskBranchRunPrompt(
   const reasonLine = reason === 'self-heal'
     ? 'This is a Symphony self-heal redispatch after a stale or unobservable run.'
     : 'This is a Symphony dispatched agent run.';
+  const directCompletionGuidance = branch.changedFiles.length === 0
+    ? [
+        'This task has no expected file changes.',
+        'If it can be completed by direct reasoning without tools, answer with the final result and stop.',
+        'Do not invent tool, file, or validation work just because this is a Symphony task.',
+        'After a final answer, Symphony can mark the task done without merge review.',
+      ]
+    : [
+        'Run validation and attach concrete evidence before review.',
+        'Do not merge into the common branch; stop at the Symphony review gate.',
+      ];
   return [
     `${reasonLine}`,
     `Session: ${sessionName}.`,
@@ -703,8 +715,7 @@ export function buildMultitaskBranchRunPrompt(
     '',
     'Do the assigned work end to end in the isolated workspace.',
     'Record the plan, edits, commands used, validation commands, and review evidence in the session.',
-    'Run validation and attach concrete evidence before review.',
-    'Do not merge into the common branch; stop at the Symphony review gate.',
+    ...directCompletionGuidance,
   ].join('\n');
 }
 
@@ -1023,6 +1034,10 @@ function summarizeSessionOutput(message: MultitaskSessionTranscriptMessage): str
   const raw = (message.streamedContent || message.content || '').replace(/\s+/g, ' ').trim();
   if (!raw) return 'Agent returned an empty response.';
   return raw.length > 180 ? `${raw.slice(0, 177)}...` : raw;
+}
+
+function completedStatusForBranch(branch: MultitaskSubagentBranch): MultitaskSubagentStatus {
+  return branch.changedFiles.length === 0 ? 'promoted' : 'ready';
 }
 
 function isRunningBranchStale(branch: MultitaskSubagentBranch, now: Date, staleAfterMs: number): boolean {
