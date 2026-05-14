@@ -13,3 +13,4 @@ This directory stores paper-by-paper research packets.
 ## Current papers
 
 - `continual-harness-2605.09998`
+- `programming-with-data-2604.24819`
