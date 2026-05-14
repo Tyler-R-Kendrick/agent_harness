@@ -39,7 +39,6 @@
     "@agent-harness/ext-design-md": "0.1.0",
     "@agent-harness/ext-design-studio": "0.1.0",
     "@agent-harness/ext-local-model-connector": "0.1.0",
-    "@agent-harness/ext-symphony": "0.1.0",
     "@agent-harness/ext-workflow-canvas": "0.1.0",
     "@agent-harness/git-stub": "0.1.0",
     "@agent-harness/logact-loop": "0.1.0",

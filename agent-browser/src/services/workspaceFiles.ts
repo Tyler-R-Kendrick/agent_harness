@@ -33,7 +33,7 @@ import type {
 export const WORKSPACE_FILES_STORAGE_KEY = 'agent-browser.workspace-files';
 export const WORKSPACE_FILE_STORAGE_DEBOUNCE_MS = 120;
 
-const DEFAULT_SYMPHONY_PLUGIN_PATH = '.agents/plugins/symphony/agent-harness.plugin.json';
+const LEGACY_DEFAULT_SYMPHONY_PLUGIN_PATH = '.agents/plugins/symphony/agent-harness.plugin.json';
 const LEGACY_DESIGN_STUDIO_GENERATED_PREFIXES = [
   ['design', ['open', 'design'].join('-')].join('/'),
   ['design', ['claude', 'design'].join('-')].join('/'),
@@ -60,49 +60,27 @@ export function createDefaultWorkspaceFiles(updatedAt = nowIso()): WorkspaceFile
   return [
     ...createDefaultWorkspaceMemoryFiles(updatedAt),
     ...createDefaultWorkspaceSettingsFiles(updatedAt),
-    createDefaultSymphonyPluginManifest(updatedAt),
   ];
 }
 
-export function createDefaultSymphonyPluginManifest(updatedAt = nowIso()): WorkspaceFile {
-  return {
-    path: DEFAULT_SYMPHONY_PLUGIN_PATH,
-    updatedAt,
-    content: [
-      '{',
-      '  "schemaVersion": 1,',
-      '  "id": "agent-harness.ext.symphony",',
-      '  "name": "Symphony internal task orchestration",',
-      '  "version": "0.1.0",',
-      '  "description": "Loads WORKFLOW.md assets and exposes Symphony internal durable task orchestration.",',
-      '  "entrypoint": {',
-      '    "module": "./src/index.ts",',
-      '    "export": "createSymphonyPlugin"',
-      '  },',
-      '  "capabilities": [',
-      '    {',
-      '      "kind": "hook",',
-      '      "id": "symphony.workflow-md",',
-      '      "description": "Prepends selected WORKFLOW.md orchestration guidance before model inference."',
-      '    }',
-      '  ]',
-      '}',
-    ].join('\n'),
-  };
-}
-
 export function mergeDefaultWorkspaceFiles(files: WorkspaceFile[], updatedAt = nowIso()): WorkspaceFile[] {
-  const withMemory = mergeDefaultWorkspaceMemoryFiles(files.filter((file) => !isLegacyDesignStudioWorkspaceFile(file.path)));
-  const withSettings = mergeDefaultWorkspaceSettingsFiles(withMemory, updatedAt);
-  const hasDefaultSymphonyPlugin = withSettings.some((file) => file.path === DEFAULT_SYMPHONY_PLUGIN_PATH);
-  return hasDefaultSymphonyPlugin
-    ? withSettings
-    : [...withSettings, createDefaultSymphonyPluginManifest(updatedAt)];
+  const retainedFiles = files.filter((file) =>
+    !isLegacyDesignStudioWorkspaceFile(file.path)
+    && !isLegacyDefaultSymphonyWorkspacePlugin(file));
+  const withMemory = mergeDefaultWorkspaceMemoryFiles(retainedFiles);
+  return mergeDefaultWorkspaceSettingsFiles(withMemory, updatedAt);
 }
 
 export function isLegacyDesignStudioWorkspaceFile(path: string): boolean {
   const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '').trim();
   return LEGACY_DESIGN_STUDIO_GENERATED_PREFIXES.some((prefix) => normalized.startsWith(`${prefix}/`));
+}
+
+export function isLegacyDefaultSymphonyWorkspacePlugin(file: Pick<WorkspaceFile, 'path' | 'content'>): boolean {
+  const normalized = file.path.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+  return normalized === LEGACY_DEFAULT_SYMPHONY_PLUGIN_PATH
+    && file.content.includes('"id"')
+    && file.content.includes('"agent-harness.ext.symphony"');
 }
 
 export function createWorkspaceFileTemplate(kind: WorkspaceFileKind, name = ''): WorkspaceFile {

@@ -211,5 +211,3 @@ plugin id to avoid collisions.
 - `ext/harness/agent-skills`: optional `.agents/skills/*/SKILL.md` loader.
 - `ext/harness/agents-md`: optional `AGENTS.md` prompt-context loader.
 - `ext/ide/design-md`: optional `DESIGN.md` guidance and token tooling.
-- `ext/runtime/symphony`: default `WORKFLOW.md` prompt-context loader with optional
-  Symphony orchestration examples.

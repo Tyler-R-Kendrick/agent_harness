@@ -1553,6 +1553,13 @@ async function main() {
     await expect(symphonyApp.getByRole('button', { name: 'Reviewer agent waiting for agent/research/frontend-1 to finish' })).toHaveCount(0);
     await expect(symphonyApp.getByRole('button', { name: /Start rework/ })).toHaveCount(0);
     await expect(symphonyApp.getByRole('button', { name: /Explain highest risk group/ })).toHaveCount(0);
+    const symphonyBoard = symphonyApp.getByRole('region', { name: 'Symphony project board' });
+    await expect(symphonyBoard.getByRole('heading', { name: 'Project board' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(symphonyBoard.getByRole('region', { name: 'Active lane' })).toContainText('Frontend branch', {
+      timeout: shellTimeoutMs,
+    });
     await symphonyApp.screenshot({ path: symphonyOutputPath });
     await page.getByRole('button', { name: 'History', exact: true }).click();
     const historyPanelAfterSymphony = page.getByRole('region', { name: 'History', exact: true });
@@ -1578,18 +1585,18 @@ async function main() {
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(installedExtensions.getByText('6 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('5 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Channel extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Slack Chat Channel')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Telegram Chat Channel')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('SMS Chat Channel')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(installedExtensions.getByText('Workspace plugin')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Workspace plugin')).toHaveCount(0);
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('25 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('24 extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('button', { name: 'Open details for Markdown preview' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
@@ -1605,9 +1612,7 @@ async function main() {
     await expect(marketplace.getByRole('heading', { name: 'Channel extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByText('Symphony internal task orchestration').first()).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
+    await expect(marketplace.getByText('Symphony internal task orchestration')).toHaveCount(0);
     await expect(marketplace.getByText('Design Studio').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -1623,9 +1628,7 @@ async function main() {
     await expect(marketplace.getByText('Unavailable on this runtime').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(marketplace.getByRole('button', { name: 'Install Symphony internal task orchestration' })).toBeVisible({
-      timeout: shellTimeoutMs,
-    });
+    await expect(marketplace.getByRole('button', { name: 'Install Symphony internal task orchestration' })).toHaveCount(0);
     await page.screenshot({ path: marketplaceOutputPath, fullPage: true });
     await marketplace.getByRole('button', { name: 'Install Artifact context' }).click();
     await expect(marketplace.getByRole('button', { name: 'Install Artifact worktree explorer' })).toBeVisible({

@@ -12440,7 +12440,6 @@ function getExtensionContributionRows(extension: DefaultExtensionDescriptor): Ar
 
 function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string {
   if (extension.manifest.id === 'agent-harness.ext.design-studio') return 'Design Studio';
-  if (extension.manifest.id === 'agent-harness.ext.symphony') return 'Symphony Board';
   if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') return 'Workflow Canvas';
   if (extension.manifest.id === 'agent-harness.ext.artifacts-worktree') return 'Artifact Worktree';
   return extension.manifest.name;
@@ -12449,9 +12448,6 @@ function getExtensionFeatureTitle(extension: DefaultExtensionDescriptor): string
 function getExtensionFeatureSummary(extension: DefaultExtensionDescriptor): string {
   if (extension.manifest.id === 'agent-harness.ext.design-studio') {
     return 'Compose DESIGN.md systems, inspect token guidance, and save each project as an artifact.';
-  }
-  if (extension.manifest.id === 'agent-harness.ext.symphony') {
-    return 'Navigate WORKFLOW.md orchestration, runtime hooks, and the preserved Symphony board package from one feature pane.';
   }
   if (extension.manifest.id === 'agent-harness.ext.workflow-canvas') {
     return 'Open saved workflow canvases as main-pane automation graphs backed by CNCF Serverless Workflow documents.';

@@ -17,7 +17,6 @@ import { createAgentSkillsPlugin } from '@agent-harness/ext-agent-skills';
 import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
 import { createArtifactsPlugin } from '@agent-harness/ext-artifacts';
 import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
-import { createSymphonyPlugin } from '@agent-harness/ext-symphony';
 import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
 import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 import type { AgentArtifact } from './artifacts';
@@ -55,7 +54,6 @@ import azureInferenceModelProviderManifestSource from '../../../ext/provider/azu
 import awsBedrockModelProviderManifestSource from '../../../ext/provider/aws-bedrock-model-provider/agent-harness.plugin.json';
 import anthropicModelProviderManifestSource from '../../../ext/provider/anthropic-model-provider/agent-harness.plugin.json';
 import xaiModelProviderManifestSource from '../../../ext/provider/xai-model-provider/agent-harness.plugin.json';
-import symphonyManifestSource from '../../../ext/runtime/symphony/agent-harness.plugin.json';
 
 export interface DefaultExtensionDescriptor {
   marketplace: HarnessPluginMarketplaceManifest['plugins'][number];
@@ -126,7 +124,6 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.markdown-preview', parseHarnessPluginManifest(markdownPreviewManifestSource)],
   ['agent-harness.ext.markdown-mermaid', parseHarnessPluginManifest(markdownMermaidManifestSource)],
   ['agent-harness.ext.design-studio', parseHarnessPluginManifest(designStudioManifestSource)],
-  ['agent-harness.ext.symphony', parseHarnessPluginManifest(symphonyManifestSource)],
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
   ['agent-harness.ext.artifacts-context', parseHarnessPluginManifest(artifactsContextManifestSource)],
   ['agent-harness.ext.artifacts-worktree', parseHarnessPluginManifest(artifactsWorktreeManifestSource)],
@@ -201,7 +198,6 @@ export async function createDefaultExtensionRuntime(
     })],
     ['agent-harness.ext.agents-md', () => createAgentsMdHookPlugin(workspaceFiles)],
     ['agent-harness.ext.design-md-context', () => createDesignMdPlugin({ documents: designDocuments })],
-    ['agent-harness.ext.symphony', () => createSymphonyPlugin(workspaceFiles)],
     ['agent-harness.ext.workflow-canvas', () => createWorkflowCanvasPlugin()],
     ['agent-harness.ext.artifacts-context', () => createArtifactsPlugin()],
     ['agent-harness.ext.local-model-connector', () => createLocalModelConnectorPlugin()],

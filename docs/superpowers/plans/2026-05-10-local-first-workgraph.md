@@ -108,8 +108,7 @@ Expected: PASS.
 ### Task 4: Symphony Integration And UI Cleanup
 
 **Files:**
-- Modify: `ext/runtime/symphony/package.json`
-- Modify: `ext/runtime/symphony/src/index.ts`
+- Removed: legacy `ext/runtime/symphony` board/plugin package; Symphony board work now lives in the first-class Symphony UI.
 - Modify: `agent-browser/src/services/multitaskSubagents.ts`
 - Modify: `agent-browser/src/features/symphony/SymphonyOrchestrationPanel.tsx`
 - Modify: `agent-browser/src/features/symphony/SymphonyOrchestrationPanel.test.tsx`

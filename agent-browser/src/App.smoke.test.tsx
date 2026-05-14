@@ -548,7 +548,7 @@ describe('App smoke coverage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Start Symphony task' }));
 
-    expect(screen.getByText('agent/research/frontend-1')).toBeInTheDocument();
+    expect(screen.getAllByText('agent/research/frontend-1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('agent active').length).toBeGreaterThan(0);
     expect(screen.getAllByText('3 events').length).toBeGreaterThan(0);
   });
@@ -1018,7 +1018,7 @@ describe('App smoke coverage', () => {
     expect(within(detail).getByText('agent-harness.ext.design-studio')).toBeInTheDocument();
   });
 
-  it('merges workspace plugin manifests into installed extensions instead of a separate pane', async () => {
+  it('does not generate a default Symphony workspace plugin extension', async () => {
     vi.useFakeTimers();
     render(<App />);
 
@@ -1030,8 +1030,30 @@ describe('App smoke coverage', () => {
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
 
     expect(installedSidebar).not.toHaveTextContent('Workspace plugins');
-    expect(installedSidebar).toHaveTextContent('symphony');
-    expect(installedSidebar).toHaveTextContent('Workspace plugin');
+    expect(installedSidebar).not.toHaveTextContent('symphony');
+    expect(installedSidebar).not.toHaveTextContent('Workspace plugin');
+  });
+
+  it('ignores stale installed Symphony extension ids and keeps Symphony on the primary nav', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(STORAGE_KEYS.installedDefaultExtensionIds, JSON.stringify([
+      'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
+      'agent-harness.ext.symphony',
+    ]));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    expect(screen.queryByRole('button', { name: 'Symphony internal task orchestration extension' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Symphony internal task orchestration feature pane' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Symphony'));
+    expect(screen.getByRole('region', { name: 'Symphony task management system' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Symphony project board' })).toBeInTheDocument();
   });
 
   it('opens installed IDE extension activity icons as feature panes and keeps Models independent', async () => {
@@ -1046,7 +1068,6 @@ describe('App smoke coverage', () => {
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     await act(async () => {
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Design Studio' }));
-      fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Symphony internal task orchestration' }));
       fireEvent.click(within(marketplace).getByRole('button', { name: 'Install Workflow canvas orchestration' }));
     });
 
@@ -1110,10 +1131,8 @@ describe('App smoke coverage', () => {
     });
     expect(screen.getByRole('region', { name: 'Design Studio critique' })).toHaveTextContent('Gate pass');
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Symphony internal task orchestration extension' }));
-    });
-    expect(screen.getByRole('region', { name: 'Symphony internal task orchestration feature pane' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Symphony internal task orchestration extension' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Symphony internal task orchestration feature pane' })).not.toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Workflow canvas orchestration extension' }));

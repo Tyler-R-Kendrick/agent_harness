@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Columns3,
   Folder,
   GitBranch,
   GitMerge,
@@ -116,6 +117,12 @@ export function SymphonyWorkspaceApp({
           <TaskComposer
             projectId={activeProjectId}
             onCreateTask={onCreateTask}
+          />
+          <ProjectTaskBoard
+            snapshot={snapshot}
+            workspaces={visibleWorkspaces}
+            selectedIssueId={selectedIssueId}
+            onSelectTask={onSelectTask}
           />
           <div className="symphony-section-heading symphony-section-heading--subtle">
             <GitBranch size={15} aria-hidden="true" />
@@ -460,6 +467,108 @@ function WorkspaceRunTable({
       </table>
     </div>
   );
+}
+
+type SymphonyProjectBoardLaneId = 'backlog' | 'active' | 'review' | 'blocked' | 'done';
+
+const SYMPHONY_PROJECT_BOARD_LANES: Array<{ id: SymphonyProjectBoardLaneId; title: string }> = [
+  { id: 'backlog', title: 'Backlog' },
+  { id: 'active', title: 'Active' },
+  { id: 'review', title: 'Review' },
+  { id: 'blocked', title: 'Blocked' },
+  { id: 'done', title: 'Done' },
+];
+
+function ProjectTaskBoard({
+  snapshot,
+  workspaces,
+  selectedIssueId,
+  onSelectTask,
+}: {
+  snapshot: SymphonyRuntimeSnapshot;
+  workspaces: SymphonyRuntimeSnapshot['workspaces'];
+  selectedIssueId: string | null;
+  onSelectTask: (branchId: string) => void;
+}) {
+  const cards = workspaces.map((workspace) => {
+    const issue = snapshot.issues.find((entry) => entry.id === workspace.issueId) ?? null;
+    const attempt = snapshot.runAttempts.find((entry) => entry.issueId === workspace.issueId) ?? null;
+    const reviewBranch = snapshot.review.branches.find((branch) => branch.branchId === workspace.issueId) ?? null;
+    const displayState = getTaskDisplayState(reviewBranch?.status ?? 'queued', attempt);
+    const evidence = summarizeWorkspaceEvidence(snapshot, workspace.issueId);
+    return {
+      workspace,
+      issue,
+      branchName: reviewBranch?.branchName ?? workspace.branchName,
+      laneId: getProjectBoardLaneId(reviewBranch?.status ?? 'queued', attempt),
+      displayState,
+      evidence,
+    };
+  });
+
+  return (
+    <section className="symphony-project-board" role="region" aria-label="Symphony project board">
+      <div className="symphony-work-queue-header">
+        <div className="symphony-section-heading">
+          <Columns3 size={15} aria-hidden="true" />
+          <h2>Project board</h2>
+        </div>
+        <span>{cards.length} tasks</span>
+      </div>
+      <div className="symphony-board-lanes" role="list" aria-label="Symphony board lanes">
+        {SYMPHONY_PROJECT_BOARD_LANES.map((lane) => {
+          const laneCards = cards.filter((card) => card.laneId === lane.id);
+          return (
+            <section key={lane.id} className="symphony-board-lane" role="region" aria-label={`${lane.title} lane`}>
+              <header className="symphony-board-lane-header">
+                <h3>{lane.title}</h3>
+                <span>{laneCards.length}</span>
+              </header>
+              <div className="symphony-board-card-list" role="list" aria-label={`${lane.title} tasks`}>
+                {laneCards.length ? laneCards.map((card) => (
+                  <button
+                    key={card.workspace.issueId}
+                    type="button"
+                    className="symphony-board-card"
+                    data-selected={card.workspace.issueId === selectedIssueId ? 'true' : undefined}
+                    aria-label={`Open board task ${card.workspace.issueIdentifier} ${card.issue?.title || card.branchName}`}
+                    aria-current={card.workspace.issueId === selectedIssueId ? 'page' : undefined}
+                    onClick={() => onSelectTask(card.workspace.issueId)}
+                  >
+                    <span className="symphony-board-card-topline">
+                      <strong>{card.workspace.issueIdentifier}</strong>
+                      <span className={`symphony-status-line symphony-status-line--${card.displayState.statusClass}`}>
+                        {card.displayState.label}
+                      </span>
+                    </span>
+                    <span className="symphony-board-card-title">{card.issue?.title || card.branchName}</span>
+                    <small>{card.branchName}</small>
+                    <span className="symphony-board-card-evidence">
+                      <span>{card.evidence.label}</span>
+                      <small>{card.evidence.detail}</small>
+                    </span>
+                  </button>
+                )) : (
+                  <p className="symphony-empty-state">No tasks.</p>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function getProjectBoardLaneId(
+  status: SymphonyRuntimeSnapshot['review']['branches'][number]['status'] | 'queued',
+  attempt: SymphonyRuntimeSnapshot['runAttempts'][number] | null,
+): SymphonyProjectBoardLaneId {
+  if (attempt?.phase === 'Stalled' || status === 'blocked' || status === 'cancelled') return 'blocked';
+  if (status === 'promoted') return 'done';
+  if (status === 'ready') return 'review';
+  if (status === 'running') return 'active';
+  return 'backlog';
 }
 
 function TaskDetailPanel({

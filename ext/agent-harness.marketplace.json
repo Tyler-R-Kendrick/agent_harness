@@ -128,25 +128,6 @@
       "keywords": ["design-studio", "designstudio", "design-md", "design-system", "tokens"]
     },
     {
-      "id": "agent-harness.ext.symphony",
-      "name": "Symphony internal task orchestration",
-      "version": "0.1.0",
-      "description": "Exposes Symphony as an IDE extension backed by the internal durable task manager.",
-      "manifest": "./runtime/symphony/agent-harness.plugin.json",
-      "source": {
-        "type": "local",
-        "path": "./runtime/symphony"
-      },
-      "categories": ["ide-extension", "runtime-extension", "workflow", "workspace-context"],
-      "metadata": {
-        "marketplaceCategory": "ide",
-        "activityIcon": "puzzle",
-        "runtimeEvents": ["llm", "agent", "tool"],
-        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.symphony.enabled"
-      },
-      "keywords": ["symphony", "workflow-md", "orchestration", "task-manager"]
-    },
-    {
       "id": "agent-harness.ext.workflow-canvas",
       "name": "Workflow canvas orchestration",
       "version": "0.1.0",

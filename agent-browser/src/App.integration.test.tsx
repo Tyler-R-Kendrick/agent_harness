@@ -457,8 +457,8 @@ describe('App', () => {
 
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     expect(within(marketplace).getByRole('heading', { name: 'IDE extensions' })).toBeInTheDocument();
-    expect(within(marketplace).getByText('Symphony internal task orchestration')).toBeInTheDocument();
-    expect(within(marketplace).getByRole('button', { name: 'Install Symphony internal task orchestration' })).toBeInTheDocument();
+    expect(within(marketplace).queryByText('Symphony internal task orchestration')).not.toBeInTheDocument();
+    expect(within(marketplace).queryByRole('button', { name: 'Install Symphony internal task orchestration' })).not.toBeInTheDocument();
   });
 
   it('lists installed extensions in the sidebar and renders the marketplace in the active area', async () => {
@@ -472,11 +472,11 @@ describe('App', () => {
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(within(installedSidebar).getByRole('heading', { name: 'Installed extensions' })).toBeInTheDocument();
-    expect(within(installedSidebar).getAllByText('3 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getAllByText('2 installed')).toHaveLength(2);
     expect(within(installedSidebar).queryByText('No installed extensions')).not.toBeInTheDocument();
     expect(within(installedSidebar).queryByText(/Workspace plugins/i)).not.toBeInTheDocument();
     expect(within(installedSidebar).getByText('Markdown preview')).toBeInTheDocument();
-    expect(within(installedSidebar).getByText('Workspace plugin')).toBeInTheDocument();
+    expect(within(installedSidebar).queryByText('Workspace plugin')).not.toBeInTheDocument();
     expect(within(installedSidebar).queryByText('Local Model Connector')).not.toBeInTheDocument();
 
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
@@ -492,7 +492,7 @@ describe('App', () => {
     expect(within(marketplace).getByText('DESIGN.md agent guidance')).toBeInTheDocument();
     expect(within(marketplace).getByText('Markdown preview')).toBeInTheDocument();
     expect(within(marketplace).getByText('Design Studio')).toBeInTheDocument();
-    expect(within(marketplace).getByText('Symphony internal task orchestration')).toBeInTheDocument();
+    expect(within(marketplace).queryByText('Symphony internal task orchestration')).not.toBeInTheDocument();
     expect(within(marketplace).getByText('Workflow canvas orchestration')).toBeInTheDocument();
     expect(within(marketplace).getByText('Artifact context')).toBeInTheDocument();
     expect(within(marketplace).getByText('Artifact worktree explorer')).toBeInTheDocument();
@@ -511,8 +511,8 @@ describe('App', () => {
     expect(within(marketplace).getByText('Slack Chat Channel')).toBeInTheDocument();
     expect(within(marketplace).getByText('Telegram Chat Channel')).toBeInTheDocument();
     expect(within(marketplace).getByText('SMS Chat Channel')).toBeInTheDocument();
-    expect(within(marketplace).getByText('25 extensions')).toBeInTheDocument();
-    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(18);
+    expect(within(marketplace).getByText('24 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(17);
     expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',
