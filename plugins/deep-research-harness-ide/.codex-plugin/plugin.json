@@ -1,0 +1,49 @@
+{
+  "name": "deep-research-harness-ide",
+  "version": "0.1.0",
+  "description": "ARIS-inspired deep research harness and IDE UX for evidence-grounded autonomous research workflows.",
+  "author": {
+    "name": "Agent Harness Team",
+    "email": "team@agent-harness.local",
+    "url": "https://github.com/agent-harness"
+  },
+  "homepage": "https://arxiv.org/abs/2605.03042",
+  "repository": "https://github.com/agent-harness/agent_harness",
+  "license": "MIT",
+  "keywords": [
+    "deep-research",
+    "multi-agent",
+    "evidence-audit",
+    "ide"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks.json",
+  "mcpServers": "./.mcp.json",
+  "apps": "./.app.json",
+  "interface": {
+    "displayName": "Deep Research Harness IDE",
+    "shortDescription": "Executor/reviewer research harness with claim-level evidence audits.",
+    "longDescription": "Implements an ARIS-style deep-research extension that runs adversarial executor/reviewer loops, persistent research memory, deterministic report assembly, and claim-evidence assurance gates directly in the IDE.",
+    "developerName": "Agent Harness",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write",
+      "Analyze"
+    ],
+    "websiteURL": "https://arxiv.org/abs/2605.03042",
+    "privacyPolicyURL": "https://openai.com/policies/privacy-policy/",
+    "termsOfServiceURL": "https://openai.com/policies/terms-of-use/",
+    "defaultPrompt": [
+      "Start Deep Research on 'topic': build hypotheses, gather sources, and produce a claim ledger with citations.",
+      "Run adversarial review on the current research draft and list unsupported claims.",
+      "Create a revision plan that maps each manuscript claim to evidence artifacts."
+    ],
+    "brandColor": "#1D4ED8",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg",
+    "screenshots": [
+      "./assets/ux-wireframe.svg"
+    ]
+  }
+}
