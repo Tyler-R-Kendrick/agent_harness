@@ -7,6 +7,7 @@ import type { WorkspaceFileCrdtHistory, WorkspaceFileCrdtOperation } from './wor
 import { buildWorkspaceActionTimeline, type WorkspaceActionHistoryState } from './workspaceActionHistory';
 
 export type WorkspaceHistoryRowKind =
+  | 'history-rollup'
   | 'session-squash'
   | 'branch-squash'
   | 'conversation-branch'
@@ -96,6 +97,7 @@ export interface WorkspaceHistoryRow {
   target?: WorkspaceHistoryTarget;
   detailCount: number;
   detailRows: WorkspaceHistoryDetailRow[];
+  children?: WorkspaceHistoryRow[];
 }
 
 export interface WorkspaceHistorySummary {
@@ -121,6 +123,20 @@ const ACTION_COLOR = '#c084fc';
 const FILE_COLOR = '#22d3ee';
 const ACTIVITY_COLOR = '#94a3b8';
 
+type WorkspaceHistoryRollupKey = 'squash-merge' | 'app-actions' | 'symphony-activity';
+
+interface WorkspaceHistoryRollupDefinition {
+  key: WorkspaceHistoryRollupKey;
+  title: string;
+  singularLabel: string;
+  pluralLabel: string;
+  statusLabel: string;
+  branchName: string;
+  sourceBranchName: string;
+  color: string;
+  isMainline: boolean;
+}
+
 export function buildWorkspaceHistoryGraph({
   workspaceId,
   workspaceName,
@@ -135,7 +151,7 @@ export function buildWorkspaceHistoryGraph({
   recentActivity,
 }: WorkspaceHistoryGraphInput): WorkspaceHistoryGraph {
   const sessionNames = new Map(sessions.map((session) => [session.id, session.name]));
-  const rows = [
+  const sortedRows = [
     ...buildSessionSquashRows({ workspaceId, sessionNames, chapterState }),
     ...buildConversationBranchSquashRows({ workspaceId, conversationBranchingState }),
     ...buildCheckpointRows({ workspaceId, sessionNames, runCheckpointState }),
@@ -145,7 +161,8 @@ export function buildWorkspaceHistoryGraph({
     ...buildWorkspaceFileRows({ workspaceId, fileHistories }),
     ...buildRecentActivityRows(recentActivity),
   ]
-    .sort((left, right) => right.timestamp - left.timestamp || left.title.localeCompare(right.title))
+    .sort((left, right) => right.timestamp - left.timestamp || left.title.localeCompare(right.title));
+  const rows = rollupDirectSubsequentHistoryRows(sortedRows)
     .map((row, index, sortedRows) => ({
       ...row,
       parentIds: sortedRows[index + 1] ? [sortedRows[index + 1].id] : [],
@@ -158,11 +175,156 @@ export function buildWorkspaceHistoryGraph({
     summary: {
       mainlineCommits: rows.filter((row) => row.isMainline).length,
       branchCommits: rows.reduce((total, row) => total + row.detailCount, 0),
-      squashMerges: rows.filter((row) => row.kind === 'session-squash' || row.kind === 'branch-squash').length,
+      squashMerges: rows.filter(isVisibleSquashMergeRow).length,
       timelineNodes: rows.length,
       lanes: [...new Set(rows.map((row) => row.branchName))],
     },
   };
+}
+
+function rollupDirectSubsequentHistoryRows(rows: WorkspaceHistoryRow[]): WorkspaceHistoryRow[] {
+  const rolledRows: WorkspaceHistoryRow[] = [];
+  let index = 0;
+  while (index < rows.length) {
+    const firstRow = rows[index];
+    const definition = getHistoryRollupDefinition(firstRow);
+    if (!definition) {
+      rolledRows.push(firstRow);
+      index += 1;
+      continue;
+    }
+
+    const group: WorkspaceHistoryRow[] = [firstRow];
+    let cursor = index + 1;
+    while (cursor < rows.length && getHistoryRollupDefinition(rows[cursor])?.key === definition.key) {
+      group.push(rows[cursor]);
+      cursor += 1;
+    }
+
+    rolledRows.push(group.length > 1 ? createHistoryRollupRow(group, definition) : firstRow);
+    index = cursor;
+  }
+  return rolledRows;
+}
+
+function getHistoryRollupDefinition(row: WorkspaceHistoryRow): WorkspaceHistoryRollupDefinition | null {
+  if (row.kind === 'session-squash' || row.kind === 'branch-squash') {
+    return {
+      key: 'squash-merge',
+      title: 'Squash merge',
+      singularLabel: 'squash merge',
+      pluralLabel: 'squash merges',
+      statusLabel: 'squash',
+      branchName: 'main',
+      sourceBranchName: 'main/squash',
+      color: MAIN_COLOR,
+      isMainline: true,
+    };
+  }
+  if (row.kind === 'app-action-squash' && row.title.startsWith('Symphony activity:')) {
+    return {
+      key: 'symphony-activity',
+      title: 'Symphony activity',
+      singularLabel: 'Symphony update',
+      pluralLabel: 'Symphony updates',
+      statusLabel: row.statusLabel,
+      branchName: 'redux',
+      sourceBranchName: 'redux/actions',
+      color: ACTION_COLOR,
+      isMainline: false,
+    };
+  }
+  if (row.kind === 'app-action-squash') {
+    return {
+      key: 'app-actions',
+      title: 'App actions',
+      singularLabel: 'app action group',
+      pluralLabel: 'app action groups',
+      statusLabel: row.statusLabel,
+      branchName: 'redux',
+      sourceBranchName: 'redux/actions',
+      color: ACTION_COLOR,
+      isMainline: false,
+    };
+  }
+  return null;
+}
+
+function createHistoryRollupRow(
+  rows: WorkspaceHistoryRow[],
+  definition: WorkspaceHistoryRollupDefinition,
+): WorkspaceHistoryRow {
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  const detailRows = buildHistoryRollupDetailRows(rows);
+  const currentRow = rows.find((row) => row.isCurrent);
+  return {
+    id: `history-rollup:${definition.key}:${first.id}:${last.id}`,
+    kind: 'history-rollup',
+    title: definition.title,
+    summary: buildHistoryRollupSummary(rows, definition),
+    branchId: definition.branchName,
+    branchName: definition.branchName,
+    sourceBranchName: definition.sourceBranchName,
+    color: definition.color,
+    timestamp: first.timestamp,
+    parentIds: [],
+    statusLabel: currentRow ? 'current' : definition.statusLabel,
+    isMainline: definition.isMainline,
+    isCurrent: Boolean(currentRow),
+    stateCursorActionId: currentRow?.stateCursorActionId ?? rows[0].stateCursorActionId,
+    target: buildHistoryRollupTarget(rows),
+    detailCount: rows.reduce((total, row) => total + row.detailCount, 0),
+    detailRows,
+    children: rows,
+  };
+}
+
+function buildHistoryRollupSummary(
+  rows: WorkspaceHistoryRow[],
+  definition: WorkspaceHistoryRollupDefinition,
+): string {
+  const label = rows.length === 1 ? definition.singularLabel : definition.pluralLabel;
+  const detailCount = rows.reduce((total, row) => total + row.detailCount, 0);
+  const detailLabel = detailCount === 1 ? 'detail' : 'details';
+  if (!detailCount) {
+    return `${rows.length} ${label} rolled up.`;
+  }
+  return `${rows.length} ${label} rolled up with ${detailCount} ${detailLabel}.`;
+}
+
+function buildHistoryRollupDetailRows(rows: WorkspaceHistoryRow[]): WorkspaceHistoryDetailRow[] {
+  return rows.flatMap((row) => [
+    {
+      id: `history-rollup-detail:${row.id}:node`,
+      kind: 'commit' as const,
+      label: row.title,
+      branchName: row.sourceBranchName,
+      timestamp: row.timestamp,
+    },
+    ...row.detailRows.map((detail) => ({
+      ...detail,
+      id: `history-rollup-detail:${row.id}:${detail.id}`,
+    })),
+  ]);
+}
+
+function buildHistoryRollupTarget(rows: WorkspaceHistoryRow[]): WorkspaceHistoryTarget | undefined {
+  const appStateTargets = rows
+    .map((row) => row.target)
+    .filter((target): target is Extract<WorkspaceHistoryTarget, { kind: 'app-state' }> => target?.kind === 'app-state');
+  if (!appStateTargets.length) return undefined;
+  return {
+    kind: 'app-state',
+    actionIds: uniqueStrings(appStateTargets.flatMap((target) => target.actionIds)),
+    cursorActionId: appStateTargets.find((target) => target.cursorActionId)?.cursorActionId ?? null,
+  };
+}
+
+function isVisibleSquashMergeRow(row: WorkspaceHistoryRow): boolean {
+  return row.kind === 'session-squash'
+    || row.kind === 'branch-squash'
+    || (row.kind === 'history-rollup' && row.statusLabel === 'squash');
 }
 
 function buildWorkspaceActionRows({

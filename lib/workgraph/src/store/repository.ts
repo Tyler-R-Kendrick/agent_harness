@@ -9,7 +9,7 @@ export function createInMemoryWorkGraphRepository(initialEvents: WorkGraphEvent[
   return {
     async appendEvents(nextEvents) {
       const frozen = freezeEvents(nextEvents);
-      events = [...events, ...frozen];
+      events = freezeEventList([...events, ...frozen]);
       emit();
       return frozen;
     },
@@ -35,5 +35,11 @@ export function createInMemoryWorkGraphRepository(initialEvents: WorkGraphEvent[
 }
 
 export function freezeEvents(events: WorkGraphEvent[]): WorkGraphEvent[] {
-  return events.map((event) => deepFreeze({ ...event, actor: { ...event.actor }, data: { ...event.data } }));
+  return freezeEventList(
+    events.map((event) => deepFreeze({ ...event, actor: { ...event.actor }, data: { ...event.data } })),
+  );
+}
+
+function freezeEventList(events: WorkGraphEvent[]): WorkGraphEvent[] {
+  return Object.freeze(events) as WorkGraphEvent[];
 }
