@@ -2,6 +2,8 @@ import { ModelContext } from '@agent-harness/webmcp';
 
 import type {
   RegisterSessionToolsOptions,
+  WorkspaceMcpRoutingConfig,
+  WorkspaceMcpRoutingTelemetryEvent,
 } from './workspaceToolTypes';
 import {
   applySessionMutation,
@@ -26,6 +28,52 @@ type SessionModelInput = SessionInput & {
 type SessionModeInput = SessionInput & {
   mode?: string;
 };
+
+
+
+type SessionRoutingInput = SessionInput & {
+  scope?: 'global' | 'project' | 'session';
+  routing?: WorkspaceMcpRoutingConfig;
+};
+
+type SessionRoutingTelemetryInput = SessionInput & {
+  policyId?: string;
+  selectedProvider?: string;
+  selectedModel?: string;
+  score?: number;
+  confidence?: number;
+  reasonVector?: unknown;
+  estimatedCostDeltaUsd?: number;
+  estimatedCostDeltaPct?: number;
+};
+
+function validateRoutingConfig(value: unknown): WorkspaceMcpRoutingConfig {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('routing must be an object.');
+  const routing = value as WorkspaceMcpRoutingConfig;
+  if (typeof routing.enabled !== 'boolean') throw new TypeError('routing.enabled must be boolean.');
+  if (routing.mode && routing.mode !== 'shadow' && routing.mode !== 'enforce') throw new TypeError('routing.mode must be shadow or enforce.');
+  if (routing.escalationKeywords && (!Array.isArray(routing.escalationKeywords) || !routing.escalationKeywords.every((v) => typeof v === 'string'))) throw new TypeError('routing.escalationKeywords must be a string array.');
+  return routing;
+}
+
+function parseRoutingTelemetryEvent(input: SessionRoutingTelemetryInput): WorkspaceMcpRoutingTelemetryEvent {
+  if (!input.selectedProvider || !input.selectedModel) throw new TypeError('selectedProvider and selectedModel are required.');
+  if (!Array.isArray(input.reasonVector) || !input.reasonVector.every((v) => typeof v === 'string')) throw new TypeError('reasonVector must be a string array.');
+  const score = Number(input.score);
+  const confidence = Number(input.confidence);
+  if (!Number.isFinite(score) || !Number.isFinite(confidence)) throw new TypeError('score and confidence must be finite numbers.');
+  return {
+    timestamp: new Date().toISOString(),
+    policyId: input.policyId?.trim() || null,
+    selectedProvider: input.selectedProvider,
+    selectedModel: input.selectedModel,
+    score,
+    confidence,
+    reasonVector: input.reasonVector,
+    estimatedCostDeltaUsd: Number.isFinite(input.estimatedCostDeltaUsd) ? input.estimatedCostDeltaUsd : null,
+    estimatedCostDeltaPct: Number.isFinite(input.estimatedCostDeltaPct) ? input.estimatedCostDeltaPct : null,
+  };
+}
 
 type SessionToolsInput = SessionInput & {
   query?: string;
@@ -165,6 +213,56 @@ export function registerSessionTools(modelContext: ModelContext, options: Regist
         }
 
         return applySessionMutation(workspaceName, session, { sessionId, mode: typedInput.mode }, onWriteSession);
+      },
+    }, { signal });
+
+    modelContext.registerTool({
+      name: 'change_session_routing',
+      title: 'Change session routing',
+      description: `Configure routing policy and model thresholds for the active session in ${workspaceName}.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string' },
+          scope: { type: 'string', enum: ['global', 'project', 'session'] },
+          routing: { type: 'object' },
+        },
+        required: ['routing'],
+        additionalProperties: false,
+      },
+      execute: async (input: object) => {
+        const typedInput = input as SessionRoutingInput;
+        const sessionId = requireActiveSession(typedInput);
+        const routing = validateRoutingConfig(typedInput.routing);
+        return applySessionMutation(workspaceName, session, { sessionId, routingScope: typedInput.scope ?? 'session', routing }, onWriteSession);
+      },
+    }, { signal });
+
+    modelContext.registerTool({
+      name: 'record_session_routing_decision',
+      title: 'Record session routing decision',
+      description: `Emit routing telemetry decision details for the active session in ${workspaceName}.`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionId: { type: 'string' },
+          policyId: { type: 'string' },
+          selectedProvider: { type: 'string' },
+          selectedModel: { type: 'string' },
+          score: { type: 'number' },
+          confidence: { type: 'number' },
+          reasonVector: { type: 'array', items: { type: 'string' } },
+          estimatedCostDeltaUsd: { type: 'number' },
+          estimatedCostDeltaPct: { type: 'number' },
+        },
+        required: ['selectedProvider', 'selectedModel', 'score', 'confidence', 'reasonVector'],
+        additionalProperties: false,
+      },
+      execute: async (input: object) => {
+        const typedInput = input as SessionRoutingTelemetryInput;
+        const sessionId = requireActiveSession(typedInput);
+        const routingTelemetryEvent = parseRoutingTelemetryEvent(typedInput);
+        return applySessionMutation(workspaceName, session, { sessionId, routingTelemetryEvent }, onWriteSession);
       },
     }, { signal });
 
