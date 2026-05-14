@@ -24,6 +24,11 @@ export interface RoutingDecisionRecord {
   fallbackCause: string | null;
   routingMode: 'active' | 'shadow';
   routingDecision: RuntimeRoutingDecision;
+  skillRouteTrace?: {
+    selectedSkill: string;
+    topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
+    reasonCodes: string[];
+  };
 }
 
 const STORAGE_KEY = 'agent-browser.routing-observability';
@@ -60,6 +65,7 @@ export function buildRoutingDecisionRecord(input: {
   candidateSetSummary?: string;
   fallbackCause?: string | null;
   routingMode?: 'active' | 'shadow';
+  skillRouteTrace?: RoutingDecisionRecord['skillRouteTrace'];
 }): RoutingDecisionRecord {
   const complexityScore = Math.min(1, Number((input.requestText.length / 500).toFixed(2)));
   const taskClass = classifyTaskClass(input.requestText);
@@ -87,6 +93,7 @@ export function buildRoutingDecisionRecord(input: {
     fallbackCause: input.fallbackCause ?? null,
     routingMode: input.routingMode ?? 'active',
     routingDecision: input.routingDecision,
+    ...(input.skillRouteTrace ? { skillRouteTrace: input.skillRouteTrace } : {}),
   };
 }
 
@@ -135,6 +142,7 @@ export function exportRoutingDecisionRecordsForEval(records: RoutingDecisionReco
         latency_tier: record.estimatedLatencyDelta,
       },
       routing_decision: record.routingDecision,
+      skill_route_trace: record.skillRouteTrace,
     }))
     .join('\n');
 }

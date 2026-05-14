@@ -189,6 +189,21 @@ function RoutingDiagnosticsStrip() {
           <p>Evidence: {latest.benchmarkEvidenceSource}</p>
           <p>Safeguards: {latest.safeguardsTriggered.length ? latest.safeguardsTriggered.join(', ') : 'none'}</p>
           <code>Δ cost {latest.estimatedCostDelta} · Δ latency {latest.estimatedLatencyDelta}</code>
+          {latest.skillRouteTrace ? (
+            <details>
+              <summary>Skill route trace</summary>
+              <p>Selected: <strong>{latest.skillRouteTrace.selectedSkill}</strong></p>
+              <p>Reasons: {latest.skillRouteTrace.reasonCodes.join(', ') || 'none'}</p>
+              <p>
+                Top alternatives:{' '}
+                {latest.skillRouteTrace.topAlternatives.length
+                  ? latest.skillRouteTrace.topAlternatives
+                    .map((alt) => `${alt.skill} (${alt.score.toFixed(2)} · ${alt.reasonCode})`)
+                    .join(' · ')
+                  : 'none'}
+              </p>
+            </details>
+          ) : null}
         </article>
       </div>
     </section>
