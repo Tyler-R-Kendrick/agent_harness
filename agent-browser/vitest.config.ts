@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +19,8 @@ const alias = {
   'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
   webmcp: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
   'agent-browser-mcp': path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
+  'driver.js': path.resolve(__dirname, 'src/test-shims/driverjs.ts'),
+  'driver.js/dist/driver.css': path.resolve(__dirname, 'src/test-shims/emptyCss.ts'),
 };
 
 const baseExclude = [
@@ -42,17 +43,27 @@ const domTestFiles = [
   'src/services/workspaceFiles.test.ts',
 ];
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
+export default defineConfig(async () => {
+  const plugins = [];
+  try {
+    const react = await import('@vitejs/plugin-react');
+    plugins.push(react.default());
+  } catch {
+    // Allow Vitest to boot in minimal environments where React plugin deps
+    // are unavailable (for example, targeted logic-only test execution).
+  }
+
+  return {
+    plugins,
+    resolve: {
     alias,
   },
-  test: {
+    test: {
     testTimeout: 60_000,
     projects: [
       {
         extends: true,
-        test: {
+          test: {
           name: 'node',
           globals: true,
           environment: 'node',
@@ -69,7 +80,7 @@ export default defineConfig({
       },
       {
         extends: true,
-        test: {
+          test: {
           name: 'jsdom',
           globals: true,
           environment: 'jsdom',
@@ -95,5 +106,6 @@ export default defineConfig({
         'src/**/*.d.ts',
       ],
     },
-  },
+    },
+  };
 });

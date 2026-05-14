@@ -1,5 +1,5 @@
 import { driver } from 'driver.js';
-import 'driver.js/dist/driver.css';
+
 
 export type TourPopoverSide = 'top' | 'right' | 'bottom' | 'left';
 export type TourPopoverAlign = 'start' | 'center' | 'end';

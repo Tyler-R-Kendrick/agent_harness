@@ -1,8 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
+
+vi.mock('driver.js', () => ({
+  driver: () => ({
+    drive: () => undefined,
+    destroy: () => undefined,
+    highlight: () => undefined,
+  }),
+}));
+
+vi.mock('driver.js/dist/driver.css', () => ({}));
 
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
@@ -14,6 +24,9 @@ import { streamAgentChat } from './index';
 import { MemorySecretStore, createSecretsManagerAgent } from './Secrets';
 
 describe('streamAgentChat', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   it('routes Codi sessions through the Codi adapter', async () => {
     const streamCodiChatSpy = vi.spyOn(CodiModule, 'streamCodiChat').mockResolvedValueOnce();
 
@@ -134,6 +147,30 @@ describe('streamAgentChat', () => {
     }), {}, undefined);
   });
 
+
+  it('routes through SkillDefinition adapters when DSR routing is enabled', async () => {
+    const streamPlannerChatSpy = vi.spyOn(PlannerModule, 'streamPlannerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'planner',
+      useDsrRouting: true,
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'Plan with DSR.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Plan the work.' }],
+      workspaceName: 'Build',
+      workspacePromptContext: 'Use workspace files.',
+    }, {});
+
+    expect(streamPlannerChatSpy).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      latestUserInput: 'Plan with DSR.',
+      workspaceName: 'Build',
+    }), {}, undefined);
+  });
+
   it('routes Planner sessions through the Planner adapter', async () => {
     const streamPlannerChatSpy = vi.spyOn(PlannerModule, 'streamPlannerChat').mockResolvedValueOnce();
 
@@ -224,7 +261,7 @@ describe('streamAgentChat', () => {
         route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.2, tier: 'standard' }),
       },
     }, { onReasoningStep });
-    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), {}, undefined);
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), expect.objectContaining({ onReasoningStep }), undefined);
     expect(onReasoningStep).toHaveBeenCalledWith(expect.objectContaining({ transcript: expect.stringContaining('low-confidence-premium-escalation') }));
   });
 
