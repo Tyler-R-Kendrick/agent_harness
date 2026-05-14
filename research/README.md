@@ -10,6 +10,7 @@ This directory stores paper-by-paper research packets.
   - `reference-architecture.md` — system design and integration points.
   - `experiments/` — reproducible implementation attempts and logs.
 
-## Current papers
+## Current papers (alphabetical)
 
 - `continual-harness-2605.09998`
+- `lambda-hermes-agent-reasoning-traces-2026-05`
