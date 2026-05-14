@@ -13,3 +13,4 @@ This directory stores paper-by-paper research packets.
 ## Current papers
 
 - `continual-harness-2605.09998`
+- `autodata-agentic-self-instruct-2026`
