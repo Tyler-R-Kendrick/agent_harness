@@ -13,6 +13,7 @@ This directory stores paper-by-paper research packets.
 ## Current papers (alphabetical)
 
 - `act-wisely-2604.08545`
+- `aldrift-google-research-2026`
 - `continual-harness-2605.09998`
 - `cost-aware-llm-routing-nadirclaw-2026-05-10`
 - `hybrid-memory-agent-marktechpost-2026`
