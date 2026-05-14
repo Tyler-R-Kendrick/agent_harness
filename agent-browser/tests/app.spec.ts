@@ -1838,6 +1838,60 @@ test('session panel stays visible when a browser tab is opened', async ({ page }
   await page.screenshot({ path: 'docs/screenshots/session-browser-coexistence-regression.png', fullPage: true });
 });
 
+test('split session panes keep close buttons inside their own titlebars', async ({ page }) => {
+  test.setTimeout(90_000);
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.setViewportSize({ width: 1440, height: 820 });
+  await page.addInitScript(() => {
+    localStorage.setItem('agent-browser.installed-models', JSON.stringify([
+      {
+        id: 'onnx-community/Qwen3-0.6B-ONNX',
+        name: 'Qwen3-0.6B-ONNX',
+        author: 'onnx-community',
+        task: 'text-generation',
+        downloads: 5000,
+        likes: 30,
+        tags: ['transformers.js', 'text-generation', 'onnx'],
+        sizeMB: 0,
+        status: 'installed',
+      },
+    ]));
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByLabel('Workspace tree')).toBeVisible({ timeout: 30_000 });
+
+  await page.getByLabel('Add session to Research').click({ force: true });
+  await expect(page.getByRole('button', { name: 'Session 2', exact: true })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Session 1', exact: true }).click({ force: true });
+  await expect(page.locator('.browser-split-view .panel-drag-cell')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Close chat panel' })).toHaveCount(2);
+
+  const paneMetrics = await page.locator('.browser-split-view .panel-drag-cell').evaluateAll((cells) => (
+    cells.map((cell) => {
+      const paneRect = cell.getBoundingClientRect();
+      const closeButton = cell.querySelector<HTMLElement>('button[aria-label="Close chat panel"]');
+      const closeRect = closeButton?.getBoundingClientRect();
+      return {
+        paneLeft: Math.round(paneRect.left),
+        paneRight: Math.round(paneRect.right),
+        closeLeft: closeRect ? Math.round(closeRect.left) : null,
+        closeRight: closeRect ? Math.round(closeRect.right) : null,
+        closeWidth: closeRect ? Math.round(closeRect.width) : null,
+      };
+    })
+  ));
+
+  for (const [index, metric] of paneMetrics.entries()) {
+    expect(metric.closeLeft, `pane ${index + 1} close button should be rendered`).not.toBeNull();
+    expect(metric.closeWidth, `pane ${index + 1} close button should have width`).toBeGreaterThan(0);
+    expect(metric.closeLeft!, `pane ${index + 1} close button should not overflow left`).toBeGreaterThanOrEqual(metric.paneLeft);
+    expect(metric.closeRight!, `pane ${index + 1} close button should not overflow into another pane`).toBeLessThanOrEqual(metric.paneRight);
+  }
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/split-session-close-buttons.png', fullPage: true });
+});
+
 test('title bar controls remain clickable while split panels are draggable', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   const fileEditorPanel = page.locator('section[aria-label="File editor"]');

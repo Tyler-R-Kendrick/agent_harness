@@ -6049,7 +6049,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   flex: 1;
   min-height: 0;
   border-right: none;
-  min-width: unset;
+  min-width: 0;
+}
+.browser-split-view .chat-header {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.browser-split-view .chat-heading {
+  flex: 1 1 min(100%, 28rem);
+  min-width: 0;
+  max-width: 100%;
+}
+.browser-split-view .chat-title-row {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+.browser-split-view .header-model-selector {
+  max-width: min(100%, 14rem);
+}
+.browser-split-view .header-model-selector select,
+.browser-split-view .benchmark-route-badge {
+  max-width: 100%;
+}
+.browser-split-view .panel-titlebar-actions,
+.browser-split-view .chat-mode-controls {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.browser-split-view .panel-titlebar-actions {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 /* While one panel is being dragged: dim it in place */
 .panel-drag-cell--dragging {
