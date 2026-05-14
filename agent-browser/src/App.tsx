@@ -77,7 +77,6 @@ import {
   rollbackToCommit,
   type VersionDAG,
 } from './services/versionHistory';
-import { areStagedRoutingChecksPassing } from './services/benchmarkModelRouting';
 import {
   getAgentDisplayName,
   getAgentInputPlaceholder,
@@ -135,6 +134,7 @@ import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+  areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
@@ -4125,7 +4125,7 @@ function ChatPanel({
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
       appendSharedMessages([{
-        id: createUniqueId(),
+        id: `shadow-routing-${Date.now()}`,
         role: 'system',
         status: 'complete',
         content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,

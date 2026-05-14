@@ -16,6 +16,14 @@ describe('routingObservability', () => {
       selectedModel: 'gpt-5',
       benchmarkEvidenceSource: 'benchmark-fixture',
       routingDecision: { reasonCode: 'router-selected', confidence: 0.8, tier: 'premium', selectedBy: 'router' },
+      skillRouteTrace: {
+        selectedSkill: 'security-review',
+        topAlternatives: [
+          { skill: 'general-debug', score: 0.61, reasonCode: 'lower-security-coverage' },
+          { skill: 'planner', score: 0.42, reasonCode: 'planning-focused' },
+        ],
+        reasonCodes: ['security-keyword-match', 'high-risk-domain'],
+      },
     });
 
     persistRoutingDecisionRecord(record);
@@ -26,5 +34,6 @@ describe('routingObservability', () => {
     const exported = exportRoutingDecisionRecordsForEval(saved);
     expect(exported).toContain('routing-regression-record');
     expect(exported).toContain('benchmark-fixture');
+    expect(exported).toContain('security-review');
   });
 });

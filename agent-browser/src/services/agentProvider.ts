@@ -200,6 +200,85 @@ function createDefaultOpenAICompatibleProvider(options: OpenAICompatibleProvider
 
 // ── Auto-selection ────────────────────────────────────────────────────────────
 
+
+export type ModelRoutingSettings = {
+  preferredProviders?: Array<'gateway' | 'custom' | 'cursor' | 'local' | 'copilot'>;
+  preferredLocalModelId?: string;
+  preferredCopilotModelId?: string;
+  preferredCursorModelId?: string;
+  gatewayModelId?: GatewayModelId | string;
+  customProviderCatalog?: ModelProviderCatalog;
+  customModelRef?: string | ModelProviderRef;
+  customSecrets?: Record<string, string>;
+};
+
+export type RouteAgentModelConfigInput = {
+  latestUserTurn: string;
+  providerTaskMetadata?: {
+    sessionId?: string;
+    preferredTask?: string;
+  };
+  installedModels: HFModel[];
+  copilotState: Pick<CopilotRuntimeState, 'available' | 'authenticated' | 'models'>;
+  cursorModels?: CursorModelSummary[];
+  routingSettings?: ModelRoutingSettings;
+};
+
+export function routeAgentModelConfig(input: RouteAgentModelConfigInput): AgentModelConfig {
+  const { latestUserTurn, providerTaskMetadata, installedModels, copilotState, cursorModels = [], routingSettings } = input;
+  void latestUserTurn;
+
+  const preferredProviders = routingSettings?.preferredProviders ?? ['gateway', 'custom', 'cursor', 'local', 'copilot'];
+
+  for (const provider of preferredProviders) {
+    if (provider === 'gateway' && routingSettings?.gatewayModelId) {
+      return { kind: 'gateway', modelId: routingSettings.gatewayModelId };
+    }
+
+    if (provider === 'custom' && routingSettings?.customProviderCatalog) {
+      return {
+        kind: 'custom',
+        catalog: routingSettings.customProviderCatalog,
+        ...(routingSettings.customModelRef ? { modelRef: routingSettings.customModelRef } : {}),
+        ...(routingSettings.customSecrets ? { secrets: routingSettings.customSecrets } : {}),
+      };
+    }
+
+    if (provider === 'cursor' && cursorModels.length > 0) {
+      const selectedCursorModel =
+        routingSettings?.preferredCursorModelId && cursorModels.some((candidate) => candidate.id === routingSettings.preferredCursorModelId)
+          ? routingSettings.preferredCursorModelId
+          : cursorModels[0].id;
+      return { kind: 'cursor', modelId: selectedCursorModel, sessionId: providerTaskMetadata?.sessionId };
+    }
+
+    if (provider === 'local') {
+      const localCandidates = installedModels.filter((candidate) => candidate.status === 'installed');
+      if (localCandidates.length > 0) {
+        const selectedLocalModel =
+          routingSettings?.preferredLocalModelId && localCandidates.some((candidate) => candidate.id === routingSettings.preferredLocalModelId)
+            ? localCandidates.find((candidate) => candidate.id === routingSettings.preferredLocalModelId)!
+            : localCandidates[0];
+        return {
+          kind: 'local',
+          modelId: selectedLocalModel.id,
+          task: providerTaskMetadata?.preferredTask ?? selectedLocalModel.task,
+        };
+      }
+    }
+
+    if (provider === 'copilot' && copilotState.available && copilotState.authenticated && copilotState.models.length > 0) {
+      const selectedCopilotModel =
+        routingSettings?.preferredCopilotModelId && copilotState.models.some((candidate) => candidate.id === routingSettings.preferredCopilotModelId)
+          ? routingSettings.preferredCopilotModelId
+          : copilotState.models[0].id;
+      return { kind: 'copilot', modelId: selectedCopilotModel, sessionId: providerTaskMetadata?.sessionId };
+    }
+  }
+
+  throw new Error('No inference provider is available. Provide a gatewayModelId, install a local model, connect Cursor/Copilot, or configure a custom provider.');
+}
+
 export type AutoProviderOptions = {
   copilotState: Pick<CopilotRuntimeState, 'available' | 'authenticated' | 'models'>;
   installedModels: HFModel[];
@@ -225,42 +304,18 @@ export type AutoProviderOptions = {
  * Throws if no provider is available.
  */
 export function createAutoProvider(options: AutoProviderOptions): AgentModelConfig {
-  const {
-    copilotState,
-    installedModels,
-    gatewayModelId,
-    customProviderCatalog,
-    customModelRef,
-    customSecrets,
-    preferredCopilotModelId,
-  } = options;
-
-  if (gatewayModelId) {
-    return { kind: 'gateway', modelId: gatewayModelId };
-  }
-
-  if (customProviderCatalog) {
-    return {
-      kind: 'custom',
-      catalog: customProviderCatalog,
-      ...(customModelRef ? { modelRef: customModelRef } : {}),
-      ...(customSecrets ? { secrets: customSecrets } : {}),
-    };
-  }
-
-  const installed = installedModels.filter((m) => m.status === 'installed');
-  if (installed.length > 0) {
-    const preferred = installed[0];
-    return { kind: 'local', modelId: preferred.id, task: preferred.task };
-  }
-
-  if (copilotState.available && copilotState.authenticated && copilotState.models.length > 0) {
-    const modelId =
-      preferredCopilotModelId && copilotState.models.some((m) => m.id === preferredCopilotModelId)
-        ? preferredCopilotModelId
-        : copilotState.models[0].id;
-    return { kind: 'copilot', modelId };
-  }
-
-  throw new Error('No inference provider is available. Provide a gatewayModelId, install a local model, or sign in to GitHub Copilot.');
+  return routeAgentModelConfig({
+    latestUserTurn: '',
+    providerTaskMetadata: {},
+    installedModels: options.installedModels,
+    copilotState: options.copilotState,
+    routingSettings: {
+      gatewayModelId: options.gatewayModelId,
+      customProviderCatalog: options.customProviderCatalog,
+      customModelRef: options.customModelRef,
+      customSecrets: options.customSecrets,
+      preferredCopilotModelId: options.preferredCopilotModelId,
+      preferredProviders: ['gateway', 'custom', 'local', 'copilot'],
+    },
+  });
 }
