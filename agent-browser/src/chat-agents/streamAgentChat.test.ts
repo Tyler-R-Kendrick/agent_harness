@@ -8,9 +8,9 @@ vi.mock('driver.js', () => ({
   driver: vi.fn(() => ({
     drive: vi.fn(),
   })),
-}), { virtual: true });
+}));
 
-vi.mock('driver.js/dist/driver.css', () => ({}), { virtual: true });
+vi.mock('driver.js/dist/driver.css', () => ({}));
 
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
