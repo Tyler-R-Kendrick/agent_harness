@@ -13,3 +13,4 @@ This directory stores paper-by-paper research packets.
 ## Current papers
 
 - `continual-harness-2605.09998`
+- `cost-aware-llm-routing-nadirclaw-2026-05-10`
