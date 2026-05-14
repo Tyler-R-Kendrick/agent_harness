@@ -1,4 +1,5 @@
-import type { EvidenceChunk, ExtractedPage, PpgrPointerBundle } from '../types';
+import { buildCitations } from '../citations';
+import type { AgentCitation, EvidenceChunk, ExtractedPage, PpgrPointerBundle } from '../types';
 
 type TextSeed = {
   page: ExtractedPage;
@@ -23,7 +24,7 @@ export function runPpgrStrategy(args: {
   pages: ExtractedPage[];
   maxEvidenceChunks: number;
   maxPointerBudget: number;
-}): { evidence: EvidenceChunk[]; pointerBundles: PpgrPointerBundle[] } {
+}): { evidence: EvidenceChunk[]; citations: AgentCitation[]; pointerBundles: PpgrPointerBundle[] } {
   const seeds = retrieveTextNodes(args.pages, args.question);
   const bundles = scoreAndBundlePointers(seeds, args.question, args.maxPointerBudget);
   const evidence = seeds
@@ -39,7 +40,8 @@ export function runPpgrStrategy(args: {
       sourceResultId: seed.page.sourceResultId,
       pageId: seed.page.id,
     } satisfies EvidenceChunk));
-  return { evidence, pointerBundles: bundles };
+  const { citations } = buildCitations(evidence);
+  return { evidence, citations, pointerBundles: bundles };
 }
 
 export function retrieveTextNodes(pages: ExtractedPage[], question: string): TextSeed[] {

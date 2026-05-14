@@ -134,7 +134,6 @@ import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
-  areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
   areStagedRoutingChecksPassing,
   discoverBenchmarkEvidence,
