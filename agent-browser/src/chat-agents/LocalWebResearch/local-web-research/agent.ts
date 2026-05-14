@@ -66,6 +66,7 @@ export class LocalWebResearchAgent {
       question,
       chunks: chunkExtractedPages({ pages: extractedPages }),
       maxChunks: maxEvidenceChunks,
+      strategy: request.retrievalStrategy ?? 'baseline',
     })));
 
     let answer: string | undefined;

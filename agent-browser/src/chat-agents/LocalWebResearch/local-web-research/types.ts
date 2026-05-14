@@ -58,6 +58,7 @@ export type WebResearchAgentConfig = {
 
 export type WebResearchRunRequest = {
   question: string;
+  retrievalStrategy?: 'baseline' | 'ppgr';
   queries?: string[];
   maxSearchResults?: number;
   maxPagesToExtract?: number;
@@ -134,6 +135,10 @@ export type AgentCitation = {
   url: string;
   normalizedUrl: string;
   quote?: string;
+  pageNumber?: number;
+  pointerType?: 'figure' | 'table';
+  pointerLabel?: string;
+  pointerAnchor?: string;
 };
 
 export type AgentErrorInfo = {
