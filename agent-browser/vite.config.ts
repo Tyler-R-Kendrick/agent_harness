@@ -72,7 +72,7 @@ export default defineConfig({
       },
       {
         find: 'mermaid',
-        replacement: resolveInstalledFile('mermaid/dist/mermaid.js'),
+        replacement: resolveInstalledFile('mermaid/dist/mermaid.esm.mjs'),
       },
       {
         find: 'inbrowser-use',

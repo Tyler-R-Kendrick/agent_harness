@@ -83,6 +83,25 @@
       "keywords": ["markdown", "md", "mdx", "preview", "artifact-renderer"]
     },
     {
+      "id": "agent-harness.ext.markdown-mermaid",
+      "name": "Markdown Mermaid diagrams",
+      "version": "0.1.0",
+      "description": "Renders Markdown and MDX artifact files with Mermaid diagram support.",
+      "manifest": "./ide/markdown-mermaid/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./ide/markdown-mermaid"
+      },
+      "categories": ["ide-extension", "file-renderer", "markdown", "mdx", "mermaid", "diagrams"],
+      "metadata": {
+        "marketplaceCategory": "ide",
+        "installSurface": "file-renderer",
+        "dependencies": ["agent-harness.ext.markdown-preview"],
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.markdown-mermaid.enabled"
+      },
+      "keywords": ["markdown", "md", "mdx", "mermaid", "diagram", "flowchart", "artifact-renderer"]
+    },
+    {
       "id": "agent-harness.ext.design-studio",
       "name": "Design Studio",
       "version": "0.1.0",

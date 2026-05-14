@@ -30,6 +30,7 @@ describe('default extensions', () => {
     const grouped = groupDefaultExtensionsByMarketplaceCategory(DEFAULT_EXTENSION_MANIFESTS);
     expect(grouped.ide).toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-preview' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-mermaid' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-studio' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-worktree' }) }),
@@ -76,6 +77,7 @@ describe('default extensions', () => {
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.design-studio',
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
@@ -105,6 +107,7 @@ describe('default extensions', () => {
       'AGENTS.md workspace instructions',
       'DESIGN.md agent guidance',
       'Markdown preview',
+      'Markdown Mermaid diagrams',
       'Design Studio',
       'Symphony internal task orchestration',
       'Workflow canvas orchestration',
@@ -124,13 +127,17 @@ describe('default extensions', () => {
       'Local Inference Worker',
       'External Chat Channels',
     ]);
-    expect(runtime.installedExtensionIds).toEqual(['agent-harness.ext.markdown-preview']);
+    expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
+    ]);
     expect(runtime.plugins).toEqual([]);
     expect(runtime.hooks).toEqual([]);
     expect(runtime.commands.map((command) => command.id)).not.toContain('agent-skills');
     expect(runtime.commands.map((command) => command.id)).not.toContain('artifacts.new');
     expect(runtime.tools).toEqual([]);
     expect(runtime.renderers.map((renderer) => renderer.id)).toContain('markdown-preview.renderer');
+    expect(runtime.renderers.map((renderer) => renderer.id)).toContain('markdown-mermaid.renderer');
   });
 
   it('loads only marketplace extensions selected for installation', async () => {
@@ -144,6 +151,7 @@ describe('default extensions', () => {
 
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts-context',
@@ -159,6 +167,7 @@ describe('default extensions', () => {
     expect(runtime.commands.map((command) => command.id)).toContain('artifacts.new');
     expect(runtime.renderers.map((renderer) => renderer.id)).toEqual(expect.arrayContaining([
       'markdown-preview.renderer',
+      'markdown-mermaid.renderer',
       'workflow-canvas.renderer',
     ]));
     expect(runtime.tools.map((tool) => tool.id)).toEqual(expect.arrayContaining([
@@ -296,6 +305,7 @@ describe('default extensions', () => {
 
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.ghcp-model-provider',
       'agent-harness.ext.codex-model-provider',
     ]);
@@ -351,6 +361,7 @@ describe('default extensions', () => {
     });
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.google-ai-edge-model-provider',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual(['google-ai-edge-model-provider']);
@@ -371,11 +382,13 @@ describe('default extensions', () => {
       'agent-harness.ext.agents-md',
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.symphony',
     ]);
     expect(installed.map(getExtensionMarketplaceCategory)).toEqual([
       'harness',
       'harness',
+      'ide',
       'ide',
       'ide',
     ]);
@@ -404,7 +417,11 @@ describe('default extensions', () => {
       'agent-harness.ext.workflow-canvas',
     ], {
       [symphonyFlag]: false,
-    })).toEqual(['agent-harness.ext.markdown-preview', 'agent-harness.ext.workflow-canvas']);
+    })).toEqual([
+      'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
+      'agent-harness.ext.workflow-canvas',
+    ]);
   });
 
   it('marks listed-but-unavailable provider extensions as disabled marketplace choices', () => {
@@ -423,9 +440,11 @@ describe('default extensions', () => {
   it('resolves transitive dependencies in dependency-first install order', async () => {
     const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
     const markdownPreview = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-preview');
+    const markdownMermaid = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-mermaid');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
     expect(designStudio).toBeDefined();
     expect(markdownPreview).toBeDefined();
+    expect(markdownMermaid).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
 
     expect(getDefaultExtensionDependencyIds(designStudio!)).toEqual([
@@ -434,6 +453,7 @@ describe('default extensions', () => {
       'agent-harness.ext.artifacts-worktree',
     ]);
     expect(getDefaultExtensionDependencyIds(markdownPreview!)).toEqual([]);
+    expect(getDefaultExtensionDependencyIds(markdownMermaid!)).toEqual(['agent-harness.ext.markdown-preview']);
     expect(getDefaultExtensionDependencyIds(artifactsWorktree!)).toEqual(['agent-harness.ext.artifacts-context']);
 
     const plan = resolveDefaultExtensionDependencyPlan([
@@ -455,6 +475,7 @@ describe('default extensions', () => {
     });
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
@@ -465,16 +486,19 @@ describe('default extensions', () => {
   it('does not expose workspace-tree-only extensions as activity-bar features', () => {
     const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
     const markdownPreview = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-preview');
+    const markdownMermaid = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-mermaid');
     const symphony = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.symphony');
     const workflowCanvas = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.workflow-canvas');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
 
     expect(markdownPreview).toBeDefined();
+    expect(markdownMermaid).toBeDefined();
     expect(designStudio).toBeDefined();
     expect(symphony).toBeDefined();
     expect(workflowCanvas).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
     expect(isDefaultExtensionActivityFeature(markdownPreview!)).toBe(false);
+    expect(isDefaultExtensionActivityFeature(markdownMermaid!)).toBe(false);
     expect(isDefaultExtensionActivityFeature(designStudio!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(symphony!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(workflowCanvas!)).toBe(true);
@@ -493,7 +517,7 @@ describe('default extensions', () => {
     )).toEqual(['agent-harness.ext.artifacts-worktree']);
   });
 
-  it('binds default markdown files to the markdown preview renderer without Design Studio hijacking them', async () => {
+  it('binds default markdown files to the Mermaid markdown renderer without Design Studio hijacking them', async () => {
     const runtime = await createDefaultExtensionRuntime([], {
       installedExtensionIds: ['agent-harness.ext.design-studio'],
     });
@@ -504,7 +528,7 @@ describe('default extensions', () => {
       content: '# Research Checklist\n\n- [ ] Capture task intent',
     }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
       kind: 'plugin',
-      rendererId: 'markdown-preview.renderer',
+      rendererId: 'markdown-mermaid.renderer',
       implementationRuntime: 'react',
     }));
     expect(resolveArtifactFileRenderer({
@@ -513,7 +537,7 @@ describe('default extensions', () => {
       content: '# Decision\n\n<Component />',
     }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
       kind: 'plugin',
-      rendererId: 'markdown-preview.renderer',
+      rendererId: 'markdown-mermaid.renderer',
       implementationRuntime: 'react',
     }));
     expect(resolveArtifactFileRenderer({
@@ -523,6 +547,44 @@ describe('default extensions', () => {
     }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
       kind: 'plugin',
       rendererId: 'design-studio.studio',
+      implementationRuntime: 'react',
+    }));
+  });
+
+  it('installs Mermaid markdown preview as a separate renderer extension above plain Markdown', async () => {
+    const markdownMermaid = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-mermaid');
+
+    expect(markdownMermaid).toMatchObject({
+      marketplace: {
+        categories: expect.arrayContaining(['file-renderer', 'markdown', 'mermaid']),
+      },
+      manifest: {
+        metadata: expect.objectContaining({
+          dependencies: ['agent-harness.ext.markdown-preview'],
+          installSurface: 'file-renderer',
+        }),
+      },
+    });
+
+    const runtime = await createDefaultExtensionRuntime([], {
+      installedExtensionIds: ['agent-harness.ext.markdown-mermaid'],
+    });
+
+    expect(runtime.installedExtensionIds).toEqual([
+      'agent-harness.ext.markdown-preview',
+      'agent-harness.ext.markdown-mermaid',
+    ]);
+    expect(runtime.renderers.map((renderer) => renderer.id)).toEqual(expect.arrayContaining([
+      'markdown-preview.renderer',
+      'markdown-mermaid.renderer',
+    ]));
+    expect(resolveArtifactFileRenderer({
+      path: 'docs/architecture.md',
+      mediaType: 'text/markdown',
+      content: '```mermaid\ngraph TD\n  A --> B\n```',
+    }, { extensionRenderers: runtime.renderers })).toEqual(expect.objectContaining({
+      kind: 'plugin',
+      rendererId: 'markdown-mermaid.renderer',
       implementationRuntime: 'react',
     }));
   });
