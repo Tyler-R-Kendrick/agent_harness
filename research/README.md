@@ -18,6 +18,7 @@ This directory stores paper-by-paper research packets.
 - `aldrift-google-research-2026`
 - `continual-harness-2605.09998`
 - `cost-aware-llm-routing-nadirclaw-2026-05-10`
+- `ctx2skill-2604.27660`
 - `delta-mem-2605.12357`
 - `hybrid-memory-agent-marktechpost-2026`
 - `lambda-hermes-agent-reasoning-traces-2026-05`
