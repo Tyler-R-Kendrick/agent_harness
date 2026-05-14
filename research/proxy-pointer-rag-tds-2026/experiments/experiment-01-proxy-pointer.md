@@ -28,4 +28,6 @@ A text-first retrieval pipeline with structural pointer expansion can recover re
 ## Artifacts
 
 - `experiment-01-proxy-pointer.ts` (implementation scaffold)
-- terminal output from `npx tsc --noEmit research/proxy-pointer-rag-tds-2026/experiments/experiment-01-proxy-pointer.ts`
+- `experiment-01-proxy-pointer.test.ts` (deterministic regression tests)
+- terminal output from `npx vitest run research/proxy-pointer-rag-tds-2026/experiments/experiment-01-proxy-pointer.test.ts`
+- terminal output from `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/proxy-pointer-rag-tds-2026/experiments/experiment-01-proxy-pointer.ts`
