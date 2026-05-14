@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import {
-  areStagedRoutingChecksPassing,
   DndContext,
   DragOverlay,
   PointerSensor,
@@ -135,7 +134,9 @@ import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+  areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
+  areStagedRoutingChecksPassing,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
   inferBenchmarkTaskClass,
@@ -4124,10 +4125,11 @@ function ChatPanel({
         }
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
-      appendSharedMessages({
+      appendSharedMessages([{
+        id: `shadow-routing-${Date.now()}`,
         role: 'system',
         content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
-      });
+      }]);
     }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;

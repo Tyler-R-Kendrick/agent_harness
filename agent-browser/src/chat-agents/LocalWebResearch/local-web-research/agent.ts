@@ -1,13 +1,11 @@
-import { buildCitations } from './citations';
-import { chunkExtractedPages } from './chunkText';
 import { mapWithConcurrency } from './concurrency';
 import { FetchPageExtractor } from './extractor';
 import { stableHash } from './hash';
 import { normalizeUrl } from './normalizeUrl';
 import { planSearchQueries } from './planSearchQueries';
-import { rankEvidenceChunks } from './rankEvidenceChunks';
 import { runPpgrStrategy } from './ppgr/strategy';
 import { createSearchProviderFromConfig } from './searchProviders';
+import { resolveRetrievalStrategy } from './retrievalStrategy';
 import type {
   AgentErrorInfo,
   AgentWorkflowStep,
@@ -64,31 +62,31 @@ export class LocalWebResearchAgent {
       request,
       errors,
     }));
-    const retrievalStrategy = request.retrievalStrategy ?? 'baseline';
-    const maxPointerBudget = request.maxPointerBudget ?? DEFAULTS.maxPointerBudget;
+    const retrievalMode = request.retrievalStrategy ?? (typeof this.config.retrievalStrategy === 'string' ? this.config.retrievalStrategy : 'text');
+    const maxPointerBudget = request.maxPointerBudget ?? this.config.maxPointerBudget ?? DEFAULTS.maxPointerBudget;
     const { evidence, citations, pointerBundles } = timeStage(timings, 'ranking', () => {
-      if (retrievalStrategy === 'ppgr') {
+      if (retrievalMode === 'ppgr') {
         const ppgr = runPpgrStrategy({
           question,
           pages: extractedPages,
           maxEvidenceChunks,
           maxPointerBudget,
         });
-        const citationInput = ppgr.evidence.map((chunk) => ({ ...chunk, strategy: 'ppgr' as const }));
         return {
-          ...buildCitations(citationInput),
+          evidence: ppgr.evidence,
+          citations: ppgr.citations,
           pointerBundles: ppgr.pointerBundles,
         };
       }
-      return {
-        ...buildCitations(rankEvidenceChunks({
-          question,
-          chunks: chunkExtractedPages({ pages: extractedPages }),
-          maxChunks: maxEvidenceChunks,
-          strategy: retrievalStrategy,
-        })),
-        pointerBundles: [],
-      };
+      const strategy = resolveRetrievalStrategy(this.config.retrievalStrategy);
+      const retrievalResult = strategy.retrieve({
+        question,
+        extractedPages,
+        maxEvidenceChunks,
+        metadata: request.metadata,
+        mode: retrievalMode,
+      });
+      return { ...retrievalResult, pointerBundles: [] };
     });
 
     let answer: string | undefined;

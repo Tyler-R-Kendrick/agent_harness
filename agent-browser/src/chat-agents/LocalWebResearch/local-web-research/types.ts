@@ -55,11 +55,14 @@ export type WebResearchAgentConfig = {
   extractor?: Extractor;
   synthesizer?: Synthesizer;
   logger?: AgentLogger;
+  retrievalStrategy?: RetrievalStrategyMode | RetrievalStrategy;
 };
+
+export type RetrievalStrategyMode = 'text' | 'ppgr' | 'baseline';
 
 export type WebResearchRunRequest = {
   question: string;
-  retrievalStrategy?: 'baseline' | 'ppgr';
+  retrievalStrategy?: RetrievalStrategyMode;
   queries?: string[];
   maxSearchResults?: number;
   maxPagesToExtract?: number;
@@ -130,14 +133,24 @@ export type EvidenceChunk = {
   sourceResultId?: string;
   pageId?: string;
   citationId?: number;
+  pageNumber?: number;
+  pointerType?: 'figure' | 'table';
+  pointerLabel?: string;
+  pointerAnchor?: string;
 };
 
 export type AgentCitation = {
   id: number;
+  kind?: 'text' | 'pointer';
   title?: string;
   url: string;
   normalizedUrl: string;
   quote?: string;
+  docId?: string;
+  page?: number;
+  bbox?: { x: number; y: number; width: number; height: number };
+  assetUri?: string;
+  assetAnchor?: string;
   pageNumber?: number;
   pointerType?: 'figure' | 'table';
   pointerLabel?: string;
@@ -195,4 +208,18 @@ export type PpgrPointerBundle = {
   pointerAnchor?: string;
   text: string;
   score: number;
+};
+
+export type RetrievalStrategy = {
+  retrieve(request: {
+    question: string;
+    extractedPages: ExtractedPage[];
+    maxEvidenceChunks: number;
+    metadata?: Record<string, unknown>;
+    mode?: RetrievalStrategyMode;
+  }): {
+    evidence: EvidenceChunk[];
+    citations: AgentCitation[];
+    pointers?: Record<string, unknown>;
+  };
 };
