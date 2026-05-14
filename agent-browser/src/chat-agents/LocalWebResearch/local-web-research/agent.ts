@@ -1,12 +1,10 @@
-import { buildCitations } from './citations';
-import { chunkExtractedPages } from './chunkText';
 import { mapWithConcurrency } from './concurrency';
 import { FetchPageExtractor } from './extractor';
 import { stableHash } from './hash';
 import { normalizeUrl } from './normalizeUrl';
 import { planSearchQueries } from './planSearchQueries';
-import { rankEvidenceChunks } from './rankEvidenceChunks';
 import { createSearchProviderFromConfig } from './searchProviders';
+import { resolveRetrievalStrategy } from './retrievalStrategy';
 import type {
   AgentErrorInfo,
   AgentWorkflowStep,
@@ -64,12 +62,17 @@ export class LocalWebResearchAgent {
       errors,
     }));
     const graphBuildStartedAt = Date.now();
-    const { evidence, citations } = timeStage(timings, 'ranking', () => buildCitations(rankEvidenceChunks({
-      question,
-      chunks: chunkExtractedPages({ pages: extractedPages }),
-      maxChunks: maxEvidenceChunks,
-      strategy: request.retrievalStrategy ?? 'baseline',
-    })));
+    const { evidence, citations } = timeStage(timings, 'ranking', () => {
+      const strategy = resolveRetrievalStrategy(this.config.retrievalStrategy);
+      const retrievalMode = request.retrievalStrategy ?? (typeof this.config.retrievalStrategy === 'string' ? this.config.retrievalStrategy : 'text');
+      return strategy.retrieve({
+        question,
+        extractedPages,
+        maxEvidenceChunks,
+        metadata: request.metadata,
+        mode: retrievalMode,
+      });
+    });
     timings.graphBuildMs = Date.now() - graphBuildStartedAt;
 
     const pointerMetrics = this.validatePpgrPointers({
