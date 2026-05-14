@@ -1,0 +1,23 @@
+slug: uipath-agentic-automation
+name: UiPath Agentic Automation
+vendor: UiPath
+segment: enterprise-agentic-automation-platform
+product_path: competition/uipath-agentic-automation
+design_path: competition/uipath-agentic-automation/design
+features_path: competition/uipath-agentic-automation/features
+marketing_path: competition/uipath-agentic-automation/marketing
+gossip_path: competition/uipath-agentic-automation/gossip
+snapshot_date: 2026-05-14
+primary_sources:
+  - https://www.uipath.com/
+  - https://www.uipath.com/platform/automate/process-orchestration
+  - https://www.uipath.com/product/agentic-orchestration
+  - https://www.uipath.com/product/autopilot-for-everyone
+secondary_sources:
+  - https://www.gartner.com/reviews/market/robotic-process-automation-software/vendor/uipath/product/uipath-platform
+  - https://www.reddit.com/r/UiPath/comments/1tavmre/is_agentic_automation_the_only_future/
+  - https://www.reddit.com/r/UiPath/comments/1oqwwhc/curious_about_how_uipath_feels_to_use_daytoday_is/
+positioning: "Open and trusted enterprise platform where agents think, robots do, and people lead."
+customer_model: "Enterprise automation suite with free trial/community entry, SaaS or self-hosted deployment, and sales-led center-of-excellence expansion."
+competitive_threat_level: high
+notes: "Threatens agent-browser in governed enterprise automation accounts that want audit, process orchestration, RPA robots, document AI, and human approval in one platform."

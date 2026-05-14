@@ -1,0 +1,23 @@
+slug: sema4ai-robocorp
+name: Sema4.ai / Robocorp
+vendor: Sema4.ai
+segment: python-first-rpa-and-ai-action-platform
+product_path: competition/sema4ai-robocorp
+design_path: competition/sema4ai-robocorp/design
+features_path: competition/sema4ai-robocorp/features
+marketing_path: competition/sema4ai-robocorp/marketing
+gossip_path: competition/sema4ai-robocorp/gossip
+snapshot_date: 2026-05-14
+primary_sources:
+  - https://sema4.ai/docs/build-agents
+  - https://sema4.ai/docs/automation/downloads
+  - https://sema4.ai/docs/automation/action-server
+  - https://sema4.ai/docs/automation/visual-studio-code
+secondary_sources:
+  - https://www.gartner.com/reviews/vendor/sema4-ai
+  - https://www.reddit.com/r/rpa/comments/1eoz77j
+  - https://www.reddit.com/r/rpa/comments/1aem9qh
+positioning: "Python-first automation and AI-agent tooling that turns scripts and robots into callable actions managed through Control Room."
+customer_model: "Developer-oriented automation platform with docs/tooling, VS Code workflows, Control Room deployment, and enterprise runtime management."
+competitive_threat_level: medium
+notes: "Competes with agent-browser on developer extensibility and local-to-managed automation, but is less browser-workbench-centric."
