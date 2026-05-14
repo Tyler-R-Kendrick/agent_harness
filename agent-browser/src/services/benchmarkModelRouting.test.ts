@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  areStagedRoutingChecksPassing,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   buildBenchmarkRoutingCandidates,
   discoverBenchmarkEvidence,
@@ -82,8 +83,20 @@ describe('benchmark model routing', () => {
 
   it('validates persisted routing settings', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
-    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
+    expect(isBenchmarkRoutingSettings({ enabled: true, routerMode: 'shadow', minConfidence: 0.5, complexityThreshold: 0.6, escalationKeywords: [], sessionPinning: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
+  });
+
+  it('requires staged rollout eval cases before enforce mode can activate', () => {
+    expect(areStagedRoutingChecksPassing([
+      { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
+      { id: 'misroute-prevention-escalation', prompt: 'security', expectedModelClass: 'premium' },
+      { id: 'cost-win-simple', prompt: 'summarize', expectedModelClass: 'cheap' },
+      { id: 'policy-invariants', prompt: 'rules', expectedModelClass: 'cheap' },
+    ])).toBe(true);
+    expect(areStagedRoutingChecksPassing([
+      { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
+    ])).toBe(false);
   });
 
   it('discovers Hugging Face model-card benchmark results and reranks installed local models', async () => {
