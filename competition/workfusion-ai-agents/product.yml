@@ -1,0 +1,21 @@
+slug: workfusion-ai-agents
+name: WorkFusion AI Agents
+vendor: WorkFusion
+segment: vertical-financial-crime-compliance-ai-agents
+product_path: competition/workfusion-ai-agents
+design_path: competition/workfusion-ai-agents/design
+features_path: competition/workfusion-ai-agents/features
+marketing_path: competition/workfusion-ai-agents/marketing
+gossip_path: competition/workfusion-ai-agents/gossip
+snapshot_date: 2026-05-14
+primary_sources:
+  - https://www.workfusion.com/blog/understanding-ai-agents-in-financial-crime-compliance/
+  - https://www.workfusion.com/blog/financial-crime-compliance-operations-showcase-ai-agent-success/
+  - https://www.workfusion.com/news/workfusion-ai-agents-now-process-1-million-sanctions-and-adverse-media-alerts-daily/
+secondary_sources:
+  - https://www.g2.com/products/workfusion-ai-digital-agents/reviews
+  - https://zoftwarehub.com/products/workfusion/reviews
+positioning: "Purpose-built AI agents for financial crime compliance operations, especially AML, sanctions, adverse media, KYC, and transaction monitoring."
+customer_model: "Vertical enterprise RegTech/FCC sales motion with prebuilt named digital workers and bank/financial-institution case studies."
+competitive_threat_level: medium
+notes: "Does not compete as a generic browser agent, but competes for budget by packaging full regulated workflows as AI-agent outcomes."

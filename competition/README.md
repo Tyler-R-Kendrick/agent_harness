@@ -55,6 +55,10 @@ competition/<product-slug>/
 | Opera Neon | End-user agentic AI browser | `competition/opera-neon` |
 | Gemini in Chrome | Incumbent browser AI assistant | `competition/gemini-in-chrome` |
 | Microsoft Edge Copilot Mode | Incumbent browser AI assistant | `competition/microsoft-edge-copilot-mode` |
+| UiPath Agentic Automation | Enterprise agentic automation/RPA platform | `competition/uipath-agentic-automation` |
+| Automation Anywhere APA | Enterprise agentic process automation platform | `competition/automation-anywhere-apa` |
+| Sema4.ai / Robocorp | Python-first RPA and AI action platform | `competition/sema4ai-robocorp` |
+| WorkFusion AI Agents | Financial-crime compliance AI-agent platform | `competition/workfusion-ai-agents` |
 
 ## Cross-Market Takeaways
 
@@ -72,4 +76,6 @@ competition/<product-slug>/
 - Fast cloud desktop products such as WebRun and whole-computer agents such as Simular broaden the competitive field beyond browser tabs. They make speed, filesystems, OS actions, and persistent environments table stakes, but they also create a stronger need for replayable evidence and policy boundaries.
 - Model-owner agents such as ChatGPT Agent, Gemini Agent, and Claude Computer Use compete above the browser UI by making web action one tool inside a broader work assistant. Their weakness is inspectability: product surfaces often summarize progress better than they preserve deterministic, reviewable evidence.
 - Open-source extension products such as Nanobrowser keep the user in their existing logged-in browser, which is a strong adoption wedge. The risk is that extension permissions, BYOK setup, and real-profile automation raise the bar for plain-language trust controls.
+- Enterprise RPA incumbents are reframing "agents" as governed orchestration across robots, people, APIs, documents, and legacy UIs. They will capture compliance-heavy buyers that require audit, case management, and center-of-excellence controls, but their broad suites can feel overbuilt for developer-first browser agent workflows.
+- Vertical AI-agent products such as WorkFusion show another wedge: package the whole process and domain model instead of selling generic browser control. This is powerful when the buyer wants outcomes in a known regulated workflow, but it leaves less room for local, inspectable, user-directed web work.
 

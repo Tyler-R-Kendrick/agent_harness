@@ -1,0 +1,21 @@
+slug: automation-anywhere-apa
+name: Automation Anywhere Agentic Process Automation
+vendor: Automation Anywhere
+segment: enterprise-agentic-process-automation-platform
+product_path: competition/automation-anywhere-apa
+design_path: competition/automation-anywhere-apa/design
+features_path: competition/automation-anywhere-apa/features
+marketing_path: competition/automation-anywhere-apa/marketing
+gossip_path: competition/automation-anywhere-apa/gossip
+snapshot_date: 2026-05-14
+primary_sources:
+  - https://www.automationanywhere.com/company/about-us
+  - https://botstore.automationanywhere.com/bot/enterprise-claw-agent/
+  - https://www.automationanywhere.com/sites/default/files/internal-assets/apa-for-globalization-services-case-study_en.pdf
+secondary_sources:
+  - https://www.g2.com/products/automation-anywhere-rpa-robotic-process-automation/reviews
+  - https://www.reddit.com/r/rpa/comments/1qnivmr/automation_anywhere_pushing_agents_too_hard/
+positioning: "Cloud-native Agentic Process Automation that combines AI agents, RPA, APIs, document processing, orchestration, and governance."
+customer_model: "Enterprise automation platform with sales-led deployment, Bot Store/App Store assets, and agentic process automation expansion."
+competitive_threat_level: high
+notes: "Competes where buyers want cloud-native enterprise automation and prebuilt agent packages instead of a browser-first local agent workbench."
