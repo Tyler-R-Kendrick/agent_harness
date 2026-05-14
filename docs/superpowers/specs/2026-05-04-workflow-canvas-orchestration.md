@@ -90,7 +90,7 @@ The app already has the right extension seams:
 - `ext/agent-harness.marketplace.json` lists installable marketplace entries.
 - `agent-browser/src/services/defaultExtensions.ts` parses marketplace entries and loads default plugin packages.
 - `harness-core` exposes plugins, tools, commands, artifacts, renderers, pane items, storage, and hooks.
-- `ext/runtime/symphony` already proves a board model can live as a plugin asset, but it is task-board orchestration, not a general Serverless Workflow DSL or n8n-class workflow canvas.
+- Symphony's task board belongs in the first-class Symphony UI, not as a plugin asset; workflow-canvas remains the separate workflow DSL surface.
 
 The new extension should therefore be separate from Symphony:
 

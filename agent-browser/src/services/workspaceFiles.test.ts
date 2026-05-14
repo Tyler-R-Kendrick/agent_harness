@@ -29,7 +29,7 @@ describe('workspaceFiles', () => {
     expect(settings.content).toBe('{\n}\n');
   });
 
-  it('creates default workspace memory files, settings files, and the default Symphony plugin manifest', () => {
+  it('creates default workspace memory and settings files without a generated Symphony plugin manifest', () => {
     const files = createDefaultWorkspaceFiles('2026-04-20T00:00:00.000Z');
 
     expect(files).toEqual(expect.arrayContaining([
@@ -40,11 +40,9 @@ describe('workspaceFiles', () => {
       expect.objectContaining({ path: '.memory/session.memory.md', updatedAt: '2026-04-20T00:00:00.000Z' }),
       expect.objectContaining({ path: 'user/settings.json', content: '{\n}\n', updatedAt: '2026-04-20T00:00:00.000Z' }),
       expect.objectContaining({ path: 'settings.json', content: '{\n}\n', updatedAt: '2026-04-20T00:00:00.000Z' }),
-      expect.objectContaining({
-        path: '.agents/plugins/symphony/agent-harness.plugin.json',
-        content: expect.stringContaining('"id": "agent-harness.ext.symphony"'),
-        updatedAt: '2026-04-20T00:00:00.000Z',
-      }),
+    ]));
+    expect(files).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
   });
 
@@ -124,10 +122,10 @@ describe('workspaceFiles', () => {
     expect(files).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: expect.stringContaining('.agents/skills/') }),
     ]));
-    expect(files).toEqual(expect.arrayContaining([
+    expect(files).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
-    expect(files).toHaveLength(8);
+    expect(files).toHaveLength(7);
   });
 
   it('loads only generic defaults when storage is empty', () => {
@@ -139,15 +137,15 @@ describe('workspaceFiles', () => {
       expect.objectContaining({ path: '.memory/MEMORY.md' }),
       expect.objectContaining({ path: 'user/settings.json' }),
       expect.objectContaining({ path: 'settings.json' }),
-      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
     expect(loaded['ws-research']).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: expect.stringContaining('.agents/skills/') }),
+      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
-    expect(loaded['ws-research']).toHaveLength(8);
+    expect(loaded['ws-research']).toHaveLength(7);
   });
 
-  it('preserves stored optional plugin-owned files without adding bundled skills', () => {
+  it('preserves stored optional plugin-owned files without adding bundled skills or the legacy Symphony plugin', () => {
     window.localStorage.setItem(WORKSPACE_FILES_STORAGE_KEY, JSON.stringify({
       'ws-research': [
         { path: 'AGENTS.md', content: '# Workspace rules', updatedAt: '2026-04-18T00:00:00.000Z' },
@@ -157,6 +155,11 @@ describe('workspaceFiles', () => {
           updatedAt: '2026-04-18T00:00:00.000Z',
         },
         { path: '.memory/MEMORY.md', content: '# Custom Memory\n\n- Keep this user fact', updatedAt: '2026-04-18T00:00:00.000Z' },
+        {
+          path: '.agents/plugins/symphony/agent-harness.plugin.json',
+          content: '{ "id": "agent-harness.ext.symphony" }',
+          updatedAt: '2026-04-18T00:00:00.000Z',
+        },
       ],
     }));
 
@@ -170,12 +173,12 @@ describe('workspaceFiles', () => {
       expect.objectContaining({ path: '.memory/session.memory.md' }),
       expect.objectContaining({ path: 'user/settings.json' }),
       expect.objectContaining({ path: 'settings.json' }),
-      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
     expect(loaded['ws-research']).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ path: '.agents/skills/agent-browser/SKILL.md' }),
+      expect.objectContaining({ path: '.agents/plugins/symphony/agent-harness.plugin.json' }),
     ]));
-    expect(loaded['ws-research']).toHaveLength(10);
+    expect(loaded['ws-research']).toHaveLength(9);
   });
 
   it('drops legacy generated Design Studio workspace files so they do not mount as their own drive', () => {

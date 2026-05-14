@@ -367,6 +367,50 @@ describe('Symphony system surfaces', () => {
     expect(detail).toHaveTextContent('Review');
   });
 
+  it('renders a project task board in Symphony instead of relying on an extension feature page', () => {
+    const state = createMultitaskSubagentState({
+      workspaceId: 'ws-board',
+      workspaceName: 'Board Lab',
+      request: 'parallelize frontend, tests, and documentation work',
+      now: new Date('2026-05-10T10:00:00.000Z'),
+    });
+    const managedState = {
+      ...state,
+      branches: [
+        { ...state.branches[0], status: 'running' as const, progress: 45 },
+        { ...state.branches[1], status: 'ready' as const, progress: 100 },
+        { ...state.branches[2], status: 'blocked' as const, progress: 20 },
+      ],
+    };
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Board Lab'));
+    const snapshot = createSymphonyRuntimeSnapshot({ state: managedState, report });
+    const onSelectTask = vi.fn();
+
+    render(
+      <SymphonyWorkspaceApp
+        snapshot={snapshot}
+        onApproveMerge={vi.fn()}
+        onManageBranch={vi.fn()}
+        onRequestChanges={vi.fn()}
+        onStartTask={vi.fn()}
+        onSelectTask={onSelectTask}
+        onStartFollowUp={vi.fn()}
+      />,
+    );
+
+    const board = screen.getByRole('region', { name: 'Symphony project board' });
+    expect(board).toHaveTextContent('Project board');
+    expect(within(board).getByRole('region', { name: 'Backlog lane' })).toHaveTextContent('0');
+    expect(within(board).getByRole('region', { name: 'Active lane' })).toHaveTextContent('Frontend branch');
+    expect(within(board).getByRole('region', { name: 'Review lane' })).toHaveTextContent('Tests branch');
+    expect(within(board).getByRole('region', { name: 'Blocked lane' })).toHaveTextContent('Documentation branch');
+    expect(within(board).getByRole('region', { name: 'Done lane' })).toHaveTextContent('0');
+
+    fireEvent.click(within(board).getByRole('button', { name: 'Open board task SYM-002 Tests branch' }));
+    expect(onSelectTask).toHaveBeenCalledWith('multitask:ws-board:tests-2');
+    expect(screen.queryByRole('region', { name: /Symphony internal task orchestration feature pane/i })).not.toBeInTheDocument();
+  });
+
   it('shows the selected task live feed and makes idle running work visibly stalled', () => {
     const state = createMultitaskSubagentState({
       workspaceId: 'ws-feed',

@@ -34,6 +34,8 @@ describe('default extensions', () => {
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-studio' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-worktree' }) }),
+    ]));
+    expect(grouped.ide).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.symphony' }) }),
     ]));
     expect(grouped.harness).toEqual(expect.arrayContaining([
@@ -74,7 +76,6 @@ describe('default extensions', () => {
       'agent-harness.ext.markdown-preview',
       'agent-harness.ext.markdown-mermaid',
       'agent-harness.ext.design-studio',
-      'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts-context',
       'agent-harness.ext.artifacts-worktree',
@@ -106,7 +107,6 @@ describe('default extensions', () => {
       'Markdown preview',
       'Markdown Mermaid diagrams',
       'Design Studio',
-      'Symphony internal task orchestration',
       'Workflow canvas orchestration',
       'Artifact context',
       'Artifact worktree explorer',
@@ -151,18 +151,14 @@ describe('default extensions', () => {
     expect(runtime.installedExtensionIds).toEqual([
       'agent-harness.ext.markdown-preview',
       'agent-harness.ext.markdown-mermaid',
-      'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts-context',
     ]);
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual([
-      'symphony',
       'workflow-canvas',
       'artifacts',
     ]);
-    expect(runtime.hooks.map((hook) => hook.id)).toEqual([
-      'symphony.workflow-md',
-    ]);
+    expect(runtime.hooks.map((hook) => hook.id)).toEqual([]);
     expect(runtime.commands.map((command) => command.id)).toContain('artifacts.new');
     expect(runtime.renderers.map((renderer) => renderer.id)).toEqual(expect.arrayContaining([
       'markdown-preview.renderer',
@@ -366,7 +362,7 @@ describe('default extensions', () => {
     expect(runtime.plugins.map((plugin) => plugin.id)).toEqual(['google-ai-edge-model-provider']);
   });
 
-  it('lists installed descriptors and keeps their marketplace categories', async () => {
+  it('lists installed descriptors, ignores stale Symphony extension installs, and keeps marketplace categories', async () => {
     const runtime = await createDefaultExtensionRuntime([], {
       installedExtensionIds: [
         'agent-harness.ext.design-md-context',
@@ -382,12 +378,10 @@ describe('default extensions', () => {
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.markdown-preview',
       'agent-harness.ext.markdown-mermaid',
-      'agent-harness.ext.symphony',
     ]);
     expect(installed.map(getExtensionMarketplaceCategory)).toEqual([
       'harness',
       'harness',
-      'ide',
       'ide',
       'ide',
     ]);
@@ -408,22 +402,20 @@ describe('default extensions', () => {
       'agent-harness.ext.slack-channel',
       'agent-harness.ext.telegram-channel',
       'agent-harness.ext.sms-channel',
-      'agent-harness.ext.symphony',
     ]);
   });
 
   it('uses OpenFeature-style boolean flags to resolve enabled installed extensions', () => {
-    const symphonyFlag = getDefaultExtensionOpenFeatureFlagKey('agent-harness.ext.symphony');
-    expect(symphonyFlag).toBe('agent-harness.extensions.agent-harness.ext.symphony.enabled');
+    const workflowCanvasFlag = getDefaultExtensionOpenFeatureFlagKey('agent-harness.ext.workflow-canvas');
+    expect(workflowCanvasFlag).toBe('agent-harness.extensions.agent-harness.ext.workflow-canvas.enabled');
     expect(resolveEnabledDefaultExtensionIds([
       'agent-harness.ext.symphony',
       'agent-harness.ext.workflow-canvas',
     ], {
-      [symphonyFlag]: false,
+      [workflowCanvasFlag]: false,
     })).toEqual([
       'agent-harness.ext.markdown-preview',
       'agent-harness.ext.markdown-mermaid',
-      'agent-harness.ext.workflow-canvas',
     ]);
   });
 
@@ -490,20 +482,18 @@ describe('default extensions', () => {
     const designStudio = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.design-studio');
     const markdownPreview = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-preview');
     const markdownMermaid = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.markdown-mermaid');
-    const symphony = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.symphony');
     const workflowCanvas = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.workflow-canvas');
     const artifactsWorktree = DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.artifacts-worktree');
 
     expect(markdownPreview).toBeDefined();
     expect(markdownMermaid).toBeDefined();
     expect(designStudio).toBeDefined();
-    expect(symphony).toBeDefined();
+    expect(DEFAULT_EXTENSION_MANIFESTS.find((extension) => extension.manifest.id === 'agent-harness.ext.symphony')).toBeUndefined();
     expect(workflowCanvas).toBeDefined();
     expect(artifactsWorktree).toBeDefined();
     expect(isDefaultExtensionActivityFeature(markdownPreview!)).toBe(false);
     expect(isDefaultExtensionActivityFeature(markdownMermaid!)).toBe(false);
     expect(isDefaultExtensionActivityFeature(designStudio!)).toBe(true);
-    expect(isDefaultExtensionActivityFeature(symphony!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(workflowCanvas!)).toBe(true);
     expect(isDefaultExtensionActivityFeature(artifactsWorktree!)).toBe(false);
   });
