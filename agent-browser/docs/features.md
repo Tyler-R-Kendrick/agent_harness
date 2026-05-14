@@ -141,9 +141,9 @@ Playwright test: `captures the keyboard shortcuts modal`
 
 How to interact:
 - Press **?** at any time to open the keyboard shortcuts overlay.
-- Use **↑ / ↓** to move the tree cursor, **→** to expand/enter, **←** to collapse/go to parent, and **Home / End** for first/last item.
-- Use **Space**, **Shift+↑/↓**, and **Ctrl+A** for selection.
-- Use **Enter**, **Ctrl+X**, **Ctrl+V**, and **Esc** for operations.
+- Use **↑ / ↓** and **Ctrl+↑/↓** to move the tree cursor, **→** to expand/enter, **←**, **Alt+↑**, and **Backspace** to collapse/go to parent, **Home / End** for first/last item, and **F5** to refresh the tree state.
+- Use **Space**, **Ctrl+Space**, **Shift+↑/↓**, and **Ctrl+A** for selection.
+- Use **Enter**, **F2**, **Alt+Enter**, **Shift+F10 / Menu**, **Delete / Ctrl+D**, **Shift+Delete**, **Ctrl+C**, **Ctrl+X**, **Ctrl+V**, and **Esc** for Explorer-style operations.
 - Use **Type to filter** for incremental search.
 - Use **Alt+1-5** to jump between Projects, History, Extensions, Settings, and Account.
 - Use **Ctrl/Cmd+`** to toggle between the chat panel and terminal mode.

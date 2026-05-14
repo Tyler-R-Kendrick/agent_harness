@@ -884,15 +884,18 @@ const WORKSPACE_SHORTCUT_GROUPS = [
     title: 'Navigation',
     items: [
       { keys: '↑ / ↓', description: 'Move cursor' },
+      { keys: 'Ctrl+↑/↓', description: 'Move cursor without changing selection' },
       { keys: '→', description: 'Expand folder / enter' },
       { keys: '←', description: 'Collapse folder / go to parent' },
+      { keys: 'Alt+↑ / Backspace', description: 'Go to parent' },
       { keys: 'Home / End', description: 'First / last item' },
+      { keys: 'F5', description: 'Refresh tree state' },
     ],
   },
   {
     title: 'Selection',
     items: [
-      { keys: 'Space', description: 'Toggle selection' },
+      { keys: 'Space / Ctrl+Space', description: 'Toggle selection' },
       { keys: 'Shift+↑/↓', description: 'Extend selection' },
       { keys: 'Ctrl+A', description: 'Select all visible' },
     ],
@@ -901,6 +904,12 @@ const WORKSPACE_SHORTCUT_GROUPS = [
     title: 'Operations',
     items: [
       { keys: 'Enter', description: 'Toggle folder / open tab' },
+      { keys: 'F2', description: 'Rename item' },
+      { keys: 'Alt+Enter', description: 'Properties' },
+      { keys: 'Shift+F10 / Menu', description: 'Context menu' },
+      { keys: 'Delete / Ctrl+D', description: 'Delete selected items' },
+      { keys: 'Shift+Delete', description: 'Delete selected items' },
+      { keys: 'Ctrl+C', description: 'Copy selected references' },
       { keys: 'Ctrl+X', description: 'Cut selected' },
       { keys: 'Ctrl+V', description: 'Paste into folder' },
       { keys: 'Esc', description: 'Clear / cancel' },
@@ -14925,7 +14934,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
           onNodeContextMenu(rect.right, rect.bottom, node);
         };
         return (
-          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile || isActiveArtifact ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
+          <div key={node.id} role="treeitem" aria-selected={isSelected || isCursor} data-tree-node-id={node.id} className={`tree-row ${isWorkspace ? 'ws-node' : ''} ${isActiveWs ? 'ws-active' : ''} ${isCursor ? 'cursor' : ''} ${openTabIds.includes(node.id) || activeSessionIds.includes(node.id) ? 'active' : ''} ${isEditingFile || isActiveArtifact ? 'active' : ''} ${isSelected ? 'selected' : ''} ${isFile ? 'file-node' : ''} ${node.isReference ? 'tree-row-reference' : ''}`} style={{ paddingLeft: `${depth * 16}px` }}
             onContextMenu={hasContextMenu ? (e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -17394,20 +17403,25 @@ function AgentBrowserApp() {
         setSelectionAnchorId(anchorId);
       };
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'a') {
         event.preventDefault();
         setSelectedIds(visibleItems.map((item) => item.node.id));
         setSelectionAnchorId(cursorId);
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x') {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        void copyWorktreeNodesByIds(selectedIds.length ? selectedIds : cursorId ? [cursorId] : []);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'x') {
         event.preventDefault();
         const nextClipboard = selectedIds.length ? selectedIds : cursorId ? [cursorId] : [];
         setClipboardIds(nextClipboard);
         setToast({ msg: nextClipboard.length ? `Cut ${nextClipboard.length} item${nextClipboard.length === 1 ? '' : 's'}` : 'Nothing selected to cut', type: nextClipboard.length ? 'info' : 'warning' });
         return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'v') {
         event.preventDefault();
         const targetWorkspace = currentNode?.type === 'workspace'
           ? currentNode
@@ -17417,10 +17431,36 @@ function AgentBrowserApp() {
         if (targetWorkspace) pasteSelectionIntoWorkspace(targetWorkspace.id);
         return;
       }
-      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key === ' ' && cursorId) {
+      if (!event.altKey && event.key === ' ' && cursorId) {
         event.preventDefault();
         setSelectedIds((current) => current.includes(cursorId) ? current.filter((id) => id !== cursorId) : [...current, cursorId]);
         setSelectionAnchorId(cursorId);
+        return;
+      }
+      if ((event.key === 'Delete' && !event.ctrlKey && !event.metaKey && !event.altKey) || ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'd')) {
+        event.preventDefault();
+        deleteWorktreeNodesByIds(selectedIds.length ? selectedIds : cursorId ? [cursorId] : []);
+        return;
+      }
+      if (event.key === 'F2' && !event.ctrlKey && !event.metaKey && !event.altKey && currentNode) {
+        event.preventDefault();
+        openRenameForWorktreeNode(currentNode);
+        return;
+      }
+      if (event.key === 'Enter' && event.altKey && !event.ctrlKey && !event.metaKey && currentNode) {
+        event.preventDefault();
+        setPropertiesNode(currentNode);
+        return;
+      }
+      if (((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu' || event.key === 'Apps') && currentNode) {
+        event.preventDefault();
+        openKeyboardContextMenuForNode(currentNode);
+        return;
+      }
+      if (event.key === 'F5' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setRoot((current) => ({ ...current }));
+        setToast({ msg: 'Workspace tree refreshed', type: 'info' });
         return;
       }
       if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1 && /\S/.test(event.key)) {
@@ -17428,9 +17468,18 @@ function AgentBrowserApp() {
         setTreeFilter((current) => `${current}${event.key.toLowerCase()}`);
         return;
       }
-      if (event.key === 'Backspace' && treeFilter) {
+      if (event.key === 'Backspace') {
         event.preventDefault();
-        setTreeFilter((current) => current.slice(0, -1));
+        if (treeFilter) {
+          setTreeFilter((current) => current.slice(0, -1));
+        } else if (currentParent && currentParent.type !== 'root') {
+          setCursorId(currentParent.id);
+        }
+        return;
+      }
+      if (event.altKey && !event.ctrlKey && !event.metaKey && event.key === 'ArrowUp' && currentParent && currentParent.type !== 'root') {
+        event.preventDefault();
+        setCursorId(currentParent.id);
         return;
       }
       if (event.key === 'ArrowDown') {
@@ -17452,10 +17501,12 @@ function AgentBrowserApp() {
       if (event.key === 'Home' && visibleItems.length) {
         event.preventDefault();
         setCursorId(visibleItems[0].node.id);
+        if (event.shiftKey) setRangeSelection(0);
       }
       if (event.key === 'End' && visibleItems.length) {
         event.preventDefault();
         setCursorId(visibleItems[visibleItems.length - 1].node.id);
+        if (event.shiftKey) setRangeSelection(visibleItems.length - 1);
       }
       if (event.key === 'ArrowRight' && cursorId) {
         if (currentNode && currentNode.type !== 'tab' && currentNode.type !== 'file' && !currentNode.expanded) {
@@ -17619,19 +17670,307 @@ function AgentBrowserApp() {
     setToast({ msg: `Created ${template.path}`, type: 'success' });
   }
 
-  async function handleDeleteSessionFsNode(sessionId: string, path: string) {
+  async function deleteSessionFsNode(sessionId: string, path: string, options: { showToast?: boolean } = {}): Promise<boolean> {
+    const showToast = options.showToast ?? true;
     const bash = bashBySessionRef.current[sessionId];
-    if (!bash) { setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' }); return; }
+    if (!bash) {
+      if (showToast) setToast({ msg: 'Session not yet initialised — open it first', type: 'warning' });
+      return false;
+    }
     let normalizedPath: string;
     try {
       normalizedPath = normalizeSessionFsPath(path);
     } catch (error) {
-      setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
-      return;
+      if (showToast) setToast({ msg: error instanceof Error ? error.message : 'Invalid session filesystem path.', type: 'warning' });
+      return false;
     }
     await bash.exec(`rm -rf ${quoteShellArg(normalizedPath)}`);
     handleTerminalFsPathsChanged(sessionId, bash.fs.getAllPaths());
-    setToast({ msg: `Deleted ${normalizedPath}`, type: 'success' });
+    if (showToast) setToast({ msg: `Deleted ${normalizedPath}`, type: 'success' });
+    return true;
+  }
+
+  async function handleDeleteSessionFsNode(sessionId: string, path: string) {
+    await deleteSessionFsNode(sessionId, path);
+  }
+
+  function orderWorktreeCommandIds(nodeIds: readonly string[]): string[] {
+    const visibleOrder = new Map(visibleItems.map((item, index) => [item.node.id, index]));
+    return [...new Set(nodeIds)].sort((left, right) => {
+      const leftIndex = visibleOrder.get(left) ?? Number.MAX_SAFE_INTEGER;
+      const rightIndex = visibleOrder.get(right) ?? Number.MAX_SAFE_INTEGER;
+      if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+      return left.localeCompare(right);
+    });
+  }
+
+  async function copyWorktreeNodesByIds(nodeIds: readonly string[]) {
+    const orderedIds = orderWorktreeCommandIds(nodeIds);
+    const references = orderedIds.flatMap((nodeId) => {
+      const node = findNode(root, nodeId);
+      if (!node) return [];
+      const vfsArgs = node.id.startsWith('vfs:') && !node.nodeKind ? parseVfsNodeId(node.id) : null;
+      if (vfsArgs) return [`${node.name}\t${vfsArgs.basePath}`];
+      if (node.url) return [`${node.name}\t${node.url}`];
+      if (node.filePath) return [`${node.name}\t${node.filePath}`];
+      return [node.name];
+    });
+    if (!references.length) {
+      setToast({ msg: 'Nothing selected to copy', type: 'warning' });
+      return;
+    }
+    try {
+      await writeToClipboard(references.join('\n'), `${references.length} worktree item${references.length === 1 ? '' : 's'}`);
+      setToast({ msg: `Copied ${references.length} item${references.length === 1 ? '' : 's'}`, type: 'success' });
+    } catch {
+      setToast({ msg: 'Failed to copy selected items', type: 'error' });
+    }
+  }
+
+  function formatWorktreeDeletionToast(deletedCount: number, skippedCount: number): ToastState {
+    if (deletedCount <= 0) {
+      return { msg: skippedCount ? 'No selected items can be deleted' : 'Nothing selected to delete', type: 'warning' };
+    }
+    const itemLabel = `Deleted ${deletedCount} item${deletedCount === 1 ? '' : 's'}`;
+    if (!skippedCount) return { msg: itemLabel, type: 'success' };
+    return { msg: `${itemLabel}; skipped ${skippedCount} item${skippedCount === 1 ? '' : 's'}`, type: 'success' };
+  }
+
+  function updateWorkspaceViewStateForDeletedItems(removalsByWorkspace: Map<string, { nodeIds: Set<string>; paneIds: Set<string>; filePaths: Set<string> }>) {
+    if (!removalsByWorkspace.size) return;
+    setWorkspaceViewStateByWorkspace((current) => {
+      let next = current;
+      for (const [workspaceId, removals] of removalsByWorkspace) {
+        const workspace = getWorkspace(root, workspaceId) ?? activeWorkspace;
+        const existing = current[workspaceId] ?? createWorkspaceViewEntry(workspace);
+        const nextEntry: WorkspaceViewState = {
+          ...existing,
+          openTabIds: existing.openTabIds.filter((id) => !removals.nodeIds.has(id)),
+          activeSessionIds: existing.activeSessionIds.filter((id) => !removals.nodeIds.has(id)),
+          mountedSessionFsIds: existing.mountedSessionFsIds.filter((id) => !removals.nodeIds.has(id)),
+          editingFilePath: existing.editingFilePath && removals.filePaths.has(existing.editingFilePath) ? null : existing.editingFilePath,
+          panelOrder: existing.panelOrder.filter((id) => !removals.paneIds.has(id)),
+        };
+        if (!workspaceViewStateEquals(existing, nextEntry)) {
+          next = { ...next, [workspaceId]: nextEntry };
+        }
+      }
+      return next;
+    });
+  }
+
+  function deleteWorktreeNodesByIds(nodeIds: readonly string[]) {
+    const orderedIds = orderWorktreeCommandIds(nodeIds);
+    if (!orderedIds.length) {
+      setToast(formatWorktreeDeletionToast(0, 0));
+      return;
+    }
+
+    const treeNodeIdsToRemove = new Set<string>();
+    const workspaceFilePathsToRemove = new Map<string, Set<string>>();
+    const removalsByWorkspace = new Map<string, { nodeIds: Set<string>; paneIds: Set<string>; filePaths: Set<string> }>();
+    const sessionIdsToClean = new Set<string>();
+    const browserTabIdsToClean = new Set<string>();
+    const deletedSelectionIds = new Set<string>();
+    const vfsDeletes: Array<{ nodeId: string; sessionId: string; basePath: string }> = [];
+    let deletedCount = 0;
+    let skippedCount = 0;
+
+    const registerWorkspaceRemoval = (workspaceId: string, nodeId: string, paneId: string | null, filePath?: string) => {
+      const existing = removalsByWorkspace.get(workspaceId) ?? { nodeIds: new Set<string>(), paneIds: new Set<string>(), filePaths: new Set<string>() };
+      existing.nodeIds.add(nodeId);
+      if (paneId) existing.paneIds.add(paneId);
+      if (filePath) {
+        existing.filePaths.add(filePath);
+        existing.paneIds.add(`file:${filePath}`);
+      }
+      removalsByWorkspace.set(workspaceId, existing);
+    };
+
+    for (const nodeId of orderedIds) {
+      const node = findNode(root, nodeId);
+      if (!node) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const vfsArgs = node.id.startsWith('vfs:') && !node.nodeKind ? parseVfsNodeId(node.id) : null;
+      if (vfsArgs) {
+        if (vfsArgs.isDriveRoot) {
+          skippedCount += 1;
+          continue;
+        }
+        vfsDeletes.push({ nodeId, sessionId: vfsArgs.sessionId, basePath: vfsArgs.basePath });
+        continue;
+      }
+
+      const ownerWorkspace = findWorkspaceForNode(root, nodeId);
+      const ownerWorkspaceId = ownerWorkspace?.id ?? activeWorkspaceId;
+      if (node.type === 'file' && node.filePath && !node.artifactId && !node.artifactReferenceId && !node.artifactFilePath) {
+        const file = ownerWorkspace ? (workspaceFilesByWorkspace[ownerWorkspace.id] ?? []).find((entry) => entry.path === node.filePath) : null;
+        const removalBlocker = file ? getWorkspaceFileRemovalBlocker(file) : null;
+        if (!ownerWorkspace || !file || removalBlocker) {
+          skippedCount += 1;
+          continue;
+        }
+        const paths = workspaceFilePathsToRemove.get(ownerWorkspace.id) ?? new Set<string>();
+        paths.add(node.filePath);
+        workspaceFilePathsToRemove.set(ownerWorkspace.id, paths);
+        registerWorkspaceRemoval(ownerWorkspace.id, nodeId, renderPaneIdForNode(node), node.filePath);
+        deletedSelectionIds.add(nodeId);
+        deletedCount += 1;
+        continue;
+      }
+
+      if (node.type === 'tab' && ((node.nodeKind ?? 'browser') === 'browser' || node.nodeKind === 'session')) {
+        treeNodeIdsToRemove.add(nodeId);
+        registerWorkspaceRemoval(ownerWorkspaceId, nodeId, renderPaneIdForNode(node));
+        deletedSelectionIds.add(nodeId);
+        deletedCount += 1;
+        if (node.nodeKind === 'session') sessionIdsToClean.add(nodeId);
+        if ((node.nodeKind ?? 'browser') === 'browser') browserTabIdsToClean.add(nodeId);
+        continue;
+      }
+
+      skippedCount += 1;
+    }
+
+    if (workspaceFilePathsToRemove.size) {
+      setWorkspaceFilesByWorkspace((current) => {
+        let next = current;
+        for (const [workspaceId, paths] of workspaceFilePathsToRemove) {
+          let files = current[workspaceId] ?? [];
+          const originalFiles = files;
+          for (const path of paths) {
+            files = removeWorkspaceFile(files, path);
+          }
+          if (files !== originalFiles) {
+            next = { ...next, [workspaceId]: files };
+          }
+        }
+        return next;
+      });
+    }
+
+    if (treeNodeIdsToRemove.size) {
+      setRoot((current) => [...treeNodeIdsToRemove].reduce((nextRoot, nodeId) => removeNodeById(nextRoot, nodeId), current));
+    }
+
+    for (const sessionId of sessionIdsToClean) {
+      delete bashBySessionRef.current[sessionId];
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, sessionId);
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.chatHistoryBySession, isStringArrayRecord, sessionId);
+      removeStoredRecordEntry(localStorageBackend, STORAGE_KEYS.artifactContextBySession, isArtifactContextBySession, sessionId);
+    }
+
+    if (sessionIdsToClean.size) {
+      setArtifactContextBySession((current) => {
+        let next = current;
+        for (const sessionId of sessionIdsToClean) {
+          if (sessionId in next) {
+            next = { ...next };
+            delete next[sessionId];
+          }
+        }
+        return next;
+      });
+      setTerminalFsPathsBySession((current) => {
+        let next = current;
+        for (const sessionId of sessionIdsToClean) {
+          if (sessionId in next) {
+            next = { ...next };
+            delete next[sessionId];
+          }
+        }
+        return next;
+      });
+      setTerminalFsFileContentsBySession((current) => {
+        let next = current;
+        for (const sessionId of sessionIdsToClean) {
+          if (sessionId in next) {
+            next = { ...next };
+            delete next[sessionId];
+          }
+        }
+        return next;
+      });
+    }
+
+    if (browserTabIdsToClean.size) {
+      setBrowserNavHistories((current) => {
+        let next = current;
+        for (const tabId of browserTabIdsToClean) {
+          if (tabId in next) {
+            next = { ...next };
+            delete next[tabId];
+          }
+        }
+        return next;
+      });
+    }
+
+    updateWorkspaceViewStateForDeletedItems(removalsByWorkspace);
+
+    const finalizeDeletion = (finalDeletedCount: number, finalSkippedCount: number, finalDeletedSelectionIds: Set<string>) => {
+      setSelectedIds((current) => current.filter((id) => !finalDeletedSelectionIds.has(id)));
+      setSelectionAnchorId(null);
+      if (cursorId && finalDeletedSelectionIds.has(cursorId)) {
+        const nextCursor = visibleItems.find((item) => !finalDeletedSelectionIds.has(item.node.id))?.node.id ?? null;
+        setCursorId(nextCursor);
+      }
+      setClipboardIds((current) => current.filter((id) => !finalDeletedSelectionIds.has(id)));
+      setToast(formatWorktreeDeletionToast(finalDeletedCount, finalSkippedCount));
+    };
+
+    if (!vfsDeletes.length) {
+      finalizeDeletion(deletedCount, skippedCount, deletedSelectionIds);
+      return;
+    }
+
+    void Promise.all(vfsDeletes.map(async (entry) => ({
+      ...entry,
+      deleted: await deleteSessionFsNode(entry.sessionId, entry.basePath, { showToast: false }),
+    }))).then((results) => {
+      const finalDeletedSelectionIds = new Set(deletedSelectionIds);
+      let deletedVfsCount = 0;
+      for (const result of results) {
+        if (result.deleted) {
+          deletedVfsCount += 1;
+          finalDeletedSelectionIds.add(result.nodeId);
+        }
+      }
+      finalizeDeletion(deletedCount + deletedVfsCount, skippedCount + results.length - deletedVfsCount, finalDeletedSelectionIds);
+    });
+  }
+
+  function openRenameForWorktreeNode(node: TreeNode) {
+    if (node.type === 'workspace') {
+      openRenameWorkspace(node.id);
+      return;
+    }
+    if (node.type === 'tab' && node.nodeKind === 'session') {
+      openRenameSessionDialog(node);
+      return;
+    }
+    const vfsArgs = node.id.startsWith('vfs:') && !node.nodeKind ? parseVfsNodeId(node.id) : null;
+    if (vfsArgs && !vfsArgs.isDriveRoot) {
+      setRenameSessionFsName(vfsArgs.basePath.slice(vfsArgs.basePath.lastIndexOf('/') + 1));
+      setRenameSessionFsMenu({ sessionId: vfsArgs.sessionId, path: vfsArgs.basePath });
+      return;
+    }
+    if (node.type === 'file' && node.filePath && !node.artifactId && !node.artifactReferenceId && !node.artifactFilePath) {
+      handleOpenFileNode(node.id);
+      setToast({ msg: `Edit the Path field to rename ${node.name}`, type: 'info' });
+      return;
+    }
+    setToast({ msg: `${node.name} cannot be renamed from the worktree`, type: 'warning' });
+  }
+
+  function openKeyboardContextMenuForNode(node: TreeNode) {
+    const row = Array.from(document.querySelectorAll<HTMLElement>('[data-tree-node-id]'))
+      .find((element) => element.dataset.treeNodeId === node.id);
+    const rect = row?.getBoundingClientRect();
+    openContextMenuForNode(rect ? rect.left + 24 : 160, rect ? rect.bottom : 160, node);
   }
 
   async function handleRenameSessionFsNode(sessionId: string, oldPath: string, newName: string) {

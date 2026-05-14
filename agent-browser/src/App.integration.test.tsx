@@ -55,6 +55,14 @@ function getTreeItemByText(text: string): HTMLElement {
   return treeItem;
 }
 
+function getTreeButtonByText(text: string): HTMLButtonElement {
+  const button = within(getTreeItemByText(text))
+    .getAllByRole('button')
+    .find((candidate) => candidate.classList.contains('tree-button'));
+  if (!button) throw new Error(`Unable to find tree button containing ${text}`);
+  return button as HTMLButtonElement;
+}
+
 function dispatchCancelableContextMenu(target: Element, init: MouseEventInit = {}) {
   const event = new MouseEvent('contextmenu', {
     bubbles: true,
@@ -5271,6 +5279,75 @@ styles:
     expect(document.querySelectorAll('.tree-row').length).toBeGreaterThan(0);
   });
 
+  it('deletes multiple selected worktree items with Explorer delete hotkeys', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.focus(getTreeButtonByText('Hugging Face'));
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+    fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true });
+    fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+
+    expect(document.querySelectorAll('.tree-row.selected')).toHaveLength(2);
+
+    fireEvent.keyDown(window, { key: 'Delete' });
+
+    expect(screen.queryByRole('button', { name: /Hugging Face/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Transformers\.js/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Deleted 2 items')).toBeInTheDocument();
+  });
+
+  it('keeps non-deletable selected worktree items while deleting the selected items that can be deleted', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Browser' }));
+    fireEvent.keyDown(window, { key: ' ', code: 'Space' });
+    fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true });
+    fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+
+    expect(document.querySelectorAll('.tree-row.selected')).toHaveLength(2);
+
+    fireEvent.keyDown(window, { key: 'd', ctrlKey: true });
+
+    expect(screen.getByRole('button', { name: 'Browser' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Hugging Face/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Deleted 1 item; skipped 1 item')).toBeInTheDocument();
+  });
+
+  it('opens rename, properties, and context actions from Explorer command keys', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const sessionButton = screen.getByRole('button', { name: 'Session 1' });
+    fireEvent.focus(sessionButton);
+    fireEvent.keyDown(window, { key: 'F2' });
+
+    expect(screen.getByRole('dialog', { name: 'Rename session' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Session name' }), { key: 'Escape' });
+
+    fireEvent.focus(sessionButton);
+    fireEvent.keyDown(window, { key: 'Enter', altKey: true });
+
+    expect(screen.getByRole('dialog', { name: 'Properties' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close Properties' }));
+
+    fireEvent.focus(sessionButton);
+    fireEvent.keyDown(window, { key: 'F10', shiftKey: true });
+
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeInTheDocument();
+  });
+
   it('supports type-to-filter and shows the screenshot hotkeys overlay', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -5284,6 +5361,10 @@ styles:
     fireEvent.keyDown(window, { key: '?' });
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
     expect(screen.getByText('Ctrl+Alt+←/→')).toBeInTheDocument();
+    expect(screen.getByText('Delete / Ctrl+D')).toBeInTheDocument();
+    expect(screen.getByText('F2')).toBeInTheDocument();
+    expect(screen.getByText('Alt+Enter')).toBeInTheDocument();
+    expect(screen.getByText('Shift+F10 / Menu')).toBeInTheDocument();
     expect(screen.getByText('Double-click pill')).toBeInTheDocument();
   });
 
