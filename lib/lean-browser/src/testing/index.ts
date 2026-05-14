@@ -1,2 +1,3 @@
-export * from './stubValidationModel';
-export * from './fakeLeanChecker';
+export { StubValidationModel } from './stubValidationModel';
+export { FakeLeanChecker } from './fakeLeanChecker';
+export type { FakeLeanCheckerDecision } from './fakeLeanChecker';
