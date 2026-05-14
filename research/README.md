@@ -24,3 +24,4 @@ This directory stores paper-by-paper research packets.
 - `proxy-pointer-framework-tds`
 - `proxy-pointer-rag-tds-2026`
 - `rubricem-2605.10899`
+- `synapse-asset-5150`
