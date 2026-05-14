@@ -75,6 +75,7 @@ async function main() {
   assert.match(visualSmokeScript, /Workspace wiki/);
   assert.match(visualSmokeScript, /agent-browser-repository-wiki\.png/);
   assert.match(visualSmokeScript, /agent-browser-repository-wiki-pages\.png/);
+  assert.match(visualSmokeScript, /agent-browser-repository-wiki-pages-mobile\.png/);
   assert.match(visualSmokeScript, /agent-browser-repository-wiki-graph\.png/);
   assert.match(visualSmokeScript, /agent-browser-repository-wiki-mobile\.png/);
   assert.match(visualSmokeScript, /wiki:ws-research:workspace-map/);

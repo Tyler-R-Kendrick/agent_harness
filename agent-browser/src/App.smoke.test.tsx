@@ -602,6 +602,10 @@ describe('App smoke coverage', () => {
     expect(screen.queryByRole('tab', { name: 'Scoped Chat' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Sources' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Search wiki pages and memories')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Wiki page contents' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Wiki article references' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'References' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Citation reference 1')).toBeInTheDocument();
     expect(screen.getAllByText('wiki:ws-research:workspace-map').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Refresh wiki' })).toBeInTheDocument();
 
@@ -611,8 +615,9 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByRole('heading', { name: 'Capability files' })).toBeInTheDocument();
     expect(screen.getByText('Related pages')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'References' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Runtime surfaces' })).toBeInTheDocument();
-    expect(screen.getByRole('complementary', { name: 'Page context' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Wiki article references' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('tab', { name: 'Knowledge Graph' }));

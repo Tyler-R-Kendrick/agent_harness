@@ -11448,6 +11448,8 @@ function RepoWikiWorkbench({
       y2: toCard.y,
     }];
   });
+  const selectedPageDomId = selectedPage?.id.replace(/[^a-z0-9_-]/gi, '-') ?? 'empty';
+  const selectedPageReferences = selectedPage ? [selectedPage.citationId, ...selectedPage.sourcePaths.slice(0, 6)] : [];
 
   return (
     <section className="repo-wiki-workbench" role="region" aria-label="Workspace knowledgebase wiki">
@@ -11490,9 +11492,9 @@ function RepoWikiWorkbench({
       <div className="repo-wiki-workbench-body" role="tabpanel" aria-label={activeViewMeta.label}>
         {activeView === 'pages' ? (
           <div className="repo-wiki-pages-view">
-            <nav className="repo-wiki-page-index" aria-label="Generated wiki pages">
+            <nav className="repo-wiki-page-index" aria-label="Wiki page contents">
               <div className="repo-wiki-panel-label">
-                <span>Generated pages</span>
+                <span>Contents</span>
                 <strong>{visiblePages.length}</strong>
               </div>
               {visiblePages.map((page) => (
@@ -11509,59 +11511,88 @@ function RepoWikiWorkbench({
             </nav>
 
             {selectedPage ? (
-              <article className="repo-wiki-page-card repo-wiki-page-card--reader" key={selectedPage.id}>
-                <header className="repo-wiki-reader-header">
-                  <span className="panel-eyebrow">Wiki page</span>
-                  <h3>{selectedPage.title}</h3>
-                  <code>{selectedPage.citationId}</code>
-                </header>
-                <div className="repo-wiki-reader-main">
+              <>
+                <article className="repo-wiki-page-card repo-wiki-page-card--reader" key={selectedPage.id}>
+                  <header className="repo-wiki-reader-header">
+                    <div>
+                      <span className="panel-eyebrow">Wiki page</span>
+                      <h3>{selectedPage.title}</h3>
+                    </div>
+                    <code>{selectedPage.citationId}</code>
+                  </header>
                   <div className="repo-wiki-reader-copy">
-                    <p className="repo-wiki-reader-summary">{selectedPage.summary}</p>
-                    {selectedPage.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-                    <ul>
-                      {selectedPage.facts.map((fact) => <li key={fact}>{fact}</li>)}
-                    </ul>
+                    <p className="repo-wiki-reader-summary">
+                      {selectedPage.summary}
+                      <sup className="repo-wiki-ref-marker" aria-label="Citation reference 1">[1]</sup>
+                    </p>
+                    {selectedPage.body.map((paragraph, index) => (
+                      <p key={`${paragraph}:${index}`}>
+                        {paragraph}
+                        <sup className="repo-wiki-ref-marker" aria-label={`Citation reference ${index + 2}`}>[{index + 2}]</sup>
+                      </p>
+                    ))}
+                    <section className="repo-wiki-reader-facts" aria-labelledby={`repo-wiki-facts-${selectedPageDomId}`}>
+                      <h4 id={`repo-wiki-facts-${selectedPageDomId}`}>Key facts</h4>
+                      <ul aria-label="Article facts">
+                        {selectedPage.facts.map((fact, index) => (
+                          <li key={`${fact}:${index}`}>
+                            <span>{fact}</span>
+                            <sup className="repo-wiki-ref-marker" aria-label={`Fact reference ${index + 1}`}>[{selectedPage.body.length + index + 2}]</sup>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
                   </div>
-                  <aside className="repo-wiki-page-context" role="complementary" aria-label="Page context">
-                    <section className="repo-wiki-related-pages" aria-label="Related pages">
-                      <h3>Related pages</h3>
-                      {[...selectedPage.links, ...selectedPage.backlinks].length ? (
-                        <div className="repo-wiki-link-list">
-                          {[...selectedPage.links, ...selectedPage.backlinks].map((link) => (
-                            <button
-                              type="button"
-                              key={`${link.targetId}:${link.predicate}`}
-                              aria-label={`Open ${link.targetTitle}`}
-                              onClick={() => onOpenPage(link.targetId)}
-                            >
-                              <strong>{link.targetTitle}</strong>
-                              <small>{link.predicate}</small>
-                            </button>
-                          ))}
-                        </div>
-                      ) : <p>No related wiki pages yet.</p>}
-                    </section>
-                    <section className="repo-wiki-source-paths" aria-label="Page source paths">
-                      <h3>Sources</h3>
-                      {selectedPage.sourcePaths.length
-                        ? selectedPage.sourcePaths.slice(0, 8).map((path) => <span key={path}>{path}</span>)
-                        : <span>No source paths captured</span>}
-                    </section>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => {
-                        const citation = snapshot.citations.find((entry) => entry.id === selectedPage.citationId);
-                        if (citation) void onCopyCitation(citation);
-                      }}
-                    >
-                      <Icon name="clipboard" size={13} />
-                      <span>Copy Citation</span>
-                    </button>
-                  </aside>
-                </div>
-              </article>
+                </article>
+                <aside className="repo-wiki-page-context" role="complementary" aria-label="Wiki article references">
+                  <section className="repo-wiki-related-pages" aria-label="Related pages">
+                    <h3>Related pages</h3>
+                    {[...selectedPage.links, ...selectedPage.backlinks].length ? (
+                      <div className="repo-wiki-link-list">
+                        {[...selectedPage.links, ...selectedPage.backlinks].map((link) => (
+                          <button
+                            type="button"
+                            key={`${link.targetId}:${link.predicate}`}
+                            aria-label={`Open ${link.targetTitle}`}
+                            onClick={() => onOpenPage(link.targetId)}
+                          >
+                            <strong>{link.targetTitle}</strong>
+                            <small>{link.predicate}</small>
+                          </button>
+                        ))}
+                      </div>
+                    ) : <p>No related wiki pages yet.</p>}
+                  </section>
+                  <section className="repo-wiki-reference-block" aria-label="References">
+                    <h3>References</h3>
+                    <ol className="repo-wiki-reference-list">
+                      {selectedPageReferences.map((reference, index) => (
+                        <li key={`${reference}:${index}`}>
+                          <span>[{index + 1}]</span>
+                          <code>{reference}</code>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
+                  <section className="repo-wiki-source-paths" aria-label="Page source paths">
+                    <h3>Sources</h3>
+                    {selectedPage.sourcePaths.length
+                      ? selectedPage.sourcePaths.slice(0, 8).map((path) => <span key={path}>{path}</span>)
+                      : <span>No source paths captured</span>}
+                  </section>
+                  <button
+                    type="button"
+                    className="secondary-button repo-wiki-citation-copy"
+                    onClick={() => {
+                      const citation = snapshot.citations.find((entry) => entry.id === selectedPage.citationId);
+                      if (citation) void onCopyCitation(citation);
+                    }}
+                  >
+                    <Icon name="clipboard" size={13} />
+                    <span>Copy Citation</span>
+                  </button>
+                </aside>
+              </>
             ) : (
               <article className="repo-wiki-page-card">
                 <h3>No wiki pages match the current search.</h3>

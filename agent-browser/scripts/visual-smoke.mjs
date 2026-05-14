@@ -36,6 +36,7 @@ const designStudioTokenReviewViewportOutputPaths = [
 const evaluationOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-evaluation-observability.png');
 const repoWikiOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki.png');
 const repoWikiPagesOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-pages.png');
+const repoWikiPagesMobileOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-pages-mobile.png');
 const repoWikiGraphOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-graph.png');
 const repoWikiMemoryOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-memory.png');
 const repoWikiMobileOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-mobile.png');
@@ -1807,12 +1808,33 @@ async function main() {
     });
     await expect(repoWikiWorkbench.getByLabel('Search wiki pages and memories')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(repoWikiWorkbench.getByRole('heading', { name: 'Repo map' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiWorkbench.getByText('wiki:ws-research:workspace-map')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('navigation', { name: 'Wiki page contents' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiWorkbench.getByRole('complementary', { name: 'Wiki article references' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiWorkbench.getByRole('heading', { name: 'References' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.locator('.repo-wiki-reader-header code')).toContainText(
+      'wiki:ws-research:workspace-map',
+      { timeout: shellTimeoutMs },
+    );
     await repoWikiWorkbench.getByLabel('Search wiki pages and memories').fill('capability');
     await expect(repoWikiWorkbench.getByRole('heading', { name: 'Capability files' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(repoWikiWorkbench.getByRole('button', { name: 'Open Runtime surfaces' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(repoWikiWorkbench.getByRole('complementary', { name: 'Page context' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('complementary', { name: 'Wiki article references' })).toBeVisible({ timeout: shellTimeoutMs });
     await page.screenshot({ path: repoWikiPagesOutputPath, fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(repoWikiWorkbench).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('heading', { name: 'Capability files' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(repoWikiWorkbench.getByRole('navigation', { name: 'Wiki page contents' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(repoWikiWorkbench.getByRole('complementary', { name: 'Wiki article references' })).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: repoWikiPagesMobileOutputPath, fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 820 });
     await repoWikiViewTabs.getByRole('tab', { name: 'Knowledge Graph' }).click();
     const repoWikiGraphPanel = repoWikiWorkbench.getByRole('tabpanel', { name: 'Knowledge Graph' });
     await expect(repoWikiGraphPanel).toBeVisible({ timeout: shellTimeoutMs });
