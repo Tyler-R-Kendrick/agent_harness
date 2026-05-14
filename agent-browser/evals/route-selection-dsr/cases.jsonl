@@ -1,0 +1,4 @@
+{"id":"local-best-theaters","input":"what are the best movie theaters near me?","expected_output":"{\"family\":\"web-search-agent\",\"expectedRoute\":\"search-local-entity\"}"}
+{"id":"compare-two-theaters","input":"compare AMC Randhurst 12 and CMX Arlington Heights with current ratings","expected_output":"{\"family\":\"composite-search-agent\",\"expectedRoute\":\"composite-compare\"}"}
+{"id":"hours-and-distance","input":"find three nearby theaters and include tonight closing times and distance","expected_output":"{\"family\":\"web-search-agent\",\"expectedRoute\":\"search-local-entity\"}"}
+{"id":"chain-and-independent-mix","input":"give me one chain and one independent theater near Arlington Heights","expected_output":"{\"family\":\"composite-search-agent\",\"expectedRoute\":\"composite-diversified\"}"}
