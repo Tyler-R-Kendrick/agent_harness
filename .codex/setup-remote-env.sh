@@ -7,6 +7,13 @@ log() {
   printf '[codex setup] %s\n' "$*"
 }
 
+log "Clearing inherited npm/node proxy configuration"
+unset HTTP_PROXY HTTPS_PROXY NO_PROXY http_proxy https_proxy no_proxy
+npm config delete proxy >/dev/null 2>&1 || true
+npm config delete https-proxy >/dev/null 2>&1 || true
+npm config set proxy null >/dev/null 2>&1 || true
+npm config set https-proxy null >/dev/null 2>&1 || true
+
 log "Preparing cache directories"
 mkdir -p /tmp/devcontainer-cache/{xdg,npm,uv,ms-playwright}
 
