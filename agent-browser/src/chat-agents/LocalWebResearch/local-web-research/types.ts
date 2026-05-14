@@ -58,6 +58,7 @@ export type WebResearchAgentConfig = {
 
 export type WebResearchRunRequest = {
   question: string;
+  retrievalStrategy?: 'baseline' | 'ppgr';
   queries?: string[];
   maxSearchResults?: number;
   maxPagesToExtract?: number;
