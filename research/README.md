@@ -12,6 +12,7 @@ This directory stores paper-by-paper research packets.
 
 ## Current papers (alphabetical)
 
+- `aaflow-2605.02162`
 - `act-wisely-2604.08545`
 - `aldrift-google-research-2026`
 - `continual-harness-2605.09998`
