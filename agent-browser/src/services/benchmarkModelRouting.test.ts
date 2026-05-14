@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   areStagedRoutingChecksPassing,
+  composeBenchmarkRouteDecision,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   buildBenchmarkRoutingCandidates,
   discoverBenchmarkEvidence,
@@ -71,6 +72,34 @@ describe('benchmark model routing', () => {
     });
 
     expect(route?.candidate.ref).toBe('ghcp:gpt-4.1');
+  });
+
+  it('composes route with pre-escalation to premium candidate on escalation keyword', () => {
+    const decision = composeBenchmarkRouteDecision({
+      provider: 'codi',
+      latestUserInput: 'Please run a security audit on this auth flow and list exploit paths.',
+      toolsEnabled: true,
+      candidates,
+      settings: { ...DEFAULT_BENCHMARK_ROUTING_SETTINGS, objective: 'cost' },
+    });
+
+    expect(decision?.complexityDecision.escalationKeyword).toBe('security');
+    expect(decision?.selectedModel.ref).toBe('ghcp:gpt-4.1');
+    expect(decision?.benchmarkReason).toContain('pre-escalated');
+  });
+
+  it('composes route with post-downgrade on simple prompts when objective allows cost bias', () => {
+    const decision = composeBenchmarkRouteDecision({
+      provider: 'codi',
+      latestUserInput: 'summarize this',
+      toolsEnabled: true,
+      candidates,
+      settings: { ...DEFAULT_BENCHMARK_ROUTING_SETTINGS, objective: 'balanced', minConfidence: 0.5 },
+    });
+
+    expect(decision?.complexityDecision.isSimple).toBe(true);
+    expect(decision?.selectedModel.ref).toBe('ghcp:gpt-4o-mini');
+    expect(decision?.benchmarkReason).toContain('post-downgraded');
   });
 
   it('infers task classes from provider and request text', () => {
