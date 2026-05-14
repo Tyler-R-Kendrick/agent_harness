@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +19,8 @@ const alias = {
   'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
   webmcp: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
   'agent-browser-mcp': path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
+  'driver.js': path.resolve(__dirname, 'src/test-fixtures/driverjs.ts'),
+  'driver.js/dist/driver.css': path.resolve(__dirname, 'src/test-fixtures/emptyStyle.ts'),
 };
 
 const baseExclude = [
@@ -42,8 +43,10 @@ const domTestFiles = [
   'src/services/workspaceFiles.test.ts',
 ];
 
+const reactPlugin = await import('@vitejs/plugin-react').then((module) => module.default).catch(() => null);
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: reactPlugin ? [reactPlugin()] : [],
   resolve: {
     alias,
   },
