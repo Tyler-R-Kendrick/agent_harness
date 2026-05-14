@@ -14,8 +14,8 @@ This directory stores paper-by-paper research packets.
 
 - `act-wisely-2604.08545`
 - `continual-harness-2605.09998`
-- `hybrid-memory-agent-marktechpost-2026`
 - `cost-aware-llm-routing-nadirclaw-2026-05-10`
+- `hybrid-memory-agent-marktechpost-2026`
 - `lambda-hermes-agent-reasoning-traces-2026-05`
-- `act-wisely-2604.08545`
+- `memprivacy-2605.09530`
 - `proxy-pointer-rag-tds-2026`
