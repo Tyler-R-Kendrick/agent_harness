@@ -22,6 +22,7 @@ import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './To
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
 import { CHAT_AGENT_SKILLS } from './skillDefinitions';
+import { buildRoutingDecisionRecord, persistRoutingDecisionRecord } from '../services/routingObservability';
 
 export type RuntimeRoutingDecision = {
   reasonCode: 'router-disabled' | 'router-selected' | 'user-pinned' | 'low-confidence-premium-escalation';
@@ -45,6 +46,11 @@ export type RuntimeRoutingConfig = {
     modelId?: string;
     confidence: number;
     tier: 'standard' | 'premium';
+    skillRouteTrace?: {
+      selectedSkill: string;
+      topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
+      reasonCodes: string[];
+    };
   } | null>;
   premiumFallback?: {
     runtimeProvider: ModelBackedAgentProvider;
@@ -244,6 +250,11 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
   runtimeProvider: ModelBackedAgentProvider;
   modelId?: string;
   routingDecision: RuntimeRoutingDecision;
+  skillRouteTrace?: {
+    selectedSkill: string;
+    topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
+    reasonCodes: string[];
+  };
 }> {
   const defaultRuntimeProvider = options.runtimeProvider ?? (options.modelId ? 'ghcp' : 'codi');
   const defaultResult = {
@@ -287,6 +298,7 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
     runtimeProvider: decision.runtimeProvider,
     modelId: decision.modelId ?? options.modelId,
     routingDecision: { reasonCode: 'router-selected', confidence: decision.confidence, tier: decision.tier, selectedBy: 'router' },
+    ...(decision.skillRouteTrace ? { skillRouteTrace: decision.skillRouteTrace } : {}),
   };
 }
 
@@ -303,6 +315,28 @@ export async function streamAgentChat(
     : (await secrets.sanitizeText(options.latestUserInput, options.secretSettings)).text;
   const latestRequest = latestUserInput ?? messages.at(-1)?.content ?? '';
   const runtimeSelection = await resolveRuntimeModelSelection({ ...options, latestUserInputText: latestRequest });
+  const sanitizedSkillRouteTrace = runtimeSelection.skillRouteTrace
+    ? {
+        selectedSkill: (await secrets.sanitizeText(runtimeSelection.skillRouteTrace.selectedSkill, options.secretSettings)).text,
+        topAlternatives: await Promise.all(runtimeSelection.skillRouteTrace.topAlternatives.map(async (item) => ({
+          skill: (await secrets.sanitizeText(item.skill, options.secretSettings)).text,
+          score: item.score,
+          reasonCode: (await secrets.sanitizeText(item.reasonCode, options.secretSettings)).text,
+        }))),
+        reasonCodes: await Promise.all(runtimeSelection.skillRouteTrace.reasonCodes.map(async (code) => (await secrets.sanitizeText(code, options.secretSettings)).text)),
+      }
+    : undefined;
+  const routingRecord = buildRoutingDecisionRecord({
+    requestId: `routing-${Date.now()}`,
+    requestText: latestRequest,
+    selectedProvider: runtimeSelection.runtimeProvider,
+    selectedModel: runtimeSelection.modelId,
+    routingDecision: runtimeSelection.routingDecision,
+    benchmarkEvidenceSource: options.runtimeRouting?.enabled ? 'benchmark-router' : 'default-router',
+    skillRouteTrace: sanitizedSkillRouteTrace,
+  });
+  persistRoutingDecisionRecord(routingRecord);
+
   callbacks.onReasoningStep?.({
     id: `routing-${Date.now()}`,
     kind: 'thinking',
