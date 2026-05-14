@@ -464,18 +464,19 @@ import {
 import {
   DEFAULT_MULTITASK_SUBAGENT_STATE,
   addMultitaskTask,
+  attachMultitaskBranchSession,
   buildMultitaskBranchDispatch,
   buildMultitaskPromptContext,
   createMultitaskProject,
   createMultitaskSubagentState,
   isMultitaskSubagentState,
   promoteMultitaskBranch,
+  reconcileMultitaskBranchSessionCompletions,
   reconcileMultitaskSubagentRuns,
   reduceMultitaskBranchLifecycle,
   requestMultitaskBranchChanges,
   selectMultitaskProject,
   selectMultitaskTask,
-  startMultitaskBranchRun,
   type MultitaskApprovalActor,
   type MultitaskBranchLifecycleAction,
   type MultitaskBranchDispatch,
@@ -2724,7 +2725,9 @@ function ChatPanel({
   cursorState,
   codexState,
   pendingSearch,
+  pendingSessionPrompt,
   onSearchConsumed,
+  onPendingSessionPromptConsumed,
   onToast,
   workspaceId,
   workspaceName,
@@ -2789,7 +2792,9 @@ function ChatPanel({
   cursorState: CursorRuntimeState;
   codexState: CodexRuntimeState;
   pendingSearch: string | null;
+  pendingSessionPrompt?: string | null;
   onSearchConsumed: () => void;
+  onPendingSessionPromptConsumed?: (prompt: string) => void;
   onToast: (toast: Exclude<ToastState, null>) => void;
   workspaceId: string;
   workspaceName: string;
@@ -2924,6 +2929,7 @@ function ChatPanel({
   const messagesRef = useRef<ChatMessage[]>([]);
   const sharedChatApiRef = useRef<SharedChatApi | null>(null);
   const consumedPendingSearchRef = useRef<string | null>(null);
+  const consumedPendingSessionPromptRef = useRef<string | null>(null);
   const browserNotificationApi = useMemo(
     () => createBrowserNotificationApi(typeof window !== 'undefined' ? window.Notification : undefined),
     [],
@@ -3844,7 +3850,7 @@ function ChatPanel({
     return true;
   }, [activeSessionId, getSessionBash, notifyAssistantComplete, onTerminalFsPathsChanged, sandboxFlags, updateMessage]);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, options: { autoRoute?: boolean; useTools?: boolean; skipSelfReflection?: boolean; provider?: AgentProvider } = {}) => {
     if (!text.trim() || activeGenerationRef.current) return;
     const assistantId = createUniqueId();
     const userId = createUniqueId();
@@ -3876,10 +3882,13 @@ function ChatPanel({
       resetActiveInputHistoryCursor();
       return;
     }
-    let providerForRequest = resolveAgentProviderForTask({
-      selectedProvider,
-      latestUserInput: trimmedText,
-    });
+    let providerForRequest = options.provider
+      ?? (options.autoRoute === false
+      ? selectedProvider
+      : resolveAgentProviderForTask({
+        selectedProvider,
+        latestUserInput: trimmedText,
+      }));
     const requestBenchmarkTaskClass = inferBenchmarkTaskClass({
       provider: providerForRequest,
       latestUserInput: trimmedText,
@@ -3893,10 +3902,15 @@ function ChatPanel({
     let requestCodiModelId = effectiveSelectedModelId;
     let requestGhcpModelId = effectiveSelectedCopilotModelId;
     let requestLocalModel = activeLocalModel;
+    if (options.autoRoute === false && providerForRequest === 'ghcp' && !requestGhcpModelId && copilotState.models[0]) {
+      requestGhcpModelId = copilotState.models[0].id;
+      effectiveSelectedCopilotModelIdRef.current = requestGhcpModelId;
+      setSelectedCopilotModelBySession((current) => ({ ...current, [activeChatSessionId]: requestGhcpModelId }));
+    }
     let runtimeProviderForRequest = resolveRuntimeAgentProvider({
       provider: providerForRequest,
       hasCodiModelsReady: Boolean(activeLocalModel),
-      hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
+      hasGhcpModelsReady: Boolean(requestGhcpModelId) && hasAvailableCopilotModels,
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
@@ -3942,10 +3956,10 @@ function ChatPanel({
     }
     setInput('');
     resetActiveInputHistoryCursor();
-    if (isMultitaskSubagentRequest(trimmedText)) {
+    if (options.autoRoute !== false && isMultitaskSubagentRequest(trimmedText)) {
       onMultitaskRequest?.(trimmedText, { openPanel: false });
     }
-    if (isConversationBranchingRequest(trimmedText)) {
+    if (options.autoRoute !== false && isConversationBranchingRequest(trimmedText)) {
       onConversationBranchRequest?.(trimmedText, activeChatSessionId);
     }
     if (activeConversationSubthread?.status === 'running') {
@@ -4068,7 +4082,8 @@ function ChatPanel({
       buildRuntimePluginPromptContext(requestRuntimePluginRuntime),
     ].filter((section): section is string => Boolean(section)).join('\n\n');
 
-    if (toolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
+    const requestToolsEnabled = options.useTools ?? toolsEnabled;
+    if (requestToolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
       if (!activeSessionId) {
         updateMessage(assistantId, { status: 'error', content: 'Open or create a session before enabling tools.' });
         return;
@@ -6187,6 +6202,7 @@ function ChatPanel({
         workspacePromptContext: requestWorkspacePromptContext,
         voters: codiVoters,
         secretSettings,
+        skipSelfReflection: options.skipSelfReflection,
       }, streamCallbacks, controller.signal);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -6476,6 +6492,59 @@ function ChatPanel({
     setPendingMcpMessage(null);
     void sendMessage(nextMessage);
   }, [pendingMcpMessage, sendMessage]);
+
+  useEffect(() => {
+    if (!pendingSessionPrompt || !activeSessionId) {
+      consumedPendingSessionPromptRef.current = null;
+      return;
+    }
+    if (activeGenerationRef.current) {
+      return;
+    }
+    if (selectedProvider === 'codi' && !activeLocalModel && !hasAvailableCopilotModels) {
+      return;
+    }
+    if (selectedProvider === 'ghcp' && !effectiveSelectedCopilotModelId && copilotState.models[0]) {
+      const nextModelId = copilotState.models[0].id;
+      effectiveSelectedCopilotModelIdRef.current = nextModelId;
+      setSelectedCopilotModelBySession((current) => ({ ...current, [activeChatSessionId]: nextModelId }));
+      return;
+    }
+
+    const promptKey = `${activeSessionId}:${pendingSessionPrompt}`;
+    if (consumedPendingSessionPromptRef.current === promptKey) {
+      return;
+    }
+
+    consumedPendingSessionPromptRef.current = promptKey;
+    void sendMessage(pendingSessionPrompt, {
+      autoRoute: false,
+      provider: hasAvailableCopilotModels ? 'ghcp' : selectedProvider,
+      skipSelfReflection: true,
+      useTools: false,
+    }).then(() => {
+      onPendingSessionPromptConsumed?.(pendingSessionPrompt);
+    }, (error) => {
+      consumedPendingSessionPromptRef.current = null;
+      onToast({
+        msg: error instanceof Error ? error.message : 'Failed to start queued session prompt',
+        type: 'error',
+      });
+    });
+  }, [
+    activeChatSessionId,
+    activeSessionId,
+    activeLocalModel,
+    copilotState.models,
+    effectiveSelectedCopilotModelId,
+    onPendingSessionPromptConsumed,
+    onToast,
+    pendingSessionPrompt,
+    selectedProvider,
+    sendMessage,
+    setSelectedCopilotModelBySession,
+    hasAvailableCopilotModels,
+  ]);
 
   useEffect(() => {
     if (!activeSessionId || !onSessionMcpControllerChange) {
@@ -15228,6 +15297,7 @@ function AgentBrowserApp() {
     setNegativeRubricTechniques(evaluationAgentRegistry.listNegativeRubricTechniques());
   }, [evaluationAgentRegistry]);
   const [harnessCoreState, setHarnessCoreState] = useState<HarnessCoreState>(() => createHarnessCoreState());
+  const [pendingReviewFollowUpRetryTick, setPendingReviewFollowUpRetryTick] = useState(0);
   const handleSessionRuntimeChange = useCallback((sessionId: string, runtime: SessionMcpRuntimeState | null) => {
     setHarnessCoreState((current) => reduceHarnessCoreEvent(
       current,
@@ -15239,6 +15309,7 @@ function AgentBrowserApp() {
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const [pendingSymphonyDispatches, setPendingSymphonyDispatches] = useState<MultitaskBranchDispatch[]>([]);
+  const queuedSymphonyBranchDispatchIdsRef = useRef<Set<string>>(new Set());
   const settingsHarnessEvolutionPlan = useMemo(() => buildHarnessEvolutionPlan({
     settings: harnessEvolutionSettings,
     request: {
@@ -15312,19 +15383,17 @@ function AgentBrowserApp() {
         : activeMultitaskSubagentState;
       return createMultitaskProject(source, name);
     });
-    setActivePanel('symphony');
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
+  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
   const createActiveMultitaskTask = useCallback((title: string, projectId: string | null) => {
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      const withTask = addMultitaskTask(source, { title, projectId });
-      if (withTask === source || !withTask.selectedBranchId) return withTask;
-      return startMultitaskBranchRun(withTask, withTask.selectedBranchId);
-    });
-    setActivePanel('symphony');
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
+    const withTask = addMultitaskTask(activeMultitaskSubagentState, { title, projectId });
+    if (withTask !== activeMultitaskSubagentState) {
+      const reconciliation = reconcileMultitaskSubagentRuns(withTask);
+      setMultitaskSubagentState(reconciliation.state);
+    }
+  }, [
+    activeMultitaskSubagentState,
+    setMultitaskSubagentState,
+  ]);
   const selectActiveMultitaskProject = useCallback((projectId: string) => {
     setMultitaskSubagentState((current) => {
       const source = current.enabled && current.workspaceId === activeWorkspaceId
@@ -15457,6 +15526,104 @@ function AgentBrowserApp() {
     activeWorkspaceId,
     setMultitaskSubagentState,
     setPendingSymphonyDispatches,
+  ]);
+  useEffect(() => {
+    if (!activeMultitaskSubagentState.enabled) {
+      queuedSymphonyBranchDispatchIdsRef.current.clear();
+      return;
+    }
+
+    const syntheticRunningIds = new Set(
+      activeMultitaskSubagentState.branches
+        .filter((branch) => branch.status === 'running' && branch.sessionId?.startsWith('symphony:'))
+        .map((branch) => branch.id),
+    );
+    for (const branchId of queuedSymphonyBranchDispatchIdsRef.current) {
+      if (!syntheticRunningIds.has(branchId)) {
+        queuedSymphonyBranchDispatchIdsRef.current.delete(branchId);
+      }
+    }
+
+    const dispatches = activeMultitaskSubagentState.branches.flatMap((branch, index) => {
+      if (!syntheticRunningIds.has(branch.id) || queuedSymphonyBranchDispatchIdsRef.current.has(branch.id)) {
+        return [];
+      }
+      queuedSymphonyBranchDispatchIdsRef.current.add(branch.id);
+      return [buildMultitaskBranchDispatch(activeMultitaskSubagentState, branch, index)];
+    });
+    if (dispatches.length > 0) {
+      setPendingSymphonyDispatches((current) => [...current, ...dispatches]);
+    }
+  }, [
+    activeMultitaskSubagentState,
+    setPendingSymphonyDispatches,
+  ]);
+  useEffect(() => {
+    if (!activeMultitaskSubagentState.enabled || activeWorkspaceSessions.length === 0) return;
+    const attachableSession = activeMultitaskSubagentState.branches
+      .map((branch) => (branch.status === 'running' && branch.sessionId?.startsWith('symphony:') && branch.sessionName
+        ? activeWorkspaceSessions.find((session) => session.name === branch.sessionName) ?? null
+        : null))
+      .find((session): session is { id: string; name: string; isOpen: boolean } => Boolean(session)) ?? null;
+    setMultitaskSubagentState((current) => {
+      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
+      return current.branches.reduce((next, branch) => {
+        if (branch.status !== 'running' || !branch.sessionId?.startsWith('symphony:') || !branch.sessionName) {
+          return next;
+        }
+        const session = activeWorkspaceSessions.find((candidate) => candidate.name === branch.sessionName);
+        return session
+          ? attachMultitaskBranchSession(next, branch.id, { sessionId: session.id, sessionName: branch.sessionName })
+          : next;
+      }, current);
+    });
+    if (attachableSession) {
+      setWorkspaceViewStateByWorkspace((current) => {
+        const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+        return {
+          ...current,
+          [activeWorkspaceId]: {
+            ...existing,
+            activeMode: 'agent',
+            activeSessionIds: [attachableSession.id],
+            panelOrder: [`session:${attachableSession.id}`],
+          },
+        };
+      });
+      setActivePanel('workspaces');
+      window.setTimeout(() => setActivePanel('workspaces'), 0);
+    }
+  }, [
+    activeWorkspace,
+    activeMultitaskSubagentState.enabled,
+    activeWorkspaceId,
+    activeWorkspaceSessions,
+    setActivePanel,
+    setMultitaskSubagentState,
+    setWorkspaceViewStateByWorkspace,
+  ]);
+  useEffect(() => {
+    if (!activeMultitaskSubagentState.enabled) return;
+    const sessionMessagesById = Object.fromEntries(
+      Object.entries(harnessCoreState.sessions).map(([sessionId, runtime]) => [
+        sessionId,
+        runtime.messages.map((message, index) => ({
+          id: `${sessionId}:${index}`,
+          role: message.role,
+          content: message.content,
+          status: message.status ?? undefined,
+        })),
+      ]),
+    );
+    setMultitaskSubagentState((current) => {
+      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
+      return reconcileMultitaskBranchSessionCompletions(current, sessionMessagesById);
+    });
+  }, [
+    activeMultitaskSubagentState.enabled,
+    activeWorkspaceId,
+    harnessCoreState.sessions,
+    setMultitaskSubagentState,
   ]);
   const workspaceActionSnapshot = useMemo<WorkspaceActionSnapshot>(() => {
     const chapterIds = Object.values(sessionChapterState.sessions)
@@ -16321,28 +16488,25 @@ function AgentBrowserApp() {
 
   const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean; boundWidgetId?: string } = {}): { id: string; name: string; isOpen: boolean } | null => {
     const shouldOpen = options.open ?? true;
-    let createdSession: { id: string; name: string; isOpen: boolean } | null = null;
-    let newSessionId: string | null = null;
+    const workspace = getWorkspace(root, workspaceId);
+    if (!workspace) return null;
+    const normalized = ensureWorkspaceCategories(workspace);
+    const category = getWorkspaceCategory(normalized, 'session');
+    const existingSessions = (category?.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind === 'session');
+    const existingIndexes = existingSessions.map((child) => {
+      const match = child.name.match(/^Session (\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+    const nextIndex = (existingIndexes.length ? Math.max(...existingIndexes) : 0) + 1;
+    const newSession = createSessionNode(workspaceId, nextIndex);
+    if (typeof nameOverride === 'string' && nameOverride.trim()) {
+      newSession.name = nameOverride.trim();
+    }
+    if (options.boundWidgetId) {
+      newSession.boundWidgetId = options.boundWidgetId;
+    }
+    const createdSession = { id: newSession.id, name: newSession.name, isOpen: shouldOpen };
     setRoot((current) => {
-      const workspace = getWorkspace(current, workspaceId);
-      if (!workspace) return current;
-      const normalized = ensureWorkspaceCategories(workspace);
-      const category = getWorkspaceCategory(normalized, 'session');
-      const existingSessions = (category?.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind === 'session');
-      const existingIndexes = existingSessions.map((child) => {
-        const match = child.name.match(/^Session (\d+)$/);
-        return match ? parseInt(match[1], 10) : 0;
-      });
-      const nextIndex = (existingIndexes.length ? Math.max(...existingIndexes) : 0) + 1;
-      const newSession = createSessionNode(workspaceId, nextIndex);
-      if (typeof nameOverride === 'string' && nameOverride.trim()) {
-        newSession.name = nameOverride.trim();
-      }
-      if (options.boundWidgetId) {
-        newSession.boundWidgetId = options.boundWidgetId;
-      }
-      newSessionId = newSession.id;
-      createdSession = { id: newSession.id, name: newSession.name, isOpen: shouldOpen };
       return deepUpdate(current, workspaceId, (node) => {
         const withCategories = ensureWorkspaceCategories(node);
         return {
@@ -16370,18 +16534,21 @@ function AgentBrowserApp() {
         ...current,
         [workspaceId]: {
           ...existing,
-          activeSessionIds: shouldOpen && newSessionId
-            ? [newSessionId]
+          activeSessionIds: shouldOpen
+            ? [newSession.id]
             : existing.activeSessionIds ?? [],
-          mountedSessionFsIds: newSessionId && !existing.mountedSessionFsIds.includes(newSessionId)
-            ? [...existing.mountedSessionFsIds, newSessionId]
+          panelOrder: shouldOpen
+            ? [`session:${newSession.id}`]
+            : existing.panelOrder,
+          mountedSessionFsIds: !existing.mountedSessionFsIds.includes(newSession.id)
+            ? [...existing.mountedSessionFsIds, newSession.id]
             : existing.mountedSessionFsIds,
         },
       };
     });
     setToast({ msg: 'New session created', type: 'success' });
     return createdSession;
-  }, [setToast, switchWorkspace]);
+  }, [root, setToast, switchWorkspace]);
 
   const openDashboardWidgetSession = useCallback((widgetId: string) => {
     const widget = activeHarnessSpec.elements[widgetId];
@@ -18669,15 +18836,22 @@ function AgentBrowserApp() {
       setToast({ msg: `Unable to open Symphony session for ${dispatch.sessionName}`, type: 'error' });
       return;
     }
-    setPendingReviewFollowUps((current) => [...current, { sessionId: session.id, prompt: dispatch.prompt }]);
     switchSidebarPanel('workspaces');
+    setMultitaskSubagentState((current) => {
+      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
+      return attachMultitaskBranchSession(current, dispatch.branchId, {
+        sessionId: session.id,
+        sessionName: dispatch.sessionName,
+      });
+    });
+    setPendingReviewFollowUps((current) => [...current, { sessionId: session.id, prompt: dispatch.prompt }]);
     setToast({
       msg: dispatch.reason === 'self-heal'
         ? `Self-healed ${dispatch.sessionName} and queued a fresh agent run`
         : `Queued Symphony agent run ${dispatch.sessionName}`,
       type: 'info',
     });
-  }, [activeWorkspaceId, addSessionToWorkspace, setToast, switchSidebarPanel]);
+  }, [activeWorkspaceId, addSessionToWorkspace, setMultitaskSubagentState, setToast, switchSidebarPanel]);
 
   useEffect(() => {
     if (pendingSymphonyDispatches.length === 0) return;
@@ -18780,22 +18954,43 @@ function AgentBrowserApp() {
   ]);
 
   useEffect(() => {
-    const readyIndex = pendingReviewFollowUps.findIndex((followUp) => sessionMcpControllersRef.current[followUp.sessionId]);
-    if (readyIndex < 0) return;
-
-    const nextFollowUp = pendingReviewFollowUps[readyIndex];
-    setPendingReviewFollowUps((current) => current.filter((_, index) => index !== readyIndex));
-    void writeSessionFromMcp({
-      sessionId: nextFollowUp.sessionId,
-      message: nextFollowUp.prompt,
-      mode: 'agent',
-    }).catch((error) => {
-      setToast({
-        msg: error instanceof Error ? error.message : 'Failed to start review follow-up',
-        type: 'error',
-      });
+    if (pendingReviewFollowUps.length === 0) return;
+    const [{ sessionId }] = pendingReviewFollowUps;
+    setWorkspaceViewStateByWorkspace((current) => {
+      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+      if (
+        existing.activeMode === 'agent'
+        && existing.activeSessionIds.length === 1
+        && existing.activeSessionIds[0] === sessionId
+        && existing.panelOrder[0] === `session:${sessionId}`
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        [activeWorkspaceId]: {
+          ...existing,
+          activeMode: 'agent',
+          activeSessionIds: [sessionId],
+          mountedSessionFsIds: existing.mountedSessionFsIds.includes(sessionId)
+            ? existing.mountedSessionFsIds
+            : [...existing.mountedSessionFsIds, sessionId],
+          panelOrder: [`session:${sessionId}`],
+        },
+      };
     });
-  }, [pendingReviewFollowUps, setToast, writeSessionFromMcp]);
+    setActivePanel('workspaces');
+    const handle = window.setTimeout(() => setActivePanel('workspaces'), 0);
+    return () => window.clearTimeout(handle);
+  }, [activeWorkspace, activeWorkspaceId, pendingReviewFollowUps, setActivePanel, setWorkspaceViewStateByWorkspace]);
+
+  useEffect(() => {
+    if (pendingReviewFollowUps.length === 0) return undefined;
+    const handle = window.setTimeout(() => {
+      setPendingReviewFollowUpRetryTick((current) => current + 1);
+    }, 100);
+    return () => window.clearTimeout(handle);
+  }, [pendingReviewFollowUps, pendingReviewFollowUpRetryTick]);
 
   const closeRenderPaneFromMcp = useCallback(async (paneId: string) => {
     if (paneId === `dashboard:${activeWorkspaceId}`) {
@@ -19946,7 +20141,13 @@ function AgentBrowserApp() {
                 cursorState={cursorState}
                 codexState={codexState}
                 pendingSearch={pendingSearch}
+                pendingSessionPrompt={pendingReviewFollowUps.find((followUp) => followUp.sessionId === panel.id)?.prompt ?? null}
                 onSearchConsumed={() => setPendingSearch(null)}
+                onPendingSessionPromptConsumed={(prompt) => {
+                  setPendingReviewFollowUps((current) => current.filter((followUp) => (
+                    followUp.sessionId !== panel.id || followUp.prompt !== prompt
+                  )));
+                }}
                 onToast={setToast}
                 workspaceId={activeWorkspaceId}
                 workspaceName={activeWorkspace.name}

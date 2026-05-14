@@ -204,6 +204,7 @@ export type StreamAgentChatOptions = {
   latestUserInput?: string;
   secrets?: SecretsManagerAgent;
   secretSettings?: SecretManagementSettings;
+  skipSelfReflection?: boolean;
 };
 
 export async function streamAgentChat(
@@ -219,7 +220,7 @@ export async function streamAgentChat(
     : (await secrets.sanitizeText(options.latestUserInput, options.secretSettings)).text;
   const latestRequest = latestUserInput ?? messages.at(-1)?.content ?? '';
 
-  if (isSelfReflectionTaskText(latestRequest)) {
+  if (!options.skipSelfReflection && isSelfReflectionTaskText(latestRequest)) {
     const answer = buildWorkspaceSelfReflectionAnswer({
       task: latestRequest,
       workspaceName: options.workspaceName,

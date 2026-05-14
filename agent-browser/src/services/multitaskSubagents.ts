@@ -9,6 +9,8 @@ export type MultitaskBranchExecutionEventType =
   | 'agent_session_queued'
   | 'heartbeat'
   | 'self_heal_requeued'
+  | 'agent_completed'
+  | 'agent_failed'
   | 'stopped'
   | 'retry_queued';
 
@@ -115,6 +117,24 @@ export interface ReconcileMultitaskSubagentRunsResult {
   healedBranchIds: string[];
 }
 
+export interface AttachMultitaskBranchSessionOptions {
+  sessionId: string;
+  sessionName?: string | null;
+}
+
+export interface MultitaskSessionTranscriptMessage {
+  id: string;
+  role: string;
+  content: string;
+  streamedContent?: string;
+  status?: string;
+  isError?: boolean;
+}
+
+export interface ReconcileMultitaskBranchSessionCompletionsOptions {
+  now?: Date;
+}
+
 type TrackDefinition = {
   slug: string;
   title: string;
@@ -194,6 +214,8 @@ const EXECUTION_EVENT_TYPES: MultitaskBranchExecutionEventType[] = [
   'agent_session_queued',
   'heartbeat',
   'self_heal_requeued',
+  'agent_completed',
+  'agent_failed',
   'stopped',
   'retry_queued',
 ];
@@ -426,6 +448,22 @@ export function startMultitaskBranchRun(
   return updateBranch(state, branchId, (current) => startBranchRun(current, state, nowIso, options.reason ?? 'manual', options));
 }
 
+export function attachMultitaskBranchSession(
+  state: MultitaskSubagentState,
+  branchId: string,
+  options: AttachMultitaskBranchSessionOptions,
+): MultitaskSubagentState {
+  const sessionId = options.sessionId.trim();
+  if (!sessionId) return state;
+  const branch = state.branches.find((candidate) => candidate.id === branchId);
+  if (!branch || branch.status !== 'running') return state;
+  return updateBranch(state, branchId, (current) => ({
+    ...current,
+    sessionId,
+    sessionName: options.sessionName ?? current.sessionName ?? null,
+  }));
+}
+
 export function stopMultitaskBranchRun(
   state: MultitaskSubagentState,
   branchId: string,
@@ -587,6 +625,45 @@ export function reconcileMultitaskSubagentRuns(
   };
 }
 
+export function reconcileMultitaskBranchSessionCompletions(
+  state: MultitaskSubagentState,
+  messagesBySession: Record<string, MultitaskSessionTranscriptMessage[]>,
+  options: ReconcileMultitaskBranchSessionCompletionsOptions = {},
+): MultitaskSubagentState {
+  if (!state.enabled || state.branches.length === 0) return state;
+  const nowIso = safeIso(options.now ?? new Date());
+  let changed = false;
+  const branches = state.branches.map((branch) => {
+    if (branch.status !== 'running' || !branch.sessionId) return branch;
+    const messages = messagesBySession[branch.sessionId] ?? [];
+    const terminalMessage = findTerminalAssistantMessage(messages);
+    if (!terminalMessage) return branch;
+    changed = true;
+    const outputSummary = summarizeSessionOutput(terminalMessage);
+    const sessionLabel = branch.sessionName || branch.sessionId;
+    const failed = terminalMessage.status === 'error' || terminalMessage.isError === true;
+    const summary = failed
+      ? `Agent failed in ${sessionLabel}: ${outputSummary}`
+      : `Agent completed in ${sessionLabel}: ${outputSummary}`;
+    return {
+      ...branch,
+      status: failed ? 'blocked' as const : 'ready' as const,
+      progress: failed ? branch.progress : 100,
+      lastHeartbeatAt: nowIso,
+      executionEvents: appendExecutionEvent(
+        branch.executionEvents,
+        branch.id,
+        failed ? 'agent_failed' : 'agent_completed',
+        nowIso,
+        summary,
+      ),
+      validation: appendValidation(branch.validation, summary),
+    };
+  });
+
+  return changed ? { ...state, branches } : state;
+}
+
 export function buildMultitaskBranchDispatch(
   state: MultitaskSubagentState,
   branch: MultitaskSubagentBranch,
@@ -625,7 +702,7 @@ export function buildMultitaskBranchRunPrompt(
     `Workspace path: ${branch.worktreePath}.`,
     '',
     'Do the assigned work end to end in the isolated workspace.',
-    'Record the plan, edits, tool trajectory, validation commands, and review evidence in the session.',
+    'Record the plan, edits, commands used, validation commands, and review evidence in the session.',
     'Run validation and attach concrete evidence before review.',
     'Do not merge into the common branch; stop at the Symphony review gate.',
   ].join('\n');
@@ -928,6 +1005,24 @@ function appendExecutionEvents(
       summary,
     })),
   ];
+}
+
+function findTerminalAssistantMessage(messages: MultitaskSessionTranscriptMessage[]): MultitaskSessionTranscriptMessage | null {
+  if (!messages.some((message) => message.role === 'user')) return null;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role !== 'assistant') continue;
+    if (message.status === 'complete' || message.status === 'error' || message.isError === true) {
+      return message;
+    }
+  }
+  return null;
+}
+
+function summarizeSessionOutput(message: MultitaskSessionTranscriptMessage): string {
+  const raw = (message.streamedContent || message.content || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return 'Agent returned an empty response.';
+  return raw.length > 180 ? `${raw.slice(0, 177)}...` : raw;
 }
 
 function isRunningBranchStale(branch: MultitaskSubagentBranch, now: Date, staleAfterMs: number): boolean {

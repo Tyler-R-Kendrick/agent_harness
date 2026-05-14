@@ -446,8 +446,11 @@ describe('App', () => {
     });
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
     expect(persisted.branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/tests-2')).toMatchObject({
-      status: 'queued',
-      progress: 0,
+      status: 'running',
+      progress: 10,
+      executionEvents: expect.arrayContaining([
+        expect.objectContaining({ type: 'agent_session_queued' }),
+      ]),
     });
 
     fireEvent.click(screen.getByLabelText('Extensions'));
