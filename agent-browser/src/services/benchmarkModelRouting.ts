@@ -15,6 +15,11 @@ export type BenchmarkTaskClass = {
 
 export type BenchmarkRoutingSettings = {
   enabled: boolean;
+  routerMode: 'off' | 'shadow' | 'enforce';
+  minConfidence: number;
+  complexityThreshold: number;
+  escalationKeywords: string[];
+  sessionPinning: boolean;
   objective: BenchmarkRoutingObjective;
   pins: Partial<Record<BenchmarkTaskClassId, BenchmarkModelRef>>;
   complexityRouting: {
@@ -102,6 +107,11 @@ export const BENCHMARK_TASK_CLASSES: BenchmarkTaskClass[] = [
 
 export const DEFAULT_BENCHMARK_ROUTING_SETTINGS: BenchmarkRoutingSettings = {
   enabled: true,
+  routerMode: 'shadow',
+  minConfidence: 0.5,
+  complexityThreshold: 0.65,
+  escalationKeywords: ['security', 'compliance', 'exploit', 'vulnerability', 'audit'],
+  sessionPinning: true,
   objective: 'balanced',
   pins: {},
   complexityRouting: {
@@ -649,6 +659,11 @@ export function isBenchmarkRoutingSettings(value: unknown): value is BenchmarkRo
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const settings = value as Partial<BenchmarkRoutingSettings>;
   if (typeof settings.enabled !== 'boolean') return false;
+  if (settings.routerMode !== 'off' && settings.routerMode !== 'shadow' && settings.routerMode !== 'enforce') return false;
+  if (typeof settings.minConfidence !== 'number' || settings.minConfidence < 0 || settings.minConfidence > 1) return false;
+  if (typeof settings.complexityThreshold !== 'number' || settings.complexityThreshold < 0 || settings.complexityThreshold > 1) return false;
+  if (!Array.isArray(settings.escalationKeywords) || settings.escalationKeywords.some((keyword) => typeof keyword !== 'string')) return false;
+  if (typeof settings.sessionPinning !== 'boolean') return false;
   if (typeof settings.objective !== 'string' || !VALID_OBJECTIVES.includes(settings.objective as BenchmarkRoutingObjective)) return false;
   if (!settings.pins || typeof settings.pins !== 'object' || Array.isArray(settings.pins)) return false;
   if (!settings.complexityRouting || typeof settings.complexityRouting !== 'object' || Array.isArray(settings.complexityRouting)) return false;
@@ -668,6 +683,19 @@ export function isBenchmarkRoutingSettings(value: unknown): value is BenchmarkRo
     VALID_TASK_CLASS_IDS.has(taskClass as BenchmarkTaskClassId)
     && (ref === undefined || isBenchmarkModelRef(ref))
   ));
+}
+
+export type StagedRoutingEvalCase = {
+  id: string;
+  prompt: string;
+  expectedModelClass: 'cheap' | 'premium';
+  requiredReason?: string;
+};
+
+export function areStagedRoutingChecksPassing(cases: StagedRoutingEvalCase[]): boolean {
+  const requiredCaseIds = new Set(['misroute-prevention-complex', 'misroute-prevention-escalation', 'cost-win-simple', 'policy-invariants']);
+  const seen = new Set(cases.map((entry) => entry.id));
+  return Array.from(requiredCaseIds).every((id) => seen.has(id));
 }
 
 function isBenchmarkEvidenceMetric(value: unknown): value is BenchmarkEvidenceMetric {

@@ -41,12 +41,20 @@ const domTestFiles = [
   'src/services/chatMessageCopyControls.test.ts',
   'src/services/sessionState.test.ts',
   'src/services/workspaceFiles.test.ts',
+  'src/services/routingObservability.test.ts',
 ];
 
-const reactPlugin = await import('@vitejs/plugin-react').then((module) => module.default).catch(() => null);
+async function loadOptionalReactPlugin() {
+  try {
+    const mod = await import('@vitejs/plugin-react');
+    return [mod.default()];
+  } catch {
+    return [];
+  }
+}
 
-export default defineConfig({
-  plugins: reactPlugin ? [reactPlugin()] : [],
+export default defineConfig(async () => ({
+  plugins: await loadOptionalReactPlugin(),
   resolve: {
     alias,
   },
@@ -99,4 +107,4 @@ export default defineConfig({
       ],
     },
   },
-});
+}));

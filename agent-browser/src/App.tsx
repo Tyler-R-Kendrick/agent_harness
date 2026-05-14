@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import {
+  areStagedRoutingChecksPassing,
   DndContext,
   DragOverlay,
   PointerSensor,
@@ -4089,12 +4090,24 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
-    const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
+const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
     const complexityRoutingInShadowMode = complexityRoutingSettings.enabled && complexityRoutingSettings.mode === 'shadow';
     const complexityRoutingTrafficSplit = complexityRoutingSettings.trafficSplitPercent ?? 100;
     const complexityRoutingAllowedByTraffic = complexityRoutingTrafficSplit >= 100
       || (complexityRoutingTrafficSplit > 0 && Math.random() * 100 < complexityRoutingTrafficSplit);
-    if (requestBenchmarkRoute && !complexityRoutingInShadowMode && complexityRoutingAllowedByTraffic) {
+    const rolloutChecksPass = areStagedRoutingChecksPassing([
+      { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
+      { id: 'misroute-prevention-escalation', prompt: 'security', expectedModelClass: 'premium' },
+      { id: 'cost-win-simple', prompt: 'summarize', expectedModelClass: 'cheap' },
+      { id: 'policy-invariants', prompt: 'policy', expectedModelClass: 'cheap' },
+    ]);
+    const shouldEnforceBenchmarkRouting = requestBenchmarkRoute
+      && benchmarkRoutingSettings.enabled
+      && benchmarkRoutingSettings.routerMode === 'enforce'
+      && rolloutChecksPass
+      && !complexityRoutingInShadowMode
+      && complexityRoutingAllowedByTraffic;
+    if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
         if (routed.provider === 'ghcp') {
@@ -4117,6 +4130,11 @@ function ChatPanel({
           requestLocalModel = routedLocalModel;
         }
       }
+    } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
+      appendSharedMessages({
+        role: 'system',
+        content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
+      });
     }
     if (requestBenchmarkRoute && complexityRoutingSettings.enabled) {
       console.info('[benchmark-routing:complexity]', {

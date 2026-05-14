@@ -1,0 +1,25 @@
+{
+  "cases": [
+    {
+      "id": "misroute-prevention-complex",
+      "prompt": "Design a multi-service migration plan with rollback checkpoints and failure-mode analysis.",
+      "expectedModelClass": "premium"
+    },
+    {
+      "id": "misroute-prevention-escalation",
+      "prompt": "Audit OAuth token handling for compliance and exploit paths.",
+      "expectedModelClass": "premium",
+      "requiredReason": "security/compliance escalation"
+    },
+    {
+      "id": "cost-win-simple",
+      "prompt": "Rewrite this TODO list into 3 concise bullets.",
+      "expectedModelClass": "cheap"
+    },
+    {
+      "id": "policy-invariants",
+      "prompt": "State the routing policy invariants exactly.",
+      "expectedModelClass": "cheap"
+    }
+  ]
+}

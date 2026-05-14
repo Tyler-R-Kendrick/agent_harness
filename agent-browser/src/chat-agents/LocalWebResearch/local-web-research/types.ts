@@ -134,6 +134,10 @@ export type AgentCitation = {
   url: string;
   normalizedUrl: string;
   quote?: string;
+  pageNumber?: number;
+  pointerType?: 'figure' | 'table';
+  pointerLabel?: string;
+  pointerAnchor?: string;
 };
 
 export type AgentErrorInfo = {
