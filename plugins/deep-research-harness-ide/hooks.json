@@ -1,0 +1,12 @@
+{
+  "hooks": [
+    {
+      "event": "onSessionStart",
+      "run": "node ./scripts/init-research-workspace.mjs"
+    },
+    {
+      "event": "beforeSubmitFinalAnswer",
+      "run": "node ./scripts/assert-claim-coverage.mjs"
+    }
+  ]
+}
