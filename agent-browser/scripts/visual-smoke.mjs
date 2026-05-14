@@ -40,6 +40,7 @@ const repoWikiGraphOutputPath = path.resolve(repoRoot, 'output/playwright/agent-
 const repoWikiMemoryOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-memory.png');
 const repoWikiMobileOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-repository-wiki-mobile.png');
 const dashboardCanvasOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-dashboard-canvas.png');
+const aiPointerOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-ai-pointer.png');
 const widgetPromptOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-widget-prompt.png');
 const widgetEditorOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-widget-editor.png');
 const historyTimelineOutputPath = path.resolve(repoRoot, 'output/playwright/agent-browser-history-unified-timeline.png');
@@ -367,7 +368,18 @@ async function main() {
                 type: 'folder',
                 nodeKind: 'browser',
                 expanded: true,
-                children: [],
+                children: [
+                  {
+                    id: 'visual-ai-pointer-tab',
+                    name: 'AI Pointer demo',
+                    type: 'tab',
+                    nodeKind: 'browser',
+                    url: 'https://example.com/ai-pointer-demo',
+                    persisted: true,
+                    memoryTier: 'hot',
+                    memoryMB: 16,
+                  },
+                ],
               },
               {
                 id: `${workspaceId}:category:session`,
@@ -1093,6 +1105,37 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: widgetEditorOutputPath, fullPage: true });
+    await page.evaluate((activeWorkspaceId) => {
+      const key = 'agent-browser.workspace-view-state-by-workspace';
+      const current = JSON.parse(localStorage.getItem(key) || '{}');
+      current[activeWorkspaceId] = {
+        ...(current[activeWorkspaceId] || {}),
+        dashboardOpen: true,
+        activeDashboardWidgetId: null,
+        activeSessionIds: [],
+        openTabIds: [],
+        editingFilePath: null,
+        activeArtifactPanel: null,
+        panelOrder: [`dashboard:${activeWorkspaceId}`],
+      };
+      localStorage.setItem(key, JSON.stringify(current));
+    }, 'ws-research');
+    await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: navigationTimeoutMs });
+    await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
+    await workspaceTree.getByRole('button', { name: /^AI Pointer demo/ }).click();
+    await page.getByRole('button', { name: 'Enable AI pointer for AI Pointer demo' }).click();
+    await page.getByLabel('AI pointer target area for AI Pointer demo').click({ position: { x: 260, y: 190 } });
+    const aiPointerPanel = page.getByLabel('AI pointer actions for AI Pointer demo');
+    await expect(aiPointerPanel).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(aiPointerPanel.getByRole('button', { name: 'Explain this' })).toBeVisible({ timeout: shellTimeoutMs });
+    await aiPointerPanel.getByLabel('AI pointer command').fill('Compare this with the docs tab.');
+    await aiPointerPanel.getByRole('button', { name: 'Draft AI pointer prompt' }).click();
+    await expect(page.getByLabel('Chat input')).toHaveValue(/AI Pointer request[\s\S]*Compare this with the docs tab\./, {
+      timeout: shellTimeoutMs,
+    });
+    await page.screenshot({ path: aiPointerOutputPath, fullPage: true });
+    console.log(`agent-browser AI pointer smoke passed: ${aiPointerOutputPath}`);
     await page.evaluate((activeWorkspaceId) => {
       const key = 'agent-browser.workspace-view-state-by-workspace';
       const current = JSON.parse(localStorage.getItem(key) || '{}');

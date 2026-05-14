@@ -59,6 +59,7 @@ export const STORAGE_KEYS = {
   workspaceFileCrdtHistoriesByWorkspace: 'agent-browser.workspace-file-crdt-histories-by-workspace',
   repoWikiSnapshotsByWorkspace: 'agent-browser.repo-wiki-snapshots-by-workspace',
   locationContext: 'agent-browser.location-context',
+  aiPointerState: 'agent-browser.ai-pointer-state',
   secretManagementSettings: 'agent-browser.secret-management-settings',
   installedDefaultExtensionIds: 'agent-browser.installed-default-extension-ids',
   defaultExtensionOpenFeatureFlags: 'agent-browser.default-extension-openfeature-flags',

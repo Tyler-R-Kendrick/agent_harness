@@ -7,16 +7,17 @@ design_path: competition/gemini-in-chrome/design
 features_path: competition/gemini-in-chrome/features
 marketing_path: competition/gemini-in-chrome/marketing
 gossip_path: competition/gemini-in-chrome/gossip
-snapshot_date: 2026-05-07
+snapshot_date: 2026-05-14
 primary_sources:
   - https://gemini.google/us/overview/gemini-in-chrome/
   - https://support.google.com/chrome/answer/16283624
   - https://support.google.com/gemini/answer/16716225
+  - https://deepmind.google/blog/ai-pointer/
 secondary_sources:
   - https://techcrunch.com/2026/01/28/chrome-takes-on-ai-browsers-with-tighter-gemini-integration-agentic-features-for-autonomous-tasks/
   - https://www.macrumors.com/2026/01/29/google-chrome-gemini-side-panel-ai-features/
   - https://www.theverge.com/tech/924933/google-chrome-4gb-gemini-nano-ai-features
-positioning: "AI assistance inside Chrome for page understanding, cross-tab comparison, history recall, Google app context, and preview autonomous tasks."
+positioning: "AI assistance inside Chrome for page understanding, cross-tab comparison, history recall, Google app context, preview autonomous tasks, and AI Pointer point-and-ask context grounding."
 customer_model: "Bundled Chrome feature with staged rollout; some agentic features preview first for Google AI Pro and Ultra subscribers in the U.S."
 competitive_threat_level: high
-notes: "Largest distribution threat. Less differentiated as an agent product, but powerful because it ships inside the default browser for many users."
+notes: "Largest distribution threat. AI Pointer sharpens the browser-native wedge by letting users point at page regions, selected products, images, places, tables, recipes, or objects and use shorthand such as this/that without leaving the current workflow."

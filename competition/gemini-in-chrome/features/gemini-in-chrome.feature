@@ -1,5 +1,5 @@
 Feature: Gemini in Chrome
-  Gemini in Chrome differentiates through default-browser distribution, page context, cross-tab reasoning, history recall, Google app integration, and preview agentic browsing.
+  Gemini in Chrome differentiates through default-browser distribution, page context, cross-tab reasoning, history recall, Google app integration, preview agentic browsing, and AI Pointer point-and-ask interactions.
 
   Scenario: Ask Gemini about the current tab
     Given a user is browsing a page in Chrome
@@ -25,5 +25,30 @@ Feature: Gemini in Chrome
     Then Gemini acts on webpages on the user's behalf
     And the user remains in control before finalizing sensitive actions
 
+  Scenario: Ask about the pointed part of a webpage
+    Given a user is viewing a webpage in Chrome
+    When the user points at a word, paragraph, image region, code block, product, or place
+    And asks a shorthand question such as "what does this mean"
+    Then Gemini grounds the answer in the pointed page region
+    And it preserves page title, URL, pointer coordinates, and visible semantic context
+
+  Scenario: Compare selected products from the same page
+    Given a shopping page shows several products
+    When the user selects a few products and asks to compare them
+    Then Gemini treats "these" as the selected products
+    And returns an in-flow comparison without requiring copied product descriptions
+
+  Scenario: Visualize or edit the pointed region
+    Given a user points at an image or room region
+    When they ask to edit the image or visualize a new object there
+    Then Gemini drafts an image-editing or visualization task with the pointed region as the target
+    And it asks for confirmation before applying or exporting external changes
+
+  Scenario: Turn pointed pixels into actionable entities
+    Given a pointed region contains a place, date, object, recipe, statistic table, or note
+    When the user asks a compact command such as "show me directions", "double this", or "chart that"
+    Then Gemini extracts a structured entity from the pointer context
+    And suggests the relevant map, recipe-scaling, charting, or object-edit action
+
   # Good: default distribution and Google app context make adoption easy.
-  # Bad: privacy, storage, availability fragmentation, and browser clutter create backlash risk.
+  # Bad: privacy, storage, availability fragmentation, browser clutter, and pointer-context overreach create backlash risk.

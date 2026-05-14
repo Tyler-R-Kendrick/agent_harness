@@ -16,6 +16,7 @@ Run `npx playwright test` from the `agent-browser/` directory to refresh them.
 - Clipboard history via Clip-Board: each workspace tree shows a non-expandable **Clip-Board** node after Files. Right-clicking it opens a History context menu item that launches the clipboard history modal, where users can browse previous clipboard entries (captured when copying URIs or session links within the app) and restore any prior item back to the clipboard.
 - Chat channels: the chat share button always exposes the built-in QR/WebRTC peer option and adds installed `channel` extension contributions such as Slack, Telegram, and SMS to the same share options.
 - Active document surfaces versus media surfaces: The prototype already opens browser tabs and workspace files as first-class content surfaces. In the broader product model, text-like docs are active or editable surfaces, while audio, PDF, DOCX, image, and video assets are viewer or playback surfaces rather than text editors.
+- AI Pointer: browser page overlays can switch into point-and-ask mode, capture the page title, URL, coordinates, semantic target kind, selected references, and entity hints, then draft a chat prompt that resolves "this", "that", "these", and "those" to the pointed context.
 
 ## Workspace shell
 
@@ -77,6 +78,7 @@ Playwright test: `captures the settings screen`
 How to interact:
 - Open **Settings** from the bottom of the activity bar.
 - Review the GHCP status card to see whether ambient GitHub Copilot access is available as the GHCP agent.
+- Open **AI pointer** in Harness settings to enable/disable the overlay, page provenance, entity hints, confirmation requirements, and quick action set.
 - Use the search field and task chips to browse browser-runnable ONNX models.
 - Search the registry across all supported browser models, then optionally narrow results with the task chips.
 - Use the Load button on a result card to install a model for Codi.
@@ -112,6 +114,7 @@ Playwright test: `captures the page overlay when opening a tab`
 How to interact:
 - Click any tab in the workspace tree to open it as a page overlay.
 - Use the address bar and navigation controls (back, forward, refresh) at the top.
+- Click the AI Pointer sparkle button in the page title bar, point at the page region, choose a quick action such as Explain, Edit image, Find places, Visualize here, Move this, Merge those, or Add that, and draft the grounded prompt into Chat.
 - Toggle the element inspector or page chat panel from the toolbar buttons.
 - Page overlays are workspace-scoped, so switching away and back restores the last open page for that workspace.
 - Close the overlay to return to the main chat view.
