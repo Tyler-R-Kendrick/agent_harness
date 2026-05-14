@@ -9671,7 +9671,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .workflow-canvas-runner ol {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 7px;
   margin: 0;
   padding: 0;
@@ -9679,7 +9679,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .workflow-canvas-runner li {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 8px minmax(0, 1fr);
   gap: 7px;
   align-items: center;
   min-width: 0;
@@ -9712,16 +9712,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workflow-canvas-runner li strong {
   color: var(--wc-text);
 }
+.workflow-canvas-runner li small {
+  grid-column: 2;
+}
 .workflow-canvas-source-list {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 8px;
 }
-.workflow-canvas-source-list span {
+.workflow-canvas-runtime-list {
+  display: grid;
+  gap: 6px;
+}
+.workflow-canvas-source-list span,
+.workflow-canvas-runtime-list span {
   border: 1px solid rgba(166, 184, 204, 0.14);
   padding: 4px 6px;
   background: rgba(17, 24, 32, 0.54);
+  color: var(--wc-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workflow-canvas-context-menu,

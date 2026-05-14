@@ -11,6 +11,12 @@ test('creates a workflow widget from the canvas context menu', async ({ page }) 
   const canvas = page.getByRole('region', { name: 'Workflow orchestration canvas' });
   await expect(canvas).toBeVisible();
 
+  await page.getByRole('button', { name: 'Run workflow' }).click();
+  await expect(page.getByRole('region', { name: 'Workflow execution replay' })).toContainText('Run complete');
+  await expect(page.getByRole('region', { name: 'Workflow execution replay' })).toContainText('success');
+  await expect(page.getByRole('region', { name: 'Workflow integration readiness' })).toContainText('6/6 ready');
+  await expect(page.getByRole('region', { name: 'Workflow binding map' })).toContainText('9 data bindings');
+
   await canvas.click({ button: 'right', position: { x: 420, y: 210 } });
   const contextMenu = page.getByRole('menu', { name: 'Workflow canvas context menu' });
   await expect(contextMenu).toBeVisible();
