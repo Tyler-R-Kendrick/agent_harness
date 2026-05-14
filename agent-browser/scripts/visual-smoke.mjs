@@ -1505,6 +1505,9 @@ async function main() {
 
     await symphonyApp.getByLabel('Symphony task request').fill('parallelize frontend, tests, and documentation work');
     await symphonyApp.getByRole('button', { name: 'Start Symphony task' }).click();
+    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('treeitem', { name: /SYM-003/ })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     await expect(symphonyApp.getByRole('navigation', { name: 'Symphony projects' })).toContainText('Projects', {
       timeout: shellTimeoutMs,
     });
@@ -1515,6 +1518,9 @@ async function main() {
     await expect(symphonyQueue).toContainText('Work queue', { timeout: shellTimeoutMs });
     await symphonyQueue.getByLabel('New task title').fill('Add smoke proof');
     await symphonyQueue.getByRole('button', { name: 'Create Symphony task' }).click();
+    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(page.getByRole('treeitem', { name: /SYM-004/ })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     await expect(symphonyQueue.getByRole('button', { name: 'Open task SYM-004 Add smoke proof' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
@@ -1541,6 +1547,8 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }).click();
+    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     await expect(symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
