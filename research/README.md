@@ -23,3 +23,4 @@ This directory stores paper-by-paper research packets.
 - `production-agent-eval-harness-12-metrics`
 - `proxy-pointer-framework-tds`
 - `proxy-pointer-rag-tds-2026`
+- `rubricem-2605.10899`
