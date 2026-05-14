@@ -86,6 +86,8 @@ describe('registerSessionTools', () => {
       agentId: null,
       toolIds: [],
       cwd: '/workspace',
+      routing: null,
+      routingTelemetry: [],
       messages: [
         { role: 'system', content: 'Active workspace: Research' },
         { role: 'user', content: 'Summarize the plan.' },
@@ -124,6 +126,8 @@ describe('registerSessionTools', () => {
       agentId: null,
       toolIds: [],
       cwd: '/workspace/app',
+      routing: null,
+      routingTelemetry: [],
       messages: [
         { role: 'system', content: 'Active workspace: Research' },
         { role: 'user', content: 'Open the terminal and inspect the repo.' },
@@ -264,6 +268,8 @@ describe('registerSessionTools', () => {
       'submit_session_message',
       'change_session_model',
       'switch_session_mode',
+      'change_session_routing',
+      'record_session_routing_decision',
     ]);
   });
 });

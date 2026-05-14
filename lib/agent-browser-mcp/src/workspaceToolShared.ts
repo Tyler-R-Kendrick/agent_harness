@@ -247,6 +247,8 @@ export function toSessionStateResult(workspaceName: string, session: WorkspaceMc
     agentId: session.agentId ?? null,
     toolIds: [...(session.toolIds ?? [])],
     cwd: session.cwd ?? null,
+    routing: session.routing ?? null,
+    routingTelemetry: [...(session.routingTelemetry ?? [])],
     messages: session.messages.map((message) => ({
       role: message.role,
       content: message.content,
@@ -627,6 +629,10 @@ export function buildDefaultSessionState(
     agentId: input.agentId ?? session.agentId ?? null,
     toolIds: input.toolIds ?? session.toolIds ?? [],
     cwd: input.cwd ?? session.cwd ?? null,
+    routing: input.routing ?? session.routing ?? null,
+    routingTelemetry: input.routingTelemetryEvent
+      ? [...(session.routingTelemetry ?? []), input.routingTelemetryEvent]
+      : (session.routingTelemetry ?? []),
     messages: input.message
       ? [...session.messages, { role: 'user', content: input.message }]
       : session.messages,
