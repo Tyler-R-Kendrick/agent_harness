@@ -179,6 +179,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function findTreeItemByText(text: string): HTMLElement {
+  const item = screen.getAllByRole('treeitem').find((treeItem) => within(treeItem).queryByText(text));
+  if (!item) throw new Error(`Unable to find tree item containing ${text}`);
+  return item;
+}
+
 describe('App smoke coverage', () => {
   it('renders the primary shell and default chat workspace', async () => {
     vi.useFakeTimers();
@@ -229,6 +235,49 @@ describe('App smoke coverage', () => {
     expect(screen.queryByLabelText('Browser evidence for selected diff')).not.toBeInTheDocument();
     expect(screen.queryByText('Agent Browser visual smoke')).not.toBeInTheDocument();
     expect(screen.queryByText('output/playwright/agent-browser-visual-smoke.png')).not.toBeInTheDocument();
+  });
+
+  it('captures an AI pointer target from a browser page and drafts a contextual chat prompt', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(within(findTreeItemByText('Hugging Face')).getAllByRole('button')[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Enable AI pointer for Hugging Face' }));
+    fireEvent.click(screen.getByLabelText('AI pointer target area for Hugging Face'), {
+      clientX: 180,
+      clientY: 120,
+    });
+    fireEvent.change(screen.getByLabelText('AI pointer command'), {
+      target: { value: 'Compare this with the docs tab.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft AI pointer prompt' }));
+
+    const chatInput = screen.getByLabelText('Chat input');
+    expect((chatInput as HTMLTextAreaElement).value).toContain('AI Pointer request');
+    expect((chatInput as HTMLTextAreaElement).value).toContain('Compare this with the docs tab.');
+    expect((chatInput as HTMLTextAreaElement).value).toContain('this/that/these/those refer to the pointed target');
+  });
+
+  it('surfaces AI pointer privacy and action controls in Settings', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByLabelText('Settings'));
+    fireEvent.click(screen.getByRole('button', { name: 'AI pointer' }));
+
+    expect(screen.getByLabelText('Enable AI pointer')).toBeChecked();
+    expect(screen.getByLabelText('Include page provenance')).toBeChecked();
+    expect(screen.getByLabelText('Require confirmation before external changes')).toBeChecked();
+    fireEvent.click(screen.getByLabelText('Include entity hints'));
+    expect(screen.getByLabelText('Include entity hints')).not.toBeChecked();
   });
 
   it('aggregates governed agent-authored workspace surfaces into the knowledge widget', async () => {

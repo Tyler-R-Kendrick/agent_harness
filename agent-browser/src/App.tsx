@@ -419,6 +419,19 @@ import {
   type BrowserLocationContext,
 } from './services/browserLocation';
 import {
+  AI_POINTER_ACTIONS,
+  DEFAULT_AI_POINTER_SETTINGS,
+  buildAiPointerPrompt,
+  captureAiPointerTarget,
+  isAiPointerFeatureState,
+  suggestAiPointerActions,
+  type AiPointerActionId,
+  type AiPointerFeatureState,
+  type AiPointerSettings,
+  type AiPointerTarget,
+  type AiPointerTargetKind,
+} from './services/aiPointer';
+import {
   STORAGE_KEYS,
   isBooleanRecord,
   isArtifactContextBySession,
@@ -1874,8 +1887,41 @@ function ConversationSubthreadTranscripts({
   );
 }
 
-function PageOverlay({ tab, onClose, onContextMenu, dragHandleProps }: { tab: TreeNode; onClose: () => void; onContextMenu?: (x: number, y: number) => void; dragHandleProps?: PanelDragHandleProps }) {
+function inferAiPointerTargetKindForTab(tab: TreeNode): AiPointerTargetKind {
+  const source = `${tab.name} ${tab.url ?? ''}`.toLowerCase();
+  if (/\b(recipe|ingredient|cook|kitchen)\b/.test(source)) return 'recipe';
+  if (/\b(map|maps|place|route|travel|restaurant|museum|campus)\b/.test(source)) return 'place';
+  if (/\b(image|photo|moodboard|gallery|visual)\b/.test(source)) return 'image';
+  if (/\b(product|shop|store|pricing|cart)\b/.test(source)) return 'product';
+  if (source.startsWith('workflow') || source.includes('agent-browser://')) return 'object';
+  return 'screen-region';
+}
+
+function PageOverlay({
+  tab,
+  aiPointerSettings,
+  onAiPointerCapture,
+  onAiPointerPrompt,
+  onClose,
+  onContextMenu,
+  dragHandleProps,
+}: {
+  tab: TreeNode;
+  aiPointerSettings: AiPointerSettings;
+  onAiPointerCapture?: (target: AiPointerTarget) => void;
+  onAiPointerPrompt?: (prompt: string) => void;
+  onClose: () => void;
+  onContextMenu?: (x: number, y: number) => void;
+  dragHandleProps?: PanelDragHandleProps;
+}) {
   const src = tab.url ?? '';
+  const [pointerArmed, setPointerArmed] = useState(false);
+  const [pointerTarget, setPointerTarget] = useState<AiPointerTarget | null>(null);
+  const [selectedActionId, setSelectedActionId] = useState<AiPointerActionId>('explain-this');
+  const [pointerCommand, setPointerCommand] = useState('');
+  const suggestedActions = pointerTarget ? suggestAiPointerActions(pointerTarget, aiPointerSettings) : [];
+  const selectedAction = suggestedActions.find((action) => action.id === selectedActionId) ?? suggestedActions[0] ?? AI_POINTER_ACTIONS['explain-this'];
+
   return (
     <section
       className="page-overlay"
@@ -1891,7 +1937,22 @@ function PageOverlay({ tab, onClose, onContextMenu, dragHandleProps }: { tab: Tr
           <Favicon url={tab.url} size={13} />
           <span className="page-tab-title">{tab.name}</span>
         </div>
-        <button type="button" className="icon-button panel-close-button" aria-label="Close page overlay" onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+        <div className="panel-titlebar-actions">
+          {aiPointerSettings.enabled ? (
+            <button
+              type="button"
+              className={`icon-button${pointerArmed ? ' is-active' : ''}`}
+              aria-label={pointerArmed ? `Disable AI pointer for ${tab.name}` : `Enable AI pointer for ${tab.name}`}
+              title={pointerArmed ? 'Disable AI pointer' : 'Enable AI pointer'}
+              data-tooltip="AI Pointer"
+              onClick={() => setPointerArmed((current) => !current)}
+              {...panelTitlebarControlProps}
+            >
+              <Icon name="sparkles" size={13} />
+            </button>
+          ) : null}
+          <button type="button" className="icon-button panel-close-button" aria-label="Close page overlay" onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+        </div>
       </header>
       <div className="page-content">
         {src ? (
@@ -1908,6 +1969,91 @@ function PageOverlay({ tab, onClose, onContextMenu, dragHandleProps }: { tab: Tr
             <span>Enter a URL to browse</span>
           </div>
         )}
+        {aiPointerSettings.enabled && pointerArmed ? (
+          <button
+            type="button"
+            className="ai-pointer-hit-target"
+            aria-label={`AI pointer target area for ${tab.name}`}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              const width = rect.width || 1024;
+              const height = rect.height || 768;
+              const point = {
+                x: rect.width ? event.clientX - rect.left : event.clientX,
+                y: rect.height ? event.clientY - rect.top : event.clientY,
+              };
+              const nextTarget = captureAiPointerTarget({
+                tab: {
+                  id: tab.id,
+                  title: tab.name,
+                  url: tab.url ?? '',
+                },
+                viewport: { width, height },
+                point,
+                targetKind: inferAiPointerTargetKindForTab(tab),
+                semanticLabel: tab.name,
+              });
+              setPointerTarget(nextTarget);
+              setSelectedActionId('explain-this');
+              onAiPointerCapture?.(nextTarget);
+            }}
+          >
+            <span className="ai-pointer-reticle" aria-hidden="true" />
+            <span className="ai-pointer-instruction">Point anywhere on the page</span>
+          </button>
+        ) : null}
+        {aiPointerSettings.enabled && pointerTarget ? (
+          <section className="ai-pointer-panel" aria-label={`AI pointer actions for ${tab.name}`}>
+            <div className="ai-pointer-panel-heading">
+              <span>
+                <strong>AI Pointer</strong>
+                <small>{Math.round(pointerTarget.coordinates.xPercent)}% / {Math.round(pointerTarget.coordinates.yPercent)}% on {pointerTarget.targetKind}</small>
+              </span>
+              <button type="button" className="icon-button" aria-label="Clear AI pointer target" onClick={() => setPointerTarget(null)}>
+                <Icon name="x" size={12} />
+              </button>
+            </div>
+            <div className="ai-pointer-actions" aria-label="AI pointer quick actions">
+              {suggestedActions.slice(0, 6).map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className={`chip${selectedAction.id === action.id ? ' active' : ''}`}
+                  aria-pressed={selectedAction.id === action.id}
+                  onClick={() => setSelectedActionId(action.id)}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+            <label className="shared-input-shell ai-pointer-command">
+              <Icon name="sparkles" size={13} color="#7dd3fc" />
+              <input
+                aria-label="AI pointer command"
+                value={pointerCommand}
+                onChange={(event) => setPointerCommand(event.target.value)}
+                placeholder="Ask about this"
+              />
+            </label>
+            <button
+              type="button"
+              className="primary-button ai-pointer-draft-button"
+              aria-label="Draft AI pointer prompt"
+              onClick={() => {
+                const prompt = buildAiPointerPrompt({
+                  actionId: selectedAction.id,
+                  command: pointerCommand || selectedAction.prompt,
+                  target: pointerTarget,
+                  settings: aiPointerSettings,
+                });
+                onAiPointerPrompt?.(prompt);
+              }}
+            >
+              <Icon name="send" size={13} />
+              <span>Draft</span>
+            </button>
+          </section>
+        ) : null}
       </div>
     </section>
   );
@@ -2726,8 +2872,10 @@ function ChatPanel({
   codexState,
   pendingSearch,
   pendingSessionPrompt,
+  pendingAiPointerPrompt,
   onSearchConsumed,
   onPendingSessionPromptConsumed,
+  onAiPointerPromptConsumed,
   onToast,
   workspaceId,
   workspaceName,
@@ -2793,8 +2941,10 @@ function ChatPanel({
   codexState: CodexRuntimeState;
   pendingSearch: string | null;
   pendingSessionPrompt?: string | null;
+  pendingAiPointerPrompt: string | null;
   onSearchConsumed: () => void;
   onPendingSessionPromptConsumed?: (prompt: string) => void;
+  onAiPointerPromptConsumed: () => void;
   onToast: (toast: Exclude<ToastState, null>) => void;
   workspaceId: string;
   workspaceName: string;
@@ -2930,6 +3080,7 @@ function ChatPanel({
   const sharedChatApiRef = useRef<SharedChatApi | null>(null);
   const consumedPendingSearchRef = useRef<string | null>(null);
   const consumedPendingSessionPromptRef = useRef<string | null>(null);
+  const consumedAiPointerPromptRef = useRef<string | null>(null);
   const browserNotificationApi = useMemo(
     () => createBrowserNotificationApi(typeof window !== 'undefined' ? window.Notification : undefined),
     [],
@@ -6574,6 +6725,21 @@ function ChatPanel({
     onSearchConsumed();
   }, [activeGenerationSessionId, onSearchConsumed, pendingSearch]);
 
+  useEffect(() => {
+    if (!pendingAiPointerPrompt) {
+      consumedAiPointerPromptRef.current = null;
+      return;
+    }
+    if (activeGenerationRef.current) {
+      return;
+    }
+    if (consumedAiPointerPromptRef.current === pendingAiPointerPrompt) return;
+    consumedAiPointerPromptRef.current = pendingAiPointerPrompt;
+    setInput(pendingAiPointerPrompt);
+    requestAnimationFrame(() => chatInputRef.current?.focus());
+    onAiPointerPromptConsumed();
+  }, [activeGenerationSessionId, onAiPointerPromptConsumed, pendingAiPointerPrompt]);
+
   const handleCopyMessage = useCallback(async ({ content, senderLabel, format }: { content: string; senderLabel: string; format: ClipboardCopyFormat }) => {
     try {
       await onCopyToClipboard(
@@ -9864,6 +10030,7 @@ interface SettingsPanelProps {
   persistentMemoryGraphState: PersistentMemoryGraphState;
   graphKnowledgeState: GraphKnowledgeState;
   browserAgentRunSdkState: BrowserAgentRunSdkState;
+  aiPointerState: AiPointerFeatureState;
   partnerAgentControlPlaneSettings: PartnerAgentControlPlaneSettings;
   partnerAgentControlPlane: PartnerAgentControlPlane;
   latestPartnerAgentAuditEntry: PartnerAgentAuditEntry | null;
@@ -9887,6 +10054,7 @@ interface SettingsPanelProps {
   onHarnessEvolutionSettingsChange: (settings: HarnessEvolutionSettings) => void;
   onPersistentMemoryGraphStateChange: (state: PersistentMemoryGraphState) => void;
   onGraphKnowledgeStateChange: (state: GraphKnowledgeState) => void;
+  onAiPointerStateChange: (state: AiPointerFeatureState) => void;
   onPartnerAgentControlPlaneSettingsChange: (settings: PartnerAgentControlPlaneSettings) => void;
   onRuntimePluginSettingsChange: (settings: RuntimePluginSettings) => void;
   onSpecDrivenDevelopmentSettingsChange: (settings: SpecDrivenDevelopmentSettings) => void;
@@ -10381,6 +10549,115 @@ function HarnessCoreSettingsPanel({ summary }: { summary: ReturnType<typeof sele
   );
 }
 
+function AiPointerSettingsPanel({
+  state,
+  onChange,
+}: {
+  state: AiPointerFeatureState;
+  onChange: (state: AiPointerFeatureState) => void;
+}) {
+  const settings = state.settings;
+  const updateSettings = (patch: Partial<AiPointerSettings>) => {
+    onChange({ ...state, settings: { ...settings, ...patch } });
+  };
+  const toggleQuickAction = (actionId: AiPointerActionId) => {
+    const current = new Set(settings.quickActions);
+    if (current.has(actionId)) {
+      current.delete(actionId);
+    } else {
+      current.add(actionId);
+    }
+    updateSettings({ quickActions: Object.keys(AI_POINTER_ACTIONS).filter((id): id is AiPointerActionId => current.has(id as AiPointerActionId)) });
+  };
+
+  return (
+    <SettingsSection title="AI pointer" defaultOpen={false}>
+      <div className="ai-pointer-settings">
+        <div className="secret-settings-grid">
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Enable AI pointer"
+              checked={settings.enabled}
+              onChange={(event) => updateSettings({ enabled: event.target.checked })}
+            />
+            <span>
+              <strong>Enable AI pointer</strong>
+              <small>Show point-and-ask controls on browser page overlays.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Include page provenance"
+              checked={settings.includePageProvenance}
+              onChange={(event) => updateSettings({ includePageProvenance: event.target.checked })}
+            />
+            <span>
+              <strong>Include page provenance</strong>
+              <small>Attach tab title, URL, and pointer coordinates to drafted prompts.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Include entity hints"
+              checked={settings.includeEntityHints}
+              onChange={(event) => updateSettings({ includeEntityHints: event.target.checked })}
+            />
+            <span>
+              <strong>Include entity hints</strong>
+              <small>Pass detected products, places, prices, or quantities when present.</small>
+            </span>
+          </label>
+          <label className="secret-toggle-row">
+            <input
+              type="checkbox"
+              aria-label="Require confirmation before external changes"
+              checked={settings.requireConfirmation}
+              onChange={(event) => updateSettings({ requireConfirmation: event.target.checked })}
+            />
+            <span>
+              <strong>Require confirmation</strong>
+              <small>Ask before edits, purchases, navigation, map actions, or other external state changes.</small>
+            </span>
+          </label>
+        </div>
+        <div className="settings-subsection">
+          <div className="settings-subsection-heading">
+            <strong>Quick actions</strong>
+            <span>{settings.quickActions.length}/{Object.keys(AI_POINTER_ACTIONS).length} enabled</span>
+          </div>
+          <div className="chip-row" aria-label="AI pointer quick action toggles">
+            {Object.values(AI_POINTER_ACTIONS).map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className={`chip${settings.quickActions.includes(action.id) ? ' active' : ''}`}
+                aria-pressed={settings.quickActions.includes(action.id)}
+                onClick={() => toggleQuickAction(action.id)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-subsection">
+          <div className="settings-subsection-heading">
+            <strong>Last target</strong>
+            <span>{state.lastTarget ? state.lastTarget.targetKind : 'none captured'}</span>
+          </div>
+          {state.lastTarget ? (
+            <p className="muted">{state.lastTarget.tab.title} at {state.lastTarget.coordinates.xPercent}% / {state.lastTarget.coordinates.yPercent}%</p>
+          ) : (
+            <p className="muted">No AI pointer target captured in this workspace yet.</p>
+          )}
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
 function SettingsPanel({
   harnessCoreSummary,
   benchmarkRoutingSettings,
@@ -10407,6 +10684,7 @@ function SettingsPanel({
   persistentMemoryGraphState,
   graphKnowledgeState,
   browserAgentRunSdkState,
+  aiPointerState,
   partnerAgentControlPlaneSettings,
   partnerAgentControlPlane,
   latestPartnerAgentAuditEntry,
@@ -10430,6 +10708,7 @@ function SettingsPanel({
   onHarnessEvolutionSettingsChange,
   onPersistentMemoryGraphStateChange,
   onGraphKnowledgeStateChange,
+  onAiPointerStateChange,
   onPartnerAgentControlPlaneSettingsChange,
   onRuntimePluginSettingsChange,
   onSpecDrivenDevelopmentSettingsChange,
@@ -10504,6 +10783,20 @@ function SettingsPanel({
               candidates={benchmarkRoutingCandidates}
               evidenceState={benchmarkEvidenceState}
               onChange={onBenchmarkRoutingSettingsChange}
+            />
+          ),
+        },
+        {
+          id: 'ai-pointer',
+          title: 'AI pointer',
+          description: 'Point-and-ask browser context, shorthand grounding, and action safety controls.',
+          pluginType: 'Core',
+          scopes: ['user', 'session'],
+          keywords: ['pointer', 'page context', 'this', 'that', 'visual'],
+          node: (
+            <AiPointerSettingsPanel
+              state={aiPointerState}
+              onChange={onAiPointerStateChange}
             />
           ),
         },
@@ -15063,6 +15356,12 @@ function AgentBrowserApp() {
     isBrowserLocationContext,
     DEFAULT_BROWSER_LOCATION_CONTEXT,
   );
+  const [aiPointerState, setAiPointerState] = useStoredState<AiPointerFeatureState>(
+    localStorageBackend,
+    STORAGE_KEYS.aiPointerState,
+    isAiPointerFeatureState,
+    { settings: DEFAULT_AI_POINTER_SETTINGS, lastTarget: null },
+  );
   const secretsManager = useMemo(() => getDefaultSecretsManagerAgent(), []);
   const [secretSettings, setSecretSettings] = useStoredState(
     localStorageBackend,
@@ -15159,6 +15458,7 @@ function AgentBrowserApp() {
   const [showAddFileMenu, setShowAddFileMenu] = useState<string | null>(null);
   const [addFileName, setAddFileName] = useState('');
   const [pendingSearch, setPendingSearch] = useState<string | null>(null);
+  const [pendingAiPointerPrompt, setPendingAiPointerPrompt] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [treeFilter, setTreeFilter] = useState('');
@@ -15590,11 +15890,14 @@ function AgentBrowserApp() {
           },
         };
       });
-      setActivePanel('workspaces');
-      window.setTimeout(() => setActivePanel('workspaces'), 0);
+      if (activePanel !== 'symphony') {
+        setActivePanel('workspaces');
+        window.setTimeout(() => setActivePanel('workspaces'), 0);
+      }
     }
   }, [
     activeWorkspace,
+    activePanel,
     activeMultitaskSubagentState.enabled,
     activeWorkspaceId,
     activeWorkspaceSessions,
@@ -16848,6 +17151,16 @@ function AgentBrowserApp() {
       },
     }));
   }, [addSessionToWorkspace, root, workspaceViewStateByWorkspace]);
+
+  const handleAiPointerCapture = useCallback((target: AiPointerTarget) => {
+    setAiPointerState((current) => ({ ...current, lastTarget: target }));
+  }, [setAiPointerState]);
+
+  const handleAiPointerPromptDraft = useCallback((prompt: string) => {
+    setPendingAiPointerPrompt(prompt);
+    switchSessionMode(activeWorkspaceId, 'agent');
+    setToast({ msg: 'AI Pointer prompt drafted', type: 'success' });
+  }, [activeWorkspaceId, setToast, switchSessionMode]);
 
   const pasteSelectionIntoWorkspace = useCallback((workspaceId: string) => {
     if (!clipboardIds.length) return;
@@ -18836,7 +19149,9 @@ function AgentBrowserApp() {
       setToast({ msg: `Unable to open Symphony session for ${dispatch.sessionName}`, type: 'error' });
       return;
     }
-    switchSidebarPanel('workspaces');
+    if (activePanel !== 'symphony') {
+      switchSidebarPanel('workspaces');
+    }
     setMultitaskSubagentState((current) => {
       if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
       return attachMultitaskBranchSession(current, dispatch.branchId, {
@@ -18851,7 +19166,7 @@ function AgentBrowserApp() {
         : `Queued Symphony agent run ${dispatch.sessionName}`,
       type: 'info',
     });
-  }, [activeWorkspaceId, addSessionToWorkspace, setMultitaskSubagentState, setToast, switchSidebarPanel]);
+  }, [activePanel, activeWorkspaceId, addSessionToWorkspace, setMultitaskSubagentState, setToast, switchSidebarPanel]);
 
   useEffect(() => {
     if (pendingSymphonyDispatches.length === 0) return;
@@ -18979,10 +19294,7 @@ function AgentBrowserApp() {
         },
       };
     });
-    setActivePanel('workspaces');
-    const handle = window.setTimeout(() => setActivePanel('workspaces'), 0);
-    return () => window.clearTimeout(handle);
-  }, [activeWorkspace, activeWorkspaceId, pendingReviewFollowUps, setActivePanel, setWorkspaceViewStateByWorkspace]);
+  }, [activeWorkspace, activeWorkspaceId, pendingReviewFollowUps, setWorkspaceViewStateByWorkspace]);
 
   useEffect(() => {
     if (pendingReviewFollowUps.length === 0) return undefined;
@@ -19637,6 +19949,7 @@ function AgentBrowserApp() {
         persistentMemoryGraphState={persistentMemoryGraphState}
         graphKnowledgeState={graphKnowledgeState}
         browserAgentRunSdkState={browserAgentRunSdkState}
+        aiPointerState={aiPointerState}
         partnerAgentControlPlaneSettings={partnerAgentControlPlaneSettings}
         partnerAgentControlPlane={settingsPartnerAgentControlPlane}
         latestPartnerAgentAuditEntry={latestPartnerAgentAuditEntry}
@@ -19660,6 +19973,7 @@ function AgentBrowserApp() {
         onHarnessEvolutionSettingsChange={setHarnessEvolutionSettings}
         onPersistentMemoryGraphStateChange={setPersistentMemoryGraphState}
         onGraphKnowledgeStateChange={setGraphKnowledgeState}
+        onAiPointerStateChange={setAiPointerState}
         onPartnerAgentControlPlaneSettingsChange={setPartnerAgentControlPlaneSettings}
         onRuntimePluginSettingsChange={setRuntimePluginSettings}
         onSpecDrivenDevelopmentSettingsChange={setSpecDrivenDevelopmentSettings}
@@ -20103,6 +20417,9 @@ function AgentBrowserApp() {
                 <PageOverlay
                   key={panel.tab.id}
                   tab={panel.tab}
+                  aiPointerSettings={aiPointerState.settings}
+                  onAiPointerCapture={handleAiPointerCapture}
+                  onAiPointerPrompt={handleAiPointerPromptDraft}
                   dragHandleProps={dragHandleProps}
                   onContextMenu={(x, y) => openContextMenuForNode(x, y, panel.tab)}
                   onClose={() => setWorkspaceViewStateByWorkspace((current) => ({
@@ -20142,12 +20459,14 @@ function AgentBrowserApp() {
                 codexState={codexState}
                 pendingSearch={pendingSearch}
                 pendingSessionPrompt={pendingReviewFollowUps.find((followUp) => followUp.sessionId === panel.id)?.prompt ?? null}
+                pendingAiPointerPrompt={pendingAiPointerPrompt}
                 onSearchConsumed={() => setPendingSearch(null)}
                 onPendingSessionPromptConsumed={(prompt) => {
                   setPendingReviewFollowUps((current) => current.filter((followUp) => (
                     followUp.sessionId !== panel.id || followUp.prompt !== prompt
                   )));
                 }}
+                onAiPointerPromptConsumed={() => setPendingAiPointerPrompt(null)}
                 onToast={setToast}
                 workspaceId={activeWorkspaceId}
                 workspaceName={activeWorkspace.name}
