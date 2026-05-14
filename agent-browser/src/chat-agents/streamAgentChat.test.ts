@@ -4,6 +4,21 @@ vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
 
+vi.mock('driver.js', () => ({ driver: vi.fn() }));
+vi.mock('driver.js/dist/driver.css', () => ({}));
+
+vi.mock('idb-keyval', () => ({
+  createStore: vi.fn(() => ({})),
+  get: vi.fn(async () => undefined),
+  set: vi.fn(async () => undefined),
+  del: vi.fn(async () => undefined),
+  clear: vi.fn(async () => undefined),
+}));
+
+vi.mock('@perplexity-ai/perplexity_ai', () => ({
+  Perplexity: class MockPerplexity {},
+}));
+
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
@@ -224,8 +239,77 @@ describe('streamAgentChat', () => {
         route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.2, tier: 'standard' }),
       },
     }, { onReasoningStep });
-    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), {}, undefined);
+    expect(streamDebuggerChatSpy).toHaveBeenLastCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), { onReasoningStep }, undefined);
     expect(onReasoningStep).toHaveBeenCalledWith(expect.objectContaining({ transcript: expect.stringContaining('low-confidence-premium-escalation') }));
+  });
+
+
+
+  it('treats shadow mode as a no-op when route returns null', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'debugger',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'quick check',
+      messages: [{ id: 'u1', role: 'user', content: 'quick check' }],
+      workspaceName: 'Build',
+      workspacePromptContext: '',
+      runtimeRouting: {
+        enabled: true,
+        route: async () => null,
+      },
+    }, {});
+
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-4.1' }), {}, undefined);
+  });
+
+  it('keeps user pin precedence even when low-confidence escalation is configured', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'debugger',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'debug this',
+      userPinnedModel: true,
+      messages: [{ id: 'u1', role: 'user', content: 'debug this' }],
+      workspaceName: 'Build',
+      workspacePromptContext: '',
+      runtimeRouting: {
+        enabled: true,
+        forcePremiumWhenLowConfidence: true,
+        lowConfidenceThreshold: 0.9,
+        premiumFallback: { runtimeProvider: 'ghcp', modelId: 'gpt-5' },
+        route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.1, tier: 'standard' }),
+      },
+    }, {});
+
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-4.1' }), {}, undefined);
+  });
+
+  it('does not apply premium escalation above the low-confidence threshold', async () => {
+    const streamDebuggerChatSpy = vi.spyOn(DebuggerModule, 'streamDebuggerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'debugger',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'investigate',
+      messages: [{ id: 'u1', role: 'user', content: 'investigate' }],
+      workspaceName: 'Build',
+      workspacePromptContext: '',
+      runtimeRouting: {
+        enabled: true,
+        forcePremiumWhenLowConfidence: true,
+        lowConfidenceThreshold: 0.3,
+        premiumFallback: { runtimeProvider: 'ghcp', modelId: 'gpt-5' },
+        route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.7, tier: 'standard' }),
+      },
+    }, {});
+
+    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet' }), {}, undefined);
   });
 
   it('answers workspace self-reflection directly from the current capability context', async () => {

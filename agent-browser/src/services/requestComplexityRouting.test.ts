@@ -25,6 +25,25 @@ describe('requestComplexityRouting', () => {
     expect(result.score).toBeGreaterThanOrEqual(DEFAULT_COMPLEXITY_ROUTING_POLICY.complexityThreshold);
   });
 
+
+  it('routes simple prompts to the cheap model for cost control', () => {
+    const classified = classifyPrompt('Summarize this changelog in 2 bullets.');
+
+    const decision = routeByComplexity(classified, DEFAULT_COMPLEXITY_ROUTING_POLICY);
+
+    expect(decision.model).toBe(DEFAULT_COMPLEXITY_ROUTING_POLICY.cheapModel);
+    expect(decision.tier).toBe('simple');
+  });
+
+  it('routes complex prompts to the premium model', () => {
+    const classified = classifyPrompt('Design architecture tradeoff analysis and debug the API endpoint pipeline');
+
+    const decision = routeByComplexity(classified, DEFAULT_COMPLEXITY_ROUTING_POLICY);
+
+    expect(decision.model).toBe(DEFAULT_COMPLEXITY_ROUTING_POLICY.premiumModel);
+    expect(decision.tier).toBe('complex');
+  });
+
   it('routes escalations to premium model', () => {
     const classified = classifyPrompt('Need security review for this feature');
 
