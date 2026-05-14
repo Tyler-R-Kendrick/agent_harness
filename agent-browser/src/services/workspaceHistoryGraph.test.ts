@@ -187,6 +187,67 @@ const workspaceActionHistory = recordWorkspaceActionTransition(
   new Date('2026-05-09T14:12:00.000Z'),
 );
 
+function createChapteredSessions(
+  chapters: Array<{ sessionId: string; sessionName: string; messageId: string; summary: string; updatedAt: string }>,
+): ChapteredSessionState {
+  return {
+    ...chapteredSessions,
+    sessions: Object.fromEntries(chapters.map((chapter) => [chapter.sessionId, {
+      sessionId: chapter.sessionId,
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      updatedAt: chapter.updatedAt,
+      chapters: [{
+        id: `chapter:${chapter.sessionId}:1`,
+        sessionId: chapter.sessionId,
+        workspaceId: 'ws-research',
+        workspaceName: 'Research',
+        title: `Chapter 1: ${chapter.sessionName}`,
+        status: 'compressed' as const,
+        startedAt: chapter.updatedAt,
+        updatedAt: chapter.updatedAt,
+        messageIds: [chapter.messageId],
+        sourceTraceRefs: [`message:${chapter.messageId}`],
+        evidenceRefs: [],
+        validationRefs: [],
+        toolOutputRefs: [],
+        compressedContext: {
+          summary: chapter.summary,
+          carryForward: [chapter.summary],
+          sourceTraceRefs: [`message:${chapter.messageId}`],
+          evidenceRefs: [],
+          validationRefs: [],
+          toolOutputRefs: [],
+          retainedRecentMessageIds: [chapter.messageId],
+          tokenBudget: 1200,
+          estimatedTokens: 8,
+          contextMode: 'standard' as const,
+          createdAt: chapter.updatedAt,
+        },
+      }],
+    }])),
+    audit: [],
+    toolOutputCache: {},
+  };
+}
+
+function createSeparatedUiActionHistory() {
+  const firstSnapshot = { ...workspaceActionHistory.actions[0].beforeSnapshot, activePanel: 'history' };
+  const secondSnapshot = { ...firstSnapshot, activePanel: 'models' };
+  const withFirst = recordWorkspaceActionTransition(
+    DEFAULT_WORKSPACE_ACTION_HISTORY_STATE,
+    workspaceActionHistory.actions[0].beforeSnapshot,
+    firstSnapshot,
+    new Date('2026-05-10T10:03:00.000Z'),
+  );
+  return recordWorkspaceActionTransition(
+    withFirst,
+    firstSnapshot,
+    secondSnapshot,
+    new Date('2026-05-10T10:04:00.000Z'),
+  );
+}
+
 describe('buildWorkspaceHistoryGraph', () => {
   it('projects each session chat chapter as one mainline squash merge with inspectable branch details', () => {
     const graph = buildWorkspaceHistoryGraph({
@@ -362,6 +423,89 @@ describe('buildWorkspaceHistoryGraph', () => {
       'files',
       'activity',
     ]));
+  });
+
+  it('rolls up only direct subsequent history nodes with matching graph categories', () => {
+    const graph = buildWorkspaceHistoryGraph({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      sessions: [
+        { id: 'later-merge', name: 'Later merge' },
+        { id: 'earlier-merge', name: 'Earlier merge' },
+        { id: 'second-later-merge', name: 'Second later merge' },
+        { id: 'second-earlier-merge', name: 'Second earlier merge' },
+      ],
+      chapterState: createChapteredSessions([
+        {
+          sessionId: 'later-merge',
+          sessionName: 'Later merge',
+          messageId: 'message-later-merge',
+          summary: 'Later squash merge summary.',
+          updatedAt: '2026-05-10T10:06:00.000Z',
+        },
+        {
+          sessionId: 'earlier-merge',
+          sessionName: 'Earlier merge',
+          messageId: 'message-earlier-merge',
+          summary: 'Earlier squash merge summary.',
+          updatedAt: '2026-05-10T10:05:00.000Z',
+        },
+        {
+          sessionId: 'second-later-merge',
+          sessionName: 'Second later merge',
+          messageId: 'message-second-later-merge',
+          summary: 'Second later squash merge summary.',
+          updatedAt: '2026-05-10T10:02:00.000Z',
+        },
+        {
+          sessionId: 'second-earlier-merge',
+          sessionName: 'Second earlier merge',
+          messageId: 'message-second-earlier-merge',
+          summary: 'Second earlier squash merge summary.',
+          updatedAt: '2026-05-10T10:01:00.000Z',
+        },
+      ]),
+      conversationBranchingState: DEFAULT_CONVERSATION_BRANCHING_STATE,
+      runCheckpointState: { ...runCheckpoints, checkpoints: [], audit: [] },
+      browserAgentRunSdkState: { runs: [], events: [] },
+      scheduledAutomationState: { automations: [], runs: [], inbox: [] },
+      actionHistoryState: createSeparatedUiActionHistory(),
+      recentActivity: [],
+    });
+
+    expect(graph.rows.map((row) => row.title)).toEqual([
+      'Squash merge',
+      'App actions',
+      'Squash merge',
+    ]);
+    expect(graph.rows.map((row) => row.kind)).toEqual([
+      'history-rollup',
+      'history-rollup',
+      'history-rollup',
+    ]);
+    expect(graph.rows[0].children?.map((row) => row.title)).toEqual([
+      'Squash merge: Later merge',
+      'Squash merge: Earlier merge',
+    ]);
+    expect(graph.rows[1].children?.map((row) => row.title)).toEqual([
+      'App actions: Opened Models',
+      'App actions: Opened History',
+    ]);
+    expect(graph.rows[2].children?.map((row) => row.title)).toEqual([
+      'Squash merge: Second later merge',
+      'Squash merge: Second earlier merge',
+    ]);
+    expect(graph.rows[0].detailRows.map((row) => row.label)).toEqual([
+      'Squash merge: Later merge',
+      'message:message-later-merge',
+      'Squash merge: Earlier merge',
+      'message:message-earlier-merge',
+    ]);
+    expect(graph.summary).toMatchObject({
+      mainlineCommits: 2,
+      squashMerges: 2,
+      timelineNodes: 3,
+    });
   });
 
   it('represents file CRDT operations as selectable file-version nodes', () => {
