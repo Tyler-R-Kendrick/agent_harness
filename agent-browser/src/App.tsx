@@ -15607,7 +15607,7 @@ function AgentBrowserApp() {
 
   const activeWorkspace = getWorkspace(root, activeWorkspaceId) ?? root;
   const [pendingSymphonyDispatches, setPendingSymphonyDispatches] = useState<MultitaskBranchDispatch[]>([]);
-  const queuedSymphonyBranchDispatchIdsRef = useRef<Set<string>>(new Set());
+  const queuedSymphonyBranchDispatchKeysRef = useRef<Set<string>>(new Set());
   const settingsHarnessEvolutionPlan = useMemo(() => buildHarnessEvolutionPlan({
     settings: harnessEvolutionSettings,
     request: {
@@ -15827,26 +15827,27 @@ function AgentBrowserApp() {
   ]);
   useEffect(() => {
     if (!activeMultitaskSubagentState.enabled) {
-      queuedSymphonyBranchDispatchIdsRef.current.clear();
+      queuedSymphonyBranchDispatchKeysRef.current.clear();
       return;
     }
 
-    const syntheticRunningIds = new Set(
+    const syntheticRunningDispatchKeys = new Set(
       activeMultitaskSubagentState.branches
         .filter((branch) => branch.status === 'running' && branch.sessionId?.startsWith('symphony:'))
-        .map((branch) => branch.id),
+        .map((branch) => `${branch.id}:${branch.runAttempt ?? 0}:${branch.sessionId ?? ''}`),
     );
-    for (const branchId of queuedSymphonyBranchDispatchIdsRef.current) {
-      if (!syntheticRunningIds.has(branchId)) {
-        queuedSymphonyBranchDispatchIdsRef.current.delete(branchId);
+    for (const dispatchKey of queuedSymphonyBranchDispatchKeysRef.current) {
+      if (!syntheticRunningDispatchKeys.has(dispatchKey)) {
+        queuedSymphonyBranchDispatchKeysRef.current.delete(dispatchKey);
       }
     }
 
     const dispatches = activeMultitaskSubagentState.branches.flatMap((branch, index) => {
-      if (!syntheticRunningIds.has(branch.id) || queuedSymphonyBranchDispatchIdsRef.current.has(branch.id)) {
+      const dispatchKey = `${branch.id}:${branch.runAttempt ?? 0}:${branch.sessionId ?? ''}`;
+      if (!syntheticRunningDispatchKeys.has(dispatchKey) || queuedSymphonyBranchDispatchKeysRef.current.has(dispatchKey)) {
         return [];
       }
-      queuedSymphonyBranchDispatchIdsRef.current.add(branch.id);
+      queuedSymphonyBranchDispatchKeysRef.current.add(dispatchKey);
       return [buildMultitaskBranchDispatch(activeMultitaskSubagentState, branch, index)];
     });
     if (dispatches.length > 0) {
@@ -19147,9 +19148,7 @@ function AgentBrowserApp() {
       setToast({ msg: `Unable to open Symphony session for ${dispatch.sessionName}`, type: 'error' });
       return;
     }
-    if (activePanel !== 'symphony') {
-      switchSidebarPanel('workspaces');
-    }
+    switchSidebarPanel('workspaces');
     setMultitaskSubagentState((current) => {
       if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
       return attachMultitaskBranchSession(current, dispatch.branchId, {
@@ -19164,7 +19163,7 @@ function AgentBrowserApp() {
         : `Queued Symphony agent run ${dispatch.sessionName}`,
       type: 'info',
     });
-  }, [activePanel, activeWorkspaceId, addSessionToWorkspace, setMultitaskSubagentState, setToast, switchSidebarPanel]);
+  }, [activeWorkspaceId, addSessionToWorkspace, setMultitaskSubagentState, setToast, switchSidebarPanel]);
 
   useEffect(() => {
     if (pendingSymphonyDispatches.length === 0) return;

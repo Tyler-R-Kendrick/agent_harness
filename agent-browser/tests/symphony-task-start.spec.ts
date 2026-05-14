@@ -56,9 +56,13 @@ test.describe('Symphony task start visual behavior', () => {
       authenticated: true,
       models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: false }],
     });
+    let chatRequestCount = 0;
+    let latestChatPayload = '';
     await page.context().route(/\/api\/copilot\/chat$/, async (route) => {
       const payload = route.request().postDataJSON() as { prompt?: string };
       const serialized = JSON.stringify(payload || {});
+      chatRequestCount += 1;
+      latestChatPayload = serialized;
       const answer = serialized.includes('Assigned task: add 1+1.')
         ? 'Agent completed task: 1 + 1 = 2.'
         : 'Unexpected Symphony prompt.';
@@ -84,6 +88,8 @@ test.describe('Symphony task start visual behavior', () => {
     await queue.getByLabel('New task title').fill('add 1+1.');
     await queue.getByRole('button', { name: 'Create Symphony task' }).click();
 
+    await expect.poll(() => chatRequestCount).toBeGreaterThan(0);
+    expect(latestChatPayload).toContain('Assigned task: add 1+1.');
     await expect(page.getByText('Agent completed task: 1 + 1 = 2.')).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: 'Symphony', exact: true }).click();
 
