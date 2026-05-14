@@ -3,8 +3,10 @@ import {
   DEFAULT_RUNTIME_PLUGIN_SETTINGS,
   buildRuntimePluginPromptContext,
   buildRuntimePluginRuntime,
+  enforceCoreRoutingSafetyInvariants,
   evaluateRuntimePluginToolCall,
   isRuntimePluginSettings,
+  resolveRuntimeRoutingExtensionOutputs,
   type RuntimePluginManifest,
 } from './runtimePlugins';
 
@@ -38,6 +40,7 @@ describe('runtimePlugins', () => {
     expect(runtime.eventSubscriptions['tool:before-call']).toEqual(['repo-policy']);
     expect(runtime.shellEnvironment.AGENT_POLICY).toBe('strict');
     expect(runtime.compactionHints).toEqual(['Keep runtime plugin policy audit ids in compacted summaries.']);
+    expect(runtime.routingExtensions).toHaveLength(1);
   });
 
   it('omits active registrations when the runtime is disabled', () => {
@@ -132,5 +135,37 @@ describe('runtimePlugins', () => {
     expect(context).toContain('Repo policy');
     expect(context).toContain('tool:before-call');
     expect(context).toContain('AGENT_POLICY');
+  });
+
+  it('keeps core routing safety invariants enabled for extension output', () => {
+    const enforced = enforceCoreRoutingSafetyInvariants({
+      enforceEscalationInvariant: false,
+      enforceConfidenceFallbackInvariant: false,
+      alternateScoringModuleId: 'experimental-scorer',
+    });
+
+    expect(enforced.enforceEscalationInvariant).toBe(true);
+    expect(enforced.enforceConfidenceFallbackInvariant).toBe(true);
+    expect(enforced.alternateScoringModuleId).toBe('experimental-scorer');
+  });
+
+  it('resolves runtime routing extension outputs through invariant enforcement', () => {
+    const runtime = buildRuntimePluginRuntime({
+      settings: {
+        ...DEFAULT_RUNTIME_PLUGIN_SETTINGS,
+        enabledPluginIds: ['repo-policy'],
+      },
+      manifests: [repoPolicyPlugin],
+    });
+
+    runtime.routingExtensions[0] = {
+      pluginId: 'repo-policy',
+      provideRoutingOutput: () => ({ enforceEscalationInvariant: false, enforceConfidenceFallbackInvariant: false }),
+    };
+
+    const outputs = resolveRuntimeRoutingExtensionOutputs(runtime);
+    expect(outputs).toHaveLength(1);
+    expect(outputs[0].enforceEscalationInvariant).toBe(true);
+    expect(outputs[0].enforceConfidenceFallbackInvariant).toBe(true);
   });
 });

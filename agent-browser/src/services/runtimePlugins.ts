@@ -60,6 +60,21 @@ export interface RuntimePluginRuntime {
   shellEnvironment: Record<string, string>;
   compactionHints: string[];
   policySummary: string[];
+  routingExtensions: RuntimeRoutingExtension[];
+}
+
+export interface RuntimeRoutingExtensionOutput {
+  featureSignals?: Record<string, number>;
+  thresholdAdjustments?: Partial<Record<'minConfidence' | 'complexityThreshold', number>>;
+  objectiveAdjustments?: Partial<Record<'quality' | 'cost' | 'latency' | 'balanced', number>>;
+  alternateScoringModuleId?: string;
+  enforceEscalationInvariant?: boolean;
+  enforceConfidenceFallbackInvariant?: boolean;
+}
+
+export interface RuntimeRoutingExtension {
+  pluginId: string;
+  provideRoutingOutput: () => RuntimeRoutingExtensionOutput;
 }
 
 export interface RuntimePluginToolCall {
@@ -207,6 +222,16 @@ export function buildRuntimePluginRuntime({
     const events = plugin.eventSubscriptions.length > 0 ? plugin.eventSubscriptions.join(', ') : 'no events';
     return `${plugin.name}: ${plugin.interceptsToolCalls ? 'intercepts tool calls' : 'observes'}; events ${events}.`;
   });
+  const routingExtensions = activePlugins.map((plugin): RuntimeRoutingExtension => ({
+    pluginId: plugin.id,
+    provideRoutingOutput: () => ({
+      featureSignals: {},
+      thresholdAdjustments: {},
+      objectiveAdjustments: {},
+      enforceEscalationInvariant: true,
+      enforceConfidenceFallbackInvariant: true,
+    }),
+  }));
 
   return {
     enabled: normalizedSettings.enabled,
@@ -222,6 +247,19 @@ export function buildRuntimePluginRuntime({
     shellEnvironment,
     compactionHints,
     policySummary,
+    routingExtensions,
+  };
+}
+
+export function resolveRuntimeRoutingExtensionOutputs(runtime: RuntimePluginRuntime): RuntimeRoutingExtensionOutput[] {
+  return runtime.routingExtensions.map((extension) => enforceCoreRoutingSafetyInvariants(extension.provideRoutingOutput()));
+}
+
+export function enforceCoreRoutingSafetyInvariants(output: RuntimeRoutingExtensionOutput): RuntimeRoutingExtensionOutput {
+  return {
+    ...output,
+    enforceEscalationInvariant: true,
+    enforceConfidenceFallbackInvariant: true,
   };
 }
 
