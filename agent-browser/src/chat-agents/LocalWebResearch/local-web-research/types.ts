@@ -127,14 +127,24 @@ export type EvidenceChunk = {
   sourceResultId?: string;
   pageId?: string;
   citationId?: number;
+  pageNumber?: number;
+  pointerType?: 'figure' | 'table';
+  pointerLabel?: string;
+  pointerAnchor?: string;
 };
 
 export type AgentCitation = {
   id: number;
+  kind?: 'text' | 'pointer';
   title?: string;
   url: string;
   normalizedUrl: string;
   quote?: string;
+  docId?: string;
+  page?: number;
+  bbox?: { x: number; y: number; width: number; height: number };
+  assetUri?: string;
+  assetAnchor?: string;
   pageNumber?: number;
   pointerType?: 'figure' | 'table';
   pointerLabel?: string;
