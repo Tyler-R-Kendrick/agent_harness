@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { createMultitaskSubagentState } from './services/multitaskSubagents';
 import { STORAGE_KEYS } from './services/sessionState';
+import { DEFAULT_SESSION_CHAPTER_STATE } from './services/sessionChapters';
 import {
   appendWorkspaceFileCrdtDiff,
   createWorkspaceFileCrdtHistory,
@@ -1801,8 +1802,9 @@ describe('App smoke coverage', () => {
     expect(screen.queryByRole('button', { name: 'Typed run SDK' })).not.toBeInTheDocument();
     expect(screen.getByText('SDK launch smoke')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for SDK launch smoke' }));
-    expect(screen.getByText('Structured event stream is live.')).toBeInTheDocument();
-    expect(screen.getByText('Reconnect cursor 3 is ready for clients.')).toBeInTheDocument();
+    const runDetailPane = screen.getByRole('region', { name: 'Selected history detail' });
+    expect(within(runDetailPane).getByText('Structured event stream is live.')).toBeInTheDocument();
+    expect(within(runDetailPane).getByText('Reconnect cursor 3 is ready for clients.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Settings'));
 
@@ -1833,7 +1835,7 @@ describe('App smoke coverage', () => {
     expect(screen.queryByRole('button', { name: 'Chaptered sessions' })).not.toBeInTheDocument();
     expect(screen.getByText(/Squash merge: visual-eval-session/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Squash merge: visual-eval-session' }));
-    expect(screen.getByText('message:visual-eval-assistant')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Selected history detail' })).getByText('message:visual-eval-assistant')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Settings'));
     fireEvent.click(screen.getByRole('button', { name: 'Chaptered sessions' }));
@@ -1877,6 +1879,82 @@ describe('App smoke coverage', () => {
     expect(historyPanel).toHaveTextContent('process:visual-tool');
     expect(historyPanel).toHaveTextContent('evidence:output/playwright/agent-browser-visual-smoke.png');
     expect(historyPanel).toHaveTextContent('tool-output:visual-tool');
+  });
+
+  it('expands rolled-up History graph nodes into the direct child checkins', async () => {
+    vi.useFakeTimers();
+    const baseChapter = DEFAULT_SESSION_CHAPTER_STATE.sessions['visual-eval-session'].chapters[0];
+    const rollupChapterState = {
+      ...DEFAULT_SESSION_CHAPTER_STATE,
+      sessions: {
+        'rollup-later-session': {
+          sessionId: 'rollup-later-session',
+          workspaceId: 'ws-research',
+          workspaceName: 'Research',
+          updatedAt: '2026-05-10T10:02:00.000Z',
+          chapters: [{
+            ...baseChapter,
+            id: 'chapter:rollup-later-session:1',
+            sessionId: 'rollup-later-session',
+            updatedAt: '2026-05-10T10:02:00.000Z',
+            startedAt: '2026-05-10T10:02:00.000Z',
+            messageIds: ['rollup-later-message'],
+            sourceTraceRefs: ['message:rollup-later-message'],
+            compressedContext: {
+              ...baseChapter.compressedContext,
+              summary: 'Later rollup detail.',
+              sourceTraceRefs: ['message:rollup-later-message'],
+              retainedRecentMessageIds: ['rollup-later-message'],
+              createdAt: '2026-05-10T10:02:00.000Z',
+            },
+          }],
+        },
+        'rollup-earlier-session': {
+          sessionId: 'rollup-earlier-session',
+          workspaceId: 'ws-research',
+          workspaceName: 'Research',
+          updatedAt: '2026-05-10T10:01:00.000Z',
+          chapters: [{
+            ...baseChapter,
+            id: 'chapter:rollup-earlier-session:1',
+            sessionId: 'rollup-earlier-session',
+            updatedAt: '2026-05-10T10:01:00.000Z',
+            startedAt: '2026-05-10T10:01:00.000Z',
+            messageIds: ['rollup-earlier-message'],
+            sourceTraceRefs: ['message:rollup-earlier-message'],
+            compressedContext: {
+              ...baseChapter.compressedContext,
+              summary: 'Earlier rollup detail.',
+              sourceTraceRefs: ['message:rollup-earlier-message'],
+              retainedRecentMessageIds: ['rollup-earlier-message'],
+              createdAt: '2026-05-10T10:01:00.000Z',
+            },
+          }],
+        },
+      },
+      audit: [],
+      toolOutputCache: {},
+    };
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('history'));
+    window.localStorage.setItem(STORAGE_KEYS.sessionChapterState, JSON.stringify(rollupChapterState));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const historyPanel = screen.getByRole('region', { name: 'History' });
+    expect(historyPanel).toHaveTextContent('Squash merge');
+    expect(historyPanel.querySelector('.workspace-history-branch-details')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect branch history for Squash merge' }));
+
+    const inlineDetails = historyPanel.querySelector('.workspace-history-branch-details');
+    expect(inlineDetails).toHaveTextContent('Squash merge: rollup-later-session');
+    expect(inlineDetails).toHaveTextContent('Squash merge: rollup-earlier-session');
+    expect(inlineDetails).toHaveTextContent('message:rollup-later-message');
+    expect(inlineDetails).toHaveTextContent('message:rollup-earlier-message');
   });
 
   it('opens timeline rows into read-only chat and CRDT-backed file detail views', async () => {
