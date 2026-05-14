@@ -43,6 +43,27 @@ export type BenchmarkRouteRecommendation = {
   reason: string;
 };
 
+export type RoutingRequestContext = {
+  taskClass: BenchmarkTaskClassId;
+  latestUserInput: string;
+  toolsEnabled: boolean;
+  provider: AgentProvider;
+};
+
+export type RoutingDecisionSafeguards = {
+  forceEscalation: boolean;
+  forceConfidenceFallback: boolean;
+};
+
+export interface RoutingStrategy {
+  classify(requestContext: RoutingRequestContext): BenchmarkTaskClassId;
+  recommend(candidates: BenchmarkRoutingCandidate[], settings: BenchmarkRoutingSettings): BenchmarkRouteRecommendation | null;
+  finalize(
+    decision: BenchmarkRouteRecommendation | null,
+    safeguards: RoutingDecisionSafeguards,
+  ): BenchmarkRouteRecommendation | null;
+}
+
 export type BenchmarkEvidenceMetric = {
   taskClass: BenchmarkTaskClassId;
   benchmark: string;
@@ -602,6 +623,33 @@ export function recommendBenchmarkRoute({
       reason: `${settings.objective} route for ${getBenchmarkTaskClass(taskClass).label}: ${best.candidate.strengths.join(', ')}.`,
     }
     : null;
+}
+
+export function createDefaultRoutingStrategy(): RoutingStrategy {
+  let lastClassifiedTask: BenchmarkTaskClassId = 'planning';
+  return {
+    classify(requestContext) {
+      lastClassifiedTask = inferBenchmarkTaskClass(requestContext);
+      return lastClassifiedTask;
+    },
+    recommend(candidates, settings) {
+      return recommendBenchmarkRoute({
+        taskClass: lastClassifiedTask,
+        candidates,
+        settings,
+      });
+    },
+    finalize(decision, safeguards) {
+      if (!decision) return null;
+      if (safeguards.forceEscalation || safeguards.forceConfidenceFallback) {
+        return {
+          ...decision,
+          reason: `${decision.reason} Core safeguards enforced: escalation/confidence fallback active.`,
+        };
+      }
+      return decision;
+    },
+  };
 }
 
 export function inferBenchmarkTaskClass({

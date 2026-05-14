@@ -3,6 +3,7 @@ import {
   areStagedRoutingChecksPassing,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   buildBenchmarkRoutingCandidates,
+  createDefaultRoutingStrategy,
   discoverBenchmarkEvidence,
   inferBenchmarkTaskClass,
   isBenchmarkRoutingSettings,
@@ -73,6 +74,28 @@ describe('benchmark model routing', () => {
     expect(route?.candidate.ref).toBe('ghcp:gpt-4.1');
   });
 
+
+  it('registers the default deterministic+benchmark hybrid routing strategy', () => {
+    const strategy = createDefaultRoutingStrategy();
+    const taskClass = strategy.classify({
+      provider: 'codi',
+      latestUserInput: 'run tests and verify this patch',
+      toolsEnabled: true,
+      taskClass: 'planning',
+    });
+    const recommendation = strategy.recommend(candidates, {
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      objective: 'quality',
+    });
+    const finalized = strategy.finalize(recommendation, {
+      forceEscalation: true,
+      forceConfidenceFallback: true,
+    });
+
+    expect(taskClass).toBe('verification');
+    expect(recommendation?.taskClass).toBe('verification');
+    expect(finalized?.reason).toContain('Core safeguards enforced');
+  });
   it('infers task classes from provider and request text', () => {
     expect(inferBenchmarkTaskClass({ provider: 'planner', latestUserInput: 'break this down', toolsEnabled: false })).toBe('planning');
     expect(inferBenchmarkTaskClass({ provider: 'researcher', latestUserInput: 'find sources', toolsEnabled: false })).toBe('research');
