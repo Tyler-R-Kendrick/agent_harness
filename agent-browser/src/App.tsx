@@ -628,6 +628,8 @@ import {
   flattenWorkspaceTreeFiltered,
   getWorkspace,
   getWorkspaceCategory,
+  groupSessionNodeInWorkspace,
+  listWorkspaceSessionNodes,
   normalizeWorkspaceViewEntry,
   removeNodeById,
   renderPaneIdForNode,
@@ -674,6 +676,7 @@ import {
   toggleWorktreeRenderPaneState,
   type WorkspaceContextMenuState,
 } from './services/workspaceMcpWorktree';
+import { deriveSessionTitle } from './services/sessionTitles';
 import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPanes';
 import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
@@ -2934,6 +2937,7 @@ function ChatPanel({
   onConversationBranchRequest,
   onOpenConversationSession,
   onConversationSubthreadSteering,
+  onSessionTitleSuggestion,
   widgetBinding,
   dragHandleProps,
 }: {
@@ -3003,6 +3007,7 @@ function ChatPanel({
   onConversationBranchRequest?: (request: string, sessionId: string) => void;
   onOpenConversationSession?: (sessionId: string) => void;
   onConversationSubthreadSteering?: (subthreadId: string, sessionId: string, text: string, messageIds: string[]) => void;
+  onSessionTitleSuggestion?: (sessionId: string, title: string) => void;
   widgetBinding?: WidgetSessionBinding | null;
   dragHandleProps?: PanelDragHandleProps;
 }) {
@@ -3498,6 +3503,13 @@ function ChatPanel({
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    const title = deriveSessionTitle(messages);
+    if (title) {
+      onSessionTitleSuggestion?.(activeChatSessionId, title);
+    }
+  }, [activeChatSessionId, messages, onSessionTitleSuggestion]);
 
   useEffect(() => {
     if (!sessionChapterState.enabled || !sessionChapterState.policy.automaticCompression) return;
@@ -14431,6 +14443,16 @@ const WORKTREE_CONTEXT_MENU_ITEM_TYPES = new Set<string>([
   'clipboard',
 ]);
 
+function canApplyGeneratedSessionTitle(node: TreeNode): boolean {
+  if (node.sessionTitleLocked) return false;
+  if (node.sessionTitleGenerated) return true;
+  return /^Session \d+$/i.test(node.name)
+    || /^SYM-\d+$/i.test(node.name)
+    || /^Branch:/i.test(node.name)
+    || /^Branch active chat thread$/i.test(node.name)
+    || /^Active chat thread$/i.test(node.name);
+}
+
 function hasWorkspaceSectionContextMenu(node: TreeNode) {
   return node.type === 'folder' && (
     node.nodeKind === 'browser'
@@ -15760,8 +15782,7 @@ function AgentBrowserApp() {
   })), [activeBrowserPageIds, activeBrowserTabs]);
   const activeWorkspaceSessions = useMemo(
     () => activeWorkspace.type === 'workspace'
-      ? ((getWorkspaceCategory(activeWorkspace, 'session')?.children ?? [])
-          .filter((child): child is TreeNode => child.type === 'tab' && child.nodeKind === 'session')
+      ? (listWorkspaceSessionNodes(activeWorkspace)
           .map((child) => ({
             id: child.id,
             name: child.name,
@@ -16584,10 +16605,8 @@ function AgentBrowserApp() {
         const extensionNodes = buildInstalledExtensionDriveNodes(`extensions:${ws.id}`, installedDefaultExtensions);
         const fileNodes = buildWorkspaceCapabilityDriveNodes(`file:${ws.id}`, files);
         const artifactNodes = buildArtifactWorktreeNodes(`artifact:${ws.id}`, artifactsByWorkspace[ws.id] ?? []);
-        const sessionCategory = getWorkspaceCategory(normalizedWorkspace, 'session');
         const mountedSessionIds = normalizeWorkspaceViewEntry(normalizedWorkspace, workspaceViewStateByWorkspace[ws.id]).mountedSessionFsIds;
-        const terminalFsNodes: TreeNode[] = (sessionCategory?.children ?? [])
-          .filter((child) => child.type === 'tab' && child.nodeKind === 'session')
+        const terminalFsNodes: TreeNode[] = listWorkspaceSessionNodes(normalizedWorkspace)
           .filter((terminalNode) => mountedSessionIds.includes(terminalNode.id))
           .map((terminalNode) => ({
             id: `vfs:${ws.id}:${terminalNode.id}`,
@@ -16776,25 +16795,44 @@ function AgentBrowserApp() {
     setRenamingWorkspaceId(null);
   }, [renamingWorkspaceId, setToast, workspaceDraftName]);
 
-  const renameSessionNodeById = useCallback((sessionId: string, nextName: string, showToast = true) => {
+  const renameSessionNodeById = useCallback((sessionId: string, nextName: string, showToast = true, options: { lockTitle?: boolean } = {}) => {
     const trimmed = nextName.trim();
     if (!trimmed) {
       return;
     }
 
-    setRoot((current) => deepUpdate(current, sessionId, (node) => ({ ...node, name: trimmed })));
+    const lockTitle = options.lockTitle ?? true;
+    setRoot((current) => deepUpdate(current, sessionId, (node) => ({
+      ...node,
+      name: trimmed,
+      ...(lockTitle ? { sessionTitleLocked: true, sessionTitleGenerated: false } : { sessionTitleGenerated: true }),
+    })));
     if (showToast) {
       setToast({ msg: `Renamed to ${trimmed}`, type: 'success' });
     }
   }, [setToast]);
 
-  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean; boundWidgetId?: string } = {}): { id: string; name: string; isOpen: boolean } | null => {
+  const applyGeneratedSessionTitle = useCallback((sessionId: string, nextTitle: string) => {
+    const trimmed = nextTitle.trim();
+    if (!trimmed) return;
+    setRoot((current) => deepUpdate(current, sessionId, (node) => {
+      if (node.type !== 'tab' || node.nodeKind !== 'session' || !canApplyGeneratedSessionTitle(node) || node.name === trimmed) {
+        return node;
+      }
+      return {
+        ...node,
+        name: trimmed,
+        sessionTitleGenerated: true,
+      };
+    }));
+  }, []);
+
+  const addSessionToWorkspace = useCallback((workspaceId: string, nameOverride?: string, options: { open?: boolean; boundWidgetId?: string; groupId?: string; groupName?: string; titleLocked?: boolean } = {}): { id: string; name: string; isOpen: boolean } | null => {
     const shouldOpen = options.open ?? true;
     const workspace = getWorkspace(root, workspaceId);
     if (!workspace) return null;
     const normalized = ensureWorkspaceCategories(workspace);
-    const category = getWorkspaceCategory(normalized, 'session');
-    const existingSessions = (category?.children ?? []).filter((child) => child.type === 'tab' && child.nodeKind === 'session');
+    const existingSessions = listWorkspaceSessionNodes(normalized);
     const existingIndexes = existingSessions.map((child) => {
       const match = child.name.match(/^Session (\d+)$/);
       return match ? parseInt(match[1], 10) : 0;
@@ -16804,20 +16842,21 @@ function AgentBrowserApp() {
     if (typeof nameOverride === 'string' && nameOverride.trim()) {
       newSession.name = nameOverride.trim();
     }
+    newSession.sessionTitleGenerated = !options.titleLocked;
     if (options.boundWidgetId) {
       newSession.boundWidgetId = options.boundWidgetId;
+    }
+    if (options.titleLocked) {
+      newSession.sessionTitleLocked = true;
     }
     const createdSession = { id: newSession.id, name: newSession.name, isOpen: shouldOpen };
     setRoot((current) => {
       return deepUpdate(current, workspaceId, (node) => {
-        const withCategories = ensureWorkspaceCategories(node);
-        return {
-          ...withCategories,
-          expanded: true,
-          children: (withCategories.children ?? []).map((child) => child.nodeKind === 'session'
-            ? { ...child, expanded: true, children: [...(child.children ?? []), newSession] }
-            : child),
-        };
+        const withSession = groupSessionNodeInWorkspace(node, newSession, {
+          groupId: options.groupId,
+          groupName: options.groupName,
+        });
+        return { ...withSession, expanded: true };
       });
     });
     switchWorkspace(workspaceId);
@@ -16943,9 +16982,14 @@ function AgentBrowserApp() {
 
   const startConversationBranch = useCallback((request: string, sessionId: string) => {
     const title = request.trim().replace(/\s+/g, ' ') || 'Active chat thread';
+    const parentSession = findNode(activeWorkspace, sessionId);
     const subthreadSession = addSessionToWorkspace(
       activeWorkspaceId,
-      `Branch: ${title.slice(0, 48)}`,
+      title.slice(0, 48),
+      {
+        groupId: `conversation:${sessionId}`,
+        groupName: `${parentSession?.name ?? 'Main conversation'} branches`,
+      },
     );
     setConversationBranchingState(createConversationBranchingState({
       workspaceId: activeWorkspaceId,
@@ -16955,7 +16999,7 @@ function AgentBrowserApp() {
       request,
     }));
     setToast({ msg: 'Conversation branch started', type: 'success' });
-  }, [activeWorkspace.name, activeWorkspaceId, addSessionToWorkspace, setConversationBranchingState, setToast]);
+  }, [activeWorkspace, activeWorkspaceId, addSessionToWorkspace, setConversationBranchingState, setToast]);
 
   const openConversationSession = useCallback((sessionId: string) => {
     const workspace = getWorkspace(root, activeWorkspaceId);
@@ -18557,7 +18601,7 @@ function AgentBrowserApp() {
   }, [browserNavHistories, readBrowserPageFromWorkspace]);
 
   const createSessionFromMcp = useCallback(async ({ name }: { name?: string }) => (
-    addSessionToWorkspace(activeWorkspaceId, name) ?? undefined
+    addSessionToWorkspace(activeWorkspaceId, name, { titleLocked: Boolean(name?.trim()) }) ?? undefined
   ), [activeWorkspaceId, addSessionToWorkspace]);
 
   const closeSessionFromMcp = useCallback(async (sessionId: string) => {
@@ -19143,7 +19187,11 @@ function AgentBrowserApp() {
   }, [activeSessionIds, activeWorkspaceId, addSessionToWorkspace, setToast, switchSidebarPanel]);
 
   const queueSymphonyDispatch = useCallback((dispatch: MultitaskBranchDispatch) => {
-    const session = addSessionToWorkspace(activeWorkspaceId, dispatch.sessionName, { open: true });
+    const session = addSessionToWorkspace(activeWorkspaceId, dispatch.sessionName, {
+      open: true,
+      groupId: dispatch.branchName,
+      groupName: dispatch.branchName,
+    });
     if (!session) {
       setToast({ msg: `Unable to open Symphony session for ${dispatch.sessionName}`, type: 'error' });
       return;
@@ -20535,6 +20583,7 @@ function AgentBrowserApp() {
                 onConversationBranchRequest={startConversationBranch}
                 onOpenConversationSession={openConversationSession}
                 onConversationSubthreadSteering={recordConversationSubthreadSteering}
+                onSessionTitleSuggestion={applyGeneratedSessionTitle}
                 widgetBinding={boundWidget ? {
                   widget: boundWidget,
                   onSavePatch: patchActiveHarnessElement,

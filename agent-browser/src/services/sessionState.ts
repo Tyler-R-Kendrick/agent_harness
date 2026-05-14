@@ -282,6 +282,10 @@ export function isTreeNode(value: unknown): value is TreeNode {
     && isOptionalString(node.artifactReferenceId)
     && isOptionalString(node.dashboardWidgetId)
     && isOptionalString(node.boundWidgetId)
+    && isOptionalString(node.sessionGroupId)
+    && isOptionalString(node.sessionGroupName)
+    && isOptionalBoolean(node.sessionTitleLocked)
+    && isOptionalBoolean(node.sessionTitleGenerated)
     && isOptionalBoolean(node.muted)
     && (node.children === undefined || (Array.isArray(node.children) && node.children.every(isTreeNode)))
   );
