@@ -375,6 +375,8 @@ export async function runLogActActorWorkflow(
   let lastExecutionText: string | undefined;
   let lastExecutionSteps = 0;
   let lastFailureKind: 'executor' | 'verification' | 'adversary-tool-review' = 'executor';
+  let trainingTools: ActiveToolSelection | undefined;
+  let adversaryChallenger: Candidate | undefined;
 
   for (let executionAttempt = 1; executionAttempt <= maxExecutionAttempts; executionAttempt += 1) {
     let selected: Candidate | undefined;
@@ -383,18 +385,20 @@ export async function runLogActActorWorkflow(
       const passIndex = nextPassIndex;
       nextPassIndex += 1;
       const priorBusContext = passIndex === 1 ? undefined : summarizeBusContext(capturedBusEntries);
-      callbacks.onAgentHandoff?.(
-        'logact',
-        'tool-agent',
-        `Agent handoff: tool-agent records tool selection and actor tool policy for LogAct pass ${passIndex}.`,
-      );
-      const activeTools = await runToolAgentDriver(bus, task, options, passIndex, priorBusContext);
+      if (!trainingTools) {
+        callbacks.onAgentHandoff?.(
+          'logact',
+          'tool-agent',
+          `Agent handoff: tool-agent records tool selection and actor tool policy for LogAct pass ${passIndex}.`,
+        );
+        trainingTools = await runToolAgentDriver(bus, task, options, passIndex, priorBusContext);
+      }
       callbacks.onAgentHandoff?.(
         'logact',
         'student-driver',
         `Agent handoff: student driver drafts a solution candidate for LogAct pass ${passIndex}.`,
       );
-      const studentDraft = await runStudentDriver(bus, task, options, activeTools.toolPolicy, passIndex, priorBusContext);
+      const studentDraft = await runStudentDriver(bus, task, options, trainingTools.toolPolicy, passIndex, priorBusContext);
       const studentCandidate = await runTeacherStudentLoop(
         bus,
         studentDraft,
@@ -410,22 +414,24 @@ export async function runLogActActorWorkflow(
         value: { type: 'judge-rubric', criteria: judgeRubric, passIndex },
         meta: actorMeta('judge-decider', passIndex, { rubric: judgeRubric }),
       });
-      callbacks.onAgentHandoff?.(
-        'judge-decider',
-        'adversary-driver',
-        `Agent handoff: adversary driver probes the rubric for LogAct pass ${passIndex}.`,
-      );
-      const adversaryCandidate = await runAdversaryDriver(
-        bus,
-        task,
-        passIndex,
-        priorBusContext,
-        negativeTechniques,
-      );
+      if (!adversaryChallenger) {
+        callbacks.onAgentHandoff?.(
+          'judge-decider',
+          'adversary-driver',
+          `Agent handoff: adversary driver probes the rubric for LogAct pass ${passIndex}.`,
+        );
+        adversaryChallenger = await runAdversaryDriver(
+          bus,
+          task,
+          passIndex,
+          priorBusContext,
+          negativeTechniques,
+        );
+      }
       const decision = await runJudgeDecider(
         bus,
         studentCandidate,
-        adversaryCandidate,
+        adversaryChallenger,
         negativeTechniques,
         judgeRubric,
         passIndex,
@@ -433,7 +439,7 @@ export async function runLogActActorWorkflow(
       );
       if (decision.winner === 'student') {
         selected = decision.selected;
-        selectedTools = activeTools;
+        selectedTools = trainingTools;
         break;
       }
     }
@@ -2000,7 +2006,7 @@ async function runJudgeDecider(
         type: 'negative-rubric-technique',
         technique: ADVERSARY_TECHNIQUE,
         passIndex,
-        reason: 'Judge selected the adversary; hardening rubric and rerunning the full LogAct actor flow.',
+        reason: 'Judge selected the adversary; hardening rubric and rerunning the teacher/student training loop against the fixed adversary challenger.',
       },
       meta: actorMeta('judge-decider', passIndex, { rubric: { criteria: rubric, negativeTechniques } }),
     });
@@ -2012,6 +2018,7 @@ async function runJudgeDecider(
         rejectedCandidate: adversary.intentId,
         studentCandidate: student.intentId,
         passIndex,
+        reason: 'Rerun the teacher/student training loop against the fixed adversary challenger.',
       },
       meta: actorMeta('judge-decider', passIndex, { rubric: { criteria: rubric, negativeTechniques } }),
     });

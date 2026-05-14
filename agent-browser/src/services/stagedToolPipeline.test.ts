@@ -154,12 +154,10 @@ describe('stagedToolPipeline', () => {
       'voter:teacher->student-driver',
       'student-driver->voter:teacher',
       'judge-decider->adversary-driver',
-      'logact->tool-agent',
       'logact->student-driver',
       'student-driver->voter:teacher',
       'voter:teacher->student-driver',
       'student-driver->voter:teacher',
-      'judge-decider->adversary-driver',
       'logact->executor',
     ]);
     expect(events.indexOf('handoff:logact->tool-agent')).toBeLessThan(events.indexOf('tool-agent:plan:tool-agent'));

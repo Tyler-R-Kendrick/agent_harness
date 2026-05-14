@@ -875,13 +875,19 @@ describe('runLogActActorWorkflow', () => {
     const studentInputs = entries.filter((entry) => (
       entry.actorId === 'student-driver' && entry.payloadType === PayloadType.InfIn
     ));
+    const toolAgentInputs = entries.filter((entry) => (
+      entry.actorId === 'tool-agent' && entry.payloadType === PayloadType.InfIn
+    ));
     const adversaryInputs = entries.filter((entry) => (
       entry.actorId === 'adversary-driver' && entry.payloadType === PayloadType.InfIn
     ));
+    const judgeRerun = policyEntries.find((entry) => /judge-rerun/.test(entry.detail));
+    expect(toolAgentInputs.map((entry) => entry.passIndex)).toEqual([1]);
     expect(studentInputs.map((entry) => entry.passIndex)).toEqual([1, 2]);
-    expect(adversaryInputs.map((entry) => entry.passIndex)).toEqual([1, 2]);
+    expect(adversaryInputs.map((entry) => entry.passIndex)).toEqual([1]);
     expect(studentInputs[1].detail).toContain('Previous AgentBus context');
-    expect(adversaryInputs[1].detail).toContain('Previous AgentBus context');
+    expect(adversaryInputs[0].detail).not.toContain('Previous AgentBus context');
+    expect(judgeRerun?.detail).toContain('teacher/student training');
 
     const rerunIndex = entries.findIndex((entry) => /judge-rerun/.test(entry.detail));
     const secondStudentIndex = entries.findIndex((entry) => (
