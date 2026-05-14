@@ -67,6 +67,18 @@ Testing utilities are available from the testing subpath only:
 import { FakeLeanChecker, StubValidationModel } from '@agent-harness/lean-browser/testing';
 ```
 
+## Package Boundary
+
+Use `@agent-harness/lean-browser` as the stable package root for runtime APIs such as `runAgentBrowser`, `BrowserLeanChecker`, `JsonPromptValidationModel`, `createLeanServer`, schema helpers, prompt builders, Lean diagnostics, and artifact storage.
+
+Use `@agent-harness/lean-browser/testing` only for package-provided test doubles:
+
+```ts
+import { FakeLeanChecker, StubValidationModel } from '@agent-harness/lean-browser/testing';
+```
+
+Do not deep-import `@agent-harness/lean-browser/src/*`. Source modules are private implementation paths and may be reorganized without compatibility guarantees. The published package intentionally contains README files, package metadata, and runtime TypeScript source while excluding package tests.
+
 Run from the repo root:
 
 ```bash
