@@ -6,6 +6,7 @@ import { stableHash } from './hash';
 import { normalizeUrl } from './normalizeUrl';
 import { planSearchQueries } from './planSearchQueries';
 import { rankEvidenceChunks } from './rankEvidenceChunks';
+import { runPpgrStrategy } from './ppgr/strategy';
 import { createSearchProviderFromConfig } from './searchProviders';
 import type {
   AgentErrorInfo,
@@ -21,6 +22,7 @@ const DEFAULTS = {
   maxSearchResults: 10,
   maxPagesToExtract: 5,
   maxEvidenceChunks: 8,
+  maxPointerBudget: 8,
   searchTimeoutMs: 15_000,
   extractionTimeoutMs: 15_000,
   defaultModel: 'llama3.1:8b',
@@ -62,12 +64,32 @@ export class LocalWebResearchAgent {
       request,
       errors,
     }));
-    const { evidence, citations } = timeStage(timings, 'ranking', () => buildCitations(rankEvidenceChunks({
-      question,
-      chunks: chunkExtractedPages({ pages: extractedPages }),
-      maxChunks: maxEvidenceChunks,
-      strategy: request.retrievalStrategy ?? 'baseline',
-    })));
+    const retrievalStrategy = request.retrievalStrategy ?? 'baseline';
+    const maxPointerBudget = request.maxPointerBudget ?? DEFAULTS.maxPointerBudget;
+    const { evidence, citations, pointerBundles } = timeStage(timings, 'ranking', () => {
+      if (retrievalStrategy === 'ppgr') {
+        const ppgr = runPpgrStrategy({
+          question,
+          pages: extractedPages,
+          maxEvidenceChunks,
+          maxPointerBudget,
+        });
+        const citationInput = ppgr.evidence.map((chunk) => ({ ...chunk, strategy: 'ppgr' as const }));
+        return {
+          ...buildCitations(citationInput),
+          pointerBundles: ppgr.pointerBundles,
+        };
+      }
+      return {
+        ...buildCitations(rankEvidenceChunks({
+          question,
+          chunks: chunkExtractedPages({ pages: extractedPages }),
+          maxChunks: maxEvidenceChunks,
+          strategy: retrievalStrategy,
+        })),
+        pointerBundles: [],
+      };
+    });
 
     let answer: string | undefined;
     const shouldSynthesize = request.synthesize ?? false;
@@ -78,6 +100,7 @@ export class LocalWebResearchAgent {
             question,
             evidence,
             citations,
+            pointerBundles,
             model: request.model ?? this.config.defaultModel ?? DEFAULTS.defaultModel,
             signal: request.signal,
           });
@@ -97,6 +120,7 @@ export class LocalWebResearchAgent {
       extractedPages,
       evidence,
       citations,
+      ...(pointerBundles.length > 0 ? { pointerBundles } : {}),
       ...(answer ? { answer } : {}),
       errors,
       timings,
