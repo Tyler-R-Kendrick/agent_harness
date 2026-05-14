@@ -25,6 +25,7 @@ This directory stores paper-by-paper research packets.
 - `modular-skill-agent-dynamic-routing-2026-05-05`
 - `nadirclaw-cost-aware-routing-2026-05-10`
 - `production-agent-eval-harness-12-metrics`
+- `programming-with-data-2604.24819`
 - `proxy-pointer-framework-tds`
 - `proxy-pointer-rag-tds-2026`
 - `rubricem-2605.10899`
