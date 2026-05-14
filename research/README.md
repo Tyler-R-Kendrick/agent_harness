@@ -14,3 +14,4 @@ This directory stores paper-by-paper research packets.
 
 - `continual-harness-2605.09998`
 - `act-wisely-2604.08545`
+- `proxy-pointer-rag-tds-2026`
