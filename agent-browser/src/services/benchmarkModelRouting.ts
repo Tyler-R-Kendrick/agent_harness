@@ -17,6 +17,15 @@ export type BenchmarkRoutingSettings = {
   enabled: boolean;
   objective: BenchmarkRoutingObjective;
   pins: Partial<Record<BenchmarkTaskClassId, BenchmarkModelRef>>;
+  complexityRouting: {
+    enabled: boolean;
+    mode: 'shadow' | 'active';
+    trafficSplitPercent?: number;
+    pinning?: {
+      workspaceAfterHardTask?: boolean;
+      sessionAfterHardTask?: boolean;
+    };
+  };
 };
 
 export type BenchmarkRoutingCandidate = {
@@ -95,6 +104,10 @@ export const DEFAULT_BENCHMARK_ROUTING_SETTINGS: BenchmarkRoutingSettings = {
   enabled: true,
   objective: 'balanced',
   pins: {},
+  complexityRouting: {
+    enabled: false,
+    mode: 'shadow',
+  },
 };
 
 const VALID_TASK_CLASS_IDS = new Set(BENCHMARK_TASK_CLASSES.map((taskClass) => taskClass.id));
@@ -638,6 +651,19 @@ export function isBenchmarkRoutingSettings(value: unknown): value is BenchmarkRo
   if (typeof settings.enabled !== 'boolean') return false;
   if (typeof settings.objective !== 'string' || !VALID_OBJECTIVES.includes(settings.objective as BenchmarkRoutingObjective)) return false;
   if (!settings.pins || typeof settings.pins !== 'object' || Array.isArray(settings.pins)) return false;
+  if (!settings.complexityRouting || typeof settings.complexityRouting !== 'object' || Array.isArray(settings.complexityRouting)) return false;
+  if (typeof settings.complexityRouting.enabled !== 'boolean') return false;
+  if (settings.complexityRouting.mode !== 'shadow' && settings.complexityRouting.mode !== 'active') return false;
+  if (settings.complexityRouting.trafficSplitPercent !== undefined) {
+    if (typeof settings.complexityRouting.trafficSplitPercent !== 'number' || !Number.isFinite(settings.complexityRouting.trafficSplitPercent)) return false;
+    if (settings.complexityRouting.trafficSplitPercent < 0 || settings.complexityRouting.trafficSplitPercent > 100) return false;
+  }
+  if (settings.complexityRouting.pinning !== undefined) {
+    if (typeof settings.complexityRouting.pinning !== 'object' || Array.isArray(settings.complexityRouting.pinning)) return false;
+    const pinning = settings.complexityRouting.pinning as Record<string, unknown>;
+    if (pinning.workspaceAfterHardTask !== undefined && typeof pinning.workspaceAfterHardTask !== 'boolean') return false;
+    if (pinning.sessionAfterHardTask !== undefined && typeof pinning.sessionAfterHardTask !== 'boolean') return false;
+  }
   return Object.entries(settings.pins as Record<string, unknown>).every(([taskClass, ref]) => (
     VALID_TASK_CLASS_IDS.has(taskClass as BenchmarkTaskClassId)
     && (ref === undefined || isBenchmarkModelRef(ref))

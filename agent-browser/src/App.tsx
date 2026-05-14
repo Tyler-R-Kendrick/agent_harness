@@ -4089,7 +4089,12 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
-    if (requestBenchmarkRoute) {
+    const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
+    const complexityRoutingInShadowMode = complexityRoutingSettings.enabled && complexityRoutingSettings.mode === 'shadow';
+    const complexityRoutingTrafficSplit = complexityRoutingSettings.trafficSplitPercent ?? 100;
+    const complexityRoutingAllowedByTraffic = complexityRoutingTrafficSplit >= 100
+      || (complexityRoutingTrafficSplit > 0 && Math.random() * 100 < complexityRoutingTrafficSplit);
+    if (requestBenchmarkRoute && !complexityRoutingInShadowMode && complexityRoutingAllowedByTraffic) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
         if (routed.provider === 'ghcp') {
@@ -4112,6 +4117,17 @@ function ChatPanel({
           requestLocalModel = routedLocalModel;
         }
       }
+    }
+    if (requestBenchmarkRoute && complexityRoutingSettings.enabled) {
+      console.info('[benchmark-routing:complexity]', {
+        mode: complexityRoutingSettings.mode,
+        applied: !complexityRoutingInShadowMode && complexityRoutingAllowedByTraffic,
+        trafficSplitPercent: complexityRoutingSettings.trafficSplitPercent ?? null,
+        pinning: complexityRoutingSettings.pinning ?? null,
+        taskClass: requestBenchmarkTaskClass,
+        selected: requestBenchmarkRoute.candidate.ref,
+        reason: requestBenchmarkRoute.reason,
+      });
     }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;

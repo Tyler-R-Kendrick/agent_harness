@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,8 +41,16 @@ const domTestFiles = [
   'src/services/workspaceFiles.test.ts',
 ];
 
+let reactPlugin: Awaited<ReturnType<typeof import('@vitejs/plugin-react')>>['default'] | null = null;
+try {
+  const plugin = await import('@vitejs/plugin-react');
+  reactPlugin = plugin.default;
+} catch {
+  reactPlugin = null;
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: reactPlugin ? [reactPlugin()] : [],
   resolve: {
     alias,
   },

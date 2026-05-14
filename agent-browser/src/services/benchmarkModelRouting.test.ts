@@ -83,7 +83,24 @@ describe('benchmark model routing', () => {
   it('validates persisted routing settings', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
-    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
+    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 }, complexityRouting: { enabled: false, mode: 'shadow' } })).toBe(false);
+    expect(isBenchmarkRoutingSettings({
+      enabled: true,
+      objective: 'cost',
+      pins: {},
+      complexityRouting: {
+        enabled: true,
+        mode: 'active',
+        trafficSplitPercent: 42,
+        pinning: { workspaceAfterHardTask: true, sessionAfterHardTask: false },
+      },
+    })).toBe(true);
+    expect(isBenchmarkRoutingSettings({
+      enabled: true,
+      objective: 'cost',
+      pins: {},
+      complexityRouting: { enabled: true, mode: 'active', trafficSplitPercent: 120 },
+    })).toBe(false);
   });
 
   it('discovers Hugging Face model-card benchmark results and reranks installed local models', async () => {
