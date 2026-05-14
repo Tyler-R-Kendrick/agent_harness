@@ -13,6 +13,7 @@ import {
   reconcileMultitaskSubagentRuns,
   retryMultitaskBranch,
   requestMultitaskBranchChanges,
+  reconcileMultitaskBranchSessionCompletions,
   startMultitaskBranchRun,
   stopMultitaskBranchRun,
   summarizeMultitaskSubagents,
@@ -206,6 +207,55 @@ describe('multitaskSubagents', () => {
     });
     expect(secondPass.state).toBe(firstPass.state);
     expect(secondPass.dispatches).toEqual([]);
+  });
+
+  it('completes a queued local task from its assigned agent session output', () => {
+    const project = createMultitaskProject({
+      ...DEFAULT_MULTITASK_SUBAGENT_STATE,
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+    }, 'Research', new Date('2026-05-12T14:00:00.000Z'));
+    const withTask = addMultitaskTask(project, {
+      title: 'add 1+1.',
+      projectId: project.projects[0].id,
+      now: new Date('2026-05-12T14:01:00.000Z'),
+    });
+    const taskId = withTask.selectedBranchId as string;
+    const running = startMultitaskBranchRun(withTask, taskId, {
+      sessionId: 'session-add-one-plus-one',
+      sessionName: 'SYM-001',
+      now: new Date('2026-05-12T14:02:00.000Z'),
+    });
+
+    const stillStreaming = reconcileMultitaskBranchSessionCompletions(running, {
+      'session-add-one-plus-one': [
+        { id: 'user-1', role: 'user', content: 'Assigned task: add 1+1.' },
+        { id: 'assistant-1', role: 'assistant', content: '', streamedContent: '1 + 1 = 2', status: 'streaming' },
+      ],
+    }, { now: new Date('2026-05-12T14:03:00.000Z') });
+
+    expect(stillStreaming).toBe(running);
+
+    const completed = reconcileMultitaskBranchSessionCompletions(running, {
+      'session-add-one-plus-one': [
+        { id: 'user-1', role: 'user', content: 'Assigned task: add 1+1.' },
+        { id: 'assistant-1', role: 'assistant', content: '', streamedContent: '1 + 1 = 2', status: 'complete' },
+      ],
+    }, { now: new Date('2026-05-12T14:04:00.000Z') });
+    const branch = completed.branches.find((candidate) => candidate.id === taskId);
+
+    expect(branch).toMatchObject({
+      status: 'ready',
+      progress: 100,
+      lastHeartbeatAt: '2026-05-12T14:04:00.000Z',
+    });
+    expect(branch?.executionEvents?.map((event) => event.type)).toEqual([
+      'claimed',
+      'workspace_prepared',
+      'agent_session_queued',
+      'agent_completed',
+    ]);
+    expect(branch?.validation).toContain('Agent completed in SYM-001: 1 + 1 = 2');
   });
 
   it('requeues stale running branches before redispatching them', () => {

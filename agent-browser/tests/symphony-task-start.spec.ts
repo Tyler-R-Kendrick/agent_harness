@@ -6,7 +6,14 @@ import { fileURLToPath } from 'url';
 const _filename = fileURLToPath(import.meta.url);
 const _dirname = path.dirname(_filename);
 const SCREENSHOT_DIR = path.resolve(_dirname, '../docs/screenshots/regression');
-const SCREENSHOT_PATH = path.join(SCREENSHOT_DIR, 'current-symphony-task-start.png');
+const SCREENSHOT_PATH = path.join(SCREENSHOT_DIR, 'current-symphony-task-completion.png');
+const DEFAULT_COPILOT_STATUS = {
+  available: true,
+  authenticated: false,
+  models: [] as Array<{ id: string; name: string; reasoning: boolean; vision: boolean }>,
+  signInCommand: 'copilot login',
+  signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
+};
 
 function ensureScreenshotDir(): void {
   if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -23,36 +30,77 @@ function captureRuntimeErrors(page: Page) {
   return () => expect(errors, errors.join('\n')).toEqual([]);
 }
 
+async function mockCopilotStatus(page: Page, overrides: Partial<typeof DEFAULT_COPILOT_STATUS> = {}) {
+  await page.context().route(/\/api\/copilot\/status$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ...DEFAULT_COPILOT_STATUS, ...overrides }),
+    });
+  });
+}
+
 test.describe('Symphony task start visual behavior', () => {
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
 
   test.beforeAll(() => {
     ensureScreenshotDir();
   });
 
-  test('new work-queue task visibly enters a running session', async ({ page }) => {
+  test('new work-queue task is dispatched to an agent session and completes', async ({ page }) => {
     const assertNoRuntimeErrors = captureRuntimeErrors(page);
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await page.getByLabel('Symphony').click();
+    await page.addInitScript(() => {
+      window.localStorage.setItem('agent-browser.installed-models', JSON.stringify([]));
+    });
+    await mockCopilotStatus(page, {
+      authenticated: true,
+      models: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: false }],
+    });
+    await page.context().route(/\/api\/copilot\/chat$/, async (route) => {
+      const payload = route.request().postDataJSON() as { prompt?: string };
+      const serialized = JSON.stringify(payload || {});
+      const answer = serialized.includes('Assigned task: add 1+1.')
+        ? 'Agent completed task: 1 + 1 = 2.'
+        : 'Unexpected Symphony prompt.';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/x-ndjson',
+        body: `${JSON.stringify({ type: 'final', content: answer })}\n${JSON.stringify({ type: 'done' })}\n`,
+      });
+    });
+    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+    await expect(page.getByRole('button', { name: 'Projects', exact: true })).toBeVisible({ timeout: 120_000 });
+    await page.getByRole('button', { name: /^(Open )?Session 1$/ }).click();
+    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Agent provider' }).selectOption('ghcp');
+    await page.getByRole('button', { name: 'Symphony', exact: true }).click();
 
     const app = page.getByRole('region', { name: 'Symphony task management system' });
     await expect(app).toBeVisible();
-    await app.getByLabel('Symphony task request').fill('parallelize frontend, tests, and documentation work');
-    await app.getByRole('button', { name: 'Start Symphony task' }).click();
+    await app.getByLabel('New project name').fill('Research');
+    await app.getByRole('button', { name: 'Create Symphony project' }).click();
 
     const queue = app.getByRole('region', { name: 'Symphony work queue' });
-    await queue.getByLabel('New task title').fill('make a new widget');
+    await queue.getByLabel('New task title').fill('add 1+1.');
     await queue.getByRole('button', { name: 'Create Symphony task' }).click();
 
-    const newTask = queue.getByRole('button', { name: 'Open task SYM-004 make a new widget' });
-    await expect(newTask).toBeVisible();
-    await expect(queue.getByLabel('New task title')).toHaveValue('');
+    await expect(page.getByText('Agent completed task: 1 + 1 = 2.')).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: 'Symphony', exact: true }).click();
 
-    const taskDetail = app.getByRole('region', { name: 'Symphony task detail' });
-    await expect(taskDetail).toContainText('make a new widget');
-    await expect(taskDetail).toContainText('Running');
-    await expect(taskDetail).toContainText('StreamingTurn');
-    await expect(app.getByRole('region', { name: 'Symphony activity summary' })).toHaveCount(0);
+    const refreshedApp = page.getByRole('region', { name: 'Symphony task management system' });
+    const refreshedQueue = refreshedApp.getByRole('region', { name: 'Symphony work queue' });
+    const newTask = refreshedQueue.getByRole('button', { name: 'Open task SYM-001 add 1+1.' });
+    await expect(newTask).toBeVisible({ timeout: 20_000 });
+    await expect(refreshedQueue.getByLabel('New task title')).toHaveValue('');
+    const taskRow = newTask.locator('xpath=ancestor::tr');
+    await expect(taskRow).toContainText('Ready');
+    await expect(taskRow).toContainText('Succeeded');
+    await expect(taskRow).toContainText('recorded');
+
+    const taskDetail = refreshedApp.getByRole('region', { name: 'Symphony task detail' });
+    await expect(taskDetail).toContainText('add 1+1.');
+    await expect(taskDetail).toContainText('Ready');
+    await expect(taskDetail).toContainText('Succeeded');
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
     assertNoRuntimeErrors();
