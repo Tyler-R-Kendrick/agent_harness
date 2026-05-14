@@ -437,22 +437,58 @@
       "keywords": ["local-models", "openai-compatible", "webrtc", "websocket", "deno", "background-worker"]
     },
     {
-      "id": "agent-harness.ext.external-channels",
-      "name": "External Chat Channels",
+      "id": "agent-harness.ext.slack-channel",
+      "name": "Slack Chat Channel",
       "version": "0.1.0",
-      "description": "Adds Slack, Telegram, and SMS as installable chat delegation and continuation channels.",
-      "manifest": "./channel/external-channels/agent-harness.plugin.json",
+      "description": "Adds Slack as an installable chat delegation and continuation channel.",
+      "manifest": "./channel/slack/agent-harness.plugin.json",
       "source": {
         "type": "local",
-        "path": "./channel/external-channels"
+        "path": "./channel/slack"
       },
-      "categories": ["channel-extension", "chat-channel", "handoff", "messaging"],
+      "categories": ["channel-extension", "chat-channel", "slack", "handoff", "messaging"],
       "metadata": {
         "marketplaceCategory": "channel",
         "installSurface": "share-dialog",
-        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.external-channels.enabled"
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.slack-channel.enabled"
       },
-      "keywords": ["channels", "slack", "telegram", "sms", "handoff", "delegate", "continue"]
+      "keywords": ["channels", "slack", "handoff", "delegate", "continue"]
+    },
+    {
+      "id": "agent-harness.ext.telegram-channel",
+      "name": "Telegram Chat Channel",
+      "version": "0.1.0",
+      "description": "Adds Telegram as an installable chat delegation and continuation channel.",
+      "manifest": "./channel/telegram/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./channel/telegram"
+      },
+      "categories": ["channel-extension", "chat-channel", "telegram", "handoff", "messaging"],
+      "metadata": {
+        "marketplaceCategory": "channel",
+        "installSurface": "share-dialog",
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.telegram-channel.enabled"
+      },
+      "keywords": ["channels", "telegram", "handoff", "delegate", "continue"]
+    },
+    {
+      "id": "agent-harness.ext.sms-channel",
+      "name": "SMS Chat Channel",
+      "version": "0.1.0",
+      "description": "Adds SMS as an installable chat delegation and continuation channel.",
+      "manifest": "./channel/sms/agent-harness.plugin.json",
+      "source": {
+        "type": "local",
+        "path": "./channel/sms"
+      },
+      "categories": ["channel-extension", "chat-channel", "sms", "handoff", "messaging"],
+      "metadata": {
+        "marketplaceCategory": "channel",
+        "installSurface": "share-dialog",
+        "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.sms-channel.enabled"
+      },
+      "keywords": ["channels", "sms", "handoff", "delegate", "continue"]
     }
   ]
 }

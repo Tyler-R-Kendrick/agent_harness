@@ -1,8 +1,8 @@
 import type { HarnessPlugin } from 'harness-core';
 
-export function createExternalChannelsPlugin(): HarnessPlugin {
+export function createSmsChannelPlugin(): HarnessPlugin {
   return {
-    id: 'external-channels',
+    id: 'sms-channel',
     register() {
       return undefined;
     },

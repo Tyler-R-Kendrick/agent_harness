@@ -472,7 +472,7 @@ describe('App', () => {
 
     const installedSidebar = screen.getByRole('region', { name: 'Installed extensions' });
     expect(within(installedSidebar).getByRole('heading', { name: 'Installed extensions' })).toBeInTheDocument();
-    expect(within(installedSidebar).getAllByText('2 installed')).toHaveLength(2);
+    expect(within(installedSidebar).getAllByText('3 installed')).toHaveLength(2);
     expect(within(installedSidebar).queryByText('No installed extensions')).not.toBeInTheDocument();
     expect(within(installedSidebar).queryByText(/Workspace plugins/i)).not.toBeInTheDocument();
     expect(within(installedSidebar).getByText('Markdown preview')).toBeInTheDocument();
@@ -508,9 +508,11 @@ describe('App', () => {
     expect(within(marketplace).getByText('xAI Models')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Model Connector')).toBeInTheDocument();
     expect(within(marketplace).getByText('Local Inference Worker')).toBeInTheDocument();
-    expect(within(marketplace).getByText('External Chat Channels')).toBeInTheDocument();
-    expect(within(marketplace).getByText('22 extensions')).toBeInTheDocument();
-    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(16);
+    expect(within(marketplace).getByText('Slack Chat Channel')).toBeInTheDocument();
+    expect(within(marketplace).getByText('Telegram Chat Channel')).toBeInTheDocument();
+    expect(within(marketplace).getByText('SMS Chat Channel')).toBeInTheDocument();
+    expect(within(marketplace).getByText('25 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(18);
     expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',

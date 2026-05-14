@@ -23,8 +23,12 @@ import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 import type { AgentArtifact } from './artifacts';
 
 import marketplaceManifestSource from '../../../ext/agent-harness.marketplace.json';
-import { createExternalChannelsPlugin } from '../../../ext/channel/external-channels/src/index.ts';
-import externalChannelsManifestSource from '../../../ext/channel/external-channels/agent-harness.plugin.json';
+import { createSlackChannelPlugin } from '../../../ext/channel/slack/src/index.ts';
+import slackChannelManifestSource from '../../../ext/channel/slack/agent-harness.plugin.json';
+import { createTelegramChannelPlugin } from '../../../ext/channel/telegram/src/index.ts';
+import telegramChannelManifestSource from '../../../ext/channel/telegram/agent-harness.plugin.json';
+import { createSmsChannelPlugin } from '../../../ext/channel/sms/src/index.ts';
+import smsChannelManifestSource from '../../../ext/channel/sms/agent-harness.plugin.json';
 import { createGhcpModelProviderPlugin } from '../../../ext/ghcp-model-provider/src/index.ts';
 import ghcpModelProviderManifestSource from '../../../ext/ghcp-model-provider/agent-harness.plugin.json';
 import { createCursorModelProviderPlugin } from '../../../ext/cursor-model-provider/src/index.ts';
@@ -138,7 +142,9 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.xai-model-provider', parseHarnessPluginManifest(xaiModelProviderManifestSource)],
   ['agent-harness.ext.local-model-connector', parseHarnessPluginManifest(localModelConnectorManifestSource)],
   ['agent-harness.ext.local-inference-daemon', parseHarnessPluginManifest(localInferenceWorkerManifestSource)],
-  ['agent-harness.ext.external-channels', parseHarnessPluginManifest(externalChannelsManifestSource)],
+  ['agent-harness.ext.slack-channel', parseHarnessPluginManifest(slackChannelManifestSource)],
+  ['agent-harness.ext.telegram-channel', parseHarnessPluginManifest(telegramChannelManifestSource)],
+  ['agent-harness.ext.sms-channel', parseHarnessPluginManifest(smsChannelManifestSource)],
 ]);
 
 export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
@@ -155,6 +161,11 @@ const DEFAULT_EXTENSION_ID_ALIASES = new Map<string, readonly string[]>([
   ['agent-harness.ext.design-md', ['agent-harness.ext.design-md-context', 'agent-harness.ext.design-studio']],
   ['agent-harness.ext.artifacts', ['agent-harness.ext.artifacts-context', 'agent-harness.ext.artifacts-worktree']],
   ['agent-harness.ext.codi-browser-model-provider', ['agent-harness.ext.huggingface-model-provider']],
+  ['agent-harness.ext.external-channels', [
+    'agent-harness.ext.slack-channel',
+    'agent-harness.ext.telegram-channel',
+    'agent-harness.ext.sms-channel',
+  ]],
 ]);
 
 const EMPTY_EXTENSION_SUMMARY: DefaultExtensionSummary = Object.freeze({
@@ -199,7 +210,9 @@ export async function createDefaultExtensionRuntime(
     ['agent-harness.ext.codex-model-provider', () => createCodexModelProviderPlugin()],
     ['agent-harness.ext.huggingface-model-provider', () => createCodiBrowserModelProviderPlugin()],
     ['agent-harness.ext.google-ai-edge-model-provider', () => createGoogleAiEdgeModelProviderPlugin()],
-    ['agent-harness.ext.external-channels', () => createExternalChannelsPlugin()],
+    ['agent-harness.ext.slack-channel', () => createSlackChannelPlugin()],
+    ['agent-harness.ext.telegram-channel', () => createTelegramChannelPlugin()],
+    ['agent-harness.ext.sms-channel', () => createSmsChannelPlugin()],
   ]);
 
   await context.plugins.loadAll(installedExtensionIds.map((extensionId) => pluginFactories.get(extensionId)?.()).filter(isHarnessPlugin));

@@ -5,21 +5,21 @@ import { DEFAULT_WEBRTC_CHAT_CHANNEL, type ChatChannelOption } from '../services
 import { SharedChatModal } from './SharedChatModal';
 
 const slackChannel: ChatChannelOption = {
-  id: 'agent-harness.ext.external-channels:slack',
+  id: 'agent-harness.ext.slack-channel:slack',
   label: 'Slack',
   kind: 'slack',
   capabilities: ['delegate', 'continue', 'notify', 'handoff-link'],
   description: 'Send a chat handoff to a Slack bot.',
-  extensionId: 'agent-harness.ext.external-channels',
+  extensionId: 'agent-harness.ext.slack-channel',
 };
 
 const smsChannel: ChatChannelOption = {
-  id: 'agent-harness.ext.external-channels:sms',
+  id: 'agent-harness.ext.sms-channel:sms',
   label: 'SMS',
   kind: 'sms',
   capabilities: ['delegate', 'continue', 'notify', 'handoff-link'],
   description: 'Send a chat handoff to an SMS gateway.',
-  extensionId: 'agent-harness.ext.external-channels',
+  extensionId: 'agent-harness.ext.sms-channel',
 };
 
 function renderModal(overrides: Partial<Parameters<typeof SharedChatModal>[0]> = {}) {

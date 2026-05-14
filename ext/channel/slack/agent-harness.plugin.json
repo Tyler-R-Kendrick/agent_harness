@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.slack-channel",
+  "name": "Slack Chat Channel",
+  "version": "0.1.0",
+  "description": "Adds Slack as an installable chat delegation and continuation channel.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createSlackChannelPlugin"
+  },
+  "contributes": {
+    "channels": [
+      {
+        "id": "slack",
+        "label": "Slack",
+        "kind": "slack",
+        "capabilities": ["delegate", "continue", "notify", "handoff-link"],
+        "description": "Delegate or continue an Agent Browser chat through a Slack bot or workflow.",
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "workspaceId": { "type": "string" },
+            "botUserId": { "type": "string" }
+          }
+        }
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "kind": "channel",
+      "id": "slack",
+      "description": "Slack chat session channel."
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "network",
+      "access": "read-write",
+      "reason": "The Slack channel sends and receives chat handoff messages through configured Slack APIs."
+    },
+    {
+      "scope": "secrets",
+      "access": "read",
+      "reason": "Provider tokens and signing secrets must stay in the configured secret store."
+    }
+  ],
+  "compatibility": {
+    "harnessCore": "^0.1.0",
+    "agentBrowser": "^0.1.0"
+  }
+}

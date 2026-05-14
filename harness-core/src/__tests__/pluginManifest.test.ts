@@ -324,9 +324,9 @@ describe('plugin manifest standards', () => {
   it('validates channel contributions for external chat handoffs', () => {
     const manifest = {
       ...pluginManifest,
-      id: 'agent-harness.ext.external-channels',
-      name: 'External chat channels',
-      description: 'Adds Slack, Telegram, and SMS chat handoff channels.',
+      id: 'agent-harness.ext.slack-channel',
+      name: 'Slack chat channel',
+      description: 'Adds Slack chat handoff channels.',
       contributes: {
         channels: [
           {

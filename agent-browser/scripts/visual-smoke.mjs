@@ -1053,7 +1053,9 @@ async function main() {
         ],
       }));
       localStorage.setItem('agent-browser.installed-default-extension-ids', JSON.stringify([
-        'agent-harness.ext.external-channels',
+        'agent-harness.ext.slack-channel',
+        'agent-harness.ext.telegram-channel',
+        'agent-harness.ext.sms-channel',
       ]));
       sessionStorage.setItem('agent-browser.session.active-workspace-id', JSON.stringify(workspaceId));
       sessionStorage.setItem('agent-browser.session.active-panel', JSON.stringify('workspaces'));
@@ -1576,16 +1578,18 @@ async function main() {
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(installedExtensions.getByText('4 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('6 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Channel extensions')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(installedExtensions.getByText('External Chat Channels')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Slack Chat Channel')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('Telegram Chat Channel')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('SMS Chat Channel')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugin')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('23 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('25 extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('button', { name: 'Open details for Markdown preview' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
