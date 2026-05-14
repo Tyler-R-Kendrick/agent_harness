@@ -13,3 +13,4 @@ This directory stores paper-by-paper research packets.
 ## Current papers
 
 - `continual-harness-2605.09998`
+- `delta-mem-2605.12357`
