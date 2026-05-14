@@ -5255,6 +5255,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 9px 12px;
   background: #171a1f;
 }
+.harness-widget-editor-topbar--draggable {
+  cursor: grab;
+  touch-action: none;
+}
+.harness-widget-editor-topbar--draggable:active {
+  cursor: grabbing;
+}
+.harness-widget-editor-heading {
+  min-width: 0;
+}
 .harness-widget-editor-topbar h2 {
   margin: 2px 0 0;
   overflow: hidden;

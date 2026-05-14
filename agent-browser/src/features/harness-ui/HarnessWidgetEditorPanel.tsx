@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { X } from 'lucide-react';
+import { useEffect, useMemo, useState, type CSSProperties, type HTMLAttributes, type SyntheticEvent } from 'react';
 
 import { WidgetDocumentRenderer } from './WidgetDocumentRenderer';
 import {
@@ -20,6 +21,18 @@ export type HarnessWidgetEditorPanelProps = {
   symphonyActive: boolean;
   onPatchElement: (patch: HarnessElementPatch) => void;
   onOpenAssistant?: () => void;
+  onClose?: () => void;
+  dragHandleProps?: HTMLAttributes<HTMLElement>;
+};
+
+function stopWidgetEditorTitlebarControlDrag(event: SyntheticEvent<HTMLElement>) {
+  event.stopPropagation();
+}
+
+const widgetEditorTitlebarControlProps: Pick<HTMLAttributes<HTMLElement>, 'onPointerDown' | 'onMouseDown' | 'onTouchStart'> = {
+  onPointerDown: stopWidgetEditorTitlebarControlDrag,
+  onMouseDown: stopWidgetEditorTitlebarControlDrag,
+  onTouchStart: stopWidgetEditorTitlebarControlDrag,
 };
 
 function readTitle(spec: HarnessAppSpec, widgetId: string): string {
@@ -81,6 +94,8 @@ export function HarnessWidgetEditorPanel({
   symphonyActive,
   onPatchElement,
   onOpenAssistant,
+  onClose,
+  dragHandleProps,
 }: HarnessWidgetEditorPanelProps) {
   const widget = spec.elements[widgetId] ?? null;
   const title = readTitle(spec, widgetId);
@@ -132,7 +147,6 @@ export function HarnessWidgetEditorPanel({
   const primaryProps = readPrimaryProps(lastValidDocument);
 
   const saveWidgetJson = () => {
-    if (!parsedWidget.document || parsedWidget.error || parsedSample.error) return;
     const nextHistory: Array<Record<string, JsonValue>> = [
       ...changeHistory,
       {
@@ -154,8 +168,11 @@ export function HarnessWidgetEditorPanel({
 
   return (
     <section className="harness-widget-editor-panel" aria-label="Widget editor">
-      <header className="harness-widget-editor-topbar">
-        <div>
+      <header
+        className={`harness-widget-editor-topbar${dragHandleProps ? ' harness-widget-editor-topbar--draggable' : ''}`}
+        {...dragHandleProps}
+      >
+        <div className="harness-widget-editor-heading">
           <span className="panel-resource-eyebrow">workspace/{workspaceName}/widget</span>
           <h2>{title}</h2>
         </div>
@@ -165,9 +182,21 @@ export function HarnessWidgetEditorPanel({
               Agent
             </button>
           ) : null}
-          <button type="button" className="primary-button" onClick={saveWidgetJson} disabled={saveDisabled}>
+          <button type="button" className="primary-button" onClick={saveDisabled ? undefined : saveWidgetJson} disabled={saveDisabled}>
             Save widget JSON
           </button>
+          {onClose ? (
+            <button
+              type="button"
+              className="icon-button panel-close-button"
+              aria-label="Close widget editor"
+              title="Close widget editor"
+              onClick={onClose}
+              {...widgetEditorTitlebarControlProps}
+            >
+              <X size={12} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </header>
 
