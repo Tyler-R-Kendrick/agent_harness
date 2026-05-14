@@ -34,6 +34,11 @@ export type DashboardWidgetNodeInput = {
   title: string;
 };
 
+export type SessionGroupInput = {
+  groupId?: string | null;
+  groupName?: string | null;
+};
+
 export function createClipboardNode(workspaceId: string): TreeNode {
   return {
     id: `${workspaceId}:clipboard`,
@@ -51,6 +56,7 @@ export function createSessionNode(workspaceId: string, index: number): TreeNode 
     nodeKind: 'session',
     persisted: true,
     filePath: `${workspaceId}:session:${index}`,
+    sessionTitleGenerated: false,
   };
 }
 
@@ -201,6 +207,27 @@ export function getWorkspaceCategory(workspace: TreeNode, kind: NodeKind): TreeN
   return (workspace.children ?? []).find((child) => child.type === 'folder' && child.nodeKind === kind) ?? null;
 }
 
+export function listWorkspaceSessionNodes(workspace: TreeNode): TreeNode[] {
+  const category = getWorkspaceCategory(workspace, 'session');
+  if (!category) return [];
+  return collectSessionNodes(category.children ?? []);
+}
+
+export function groupSessionNodeInWorkspace(
+  workspace: TreeNode,
+  session: TreeNode,
+  group: SessionGroupInput = {},
+): TreeNode {
+  const normalized = ensureWorkspaceCategories(workspace);
+  return {
+    ...normalized,
+    children: (normalized.children ?? []).map((child) => {
+      if (child.type !== 'folder' || child.nodeKind !== 'session') return child;
+      return insertSessionIntoCategory(normalized.id, child, session, group);
+    }),
+  };
+}
+
 export function removeNodeById(node: TreeNode, nodeId: string): TreeNode {
   if (!node.children) return node;
   return {
@@ -309,16 +336,12 @@ export function syncWorkspaceArtifactNodes(
 }
 
 export function findFirstSessionId(workspace: TreeNode): string | null {
-  const category = getWorkspaceCategory(workspace, 'session');
-  const first = (category?.children ?? []).find((child) => child.type === 'tab' && child.nodeKind === 'session');
+  const first = listWorkspaceSessionNodes(workspace)[0] ?? null;
   return first?.id ?? null;
 }
 
 export function listWorkspaceSessionIds(workspace: TreeNode): string[] {
-  const category = getWorkspaceCategory(workspace, 'session');
-  return (category?.children ?? [])
-    .filter((child): child is TreeNode => child.type === 'tab' && child.nodeKind === 'session')
-    .map((child) => child.id);
+  return listWorkspaceSessionNodes(workspace).map((child) => child.id);
 }
 
 export function createWorkspaceViewEntry(workspace: TreeNode): WorkspaceViewState {
@@ -482,4 +505,63 @@ export function nextWorkspaceName(root: TreeNode): string {
   let index = (root.children ?? []).length + 1;
   while (existing.has(`Workspace ${index}`)) index += 1;
   return `Workspace ${index}`;
+}
+
+function collectSessionNodes(nodes: readonly TreeNode[]): TreeNode[] {
+  return nodes.flatMap((node) => {
+    if (node.type === 'tab' && node.nodeKind === 'session') return [node];
+    return node.children ? collectSessionNodes(node.children) : [];
+  });
+}
+
+function insertSessionIntoCategory(
+  workspaceId: string,
+  category: TreeNode,
+  session: TreeNode,
+  group: SessionGroupInput,
+): TreeNode {
+  const rawGroupId = group.groupId?.trim();
+  const rawGroupName = group.groupName?.trim();
+  if (!rawGroupId || !rawGroupName) {
+    return { ...category, expanded: true, children: [...(category.children ?? []), session] };
+  }
+
+  const groupId = `${workspaceId}:session-group:${slugifyId(rawGroupId)}`;
+  const groupedSession: TreeNode = {
+    ...session,
+    sessionGroupId: rawGroupId,
+    sessionGroupName: rawGroupName,
+  };
+  let inserted = false;
+  const children = (category.children ?? []).map((child) => {
+    if (child.id !== groupId) return child;
+    inserted = true;
+    return {
+      ...child,
+      name: rawGroupName,
+      type: 'folder' as const,
+      expanded: true,
+      children: [...(child.children ?? []), groupedSession],
+    };
+  });
+
+  if (!inserted) {
+    children.push({
+      id: groupId,
+      name: rawGroupName,
+      type: 'folder',
+      expanded: true,
+      children: [groupedSession],
+    });
+  }
+
+  return { ...category, expanded: true, children };
+}
+
+function slugifyId(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'branch';
 }

@@ -185,6 +185,14 @@ function findTreeItemByText(text: string): HTMLElement {
   return item;
 }
 
+async function returnToSymphonyPanel(): Promise<HTMLElement> {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Symphony' }));
+    await Promise.resolve();
+  });
+  return screen.getByRole('region', { name: 'Symphony task management system' });
+}
+
 describe('App smoke coverage', () => {
   it('renders the primary shell and default chat workspace', async () => {
     vi.useFakeTimers();
@@ -548,6 +556,11 @@ describe('App smoke coverage', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Start Symphony task' }));
 
+    expect(screen.getByRole('region', { name: 'Chat panel' })).toBeInTheDocument();
+    const dispatchedTree = screen.getByRole('tree', { name: 'Workspace tree' });
+    expect(within(dispatchedTree).getAllByRole('treeitem', { name: /SYM-001/ }).length).toBeGreaterThan(0);
+    await returnToSymphonyPanel();
+
     expect(screen.getAllByText('agent/research/frontend-1').length).toBeGreaterThan(0);
     expect(screen.getAllByText('agent active').length).toBeGreaterThan(0);
     expect(screen.getAllByText('3 events').length).toBeGreaterThan(0);
@@ -683,7 +696,8 @@ describe('App smoke coverage', () => {
       await vi.runOnlyPendingTimersAsync();
     });
 
-    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    expect(screen.getByRole('region', { name: 'Chat panel' })).toBeInTheDocument();
+    const app = await returnToSymphonyPanel();
     expect(app).toBeInTheDocument();
     expect(screen.getByText('Isolated Workspaces')).toBeInTheDocument();
     expect(screen.getAllByText('agent/research/frontend-1').length).toBeGreaterThan(0);
@@ -721,7 +735,8 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    expect(screen.getByRole('region', { name: 'Chat panel' })).toBeInTheDocument();
+    const app = await returnToSymphonyPanel();
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}')
       .branches.find((branch: { branchName: string }) => branch.branchName === 'agent/research/frontend-1')).toMatchObject({
         status: 'running',
@@ -765,7 +780,8 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(350);
     });
 
-    const app = screen.getByRole('region', { name: 'Symphony task management system' });
+    expect(screen.getByRole('region', { name: 'Chat panel' })).toBeInTheDocument();
+    const app = await returnToSymphonyPanel();
     const queue = within(app).getByRole('region', { name: 'Symphony work queue' });
     fireEvent.change(within(queue).getByLabelText('New task title'), {
       target: { value: 'make a new widget' },
@@ -775,11 +791,15 @@ describe('App smoke coverage', () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(within(queue).getByRole('button', { name: 'Open task SYM-004 make a new widget' })).toBeInTheDocument();
-    expect(within(queue).getByLabelText('New task title')).toHaveValue('');
-    expect(within(app).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('make a new widget');
-    expect(within(app).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('Running');
-    expect(within(app).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('StreamingTurn');
+    expect(screen.getByRole('region', { name: 'Chat panel' })).toBeInTheDocument();
+    const resumedApp = await returnToSymphonyPanel();
+    const resumedQueue = within(resumedApp).getByRole('region', { name: 'Symphony work queue' });
+
+    expect(within(resumedQueue).getByRole('button', { name: 'Open task SYM-004 make a new widget' })).toBeInTheDocument();
+    expect(within(resumedQueue).getByLabelText('New task title')).toHaveValue('');
+    expect(within(resumedApp).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('make a new widget');
+    expect(within(resumedApp).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('Running');
+    expect(within(resumedApp).getByRole('region', { name: 'Symphony task detail' })).toHaveTextContent('StreamingTurn');
 
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}');
     expect(persisted.selectedBranchId).toBe('multitask:ws-research:make-a-new-widget-4');
@@ -875,6 +895,9 @@ describe('App smoke coverage', () => {
     expect(screen.getByRole('button', { name: 'Back to main conversation' })).toBeInTheDocument();
     expect(screen.getByText('conversation/research/branch-active-chat-thread')).toBeInTheDocument();
     expect(screen.getByText(/Steering messages update this running subthread/i)).toBeInTheDocument();
+    const workspaceTree = screen.getByRole('tree', { name: 'Workspace tree' });
+    expect(within(workspaceTree).getByText('Session 2 branches')).toBeInTheDocument();
+    expect(within(workspaceTree).queryByRole('button', { name: 'Branch: Branch active chat thread' })).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Agent provider'), { target: { value: 'tour-guide' } });
     fireEvent.change(screen.getByLabelText('Chat input'), {

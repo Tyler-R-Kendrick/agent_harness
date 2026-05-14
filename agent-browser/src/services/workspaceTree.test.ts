@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   buildWorkspaceNodeMap,
   createBrowserTab,
+  createSessionNode,
   createWorkspaceNode,
   createWorkspaceViewEntry,
   ensureWorkspaceCategories,
+  findFirstSessionId,
   flattenWorkspaceTreeFiltered,
   getWorkspaceCategory,
+  groupSessionNodeInWorkspace,
+  listWorkspaceSessionNodes,
   normalizeWorkspaceViewEntry,
   renderPaneIdForNode,
   syncWorkspaceArtifactNodes,
@@ -210,6 +214,56 @@ describe('workspaceTree', () => {
       activeDashboardWidgetId: null,
       activeSessionIds: [],
       mountedSessionFsIds: [firstSessionId],
+    }));
+  });
+
+  it('nests branch sessions under their parent branch group while preserving recursive session lookup', () => {
+    const workspace = createWorkspaceNode({
+      id: 'ws-branches',
+      name: 'Branches',
+      color: '#fff',
+      browserTabs: [],
+    });
+    const branchSession = createSessionNode('ws-branches', 2);
+    branchSession.name = 'SYM-001';
+
+    const grouped = groupSessionNodeInWorkspace(workspace, branchSession, {
+      groupId: 'agent/research/frontend-1',
+      groupName: 'agent/research/frontend-1',
+    });
+
+    const sessionCategory = getWorkspaceCategory(grouped, 'session');
+    expect(sessionCategory?.children?.map((child) => child.name)).toEqual([
+      'Session 1',
+      'agent/research/frontend-1',
+    ]);
+    expect(sessionCategory?.children?.[1]).toEqual(expect.objectContaining({
+      id: 'ws-branches:session-group:agent-research-frontend-1',
+      type: 'folder',
+      expanded: true,
+    }));
+    expect(sessionCategory?.children?.[1]?.children).toEqual([
+      expect.objectContaining({
+        id: branchSession.id,
+        name: 'SYM-001',
+        nodeKind: 'session',
+        sessionGroupId: 'agent/research/frontend-1',
+        sessionGroupName: 'agent/research/frontend-1',
+      }),
+    ]);
+    expect(listWorkspaceSessionNodes(grouped).map((session) => session.id)).toEqual([
+      getWorkspaceCategory(grouped, 'session')?.children?.[0]?.id,
+      branchSession.id,
+    ]);
+    expect(findFirstSessionId(grouped)).toBe(getWorkspaceCategory(grouped, 'session')?.children?.[0]?.id);
+    expect(normalizeWorkspaceViewEntry(grouped, {
+      ...createWorkspaceViewEntry(grouped),
+      activeSessionIds: [branchSession.id],
+      mountedSessionFsIds: [branchSession.id],
+      panelOrder: [`session:${branchSession.id}`],
+    })).toEqual(expect.objectContaining({
+      activeSessionIds: [branchSession.id],
+      mountedSessionFsIds: [branchSession.id],
     }));
   });
 });

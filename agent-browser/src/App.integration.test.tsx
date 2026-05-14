@@ -6622,6 +6622,40 @@ styles:
     expect(getTreeItemByText('My Session')).toBeInTheDocument();
   });
 
+  it('auto-renames chat sessions from the conversation until a user rename locks the title', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { vi.advanceTimersByTime(350); await Promise.resolve(); });
+    await openDefaultSessionPanel();
+
+    fireEvent.change(screen.getByLabelText('Agent provider'), { target: { value: 'tour-guide' } });
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Can you investigate why the checkout flow breaks on mobile and summarize the fix?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await flushAsyncUpdates();
+
+    expect(getTreeItemByText('Investigate Checkout Flow')).toBeInTheDocument();
+
+    const renamedSessionRow = getTreeItemByText('Investigate Checkout Flow');
+    fireEvent.contextMenu(renamedSessionRow);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Session name' }), { target: { value: 'My checkout review' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+      await Promise.resolve();
+    });
+
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Build a release plan for the pricing page.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await flushAsyncUpdates();
+
+    expect(getTreeItemByText('My checkout review')).toBeInTheDocument();
+    expect(screen.queryByText('Build Release Plan')).not.toBeInTheDocument();
+  });
+
   it('Enter in session rename input submits the rename', async () => {
     vi.useFakeTimers();
     render(<App />);

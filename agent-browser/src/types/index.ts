@@ -36,6 +36,10 @@ export interface TreeNode {
   artifactReferenceId?: string;
   dashboardWidgetId?: string;
   boundWidgetId?: string;
+  sessionGroupId?: string;
+  sessionGroupName?: string;
+  sessionTitleLocked?: boolean;
+  sessionTitleGenerated?: boolean;
   muted?: boolean;
 }
 
