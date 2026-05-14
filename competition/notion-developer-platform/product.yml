@@ -1,0 +1,19 @@
+slug: notion-developer-platform
+name: Notion Developer Platform
+vendor: Notion
+segment: ai-work-automation-platform
+product_path: competition/notion-developer-platform
+design_path: competition/notion-developer-platform/design
+features_path: competition/notion-developer-platform/features
+marketing_path: competition/notion-developer-platform/marketing
+gossip_path: competition/notion-developer-platform/gossip
+snapshot_date: 2026-05-14
+primary_sources:
+  - https://techcrunch.com/2026/05/13/notion-just-turned-its-workspace-into-a-hub-for-ai-agents/
+  - https://developers.notion.com/
+secondary_sources:
+  - https://www.notion.com/product/ai
+positioning: "A programmable workspace orchestration layer where custom agents, external agents, custom code workers, and synced databases run inside Notion."
+customer_model: "Available across Notion plans with usage-credit economics; Workers currently free through August 2026 for experimentation."
+competitive_threat_level: high
+notes: "This launch moves Notion from AI-enabled docs toward agent infrastructure that can absorb data sync, custom tools, and external-agent execution into one workspace."
