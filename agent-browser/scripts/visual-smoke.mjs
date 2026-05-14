@@ -855,7 +855,7 @@ async function main() {
               {
                 path: 'dashboard.md',
                 mediaType: 'text/markdown',
-                content: '# Launch dashboard\n\n- Status: ready\n- Evidence: visual smoke',
+                content: '# Launch dashboard\n\n```mermaid\nflowchart TD\n  Plan[Plan] --> Ship[Ship]\n```\n\n- Status: ready\n- Evidence: visual smoke',
               },
             ],
             references: [],
@@ -1533,16 +1533,18 @@ async function main() {
     await expect(installedExtensions.getByRole('heading', { name: 'Installed extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(installedExtensions.getByText('3 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByText('4 installed').first()).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(installedExtensions.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Channel extensions')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('External Chat Channels')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugin')).toBeVisible({ timeout: shellTimeoutMs });
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('22 extensions')).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('Markdown preview')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText('23 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByRole('button', { name: 'Open details for Markdown preview' })).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'Harness extensions' })).toBeVisible({
       timeout: shellTimeoutMs,
@@ -1599,6 +1601,9 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await expect(page.getByText('//workspace/artifacts/artifact-ws-research-dashboard/dashboard.md')).toBeVisible({
+      timeout: shellTimeoutMs,
+    });
+    await expect(page.locator('.markdown-mermaid-output[data-state="rendered"] svg').first()).toBeVisible({
       timeout: shellTimeoutMs,
     });
     await page.screenshot({ path: artifactWorktreeOutputPath, fullPage: true });

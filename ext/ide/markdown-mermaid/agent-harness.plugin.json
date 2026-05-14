@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "agent-harness.ext.markdown-mermaid",
+  "name": "Markdown Mermaid diagrams",
+  "version": "0.1.0",
+  "description": "Renders Markdown and MDX artifact files with Mermaid diagram support.",
+  "entrypoint": {
+    "module": "./src/index.ts",
+    "export": "createMarkdownMermaidPlugin"
+  },
+  "metadata": {
+    "installSurface": "file-renderer",
+    "dependencies": ["agent-harness.ext.markdown-preview"],
+    "openFeatureFlag": "agent-harness.extensions.agent-harness.ext.markdown-mermaid.enabled"
+  },
+  "capabilities": [
+    {
+      "kind": "renderer",
+      "id": "markdown-mermaid.renderer",
+      "description": "Markdown and MDX preview renderer with Mermaid diagram hydration."
+    }
+  ],
+  "renderers": [
+    {
+      "id": "markdown-mermaid.renderer",
+      "label": "Markdown Mermaid preview",
+      "description": "Renders Markdown and MDX files with sanitized Mermaid diagram support.",
+      "target": {
+        "kind": "file",
+        "fileExtensions": [".md", ".mdx", ".markdown", ".mdown", ".mkd"],
+        "mimeTypes": ["text/markdown", "text/mdx"]
+      },
+      "implementations": [
+        {
+          "id": "markdown-mermaid.react",
+          "label": "React Mermaid markdown preview",
+          "runtime": "react",
+          "component": {
+            "module": "./src/index.ts",
+            "export": "MermaidMarkdownRenderer"
+          }
+        }
+      ],
+      "priority": 30
+    }
+  ],
+  "permissions": [
+    {
+      "scope": "workspace-files",
+      "access": "read",
+      "reason": "Reads Markdown artifact content to render Mermaid diagrams in the preview."
+    }
+  ],
+  "compatibility": {
+    "agentBrowser": "^0.1.0",
+    "harnessCore": "^0.1.0"
+  }
+}

@@ -1847,6 +1847,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .markdown-content th { background: rgba(255,255,255,.04); font-weight: 600; }
 .markdown-content strong { font-weight: 600; }
 .markdown-content em { font-style: italic; }
+.markdown-content .markdown-mermaid {
+  margin: 0.9em 0;
+  overflow: hidden;
+  border: 1px solid rgba(148,163,184,.16);
+  border-radius: 8px;
+  background: rgba(3,7,18,.28);
+}
+.markdown-content .markdown-mermaid-output {
+  min-height: 132px;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 16px;
+  color: #cbd5e1;
+}
+.markdown-content .markdown-mermaid-output[data-state="rendered"] {
+  display: block;
+  background: #f8fafc;
+  color: #111827;
+}
+.markdown-content .markdown-mermaid-output[data-state="error"] {
+  justify-items: start;
+  color: #fecaca;
+}
+.markdown-content .markdown-mermaid-output svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.markdown-content .markdown-mermaid-source {
+  border-top: 1px solid rgba(148,163,184,.12);
+  padding: 8px 12px 10px;
+}
+.markdown-content .markdown-mermaid-source summary {
+  cursor: pointer;
+  color: #93c5fd;
+  font-size: 12px;
+}
+.markdown-content .markdown-mermaid-source pre {
+  margin-bottom: 0;
+}
 .message.user .message-bubble {
   background: rgba(14, 99, 156, 0.18);
   border-color: rgba(14, 99, 156, 0.38);

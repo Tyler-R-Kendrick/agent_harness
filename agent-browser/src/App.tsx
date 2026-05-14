@@ -387,6 +387,7 @@ import {
   type ArtifactFile,
 } from './services/artifacts';
 import {
+  MARKDOWN_MERMAID_RENDERER_ID,
   MARKDOWN_PREVIEW_RENDERER_ID,
   resolveArtifactFileRenderer,
   type ArtifactFileRendererBinding,
@@ -2207,10 +2208,11 @@ function ArtifactRendererContent({
     );
   }
 
-  if (binding.kind === 'plugin' && binding.rendererId === MARKDOWN_PREVIEW_RENDERER_ID) {
+  if (binding.kind === 'plugin' && (binding.rendererId === MARKDOWN_PREVIEW_RENDERER_ID || binding.rendererId === MARKDOWN_MERMAID_RENDERER_ID)) {
+    const enableMermaid = binding.rendererId === MARKDOWN_MERMAID_RENDERER_ID;
     return (
-      <section className="artifact-markdown-renderer" role="region" aria-label="Markdown preview renderer">
-        <MarkdownContent content={file.content} className="markdown-content artifact-markdown-content" />
+      <section className={`artifact-markdown-renderer${enableMermaid ? ' artifact-markdown-renderer--mermaid' : ''}`} role="region" aria-label="Markdown preview renderer">
+        <MarkdownContent content={file.content} className="markdown-content artifact-markdown-content" enableMermaid={enableMermaid} />
       </section>
     );
   }
