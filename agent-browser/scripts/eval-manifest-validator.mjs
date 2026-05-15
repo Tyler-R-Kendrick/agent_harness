@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 const MANIFEST_FILENAME = 'evals.json';
 const IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', '.npm-cache', 'dist', 'coverage']);
 
+function isIgnoredDirectory(directoryName) {
+  return IGNORED_DIRECTORIES.has(directoryName) || directoryName.startsWith('.codex-verify-');
+}
+
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -36,7 +40,7 @@ export async function findEvalManifestPaths(repoRoot) {
   async function walk(currentPath) {
     const entries = await fs.readdir(currentPath, { withFileTypes: true });
     for (const entry of entries) {
-      if (IGNORED_DIRECTORIES.has(entry.name)) {
+      if (isIgnoredDirectory(entry.name)) {
         continue;
       }
 

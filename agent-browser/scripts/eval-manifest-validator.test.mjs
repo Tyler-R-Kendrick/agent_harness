@@ -53,6 +53,13 @@ test('finds eval manifests while skipping ignored directories', async () => {
   );
   await fs.mkdir(path.join(repoRoot, 'node_modules', 'ignored', 'evals'), { recursive: true });
   await fs.writeFile(path.join(repoRoot, 'node_modules', 'ignored', 'evals', 'evals.json'), '{}');
+  await fs.mkdir(path.join(repoRoot, '.codex-verify-tk14-20260507223730', 'skills', 'ignored', 'evals'), {
+    recursive: true,
+  });
+  await fs.writeFile(
+    path.join(repoRoot, '.codex-verify-tk14-20260507223730', 'skills', 'ignored', 'evals', 'evals.json'),
+    '{}',
+  );
   await fs.mkdir(path.join(repoRoot, 'skills', 'beta', 'notes'), { recursive: true });
   await fs.writeFile(path.join(repoRoot, 'skills', 'beta', 'notes', 'evals.json'), '{}');
 

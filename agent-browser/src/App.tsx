@@ -729,7 +729,6 @@ type SessionMcpController = {
 const EMPTY_AGENT_ARTIFACTS: AgentArtifact[] = [];
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
-const NOOP_CLOSE_HANDLER = () => {};
 type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
 const pendingSecretRequestResolvers = new Map<string, (result: SecretRequestCreatedResult) => void>();
 
@@ -16515,7 +16514,7 @@ function AgentBrowserApp() {
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
   const activeDashboardWidgetId = activeWorkspaceViewState.activeDashboardWidgetId ?? null;
   const activeDashboardWidget = activeDashboardWidgetId ? activeHarnessSpec.elements[activeDashboardWidgetId] ?? null : null;
-  const shouldRenderDashboard = activeWorkspace.type === 'workspace';
+  const shouldRenderDashboard = activeWorkspace.type === 'workspace' && activeWorkspaceViewState.dashboardOpen;
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
@@ -20891,6 +20890,13 @@ function AgentBrowserApp() {
               editingFilePath: null,
             },
           }));
+          const dashboardPanelOnClose = () => setWorkspaceViewStateByWorkspace((current) => ({
+            ...current,
+            [activeWorkspaceId]: {
+              ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+              dashboardOpen: false,
+            },
+          }));
           const panelEntries: Array<[string, Panel]> = [];
           if (activeDashboardWidget) {
             panelEntries.push([
@@ -20936,7 +20942,7 @@ function AgentBrowserApp() {
                   onCreateDashboardWidget={createDashboardWidgetFromCanvas}
                   onOpenWidgetEditor={(widgetId) => openDashboardWidgetEditor(widgetId)}
                   onPatchElement={patchActiveHarnessElement}
-                  onClose={NOOP_CLOSE_HANDLER}
+                  onClose={dashboardPanelOnClose}
                   dragHandleProps={dragHandleProps}
                 />
               );
