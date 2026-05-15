@@ -88,10 +88,16 @@ export type WebResearchRunResult = {
   pointerBundles?: PpgrPointerBundle[];
   answer?: string;
   errors: AgentErrorInfo[];
-  timings: Partial<Record<AgentWorkflowStep, number>>;
+  timings: Partial<Record<AgentWorkflowStep, number>> & {
+    graphBuildMs?: number;
+    pointerExpansionMs?: number;
+  };
   elapsedMs: number;
   createdAt: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> & {
+    pointerCount?: number;
+    droppedPointers?: number;
+  };
 };
 
 export type WebSearchResult = {

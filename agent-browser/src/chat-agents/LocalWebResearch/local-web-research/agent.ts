@@ -95,9 +95,7 @@ export class LocalWebResearchAgent {
       retrievalStrategy: request.retrievalStrategy,
       evidence,
       citations,
-      metadata: retrievalMode === 'ppgr'
-        ? { ...(request.metadata ?? {}), pointerBundles, maxPointerBudget }
-        : request.metadata,
+      metadata: request.metadata,
       errors,
       timings,
     });
