@@ -1,6 +1,7 @@
 import type { AgentProvider } from '../chat-agents/types';
 import type { CopilotModelSummary } from './copilotApi';
 import type { HFModel } from '../types';
+import { classifyPrompt, type ClassifiedPrompt } from './requestComplexityRouting';
 
 export type BenchmarkTaskClassId = 'planning' | 'browser-action' | 'verification' | 'research' | 'review';
 export type BenchmarkRoutingObjective = 'balanced' | 'quality' | 'cost' | 'latency';
@@ -22,6 +23,15 @@ export type BenchmarkRoutingSettings = {
   sessionPinning: boolean;
   objective: BenchmarkRoutingObjective;
   pins: Partial<Record<BenchmarkTaskClassId, BenchmarkModelRef>>;
+  complexityRouting: {
+    enabled: boolean;
+    mode: 'shadow' | 'active';
+    trafficSplitPercent?: number;
+    pinning?: {
+      workspaceAfterHardTask?: boolean;
+      sessionAfterHardTask?: boolean;
+    };
+  };
 };
 
 export type BenchmarkRoutingCandidate = {
@@ -42,6 +52,35 @@ export type BenchmarkRouteRecommendation = {
   score: number;
   reason: string;
 };
+
+export type HybridRouteRecommendation = {
+  taskClass: BenchmarkTaskClassId;
+  candidate: BenchmarkRoutingCandidate;
+  benchmark: BenchmarkRouteRecommendation;
+  complexity: ClassifiedPrompt;
+  mergedReason: string;
+};
+
+export type RoutingRequestContext = {
+  taskClass: BenchmarkTaskClassId;
+  latestUserInput: string;
+  toolsEnabled: boolean;
+  provider: AgentProvider;
+};
+
+export type RoutingDecisionSafeguards = {
+  forceEscalation: boolean;
+  forceConfidenceFallback: boolean;
+};
+
+export interface RoutingStrategy {
+  classify(requestContext: RoutingRequestContext): BenchmarkTaskClassId;
+  recommend(candidates: BenchmarkRoutingCandidate[], settings: BenchmarkRoutingSettings): BenchmarkRouteRecommendation | null;
+  finalize(
+    decision: BenchmarkRouteRecommendation | null,
+    safeguards: RoutingDecisionSafeguards,
+  ): BenchmarkRouteRecommendation | null;
+}
 
 export type BenchmarkComplexityDecision = {
   score: number;
@@ -120,6 +159,10 @@ export const DEFAULT_BENCHMARK_ROUTING_SETTINGS: BenchmarkRoutingSettings = {
   sessionPinning: true,
   objective: 'balanced',
   pins: {},
+  complexityRouting: {
+    enabled: false,
+    mode: 'shadow',
+  },
 };
 
 const VALID_TASK_CLASS_IDS = new Set(BENCHMARK_TASK_CLASSES.map((taskClass) => taskClass.id));
@@ -619,6 +662,33 @@ export function recommendBenchmarkRoute({
     : null;
 }
 
+export function createDefaultRoutingStrategy(): RoutingStrategy {
+  let lastClassifiedTask: BenchmarkTaskClassId = 'planning';
+  return {
+    classify(requestContext) {
+      lastClassifiedTask = inferBenchmarkTaskClass(requestContext);
+      return lastClassifiedTask;
+    },
+    recommend(candidates, settings) {
+      return recommendBenchmarkRoute({
+        taskClass: lastClassifiedTask,
+        candidates,
+        settings,
+      });
+    },
+    finalize(decision, safeguards) {
+      if (!decision) return null;
+      if (safeguards.forceEscalation || safeguards.forceConfidenceFallback) {
+        return {
+          ...decision,
+          reason: `${decision.reason} Core safeguards enforced: escalation/confidence fallback active.`,
+        };
+      }
+      return decision;
+    },
+  };
+}
+
 function evaluatePromptComplexity(prompt: string, settings: BenchmarkRoutingSettings): BenchmarkComplexityDecision {
   const normalized = prompt.toLowerCase();
   const escalationKeyword = settings.escalationKeywords.find((keyword) => normalized.includes(keyword.toLowerCase())) ?? null;
@@ -724,6 +794,75 @@ export function inferBenchmarkTaskClass({
   return toolsEnabled ? 'browser-action' : 'planning';
 }
 
+export function recommendHybridRoute({
+  prompt,
+  provider,
+  toolsEnabled,
+  settings,
+  candidates,
+}: {
+  prompt: string;
+  provider: AgentProvider;
+  toolsEnabled: boolean;
+  settings: BenchmarkRoutingSettings;
+  candidates: BenchmarkRoutingCandidate[];
+}): HybridRouteRecommendation | null {
+  if (!settings.enabled || candidates.length === 0) return null;
+
+  const taskClass = inferBenchmarkTaskClass({
+    provider,
+    latestUserInput: prompt,
+    toolsEnabled,
+  });
+  const benchmark = recommendBenchmarkRoute({ taskClass, candidates, settings });
+  if (!benchmark) return null;
+
+  const complexity = classifyPrompt(prompt);
+  const hasEscalationKeyword = settings.escalationKeywords.some((keyword) =>
+    complexity.reasons.includes(`escalation:${keyword.toLowerCase()}`),
+  );
+  const isCritical = complexity.tier === 'complex' && complexity.score >= settings.complexityThreshold;
+  const isLowConfidence = complexity.confidence < settings.minConfidence;
+  const requiresPremiumSafeSet = hasEscalationKeyword || isCritical || isLowConfidence;
+
+  if (!requiresPremiumSafeSet) {
+    return {
+      taskClass,
+      candidate: benchmark.candidate,
+      benchmark,
+      complexity,
+      mergedReason: `Objective-weighted route selected (${settings.objective}).`,
+    };
+  }
+
+  const [premiumSafeCandidate] = candidates
+    .filter((candidate) => candidate.costTier >= 3)
+    .map((candidate) => ({ candidate, score: objectiveScore(candidate, taskClass, 'quality') }))
+    .sort(compareCandidates);
+
+  if (!premiumSafeCandidate) {
+    return {
+      taskClass,
+      candidate: benchmark.candidate,
+      benchmark,
+      complexity,
+      mergedReason: 'Premium-safe fallback unavailable; used benchmark objective candidate.',
+    };
+  }
+
+  return {
+    taskClass,
+    candidate: premiumSafeCandidate.candidate,
+    benchmark,
+    complexity,
+    mergedReason: [
+      hasEscalationKeyword ? 'escalation' : null,
+      isCritical ? 'critical' : null,
+      isLowConfidence ? 'low_confidence' : null,
+    ].filter(Boolean).join('+') + ' policy override to premium-safe candidate set.',
+  };
+}
+
 export function getBenchmarkTaskClass(id: BenchmarkTaskClassId): BenchmarkTaskClass {
   return BENCHMARK_TASK_CLASSES.find((taskClass) => taskClass.id === id) ?? BENCHMARK_TASK_CLASSES[0];
 }
@@ -747,6 +886,19 @@ export function isBenchmarkRoutingSettings(value: unknown): value is BenchmarkRo
   if (typeof settings.sessionPinning !== 'boolean') return false;
   if (typeof settings.objective !== 'string' || !VALID_OBJECTIVES.includes(settings.objective as BenchmarkRoutingObjective)) return false;
   if (!settings.pins || typeof settings.pins !== 'object' || Array.isArray(settings.pins)) return false;
+  if (!settings.complexityRouting || typeof settings.complexityRouting !== 'object' || Array.isArray(settings.complexityRouting)) return false;
+  if (typeof settings.complexityRouting.enabled !== 'boolean') return false;
+  if (settings.complexityRouting.mode !== 'shadow' && settings.complexityRouting.mode !== 'active') return false;
+  if (settings.complexityRouting.trafficSplitPercent !== undefined) {
+    if (typeof settings.complexityRouting.trafficSplitPercent !== 'number' || !Number.isFinite(settings.complexityRouting.trafficSplitPercent)) return false;
+    if (settings.complexityRouting.trafficSplitPercent < 0 || settings.complexityRouting.trafficSplitPercent > 100) return false;
+  }
+  if (settings.complexityRouting.pinning !== undefined) {
+    if (typeof settings.complexityRouting.pinning !== 'object' || Array.isArray(settings.complexityRouting.pinning)) return false;
+    const pinning = settings.complexityRouting.pinning as Record<string, unknown>;
+    if (pinning.workspaceAfterHardTask !== undefined && typeof pinning.workspaceAfterHardTask !== 'boolean') return false;
+    if (pinning.sessionAfterHardTask !== undefined && typeof pinning.sessionAfterHardTask !== 'boolean') return false;
+  }
   return Object.entries(settings.pins as Record<string, unknown>).every(([taskClass, ref]) => (
     VALID_TASK_CLASS_IDS.has(taskClass as BenchmarkTaskClassId)
     && (ref === undefined || isBenchmarkModelRef(ref))

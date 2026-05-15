@@ -31,6 +31,7 @@ describe('default extensions', () => {
     expect(grouped.ide).toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-preview' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-mermaid' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.hyperframes' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-studio' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.hyperframes' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),

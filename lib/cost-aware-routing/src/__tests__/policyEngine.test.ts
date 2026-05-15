@@ -28,6 +28,17 @@ describe('cost-aware routing policy', () => {
     expect(decision.features.hasEscalationCue).toBe(true);
   });
 
+  it('matches routing cues as complete words instead of substrings', () => {
+    const decision = routePrompt('Summarize customer insecurity survey notes and stool sample labels.');
+
+    expect(decision.modelId).toBe('gpt-4.1-mini');
+    expect(decision.provider).toBe('openai');
+    expect(decision.tier).toBe('simple');
+    expect(decision.reasons).toEqual(['lightweight_prompt']);
+    expect(decision.features.matchedEscalationCues).toEqual([]);
+    expect(decision.features.matchedToolCues).toEqual([]);
+  });
+
   it('applies low-confidence fallback to premium model', () => {
     const decision = routePrompt('Analyze quickly.', { minConfidence: 0.6 });
 

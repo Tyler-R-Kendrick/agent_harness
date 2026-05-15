@@ -1,10 +1,10 @@
+import '@testing-library/jest-dom/vitest';
 import { setMaxListeners } from 'node:events';
 import {
   ReadableStream,
   TransformStream,
   WritableStream,
 } from 'node:stream/web';
-import '@testing-library/jest-dom/vitest';
 
 Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', { value: () => undefined, writable: true });
 

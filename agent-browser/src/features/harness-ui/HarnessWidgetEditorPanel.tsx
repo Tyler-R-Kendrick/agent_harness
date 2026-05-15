@@ -1,5 +1,4 @@
-import { X } from 'lucide-react';
-import { useEffect, useMemo, useState, type CSSProperties, type HTMLAttributes, type SyntheticEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type HTMLAttributes } from 'react';
 
 import { WidgetDocumentRenderer } from './WidgetDocumentRenderer';
 import {
@@ -11,6 +10,7 @@ import {
 } from './widgetComponents';
 import type { HarnessAppSpec, HarnessElementPatch, JsonValue } from './types';
 import type { HarnessFileSummary } from './HarnessJsonRenderer';
+import { RenderPaneTitlebar } from '../render-panes/RenderPaneTitlebar';
 
 export type HarnessWidgetEditorPanelProps = {
   spec: HarnessAppSpec;
@@ -21,18 +21,8 @@ export type HarnessWidgetEditorPanelProps = {
   symphonyActive: boolean;
   onPatchElement: (patch: HarnessElementPatch) => void;
   onOpenAssistant?: () => void;
-  onClose?: () => void;
+  onClose: () => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
-};
-
-function stopWidgetEditorTitlebarControlDrag(event: SyntheticEvent<HTMLElement>) {
-  event.stopPropagation();
-}
-
-const widgetEditorTitlebarControlProps: Pick<HTMLAttributes<HTMLElement>, 'onPointerDown' | 'onMouseDown' | 'onTouchStart'> = {
-  onPointerDown: stopWidgetEditorTitlebarControlDrag,
-  onMouseDown: stopWidgetEditorTitlebarControlDrag,
-  onTouchStart: stopWidgetEditorTitlebarControlDrag,
 };
 
 function readTitle(spec: HarnessAppSpec, widgetId: string): string {
@@ -136,6 +126,14 @@ export function HarnessWidgetEditorPanel({
   if (!widget) {
     return (
       <section className="harness-widget-editor-panel" aria-label="Widget editor">
+        <RenderPaneTitlebar
+          className="harness-widget-editor-topbar"
+          closeLabel="Close widget editor"
+          dragHandleProps={dragHandleProps}
+          eyebrow={<span className="panel-resource-eyebrow">workspace/{workspaceName}/widget</span>}
+          onClose={onClose}
+          title={<h2>{widgetId}</h2>}
+        />
         <p className="harness-widget-empty">Missing widget: {widgetId}</p>
       </section>
     );
@@ -168,15 +166,15 @@ export function HarnessWidgetEditorPanel({
 
   return (
     <section className="harness-widget-editor-panel" aria-label="Widget editor">
-      <header
-        className={`harness-widget-editor-topbar${dragHandleProps ? ' harness-widget-editor-topbar--draggable' : ''}`}
-        {...dragHandleProps}
-      >
-        <div className="harness-widget-editor-heading">
-          <span className="panel-resource-eyebrow">workspace/{workspaceName}/widget</span>
-          <h2>{title}</h2>
-        </div>
-        <div className="harness-widget-editor-actions">
+      <RenderPaneTitlebar
+        className="harness-widget-editor-topbar"
+        closeLabel="Close widget editor"
+        dragHandleProps={dragHandleProps}
+        eyebrow={<span className="panel-resource-eyebrow">workspace/{workspaceName}/widget</span>}
+        onClose={onClose}
+        title={<h2>{title}</h2>}
+        actions={(
+          <>
           {onOpenAssistant ? (
             <button type="button" className="secondary-button" onClick={onOpenAssistant} aria-label="Open widget assistant">
               Agent
@@ -185,20 +183,9 @@ export function HarnessWidgetEditorPanel({
           <button type="button" className="primary-button" onClick={saveDisabled ? undefined : saveWidgetJson} disabled={saveDisabled}>
             Save widget JSON
           </button>
-          {onClose ? (
-            <button
-              type="button"
-              className="icon-button panel-close-button"
-              aria-label="Close widget editor"
-              title="Close widget editor"
-              onClick={onClose}
-              {...widgetEditorTitlebarControlProps}
-            >
-              <X size={12} aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </header>
+          </>
+        )}
+      />
 
       <div className="harness-widget-editor-grid">
         <aside className="harness-widget-component-rail" aria-label="Widget components">

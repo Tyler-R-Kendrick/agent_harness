@@ -22,6 +22,7 @@ export function rankEvidenceChunks(args: {
   question: string;
   chunks: EvidenceChunk[];
   maxChunks: number;
+  strategy?: 'baseline' | 'ppgr';
 }): EvidenceChunk[] {
   const query = normalize(args.question);
   const terms = tokenize(args.question);
@@ -38,10 +39,22 @@ export function rankEvidenceChunks(args: {
       if (query && body.includes(query)) score += 4;
       if (query && title.includes(query)) score += 3;
       score += searchRankBoost(chunk.sourceResultId);
+      if ((args.strategy ?? 'baseline') === 'ppgr') {
+        score += pointerProvenanceBoost(chunk, terms, query);
+      }
       return { ...chunk, score: Number(score.toFixed(3)) };
     })
     .sort((left, right) => right.score - left.score || left.id.localeCompare(right.id))
     .slice(0, args.maxChunks);
+}
+
+function pointerProvenanceBoost(chunk: EvidenceChunk, terms: string[], query: string): number {
+  const pointerDensity = Math.min(2, terms.reduce((sum, term) => {
+    return sum + (chunk.text.toLowerCase().includes(term) ? 0.25 : 0);
+  }, 0));
+  const hasStablePointer = chunk.normalizedUrl.length > 0 && chunk.normalizedUrl.startsWith('http') ? 0.5 : 0;
+  const exactPointer = query && chunk.text.toLowerCase().includes(query) ? 0.75 : 0;
+  return pointerDensity + hasStablePointer + exactPointer;
 }
 
 function tokenize(value: string): string[] {
