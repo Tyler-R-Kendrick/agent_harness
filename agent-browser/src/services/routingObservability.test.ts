@@ -30,7 +30,6 @@ describe('routingObservability', () => {
     const saved = loadRoutingDecisionRecords();
     expect(saved).toHaveLength(1);
     expect(saved[0]?.taskClass).toBe('security');
-
     expect(saved[0]?.complexityReasons.length).toBeGreaterThan(0);
     expect(saved[0]?.candidateSetSummary).toBe('candidate-set-unavailable');
     expect(saved[0]?.routingMode).toBe('active');

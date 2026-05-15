@@ -29,7 +29,6 @@ export interface RoutingStrategy<RequestContext = string, Settings = ComplexityR
   recommend(candidates: Candidate[], settings: Settings): Decision;
   finalize(decision: Decision, safeguards: { requireEscalation: boolean; requireConfidenceFallback: boolean }): Decision;
 }
-
 const REASONING_CUES = ['analyze', 'design', 'architecture', 'debug', 'tradeoff', 'optimize'] as const;
 const TOOLING_CUES = ['tool', 'api', 'endpoint', 'playwright', 'pipeline', 'refactor'] as const;
 const DEFAULT_ESCALATION_CUES = ['security', 'compliance', 'incident', 'outage'] as const;
@@ -60,7 +59,6 @@ export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy<string, ComplexityRouting
     return { ...decision, reasons: nextReasons };
   },
 };
-
 export function classifyPrompt(prompt: string, _context?: PromptComplexityContext): ClassifiedPrompt {
   const normalized = prompt.toLowerCase();
   const reasons: string[] = [];

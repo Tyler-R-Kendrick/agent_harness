@@ -54,7 +54,6 @@ function inferComplexityReasons(requestText: string, taskClass: RoutingTaskClass
   if (taskClass === 'security') reasons.push('security-sensitive');
   return reasons.length > 0 ? reasons : ['general-request'];
 }
-
 export function buildRoutingDecisionRecord(input: {
   requestId: string;
   requestText: string;

@@ -71,7 +71,7 @@ describe('requestComplexityRouting', () => {
       reasons: ['lightweight_prompt'],
     };
 
-    const decision = routeByComplexity(
+  const decision = routeByComplexity(
       simple,
       { ...DEFAULT_COMPLEXITY_ROUTING_POLICY, enableSessionPinning: true },
       { sessionPinnedModel: 'pinned-model' },

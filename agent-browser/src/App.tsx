@@ -4091,7 +4091,7 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
-const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
+    const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
     const complexityRoutingInShadowMode = complexityRoutingSettings.enabled && complexityRoutingSettings.mode === 'shadow';
     const complexityRoutingTrafficSplit = complexityRoutingSettings.trafficSplitPercent ?? 100;
     const complexityRoutingAllowedByTraffic = complexityRoutingTrafficSplit >= 100

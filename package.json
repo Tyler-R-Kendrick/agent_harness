@@ -22,7 +22,8 @@
     "verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-agent-browser.ps1",
     "test:agent-browser": "npm --workspace agent-browser run test",
     "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage",
-    "visual:agent-browser": "npm --workspace agent-browser run visual:smoke"
+    "visual:agent-browser": "npm --workspace agent-browser run visual:smoke",
+    "install:offline-safe": "npm install --ignore-scripts"
   },
   "overrides": {
     "@anthropic-ai/sdk": "0.95.0",

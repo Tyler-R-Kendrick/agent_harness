@@ -19,8 +19,8 @@ const alias = {
   'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
   webmcp: path.resolve(__dirname, '../lib/webmcp/src/index.ts'),
   'agent-browser-mcp': path.resolve(__dirname, '../lib/agent-browser-mcp/src/index.ts'),
-  'driver.js': path.resolve(__dirname, 'src/test-fixtures/driverjs.ts'),
-  'driver.js/dist/driver.css': path.resolve(__dirname, 'src/test-fixtures/emptyStyle.ts'),
+  'driver.js': path.resolve(__dirname, 'src/test-shims/driverjs.ts'),
+  'driver.js/dist/driver.css': path.resolve(__dirname, 'src/test-shims/emptyCss.ts'),
 };
 
 const baseExclude = [
@@ -58,12 +58,12 @@ export default defineConfig(async () => ({
   resolve: {
     alias,
   },
-  test: {
+    test: {
     testTimeout: 60_000,
     projects: [
       {
         extends: true,
-        test: {
+          test: {
           name: 'node',
           globals: true,
           environment: 'node',
@@ -80,7 +80,7 @@ export default defineConfig(async () => ({
       },
       {
         extends: true,
-        test: {
+          test: {
           name: 'jsdom',
           globals: true,
           environment: 'jsdom',

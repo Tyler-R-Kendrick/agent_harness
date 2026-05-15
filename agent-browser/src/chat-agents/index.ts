@@ -21,6 +21,7 @@ import { AGENT_SWARM_LABEL, isAgentSwarmTaskText, streamAgentSwarmChat } from '.
 import { TOUR_GUIDE_LABEL, isTourGuideTaskText, streamTourGuideChat } from './TourGuide';
 import { buildWorkspaceSelfReflectionAnswer, isSelfReflectionTaskText } from '../services/selfReflection';
 import type { AgentProvider, ModelBackedAgentProvider } from './types';
+import { CHAT_AGENT_SKILLS } from './skillDefinitions';
 import { buildRoutingDecisionRecord, persistRoutingDecisionRecord } from '../services/routingObservability';
 
 export type RuntimeRoutingDecision = {
@@ -230,6 +231,7 @@ export { runAgentLoop, wrapVoterWithCallbacks, type AgentLoopOptions } from './a
 export type { AgentProvider, AgentStreamCallbacks, ModelBackedAgentProvider } from './types';
 
 export type StreamAgentChatOptions = {
+  useDsrRouting?: boolean;
   provider: AgentProvider;
   runtimeProvider?: ModelBackedAgentProvider;
   messages: ChatMessage[];
@@ -251,8 +253,8 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
   runtimeProvider: ModelBackedAgentProvider;
   modelId?: string;
   routingDecision: RuntimeRoutingDecision;
-    candidateSetSummary?: string;
-    fallbackCause?: string | null;
+  candidateSetSummary?: string;
+  fallbackCause?: string | null;
   skillRouteTrace?: {
     selectedSkill: string;
     topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
@@ -372,6 +374,22 @@ export async function streamAgentChat(
     });
     callbacks.onToken?.(answer);
     callbacks.onDone?.(answer);
+    return;
+  }
+
+
+  if (options.useDsrRouting) {
+    const skill = CHAT_AGENT_SKILLS[options.provider];
+    await skill.execute({
+      runtimeProvider: runtimeSelection.runtimeProvider,
+      model: options.model,
+      modelId: runtimeSelection.modelId,
+      sessionId: options.sessionId,
+      workspaceName: options.workspaceName,
+      workspacePromptContext,
+      messages,
+      latestUserInput: latestUserInput ?? messages.at(-1)?.content ?? '',
+    }, callbacks, signal);
     return;
   }
 

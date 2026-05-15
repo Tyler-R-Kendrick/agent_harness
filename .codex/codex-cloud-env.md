@@ -7,8 +7,7 @@ This repository should be configured in **Codex Web → Environments** with:
 
 The setup script now also clears inherited `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` (and lowercase variants),
 unsets `npm_config_*proxy` environment variables, and resets npm's `proxy`/`https-proxy` config so remote
-Codex sandboxes default to direct networking without
-per-session manual cleanup.
+Codex sandboxes default to direct networking without per-session manual cleanup.
 
 ## Runtime selection (official `CODEX_ENV_*` variables)
 

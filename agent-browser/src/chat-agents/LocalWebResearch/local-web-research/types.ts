@@ -215,7 +215,6 @@ export type PpgrPointerBundle = {
   text: string;
   score: number;
 };
-
 export type RetrievalStrategy = {
   retrieve(request: {
     question: string;

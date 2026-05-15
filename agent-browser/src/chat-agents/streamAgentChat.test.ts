@@ -14,9 +14,11 @@ vi.mock('@perplexity-ai/perplexity_ai', () => ({
 }));
 
 vi.mock('driver.js', () => ({
-  driver: vi.fn(() => ({
-    drive: vi.fn(),
-  })),
+  driver: () => ({
+    drive: () => undefined,
+    destroy: () => undefined,
+    highlight: () => undefined,
+  }),
 }));
 
 vi.mock('driver.js/dist/driver.css', () => ({}));
@@ -34,7 +36,6 @@ describe('streamAgentChat', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
   it('routes Codi sessions through the Codi adapter', async () => {
     const streamCodiChatSpy = vi.spyOn(CodiModule, 'streamCodiChat').mockResolvedValueOnce();
 
@@ -152,6 +153,30 @@ describe('streamAgentChat', () => {
       latestUserInput: 'Show me how to configure tools.',
       workspaceName: 'Ops',
       workspacePromptContext: 'Use workspace files.',
+    }), {}, undefined);
+  });
+
+
+  it('routes through SkillDefinition adapters when DSR routing is enabled', async () => {
+    const streamPlannerChatSpy = vi.spyOn(PlannerModule, 'streamPlannerChat').mockResolvedValueOnce();
+
+    await streamAgentChat({
+      provider: 'planner',
+      useDsrRouting: true,
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      sessionId: 'session-1',
+      latestUserInput: 'Plan with DSR.',
+      messages: [{ id: 'user-1', role: 'user', content: 'Plan the work.' }],
+      workspaceName: 'Build',
+      workspacePromptContext: 'Use workspace files.',
+    }, {});
+
+    expect(streamPlannerChatSpy).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeProvider: 'ghcp',
+      modelId: 'gpt-4.1',
+      latestUserInput: 'Plan with DSR.',
+      workspaceName: 'Build',
     }), {}, undefined);
   });
 
