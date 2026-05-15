@@ -13,6 +13,14 @@ vi.mock('@perplexity-ai/perplexity_ai', () => ({
   Client: class MockPerplexityClient {},
 }));
 
+vi.mock('driver.js', () => ({
+  driver: vi.fn(() => ({
+    drive: vi.fn(),
+  })),
+}));
+
+vi.mock('driver.js/dist/driver.css', () => ({}));
+
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
 import * as GhcpModule from './Ghcp';
