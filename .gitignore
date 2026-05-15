@@ -5,6 +5,7 @@
 .playwright-mcp/
 .agentv/cache.json
 .codex/environments/
+.codex-verify-*/
 node_modules/
 .npm-cache/
 _cacache/
