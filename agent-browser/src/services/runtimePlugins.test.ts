@@ -39,7 +39,13 @@ describe('runtimePlugins', () => {
     expect(runtime.eventSubscriptions['tool:before-call']).toEqual(['repo-policy']);
     expect(runtime.shellEnvironment.AGENT_POLICY).toBe('strict');
     expect(runtime.compactionHints).toEqual(['Keep runtime plugin policy audit ids in compacted summaries.']);
-    expect(runtime.routingExtensions).toHaveLength(1);
+    expect(runtime.routingExtensions.signals).toEqual([]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([]);
+    expect(runtime.routingExtensions.scoringModules).toEqual([]);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
   });
 
   it('omits active registrations when the runtime is disabled', () => {
@@ -161,25 +167,6 @@ describe('runtimePlugins', () => {
       enforceEscalation: true,
       enforceConfidenceFallback: true,
     });
-  });
-
-  it('merges extension reasons but ignores overrides when disabled', () => {
-        routingScoringModules: [{ id: 'quality-boost', score: ({ baseScore }) => baseScore + 3 }],
-      }],
-    });
-
-    expect(runtime.routingExtensions.signals).toEqual([
-      { pluginId: 'repo-policy', feature: 'task-risk', value: 0.8 },
-    ]);
-    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([
-      { pluginId: 'repo-policy', minConfidenceDelta: 0.1, objective: 'quality' },
-    ]);
-    expect(runtime.routingExtensions.scoringModules).toHaveLength(1);
-    expect(runtime.routingExtensions.safetyInvariants).toEqual({
-      enforceEscalation: true,
-      enforceConfidenceFallback: true,
-    });
->>>>>>> origin/main
   });
 
   it('merges extension reasons but ignores overrides when disabled', () => {
