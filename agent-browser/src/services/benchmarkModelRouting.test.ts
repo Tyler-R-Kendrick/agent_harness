@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   areStagedRoutingChecksPassing,
+  composeBenchmarkRouteDecision,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   buildBenchmarkRoutingCandidates,
+  createDefaultRoutingStrategy,
   discoverBenchmarkEvidence,
   inferBenchmarkTaskClass,
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
+  recommendHybridRoute,
   recommendBenchmarkRoute,
 } from './benchmarkModelRouting';
 
@@ -73,6 +76,56 @@ describe('benchmark model routing', () => {
     expect(route?.candidate.ref).toBe('ghcp:gpt-4.1');
   });
 
+  it('registers the default deterministic+benchmark hybrid routing strategy', () => {
+    const strategy = createDefaultRoutingStrategy();
+    const taskClass = strategy.classify({
+      provider: 'codi',
+      latestUserInput: 'run tests and verify this patch',
+      toolsEnabled: true,
+      taskClass: 'planning',
+    });
+    const recommendation = strategy.recommend(candidates, {
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      objective: 'quality',
+    });
+    const finalized = strategy.finalize(recommendation, {
+      forceEscalation: true,
+      forceConfidenceFallback: true,
+    });
+
+    expect(taskClass).toBe('verification');
+    expect(recommendation?.taskClass).toBe('verification');
+    expect(finalized?.reason).toContain('Core safeguards enforced');
+  });
+
+  it('composes route with pre-escalation to premium candidate on escalation keyword', () => {
+    const decision = composeBenchmarkRouteDecision({
+      provider: 'codi',
+      latestUserInput: 'Please run a security audit on this auth flow and list exploit paths.',
+      toolsEnabled: true,
+      candidates,
+      settings: { ...DEFAULT_BENCHMARK_ROUTING_SETTINGS, objective: 'cost' },
+    });
+
+    expect(decision?.complexityDecision.escalationKeyword).toBe('security');
+    expect(decision?.selectedModel.ref).toBe('ghcp:gpt-4.1');
+    expect(decision?.benchmarkReason).toContain('pre-escalated');
+  });
+
+  it('composes route with post-downgrade on simple prompts when objective allows cost bias', () => {
+    const decision = composeBenchmarkRouteDecision({
+      provider: 'codi',
+      latestUserInput: 'summarize this',
+      toolsEnabled: true,
+      candidates,
+      settings: { ...DEFAULT_BENCHMARK_ROUTING_SETTINGS, objective: 'balanced', minConfidence: 0.5 },
+    });
+
+    expect(decision?.complexityDecision.isSimple).toBe(true);
+    expect(decision?.selectedModel.ref).toBe('ghcp:gpt-4o-mini');
+    expect(decision?.benchmarkReason).toContain('post-downgraded');
+  });
+
   it('infers task classes from provider and request text', () => {
     expect(inferBenchmarkTaskClass({ provider: 'planner', latestUserInput: 'break this down', toolsEnabled: false })).toBe('planning');
     expect(inferBenchmarkTaskClass({ provider: 'researcher', latestUserInput: 'find sources', toolsEnabled: false })).toBe('research');
@@ -83,8 +136,24 @@ describe('benchmark model routing', () => {
 
   it('validates persisted routing settings', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
+    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, routerMode: 'shadow', minConfidence: 0.5, complexityThreshold: 0.6, escalationKeywords: [], sessionPinning: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
+    expect(isBenchmarkRoutingSettings({
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      complexityRouting: {
+        enabled: true,
+        mode: 'active',
+        trafficSplitPercent: 42,
+        pinning: { workspaceAfterHardTask: true, sessionAfterHardTask: false },
+      },
+    })).toBe(true);
+    expect(isBenchmarkRoutingSettings({
+      enabled: true,
+      objective: 'cost',
+      pins: {},
+      complexityRouting: { enabled: true, mode: 'active', trafficSplitPercent: 120 },
+    })).toBe(false);
   });
 
   it('requires staged rollout eval cases before enforce mode can activate', () => {
@@ -207,5 +276,41 @@ describe('benchmark model routing', () => {
 
     expect(discovery.records).toEqual([]);
     expect(discovery.errors).toEqual(['Ignored untrusted benchmark source https://benchmarks.example.invalid/results for ghcp:gpt-4.1.']);
+  });
+
+  it('overrides cost objective with premium-safe candidate when escalation is detected', () => {
+    const route = recommendHybridRoute({
+      prompt: 'Need security review and incident response runbook updates',
+      provider: 'codi',
+      toolsEnabled: true,
+      candidates,
+      settings: {
+        ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+        objective: 'cost',
+        minConfidence: 0.2,
+      },
+    });
+
+    expect(route?.benchmark.candidate.ref).toBe('codi:onnx-community/Qwen3-0.6B-ONNX');
+    expect(route?.candidate.ref).toBe('ghcp:gpt-4.1');
+    expect(route?.complexity.reasons).toContain('escalation:security');
+    expect(route?.mergedReason).toContain('policy override');
+  });
+
+  it('keeps objective-weighted candidate when no premium override conditions trigger', () => {
+    const route = recommendHybridRoute({
+      prompt: 'Summarize this changelog',
+      provider: 'planner',
+      toolsEnabled: false,
+      candidates,
+      settings: {
+        ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+        objective: 'cost',
+      },
+    });
+
+    expect(route?.benchmark.candidate.ref).toBe('codi:onnx-community/Qwen3-0.6B-ONNX');
+    expect(route?.candidate.ref).toBe('codi:onnx-community/Qwen3-0.6B-ONNX');
+    expect(route?.mergedReason).toContain('Objective-weighted route selected');
   });
 });

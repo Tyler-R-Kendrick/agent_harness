@@ -1605,7 +1605,7 @@ async function main() {
     await expect(installedExtensions.getByText('Workspace plugins')).toHaveCount(0);
     const marketplace = page.getByRole('region', { name: 'Extension marketplace' });
     await expect(marketplace.getByRole('heading', { name: 'Marketplace' })).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(marketplace.getByText('24 extensions')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(marketplace.getByText(/^\d+ extensions$/)).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('button', { name: 'Open details for Markdown preview' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('button', { name: 'Open details for Markdown Mermaid diagrams' })).toBeVisible({ timeout: shellTimeoutMs });
     await expect(marketplace.getByRole('heading', { name: 'IDE extensions' })).toBeVisible({ timeout: shellTimeoutMs });

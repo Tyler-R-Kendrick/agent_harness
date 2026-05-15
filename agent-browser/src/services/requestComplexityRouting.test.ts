@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   classifyPrompt,
+  DEFAULT_ROUTING_STRATEGY,
   DEFAULT_COMPLEXITY_ROUTING_POLICY,
   routeByComplexity,
   type ClassifiedPrompt,
@@ -89,7 +90,7 @@ describe('requestComplexityRouting', () => {
       reasons: ['lightweight_prompt'],
     };
 
-    const decision = routeByComplexity(
+  const decision = routeByComplexity(
       simple,
       { ...DEFAULT_COMPLEXITY_ROUTING_POLICY, enableSessionPinning: true },
       { sessionPinnedModel: 'pinned-model' },
@@ -97,5 +98,21 @@ describe('requestComplexityRouting', () => {
 
     expect(decision.model).toBe('pinned-model');
     expect(decision.reasons).toContain('session_pinned_model');
+  });
+
+  it('uses default routing strategy classify/recommend/finalize contract', () => {
+    const classified = DEFAULT_ROUTING_STRATEGY.classify('Design architecture with tooling and security review');
+    const recommended = DEFAULT_ROUTING_STRATEGY.recommend(
+      ['Design architecture with tooling and security review'],
+      DEFAULT_COMPLEXITY_ROUTING_POLICY,
+    );
+    const finalized = DEFAULT_ROUTING_STRATEGY.finalize(recommended, {
+      requireEscalation: true,
+      requireConfidenceFallback: true,
+    });
+
+    expect(classified.tier).toBe('complex');
+    expect(recommended.model).toBe(DEFAULT_COMPLEXITY_ROUTING_POLICY.premiumModel);
+    expect(finalized.reasons).toEqual(expect.arrayContaining(recommended.reasons));
   });
 });

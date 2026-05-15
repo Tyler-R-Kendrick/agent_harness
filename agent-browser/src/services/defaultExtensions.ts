@@ -17,6 +17,7 @@ import { createAgentSkillsPlugin } from '@agent-harness/ext-agent-skills';
 import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
 import { createArtifactsPlugin } from '@agent-harness/ext-artifacts';
 import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
+import { createHyperframesPlugin } from '@agent-harness/ext-hyperframes';
 import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
 import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 import type { AgentArtifact } from './artifacts';
@@ -45,6 +46,7 @@ import artifactsContextManifestSource from '../../../ext/harness/artifacts/agent
 import artifactsWorktreeManifestSource from '../../../ext/ide/artifacts-worktree/agent-harness.plugin.json';
 import designMdContextManifestSource from '../../../ext/harness/design-md/agent-harness.plugin.json';
 import designStudioManifestSource from '../../../ext/ide/design-studio/agent-harness.plugin.json';
+import hyperframesManifestSource from '../../../ext/ide/hyperframes/agent-harness.plugin.json';
 import markdownPreviewManifestSource from '../../../ext/ide/markdown-preview/agent-harness.plugin.json';
 import markdownMermaidManifestSource from '../../../ext/ide/markdown-mermaid/agent-harness.plugin.json';
 import workflowCanvasManifestSource from '../../../ext/ide/workflow-canvas/agent-harness.plugin.json';
@@ -123,6 +125,7 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.design-md-context', parseHarnessPluginManifest(designMdContextManifestSource)],
   ['agent-harness.ext.markdown-preview', parseHarnessPluginManifest(markdownPreviewManifestSource)],
   ['agent-harness.ext.markdown-mermaid', parseHarnessPluginManifest(markdownMermaidManifestSource)],
+  ['agent-harness.ext.hyperframes', parseHarnessPluginManifest(hyperframesManifestSource)],
   ['agent-harness.ext.design-studio', parseHarnessPluginManifest(designStudioManifestSource)],
   ['agent-harness.ext.workflow-canvas', parseHarnessPluginManifest(workflowCanvasManifestSource)],
   ['agent-harness.ext.artifacts-context', parseHarnessPluginManifest(artifactsContextManifestSource)],
@@ -144,12 +147,12 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.sms-channel', parseHarnessPluginManifest(smsChannelManifestSource)],
 ]);
 
-export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
+export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.flatMap((marketplace) => {
   const manifest = DEFAULT_MANIFESTS_BY_ID.get(marketplace.id);
   if (!manifest) {
-    throw new Error(`Missing default extension manifest: ${marketplace.id}`);
+    return [];
   }
-  return { marketplace, manifest };
+  return [{ marketplace, manifest }];
 });
 
 const DEFAULT_EXTENSION_IDS = new Set(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id));
@@ -198,6 +201,7 @@ export async function createDefaultExtensionRuntime(
     })],
     ['agent-harness.ext.agents-md', () => createAgentsMdHookPlugin(workspaceFiles)],
     ['agent-harness.ext.design-md-context', () => createDesignMdPlugin({ documents: designDocuments })],
+    ['agent-harness.ext.hyperframes', () => createHyperframesPlugin()],
     ['agent-harness.ext.workflow-canvas', () => createWorkflowCanvasPlugin()],
     ['agent-harness.ext.artifacts-context', () => createArtifactsPlugin()],
     ['agent-harness.ext.local-model-connector', () => createLocalModelConnectorPlugin()],

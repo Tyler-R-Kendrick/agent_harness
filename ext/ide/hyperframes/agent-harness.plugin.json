@@ -12,7 +12,7 @@
     { "kind": "renderer", "id": "hyperframes.artifact-preview" },
     { "kind": "pane-item", "id": "hyperframes.editor-pane" },
     { "kind": "tool", "id": "hyperframes.generate" },
-    { "kind": "artifact", "id": "hyperframes-artifact" }
+    { "kind": "asset", "id": "hyperframes-artifact" }
   ],
   "renderers": [
     {
@@ -35,6 +35,10 @@
       "label": "HyperFrames",
       "rendererId": "hyperframes.artifact-preview",
       "preferredLocation": "side",
+      "when": {
+        "kind": "artifact",
+        "artifactKinds": ["hyperframe", "hyperframes-project"]
+      },
       "component": {
         "module": "./src/index.ts",
         "export": "HyperframesEditorPane"
