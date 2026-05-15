@@ -31,9 +31,15 @@ describe('routingObservability', () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]?.taskClass).toBe('security');
 
+    expect(saved[0]?.complexityReasons.length).toBeGreaterThan(0);
+    expect(saved[0]?.candidateSetSummary).toBe('candidate-set-unavailable');
+    expect(saved[0]?.routingMode).toBe('active');
+
     const exported = exportRoutingDecisionRecordsForEval(saved);
     expect(exported).toContain('routing-regression-record');
     expect(exported).toContain('benchmark-fixture');
+    expect(exported).toContain('candidate_set_summary');
+    expect(exported).toContain('routing_mode');
     expect(exported).toContain('security-review');
   });
 });
