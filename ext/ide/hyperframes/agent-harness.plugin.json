@@ -35,6 +35,10 @@
       "label": "HyperFrames",
       "rendererId": "hyperframes.artifact-preview",
       "preferredLocation": "side",
+      "when": {
+        "kind": "artifact",
+        "artifactKinds": ["hyperframe", "hyperframes-project"]
+      },
       "component": {
         "module": "./src/index.ts",
         "export": "HyperframesEditorPane"

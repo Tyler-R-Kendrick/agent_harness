@@ -1950,6 +1950,98 @@ test('split session panes keep close buttons inside their own titlebars', async 
   await page.screenshot({ path: 'docs/screenshots/split-session-close-buttons.png', fullPage: true });
 });
 
+test('widget editor split pane stays readable and closable beside the chat pane', async ({ page }) => {
+  test.setTimeout(90_000);
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.setViewportSize({ width: 2048, height: 1152 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByLabel('Workspace tree')).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'Session summary', exact: true }).click({ force: true });
+  await expect(page.getByRole('region', { name: 'Widget editor' })).toBeVisible();
+  await page.getByRole('button', { name: 'Session 1', exact: true }).click({ force: true });
+
+  const splitCells = page.locator('.browser-split-view .panel-drag-cell');
+  await expect(splitCells).toHaveCount(2);
+  await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
+
+  const widgetEditor = page.getByRole('region', { name: 'Widget editor' });
+  const widgetCell = splitCells.filter({ has: widgetEditor });
+  await expect(widgetCell).toHaveCount(1);
+  await expect(splitCells.locator('.render-pane-titlebar')).toHaveCount(2);
+  await expect(splitCells.locator('.render-pane-titlebar .panel-close-button')).toHaveCount(2);
+  await expect(widgetEditor.getByRole('button', { name: 'Close widget editor' })).toBeVisible();
+  await expect(widgetEditor.getByLabel('Live widget preview')).toBeVisible();
+
+  const paneMetrics = await widgetCell.evaluate((cell) => {
+    const paneRect = cell.getBoundingClientRect();
+    const editorRect = cell.querySelector<HTMLElement>('[aria-label="Widget editor"]')?.getBoundingClientRect();
+    const gridRect = cell.querySelector<HTMLElement>('.harness-widget-editor-grid')?.getBoundingClientRect();
+    const previewRect = cell.querySelector<HTMLElement>('[aria-label="Live widget preview"]')?.getBoundingClientRect();
+    const closeRect = cell.querySelector<HTMLElement>('button[aria-label="Close widget editor"]')?.getBoundingClientRect();
+    return {
+      paneLeft: Math.round(paneRect.left),
+      paneRight: Math.round(paneRect.right),
+      editorLeft: editorRect ? Math.round(editorRect.left) : null,
+      editorRight: editorRect ? Math.round(editorRect.right) : null,
+      gridLeft: gridRect ? Math.round(gridRect.left) : null,
+      gridRight: gridRect ? Math.round(gridRect.right) : null,
+      previewLeft: previewRect ? Math.round(previewRect.left) : null,
+      previewRight: previewRect ? Math.round(previewRect.right) : null,
+      previewWidth: previewRect ? Math.round(previewRect.width) : null,
+      closeLeft: closeRect ? Math.round(closeRect.left) : null,
+      closeRight: closeRect ? Math.round(closeRect.right) : null,
+    };
+  });
+
+  expect(paneMetrics.editorLeft, 'widget editor should render inside its pane').not.toBeNull();
+  expect(paneMetrics.editorRight, 'widget editor should not spill past its pane').toBeLessThanOrEqual(paneMetrics.paneRight + 1);
+  expect(paneMetrics.gridLeft, 'widget grid should render inside its pane').not.toBeNull();
+  expect(paneMetrics.gridRight, 'widget grid should not spill past its pane').toBeLessThanOrEqual(paneMetrics.paneRight + 1);
+  expect(paneMetrics.previewLeft, 'live preview should render inside its pane').not.toBeNull();
+  expect(paneMetrics.previewRight, 'live preview should not be clipped by pane split').toBeLessThanOrEqual(paneMetrics.paneRight + 1);
+  expect(paneMetrics.previewWidth, 'live preview should keep usable width').toBeGreaterThan(280);
+  expect(paneMetrics.closeLeft, 'widget close button should render inside its pane').not.toBeNull();
+  expect(paneMetrics.closeLeft!, 'widget close button should not overflow left').toBeGreaterThanOrEqual(paneMetrics.paneLeft);
+  expect(paneMetrics.closeRight!, 'widget close button should not overflow right').toBeLessThanOrEqual(paneMetrics.paneRight);
+
+  await widgetEditor.getByRole('button', { name: 'Close widget editor' }).click();
+  await expect(page.getByRole('region', { name: 'Widget editor' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/widget-editor-split-regression.png', fullPage: true });
+});
+
+test('dashboard navigation renders the dashboard pane separately from widget editor previews', async ({ page }) => {
+  test.setTimeout(90_000);
+  const assertNoRuntimeErrors = captureRuntimeErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByLabel('Workspace tree')).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'Session summary', exact: true }).click({ force: true });
+  await expect(page.getByRole('region', { name: 'Widget editor' })).toBeVisible();
+  const widgetEditor = page.getByRole('region', { name: 'Widget editor' });
+  await expect(widgetEditor.getByLabel('Live widget preview')).toBeVisible();
+  await expect(widgetEditor.getByLabel('Infinite session canvas')).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Dashboard', exact: true }).click({ force: true });
+  const dashboard = page.getByRole('region', { name: 'Harness dashboard' });
+  await expect(dashboard).toBeVisible();
+  await expect(dashboard.getByLabel('Infinite session canvas')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Widget editor' })).toHaveCount(0);
+  await expect(dashboard.locator('.render-pane-titlebar')).toHaveCount(1);
+  await expect(dashboard.getByRole('button', { name: 'Close dashboard' })).toBeVisible();
+
+  await dashboard.getByRole('button', { name: 'Close dashboard' }).click();
+  await expect(page.getByRole('region', { name: 'Harness dashboard' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'No panels open' })).toBeVisible();
+
+  assertNoRuntimeErrors();
+  await page.screenshot({ path: 'docs/screenshots/dashboard-pane-navigation-regression.png', fullPage: true });
+});
+
 test('title bar controls remain clickable while split panels are draggable', async ({ page }) => {
   const assertNoRuntimeErrors = captureRuntimeErrors(page);
   const fileEditorPanel = page.locator('section[aria-label="File editor"]');
@@ -1964,18 +2056,17 @@ test('title bar controls remain clickable while split panels are draggable', asy
 
   await page.getByRole('button', { name: 'Hugging Face' }).first().click();
   await expect(page.getByRole('region', { name: 'Page overlay' })).toBeVisible();
-  await page.getByRole('button', { name: 'Session 1', exact: true }).click({ force: true });
-  await expect(page.locator('.panel-drag-cell')).toHaveCount(3);
-
-  await page.getByRole('tab', { name: 'Terminal mode' }).click();
-  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+  await expect(page.locator('.panel-drag-cell')).toHaveCount(2);
+  await expect(page.locator('.panel-drag-cell .render-pane-titlebar')).toHaveCount(2);
+  await expect(page.locator('.panel-drag-cell .render-pane-titlebar .panel-close-button')).toHaveCount(2);
 
   await page.getByRole('button', { name: 'Close page overlay' }).click();
   await expect(page.getByRole('region', { name: 'Page overlay' })).toHaveCount(0);
+  await expect(fileEditorPanel).toBeVisible();
 
   await page.getByRole('button', { name: 'Close file editor' }).click();
   await expect(fileEditorPanel).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Terminal' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible();
 
   assertNoRuntimeErrors();
 });
