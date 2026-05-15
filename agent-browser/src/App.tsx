@@ -729,6 +729,7 @@ type SessionMcpController = {
 const EMPTY_AGENT_ARTIFACTS: AgentArtifact[] = [];
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
+const NOOP_CLOSE_HANDLER = () => {};
 type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
 const pendingSecretRequestResolvers = new Map<string, (result: SecretRequestCreatedResult) => void>();
 
@@ -20935,7 +20936,7 @@ function AgentBrowserApp() {
                   onCreateDashboardWidget={createDashboardWidgetFromCanvas}
                   onOpenWidgetEditor={(widgetId) => openDashboardWidgetEditor(widgetId)}
                   onPatchElement={patchActiveHarnessElement}
-                  onClose={() => {}}
+                  onClose={NOOP_CLOSE_HANDLER}
                   dragHandleProps={dragHandleProps}
                 />
               );

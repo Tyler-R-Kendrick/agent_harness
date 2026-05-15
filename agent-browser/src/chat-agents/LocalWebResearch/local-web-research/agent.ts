@@ -20,7 +20,7 @@ const DEFAULTS = {
   maxSearchResults: 10,
   maxPagesToExtract: 5,
   maxEvidenceChunks: 8,
-  maxPointerBudget: 32,
+  maxPointerBudget: 8,
   searchTimeoutMs: 15_000,
   extractionTimeoutMs: 15_000,
   defaultModel: 'llama3.1:8b',
