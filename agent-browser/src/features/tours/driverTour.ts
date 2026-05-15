@@ -1,4 +1,3 @@
-import { driver } from 'driver.js';
 export type TourPopoverSide = 'top' | 'right' | 'bottom' | 'left';
 export type TourPopoverAlign = 'start' | 'center' | 'end';
 
