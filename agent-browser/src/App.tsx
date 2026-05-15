@@ -143,7 +143,6 @@ import {
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
   recommendBenchmarkRoute,
-  areStagedRoutingChecksPassing,
   splitBenchmarkModelRef,
   type BenchmarkEvidenceDiscoveryState,
   type BenchmarkModelRef,
