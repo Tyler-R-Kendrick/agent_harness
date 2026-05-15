@@ -12148,8 +12148,42 @@ function WorkspaceHistoryGraphRow({
             <span>Inspect branch history ({detailLabel})</span>
           </button>
         ) : null}
+        {expanded ? <WorkspaceHistoryExpandedDetails row={row} /> : null}
       </div>
     </li>
+  );
+}
+
+function WorkspaceHistoryExpandedDetails({ row }: { row: WorkspaceHistoryRow }) {
+  if (row.children?.length) {
+    return (
+      <ol className="workspace-history-branch-details" aria-label={`Expanded history details for ${row.title}`}>
+        {row.children.map((child) => (
+          <li key={child.id} className="workspace-history-branch-detail-node">
+            <span className="workspace-history-detail-dot" aria-hidden="true" />
+            <span className="workspace-history-branch-detail-copy">
+              <strong>{child.title}</strong>
+              <span>{child.summary}</span>
+              {child.detailRows.map((detail) => (
+                <code key={detail.id}>{detail.label}</code>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  if (!row.detailRows.length) return null;
+  return (
+    <ol className="workspace-history-branch-details" aria-label={`Expanded history details for ${row.title}`}>
+      {row.detailRows.map((detail) => (
+        <li key={detail.id}>
+          <span className="workspace-history-detail-dot" aria-hidden="true" />
+          <code>{detail.label}</code>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -12833,7 +12867,6 @@ function InstalledExtensionCard({
   installedExtensionIds,
   enabled,
   onOpenExtensionDetail,
-  onInstallExtension,
   onUninstallExtension,
   onSetExtensionEnabled,
   onConfigureExtension,
@@ -12844,44 +12877,98 @@ function InstalledExtensionCard({
   enabled: boolean;
 } & ExtensionActionHandlers & ExtensionNavigationHandlers) {
   const dependentNames = getDefaultExtensionDependentNames(extension, installedExtensionIds, repoExtensions);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const name = extension.manifest.name;
+  const menuId = `installed-extension-actions-${extension.manifest.id.replace(/[^a-z0-9_-]/gi, '-')}`;
+  const closeActions = () => setActionsOpen(false);
 
   return (
-    <article className={`extension-row installed-extension-row ${enabled ? '' : 'extension-row--disabled'}`}>
+    <article
+      className={`extension-row installed-extension-row ${enabled ? '' : 'extension-row--disabled'}`}
+      onBlur={(event) => {
+        const nextFocus = event.relatedTarget;
+        if (!(nextFocus instanceof Node) || !event.currentTarget.contains(nextFocus)) {
+          closeActions();
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') closeActions();
+      }}
+    >
       <button
         type="button"
         className="extension-row-main"
-        aria-label={`Open details for ${extension.manifest.name}`}
+        aria-label={`Open details for ${name}`}
         onClick={() => onOpenExtensionDetail(extension.manifest.id)}
       >
         <span className="extension-row-glyph">
           <Icon name={getDefaultExtensionIcon(extension)} color="currentColor" />
         </span>
         <div className="extension-row-body">
-          <strong>{extension.manifest.name}</strong>
+          <strong>{name}</strong>
           <span className="extension-row-source">{getDefaultExtensionSourceLabel(extension)}</span>
           <p className="extension-row-desc">{extension.manifest.description}</p>
           <div className="extension-row-meta">
-            <span>{enabled ? 'OpenFeature enabled' : 'OpenFeature disabled'}</span>
-            <span>{getDefaultExtensionOpenFeatureFlagKey(extension.manifest.id)}</span>
+            <span>{enabled ? 'Enabled' : 'Disabled'}</span>
           </div>
           {dependentNames.length > 0 ? (
-            <div className="extension-dependency-lines" aria-label={`${extension.manifest.name} dependents`}>
+            <div className="extension-dependency-lines" aria-label={`${name} dependents`}>
               {dependentNames.map((name) => <span key={name}>Required by {name}</span>)}
             </div>
           ) : null}
         </div>
       </button>
-      <div className="marketplace-actions">
-        <ExtensionActionButtons
-          extension={extension}
-          isInstalled
-          isEnabled={enabled}
-          availability={getDefaultExtensionAvailability(extension)}
-          onInstallExtension={onInstallExtension}
-          onUninstallExtension={onUninstallExtension}
-          onSetExtensionEnabled={onSetExtensionEnabled}
-          onConfigureExtension={onConfigureExtension}
-        />
+      <div className="installed-extension-actions">
+        <button
+          type="button"
+          className="sidebar-icon-button installed-extension-manage-button"
+          aria-label={`Manage ${name}`}
+          aria-haspopup="menu"
+          aria-expanded={actionsOpen}
+          aria-controls={actionsOpen ? menuId : undefined}
+          title={`Manage ${name}`}
+          onClick={() => setActionsOpen((open) => !open)}
+        >
+          <Icon name="settings" size={14} />
+        </button>
+        {actionsOpen ? (
+          <div id={menuId} className="installed-extension-menu" role="menu" aria-label={`Manage ${name}`}>
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={`Configure ${name}`}
+              onClick={() => {
+                closeActions();
+                onConfigureExtension(extension);
+              }}
+            >
+              Configure
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              aria-label={enabled ? `Disable ${name}` : `Enable ${name}`}
+              onClick={() => {
+                closeActions();
+                onSetExtensionEnabled(extension.manifest.id, !enabled);
+              }}
+            >
+              {enabled ? 'Disable' : 'Enable'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="installed-extension-menu-danger"
+              aria-label={`Uninstall ${name}`}
+              onClick={() => {
+                closeActions();
+                onUninstallExtension(extension.manifest.id);
+              }}
+            >
+              Uninstall
+            </button>
+          </div>
+        ) : null}
       </div>
     </article>
   );

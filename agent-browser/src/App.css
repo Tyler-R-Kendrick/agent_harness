@@ -5873,12 +5873,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   gap: 6px;
   min-width: 0;
 }
+.workspace-history-branch-detail-node {
+  align-items: flex-start;
+}
 .workspace-history-detail-dot {
   background: #93c5fd;
   border-radius: 50%;
   flex: 0 0 auto;
   height: 5px;
   width: 5px;
+}
+.workspace-history-branch-detail-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.workspace-history-branch-detail-copy strong {
+  color: #dbeafe;
+  font-size: 10.5px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.workspace-history-branch-detail-copy span {
+  color: var(--text-soft);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .workspace-history-branch-details code {
   color: #cbd5e1;
@@ -6576,6 +6596,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .installed-extension-card {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+.extensions-panel .extensions-list {
+  overflow: visible;
 }
 .extensions-list,
 .workspace-plugins-section {
@@ -9427,6 +9450,76 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .extensions-panel .sidebar-section-body {
   overflow: visible;
+}
+.installed-extension-row {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+.installed-extension-row .extension-row-main {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 9px;
+  padding: 9px 0 9px 10px;
+}
+.installed-extension-row .extension-row-glyph {
+  width: 34px;
+  height: 34px;
+}
+.installed-extension-actions {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 0;
+  padding: 10px 8px 0 0;
+}
+.installed-extension-manage-button {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-color: transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #a8b3c3;
+}
+.installed-extension-row:hover .installed-extension-manage-button,
+.installed-extension-manage-button:focus-visible,
+.installed-extension-manage-button[aria-expanded="true"] {
+  border-color: rgba(125, 211, 252, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+  color: #dbeafe;
+}
+.installed-extension-menu {
+  position: absolute;
+  top: 38px;
+  right: 8px;
+  z-index: 30;
+  display: grid;
+  min-width: 152px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 4px;
+  background: #1f2329;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+}
+.installed-extension-menu button {
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #d7dde5;
+  font-size: 12px;
+  text-align: left;
+}
+.installed-extension-menu button:hover,
+.installed-extension-menu button:focus-visible {
+  outline: 0;
+  background: rgba(14, 99, 156, 0.34);
+  color: #f8fafc;
+}
+.installed-extension-menu-danger {
+  color: #fecaca !important;
 }
 .design-studio-projects-panel .sidebar-section {
   border: 0;

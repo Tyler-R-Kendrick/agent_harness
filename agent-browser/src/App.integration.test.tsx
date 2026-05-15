@@ -486,6 +486,19 @@ describe('App', () => {
     expect(within(installedSidebar).getByText('Markdown preview')).toBeInTheDocument();
     expect(within(installedSidebar).queryByText('Workspace plugin')).not.toBeInTheDocument();
     expect(within(installedSidebar).queryByText('Local Model Connector')).not.toBeInTheDocument();
+    const markdownPreviewRow = within(installedSidebar).getByText('Markdown preview').closest('.installed-extension-row');
+    expect(markdownPreviewRow).toBeInstanceOf(HTMLElement);
+    expect(markdownPreviewRow).not.toHaveTextContent('agent-harness.extensions.');
+    expect(within(markdownPreviewRow as HTMLElement).getByRole('button', { name: 'Manage Markdown preview' })).toBeInTheDocument();
+    expect(within(markdownPreviewRow as HTMLElement).queryByRole('button', { name: 'Configure Markdown preview' })).not.toBeInTheDocument();
+    expect(within(markdownPreviewRow as HTMLElement).queryByRole('button', { name: 'Disable Markdown preview' })).not.toBeInTheDocument();
+    expect(within(markdownPreviewRow as HTMLElement).queryByRole('button', { name: 'Uninstall Markdown preview' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(markdownPreviewRow as HTMLElement).getByRole('button', { name: 'Manage Markdown preview' }));
+    const manageMenu = within(markdownPreviewRow as HTMLElement).getByRole('menu', { name: 'Manage Markdown preview' });
+    expect(within(manageMenu).getByRole('menuitem', { name: 'Configure Markdown preview' })).toBeInTheDocument();
+    expect(within(manageMenu).getByRole('menuitem', { name: 'Disable Markdown preview' })).toBeInTheDocument();
+    expect(within(manageMenu).getByRole('menuitem', { name: 'Uninstall Markdown preview' })).toBeInTheDocument();
 
     const marketplace = screen.getByRole('region', { name: 'Extension marketplace' });
     expect(within(marketplace).getByRole('heading', { name: 'Marketplace' })).toBeInTheDocument();

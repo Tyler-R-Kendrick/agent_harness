@@ -12,5 +12,7 @@ This directory stores paper-by-paper research packets.
 
 ## Current papers
 
+- `act-wisely-2604.08545`
 - `continual-harness-2605.09998`
 - `lambda-hermes-agent-reasoning-traces-2026-05`
+- `proxy-pointer-rag-tds-2026`
