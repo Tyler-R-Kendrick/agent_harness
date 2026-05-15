@@ -31,6 +31,7 @@ describe('default extensions', () => {
     expect(grouped.ide).toEqual(expect.arrayContaining([
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-preview' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.markdown-mermaid' }) }),
+      expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.hyperframes' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.design-studio' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.workflow-canvas' }) }),
       expect.objectContaining({ manifest: expect.objectContaining({ id: 'agent-harness.ext.artifacts-worktree' }) }),
@@ -75,6 +76,7 @@ describe('default extensions', () => {
       'agent-harness.ext.design-md-context',
       'agent-harness.ext.markdown-preview',
       'agent-harness.ext.markdown-mermaid',
+      'agent-harness.ext.hyperframes',
       'agent-harness.ext.design-studio',
       'agent-harness.ext.workflow-canvas',
       'agent-harness.ext.artifacts-context',
@@ -106,6 +108,7 @@ describe('default extensions', () => {
       'DESIGN.md agent guidance',
       'Markdown preview',
       'Markdown Mermaid diagrams',
+      'HyperFrames IDE',
       'Design Studio',
       'Workflow canvas orchestration',
       'Artifact context',

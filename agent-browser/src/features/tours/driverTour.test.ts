@@ -205,7 +205,7 @@ describe('driver tour planner', () => {
       targets: DEFAULT_TOUR_TARGETS,
     });
 
-    const result = startDriverTour(plan, { root: document });
+    const result = startDriverTour(plan, { root: document, driverFactory: driverFactoryMock });
 
     expect(result.started).toBe(true);
     expect(result.stepCount).toBeGreaterThanOrEqual(3);
@@ -231,7 +231,7 @@ describe('driver tour planner', () => {
       }],
     });
 
-    const result = startDriverTour(plan);
+    const result = startDriverTour(plan, { driverFactory: driverFactoryMock });
 
     expect(result).toEqual({
       started: true,
@@ -246,7 +246,7 @@ describe('driver tour planner', () => {
       targets: DEFAULT_TOUR_TARGETS,
     });
 
-    const result = startDriverTour(plan, { root: document });
+    const result = startDriverTour(plan, { root: document, driverFactory: driverFactoryMock });
 
     expect(result.started).toBe(true);
     expect(result.stepCount).toBe(1);

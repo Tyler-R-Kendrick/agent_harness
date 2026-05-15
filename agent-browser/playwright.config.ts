@@ -7,6 +7,18 @@ const webServerCommand = process.env.AGENT_BROWSER_PLAYWRIGHT_PORT
   ? `node ../scripts/run-package-bin.mjs vite --host ${host} --port ${port} --strictPort`
   : 'npm run dev:cucumber';
 
+const experimentalGpuArgs =
+  process.env.AGENT_BROWSER_PLAYWRIGHT_GPU === '1'
+    ? [
+        '--enable-gpu',
+        '--ignore-gpu-blocklist',
+        '--enable-unsafe-webgpu',
+        '--enable-features=Vulkan,WebGPU',
+        '--use-vulkan=swiftshader',
+        '--use-angle=vulkan',
+      ]
+    : [];
+
 export default defineConfig({
   testDir: './tests',
   use: {
@@ -14,14 +26,7 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
     launchOptions: {
-      args: [
-        '--enable-gpu',
-        '--ignore-gpu-blocklist',
-        '--enable-unsafe-webgpu',
-        '--enable-features=Vulkan,WebGPU',
-        '--use-vulkan=swiftshader',
-        '--use-angle=vulkan',
-      ],
+      args: experimentalGpuArgs,
     },
   },
   webServer: {
