@@ -82,6 +82,20 @@ export interface RoutingStrategy {
   ): BenchmarkRouteRecommendation | null;
 }
 
+export type BenchmarkComplexityDecision = {
+  score: number;
+  confidence: number;
+  escalationKeyword: string | null;
+  isSimple: boolean;
+  reason: string;
+};
+
+export type CompositeBenchmarkRouteDecision = {
+  taskClass: BenchmarkTaskClassId;
+  benchmarkReason: string;
+  complexityDecision: BenchmarkComplexityDecision;
+  selectedModel: BenchmarkRoutingCandidate;
+};
 
 export type BenchmarkEvidenceMetric = {
   taskClass: BenchmarkTaskClassId;
@@ -672,6 +686,85 @@ export function createDefaultRoutingStrategy(): RoutingStrategy {
       }
       return decision;
     },
+  };
+}
+
+function evaluatePromptComplexity(prompt: string, settings: BenchmarkRoutingSettings): BenchmarkComplexityDecision {
+  const normalized = prompt.toLowerCase();
+  const escalationKeyword = settings.escalationKeywords.find((keyword) => normalized.includes(keyword.toLowerCase())) ?? null;
+  const sentenceCount = Math.max(1, prompt.split(/[.!?]\s+/).filter((entry) => entry.trim().length > 0).length);
+  const wordCount = prompt.split(/\s+/).filter((entry) => entry.trim().length > 0).length;
+  const asksForCodeOrVerification = /\b(test|tests|verify|verification|lint|build|coverage|refactor|debug|fix|audit)\b/.test(normalized);
+  const asksForResearch = /\b(research|sources|compare|investigate|analyze)\b/.test(normalized);
+  const structuralScore = Math.min(1, (wordCount / 120) + (sentenceCount / 12));
+  const taskSignal = (asksForCodeOrVerification ? 0.2 : 0) + (asksForResearch ? 0.15 : 0);
+  const escalationBoost = escalationKeyword ? 0.45 : 0;
+  const score = Math.min(1, Number((structuralScore + taskSignal + escalationBoost).toFixed(2)));
+  const distance = Math.abs(score - settings.complexityThreshold);
+  const confidence = Math.max(0.5, Number((Math.min(1, 0.55 + distance * 0.9)).toFixed(2)));
+  const isSimple = !escalationKeyword && score <= Math.max(0.15, settings.complexityThreshold - 0.2);
+  return {
+    score,
+    confidence,
+    escalationKeyword,
+    isSimple,
+    reason: escalationKeyword
+      ? `escalation keyword: ${escalationKeyword}`
+      : isSimple
+        ? 'low complexity signal'
+        : 'standard complexity signal',
+  };
+}
+
+export function composeBenchmarkRouteDecision({
+  provider,
+  latestUserInput,
+  toolsEnabled,
+  candidates,
+  settings,
+}: {
+  provider: AgentProvider;
+  latestUserInput: string;
+  toolsEnabled: boolean;
+  candidates: BenchmarkRoutingCandidate[];
+  settings: BenchmarkRoutingSettings;
+}): CompositeBenchmarkRouteDecision | null {
+  const taskClass = inferBenchmarkTaskClass({ provider, latestUserInput, toolsEnabled });
+  const recommendation = recommendBenchmarkRoute({ taskClass, candidates, settings });
+  if (!recommendation) return null;
+
+  const complexityDecision = evaluatePromptComplexity(latestUserInput, settings);
+  const premiumCandidate = [...candidates]
+    .sort((left, right) => objectiveScore(right, taskClass, 'quality') - objectiveScore(left, taskClass, 'quality'))[0];
+
+  if (complexityDecision.escalationKeyword && premiumCandidate) {
+    return {
+      taskClass,
+      benchmarkReason: `${recommendation.reason} pre-escalated to premium due to ${complexityDecision.reason}.`,
+      complexityDecision,
+      selectedModel: premiumCandidate,
+    };
+  }
+
+  if (complexityDecision.isSimple && complexityDecision.confidence >= settings.minConfidence && settings.objective !== 'quality') {
+    const cheaperCandidate = [...candidates]
+      .filter((candidate) => candidate.costTier <= recommendation.candidate.costTier)
+      .sort((left, right) => objectiveScore(right, taskClass, 'cost') - objectiveScore(left, taskClass, 'cost'))[0];
+    if (cheaperCandidate) {
+      return {
+        taskClass,
+        benchmarkReason: `${recommendation.reason} post-downgraded for cost on simple prompt.`,
+        complexityDecision,
+        selectedModel: cheaperCandidate,
+      };
+    }
+  }
+
+  return {
+    taskClass,
+    benchmarkReason: recommendation.reason,
+    complexityDecision,
+    selectedModel: recommendation.candidate,
   };
 }
 
