@@ -2025,6 +2025,9 @@ test('dashboard navigation renders the dashboard pane separately from widget edi
   const widgetEditor = page.getByRole('region', { name: 'Widget editor' });
   await expect(widgetEditor.getByLabel('Live widget preview')).toBeVisible();
   await expect(widgetEditor.getByLabel('Infinite session canvas')).toHaveCount(0);
+  const dashboardWhileEditing = page.getByRole('region', { name: 'Harness dashboard' });
+  await expect(dashboardWhileEditing).toBeVisible();
+  await expect(dashboardWhileEditing.getByLabel('Infinite session canvas')).toBeVisible();
 
   await page.getByRole('button', { name: 'Dashboard', exact: true }).click({ force: true });
   const dashboard = page.getByRole('region', { name: 'Harness dashboard' });
@@ -2035,8 +2038,9 @@ test('dashboard navigation renders the dashboard pane separately from widget edi
   await expect(dashboard.getByRole('button', { name: 'Close dashboard' })).toBeVisible();
 
   await dashboard.getByRole('button', { name: 'Close dashboard' }).click();
-  await expect(page.getByRole('region', { name: 'Harness dashboard' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'No panels open' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Harness dashboard' })).toBeVisible();
+  await expect(page.getByLabel('Infinite session canvas')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'No panels open' })).toHaveCount(0);
 
   assertNoRuntimeErrors();
   await page.screenshot({ path: 'docs/screenshots/dashboard-pane-navigation-regression.png', fullPage: true });
