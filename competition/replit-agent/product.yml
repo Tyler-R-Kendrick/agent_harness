@@ -1,0 +1,22 @@
+slug: replit-agent
+name: Replit Agent
+vendor: Replit
+segment: prompt-to-app-agent-workspace
+product_path: competition/replit-agent
+design_path: competition/replit-agent/design
+features_path: competition/replit-agent/features
+marketing_path: competition/replit-agent/marketing
+gossip_path: competition/replit-agent/gossip
+snapshot_date: 2026-05-15
+primary_sources:
+  - https://docs.replit.com/core-concepts/agent
+  - https://docs.replit.com/core-concepts/agent/task-system
+  - https://docs.replit.com/replitai/canvas
+  - https://docs.replit.com/billing/ai-billing
+secondary_sources:
+  - https://www.reddit.com/r/replit/comments/1r11vc9/replit_pricing_am_i_the_only_one_who_keeps/
+  - https://www.reddit.com/r/replit/comments/1ru0uhg/replit_agent_4_prompt_costs_doubled_multiagent/
+positioning: "Plain-language app builder and cloud workspace that plans, codes, previews, designs, deploys, and runs parallel background tasks."
+customer_model: "Freemium and paid Core/Pro subscriptions with effort-based Agent billing, credits, deployment usage, collaboration seats, and plan-gated background concurrency."
+competitive_threat_level: high
+notes: "Competes for builders who want an integrated app workspace rather than a local developer harness."

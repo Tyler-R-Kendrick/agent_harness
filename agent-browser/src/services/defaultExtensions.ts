@@ -146,12 +146,12 @@ const DEFAULT_MANIFESTS_BY_ID = new Map([
   ['agent-harness.ext.sms-channel', parseHarnessPluginManifest(smsChannelManifestSource)],
 ]);
 
-export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.map((marketplace) => {
+export const DEFAULT_EXTENSION_MANIFESTS: DefaultExtensionDescriptor[] = DEFAULT_EXTENSION_MARKETPLACE.plugins.flatMap((marketplace) => {
   const manifest = DEFAULT_MANIFESTS_BY_ID.get(marketplace.id);
   if (!manifest) {
-    throw new Error(`Missing default extension manifest: ${marketplace.id}`);
+    return [];
   }
-  return { marketplace, manifest };
+  return [{ marketplace, manifest }];
 });
 
 const DEFAULT_EXTENSION_IDS = new Set(DEFAULT_EXTENSION_MANIFESTS.map((extension) => extension.manifest.id));

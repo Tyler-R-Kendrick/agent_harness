@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   areStagedRoutingChecksPassing,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   buildBenchmarkRoutingCandidates,
+  createDefaultRoutingStrategy,
   discoverBenchmarkEvidence,
   inferBenchmarkTaskClass,
   isBenchmarkRoutingSettings,
@@ -73,6 +74,28 @@ describe('benchmark model routing', () => {
     expect(route?.candidate.ref).toBe('ghcp:gpt-4.1');
   });
 
+
+  it('registers the default deterministic+benchmark hybrid routing strategy', () => {
+    const strategy = createDefaultRoutingStrategy();
+    const taskClass = strategy.classify({
+      provider: 'codi',
+      latestUserInput: 'run tests and verify this patch',
+      toolsEnabled: true,
+      taskClass: 'planning',
+    });
+    const recommendation = strategy.recommend(candidates, {
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      objective: 'quality',
+    });
+    const finalized = strategy.finalize(recommendation, {
+      forceEscalation: true,
+      forceConfidenceFallback: true,
+    });
+
+    expect(taskClass).toBe('verification');
+    expect(recommendation?.taskClass).toBe('verification');
+    expect(finalized?.reason).toContain('Core safeguards enforced');
+  });
   it('infers task classes from provider and request text', () => {
     expect(inferBenchmarkTaskClass({ provider: 'planner', latestUserInput: 'break this down', toolsEnabled: false })).toBe('planning');
     expect(inferBenchmarkTaskClass({ provider: 'researcher', latestUserInput: 'find sources', toolsEnabled: false })).toBe('research');
@@ -83,8 +106,24 @@ describe('benchmark model routing', () => {
 
   it('validates persisted routing settings', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
+    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, routerMode: 'shadow', minConfidence: 0.5, complexityThreshold: 0.6, escalationKeywords: [], sessionPinning: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
+    expect(isBenchmarkRoutingSettings({
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      complexityRouting: {
+        enabled: true,
+        mode: 'active',
+        trafficSplitPercent: 42,
+        pinning: { workspaceAfterHardTask: true, sessionAfterHardTask: false },
+      },
+    })).toBe(true);
+    expect(isBenchmarkRoutingSettings({
+      enabled: true,
+      objective: 'cost',
+      pins: {},
+      complexityRouting: { enabled: true, mode: 'active', trafficSplitPercent: 120 },
+    })).toBe(false);
   });
 
   it('requires staged rollout eval cases before enforce mode can activate', () => {
