@@ -82,6 +82,7 @@ function StatefulDashboard({ onPatchElement }: { onPatchElement: (patch: Harness
       files={[]}
       knowledge={knowledge}
       onCreateDashboardWidget={vi.fn()}
+      onClose={vi.fn()}
       onPatchElement={(patch) => {
         onPatchElement(patch);
         setSpec((current) => applyHarnessPatch(current, patch));
@@ -105,6 +106,7 @@ describe('HarnessDashboardPanel', () => {
         browserPages={[{ id: 'b1', title: 'Docs', url: 'https://example.com' }]}
         files={[{ path: 'AGENTS.md', kind: 'agents' }]}
         knowledge={knowledge}
+        onClose={vi.fn()}
         onOpenWidgetEditor={onOpenWidgetEditor}
       />,
     );
@@ -124,7 +126,9 @@ describe('HarnessDashboardPanel', () => {
     expect(onOpenWidgetEditor).toHaveBeenCalledWith('session-summary-widget');
   });
 
-  it('does not render a separate titlebar or button strip above the infinite canvas', () => {
+  it('renders shared pane chrome above the infinite canvas without dashboard action clutter', () => {
+    const onClose = vi.fn();
+
     render(
       <HarnessDashboardPanel
         spec={createSpecWithWidgetLayout()}
@@ -133,6 +137,7 @@ describe('HarnessDashboardPanel', () => {
         browserPages={[]}
         files={[]}
         knowledge={knowledge}
+        onClose={onClose}
         onPatchElement={vi.fn()}
       />,
     );
@@ -140,8 +145,11 @@ describe('HarnessDashboardPanel', () => {
     const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
     const canvas = screen.getByLabelText('Infinite session canvas');
 
-    expect(dashboard.querySelector('.harness-dashboard-titlebar')).toBeNull();
-    expect(within(canvas).getByRole('heading', { name: 'Research harness' })).toBeInTheDocument();
+    expect(dashboard.querySelector('.render-pane-titlebar')).not.toBeNull();
+    expect(within(dashboard).getByRole('heading', { name: 'Research harness' })).toBeInTheDocument();
+    fireEvent.click(within(dashboard).getByRole('button', { name: 'Close dashboard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(within(canvas).queryByRole('heading', { name: 'Research harness' })).not.toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'New session widget' })).not.toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument();
   });
@@ -157,6 +165,7 @@ describe('HarnessDashboardPanel', () => {
         browserPages={[]}
         files={[]}
         knowledge={knowledge}
+        onClose={vi.fn()}
         onCreateDashboardWidget={onCreateDashboardWidget}
       />,
     );
@@ -191,6 +200,7 @@ describe('HarnessDashboardPanel', () => {
         browserPages={[]}
         files={[]}
         knowledge={knowledge}
+        onClose={vi.fn()}
         onPatchElement={onPatchElement}
       />,
     );
@@ -258,6 +268,7 @@ describe('HarnessDashboardPanel', () => {
         browserPages={[]}
         files={[]}
         knowledge={knowledge}
+        onClose={vi.fn()}
       />,
     );
 
