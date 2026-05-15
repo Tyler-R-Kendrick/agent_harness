@@ -11,6 +11,39 @@ export type RuntimePluginInterceptionMode = 'observe' | 'rewrite' | 'block';
 export type RuntimePluginSource = 'repo' | 'user' | 'workspace';
 export type RuntimePluginProviderKind = 'model' | 'auth' | 'tooling';
 export type RuntimePluginToolDecision = 'allow' | 'rewrite' | 'block';
+export type RuntimeRoutingObjective = 'balanced' | 'quality' | 'cost' | 'latency';
+
+export interface RuntimeRoutingSignalContribution {
+  pluginId: string;
+  feature: string;
+  value: number;
+}
+
+export interface RuntimeRoutingThresholdAdjustment {
+  pluginId: string;
+  minConfidenceDelta?: number;
+  complexityThresholdDelta?: number;
+  objective?: RuntimeRoutingObjective;
+}
+
+export interface RuntimeRoutingScoringModule {
+  pluginId: string;
+  id: string;
+  score(input: { baseScore: number; confidence: number; complexity: number }): number;
+}
+
+export interface RuntimeRoutingSafetyInvariants {
+  enforceEscalation: boolean;
+  enforceConfidenceFallback: boolean;
+}
+
+export interface RuntimeRoutingExtensionHooks {
+  signals: RuntimeRoutingSignalContribution[];
+  thresholdAdjustments: RuntimeRoutingThresholdAdjustment[];
+  scoringModules: RuntimeRoutingScoringModule[];
+  safetyInvariants: RuntimeRoutingSafetyInvariants;
+}
+
 export type RuntimePluginRoutingDecisionReason =
   | 'security-escalation'
   | 'compliance-escalation'
@@ -92,6 +125,9 @@ export interface RuntimePluginManifest {
   interceptsToolCalls: boolean;
   shellEnvironment: Record<string, string>;
   compactionHint?: string;
+  routingSignals?: Omit<RuntimeRoutingSignalContribution, 'pluginId'>[];
+  routingThresholdAdjustments?: Omit<RuntimeRoutingThresholdAdjustment, 'pluginId'>[];
+  routingScoringModules?: Omit<RuntimeRoutingScoringModule, 'pluginId'>[];
 }
 
 export interface RuntimePluginRuntime {
@@ -108,6 +144,7 @@ export interface RuntimePluginRuntime {
   shellEnvironment: Record<string, string>;
   compactionHints: string[];
   policySummary: string[];
+  routingExtensions: RuntimeRoutingExtensionHooks;
 }
 
 export interface RuntimePluginToolCall {
@@ -251,6 +288,19 @@ export function isRuntimePluginManifest(value: unknown): value is RuntimePluginM
     && typeof value.interceptsToolCalls === 'boolean'
     && isStringRecord(value.shellEnvironment)
     && (value.compactionHint === undefined || typeof value.compactionHint === 'string')
+    && (value.routingSignals === undefined || (Array.isArray(value.routingSignals)
+      && value.routingSignals.every((signal) => isRecord(signal)
+        && typeof signal.feature === 'string'
+        && typeof signal.value === 'number')))
+    && (value.routingThresholdAdjustments === undefined || (Array.isArray(value.routingThresholdAdjustments)
+      && value.routingThresholdAdjustments.every((threshold) => isRecord(threshold)
+        && (threshold.minConfidenceDelta === undefined || typeof threshold.minConfidenceDelta === 'number')
+        && (threshold.complexityThresholdDelta === undefined || typeof threshold.complexityThresholdDelta === 'number')
+        && (threshold.objective === undefined || threshold.objective === 'balanced' || threshold.objective === 'quality' || threshold.objective === 'cost' || threshold.objective === 'latency'))))
+    && (value.routingScoringModules === undefined || (Array.isArray(value.routingScoringModules)
+      && value.routingScoringModules.every((module) => isRecord(module)
+        && typeof module.id === 'string'
+        && typeof module.score === 'function')))
   );
 }
 
@@ -289,6 +339,7 @@ export function buildRuntimePluginRuntime({
     const events = plugin.eventSubscriptions.length > 0 ? plugin.eventSubscriptions.join(', ') : 'no events';
     return `${plugin.name}: ${plugin.interceptsToolCalls ? 'intercepts tool calls' : 'observes'}; events ${events}.`;
   });
+  const routingExtensions = collectRuntimeRoutingExtensions(activePlugins);
 
   return {
     enabled: normalizedSettings.enabled,
@@ -304,6 +355,35 @@ export function buildRuntimePluginRuntime({
     shellEnvironment,
     compactionHints,
     policySummary,
+    routingExtensions,
+  };
+}
+
+export function collectRuntimeRoutingExtensions(activePlugins: RuntimePluginManifest[]): RuntimeRoutingExtensionHooks {
+  const signals: RuntimeRoutingSignalContribution[] = [];
+  const thresholdAdjustments: RuntimeRoutingThresholdAdjustment[] = [];
+  const scoringModules: RuntimeRoutingScoringModule[] = [];
+
+  for (const plugin of activePlugins) {
+    for (const signal of plugin.routingSignals ?? []) {
+      signals.push({ ...signal, pluginId: plugin.id });
+    }
+    for (const threshold of plugin.routingThresholdAdjustments ?? []) {
+      thresholdAdjustments.push({ ...threshold, pluginId: plugin.id });
+    }
+    for (const scoring of plugin.routingScoringModules ?? []) {
+      scoringModules.push({ ...scoring, pluginId: plugin.id });
+    }
+  }
+
+  return {
+    signals,
+    thresholdAdjustments,
+    scoringModules,
+    safetyInvariants: {
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    },
   };
 }
 
@@ -443,6 +523,9 @@ function cloneManifest(manifest: RuntimePluginManifest): RuntimePluginManifest {
     providers: manifest.providers.map((provider) => ({ ...provider })),
     eventSubscriptions: [...manifest.eventSubscriptions],
     shellEnvironment: { ...manifest.shellEnvironment },
+    routingSignals: manifest.routingSignals?.map((signal) => ({ ...signal })),
+    routingThresholdAdjustments: manifest.routingThresholdAdjustments?.map((threshold) => ({ ...threshold })),
+    routingScoringModules: manifest.routingScoringModules?.map((module) => ({ ...module })),
   };
 }
 
