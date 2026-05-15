@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   areStagedRoutingChecksPassing,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
@@ -85,7 +85,7 @@ describe('benchmark model routing', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, routerMode: 'shadow', minConfidence: 0.5, complexityThreshold: 0.6, escalationKeywords: [], sessionPinning: true, objective: 'fast', pins: {} })).toBe(false);
-    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 }, complexityRouting: { enabled: false, mode: 'shadow' } })).toBe(false);
+    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
     expect(isBenchmarkRoutingSettings({
       ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
       complexityRouting: {

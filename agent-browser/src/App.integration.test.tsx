@@ -5770,6 +5770,22 @@ styles:
     expect(screen.queryByRole('region', { name: 'No panels open' })).not.toBeInTheDocument();
   });
 
+  it('keeps the dashboard canvas active while a widget editor preview is open', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Session summary$/ }));
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    expect(within(dashboard).getByLabelText('Infinite session canvas')).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Widget editor' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'No panels open' })).not.toBeInTheDocument();
+  });
+
   it('does not expose the dashboard as a closeable render pane and reveals it after closing all windows', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -5806,6 +5822,21 @@ styles:
     expect(screen.queryByRole('region', { name: 'Page overlay' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Chat panel')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'No panels open' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the dashboard active instead of showing an empty placeholder when its titlebar close is pressed alone', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close dashboard' }));
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    expect(within(dashboard).getByLabelText('Infinite session canvas')).toBeInTheDocument();
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'No panels open' })).not.toBeInTheDocument();
   });
 

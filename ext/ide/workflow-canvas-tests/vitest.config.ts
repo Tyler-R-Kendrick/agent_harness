@@ -22,7 +22,7 @@ export default defineConfig({
     maxWorkers: 1,
     testTimeout: 60_000,
     coverage: {
-      provider: 'v8',
+      provider: 'istanbul',
       reporter: ['text', 'lcov'],
       allowExternal: true,
       include: [`${workflowCanvasSource}/**/*.ts`],
