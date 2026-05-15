@@ -5,6 +5,7 @@ import {
   buildRuntimePluginRuntime,
   evaluateRuntimePluginToolCall,
   isRuntimePluginSettings,
+  mergeRoutingPolicyExtensionDecision,
   type RuntimePluginManifest,
 } from './runtimePlugins';
 
@@ -38,6 +39,13 @@ describe('runtimePlugins', () => {
     expect(runtime.eventSubscriptions['tool:before-call']).toEqual(['repo-policy']);
     expect(runtime.shellEnvironment.AGENT_POLICY).toBe('strict');
     expect(runtime.compactionHints).toEqual(['Keep runtime plugin policy audit ids in compacted summaries.']);
+    expect(runtime.routingExtensions.signals).toEqual([]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([]);
+    expect(runtime.routingExtensions.scoringModules).toEqual([]);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
   });
 
   it('omits active registrations when the runtime is disabled', () => {
@@ -132,5 +140,72 @@ describe('runtimePlugins', () => {
     expect(context).toContain('Repo policy');
     expect(context).toContain('tool:before-call');
     expect(context).toContain('AGENT_POLICY');
+  });
+
+  it('collects routing extensions and enforces core safety invariants', () => {
+    const runtime = buildRuntimePluginRuntime({
+      settings: {
+        ...DEFAULT_RUNTIME_PLUGIN_SETTINGS,
+        enabledPluginIds: ['repo-policy'],
+      },
+      manifests: [{
+        ...repoPolicyPlugin,
+        routingSignals: [{ feature: 'task-risk', value: 0.8 }],
+        routingThresholdAdjustments: [{ minConfidenceDelta: 0.1, objective: 'quality' }],
+        routingScoringModules: [{ id: 'quality-boost', score: ({ baseScore }) => baseScore + 3 }],
+      }],
+    });
+
+    expect(runtime.routingExtensions.signals).toEqual([
+      { pluginId: 'repo-policy', feature: 'task-risk', value: 0.8 },
+    ]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([
+      { pluginId: 'repo-policy', minConfidenceDelta: 0.1, objective: 'quality' },
+    ]);
+    expect(runtime.routingExtensions.scoringModules).toHaveLength(1);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
+  });
+
+  it('merges extension reasons but ignores overrides when disabled', () => {
+    const runtime = buildRuntimePluginRuntime({});
+    const merged = mergeRoutingPolicyExtensionDecision({
+      input: {
+        runtime,
+        toolCall: { id: 'call-3', toolId: 'shell.exec', args: { command: 'echo ok' } },
+        baseDecision: { decision: 'allow', reasons: ['plugin-observation'] },
+        allowDecisionOverride: false,
+      },
+      partialDecision: {
+        decision: 'block',
+        reasons: ['plugin-override'],
+        rewrittenArgs: { command: 'echo blocked' },
+      },
+    });
+
+    expect(merged.decision).toBe('allow');
+    expect(merged.reasons).toEqual(['plugin-observation', 'plugin-override']);
+    expect(merged.rewrittenArgs).toBeUndefined();
+  });
+
+  it('prevents security escalation from being downgraded by extension overrides', () => {
+    const runtime = buildRuntimePluginRuntime({});
+    const merged = mergeRoutingPolicyExtensionDecision({
+      input: {
+        runtime,
+        toolCall: { id: 'call-4', toolId: 'shell.exec', args: { command: 'echo secure' } },
+        baseDecision: { decision: 'block', reasons: ['security-escalation'] },
+        allowDecisionOverride: true,
+      },
+      partialDecision: {
+        decision: 'allow',
+        reasons: ['plugin-override'],
+      },
+    });
+
+    expect(merged.decision).toBe('block');
+    expect(merged.reasons).toEqual(['security-escalation', 'plugin-override']);
   });
 });
