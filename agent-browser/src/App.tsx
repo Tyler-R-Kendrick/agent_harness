@@ -139,7 +139,6 @@ import {
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
   inferBenchmarkTaskClass,
-  areStagedRoutingChecksPassing,
   isBenchmarkEvidenceDiscoveryState,
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
