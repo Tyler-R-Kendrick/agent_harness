@@ -150,6 +150,7 @@ describe('HarnessWidgetEditorPanel', () => {
         artifactCount={0}
         symphonyActive={false}
         onPatchElement={vi.fn()}
+        onClose={vi.fn()}
       />,
     );
 
@@ -172,6 +173,7 @@ describe('HarnessWidgetEditorPanel', () => {
         artifactCount={0}
         symphonyActive={false}
         onPatchElement={onPatchElement}
+        onClose={vi.fn()}
       />,
     );
 
@@ -196,5 +198,30 @@ describe('HarnessWidgetEditorPanel', () => {
     expect(within(editor).getByRole('status')).toHaveTextContent('Widget JSON must be valid JSON');
     expect(within(editor).getByRole('article', { name: 'Widget preview' })).toBeInTheDocument();
     expect(within(editor).getByRole('button', { name: 'Save widget JSON' })).toBeDisabled();
+  });
+
+  it('exposes a close action when the editor is opened as a render pane', () => {
+    const onClose = vi.fn();
+    const spec = createDefaultHarnessAppSpec({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+    });
+
+    render(
+      <HarnessWidgetEditorPanel
+        spec={spec}
+        widgetId="session-summary-widget"
+        workspaceName="Research"
+        files={[]}
+        artifactCount={0}
+        symphonyActive={false}
+        onPatchElement={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close widget editor' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,6 +5,7 @@ import {
   buildRuntimePluginRuntime,
   evaluateRuntimePluginToolCall,
   isRuntimePluginSettings,
+  mergeRoutingPolicyExtensionDecision,
   type RuntimePluginManifest,
 } from './runtimePlugins';
 
@@ -159,5 +160,45 @@ describe('runtimePlugins', () => {
       enforceEscalation: true,
       enforceConfidenceFallback: true,
     });
+  });
+
+  it('merges extension reasons but ignores overrides when disabled', () => {
+    const runtime = buildRuntimePluginRuntime({});
+    const merged = mergeRoutingPolicyExtensionDecision({
+      input: {
+        runtime,
+        toolCall: { id: 'call-3', toolId: 'shell.exec', args: { command: 'echo ok' } },
+        baseDecision: { decision: 'allow', reasons: ['plugin-observation'] },
+        allowDecisionOverride: false,
+      },
+      partialDecision: {
+        decision: 'block',
+        reasons: ['plugin-override'],
+        rewrittenArgs: { command: 'echo blocked' },
+      },
+    });
+
+    expect(merged.decision).toBe('allow');
+    expect(merged.reasons).toEqual(['plugin-observation', 'plugin-override']);
+    expect(merged.rewrittenArgs).toBeUndefined();
+  });
+
+  it('prevents security escalation from being downgraded by extension overrides', () => {
+    const runtime = buildRuntimePluginRuntime({});
+    const merged = mergeRoutingPolicyExtensionDecision({
+      input: {
+        runtime,
+        toolCall: { id: 'call-4', toolId: 'shell.exec', args: { command: 'echo secure' } },
+        baseDecision: { decision: 'block', reasons: ['security-escalation'] },
+        allowDecisionOverride: true,
+      },
+      partialDecision: {
+        decision: 'allow',
+        reasons: ['plugin-override'],
+      },
+    });
+
+    expect(merged.decision).toBe('block');
+    expect(merged.reasons).toEqual(['security-escalation', 'plugin-override']);
   });
 });

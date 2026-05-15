@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   areStagedRoutingChecksPassing,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
@@ -106,8 +106,24 @@ describe('benchmark model routing', () => {
 
   it('validates persisted routing settings', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
+    expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, routerMode: 'shadow', minConfidence: 0.5, complexityThreshold: 0.6, escalationKeywords: [], sessionPinning: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
+    expect(isBenchmarkRoutingSettings({
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      complexityRouting: {
+        enabled: true,
+        mode: 'active',
+        trafficSplitPercent: 42,
+        pinning: { workspaceAfterHardTask: true, sessionAfterHardTask: false },
+      },
+    })).toBe(true);
+    expect(isBenchmarkRoutingSettings({
+      enabled: true,
+      objective: 'cost',
+      pins: {},
+      complexityRouting: { enabled: true, mode: 'active', trafficSplitPercent: 120 },
+    })).toBe(false);
   });
 
   it('requires staged rollout eval cases before enforce mode can activate', () => {
