@@ -4125,8 +4125,9 @@ function ChatPanel({
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
       appendSharedMessages([{
-        id: `shadow-routing-${Date.now()}`,
+        id: createUniqueId(),
         role: 'system',
+        status: 'complete',
         content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
       }]);
     }

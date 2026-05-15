@@ -221,6 +221,56 @@ describe('Local Web Research Agent', () => {
     expect(synthesizer.synthesize).toHaveBeenCalled();
   });
 
+
+
+  it('validates PPGR pointers, budgets, and span requirements as recoverable ranking errors', async () => {
+    const searchProvider = {
+      id: 'searxng',
+      search: vi.fn(async () => [{
+        id: 'search-1',
+        title: 'Pointer-backed claim source',
+        url: 'https://example.com/a',
+        normalizedUrl: 'https://example.com/a',
+        provider: 'searxng' as const,
+        rank: 1,
+      }]),
+    };
+    const extractor = {
+      extract: vi.fn(async ({ url, sourceResultId }: { url: string; sourceResultId?: string }) => ({
+        id: 'page-a',
+        url,
+        normalizedUrl: normalizeUrl(url),
+        title: 'Pointer-backed claim source',
+        text: 'pointer-backed claim evidence text for ranking and citation checks',
+        length: 80,
+        fetchedAt: '2026-05-01T00:00:00.000Z',
+        sourceResultId,
+      })),
+    };
+    const agent = new LocalWebResearchAgent({ searchProvider, extractor });
+
+    const result = await agent.run({
+      question: 'pointer-backed claims',
+      retrievalStrategy: 'ppgr',
+      metadata: {
+        maxPointerBudget: 1,
+        pointerBundles: [
+          { assetUri: '', textEvidenceSpans: [] },
+          { assetUri: 'https://example.com/asset/1', textEvidenceSpans: [] },
+        ],
+      },
+    });
+
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'ranking', message: expect.stringContaining('missing or non-resolvable assetUri'), recoverable: true }),
+      expect.objectContaining({ stage: 'ranking', message: expect.stringContaining('pointer budget exceeded'), recoverable: true }),
+      expect.objectContaining({ stage: 'ranking', message: expect.stringContaining('require at least one text evidence span'), recoverable: true }),
+    ]));
+    expect(result.timings.graphBuildMs).toEqual(expect.any(Number));
+    expect(result.timings.pointerExpansionMs).toEqual(expect.any(Number));
+    expect(result.metadata).toMatchObject({ pointerCount: 1, droppedPointers: 2 });
+  });
+
   it('selects the local research tool and passes the static AgentEvals policy rubric', () => {
     const selectedToolIds = selectLocalWebResearchAgentTools(descriptors, 'latest local web search agents');
     const prompt = buildLocalWebResearchAgentPrompt({

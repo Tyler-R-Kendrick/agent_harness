@@ -822,6 +822,32 @@ describe('workflow-canvas extension', () => {
     ]));
   });
 
+  it('uses default runtime options when planning and running a local workflow', () => {
+    const localOnlyWorkflow = {
+      dsl: '1.0.0',
+      name: 'local-defaults',
+      version: '1.0.0',
+      do: [
+        {
+          markReady: {
+            set: { status: 'ready' },
+          },
+        },
+      ],
+    } satisfies ServerlessWorkflowDocument;
+    const canvas = createWorkflowCanvasFromServerlessWorkflow(localOnlyWorkflow);
+
+    expect(createWorkflowCanvasRuntimePlan(canvas)).toMatchObject({
+      workflowName: 'local-defaults',
+      integrationCount: 0,
+      gaps: [],
+    });
+    expect(runWorkflowCanvasLocally(canvas)).toMatchObject({
+      status: 'success',
+      finalState: { status: 'ready' },
+    });
+  });
+
   it('normalizes stored workflow canvas artifacts and exposes an installable renderer component', () => {
     const canvas = createWorkflowCanvasFromServerlessWorkflow(serverlessWorkflow);
     const decoded = decodeWorkflowCanvasArtifact(JSON.stringify({
