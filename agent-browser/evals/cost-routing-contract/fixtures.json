@@ -1,0 +1,8 @@
+{
+  "cases": [
+    {"id":"simple-stays-cheap","prompt":"Summarize this TODO list in 3 bullets.","expectedModelClass":"cheap"},
+    {"id":"complex-upgrades","prompt":"Design a multi-step migration plan with trade-offs and failure modes.","expectedModelClass":"premium"},
+    {"id":"security-escalates","prompt":"Audit auth token handling for compliance violations and exploit paths.","expectedModelClass":"premium","requiredReason":"security/compliance escalation"},
+    {"id":"misroute-regression-guard","prompt":"List two shell commands to show current branch.","expectedModelClass":"cheap"}
+  ]
+}

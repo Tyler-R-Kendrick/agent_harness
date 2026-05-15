@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,10 +39,20 @@ const domTestFiles = [
   'src/services/chatMessageCopyControls.test.ts',
   'src/services/sessionState.test.ts',
   'src/services/workspaceFiles.test.ts',
+  'src/services/routingObservability.test.ts',
 ];
 
-export default defineConfig({
-  plugins: [react()],
+async function loadOptionalReactPlugin() {
+  try {
+    const mod = await import('@vitejs/plugin-react');
+    return [mod.default()];
+  } catch {
+    return [];
+  }
+}
+
+export default defineConfig(async () => ({
+  plugins: await loadOptionalReactPlugin(),
   resolve: {
     alias,
   },
@@ -96,4 +105,4 @@ export default defineConfig({
       ],
     },
   },
-});
+}));

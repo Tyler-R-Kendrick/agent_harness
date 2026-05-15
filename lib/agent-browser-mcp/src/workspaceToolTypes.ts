@@ -85,6 +85,36 @@ export interface WorkspaceMcpSessionSummary {
   isOpen: boolean;
 }
 
+
+export type WorkspaceMcpRoutingMode = 'shadow' | 'enforce';
+
+export interface WorkspaceMcpRoutingThresholds {
+  complexity?: number;
+  compliance?: number;
+  security?: number;
+}
+
+export interface WorkspaceMcpRoutingConfig {
+  enabled: boolean;
+  policyId?: string | null;
+  cheapModel?: string | null;
+  premiumModel?: string | null;
+  escalationKeywords?: readonly string[];
+  thresholds?: WorkspaceMcpRoutingThresholds;
+  mode?: WorkspaceMcpRoutingMode;
+}
+
+export interface WorkspaceMcpRoutingTelemetryEvent {
+  timestamp: string;
+  policyId?: string | null;
+  selectedProvider: string;
+  selectedModel: string;
+  score: number;
+  confidence: number;
+  reasonVector: readonly string[];
+  estimatedCostDeltaUsd?: number | null;
+  estimatedCostDeltaPct?: number | null;
+}
 export interface WorkspaceMcpSessionMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -98,6 +128,8 @@ export interface WorkspaceMcpSessionState extends WorkspaceMcpSessionSummary {
   agentId?: string | null;
   toolIds?: readonly string[];
   cwd?: string | null;
+  routing?: WorkspaceMcpRoutingConfig | null;
+  routingTelemetry?: readonly WorkspaceMcpRoutingTelemetryEvent[];
   messages: readonly WorkspaceMcpSessionMessage[];
 }
 
@@ -392,6 +424,9 @@ export interface WorkspaceMcpWriteSessionInput {
   toolIds?: readonly string[];
   mode?: 'agent' | 'terminal';
   cwd?: string;
+  routing?: WorkspaceMcpRoutingConfig;
+  routingScope?: WorkspaceMcpSettingsScope;
+  routingTelemetryEvent?: WorkspaceMcpRoutingTelemetryEvent;
 }
 
 export interface RegisterWorkspaceToolsOptions extends RegisterWorkspaceFileToolsOptions {
