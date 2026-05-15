@@ -135,6 +135,33 @@ describe('runtimePlugins', () => {
     expect(context).toContain('AGENT_POLICY');
   });
 
+  it('collects routing extensions and enforces core safety invariants', () => {
+    const runtime = buildRuntimePluginRuntime({
+      settings: {
+        ...DEFAULT_RUNTIME_PLUGIN_SETTINGS,
+        enabledPluginIds: ['repo-policy'],
+      },
+      manifests: [{
+        ...repoPolicyPlugin,
+        routingSignals: [{ feature: 'task-risk', value: 0.8 }],
+        routingThresholdAdjustments: [{ minConfidenceDelta: 0.1, objective: 'quality' }],
+        routingScoringModules: [{ id: 'quality-boost', score: ({ baseScore }) => baseScore + 3 }],
+      }],
+    });
+
+    expect(runtime.routingExtensions.signals).toEqual([
+      { pluginId: 'repo-policy', feature: 'task-risk', value: 0.8 },
+    ]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([
+      { pluginId: 'repo-policy', minConfidenceDelta: 0.1, objective: 'quality' },
+    ]);
+    expect(runtime.routingExtensions.scoringModules).toHaveLength(1);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
+  });
+
   it('merges extension reasons but ignores overrides when disabled', () => {
     const runtime = buildRuntimePluginRuntime({});
     const merged = mergeRoutingPolicyExtensionDecision({
