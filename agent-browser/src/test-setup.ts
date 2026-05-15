@@ -4,25 +4,7 @@ import {
   TransformStream,
   WritableStream,
 } from 'node:stream/web';
-import { expect } from 'vitest';
-
-declare module 'vitest' {
-  interface Assertion<T = any> {
-    toBeInTheDocument(): T;
-  }
-}
-
-expect.extend({
-  toBeInTheDocument(received: unknown) {
-    const pass = received instanceof HTMLElement && received.isConnected;
-    return {
-      pass,
-      message: () => pass
-        ? 'expected element not to be attached to the document'
-        : 'expected element to be attached to the document',
-    };
-  },
-});
+import '@testing-library/jest-dom/vitest';
 
 Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', { value: () => undefined, writable: true });
 

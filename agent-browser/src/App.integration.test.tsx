@@ -532,8 +532,8 @@ describe('App', () => {
     expect(within(marketplace).getByText('Slack Chat Channel')).toBeInTheDocument();
     expect(within(marketplace).getByText('Telegram Chat Channel')).toBeInTheDocument();
     expect(within(marketplace).getByText('SMS Chat Channel')).toBeInTheDocument();
-    expect(within(marketplace).getByText('24 extensions')).toBeInTheDocument();
-    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(17);
+    expect(within(marketplace).getByText('25 extensions')).toBeInTheDocument();
+    expect(within(marketplace).getAllByRole('button', { name: /^Install / })).toHaveLength(18);
     expect(within(marketplace).getAllByText('Unavailable on this runtime')).toHaveLength(5);
     expect(within(marketplace).getByRole('link', { name: 'Download Local Model Connector' })).toHaveAttribute(
       'href',
