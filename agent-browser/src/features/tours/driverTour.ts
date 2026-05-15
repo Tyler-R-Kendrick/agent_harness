@@ -1,6 +1,3 @@
-import { driver } from 'driver.js';
-import 'driver.js/dist/driver.css';
-
 export type TourPopoverSide = 'top' | 'right' | 'bottom' | 'left';
 export type TourPopoverAlign = 'start' | 'center' | 'end';
 
@@ -56,7 +53,7 @@ interface DriverStep {
 
 interface StartDriverTourOptions {
   root?: Pick<Document, 'querySelector'>;
-  driverFactory?: typeof driver;
+  driverFactory?: (config: unknown) => { drive: () => void };
 }
 
 const MAX_TOUR_STEPS = 6;
@@ -253,7 +250,15 @@ export function startDriverTour(plan: GuidedTourPlan, options: StartDriverTourOp
         description: `Open the relevant panel, then ask Tour Guide again for "${plan.title}".`,
       },
     }];
-  const driverFactory = options.driverFactory ?? driver;
+  const driverFactory = options.driverFactory ?? resolveDriverFactory();
+  if (!driverFactory) {
+    return {
+      started: false,
+      stepCount: 0,
+      skippedTargetIds: plan.steps.map((step) => step.targetId),
+      error: 'Driver.js is unavailable in this runtime.',
+    };
+  }
   const driverObj = driverFactory({
     showProgress: true,
     allowClose: true,
@@ -268,6 +273,12 @@ export function startDriverTour(plan: GuidedTourPlan, options: StartDriverTourOp
     stepCount: steps.length,
     skippedTargetIds,
   };
+}
+
+function resolveDriverFactory(): ((config: unknown) => { drive: () => void }) | null {
+  if (typeof window === 'undefined') return null;
+  const globalDriver = (window as { driver?: { js?: { driver?: (config: unknown) => { drive: () => void } } } }).driver?.js?.driver;
+  return typeof globalDriver === 'function' ? globalDriver : null;
 }
 
 function targetToStep(target: TourTargetDescriptor): GuidedTourStep {

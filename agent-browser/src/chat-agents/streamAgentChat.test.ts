@@ -1,8 +1,25 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
+vi.mock('idb-keyval', () => ({
+  createStore: vi.fn(),
+  get: vi.fn(),
+  set: vi.fn(),
+  del: vi.fn(),
+}));
+vi.mock('@perplexity-ai/perplexity_ai', () => ({
+  Client: class MockPerplexityClient {},
+}));
+
+vi.mock('driver.js', () => ({
+  driver: vi.fn(() => ({
+    drive: vi.fn(),
+  })),
+}));
+
+vi.mock('driver.js/dist/driver.css', () => ({}));
 
 import * as CodiModule from './Codi';
 import * as DebuggerModule from './Debugger';
@@ -14,6 +31,10 @@ import { streamAgentChat } from './index';
 import { MemorySecretStore, createSecretsManagerAgent } from './Secrets';
 
 describe('streamAgentChat', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('routes Codi sessions through the Codi adapter', async () => {
     const streamCodiChatSpy = vi.spyOn(CodiModule, 'streamCodiChat').mockResolvedValueOnce();
 

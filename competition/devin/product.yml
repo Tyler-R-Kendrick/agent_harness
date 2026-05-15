@@ -1,0 +1,21 @@
+slug: devin
+name: Devin
+vendor: Cognition
+segment: autonomous-software-engineer
+product_path: competition/devin
+design_path: competition/devin/design
+features_path: competition/devin/features
+marketing_path: competition/devin/marketing
+gossip_path: competition/devin/gossip
+snapshot_date: 2026-05-15
+primary_sources:
+  - https://docs.devin.ai/admin/billing
+  - https://docs.devin.ai/integrations/gh
+  - https://docs.devin.ai/release-notes/2026
+secondary_sources:
+  - https://www.reddit.com/r/developersIndia/comments/1qhtef3/devin_costs_500month_a_fresher_at_infosys_costs/
+  - https://www.reddit.com/r/singularity/comments/1hb7n8m/devin_is_generally_available_today/
+positioning: "Autonomous AI software engineer that works in sessions, integrates with source-control and work-tracking systems, and produces pull requests for human review."
+customer_model: "Self-serve plans with included quota and on-demand credits, plus enterprise ACU pricing, sales-led controls, SSO/security posture, and admin consumption reporting."
+competitive_threat_level: high
+notes: "Direct threat to agent-browser when buyers want an outsourced engineering teammate rather than a browser-workbench primitive."

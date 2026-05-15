@@ -1,0 +1,21 @@
+slug: cursor-background-agents
+name: Cursor Background Agents
+vendor: Anysphere
+segment: ai-coding-ide-and-remote-agents
+product_path: competition/cursor-background-agents
+design_path: competition/cursor-background-agents/design
+features_path: competition/cursor-background-agents/features
+marketing_path: competition/cursor-background-agents/marketing
+gossip_path: competition/cursor-background-agents/gossip
+snapshot_date: 2026-05-15
+primary_sources:
+  - https://docs.cursor.com/en/background-agent
+  - https://docs.cursor.com/account/rate-limits
+  - https://docs.cursor.com/bugbot
+secondary_sources:
+  - https://www.reddit.com/r/cursor/comments/1mp16ys/bugbot_should_resolve_its_own_outdated_comments/
+  - https://www.reddit.com/r/GithubCopilot/comments/1oh58q3/the_cursor_bug_bot_doesnt_review_all_files_at_once/
+positioning: "AI-native IDE with asynchronous remote agents, codebase context, background branches, and PR review automation."
+customer_model: "Subscription IDE plans with included agent usage, model-priced overage, team pools, and add-on review automation."
+competitive_threat_level: high
+notes: "Threatens agent-browser when developer workflows center on code review, IDE handoff, and remote branch execution rather than browser task automation."

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type HTMLAttr
 import { HarnessJsonRenderer, type HarnessBrowserPageSummary, type HarnessFileSummary, type HarnessKnowledgeSummary, type HarnessSessionSummary } from './HarnessJsonRenderer';
 import { normalizeWidgetPosition, normalizeWidgetSize } from './spaceLayout';
 import type { HarnessAppSpec, HarnessElement, HarnessElementPatch, WidgetPosition, WidgetSize } from './types';
+import { RenderPaneTitlebar } from '../render-panes/RenderPaneTitlebar';
 
 export type HarnessDashboardPanelProps = {
   spec: HarnessAppSpec;
@@ -14,6 +15,7 @@ export type HarnessDashboardPanelProps = {
   onCreateDashboardWidget?: (position: WidgetPosition, prompt: string) => void;
   onOpenWidgetEditor?: (widgetId: string) => void;
   onPatchElement?: (patch: HarnessElementPatch) => void;
+  onClose: () => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
 };
 
@@ -190,6 +192,7 @@ export function HarnessDashboardPanel({
   onCreateDashboardWidget,
   onOpenWidgetEditor,
   onPatchElement,
+  onClose,
   dragHandleProps,
 }: HarnessDashboardPanelProps) {
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 });
@@ -410,6 +413,14 @@ export function HarnessDashboardPanel({
 
   return (
     <section className="harness-dashboard-panel" aria-label="Harness dashboard">
+      <RenderPaneTitlebar
+        className="harness-dashboard-titlebar"
+        closeLabel="Close dashboard"
+        dragHandleProps={dragHandleProps}
+        eyebrow={<span className="panel-resource-eyebrow">workspace/{workspaceName}</span>}
+        onClose={onClose}
+        title={<h2>{readTitle(spec, dashboard.id, `${workspaceName} harness`)}</h2>}
+      />
       <div className="harness-dashboard-workbench">
         <div
           ref={canvasRef}
@@ -422,15 +433,6 @@ export function HarnessDashboardPanel({
           onPointerDown={handleCanvasPointerDown}
           onWheel={handleWheel}
         >
-          <div className="harness-dashboard-canvas-chrome">
-            <div
-              className={`harness-dashboard-canvas-heading${dragHandleProps ? ' harness-dashboard-canvas-heading--draggable' : ''}`}
-              {...dragHandleProps}
-            >
-              <span className="panel-resource-eyebrow">workspace/{workspaceName}</span>
-              <h2>{readTitle(spec, dashboard.id, `${workspaceName} harness`)}</h2>
-            </div>
-          </div>
           <div className="harness-dashboard-space" style={viewportStyle(viewport)}>
             <div className="harness-dashboard-grid" aria-label="Dashboard widgets">
               {widgets.map((widget) => {
