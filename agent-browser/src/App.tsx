@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import {
-  areStagedRoutingChecksPassing,
   DndContext,
   DragOverlay,
   PointerSensor,
@@ -143,6 +142,7 @@ import {
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
   recommendBenchmarkRoute,
+  areStagedRoutingChecksPassing,
   splitBenchmarkModelRef,
   type BenchmarkEvidenceDiscoveryState,
   type BenchmarkModelRef,
@@ -4131,10 +4131,12 @@ const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
         }
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
-      appendSharedMessages({
+      appendSharedMessages([{
+        id: createUniqueId(),
         role: 'system',
+        status: 'complete',
         content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
-      });
+      }]);
     }
     if (requestBenchmarkRoute && complexityRoutingSettings.enabled) {
       console.info('[benchmark-routing:complexity]', {
