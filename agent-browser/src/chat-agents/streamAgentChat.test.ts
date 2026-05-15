@@ -261,7 +261,7 @@ describe('streamAgentChat', () => {
         route: async () => ({ runtimeProvider: 'cursor', modelId: 'claude-4-sonnet', confidence: 0.2, tier: 'standard' }),
       },
     }, { onReasoningStep });
-    expect(streamDebuggerChatSpy).toHaveBeenCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), expect.objectContaining({ onReasoningStep }), undefined);
+    expect(streamDebuggerChatSpy).toHaveBeenLastCalledWith(expect.objectContaining({ runtimeProvider: 'ghcp', modelId: 'gpt-5' }), expect.objectContaining({ onReasoningStep }), undefined);
     expect(onReasoningStep).toHaveBeenCalledWith(expect.objectContaining({ transcript: expect.stringContaining('low-confidence-premium-escalation') }));
   });
 

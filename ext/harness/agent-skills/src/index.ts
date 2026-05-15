@@ -32,6 +32,104 @@ export interface AgentSkillsPluginOptions {
   toolIdPrefix?: string;
 }
 
+export interface AgentSkillExecutionTelemetryEvent {
+  parentTaskId: string;
+  stageName: string;
+  stageType: 'parent' | 'child';
+  depth: number;
+  success: boolean;
+  childSkillName?: string;
+}
+
+export interface AgentSkillExecutionScope {
+  parentTaskId: string;
+  stepBudget: number;
+  outputByStage: Record<string, unknown>;
+  stepsUsed: number;
+  telemetry: AgentSkillExecutionTelemetryEvent[];
+}
+
+export interface CompositeSkillStep {
+  stageName: string;
+  skillName: string;
+  input: string;
+}
+
+export interface CompositeSkillDefinition {
+  name: string;
+  steps: readonly CompositeSkillStep[];
+}
+
+export function createAgentSkillRegistry(skills: readonly WorkspaceAgentSkill[]): ReadonlyMap<string, WorkspaceAgentSkill> {
+  return new Map(skills.map((skill) => [skill.name, skill]));
+}
+
+export async function executeCompositeSkill(
+  definition: CompositeSkillDefinition,
+  request: AgentSkillExecutionRequest,
+  registry: ReadonlyMap<string, WorkspaceAgentSkill>,
+  client: AgentSkillsClient,
+  scopes: Map<string, AgentSkillExecutionScope>,
+): Promise<AgentSkillExecutionScope> {
+  const stepBudget = readStepBudget(request.args);
+  const parentTaskId = readParentTaskId(request.args);
+  const scope = scopes.get(parentTaskId) ?? {
+    parentTaskId,
+    stepBudget,
+    outputByStage: {},
+    stepsUsed: 0,
+    telemetry: [],
+  };
+
+  const parentTelemetry: AgentSkillExecutionTelemetryEvent = {
+    parentTaskId,
+    stageName: definition.name,
+    stageType: 'parent',
+    depth: 0,
+    success: false,
+  };
+  scope.telemetry.push(parentTelemetry);
+
+  for (const [index, step] of definition.steps.entries()) {
+    if (scope.stepsUsed >= scope.stepBudget) {
+      throw new Error(`Step budget exceeded for task ${parentTaskId}.`);
+    }
+    const skill = registry.get(step.skillName);
+    if (!skill) {
+      throw new Error(`Unknown child skill: ${step.skillName}`);
+    }
+
+    scope.stepsUsed += 1;
+    const childArgs = {
+      ...request.args,
+      parentTaskId,
+      stageName: step.stageName,
+      depth: index + 1,
+      stageType: 'child',
+    };
+
+    const result = await client.executeSkill({
+      ...request,
+      skill,
+      input: step.input,
+      args: childArgs,
+    });
+    scope.outputByStage[step.stageName] = result;
+    scope.telemetry.push({
+      parentTaskId,
+      stageName: step.stageName,
+      stageType: 'child',
+      depth: index + 1,
+      success: true,
+      childSkillName: step.skillName,
+    });
+  }
+
+  parentTelemetry.success = true;
+  scopes.set(parentTaskId, scope);
+  return scope;
+}
+
 export function detectAgentSkillFile(path: string): boolean {
   return WORKSPACE_AGENT_SKILL_DIRECTORIES.some((directory) => path.startsWith(directory) && path.endsWith('/SKILL.md'));
 }
@@ -146,4 +244,14 @@ function readInputArg(args: unknown): string {
 
 function toRecord(args: unknown): Record<string, unknown> {
   return typeof args === 'object' && args !== null ? args as Record<string, unknown> : {};
+}
+
+function readStepBudget(args: Record<string, unknown>): number {
+  const candidate = args.stepBudget;
+  return typeof candidate === 'number' && Number.isInteger(candidate) && candidate > 0 ? candidate : 5;
+}
+
+function readParentTaskId(args: Record<string, unknown>): string {
+  const candidate = args.parentTaskId;
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : 'task:unknown';
 }

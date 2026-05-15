@@ -41,21 +41,21 @@ const domTestFiles = [
   'src/services/chatMessageCopyControls.test.ts',
   'src/services/sessionState.test.ts',
   'src/services/workspaceFiles.test.ts',
+  'src/services/routingObservability.test.ts',
 ];
 
-export default defineConfig(async () => {
-  const plugins = [];
+async function loadOptionalReactPlugin() {
   try {
-    const react = await import('@vitejs/plugin-react');
-    plugins.push(react.default());
+    const mod = await import('@vitejs/plugin-react');
+    return [mod.default()];
   } catch {
-    // Allow Vitest to boot in minimal environments where React plugin deps
-    // are unavailable (for example, targeted logic-only test execution).
+    return [];
   }
+}
 
-  return {
-    plugins,
-    resolve: {
+export default defineConfig(async () => ({
+  plugins: await loadOptionalReactPlugin(),
+  resolve: {
     alias,
   },
     test: {
@@ -106,6 +106,5 @@ export default defineConfig(async () => {
         'src/**/*.d.ts',
       ],
     },
-    },
-  };
-});
+  },
+}));
