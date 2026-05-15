@@ -48,7 +48,6 @@ function buildCitationKey(chunk: EvidenceChunk): string {
   const pointerBundleKey = [chunk.pageNumber ?? '', chunk.pointerType ?? '', chunk.pointerLabel ?? '', chunk.pointerAnchor ?? ''].join('|');
   return `${chunk.normalizedUrl}::${pointerBundleKey}`;
 }
-
 export function formatCitationPointerLabel(citation: CitationPointer): string | null {
   const pageSegment = typeof citation.pageNumber === 'number' ? `page ${citation.pageNumber}` : null;
   const pointerSegment = citation.pointerType
@@ -69,7 +68,6 @@ export function buildCitationAssetNavigationTarget(citation: CitationPointer): s
   if (citation.assetAnchor) return `${citation.assetUri}#${citation.assetAnchor}`;
   return citation.assetUri;
 }
-
 export function buildCitationPointerAriaLabel(citation: CitationPointer): string {
   const pageNumber = typeof citation.pageNumber === 'number' ? citation.pageNumber : 'source';
   if (citation.pointerType) {
