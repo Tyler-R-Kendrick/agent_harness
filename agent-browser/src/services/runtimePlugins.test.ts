@@ -39,6 +39,13 @@ describe('runtimePlugins', () => {
     expect(runtime.eventSubscriptions['tool:before-call']).toEqual(['repo-policy']);
     expect(runtime.shellEnvironment.AGENT_POLICY).toBe('strict');
     expect(runtime.compactionHints).toEqual(['Keep runtime plugin policy audit ids in compacted summaries.']);
+    expect(runtime.routingExtensions.signals).toEqual([]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([]);
+    expect(runtime.routingExtensions.scoringModules).toEqual([]);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
   });
 
   it('omits active registrations when the runtime is disabled', () => {

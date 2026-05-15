@@ -75,6 +75,14 @@ export default defineConfig({
         replacement: resolveInstalledFile('mermaid/dist/mermaid.esm.mjs'),
       },
       {
+        find: 'https-proxy-agent',
+        replacement: path.resolve(__dirname, 'src/vendor/httpsProxyAgent.stub.ts'),
+      },
+      {
+        find: 'agent-base',
+        replacement: path.resolve(__dirname, 'src/vendor/agentBase.stub.ts'),
+      },
+      {
         find: 'inbrowser-use',
         replacement: path.resolve(__dirname, '../lib/inbrowser-use/src/index.ts'),
       },
