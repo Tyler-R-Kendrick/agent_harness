@@ -1,0 +1,22 @@
+slug: github-copilot-cloud-agent
+name: GitHub Copilot Cloud Agent
+vendor: GitHub
+segment: repository-native-coding-agent
+product_path: competition/github-copilot-cloud-agent
+design_path: competition/github-copilot-cloud-agent/design
+features_path: competition/github-copilot-cloud-agent/features
+marketing_path: competition/github-copilot-cloud-agent/marketing
+gossip_path: competition/github-copilot-cloud-agent/gossip
+snapshot_date: 2026-05-15
+primary_sources:
+  - https://docs.github.com/en/copilot/get-started/what-is-github-copilot
+  - https://docs.github.com/en/enterprise-cloud@latest/copilot/how-tos/use-copilot-agents/cloud-agent/start-copilot-sessions
+  - https://docs.github.com/en/copilot/concepts/agents/about-third-party-agents
+secondary_sources:
+  - https://www.reddit.com/r/GithubCopilot/comments/1pd9xey/is_anyone_actually_using_github_copilot_as_an/
+  - https://www.reddit.com/r/GithubCopilot/comments/1ssp8kd/github_cloud_agent_having_a_break/
+  - https://www.techradar.com/pro/this-is-horrific-github-kills-copilot-pull-request-ads-after-user-backlash
+positioning: "Repository-native cloud coding agent that can be assigned from issues, GitHub.com, IDE chat, mobile, CLI, MCP, and work-management integrations to produce pull requests."
+customer_model: "Bundled into Copilot paid plans, consuming Copilot premium requests and GitHub Actions minutes, with enterprise policy controls and third-party agent enablement."
+competitive_threat_level: high
+notes: "A distribution threat because agent work starts where many teams already manage issues, PRs, CI, reviews, and permissions."

@@ -24,6 +24,11 @@ export interface ComplexityRoutingDecision extends ClassifiedPrompt {
   model: string;
 }
 
+export interface RoutingStrategy<RequestContext = string, Settings = ComplexityRoutingPolicy, Candidate = string, Decision = ComplexityRoutingDecision> {
+  classify(requestContext: RequestContext): ClassifiedPrompt;
+  recommend(candidates: Candidate[], settings: Settings): Decision;
+  finalize(decision: Decision, safeguards: { requireEscalation: boolean; requireConfidenceFallback: boolean }): Decision;
+}
 const REASONING_CUES = ['analyze', 'design', 'architecture', 'debug', 'tradeoff', 'optimize'] as const;
 const TOOLING_CUES = ['tool', 'api', 'endpoint', 'playwright', 'pipeline', 'refactor'] as const;
 const DEFAULT_ESCALATION_CUES = ['security', 'compliance', 'incident', 'outage'] as const;
@@ -37,6 +42,23 @@ export const DEFAULT_COMPLEXITY_ROUTING_POLICY: ComplexityRoutingPolicy = {
   enableSessionPinning: false,
 };
 
+export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy<string, ComplexityRoutingPolicy, string, ComplexityRoutingDecision> = {
+  classify: (requestContext) => classifyPrompt(requestContext),
+  recommend: (candidates, settings) => {
+    const classified = candidates[0] ? classifyPrompt(candidates[0]) : classifyPrompt('');
+    return routeByComplexity(classified, settings);
+  },
+  finalize: (decision, safeguards) => {
+    const nextReasons = [...decision.reasons];
+    if (safeguards.requireEscalation && decision.tier === 'complex' && !nextReasons.includes('escalation_keyword')) {
+      nextReasons.push('safeguard:escalation-invariant');
+    }
+    if (safeguards.requireConfidenceFallback && decision.confidence < DEFAULT_COMPLEXITY_ROUTING_POLICY.minConfidence && !nextReasons.includes('low_confidence_fallback')) {
+      nextReasons.push('safeguard:confidence-fallback-invariant');
+    }
+    return { ...decision, reasons: nextReasons };
+  },
+};
 export function classifyPrompt(prompt: string, _context?: PromptComplexityContext): ClassifiedPrompt {
   const normalized = prompt.toLowerCase();
   const reasons: string[] = [];

@@ -1,3 +1,5 @@
+import type { SkillDefinition } from './skillContracts';
+
 export type SkillRegistrySource = 'core' | 'extension';
 
 export interface SkillDescriptor {
@@ -96,7 +98,7 @@ export function registerSkillPacks(registrations: SkillPackRegistration[]): Skil
       if (seenSkillIds.has(skill.id)) {
         diagnostics.push({
           code: 'duplicate-skill-id',
-          path: `skills[].id`,
+          path: 'skills[].id',
           message: `Duplicate skill id: ${skill.id}`,
         });
         continue;
@@ -201,4 +203,20 @@ function requireStringField(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+export class SkillRegistry {
+  private readonly skills = new Map<string, SkillDefinition>();
+
+  register(skill: SkillDefinition): void {
+    this.skills.set(skill.id, skill);
+  }
+
+  get(skillId: string): SkillDefinition | undefined {
+    return this.skills.get(skillId);
+  }
+
+  list(): SkillDefinition[] {
+    return [...this.skills.values()];
+  }
 }
