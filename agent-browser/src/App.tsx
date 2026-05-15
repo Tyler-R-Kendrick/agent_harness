@@ -143,6 +143,7 @@ import {
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
   recommendBenchmarkRoute,
+  areStagedRoutingChecksPassing,
   splitBenchmarkModelRef,
   type BenchmarkEvidenceDiscoveryState,
   type BenchmarkModelRef,
@@ -17097,7 +17098,7 @@ function AgentBrowserApp() {
         ...current,
         [ownerWorkspace.id]: {
           ...existing,
-          dashboardOpen: false,
+          dashboardOpen: true,
           activeDashboardWidgetId: widgetId,
           activeSessionIds: [],
           openTabIds: [],
@@ -17153,7 +17154,7 @@ function AgentBrowserApp() {
         ...current,
         [activeWorkspaceId]: {
           ...existing,
-          dashboardOpen: false,
+          dashboardOpen: true,
           activeDashboardWidgetId: widgetId,
           activeSessionIds: [],
           openTabIds: [],
@@ -20947,7 +20948,7 @@ function AgentBrowserApp() {
                       ...current,
                       [activeWorkspaceId]: {
                         ...existing,
-                        dashboardOpen: false,
+                        dashboardOpen: activeRenderPanes.length === 0,
                         panelOrder: existing.panelOrder.filter((id) => id !== `dashboard:${activeWorkspaceId}`),
                       },
                     };
@@ -21126,7 +21127,7 @@ function AgentBrowserApp() {
           };
           const renderDashboard = () => renderPanel({ type: 'dashboard', workspaceId: activeWorkspaceId });
           if (!allPanels.length) {
-            return shouldRenderDashboard
+            return activeWorkspace.type === 'workspace'
               ? renderDashboard()
               : <ClosedPanelsPlaceholder workspaceName={activeWorkspace.name} onNewSession={() => addSessionToWorkspace(activeWorkspaceId)} />;
           }
