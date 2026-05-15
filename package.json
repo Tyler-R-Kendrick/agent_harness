@@ -23,7 +23,7 @@
     "test:agent-browser": "npm --workspace agent-browser run test",
     "test:coverage:agent-browser": "npm --workspace agent-browser run test:coverage",
     "visual:agent-browser": "npm --workspace agent-browser run visual:smoke",
-    "install:offline-safe": "ONNXRUNTIME_NODE_INSTALL=skip npm install"
+    "install:offline-safe": "npm install --ignore-scripts"
   },
   "overrides": {
     "@anthropic-ai/sdk": "0.95.0",
