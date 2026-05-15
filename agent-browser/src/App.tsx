@@ -134,7 +134,6 @@ import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
-  areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
@@ -143,6 +142,7 @@ import {
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
   recommendBenchmarkRoute,
+  areStagedRoutingChecksPassing,
   splitBenchmarkModelRef,
   type BenchmarkEvidenceDiscoveryState,
   type BenchmarkModelRef,
@@ -683,7 +683,6 @@ import { moveRenderPaneOrder, orderRenderPanes } from './services/workspaceMcpPa
 import { planRenderPaneRows } from './services/renderPaneLayout';
 import { HarnessDashboardPanel } from './features/harness-ui/HarnessDashboardPanel';
 import { HarnessWidgetEditorPanel } from './features/harness-ui/HarnessWidgetEditorPanel';
-import { RenderPaneTitlebar, renderPaneControlProps } from './features/render-panes/RenderPaneTitlebar';
 import {
   addHarnessDashboardWidget,
   applyHarnessElementPatch,
@@ -774,7 +773,15 @@ function defaultPermissionsFor(actions: string[]): IdentityPermissions[] {
   }));
 }
 
-const panelTitlebarControlProps = renderPaneControlProps;
+function stopPanelTitlebarControlDrag(event: React.SyntheticEvent<HTMLElement>) {
+  event.stopPropagation();
+}
+
+const panelTitlebarControlProps: Pick<React.HTMLAttributes<HTMLElement>, 'onPointerDown' | 'onMouseDown' | 'onTouchStart'> = {
+  onPointerDown: stopPanelTitlebarControlDrag,
+  onMouseDown: stopPanelTitlebarControlDrag,
+  onTouchStart: stopPanelTitlebarControlDrag,
+};
 
 const TIERS = {
   hot: { color: '#f87171', label: 'Hot' },
@@ -1940,14 +1947,13 @@ function PageOverlay({
         onContextMenu?.(event.clientX, event.clientY);
       }}
     >
-      <RenderPaneTitlebar
-        className="page-tab-header"
-        dragHandleProps={dragHandleProps}
-        closeLabel="Close page overlay"
-        onClose={onClose}
-        title={<span className="page-tab-title">{tab.name}</span>}
-        eyebrow={<Favicon url={tab.url} size={13} />}
-        actions={aiPointerSettings.enabled ? (
+      <header className={`page-tab-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
+        <div className="panel-titlebar-heading">
+          <Favicon url={tab.url} size={13} />
+          <span className="page-tab-title">{tab.name}</span>
+        </div>
+        <div className="panel-titlebar-actions">
+          {aiPointerSettings.enabled ? (
             <button
               type="button"
               className={`icon-button${pointerArmed ? ' is-active' : ''}`}
@@ -1960,7 +1966,9 @@ function PageOverlay({
               <Icon name="sparkles" size={13} />
             </button>
           ) : null}
-      />
+          <button type="button" className="icon-button panel-close-button" aria-label="Close page overlay" onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+        </div>
+      </header>
       <div className="page-content">
         {src ? (
           <iframe
@@ -2133,15 +2141,13 @@ function FileEditorPanel({
 
   return (
     <section className="file-editor-panel" aria-label="File editor">
-      <RenderPaneTitlebar
-        className="file-editor-header"
-        headingClassName="file-editor-heading"
-        dragHandleProps={dragHandleProps}
-        closeLabel="Close file editor"
-        onClose={onClose}
-        eyebrow={<Icon name="file" size={14} color="#7d8590" />}
-        title={<span className="file-editor-title">{editorPath}</span>}
-      />
+      <header className={`file-editor-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
+        <div className="file-editor-heading panel-titlebar-heading">
+          <Icon name="file" size={14} color="#7d8590" />
+          <span className="file-editor-title">{editorPath}</span>
+        </div>
+        <button type="button" className="icon-button panel-close-button" aria-label="Close file editor" onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+      </header>
       <div className="file-editor-body">
         <div className="file-editor-chrome">
           {isPathEditing ? (
@@ -2245,15 +2251,13 @@ function ArtifactViewerPanel({
   const rendererBinding = resolveArtifactFileRenderer(file, { extensionRenderers });
   return (
     <section className="file-editor-panel artifact-viewer-panel" aria-label="Artifact viewer">
-      <RenderPaneTitlebar
-        className="file-editor-header"
-        headingClassName="file-editor-heading"
-        dragHandleProps={dragHandleProps}
-        closeLabel="Close artifact"
-        onClose={onClose}
-        eyebrow={<Icon name="layers" size={14} color="#a5b4fc" />}
-        title={<span className="file-editor-title">{artifact.title}</span>}
-      />
+      <header className={`file-editor-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
+        <div className="file-editor-heading panel-titlebar-heading">
+          <Icon name="layers" size={14} color="#a5b4fc" />
+          <span className="file-editor-title">{artifact.title}</span>
+        </div>
+        <button type="button" className="icon-button panel-close-button" aria-label="Close artifact" onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+      </header>
       <div className="file-editor-body artifact-viewer-body">
         <div className="file-editor-chrome">
           <div className="file-editor-pathbar file-editor-path-display shared-input-shell">
@@ -4086,6 +4090,11 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
+const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
+    const complexityRoutingInShadowMode = complexityRoutingSettings.enabled && complexityRoutingSettings.mode === 'shadow';
+    const complexityRoutingTrafficSplit = complexityRoutingSettings.trafficSplitPercent ?? 100;
+    const complexityRoutingAllowedByTraffic = complexityRoutingTrafficSplit >= 100
+      || (complexityRoutingTrafficSplit > 0 && Math.random() * 100 < complexityRoutingTrafficSplit);
     const rolloutChecksPass = areStagedRoutingChecksPassing([
       { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
       { id: 'misroute-prevention-escalation', prompt: 'security', expectedModelClass: 'premium' },
@@ -4095,7 +4104,9 @@ function ChatPanel({
     const shouldEnforceBenchmarkRouting = requestBenchmarkRoute
       && benchmarkRoutingSettings.enabled
       && benchmarkRoutingSettings.routerMode === 'enforce'
-      && rolloutChecksPass;
+      && rolloutChecksPass
+      && !complexityRoutingInShadowMode
+      && complexityRoutingAllowedByTraffic;
     if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
@@ -4126,6 +4137,17 @@ function ChatPanel({
         status: 'complete',
         content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
       }]);
+    }
+    if (requestBenchmarkRoute && complexityRoutingSettings.enabled) {
+      console.info('[benchmark-routing:complexity]', {
+        mode: complexityRoutingSettings.mode,
+        applied: !complexityRoutingInShadowMode && complexityRoutingAllowedByTraffic,
+        trafficSplitPercent: complexityRoutingSettings.trafficSplitPercent ?? null,
+        pinning: complexityRoutingSettings.pinning ?? null,
+        taskClass: requestBenchmarkTaskClass,
+        selected: requestBenchmarkRoute.candidate.ref,
+        reason: requestBenchmarkRoute.reason,
+      });
     }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
@@ -6794,20 +6816,13 @@ function ChatPanel({
 
   return (
     <section className={`chat-panel shared-console ${showBash ? 'mode-terminal' : 'mode-chat'}`} aria-label={showBash ? 'Terminal' : 'Chat panel'}>
-      <RenderPaneTitlebar
-        className="chat-header shared-console-header"
-        headingClassName="chat-heading"
-        dragHandleProps={dragHandleProps}
-        closeLabel={showBash ? 'Close terminal panel' : 'Close chat panel'}
-        onClose={onClose}
-        eyebrow={(
+      <header className={`chat-header shared-console-header panel-titlebar${dragHandleProps ? ' panel-titlebar--draggable' : ''}`} {...dragHandleProps}>
+        <div className="chat-heading">
           <span className="panel-eyebrow panel-resource-eyebrow">
             <Icon name="layers" size={12} color="#8fa6c4" />
             <span className="panel-resource-label">workspace/{workspaceName}</span>
             <span className="panel-resource-path">{workspacePath}</span>
           </span>
-        )}
-        title={(
           <div className="chat-title-row">
             <Icon name={showBash ? 'terminal' : 'sparkles'} size={15} color={showBash ? '#86efac' : '#d1fae5'} />
             <h2>{showBash ? 'Terminal' : 'Chat'}</h2>
@@ -6894,9 +6909,8 @@ function ChatPanel({
               </>
             )}
           </div>
-        )}
-        actions={(
-          <>
+        </div>
+        <div className="panel-titlebar-actions">
           {!showBash ? (
             <>
               <button
@@ -6965,9 +6979,9 @@ function ChatPanel({
             </div>
             <button type="button" className="mode-tab mode-action mode-tab-icon" aria-label="New session" title="New session" data-tooltip="New session" onClick={onNewSession} {...panelTitlebarControlProps}><Icon name="plus" size={13} /></button>
           </div>
-          </>
-        )}
-      />
+          <button type="button" className="icon-button panel-close-button" aria-label={showBash ? 'Close terminal panel' : 'Close chat panel'} onClick={onClose} {...panelTitlebarControlProps}><Icon name="x" size={12} /></button>
+        </div>
+      </header>
       <SharedChatModal
         open={shareDialogOpen}
         sessionId={activeChatSessionId}
@@ -15104,7 +15118,7 @@ function SidebarTree({ root, workspaceByNodeId, activeWorkspaceId, openTabIds, a
               onNodeContextMenu(e.clientX, e.clientY, node);
             } : undefined}
           >
-            <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" aria-expanded={isFolder ? Boolean(node.expanded) : undefined} style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder && node.nodeKind === 'dashboard' ? onOpenTab(node.id, event.ctrlKey || event.metaKey) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
+            <button type="button" tabIndex={isCursor ? 0 : -1} className="tree-button" aria-expanded={isFolder ? Boolean(node.expanded) : undefined} style={tabOpacity !== undefined ? { opacity: tabOpacity } : undefined} onFocus={() => onCursorChange(node.id)} onClick={(event) => isFile ? onOpenFile(node.id) : isFolder ? onToggleFolder(node.id) : onOpenTab(node.id, event.ctrlKey || event.metaKey)}>
               {isFile ? (
                 <><span className="tree-chevron-spacer" /><Icon name={node.isReference ? 'link' : 'file'} size={12} color={node.isReference ? '#fbbf24' : '#a5b4fc'} /></>
               ) : isFolder ? (
@@ -16500,7 +16514,7 @@ function AgentBrowserApp() {
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
   const activeDashboardWidgetId = activeWorkspaceViewState.activeDashboardWidgetId ?? null;
   const activeDashboardWidget = activeDashboardWidgetId ? activeHarnessSpec.elements[activeDashboardWidgetId] ?? null : null;
-  const shouldRenderDashboard = activeWorkspace.type === 'workspace' && activeWorkspaceViewState.dashboardOpen !== false;
+  const shouldRenderDashboard = activeWorkspace.type === 'workspace';
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
@@ -17097,7 +17111,7 @@ function AgentBrowserApp() {
         ...current,
         [ownerWorkspace.id]: {
           ...existing,
-          dashboardOpen: true,
+          dashboardOpen: false,
           activeDashboardWidgetId: widgetId,
           activeSessionIds: [],
           openTabIds: [],
@@ -17153,7 +17167,7 @@ function AgentBrowserApp() {
         ...current,
         [activeWorkspaceId]: {
           ...existing,
-          dashboardOpen: true,
+          dashboardOpen: false,
           activeDashboardWidgetId: widgetId,
           activeSessionIds: [],
           openTabIds: [],
@@ -18871,30 +18885,10 @@ function AgentBrowserApp() {
 
   function handleOpenTreeTab(nodeId: string, _multi = false) {
     const node = findNode(root, nodeId);
-    if (!node) return;
+    if (!node || node.type !== 'tab') return;
     const workspace = findWorkspaceForNode(root, nodeId);
     if (workspace) switchWorkspace(workspace.id);
     if (!workspace) return;
-    if (node.type === 'folder' && node.nodeKind === 'dashboard') {
-      setWorkspaceViewStateByWorkspace((current) => {
-        const existing = current[workspace.id] ?? createWorkspaceViewEntry(workspace);
-        return {
-          ...current,
-          [workspace.id]: {
-            ...existing,
-            dashboardOpen: true,
-            activeDashboardWidgetId: null,
-            activeSessionIds: [],
-            openTabIds: [],
-            editingFilePath: null,
-            activeArtifactPanel: null,
-            panelOrder: [`dashboard:${workspace.id}`],
-          },
-        };
-      });
-      return;
-    }
-    if (node.type !== 'tab') return;
     const toggleId = (ids: string[]) => ids.includes(nodeId)
       ? ids.filter((id) => id !== nodeId)
       : [...ids, nodeId];
@@ -20941,17 +20935,6 @@ function AgentBrowserApp() {
                   onCreateDashboardWidget={createDashboardWidgetFromCanvas}
                   onOpenWidgetEditor={(widgetId) => openDashboardWidgetEditor(widgetId)}
                   onPatchElement={patchActiveHarnessElement}
-                  onClose={() => setWorkspaceViewStateByWorkspace((current) => {
-                    const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-                    return {
-                      ...current,
-                      [activeWorkspaceId]: {
-                        ...existing,
-                        dashboardOpen: activeRenderPanes.length === 0,
-                        panelOrder: existing.panelOrder.filter((id) => id !== `dashboard:${activeWorkspaceId}`),
-                      },
-                    };
-                  })}
                   dragHandleProps={dragHandleProps}
                 />
               );
@@ -21126,7 +21109,7 @@ function AgentBrowserApp() {
           };
           const renderDashboard = () => renderPanel({ type: 'dashboard', workspaceId: activeWorkspaceId });
           if (!allPanels.length) {
-            return activeWorkspace.type === 'workspace'
+            return shouldRenderDashboard
               ? renderDashboard()
               : <ClosedPanelsPlaceholder workspaceName={activeWorkspace.name} onNewSession={() => addSessionToWorkspace(activeWorkspaceId)} />;
           }
