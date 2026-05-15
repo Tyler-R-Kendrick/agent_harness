@@ -3,6 +3,7 @@ import { FetchPageExtractor } from './extractor';
 import { stableHash } from './hash';
 import { normalizeUrl } from './normalizeUrl';
 import { planSearchQueries } from './planSearchQueries';
+import { runPpgrStrategy } from './ppgr/strategy';
 import { createSearchProviderFromConfig } from './searchProviders';
 import { resolveRetrievalStrategy } from './retrievalStrategy';
 import type {
@@ -19,12 +20,12 @@ const DEFAULTS = {
   maxSearchResults: 10,
   maxPagesToExtract: 5,
   maxEvidenceChunks: 8,
+  maxPointerBudget: 8,
   searchTimeoutMs: 15_000,
   extractionTimeoutMs: 15_000,
   defaultModel: 'llama3.1:8b',
   searchCacheTtlMs: 10 * 60 * 1000,
   extractCacheTtlMs: 24 * 60 * 60 * 1000,
-  maxPointerBudget: 32,
 };
 
 export class LocalWebResearchAgent {
@@ -61,17 +62,32 @@ export class LocalWebResearchAgent {
       request,
       errors,
     }));
+    const retrievalMode = request.retrievalStrategy ?? (typeof this.config.retrievalStrategy === 'string' ? this.config.retrievalStrategy : 'text');
+    const maxPointerBudget = request.maxPointerBudget ?? this.config.maxPointerBudget ?? DEFAULTS.maxPointerBudget;
     const graphBuildStartedAt = Date.now();
-    const { evidence, citations } = timeStage(timings, 'ranking', () => {
+    const { evidence, citations, pointerBundles } = timeStage(timings, 'ranking', () => {
+      if (retrievalMode === 'ppgr') {
+        const ppgr = runPpgrStrategy({
+          question,
+          pages: extractedPages,
+          maxEvidenceChunks,
+          maxPointerBudget,
+        });
+        return {
+          evidence: ppgr.evidence,
+          citations: ppgr.citations,
+          pointerBundles: ppgr.pointerBundles,
+        };
+      }
       const strategy = resolveRetrievalStrategy(this.config.retrievalStrategy);
-      const retrievalMode = request.retrievalStrategy ?? (typeof this.config.retrievalStrategy === 'string' ? this.config.retrievalStrategy : 'text');
-      return strategy.retrieve({
+      const retrievalResult = strategy.retrieve({
         question,
         extractedPages,
         maxEvidenceChunks,
         metadata: request.metadata,
         mode: retrievalMode,
       });
+      return { ...retrievalResult, pointerBundles: [] };
     });
     timings.graphBuildMs = Date.now() - graphBuildStartedAt;
 
@@ -93,6 +109,7 @@ export class LocalWebResearchAgent {
             question,
             evidence,
             citations,
+            pointerBundles,
             model: request.model ?? this.config.defaultModel ?? DEFAULTS.defaultModel,
             signal: request.signal,
           });
@@ -112,6 +129,7 @@ export class LocalWebResearchAgent {
       extractedPages,
       evidence,
       citations,
+      ...(pointerBundles.length > 0 ? { pointerBundles } : {}),
       ...(answer ? { answer } : {}),
       errors,
       timings,
@@ -159,8 +177,6 @@ export class LocalWebResearchAgent {
       allowPrivateUrlExtraction: this.config.allowPrivateUrlExtraction,
     });
   }
-
-
 
   private validatePpgrPointers(args: {
     retrievalStrategy: WebResearchRunRequest['retrievalStrategy'];
@@ -326,7 +342,6 @@ async function timeStageAsync<T>(
     timings[stage] = Date.now() - start;
   }
 }
-
 
 function readPointerBundles(metadata: WebResearchRunRequest['metadata']): Array<Record<string, unknown>> {
   const value = metadata?.pointerBundles;
