@@ -11,6 +11,54 @@ export type RuntimePluginInterceptionMode = 'observe' | 'rewrite' | 'block';
 export type RuntimePluginSource = 'repo' | 'user' | 'workspace';
 export type RuntimePluginProviderKind = 'model' | 'auth' | 'tooling';
 export type RuntimePluginToolDecision = 'allow' | 'rewrite' | 'block';
+export type RuntimePluginRoutingDecisionReason =
+  | 'security-escalation'
+  | 'compliance-escalation'
+  | 'low-confidence-fallback'
+  | 'plugin-override'
+  | 'plugin-observation'
+  | string;
+
+/**
+ * Core routing decision produced before extension evaluation.
+ */
+export interface RuntimePluginRoutingDecision {
+  decision: RuntimePluginToolDecision;
+  reasons: RuntimePluginRoutingDecisionReason[];
+  rewrittenArgs?: Record<string, unknown>;
+}
+
+/**
+ * Extension output is intentionally partial so policy plugins can append context
+ * without replacing the full decision payload.
+ */
+export interface RuntimePluginRoutingPartialDecision {
+  decision?: RuntimePluginToolDecision;
+  reasons?: RuntimePluginRoutingDecisionReason[];
+  rewrittenArgs?: Record<string, unknown>;
+}
+
+export interface RuntimePluginRoutingEvaluationInput {
+  toolCall: RuntimePluginToolCall;
+  baseDecision: RuntimePluginRoutingDecision;
+  runtime: RuntimePluginRuntime;
+  allowDecisionOverride: boolean;
+}
+
+/**
+ * Runtime policy extension contract.
+ *
+ * Precedence and safety constraints:
+ * - The core routing policy always evaluates first and produces `baseDecision`.
+ * - Extensions may always append reasons via `partialDecision.reasons`.
+ * - Extensions may override `decision` or `rewrittenArgs` only when
+ *   `input.allowDecisionOverride` is `true`.
+ * - Implementations MUST treat escalation/security outcomes from core policy
+ *   as immutable unless override is explicitly permitted by configuration.
+ */
+export interface RoutingPolicyExtension {
+  evaluate(input: RuntimePluginRoutingEvaluationInput): RuntimePluginRoutingPartialDecision;
+}
 
 export interface RuntimePluginSettings {
   enabled: boolean;
@@ -142,6 +190,40 @@ const EVENT_KINDS = new Set<RuntimePluginEventKind>([
 
 const INTERCEPTION_MODES = new Set<RuntimePluginInterceptionMode>(['observe', 'rewrite', 'block']);
 const PROVIDER_KINDS = new Set<RuntimePluginProviderKind>(['model', 'auth', 'tooling']);
+const SAFETY_IMMUTABLE_REASONS = new Set<RuntimePluginRoutingDecisionReason>([
+  'security-escalation',
+  'compliance-escalation',
+]);
+
+export function mergeRoutingPolicyExtensionDecision({
+  input,
+  partialDecision,
+}: {
+  input: RuntimePluginRoutingEvaluationInput;
+  partialDecision: RuntimePluginRoutingPartialDecision;
+}): RuntimePluginRoutingDecision {
+  const mergedReasons = uniqueStrings([...(input.baseDecision.reasons ?? []), ...(partialDecision.reasons ?? [])]);
+  if (!input.allowDecisionOverride) {
+    return {
+      ...input.baseDecision,
+      reasons: mergedReasons,
+    };
+  }
+
+  const hasImmutableSafetyReason = input.baseDecision.reasons.some((reason) => SAFETY_IMMUTABLE_REASONS.has(reason));
+  if (hasImmutableSafetyReason && partialDecision.decision && partialDecision.decision !== input.baseDecision.decision) {
+    return {
+      ...input.baseDecision,
+      reasons: mergedReasons,
+    };
+  }
+
+  return {
+    decision: partialDecision.decision ?? input.baseDecision.decision,
+    reasons: mergedReasons,
+    rewrittenArgs: partialDecision.rewrittenArgs ?? input.baseDecision.rewrittenArgs,
+  };
+}
 
 export function isRuntimePluginSettings(value: unknown): value is RuntimePluginSettings {
   if (!isRecord(value)) return false;
