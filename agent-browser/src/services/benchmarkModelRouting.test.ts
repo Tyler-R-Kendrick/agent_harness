@@ -8,6 +8,7 @@ import {
   inferBenchmarkTaskClass,
   isBenchmarkRoutingSettings,
   mergeDiscoveredBenchmarkEvidence,
+  recommendHybridRoute,
   recommendBenchmarkRoute,
 } from './benchmarkModelRouting';
 
@@ -246,5 +247,41 @@ describe('benchmark model routing', () => {
 
     expect(discovery.records).toEqual([]);
     expect(discovery.errors).toEqual(['Ignored untrusted benchmark source https://benchmarks.example.invalid/results for ghcp:gpt-4.1.']);
+  });
+
+  it('overrides cost objective with premium-safe candidate when escalation is detected', () => {
+    const route = recommendHybridRoute({
+      prompt: 'Need security review and incident response runbook updates',
+      provider: 'codi',
+      toolsEnabled: true,
+      candidates,
+      settings: {
+        ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+        objective: 'cost',
+        minConfidence: 0.2,
+      },
+    });
+
+    expect(route?.benchmark.candidate.ref).toBe('codi:onnx-community/Qwen3-0.6B-ONNX');
+    expect(route?.candidate.ref).toBe('ghcp:gpt-4.1');
+    expect(route?.complexity.reasons).toContain('escalation:security');
+    expect(route?.mergedReason).toContain('policy override');
+  });
+
+  it('keeps objective-weighted candidate when no premium override conditions trigger', () => {
+    const route = recommendHybridRoute({
+      prompt: 'Summarize this changelog',
+      provider: 'planner',
+      toolsEnabled: false,
+      candidates,
+      settings: {
+        ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+        objective: 'cost',
+      },
+    });
+
+    expect(route?.benchmark.candidate.ref).toBe('codi:onnx-community/Qwen3-0.6B-ONNX');
+    expect(route?.candidate.ref).toBe('codi:onnx-community/Qwen3-0.6B-ONNX');
+    expect(route?.mergedReason).toContain('Objective-weighted route selected');
   });
 });
