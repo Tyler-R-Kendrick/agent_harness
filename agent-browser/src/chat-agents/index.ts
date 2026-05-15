@@ -251,8 +251,8 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
   runtimeProvider: ModelBackedAgentProvider;
   modelId?: string;
   routingDecision: RuntimeRoutingDecision;
-  candidateSetSummary?: string;
-  fallbackCause?: string | null;
+    candidateSetSummary?: string;
+    fallbackCause?: string | null;
   skillRouteTrace?: {
     selectedSkill: string;
     topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;

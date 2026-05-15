@@ -3,10 +3,8 @@ import {
   DEFAULT_RUNTIME_PLUGIN_SETTINGS,
   buildRuntimePluginPromptContext,
   buildRuntimePluginRuntime,
-  enforceCoreRoutingSafetyInvariants,
   evaluateRuntimePluginToolCall,
   isRuntimePluginSettings,
-  resolveRuntimeRoutingExtensionOutputs,
   mergeRoutingPolicyExtensionDecision,
   type RuntimePluginManifest,
 } from './runtimePlugins';
@@ -138,36 +136,50 @@ describe('runtimePlugins', () => {
     expect(context).toContain('AGENT_POLICY');
   });
 
-  it('keeps core routing safety invariants enabled for extension output', () => {
-    const enforced = enforceCoreRoutingSafetyInvariants({
-      enforceEscalationInvariant: false,
-      enforceConfidenceFallbackInvariant: false,
-      alternateScoringModuleId: 'experimental-scorer',
-    });
-
-    expect(enforced.enforceEscalationInvariant).toBe(true);
-    expect(enforced.enforceConfidenceFallbackInvariant).toBe(true);
-    expect(enforced.alternateScoringModuleId).toBe('experimental-scorer');
-  });
-
-  it('resolves runtime routing extension outputs through invariant enforcement', () => {
+  it('collects routing extensions and enforces core safety invariants', () => {
     const runtime = buildRuntimePluginRuntime({
       settings: {
         ...DEFAULT_RUNTIME_PLUGIN_SETTINGS,
         enabledPluginIds: ['repo-policy'],
       },
-      manifests: [repoPolicyPlugin],
+      manifests: [{
+        ...repoPolicyPlugin,
+        routingSignals: [{ feature: 'task-risk', value: 0.8 }],
+        routingThresholdAdjustments: [{ minConfidenceDelta: 0.1, objective: 'quality' }],
+        routingScoringModules: [{ id: 'quality-boost', score: ({ baseScore }) => baseScore + 3 }],
+      }],
     });
 
-    runtime.routingExtensions[0] = {
-      pluginId: 'repo-policy',
-      provideRoutingOutput: () => ({ enforceEscalationInvariant: false, enforceConfidenceFallbackInvariant: false }),
-    };
+    expect(runtime.routingExtensions.signals).toEqual([
+      { pluginId: 'repo-policy', feature: 'task-risk', value: 0.8 },
+    ]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([
+      { pluginId: 'repo-policy', minConfidenceDelta: 0.1, objective: 'quality' },
+    ]);
+    expect(runtime.routingExtensions.scoringModules).toHaveLength(1);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
+  });
 
-    const outputs = resolveRuntimeRoutingExtensionOutputs(runtime);
-    expect(outputs).toHaveLength(1);
-    expect(outputs[0].enforceEscalationInvariant).toBe(true);
-    expect(outputs[0].enforceConfidenceFallbackInvariant).toBe(true);
+  it('merges extension reasons but ignores overrides when disabled', () => {
+        routingScoringModules: [{ id: 'quality-boost', score: ({ baseScore }) => baseScore + 3 }],
+      }],
+    });
+
+    expect(runtime.routingExtensions.signals).toEqual([
+      { pluginId: 'repo-policy', feature: 'task-risk', value: 0.8 },
+    ]);
+    expect(runtime.routingExtensions.thresholdAdjustments).toEqual([
+      { pluginId: 'repo-policy', minConfidenceDelta: 0.1, objective: 'quality' },
+    ]);
+    expect(runtime.routingExtensions.scoringModules).toHaveLength(1);
+    expect(runtime.routingExtensions.safetyInvariants).toEqual({
+      enforceEscalation: true,
+      enforceConfidenceFallback: true,
+    });
+>>>>>>> origin/main
   });
 
   it('merges extension reasons but ignores overrides when disabled', () => {
