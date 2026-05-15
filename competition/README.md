@@ -59,6 +59,10 @@ competition/<product-slug>/
 | Automation Anywhere APA | Enterprise agentic process automation platform | `competition/automation-anywhere-apa` |
 | Sema4.ai / Robocorp | Python-first RPA and AI action platform | `competition/sema4ai-robocorp` |
 | WorkFusion AI Agents | Financial-crime compliance AI-agent platform | `competition/workfusion-ai-agents` |
+| Devin | Autonomous software engineer | `competition/devin` |
+| Cursor Background Agents | AI coding IDE and remote agents | `competition/cursor-background-agents` |
+| Replit Agent | Prompt-to-app agent workspace | `competition/replit-agent` |
+| GitHub Copilot Cloud Agent | Repository-native coding agent | `competition/github-copilot-cloud-agent` |
 
 ## Cross-Market Takeaways
 
@@ -78,4 +82,7 @@ competition/<product-slug>/
 - Open-source extension products such as Nanobrowser keep the user in their existing logged-in browser, which is a strong adoption wedge. The risk is that extension permissions, BYOK setup, and real-profile automation raise the bar for plain-language trust controls.
 - Enterprise RPA incumbents are reframing "agents" as governed orchestration across robots, people, APIs, documents, and legacy UIs. They will capture compliance-heavy buyers that require audit, case management, and center-of-excellence controls, but their broad suites can feel overbuilt for developer-first browser agent workflows.
 - Vertical AI-agent products such as WorkFusion show another wedge: package the whole process and domain model instead of selling generic browser control. This is powerful when the buyer wants outcomes in a known regulated workflow, but it leaves less room for local, inspectable, user-directed web work.
+- Coding-agent workbenches are converging on the same delegation loop: scoped task, isolated environment, branch or session, progress log, pull request, and human review. Devin sells this as an AI engineer, Cursor sells it from the IDE, Replit sells it as a full app-builder workspace, and GitHub sells it through repository-native issue and PR distribution.
+- The biggest opening for `agent-browser` against coding agents is evidence quality outside source code: browser session traces, screenshots, user approvals, visual regression artifacts, and local state that remain inspectable after the agent finishes.
+- Variable agent pricing is becoming a category-wide UX problem. Replit credit burn, Devin ACUs, Cursor model-priced background work, and Copilot premium-request/Actions consumption all create anxiety when long-running agents take a wrong turn.
 

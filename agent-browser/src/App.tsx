@@ -136,7 +136,6 @@ import {
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
   areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
-  areStagedRoutingChecksPassing,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
   inferBenchmarkTaskClass,
@@ -730,6 +729,7 @@ type SessionMcpController = {
 const EMPTY_AGENT_ARTIFACTS: AgentArtifact[] = [];
 const USER_ELICITATION_EVENT = 'agent-browser:user-elicitation';
 const SECRET_REQUEST_EVENT = 'agent-browser:secret-request';
+const NOOP_CLOSE_HANDLER = () => {};
 type SecretRequestCreatedResult = Extract<WorkspaceMcpSecretRequestResult, { status: 'secret_ref_created' }>;
 const pendingSecretRequestResolvers = new Map<string, (result: SecretRequestCreatedResult) => void>();
 
@@ -4091,6 +4091,11 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
+    const complexityRoutingSettings = benchmarkRoutingSettings.complexityRouting;
+    const complexityRoutingInShadowMode = complexityRoutingSettings.enabled && complexityRoutingSettings.mode === 'shadow';
+    const complexityRoutingTrafficSplit = complexityRoutingSettings.trafficSplitPercent ?? 100;
+    const complexityRoutingAllowedByTraffic = complexityRoutingTrafficSplit >= 100
+      || (complexityRoutingTrafficSplit > 0 && Math.random() * 100 < complexityRoutingTrafficSplit);
     const rolloutChecksPass = areStagedRoutingChecksPassing([
       { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
       { id: 'misroute-prevention-escalation', prompt: 'security', expectedModelClass: 'premium' },
@@ -4100,7 +4105,9 @@ function ChatPanel({
     const shouldEnforceBenchmarkRouting = requestBenchmarkRoute
       && benchmarkRoutingSettings.enabled
       && benchmarkRoutingSettings.routerMode === 'enforce'
-      && rolloutChecksPass;
+      && rolloutChecksPass
+      && !complexityRoutingInShadowMode
+      && complexityRoutingAllowedByTraffic;
     if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
@@ -4126,10 +4133,22 @@ function ChatPanel({
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
       appendSharedMessages([{
-        id: `shadow-routing-${Date.now()}`,
+        id: createUniqueId(),
         role: 'system',
+        status: 'complete',
         content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
       }]);
+    }
+    if (requestBenchmarkRoute && complexityRoutingSettings.enabled) {
+      console.info('[benchmark-routing:complexity]', {
+        mode: complexityRoutingSettings.mode,
+        applied: !complexityRoutingInShadowMode && complexityRoutingAllowedByTraffic,
+        trafficSplitPercent: complexityRoutingSettings.trafficSplitPercent ?? null,
+        pinning: complexityRoutingSettings.pinning ?? null,
+        taskClass: requestBenchmarkTaskClass,
+        selected: requestBenchmarkRoute.candidate.ref,
+        reason: requestBenchmarkRoute.reason,
+      });
     }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
@@ -20917,6 +20936,7 @@ function AgentBrowserApp() {
                   onCreateDashboardWidget={createDashboardWidgetFromCanvas}
                   onOpenWidgetEditor={(widgetId) => openDashboardWidgetEditor(widgetId)}
                   onPatchElement={patchActiveHarnessElement}
+                  onClose={NOOP_CLOSE_HANDLER}
                   dragHandleProps={dragHandleProps}
                 />
               );

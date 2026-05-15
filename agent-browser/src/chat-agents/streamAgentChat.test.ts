@@ -3,6 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
 }));
+vi.mock('idb-keyval', () => ({
+  createStore: vi.fn(),
+  get: vi.fn(),
+  set: vi.fn(),
+  del: vi.fn(),
+}));
+vi.mock('@perplexity-ai/perplexity_ai', () => ({
+  Client: class MockPerplexityClient {},
+}));
 
 vi.mock('driver.js', () => ({
   driver: () => ({

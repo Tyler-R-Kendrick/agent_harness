@@ -35,6 +35,7 @@ export type RuntimeRoutingConfig = {
   enabled?: boolean;
   forcePremiumWhenLowConfidence?: boolean;
   lowConfidenceThreshold?: number;
+  routingMode?: 'active' | 'shadow';
   route?: (input: {
     provider: AgentProvider;
     modelId?: string;
@@ -46,6 +47,8 @@ export type RuntimeRoutingConfig = {
     modelId?: string;
     confidence: number;
     tier: 'standard' | 'premium';
+    candidateSetSummary?: string;
+    fallbackCause?: string | null;
     skillRouteTrace?: {
       selectedSkill: string;
       topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
@@ -250,6 +253,8 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
   runtimeProvider: ModelBackedAgentProvider;
   modelId?: string;
   routingDecision: RuntimeRoutingDecision;
+  candidateSetSummary?: string;
+  fallbackCause?: string | null;
   skillRouteTrace?: {
     selectedSkill: string;
     topAlternatives: Array<{ skill: string; score: number; reasonCode: string }>;
@@ -260,6 +265,8 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
   const defaultResult = {
     runtimeProvider: defaultRuntimeProvider,
     modelId: options.modelId,
+    candidateSetSummary: 'default-only',
+    fallbackCause: null,
     routingDecision: {
       reasonCode: 'router-disabled' as const,
       confidence: 1,
@@ -291,12 +298,16 @@ export async function resolveRuntimeModelSelection(options: StreamAgentChatOptio
     return {
       runtimeProvider: premium.runtimeProvider,
       modelId: premium.modelId,
+      candidateSetSummary: decision.candidateSetSummary ?? 'benchmark-candidates-evaluated',
+      fallbackCause: decision.fallbackCause ?? 'low-confidence-premium-escalation',
       routingDecision: { reasonCode: 'low-confidence-premium-escalation', confidence: decision.confidence, tier: 'premium', selectedBy: 'router' },
     };
   }
   return {
     runtimeProvider: decision.runtimeProvider,
     modelId: decision.modelId ?? options.modelId,
+    candidateSetSummary: decision.candidateSetSummary ?? 'benchmark-candidates-evaluated',
+    fallbackCause: decision.fallbackCause ?? null,
     routingDecision: { reasonCode: 'router-selected', confidence: decision.confidence, tier: decision.tier, selectedBy: 'router' },
     ...(decision.skillRouteTrace ? { skillRouteTrace: decision.skillRouteTrace } : {}),
   };
@@ -333,6 +344,12 @@ export async function streamAgentChat(
     selectedModel: runtimeSelection.modelId,
     routingDecision: runtimeSelection.routingDecision,
     benchmarkEvidenceSource: options.runtimeRouting?.enabled ? 'benchmark-router' : 'default-router',
+    candidateSetSummary: runtimeSelection.candidateSetSummary ?? (options.runtimeRouting?.enabled ? 'benchmark-candidates-evaluated' : 'default-only'),
+    fallbackCause: runtimeSelection.fallbackCause
+      ?? (runtimeSelection.routingDecision.reasonCode === 'low-confidence-premium-escalation'
+        ? 'low-confidence-premium-escalation'
+        : null),
+    routingMode: options.runtimeRouting?.routingMode ?? 'active',
     skillRouteTrace: sanitizedSkillRouteTrace,
   });
   persistRoutingDecisionRecord(routingRecord);

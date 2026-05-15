@@ -42,6 +42,7 @@ export type WebResearchAgentConfig = {
   maxSearchResults?: number;
   maxPagesToExtract?: number;
   maxEvidenceChunks?: number;
+  maxPointerBudget?: number;
   extractionTimeoutMs?: number;
   searchTimeoutMs?: number;
   allowPrivateUrlExtraction?: boolean;
@@ -66,6 +67,7 @@ export type WebResearchRunRequest = {
   maxSearchResults?: number;
   maxPagesToExtract?: number;
   maxEvidenceChunks?: number;
+  maxPointerBudget?: number;
   synthesize?: boolean;
   model?: string;
   language?: string;
@@ -83,12 +85,19 @@ export type WebResearchRunResult = {
   extractedPages: ExtractedPage[];
   evidence: EvidenceChunk[];
   citations: AgentCitation[];
+  pointerBundles?: PpgrPointerBundle[];
   answer?: string;
   errors: AgentErrorInfo[];
-  timings: Partial<Record<AgentWorkflowStep, number>>;
+  timings: Partial<Record<AgentWorkflowStep, number>> & {
+    graphBuildMs?: number;
+    pointerExpansionMs?: number;
+  };
   elapsedMs: number;
   createdAt: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> & {
+    pointerCount?: number;
+    droppedPointers?: number;
+  };
 };
 
 export type WebSearchResult = {
@@ -189,11 +198,23 @@ export type Synthesizer = {
     question: string;
     evidence: EvidenceChunk[];
     citations: AgentCitation[];
+    pointerBundles?: PpgrPointerBundle[];
     model?: string;
     signal?: AbortSignal;
   }): Promise<string>;
 };
 
+export type PpgrPointerBundle = {
+  id: string;
+  pageId: string;
+  pageUrl: string;
+  nodeId: string;
+  pointerType: 'figure' | 'table';
+  pointerLabel?: string;
+  pointerAnchor?: string;
+  text: string;
+  score: number;
+};
 export type RetrievalStrategy = {
   retrieve(request: {
     question: string;
