@@ -17,6 +17,7 @@ import { createAgentSkillsPlugin } from '@agent-harness/ext-agent-skills';
 import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';
 import { createArtifactsPlugin } from '@agent-harness/ext-artifacts';
 import { createDesignMdPlugin } from '@agent-harness/ext-design-md';
+import { createHyperframesPlugin } from '@agent-harness/ext-hyperframes';
 import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
 import { createWorkflowCanvasPlugin } from '@agent-harness/ext-workflow-canvas';
 import type { AgentArtifact } from './artifacts';
@@ -200,6 +201,7 @@ export async function createDefaultExtensionRuntime(
     })],
     ['agent-harness.ext.agents-md', () => createAgentsMdHookPlugin(workspaceFiles)],
     ['agent-harness.ext.design-md-context', () => createDesignMdPlugin({ documents: designDocuments })],
+    ['agent-harness.ext.hyperframes', () => createHyperframesPlugin()],
     ['agent-harness.ext.workflow-canvas', () => createWorkflowCanvasPlugin()],
     ['agent-harness.ext.artifacts-context', () => createArtifactsPlugin()],
     ['agent-harness.ext.local-model-connector', () => createLocalModelConnectorPlugin()],
