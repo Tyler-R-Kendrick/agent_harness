@@ -134,7 +134,9 @@ import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+  areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
+  areStagedRoutingChecksPassing,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
   inferBenchmarkTaskClass,
@@ -4089,7 +4091,17 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
-    if (requestBenchmarkRoute) {
+    const rolloutChecksPass = areStagedRoutingChecksPassing([
+      { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
+      { id: 'misroute-prevention-escalation', prompt: 'security', expectedModelClass: 'premium' },
+      { id: 'cost-win-simple', prompt: 'summarize', expectedModelClass: 'cheap' },
+      { id: 'policy-invariants', prompt: 'policy', expectedModelClass: 'cheap' },
+    ]);
+    const shouldEnforceBenchmarkRouting = requestBenchmarkRoute
+      && benchmarkRoutingSettings.enabled
+      && benchmarkRoutingSettings.routerMode === 'enforce'
+      && rolloutChecksPass;
+    if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
         if (routed.provider === 'ghcp') {
@@ -4112,6 +4124,12 @@ function ChatPanel({
           requestLocalModel = routedLocalModel;
         }
       }
+    } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
+      appendSharedMessages([{
+        id: `shadow-routing-${Date.now()}`,
+        role: 'system',
+        content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
+      }]);
     }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
