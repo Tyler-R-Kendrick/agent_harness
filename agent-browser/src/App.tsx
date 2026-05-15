@@ -20935,6 +20935,7 @@ function AgentBrowserApp() {
                   onCreateDashboardWidget={createDashboardWidgetFromCanvas}
                   onOpenWidgetEditor={(widgetId) => openDashboardWidgetEditor(widgetId)}
                   onPatchElement={patchActiveHarnessElement}
+                  onClose={() => {}}
                   dragHandleProps={dragHandleProps}
                 />
               );
