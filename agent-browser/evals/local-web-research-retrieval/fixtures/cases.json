@@ -1,0 +1,46 @@
+[
+  {
+    "id": "kuzu-pathrag",
+    "query": "How does Kuzu-WASM support offline PathRAG retrieval?",
+    "extractedPages": [
+      {
+        "id": "page-1",
+        "url": "https://example.com/kuzu",
+        "normalizedUrl": "https://example.com/kuzu",
+        "title": "Kuzu-WASM and PathRAG",
+        "text": "Kuzu-WASM enables browser-local graph traversal. PathRAG returns short evidence paths for explainable retrieval.",
+        "length": 118,
+        "fetchedAt": "2026-05-01T00:00:00.000Z",
+        "sourceResultId": "search-1"
+      },
+      {
+        "id": "page-2",
+        "url": "https://example.com/noise",
+        "normalizedUrl": "https://example.com/noise",
+        "title": "General AI News",
+        "text": "Unrelated model launch details and marketing copy.",
+        "length": 52,
+        "fetchedAt": "2026-05-01T00:00:00.000Z",
+        "sourceResultId": "search-2"
+      }
+    ],
+    "expectedCitations": ["https://example.com/kuzu"]
+  },
+  {
+    "id": "searxng-citations",
+    "query": "Why do local web research agents cite extracted pages?",
+    "extractedPages": [
+      {
+        "id": "page-3",
+        "url": "https://example.com/citations",
+        "normalizedUrl": "https://example.com/citations",
+        "title": "Evidence-first citation flow",
+        "text": "Local web research agents rank extracted evidence chunks and attach citations to each claim.",
+        "length": 95,
+        "fetchedAt": "2026-05-01T00:00:00.000Z",
+        "sourceResultId": "search-1"
+      }
+    ],
+    "expectedCitations": ["https://example.com/citations"]
+  }
+]

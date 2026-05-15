@@ -134,7 +134,9 @@ import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
   DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+  areStagedRoutingChecksPassing,
   buildBenchmarkRoutingCandidates,
+  areStagedRoutingChecksPassing,
   discoverBenchmarkEvidence,
   getBenchmarkTaskClass,
   inferBenchmarkTaskClass,
@@ -4089,7 +4091,17 @@ function ChatPanel({
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
       hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
     });
-    if (requestBenchmarkRoute) {
+    const rolloutChecksPass = areStagedRoutingChecksPassing([
+      { id: 'misroute-prevention-complex', prompt: 'complex', expectedModelClass: 'premium' },
+      { id: 'misroute-prevention-escalation', prompt: 'security', expectedModelClass: 'premium' },
+      { id: 'cost-win-simple', prompt: 'summarize', expectedModelClass: 'cheap' },
+      { id: 'policy-invariants', prompt: 'policy', expectedModelClass: 'cheap' },
+    ]);
+    const shouldEnforceBenchmarkRouting = requestBenchmarkRoute
+      && benchmarkRoutingSettings.enabled
+      && benchmarkRoutingSettings.routerMode === 'enforce'
+      && rolloutChecksPass;
+    if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
         if (routed.provider === 'ghcp') {
@@ -4112,6 +4124,12 @@ function ChatPanel({
           requestLocalModel = routedLocalModel;
         }
       }
+    } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
+      appendSharedMessages([{
+        id: `shadow-routing-${Date.now()}`,
+        role: 'system',
+        content: `[shadow-routing] ${requestBenchmarkRoute.taskClass} -> ${requestBenchmarkRoute.candidate.ref} (${requestBenchmarkRoute.reason})`,
+      }]);
     }
     if (providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
@@ -16478,20 +16496,10 @@ function AgentBrowserApp() {
   const editingFile = activeWorkspaceViewState.editingFilePath ? activeWorkspaceFiles.find((f) => f.path === activeWorkspaceViewState.editingFilePath) ?? null : null;
   const activeDashboardWidgetId = activeWorkspaceViewState.activeDashboardWidgetId ?? null;
   const activeDashboardWidget = activeDashboardWidgetId ? activeHarnessSpec.elements[activeDashboardWidgetId] ?? null : null;
-  const hasActiveRenderPane = Boolean(activeDashboardWidget || editingFile || activeArtifactPanelArtifact || openBrowserTabs.length || activeSessionIds.length);
-  const shouldRenderDashboard = activeWorkspaceViewState.dashboardOpen && !hasActiveRenderPane;
+  const shouldRenderDashboard = activeWorkspace.type === 'workspace';
 
   const activeRenderPanes = useMemo<WorkspaceMcpRenderPane[]>(() => {
     const panes: WorkspaceMcpRenderPane[] = [];
-
-    if (shouldRenderDashboard) {
-      panes.push({
-        id: `dashboard:${activeWorkspaceId}`,
-        paneType: 'dashboard',
-        itemId: activeWorkspaceId,
-        label: `${activeWorkspace.name} harness`,
-      });
-    }
 
     if (activeDashboardWidget) {
       panes.push({
@@ -16553,15 +16561,11 @@ function AgentBrowserApp() {
     activeDashboardWidget,
     activeArtifactPanelArtifact,
     activeArtifactPanelFile,
-    activeWorkspace.name,
     activeWorkspaceSessions,
     activeWorkspaceId,
     activeWorkspaceViewState.panelOrder,
-    activeDashboardWidgetId,
     editingFile,
     openBrowserTabs,
-    activeWorkspaceViewState.dashboardOpen,
-    shouldRenderDashboard,
   ]);
   const activeClipboardEntries = useMemo<WorkspaceMcpClipboardEntry[]>(() => clipboardHistory.map((entry, index) => ({
     id: entry.id,
@@ -19858,20 +19862,6 @@ function AgentBrowserApp() {
   }, [pendingReviewFollowUps, pendingReviewFollowUpRetryTick]);
 
   const closeRenderPaneFromMcp = useCallback(async (paneId: string) => {
-    if (paneId === `dashboard:${activeWorkspaceId}`) {
-      setWorkspaceViewStateByWorkspace((current) => {
-        const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-        return {
-          ...current,
-          [activeWorkspaceId]: {
-            ...existing,
-            dashboardOpen: false,
-            panelOrder: existing.panelOrder.filter((id) => id !== paneId),
-          },
-        };
-      });
-      return { paneId, closed: true };
-    }
     if (paneId.startsWith(`widget-editor:${activeWorkspaceId}:`)) {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
@@ -20883,9 +20873,6 @@ function AgentBrowserApp() {
             },
           }));
           const panelEntries: Array<[string, Panel]> = [];
-          if (shouldRenderDashboard) {
-            panelEntries.push([`dashboard:${activeWorkspaceId}`, { type: 'dashboard', workspaceId: activeWorkspaceId }]);
-          }
           if (activeDashboardWidget) {
             panelEntries.push([
               `widget-editor:${activeWorkspaceId}:${activeDashboardWidget.id}`,
@@ -21102,28 +21089,45 @@ function AgentBrowserApp() {
               />
             );
           };
+          const renderDashboard = () => renderPanel({ type: 'dashboard', workspaceId: activeWorkspaceId });
           if (!allPanels.length) {
-            return <ClosedPanelsPlaceholder workspaceName={activeWorkspace.name} onNewSession={() => addSessionToWorkspace(activeWorkspaceId)} />;
+            return shouldRenderDashboard
+              ? renderDashboard()
+              : <ClosedPanelsPlaceholder workspaceName={activeWorkspace.name} onNewSession={() => addSessionToWorkspace(activeWorkspaceId)} />;
           }
-          if (allPanels.length > 1) {
-            return (
-              <PanelSplitView
-                panels={allPanels}
-                renderPanel={renderPanel}
-                onOrderChange={(paneIds) => setWorkspaceViewStateByWorkspace((current) => {
-                  const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-                  return {
-                    ...current,
-                    [activeWorkspaceId]: {
-                      ...existing,
-                      panelOrder: paneIds,
-                    },
-                  };
-                })}
-              />
-            );
-          }
-          return renderPanel(allPanels[0]);
+          const renderWindows = () => {
+            if (allPanels.length > 1) {
+              return (
+                <PanelSplitView
+                  panels={allPanels}
+                  renderPanel={renderPanel}
+                  onOrderChange={(paneIds) => setWorkspaceViewStateByWorkspace((current) => {
+                    const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
+                    return {
+                      ...current,
+                      [activeWorkspaceId]: {
+                        ...existing,
+                        panelOrder: paneIds,
+                      },
+                    };
+                  })}
+                />
+              );
+            }
+            return renderPanel(allPanels[0]);
+          };
+          return (
+            <div className="workspace-stage">
+              {shouldRenderDashboard ? (
+                <div className="workspace-dashboard-base">
+                  {renderDashboard()}
+                </div>
+              ) : null}
+              <div className="workspace-window-layer">
+                {renderWindows()}
+              </div>
+            </div>
+          );
         })()}
       </main>
       {showAddFileMenu ? <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add file"><div className="modal-card compact"><div className="modal-header"><h2>Add file</h2><button type="button" className="icon-button" onClick={() => setShowAddFileMenu(null)}><Icon name="x" /></button></div><div className="add-file-form"><label className="file-editor-field"><span>Name (optional)</span><input aria-label="Capability name" value={addFileName} onChange={(event) => setAddFileName(event.target.value)} placeholder="e.g. review-pr" /></label><div className="add-file-buttons"><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('tool', showAddFileMenu)}>Tool</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('plugin', showAddFileMenu)}>Plugin</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('hook', showAddFileMenu)}>Hook</button><button type="button" className="secondary-button" onClick={() => handleAddFileToWorkspace('memory', showAddFileMenu)}>Memory</button></div></div></div></div> : null}

@@ -5753,6 +5753,62 @@ styles:
     expect(screen.getAllByRole('region', { name: /Chat panel|Terminal/ })).toHaveLength(1);
   });
 
+  it('keeps the dashboard mounted as the workspace base while windows are open', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    fireEvent.click(screen.getByText('Hugging Face'));
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+
+    const dashboard = screen.getByRole('region', { name: 'Harness dashboard' });
+    expect(within(dashboard).getByRole('article', { name: 'Session summary widget' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Page overlay' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'No panels open' })).not.toBeInTheDocument();
+  });
+
+  it('does not expose the dashboard as a closeable render pane and reveals it after closing all windows', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const modelContext = installModelContext(window);
+    const webmcpTool = createWebMcpTool(modelContext!);
+
+    await expect(webmcpTool.execute?.({ tool: 'list_render_panes' }, {} as never)).resolves.toEqual([]);
+
+    fireEvent.click(screen.getByText('Hugging Face'));
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+
+    let renderPanes: Array<{ id: string; paneType: string }> = [];
+    await act(async () => {
+      renderPanes = await webmcpTool.execute?.({ tool: 'list_render_panes' }, {} as never) as Array<{ id: string; paneType: string }>;
+    });
+
+    expect(renderPanes.map((pane) => pane.paneType).sort()).toEqual(['browser-page', 'session']);
+
+    for (const pane of renderPanes) {
+      await act(async () => {
+        await webmcpTool.execute?.({
+          tool: 'close_render_pane',
+          args: { paneId: pane.id },
+        }, {} as never);
+        await Promise.resolve();
+      });
+    }
+
+    expect(screen.queryByRole('region', { name: 'Page overlay' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Chat panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'No panels open' })).not.toBeInTheDocument();
+  });
+
   it('highlights active session nodes in the sidebar tree', async () => {
     vi.useFakeTimers();
     render(<App />);
@@ -5832,7 +5888,7 @@ styles:
     expect(splitRows).toHaveLength(2);
     expect(splitRows[0]).toHaveClass('panels-2');
     expect(splitRows[1]).toHaveClass('panels-1');
-    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
   });
 
   it('hides panels that would breach the minimum panel height', async () => {
@@ -5861,7 +5917,7 @@ styles:
     const splitRows = document.querySelectorAll('.browser-split-view');
     expect(splitRows).toHaveLength(1);
     expect(splitRows[0]).toHaveClass('panels-2');
-    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.queryByLabelText('Chat panel')).not.toBeInTheDocument();
   });
@@ -5892,7 +5948,7 @@ styles:
     expect(splitRows).toHaveLength(2);
     expect(splitRows[0]).toHaveClass('panels-2');
     expect(splitRows[1]).toHaveClass('panels-1');
-    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });
@@ -6060,7 +6116,7 @@ styles:
     const handles = document.querySelectorAll('.panel-titlebar--draggable');
     expect(handles).toHaveLength(3);
     // Both panel types must still be rendered after interaction
-    expect(screen.queryByRole('region', { name: 'Harness dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Harness dashboard' })).toBeInTheDocument();
     expect(screen.getAllByRole('region', { name: 'Page overlay' })).toHaveLength(2);
     expect(screen.getByLabelText('Chat panel')).toBeInTheDocument();
   });

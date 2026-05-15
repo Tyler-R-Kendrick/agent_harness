@@ -900,6 +900,8 @@ describe('workspaceTools', () => {
       agentId: null,
       toolIds: [],
       cwd: '/workspace',
+      routing: null,
+      routingTelemetry: [],
       messages: [
         { role: 'system', content: 'Active workspace: Research' },
         { role: 'user', content: 'Summarize the plan.' },
@@ -936,6 +938,8 @@ describe('workspaceTools', () => {
       agentId: null,
       toolIds: [],
       cwd: '/workspace',
+      routing: null,
+      routingTelemetry: [],
       messages: [
         { role: 'system', content: 'Active workspace: Research' },
         { role: 'user', content: 'Open the terminal and inspect the repo.' },
