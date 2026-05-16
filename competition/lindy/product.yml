@@ -1,0 +1,23 @@
+slug: lindy
+name: Lindy
+vendor: Lindy
+segment: ai-assistant-workflow-automation
+product_path: competition/lindy
+design_path: competition/lindy/design
+features_path: competition/lindy/features
+marketing_path: competition/lindy/marketing
+gossip_path: competition/lindy/gossip
+snapshot_date: 2026-05-16
+primary_sources:
+  - https://www.lindy.ai/
+  - https://www.lindy.ai/ai-agent
+  - https://docs.lindy.ai/pricing
+  - https://www.lindy.ai/integrations
+secondary_sources:
+  - https://www.trustpilot.com/review/lindy.ai
+  - https://community.lindy.ai/x/support/1nfa02599kn0/issues-with-lindy-automation-repeated-workflow-fai
+  - https://www.reddit.com/r/AI_Agents/comments/1jtmm2z
+positioning: "AI assistant and no-code agent builder for inbox, meetings, calendar, follow-ups, integrations, and computer-use workflows."
+customer_model: "Self-serve subscriptions from Plus through Max with usage capacity and connected inbox limits, plus enterprise plans and a services-led 'built in 48 hours' motion."
+competitive_threat_level: medium
+notes: "Competes when buyers want office workflow agents with browser/computer use bundled into integrations rather than a developer-first browser workbench."

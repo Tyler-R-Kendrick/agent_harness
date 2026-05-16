@@ -63,6 +63,10 @@ competition/<product-slug>/
 | Cursor Background Agents | AI coding IDE and remote agents | `competition/cursor-background-agents` |
 | Replit Agent | Prompt-to-app agent workspace | `competition/replit-agent` |
 | GitHub Copilot Cloud Agent | Repository-native coding agent | `competition/github-copilot-cloud-agent` |
+| Manus | General-purpose autonomous agent | `competition/manus` |
+| Genspark Super Agent | No-code general agent workspace | `competition/genspark-super-agent` |
+| MultiOn | Autonomous web-agent API | `competition/multion` |
+| Lindy | AI assistant workflow automation | `competition/lindy` |
 
 ## Cross-Market Takeaways
 
@@ -85,4 +89,6 @@ competition/<product-slug>/
 - Coding-agent workbenches are converging on the same delegation loop: scoped task, isolated environment, branch or session, progress log, pull request, and human review. Devin sells this as an AI engineer, Cursor sells it from the IDE, Replit sells it as a full app-builder workspace, and GitHub sells it through repository-native issue and PR distribution.
 - The biggest opening for `agent-browser` against coding agents is evidence quality outside source code: browser session traces, screenshots, user approvals, visual regression artifacts, and local state that remain inspectable after the agent finishes.
 - Variable agent pricing is becoming a category-wide UX problem. Replit credit burn, Devin ACUs, Cursor model-priced background work, and Copilot premium-request/Actions consumption all create anxiety when long-running agents take a wrong turn.
-
+- General-purpose agents such as Manus and Genspark compete above the browser by selling broad delegation and finished artifacts. They can capture mainstream users quickly, but they leave a wedge for `agent-browser` when users need deterministic traces, local state, and exact browser evidence.
+- Local-browser delegation is becoming a shared pattern. Manus Browser Operator and MultiOn local mode validate the logged-in-browser wedge, but they also increase demand for session authorization, action allowlists, and clear stop/recovery controls.
+- Office-agent platforms such as Lindy pull browser/computer use into inbox, meeting, calendar, and CRM workflows. They will win buyers who want packaged work outcomes, while developer-first workbenches can still win on inspectability, reproducibility, and extension surfaces.
