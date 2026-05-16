@@ -126,7 +126,9 @@ export function createHarnessTaskManager(options: HarnessTaskManagerOptions): Ha
     },
     async listTasks() {
       const durableTasks = await options.runtime.listTasks({ type: INTERNAL_TASK_STORE_CONFIG.taskType });
-      return durableTasks.filter(isHarnessDurableTask).map(toHarnessTask);
+      return durableTasks
+        .filter((task) => isHarnessDurableTask(task, options.workspaceId))
+        .map(toHarnessTask);
     },
     async snapshot(): Promise<HarnessTaskSnapshot> {
       return {
@@ -185,7 +187,7 @@ async function updateHarnessTask(
 ): Promise<HarnessManagedTask> {
   const updatedAt = options.now?.() ?? Date.now();
   const updated = await options.runtime.updateTask(id, (task) => {
-    const metadata = harnessMetadataFrom(task);
+    const metadata = workspaceMetadataFrom(task, options.workspaceId);
     return {
       status,
       metadata: {
@@ -199,7 +201,7 @@ async function updateHarnessTask(
 }
 
 function toHarnessTask(record: DurableTaskRecord): HarnessManagedTask {
-  const metadata = harnessMetadataFrom(record);
+  const metadata = record.metadata as HarnessTaskMetadata;
   return {
     ...metadata,
     id: record.id,
@@ -209,17 +211,18 @@ function toHarnessTask(record: DurableTaskRecord): HarnessManagedTask {
   };
 }
 
-function harnessMetadataFrom(record: DurableTaskRecord): HarnessTaskMetadata {
-  if (!isHarnessDurableTask(record)) {
-    throw new Error(`Durable task ${record.id} is not a harness task`);
+function workspaceMetadataFrom(record: DurableTaskRecord, workspaceId: string): HarnessTaskMetadata {
+  if (!isHarnessDurableTask(record, workspaceId)) {
+    throw new Error(`Durable task ${record.id} is not a harness task for workspace ${workspaceId}`);
   }
   return record.metadata as HarnessTaskMetadata;
 }
 
-function isHarnessDurableTask(record: DurableTaskRecord): boolean {
+function isHarnessDurableTask(record: DurableTaskRecord, workspaceId?: string): boolean {
   return record.metadata.kind === 'harness-task'
     && record.metadata.source === 'internal'
-    && typeof record.metadata.identifier === 'string';
+    && typeof record.metadata.identifier === 'string'
+    && (workspaceId === undefined || record.metadata.workspaceId === workspaceId);
 }
 
 function emptyReview(): HarnessTaskReview {
