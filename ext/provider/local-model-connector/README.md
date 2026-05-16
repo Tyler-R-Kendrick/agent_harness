@@ -12,6 +12,29 @@ Local OpenAI-compatible endpoint
 
 The extension only accepts configured PWA origins and only fetches loopback `http://127.0.0.1:<port>/v1` or `http://localhost:<port>/v1` targets. It is not a generic fetch proxy.
 
+## Package Boundary
+
+Use the package root as the stable plugin import:
+
+```ts
+import { createLocalModelConnectorPlugin } from '@agent-harness/ext-local-model-connector';
+```
+
+Use the manifest subpath when a host needs the Agent Harness plugin metadata:
+
+```ts
+import manifest from '@agent-harness/ext-local-model-connector/manifest';
+```
+
+Treat `@agent-harness/ext-local-model-connector/src/*` deep imports as private
+implementation modules. The extension service worker, validation, storage, and
+client modules are packaged for the loadable browser extension and local tests;
+they are not a supported application integration surface.
+
+Published package contents intentionally include the README, plugin manifest,
+Chrome manifest template, build scripts, runtime TypeScript source, and generated
+extension `dist/**` files while excluding source tests and source maps.
+
 ## Developer Setup
 
 Build the extension:
