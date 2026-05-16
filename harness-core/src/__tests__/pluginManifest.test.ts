@@ -204,6 +204,48 @@ describe('plugin manifest standards', () => {
         }],
       }],
     }).issues).toContain('WASI renderer implementations require a WIT world name.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        implementations: [{
+          ...manifest.renderers[0].implementations[0],
+          runtime: 'native',
+        }],
+      }],
+    }).issues).toContain('Renderer implementation runtime "native" is not part of the core renderer standard.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        implementations: [{
+          ...manifest.renderers[0].implementations[0],
+          module: undefined,
+          wasi: undefined,
+        }],
+      }],
+    }).issues).toEqual(expect.arrayContaining([
+      'WASI renderer implementations require a component module.',
+      'WASI renderer implementations require a WIT world name.',
+    ]));
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        implementations: [{
+          ...manifest.renderers[0].implementations[1],
+          component: undefined,
+        }],
+      }],
+    }).issues).toContain('react renderer implementations require a component reference.');
+    expect(validateHarnessPluginManifest({
+      ...manifest,
+      renderers: [{
+        ...manifest.renderers[0],
+        component: undefined,
+        implementations: [],
+      }],
+    }).issues).toContain('Renderer contributions require a component or at least one renderer implementation.');
   });
 
   it('validates VS Code-style activation events and contribution points for provider extensions', () => {
