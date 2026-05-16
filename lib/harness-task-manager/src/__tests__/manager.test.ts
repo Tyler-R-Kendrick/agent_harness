@@ -204,6 +204,49 @@ describe('harness task manager', () => {
     });
   });
 
+  it('isolates task lists, identifiers, and mutations by workspace when managers share a runtime', async () => {
+    const store = createMemoryDurableTaskStore();
+    const runtime = createDurableTaskRuntime({
+      store,
+      lockOwner: 'task-manager-workspaces',
+      now: () => Date.parse('2026-05-09T18:30:00.000Z'),
+    });
+    const alpha = createHarnessTaskManager({
+      runtime,
+      workspaceId: 'alpha-workspace',
+      now: () => Date.parse('2026-05-09T18:30:00.000Z'),
+    });
+    const beta = createHarnessTaskManager({
+      runtime,
+      workspaceId: 'beta-workspace',
+      now: () => Date.parse('2026-05-09T18:30:00.000Z'),
+    });
+
+    const alphaTask = await alpha.createTask({
+      title: 'Alpha workspace task',
+      description: 'Should remain scoped to alpha.',
+    });
+    const betaTask = await beta.createTask({
+      title: 'Beta workspace task',
+      description: 'Should start its own identifier sequence.',
+    });
+
+    expect(alphaTask.identifier).toBe('HT-1');
+    expect(betaTask.identifier).toBe('HT-1');
+    expect((await alpha.listTasks()).map((task) => task.title)).toEqual(['Alpha workspace task']);
+    expect((await beta.listTasks()).map((task) => task.title)).toEqual(['Beta workspace task']);
+    await expect(beta.dispatchToAgent(alphaTask.id, {
+      agentId: 'beta-agent',
+      role: 'tests',
+      worktreeBranch: 'agent/beta',
+      worktreePath: '.symphony/workspaces/beta',
+    })).rejects.toThrow(`Durable task ${alphaTask.id} is not a harness task for workspace beta-workspace`);
+    expect((await alpha.listTasks())[0]).toMatchObject({
+      lane: 'ready',
+      assignee: null,
+    });
+  });
+
   it('keeps malformed durable records out of normal lists and reports invalid task mutations', async () => {
     const { runtime, manager } = createManager();
     const malformed = await runtime.enqueue('harness.task', {}, {
