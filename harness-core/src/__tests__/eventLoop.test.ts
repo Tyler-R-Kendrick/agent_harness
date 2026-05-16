@@ -361,6 +361,45 @@ describe('agent event loop', () => {
     expect(sideEffects).not.toContain('second');
   });
 
+  it('continues to later invocations when an earlier invocation has no dispatch event', async () => {
+    const sideEffects: string[] = [];
+    const actors = new AgentLoopActorRegistry();
+    actors.register({
+      id: 'first-agent',
+      event: 'loop.first',
+      run: () => {
+        sideEffects.push('first');
+        return {};
+      },
+    });
+    actors.register({
+      id: 'second-agent',
+      event: 'loop.second',
+      run: () => {
+        sideEffects.push('second');
+        return { event: { type: 'loop.exit' } };
+      },
+    });
+
+    const result = await runAgentEventLoop({
+      id: 'fallthrough-invocation-loop',
+      initial: 'running',
+      states: {
+        running: {
+          events: [
+            { type: 'loop.first', actorIds: ['first-agent'] },
+            { type: 'loop.second', actorIds: ['second-agent'] },
+          ],
+          on: { 'loop.exit': 'done' },
+        },
+        done: { type: 'final' },
+      },
+    }, { actors });
+
+    expect(result.finalState).toBe('done');
+    expect(sideEffects).toEqual(['first', 'second']);
+  });
+
   it('throws when multiple parallel actors return conflicting dispatch events', async () => {
     const actors = new AgentLoopActorRegistry();
     actors.register({
@@ -385,5 +424,27 @@ describe('agent event loop', () => {
         done: { type: 'final' },
       },
     }, { actors })).rejects.toThrow(/conflicting events in parallel/i);
+  });
+
+  it('throws when multiple serial actors dispatch for the same invocation', async () => {
+    const actors = new AgentLoopActorRegistry();
+    actors.register({
+      id: 'actor-a',
+      event: 'loop.race',
+      run: () => ({ event: { type: 'loop.exit-a' } }),
+    });
+    actors.register({
+      id: 'actor-b',
+      event: 'loop.race',
+      run: () => ({ event: { type: 'loop.exit-b' } }),
+    });
+
+    await expect(runAgentEventLoop({
+      id: 'serial-conflict-loop',
+      initial: 'running',
+      states: {
+        running: { events: [{ type: 'loop.race', actorIds: ['actor-a', 'actor-b'] }] },
+      },
+    }, { actors })).rejects.toThrow(/Multiple actors dispatched events/);
   });
 });
