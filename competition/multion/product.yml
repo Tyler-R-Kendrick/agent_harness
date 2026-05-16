@@ -1,0 +1,22 @@
+slug: multion
+name: MultiOn
+vendor: MultiOn
+segment: autonomous-web-agent-api
+product_path: competition/multion
+design_path: competition/multion/design
+features_path: competition/multion/features
+marketing_path: competition/multion/marketing
+gossip_path: competition/multion/gossip
+snapshot_date: 2026-05-16
+primary_sources:
+  - https://docs.multion.ai/
+  - https://docs.multion.ai/learn/sessions
+  - https://docs.multion.ai/api-reference/autonomous-api-reference/browse
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1cy1kn9/d_ai_agents_too_early_too_expensive_too_unreliable/
+  - https://www.reddit.com/r/SaaS/comments/1qx1zlv/is_it_useful/
+  - https://www.reddit.com/r/AI_Agents/comments/1swsz8s/what_are_people_using_browser_based_agents_for/
+positioning: "Motor Cortex layer for AI: API-first autonomous web actions with remote browser sessions, local Chrome extension mode, proxy support, and scalable parallel agents."
+customer_model: "Developer API and playground model for teams building web-agent workflows into their own products; support and community through docs, Discord, and email."
+competitive_threat_level: medium
+notes: "Competes directly with agent-browser infrastructure primitives, especially session APIs and local-extension browser control."

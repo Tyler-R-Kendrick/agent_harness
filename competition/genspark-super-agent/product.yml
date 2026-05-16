@@ -1,0 +1,20 @@
+slug: genspark-super-agent
+name: Genspark Super Agent
+vendor: Mainfunc / Genspark
+segment: no-code-general-agent-workspace
+product_path: competition/genspark-super-agent
+design_path: competition/genspark-super-agent/design
+features_path: competition/genspark-super-agent/features
+marketing_path: competition/genspark-super-agent/marketing
+gossip_path: competition/genspark-super-agent/gossip
+snapshot_date: 2026-05-16
+primary_sources:
+  - https://www.genspark.ai/helpcenter
+  - https://openai.com/index/genspark/
+secondary_sources:
+  - https://vantaige.io/ai-tool/genspark
+  - https://qatar.websummit.com/wp-media/2026/01/Genspark-WebSummit-Press-Release.pdf
+positioning: "No-code Super Agent that plans and completes everyday work across research, slides, docs, data, design, developer tasks, email, phone calls, and media."
+customer_model: "Freemium or subscription AI workspace with credits and higher-tier priority/agent usage; growth marketed through viral personal-agent workflows and broad feature breadth."
+competitive_threat_level: medium
+notes: "Competes with agent-browser when the buyer values polished deliverables and no-code multi-tool breadth more than inspectable browser execution."

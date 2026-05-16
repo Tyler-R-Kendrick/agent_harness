@@ -1,0 +1,22 @@
+slug: manus
+name: Manus
+vendor: Monica / Butterfly Effect
+segment: general-purpose-autonomous-agent
+product_path: competition/manus
+design_path: competition/manus/design
+features_path: competition/manus/features
+marketing_path: competition/manus/marketing
+gossip_path: competition/manus/gossip
+snapshot_date: 2026-05-16
+primary_sources:
+  - https://manus.im/docs/features/browser-operator
+  - https://manus.im/blog/manus-preferred-browser
+  - https://open.manus.im/docs
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1pau2f2/manus_ai_users_what_has_your_experience_really/
+  - https://www.reddit.com/r/ManusOfficial/comments/1p25w2p/were_launching_manus_browser_operator/
+  - https://www.reddit.com/r/ManusOfficial/comments/1kr6pkj
+positioning: "General AI agent that executes multi-step work across cloud browser, local browser, files, and API-created tasks."
+customer_model: "Prosumer and team subscription/credit usage model, with API access for programmatic agent task creation and browser operator workflows for logged-in desktop sessions."
+competitive_threat_level: high
+notes: "Directly competes for the 'delegate real web work to an agent' job; Browser Operator and Preferred Browser reduce the logged-in session gap that local agent-browser workflows target."
