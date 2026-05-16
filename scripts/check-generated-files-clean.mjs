@@ -49,6 +49,10 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === 'output' || filePath.startsWith('output/'),
   },
   {
+    label: '.patches-*/',
+    matches: (filePath) => /^\.patches-[^/]+(?:\/|$)/u.test(filePath),
+  },
+  {
     label: '.agentv/cache.json',
     matches: (filePath) => filePath === '.agentv/cache.json',
   },
@@ -201,7 +205,7 @@ function resolveGitIndexPath(cwd) {
 }
 
 export function checkGeneratedFilesClean(cwd) {
-  return findTrackedGeneratedArtifacts(readTrackedFiles(cwd));
+  return findTrackedGeneratedArtifacts(filterExistingTrackedFiles(readTrackedFiles(cwd), cwd));
 }
 
 export function readTrackedFilesFromLineInput(input) {
@@ -209,6 +213,10 @@ export function readTrackedFilesFromLineInput(input) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+export function filterExistingTrackedFiles(trackedFiles, cwd) {
+  return trackedFiles.filter((filePath) => existsSync(path.join(cwd, normalizeGitPath(filePath))));
 }
 
 function defaultRepoRoot() {
@@ -220,7 +228,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const trackedFiles = process.argv.includes('--stdin-lines')
       ? readTrackedFilesFromLineInput(readFileSync(0, 'utf8'))
       : readTrackedFiles(defaultRepoRoot());
-    const artifacts = findTrackedGeneratedArtifacts(trackedFiles);
+    const artifacts = findTrackedGeneratedArtifacts(filterExistingTrackedFiles(trackedFiles, defaultRepoRoot()));
     if (artifacts.length > 0) {
       process.stderr.write(`${formatTrackedGeneratedArtifactsError(artifacts)}\n`);
       process.exit(1);
