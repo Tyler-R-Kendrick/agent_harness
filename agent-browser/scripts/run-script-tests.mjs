@@ -7,6 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolvePackageBin } from './search-eval-target.mjs';
 import {
   buildGitLsFilesInvocation,
+  filterExistingTrackedFiles,
   findTrackedGeneratedArtifacts,
   formatTrackedGeneratedArtifactsError,
   readTrackedFilesFromGitIndex,
@@ -613,6 +614,7 @@ async function main() {
     'agent-browser-debug.log',
     'output/evals/search-fulfillment-agentv/timing.json',
     'output/dev-server/agent-browser-5174.out.log',
+    '.patches-JtbPSD/guidance-ts+1.0.0.patch',
     '.npm-cache/_logs/2026-05-02T00_00_00_000Z-debug-0.log',
     '_cacache/index-v5/00/00/cache-entry',
     '_logs/2026-05-02T00_00_00_000Z-debug-0.log',
@@ -635,6 +637,7 @@ async function main() {
       'agent-browser-debug.log',
       'output/evals/search-fulfillment-agentv/timing.json',
       'output/dev-server/agent-browser-5174.out.log',
+      '.patches-JtbPSD/guidance-ts+1.0.0.patch',
       '.npm-cache/_logs/2026-05-02T00_00_00_000Z-debug-0.log',
       '_cacache/index-v5/00/00/cache-entry',
       '_logs/2026-05-02T00_00_00_000Z-debug-0.log',
@@ -650,6 +653,7 @@ async function main() {
     /Generated or local-only artifacts are tracked by git/,
   );
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /output\/evals/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.patches-JtbPSD\/guidance-ts\+1\.0\.0\.patch/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/package-lock\.json/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /coverage\/lcov\.info/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /playwright-report\/index\.html/);
@@ -684,6 +688,16 @@ async function main() {
   assert.deepEqual(
     readTrackedFilesFromLineInput("src/index.ts\r\n\r\noutput/generated.json\n"),
     ['src/index.ts', 'output/generated.json'],
+  );
+  const deletedTrackedFileFixture = await mkdtemp(path.join(tmpdir(), 'generated-files-deleted-'));
+  await mkdir(path.join(deletedTrackedFileFixture, 'src'));
+  await writeFile(path.join(deletedTrackedFileFixture, 'src', 'index.ts'), 'export {};\n');
+  assert.deepEqual(
+    filterExistingTrackedFiles(
+      ['src/index.ts', '.patches-JtbPSD/guidance-ts+1.0.0.patch'],
+      deletedTrackedFileFixture,
+    ),
+    ['src/index.ts'],
   );
 
   const gitIndexFixture = await mkdtemp(path.join(tmpdir(), 'generated-files-git-index-'));

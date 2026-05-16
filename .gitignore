@@ -31,6 +31,7 @@ file-editor-edit-mode.png
 file-editor-label-mode.png
 output/
 .dev-server*.log
+.patches-*/
 .codex-tk26-objects/
 .codex-tk26-index-*
 .tmp-*
