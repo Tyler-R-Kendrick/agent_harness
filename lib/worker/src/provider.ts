@@ -84,6 +84,9 @@ export class DefaultProviderRegistry implements ProviderRegistry {
   private readonly providers = new Map<ProviderId, Provider>();
 
   register(provider: Provider): void {
+    if (this.providers.has(provider.ref.id)) {
+      throw new Error(`Provider already registered: ${provider.ref.id}`);
+    }
     this.providers.set(provider.ref.id, provider);
   }
 
