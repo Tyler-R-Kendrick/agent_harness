@@ -31,6 +31,8 @@ describe('registerSessionTools', () => {
       agentId,
       toolIds,
       mode,
+      routing,
+      routingTelemetryEvent,
     }: {
       sessionId: string;
       message?: string;
@@ -39,6 +41,18 @@ describe('registerSessionTools', () => {
       agentId?: string | null;
       toolIds?: readonly string[];
       mode?: 'agent' | 'terminal';
+      routing?: { enabled: boolean; mode?: 'shadow' | 'enforce'; escalationKeywords?: string[] };
+      routingTelemetryEvent?: {
+        timestamp: string;
+        policyId: string | null;
+        selectedProvider: string;
+        selectedModel: string;
+        score: number;
+        confidence: number;
+        reasonVector: string[];
+        estimatedCostDeltaUsd: number | null;
+        estimatedCostDeltaPct: number | null;
+      };
     }) => ({
       id: sessionId,
       name: 'Ops Session',
@@ -48,6 +62,8 @@ describe('registerSessionTools', () => {
       agentId: agentId ?? null,
       toolIds: toolIds ?? [],
       cwd: '/workspace/app',
+      routing: routing ?? null,
+      routingTelemetry: routingTelemetryEvent ? [routingTelemetryEvent] : [],
       messages: [
         { role: 'system' as const, content: 'Active workspace: Research' },
         { role: 'user' as const, content: message ?? 'hello' },
@@ -214,6 +230,139 @@ describe('registerSessionTools', () => {
       sessionId: 'session-1',
       toolIds: ['cli'],
     });
+
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: {
+        sessionId: 'session-1',
+        scope: 'project',
+        routing: {
+          enabled: true,
+          mode: 'enforce',
+          escalationKeywords: ['prod'],
+        },
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routing: {
+        enabled: true,
+        mode: 'enforce',
+        escalationKeywords: ['prod'],
+      },
+    }));
+    expect(onWriteSession).toHaveBeenNthCalledWith(6, {
+      sessionId: 'session-1',
+      routingScope: 'project',
+      routing: {
+        enabled: true,
+        mode: 'enforce',
+        escalationKeywords: ['prod'],
+      },
+    });
+
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: {
+        sessionId: 'session-1',
+        policyId: '  ',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.2',
+        score: 0.84,
+        confidence: 0.9,
+        reasonVector: ['quality', 'latency'],
+        estimatedCostDeltaUsd: 0.02,
+        estimatedCostDeltaPct: 12,
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routingTelemetry: [
+        expect.objectContaining({
+          policyId: null,
+          selectedProvider: 'openai',
+          selectedModel: 'gpt-5.2',
+          score: 0.84,
+          confidence: 0.9,
+          reasonVector: ['quality', 'latency'],
+          estimatedCostDeltaUsd: 0.02,
+          estimatedCostDeltaPct: 12,
+        }),
+      ],
+    }));
+    expect(onWriteSession).toHaveBeenNthCalledWith(7, {
+      sessionId: 'session-1',
+      routingTelemetryEvent: expect.objectContaining({
+        policyId: null,
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.2',
+        score: 0.84,
+        confidence: 0.9,
+        reasonVector: ['quality', 'latency'],
+        estimatedCostDeltaUsd: 0.02,
+        estimatedCostDeltaPct: 12,
+      }),
+    });
+
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: {
+        sessionId: 'session-1',
+        routing: { enabled: false },
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routing: { enabled: false },
+    }));
+    expect(onWriteSession).toHaveBeenNthCalledWith(8, {
+      sessionId: 'session-1',
+      routingScope: 'session',
+      routing: { enabled: false },
+    });
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: {
+        sessionId: 'session-1',
+        policyId: 'cost-aware',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.2-mini',
+        score: 0.74,
+        confidence: 0.81,
+        reasonVector: ['cost'],
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routingTelemetry: [
+        expect.objectContaining({
+          policyId: 'cost-aware',
+          estimatedCostDeltaUsd: null,
+          estimatedCostDeltaPct: null,
+        }),
+      ],
+    }));
+
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { sessionId: 'session-1', routing: null },
+    }, {} as never)).rejects.toThrow('routing must be an object');
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { sessionId: 'session-1', routing: { enabled: 'yes' } },
+    }, {} as never)).rejects.toThrow('routing.enabled');
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { sessionId: 'session-1', routing: { enabled: true, mode: 'auto' } },
+    }, {} as never)).rejects.toThrow('routing.mode');
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { sessionId: 'session-1', routing: { enabled: true, escalationKeywords: [1] } },
+    }, {} as never)).rejects.toThrow('escalationKeywords');
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: { sessionId: 'session-1', selectedProvider: 'openai', score: 1, confidence: 1, reasonVector: [] },
+    }, {} as never)).rejects.toThrow('selectedProvider and selectedModel');
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: { sessionId: 'session-1', selectedProvider: 'openai', selectedModel: 'gpt-5.2', score: 1, confidence: 1, reasonVector: [1] },
+    }, {} as never)).rejects.toThrow('reasonVector');
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: { sessionId: 'session-1', selectedProvider: 'openai', selectedModel: 'gpt-5.2', score: Number.NaN, confidence: 1, reasonVector: [] },
+    }, {} as never)).rejects.toThrow('score and confidence');
 
     await expect(webmcpTool.execute?.({
       tool: 'read_session',
