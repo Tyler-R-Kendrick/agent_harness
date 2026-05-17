@@ -1,0 +1,21 @@
+slug: gumloop
+name: Gumloop
+vendor: Gumloop
+segment: ai-native-workflow-automation
+product_path: competition/gumloop
+design_path: competition/gumloop/design
+features_path: competition/gumloop/features
+marketing_path: competition/gumloop/marketing
+gossip_path: competition/gumloop/gossip
+snapshot_date: 2026-05-17
+primary_sources:
+  - https://docs.gumloop.com/
+  - https://docs.gumloop.com/core-concepts/agents
+  - https://docs.gumloop.com/core-concepts/credits
+secondary_sources:
+  - https://www.reddit.com/r/automation/comments/1qh1d0y/gumloop_vs_n8n_for_ai_automation_my_take_after/
+  - https://www.techradar.com/best/best-ai-tools
+positioning: "AI-native no-code workflow automation for teams that want agents, web data, app actions, and reusable flows without building agent infrastructure."
+customer_model: "Subscription and credit-based usage model; monthly credits cover workflow runs, AI nodes, agent chats, model usage, and enrichment operations."
+competitive_threat_level: medium
+notes: "Competes with browser-agent workbenches for research, enrichment, sales, marketing, and operations tasks where the buyer values a visual AI workflow more than page-level browser evidence."

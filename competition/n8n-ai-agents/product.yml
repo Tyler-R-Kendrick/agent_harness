@@ -1,0 +1,22 @@
+slug: n8n-ai-agents
+name: n8n AI Agents
+vendor: n8n
+segment: open-source-workflow-agent-builder
+product_path: competition/n8n-ai-agents
+design_path: competition/n8n-ai-agents/design
+features_path: competition/n8n-ai-agents/features
+marketing_path: competition/n8n-ai-agents/marketing
+gossip_path: competition/n8n-ai-agents/gossip
+snapshot_date: 2026-05-17
+primary_sources:
+  - https://n8n.io/ai-agents/
+  - https://docs.n8n.io/advanced-ai/examples/understand-agents/
+  - https://docs.n8n.io/advanced-ai/human-in-the-loop-tools/
+  - https://docs.n8n.io/advanced-ai/ai-workflow-builder/
+secondary_sources:
+  - https://www.reddit.com/r/n8n/comments/1lm1y8d/multiagent_ai_in_n8n_is_a_total_scam_youre_just/
+  - https://www.reddit.com/r/n8n/comments/1su96w2/when_would_you_pick_n8n_over_an_ai_agent/
+positioning: "Open-source workflow automation platform where traditional workflows, AI agent nodes, tools, approvals, and code can be combined for predictable production automation."
+customer_model: "Open-source self-hosting plus n8n Cloud subscriptions; cloud pricing emphasizes workflow executions and AI Workflow Builder credits."
+competitive_threat_level: medium
+notes: "Competes where technical teams prefer self-hostable workflow orchestration and agent nodes over a dedicated browser-agent UI."
