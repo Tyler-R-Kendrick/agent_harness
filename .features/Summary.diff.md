@@ -1,51 +1,45 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-16
-Baseline: `.features/Summary.md` refreshed from the 2026-05-15 Hermes-updated corpus.
-Diff type: additive update after Codex feature refresh
+Updated: 2026-05-17
+Baseline: `.features/Summary.md` refreshed from the 2026-05-16 Codex-updated corpus.
+Diff type: additive update after OpenAI Symphony feature refresh
 
 ## Net new normalized features
 
-### Added: Hybrid local, worktree, and cloud execution portability
-- Why now: the refreshed Codex corpus shows OpenAI turning execution mode into an explicit product axis instead of a hidden implementation detail.
+### Added: Operator control consoles with blocked-state queues and durable usage ledgers
+- Why now: the refreshed OpenAI Symphony corpus shows a current orchestration harness turning live supervision, blocked-session handling, and durable usage accounting into explicit product features.
 - Research delta:
-  - Codex app threads now expose explicit `Local`, `Worktree`, and `Cloud` modes
-  - the app docs now describe local projects versus dedicated worktrees for automations, not just for interactive threads
-  - the IDE can start a cloud task from `main` or from local changes, then load that task back into the editor for local continuation
-  - current remote-connections docs show the same host threads, approvals, diffs, screenshots, plugins, browser state, and tools being supervised from ChatGPT mobile
-  - current product framing makes context-preserving handoff between execution environments a first-class user workflow
+  - OpenAI Symphony PR #68 adds selectable running sessions with current stage, checklist payloads, workspace metadata, and bounded recent Codex activity inside the dashboard
+  - OpenAI Symphony PR #66 adds a blocked-session state for `input-required` and MCP elicitation events instead of retrying them like transient failures
+  - OpenAI Symphony PR #60 persists per-issue token totals in a JSONL ledger and exposes ledger-backed summaries in the observability API
+  - the current Elixir README documents a real dashboard plus `/api/v1/*` debugging API, reinforcing that the operator surface is part of the product shape, not a future admin add-on
 
-### Expanded: Scheduled automations and background execution
-- Why now: Codex automations are more operationally structured than the earlier high-level launch story implied.
+### Expanded: Parallel agent orchestration
+- Why now: the Symphony refresh makes orchestration less abstract and more like a supervised control room.
 - Research delta:
-  - automation runs can route findings into a Triage inbox or auto-archive when nothing needs attention
-  - project-scoped automations can run in the local checkout or a dedicated background worktree
-  - Codex supports custom cron schedules and thread-bound automations
-  - skills can be triggered directly inside automations with `$skill-name`
+  - the running-session dashboard now exposes stage, checklist, and recent activity instead of only listing that a run exists
+  - blocked sessions stay claimed and visible until routing changes, which implies orchestration owns pause-state supervision as well as dispatch
 
-### Expanded: Browser use and computer control
-- Why now: Codex now exposes both page-scoped browser control and app-scoped desktop control as documented product surfaces.
+### Expanded: Hybrid local, worktree, and cloud execution portability
+- Why now: the Symphony refresh adds stronger evidence that orchestration products are validating mixed execution backends, not just talking about them.
 - Research delta:
-  - the in-app browser supports visual comments on specific rendered elements or regions
-  - Browser plugin actions can click, type, inspect, screenshot, and verify inside the in-app browser
-  - Computer Use requires explicit plugin installation plus app-level approval and OS-level permissions
-  - the product keeps browser use and computer use under narrower trust boundaries than generic unrestricted remote control
+  - the current Elixir README documents a live `make e2e` flow that runs both local-worker and SSH-worker scenarios
+  - the SSH scenario can use disposable localhost workers via `docker compose`, generated keypairs, and mounted Codex auth for transport-realistic testing
+  - the same test creates temporary Linear resources, runs a real agent turn, verifies workspace side effects, and closes the issue, showing remote transport parity as an actively exercised path
 
-### Expanded: Git/PR-native execution
-- Why now: Codex’s GitHub integration is now a clearer reviewer-plus-remediator loop.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: Symphony continues to treat repo-owned workflow policy as the place where privileged runtime behavior is declared.
 - Research delta:
-  - `@codex review` triggers high-signal PR review focused on P0 and P1 issues
-  - repositories can enable automatic reviews for every PR
-  - `AGENTS.md` review guidance is applied per changed file using closest-scope instructions
-  - follow-up commands such as `@codex fix the P1 issue` turn review findings into cloud-backed remediation tasks
+  - OpenAI Symphony PR #65 adds `networkAccess: true` at the `WORKFLOW.md` turn-sandbox layer for package-manager and external-host bootstrap flows
+  - the rationale keeps safer defaults intact and scopes the permission increase to the checked-in workflow contract instead of global runtime configuration
 
-### Added: Add hybrid local, worktree, and cloud execution modes with remote follow-through
-- Why now: `agent-browser` already has sessions, worktrees, and evidence surfaces, but it still does not provide one thread model that can move cleanly between local execution, isolated worktrees, hosted runs, and remote supervision without splitting the user experience.
+### Added: Add an operator console with blocked-session queues and durable run ledgers
+- Why now: `agent-browser` already has sessions, evidence surfaces, and worktree support, but it still lacks one explicit operator surface that shows what every long-running agent is doing, what is blocked on a human, and what each run is consuming over time.
 - Linear issue:
-  - `TK-65`
+  - `TK-66`
 - Linear issue title:
-  - `Add hybrid local, worktree, and cloud execution modes with remote follow-through`
+  - `Add an operator console with blocked-session queues and durable run ledgers`
 - Suggested problem statement:
-  - `agent-browser` can open local sessions and worktrees, but it does not yet let one agent run start locally, move into an isolated or hosted environment, keep the same thread and artifacts, return for local finishing, and remain steerable from remote supervision surfaces without forcing the user to mentally stitch together multiple sessions.
+  - `agent-browser` can show session state and artifacts, but it does not yet provide a dedicated operator console that surfaces current stage, checklist progress, recent activity, blocked-on-human states, and durable token or cost accounting across long-running runs. When a run stalls on input or burns resources over time, the user still has to reconstruct that story from scattered session views and transient transcript details.`
 - One-shot instruction for an LLM:
-  - Implement execution-mode portability for `agent-browser` so a run can start in the local workspace, be promoted into an isolated worktree or remote/cloud environment, keep the same thread identity and artifact history, and return for local review or finishing work; wire this into session storage, worktree management, remote-control surfaces, approval state, and diff/evidence rendering so users can supervise one continuous task instead of juggling separate disconnected sessions.
+  - Implement an operator console for `agent-browser` that shows all active and blocked runs in one place, exposes current stage, checklist progress, recent events, workspace metadata, and durable token or cost ledgers per run, and treats human-input blockers as a visible queue with explicit unblock actions instead of hidden retry loops; wire this into session storage, artifact rendering, approval state, and any existing remote supervision surfaces so long-running agent work is operable without reading raw transcripts.
