@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
+import * as workerDaemon from '../index';
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
@@ -35,5 +36,20 @@ describe('worker-daemon package boundary', () => {
     expect(readme).toContain('## Package Boundary');
     expect(readme).toContain("import { DaemonWorkerProvider } from '@agent-harness/worker-daemon';");
     expect(readme).toContain('@agent-harness/worker-daemon/src/*');
+  });
+
+  test('keeps the root entry point explicit and stable', () => {
+    const indexSource = readPackageFile('src/index.ts');
+
+    expect(indexSource).not.toContain('export * from');
+    expect(Object.keys(workerDaemon).sort()).toEqual([
+      'CapDaemonLocalInference',
+      'CapDaemonRequest',
+      'DaemonRuntimeType',
+      'DaemonWorker',
+      'DaemonWorkerProvider',
+      'DaemonWorkerProviderId',
+      'DaemonWorkerType',
+    ]);
   });
 });

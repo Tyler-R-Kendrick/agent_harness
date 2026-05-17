@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'vitest';
+import * as workerBrowser from '../index';
 
 const packageRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 
@@ -35,5 +36,20 @@ describe('worker-browser package boundary', () => {
     expect(readme).toContain('## Package boundary');
     expect(readme).toContain("import { BrowserWorkerProvider } from '@agent-harness/worker-browser';");
     expect(readme).toContain('@agent-harness/worker-browser/src/*');
+  });
+
+  test('keeps the root entry point explicit and stable', () => {
+    const indexSource = readPackageFile('src/index.ts');
+
+    expect(indexSource).not.toContain('export * from');
+    expect(Object.keys(workerBrowser).sort()).toEqual([
+      'BrowserRuntimeType',
+      'BrowserWorker',
+      'BrowserWorkerProvider',
+      'BrowserWorkerProviderId',
+      'BrowserWorkerType',
+      'CapWorkerJobSkillCreate',
+      'CapWorkerSandboxOrchestration',
+    ]);
   });
 });
