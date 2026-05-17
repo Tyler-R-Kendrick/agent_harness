@@ -418,6 +418,18 @@ describe('provider registry', () => {
     expect(registry.list()).toEqual([]);
   });
 
+  it('rejects duplicate provider ids without replacing the registered provider', () => {
+    const registry = new DefaultProviderRegistry();
+    const first = new DescribedProvider('com.example.provider');
+    const duplicate = new DescribedProvider('com.example.provider');
+
+    registry.register(first);
+
+    expect(() => registry.register(duplicate)).toThrow('Provider already registered: com.example.provider');
+    expect(registry.get(first.ref.id)).toBe(first);
+    expect(registry.list()).toEqual([first]);
+  });
+
   it('structurally identifies worker and sandbox providers without hardcoded ids', () => {
     const registry = new DefaultProviderRegistry();
     const workerProvider = new FakeWorkerProvider('com.example.worker-provider', 'com.example.worker');
