@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-16
+Updated: 2026-05-17
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -68,3 +68,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: teams want to choose the cheapest or safest execution environment per task without losing context, approvals, or reviewability.
 - One-shot build instruction:
   - Build execution-mode portability so a run can start locally, move into an isolated worktree or cloud environment, and come back for local finishing while preserving thread history, approvals, artifacts, and diff context across every handoff.
+
+### 10. Operator control consoles with blocked-state queues and durable usage ledgers
+- Common pattern: long-running harnesses are turning live supervision into a first-class product surface instead of leaving operations buried in logs.
+- Seen in: OpenAI Symphony dashboard detail panel, blocked-session surfacing, and per-issue token ledger API; Mastra Cloud dashboard plus observability and OTel-ready tracing; Roomote shared task console with transcript, diff, logs, and artifacts; T3 Code local trace observability; Kilo Code team analytics and adoption scoring; Warp agent session sharing and cloud supervision surfaces.
+- Why it matters: once agents run for long periods, teams need to see what is running, what is blocked, what it is costing, and what needs human intervention without reconstructing the story from transcripts.
+- One-shot build instruction:
+  - Build an operator console that shows running and blocked sessions, current stage, checklist progress, recent events, and durable per-run token or cost ledgers; treat human-input blockers as a visible queue with explicit unblock actions instead of generic retries or hidden failures.
