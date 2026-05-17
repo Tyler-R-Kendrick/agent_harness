@@ -4,8 +4,64 @@ import { ModelContext } from '@agent-harness/webmcp';
 import { registerFilesystemTools } from '../filesystemTools';
 import { createWebMcpTool } from '../tool';
 import { registerSessionTools, registerWorkspaceTools } from '../workspaceTools';
+import { buildDefaultSessionState } from '../workspaceToolShared';
 
 describe('workspaceTools coverage branches', () => {
+  it('defaults missing routing telemetry to an empty snapshot', () => {
+    expect(buildDefaultSessionState({
+      id: 'session-1',
+      name: 'Session 1',
+      isOpen: true,
+      mode: 'agent',
+      provider: null,
+      modelId: null,
+      agentId: null,
+      toolIds: [],
+      cwd: null,
+      messages: [],
+    }, { sessionId: 'session-1' }).routingTelemetry).toEqual([]);
+    expect(buildDefaultSessionState({
+      id: 'session-2',
+      name: 'Session 2',
+      isOpen: true,
+      mode: 'agent',
+      provider: null,
+      modelId: null,
+      agentId: null,
+      toolIds: [],
+      cwd: null,
+      routingTelemetry: null as never,
+      messages: [],
+    }, { sessionId: 'session-2' }).routingTelemetry).toEqual([]);
+    expect(buildDefaultSessionState({
+      id: 'session-3',
+      name: 'Session 3',
+      isOpen: true,
+      mode: 'agent',
+      provider: null,
+      modelId: null,
+      agentId: null,
+      toolIds: [],
+      cwd: null,
+      messages: [],
+    }, {
+      sessionId: 'session-3',
+      routingTelemetryEvent: {
+        timestamp: '2026-05-17T00:00:00.000Z',
+        policyId: null,
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.2',
+        score: 1,
+        confidence: 1,
+        reasonVector: ['quality'],
+        estimatedCostDeltaUsd: null,
+        estimatedCostDeltaPct: null,
+      },
+    }).routingTelemetry).toEqual([
+      expect.objectContaining({ selectedProvider: 'openai' }),
+    ]);
+  });
+
   it('covers workspace mutation fallbacks and browser/session validation branches', async () => {
     const modelContext = new ModelContext();
     const onCreateBrowserPage = vi.fn(async () => undefined);
@@ -39,6 +95,8 @@ describe('workspaceTools coverage branches', () => {
       mode: 'agent' as const,
       provider: null,
       modelId: null,
+      routing: null,
+      routingTelemetry: [],
       agentId: null,
       toolIds: ['cli'],
       cwd: null,
@@ -49,6 +107,18 @@ describe('workspaceTools coverage branches', () => {
       modelId?: string;
       agentId?: string | null;
       toolIds?: readonly string[];
+      routing?: { enabled: boolean; mode?: 'shadow' | 'enforce' };
+      routingTelemetryEvent?: {
+        timestamp: string;
+        policyId: string | null;
+        selectedProvider: string;
+        selectedModel: string;
+        score: number;
+        confidence: number;
+        reasonVector: string[];
+        estimatedCostDeltaUsd: number | null;
+        estimatedCostDeltaPct: number | null;
+      };
     }) => {
       if (input.provider === 'structured') {
         return {
@@ -61,6 +131,8 @@ describe('workspaceTools coverage branches', () => {
           agentId: input.agentId ?? null,
           toolIds: input.toolIds ?? [],
           cwd: null,
+          routing: input.routing ?? null,
+          routingTelemetry: input.routingTelemetryEvent ? [input.routingTelemetryEvent] : [],
           messages: [],
         };
       }
@@ -211,6 +283,8 @@ describe('workspaceTools coverage branches', () => {
       mode: 'agent',
       provider: null,
       modelId: null,
+      routing: null,
+      routingTelemetry: [],
       agentId: null,
       toolIds: ['cli'],
       cwd: null,
@@ -260,6 +334,82 @@ describe('workspaceTools coverage branches', () => {
     }, {} as never)).resolves.toEqual(expect.objectContaining({
       mode: 'terminal',
     }));
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { scope: 'global', routing: { enabled: true, mode: 'shadow' } },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routing: { enabled: true, mode: 'shadow' },
+    }));
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { routing: { enabled: false } },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routing: { enabled: false },
+    }));
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: {
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.2',
+        score: 0.7,
+        confidence: 0.8,
+        reasonVector: ['quality'],
+        estimatedCostDeltaUsd: 0.03,
+        estimatedCostDeltaPct: 9,
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routingTelemetry: [
+        expect.objectContaining({
+          policyId: null,
+          selectedProvider: 'openai',
+          selectedModel: 'gpt-5.2',
+          score: 0.7,
+          confidence: 0.8,
+          reasonVector: ['quality'],
+          estimatedCostDeltaUsd: 0.03,
+          estimatedCostDeltaPct: 9,
+        }),
+      ],
+    }));
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: {
+        policyId: 'quality',
+        selectedProvider: 'openai',
+        selectedModel: 'gpt-5.2-mini',
+        score: 0.62,
+        confidence: 0.71,
+        reasonVector: ['cost'],
+      },
+    }, {} as never)).resolves.toEqual(expect.objectContaining({
+      routingTelemetry: [
+        expect.objectContaining({
+          policyId: 'quality',
+          estimatedCostDeltaUsd: null,
+          estimatedCostDeltaPct: null,
+        }),
+      ],
+    }));
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { routing: null },
+    }, {} as never)).rejects.toThrow('routing must be an object');
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { routing: { enabled: 'yes' } },
+    }, {} as never)).rejects.toThrow('routing.enabled');
+    await expect(webmcpTool.execute?.({
+      tool: 'change_session_routing',
+      args: { routing: { enabled: true, mode: 'auto' } },
+    }, {} as never)).rejects.toThrow('routing.mode');
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: { selectedProvider: 'openai', score: 1, confidence: 1, reasonVector: [] },
+    }, {} as never)).rejects.toThrow('selectedProvider and selectedModel');
+    await expect(webmcpTool.execute?.({
+      tool: 'record_session_routing_decision',
+      args: { selectedProvider: 'openai', selectedModel: 'gpt-5.2', score: 1, confidence: 1, reasonVector: [1] },
+    }, {} as never)).rejects.toThrow('reasonVector');
     await expect(webmcpTool.execute?.({
       tool: 'change_session_tools',
       args: { action: 'select', toolIds: ['browser'] },
