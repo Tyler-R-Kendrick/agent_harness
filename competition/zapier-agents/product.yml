@@ -1,0 +1,22 @@
+slug: zapier-agents
+name: Zapier Agents
+vendor: Zapier
+segment: app-integration-ai-teammates
+product_path: competition/zapier-agents
+design_path: competition/zapier-agents/design
+features_path: competition/zapier-agents/features
+marketing_path: competition/zapier-agents/marketing
+gossip_path: competition/zapier-agents/gossip
+snapshot_date: 2026-05-17
+primary_sources:
+  - https://zapier.com/agents
+  - https://help.zapier.com/hc/en-us/articles/24393442652557-Build-an-agent-in-Zapier-Agents
+  - https://help.zapier.com/hc/en-us/articles/24569690575117-Add-your-own-data-to-an-agent
+  - https://help.zapier.com/hc/en-us/articles/26559132765325-How-is-Zapier-Agents-usage-measured
+secondary_sources:
+  - https://www.reddit.com/r/zapier/comments/1qz8uua/how_have_you_used_zapier_agents/
+  - https://www.reddit.com/r/zapier/comments/1t99166/is_zapier_worth_the_cost_for_a_small_startup/
+positioning: "AI teammates that use Zapier's app ecosystem, knowledge sources, and actions to research, answer, and perform business tasks."
+customer_model: "Zapier subscription and agent usage model based on activities, messages, app connections, sharing, and plan limits."
+competitive_threat_level: medium
+notes: "Competes by turning app integrations into agent tools, which can remove the need for browser automation when SaaS APIs and knowledge sources cover the workflow."

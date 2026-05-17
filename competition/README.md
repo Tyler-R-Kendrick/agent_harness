@@ -67,6 +67,10 @@ competition/<product-slug>/
 | Genspark Super Agent | No-code general agent workspace | `competition/genspark-super-agent` |
 | MultiOn | Autonomous web-agent API | `competition/multion` |
 | Lindy | AI assistant workflow automation | `competition/lindy` |
+| Gumloop | AI-native workflow automation platform | `competition/gumloop` |
+| n8n AI Agents | Open-source workflow automation and AI agent builder | `competition/n8n-ai-agents` |
+| Zapier Agents | App-integration AI teammate platform | `competition/zapier-agents` |
+| Make AI Agents | Visual workflow AI-agent orchestration platform | `competition/make-ai-agents` |
 
 ## Cross-Market Takeaways
 
@@ -92,3 +96,6 @@ competition/<product-slug>/
 - General-purpose agents such as Manus and Genspark compete above the browser by selling broad delegation and finished artifacts. They can capture mainstream users quickly, but they leave a wedge for `agent-browser` when users need deterministic traces, local state, and exact browser evidence.
 - Local-browser delegation is becoming a shared pattern. Manus Browser Operator and MultiOn local mode validate the logged-in-browser wedge, but they also increase demand for session authorization, action allowlists, and clear stop/recovery controls.
 - Office-agent platforms such as Lindy pull browser/computer use into inbox, meeting, calendar, and CRM workflows. They will win buyers who want packaged work outcomes, while developer-first workbenches can still win on inspectability, reproducibility, and extension surfaces.
+- Workflow-agent platforms are absorbing browser tasks into integration canvases. Gumloop, n8n, Zapier, and Make compete less by rendering a browser and more by making web search, app actions, approvals, knowledge sources, and logs feel like durable business automation.
+- Their main advantage is operational fit: triggers, app credentials, reusable agents, quota controls, and team sharing are already shaped for sales, support, marketing, finance, and RevOps. Their weakness is that visual nodes and activity counters can obscure the actual page-level evidence a browser-first agent can preserve.
+- Pricing anxiety is widening from coding agents into automation agents. Credits, activities, workflow executions, model calls, token usage, and per-step task counting all create a UX wedge for `agent-browser` if it can make cost, action history, and failure recovery clearer during long-running work.

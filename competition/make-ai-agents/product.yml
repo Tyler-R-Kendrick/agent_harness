@@ -1,0 +1,21 @@
+slug: make-ai-agents
+name: Make AI Agents
+vendor: Make
+segment: visual-workflow-ai-agent-orchestration
+product_path: competition/make-ai-agents
+design_path: competition/make-ai-agents/design
+features_path: competition/make-ai-agents/features
+marketing_path: competition/make-ai-agents/marketing
+gossip_path: competition/make-ai-agents/gossip
+snapshot_date: 2026-05-17
+primary_sources:
+  - https://www.make.com/en/ai-agents
+  - https://help.make.com/manage-ai-agents
+  - https://www.make.com/en/how-to-guides/build-ai-agents
+secondary_sources:
+  - https://community.make.com/t/what-is-the-ai-agent-pricing-model/98179
+  - https://www.make.com/en/blog/make-ai-agents-trust-through-transparency
+positioning: "Transparent AI agents built inside Make's visual automation canvas, shared across teams and workflows, and connected to thousands of apps."
+customer_model: "Available across Make plans with paid-plan access to custom AI provider connections; usage and cost depend on Make operations, model settings, and agent/tool behavior."
+competitive_threat_level: medium
+notes: "Competes by adding agent reasoning to a mature visual automation canvas where businesses already orchestrate app workflows."
