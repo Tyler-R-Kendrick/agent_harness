@@ -1,21 +1,21 @@
 # Profiles Permissions And Run Until Completion
 
 - Harness: Warp
-- Sourced: 2026-04-30
+- Sourced: 2026-05-19
 
 ## What it is
-Warp lets teams define how autonomous the agent should be through Profiles and Permissions, including modes that allow the agent to keep running until it finishes the requested work.
+Warp lets teams define reusable autonomy profiles for models, commands, MCP access, and approval behavior, including a run-until-completion mode that fully auto-approves the current task.
 
 ## Evidence
-- Official docs: [Agent Profiles & Permissions](https://docs.warp.dev/agents/using-agents/agent-profiles-permissions)
-- Official docs: [Using Agents](https://docs.warp.dev/features/warp-ai/agent-mode)
+- Official docs: [Profiles & permissions](https://docs.warp.dev/agent-platform/capabilities/agent-profiles-permissions/)
+- Official docs: [Agents overview](https://docs.warp.dev/agents)
 - First-party details:
-  - permission profiles govern what the agent can read, write, and execute before asking again
-  - Warp documents autonomy levels that range from more supervised execution to more continuous run-until-done behavior
-  - profiles can be reused instead of re-answering the same approval questions every session
-  - the permission system is part of the product model for both local and remote agent work
+  - profiles capture base model choice, autonomy, command allowlists and denylists, and MCP access rules
+  - Warp explicitly documents that the denylist overrides broader allow settings, which makes safety policy an explicit product contract
+  - run-until-completion auto-approves commands for the current task and Warp notes that it bypasses the denylist entirely
+  - profile reuse reduces repeated approval steering across recurring workflows instead of keeping permissions as ephemeral chat state
 - Latest development checkpoint:
-  - current Warp docs make permissions a first-class configuration layer around agent behavior rather than a scattered per-command prompt
+  - current Warp docs make permissions and full-autonomy controls a first-class configuration layer around agent behavior rather than a scattered series of one-off prompts
 
 ## Product signal
-This is a strong signal that agent UX is moving toward explicit policy presets, which lowers friction for repeated work without removing the user's safety controls.
+This is a strong signal that agent UX is moving toward explicit policy presets, which lowers friction for repeated work without pretending that approval and trust settings should stay implicit.

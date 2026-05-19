@@ -1,21 +1,21 @@
 # GitHub Actions Agent Automation
 
 - Harness: Warp
-- Sourced: 2026-04-30
+- Sourced: 2026-05-19
 
 ## What it is
-Warp can be triggered from GitHub Actions so repository events can launch hosted agent work without a human manually opening the terminal first.
+Warp can run agents directly inside GitHub Actions jobs, using workflow context and GitHub permissions to review code, comment on PRs, suggest fixes, and open branches as part of CI.
 
 ## Evidence
-- Official docs: [GitHub Actions](https://docs.warp.dev/agent-platform/integrations/github-actions)
+- Official docs: [GitHub Actions](https://docs.warp.dev/agent-platform/cloud-agents/integrations/github-actions)
 - Official docs: [Agents Overview](https://docs.warp.dev/agents)
 - First-party details:
-  - Warp documents a direct GitHub Actions path for Cloud Agents
-  - this turns CI or repo events into agent launch points
-  - the feature complements Slack and Linear integrations by widening task intake beyond the terminal UI
-  - the result is an event-driven automation surface rather than a purely conversational one
+  - the `oz-agent-action` wraps the Oz CLI inside an Actions job and can pass event payloads and prior step outputs into the prompt
+  - Warp documents automated PR reviews with summary feedback, inline suggestions, one-click batching, and suggested-fix PR creation
+  - the action can comment on pull requests, post results, or open branches through the GitHub token already available to the workflow
+  - pre-built or custom skills can be applied in the workflow so the automation is packaged rather than prompt-only
 - Latest development checkpoint:
-  - the integration is documented as part of the main Cloud Agent flow, which indicates Warp sees CI-triggered agent work as a product use case, not a hack
+  - Warp's current GitHub Actions docs treat CI-native agent work as a mainstream cloud-agent entrypoint, complete with demos, mention-based flows, and permission guidance
 
 ## Product signal
-Warp is collapsing the gap between CI pipelines and agent execution, which matters for teams that want repo events to create work automatically.
+Warp is collapsing the gap between CI pipelines and agent execution, which matters for teams that want repository events to create reviewable agent work automatically.

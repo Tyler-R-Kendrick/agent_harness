@@ -1,44 +1,40 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-18
-Baseline: `.features/Summary.md` refreshed from the 2026-05-17 OpenAI Symphony-updated corpus.
-Diff type: additive update after GitHub Copilot feature refresh
+Updated: 2026-05-19
+Baseline: `.features/Summary.md` refreshed from the 2026-05-18 GitHub Copilot-updated corpus.
+Diff type: additive update after Warp feature refresh
 
 ## Net new normalized features
 
-### Added: Searchable run history and cross-session debug recall
-- Why now: the refreshed GitHub Copilot corpus shows a major harness turning past agent work into a queryable product surface instead of leaving it trapped inside transcripts or one-off logs.
+### Added: Steerable remote runs with local takeover
+- Why now: the refreshed Warp corpus shows a stronger product contract around remote agent supervision, where cloud runs stay open as inspectable sessions and can move back onto a developer machine instead of ending as static transcripts.
 - Research delta:
-  - GitHub Copilot's experimental `/chronicle` stores chat interactions in a local database and can recall touched files, referenced pull requests, and prior work across sessions
-  - the Agent Debug Log panel now persists logs locally, so earlier agent runs stay inspectable after the active thread ends
-  - session titles and ordering are being normalized across CLI and GitHub surfaces, which turns past runs into a manageable index instead of an ephemeral terminal artifact
+  - Warp's cloud-session viewer exposes commands, logs, context, plans, and outputs while the remote VM is still running
+  - follow-up prompts can be sent into the same remote session after the first task finishes, so background work becomes a live conversational surface
+  - when the remote VM ends, Warp exposes a `Fork to local` path so the same run can continue on the developer's machine without starting over
+  - the same session can be watched from Warp or directly in a browser, which turns remote execution into a shareable and steerable artifact instead of a black-box job
 
-### Expanded: Persistent memory plus project instructions
-- Why now: GitHub Copilot is broadening memory from repository facts into portable user preferences and more inspectable instruction layering.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: Warp is packaging reusable prompt logic more like runnable infrastructure than like static prompt snippets.
 - Research delta:
-  - Copilot Memory now supports user-level preferences such as commit style, PR structure, and communication defaults for eligible plans
-  - VS Code custom-instruction diagnostics now show which instruction sources loaded and why
-  - Spaces plus instruction files are becoming a layered grounding stack instead of one opaque prompt
+  - Warp can auto-discover repo-defined skills and publish them into the Oz agent catalog
+  - those skills can be launched visually, from the CLI, or through the API
+  - scheduled runs can target a skill directly, which collapses the gap between workflow packaging and background automation
 
-### Expanded: Browser use and computer control
-- Why now: the Copilot refresh shows a stronger move from static code chat into live browser and terminal state sharing.
+### Expanded: Operator control consoles with blocked-state queues and durable usage ledgers
+- Why now: the Warp refresh adds a clearer operations surface than the older notes captured.
 - Research delta:
-  - the integrated browser can share live tabs with the agent for page reading and interaction
-  - open-terminal access lets the agent read and write to existing REPLs and interactive scripts instead of only launching isolated commands
+  - the management view now spans interactive conversations and cloud runs in one scannable list
+  - each run exposes source, status, duration, creator, and credit usage before opening the full transcript
+  - the same control plane is available through Warp and the mobile-friendly `oz.warp.dev` web app
 
-### Expanded: External tool connectivity and actionability
-- Why now: GitHub is exposing Copilot cloud agent as automation infrastructure, not only as an interactive UI.
-- Research delta:
-  - the new Agent tasks REST API can start and track cloud-agent runs programmatically
-  - IDE agent mode can access Copilot Spaces through the GitHub MCP server instead of requiring a separate manual context hop
-
-### Added: Add a searchable run chronicle with debug-log recall
-- Why now: `agent-browser` already stores sessions, artifacts, and evidence, but it still does not give users one searchable history surface that answers what happened in earlier runs without reopening each transcript manually.
+### Added: Add steerable remote runs with fork-to-local handoff
+- Why now: `agent-browser` already stores session history and artifacts, but it still treats local and remote execution as separate modes rather than one continuable run that a user can inspect live, steer after the initial result, and adopt locally when needed.
 - Linear issue:
-  - `TK-67`
+  - Pending external publication in this session because the Linear connector did not surface callable tools and no `LINEAR_API_KEY` is available locally
 - Linear issue title:
-  - `Add a searchable run chronicle with debug-log recall`
+  - `Add steerable remote runs with fork-to-local handoff`
 - Suggested problem statement:
-  - `agent-browser` stores transcripts, evidence, and session state, but it still makes users reconstruct prior agent work by opening one run at a time and manually scanning chat history. There is no searchable chronicle that answers which files a run touched, which commands it executed, which artifacts it produced, which pull request it referenced, or how a previous failure looked in debug logs. As the product adds more long-running local, worktree, and remote sessions, history retrieval is becoming an operator problem instead of just a storage problem.`
+  - `agent-browser` can run work locally and it can preserve transcripts and artifacts, but it does not yet let a long-running background or remote session stay open as a live collaborative surface with follow-up turns, nor can a user adopt that same run into a local workspace when the remote environment is done or blocked. Users still have to reconstruct the state transition by reopening transcripts or restarting the task in another mode, which breaks continuity across supervision, debugging, and final local finishing.`
 - One-shot instruction for an LLM:
-  - Implement a searchable run chronicle for `agent-browser` that indexes local, worktree, and remote agent sessions with touched files, commands, artifacts, linked issues or pull requests, and persisted debug logs; expose that history through the main UI with filtering and full-text lookup, and let users jump from a search hit into the exact transcript, artifact, diff, or log segment so prior work can be reused, audited, or resumed without replaying an entire thread.
+  - Implement steerable remote-run handoff for `agent-browser` so background, worktree, and remote sessions remain inspectable live, accept follow-up turns after the first result, and can be adopted into a local workspace with the same transcript, artifacts, approvals, and diff context preserved; add an operator-facing session view plus a `fork to local` action that resumes the exact run instead of starting a new thread.

@@ -1,21 +1,21 @@
 # Agent Session Sharing And Live Remote Steering
 
 - Harness: Warp
-- Sourced: 2026-04-30
+- Sourced: 2026-05-19
 
 ## What it is
-Warp lets users share agent sessions, watch work remotely, and take over or fork the run instead of treating the agent outcome as an opaque black box.
+Warp lets users open a remote or shared agent run as a live session, inspect the full trajectory, keep chatting with the agent after the first task completes, and fork the work back to local.
 
 ## Evidence
-- Official docs: [Agent Session Sharing](https://docs.warp.dev/knowledge-and-collaboration/session-sharing/agent-session-sharing)
+- Official docs: [Session sharing](https://docs.warp.dev/knowledge-and-collaboration/session-sharing/)
 - Official docs: [Viewing Cloud Agent Runs](https://docs.warp.dev/agent-platform/cloud-agents/viewing-cloud-agent-runs)
 - First-party details:
-  - Warp exposes session sharing as a formal Cloud Agent capability
-  - users can observe the remote run while it is happening rather than only reading a final summary
-  - live remote sessions support human intervention and continuation instead of a fire-and-forget job model
-  - the sharing model is designed for collaboration and debugging, not just vanity links
+  - shared sessions expose commands, logs, context, plans, and outputs while the remote VM is still running
+  - follow-up turns can be sent back into the remote environment after the original task completes, as long as the environment is still active
+  - cloud runs can be viewed in Warp or directly in a browser, even if the viewer does not have Warp installed
+  - if the remote VM shuts down, Warp exposes a `Fork to local` path so the same run can continue on the developer's machine
 - Latest development checkpoint:
-  - Warp's current Cloud Agent docs emphasize inspectability and collaboration during execution, not only after execution
+  - Warp's May 19, 2026 cloud-session docs emphasize observability, live steering, and cloud-to-local continuation as the default remote-run experience, not a read-only transcript view
 
 ## Product signal
-Warp is productizing the agent run itself as a collaborative artifact, which is useful for review, debugging, and handoff across devices or teammates.
+Warp is productizing the remote run itself as a live collaborative artifact, which raises the bar for handoff, debugging, and post-run intervention across teammates and devices.
