@@ -29,7 +29,7 @@ describe('package boundary', () => {
     expect(packageJson.main).toBe('./src/index.ts');
     expect(packageJson.types).toBe('./src/index.ts');
     expect(packageJson.exports).toEqual({ '.': './src/index.ts' });
-    expect(packageJson.files).toEqual(['README.md', 'src/**/*.ts', '!src/__tests__/**']);
+    expect(packageJson.files).toEqual(['README.md', 'src/**/*.ts', '!src/__tests__/**', '!src/**/*.test.ts']);
   });
 
   test('keeps root exports explicit instead of wildcarding implementation modules', () => {
