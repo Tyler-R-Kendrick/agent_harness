@@ -176,7 +176,7 @@ export function createDefaultHarnessAppSpec({
         'SessionConversationSummary',
         dashboardWidgetProps(
           'Session summary',
-          { col: -7, row: -2 },
+          { col: 0, row: 0 },
           { cols: 6, rows: 3 },
           { summary: 'Aggregated session summary' },
         ),
@@ -187,7 +187,7 @@ export function createDefaultHarnessAppSpec({
         'KnowledgeGraphWidget',
         dashboardWidgetProps(
           'Knowledge',
-          { col: 0, row: -2 },
+          { col: 6, row: 0 },
           { cols: 7, rows: 4 },
           { summary: 'Memory, knowledge, steering, files, sessions, and surfaces' },
         ),

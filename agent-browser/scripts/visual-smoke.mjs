@@ -1072,24 +1072,28 @@ async function main() {
     });
     await captureDashboardCanvasViewportMatrix(page, shellTimeoutMs);
     await page.setViewportSize({ width: 1280, height: 820 });
-    const canvas = page.getByLabel('Infinite session canvas');
-    await canvas.click({ button: 'right', position: { x: 520, y: 620 } });
-    await page.getByRole('menuitem', { name: 'Create widget' }).click();
-    const widgetPrompt = page.getByRole('dialog', { name: 'Create canvas widget' });
+    const dashboard = page.getByRole('region', { name: 'Harness dashboard' });
+    const addWidgetTile = dashboard.getByRole('article', { name: 'Add dashboard widget' });
+    await expect(addWidgetTile).toBeVisible({ timeout: shellTimeoutMs });
+    await addWidgetTile.getByRole('button', { name: 'Add Widget' }).click();
+    const widgetPrompt = dashboard.getByRole('article', { name: 'New Widget' });
     await expect(widgetPrompt).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(widgetPrompt.getByRole('button', { name: 'Create widget' })).toBeDisabled({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByText('Try one of these:')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByRole('button', { name: 'Go' })).toBeDisabled({ timeout: shellTimeoutMs });
     await widgetPrompt.getByLabel('Widget prompt').fill('Track launch risks by owner and blocked item');
-    await expect(widgetPrompt.getByRole('button', { name: 'Create widget' })).toBeEnabled({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByRole('button', { name: 'Go' })).toBeEnabled({ timeout: shellTimeoutMs });
     await page.screenshot({ path: widgetPromptOutputPath, fullPage: true });
-    await widgetPrompt.getByRole('button', { name: 'Create widget' }).click();
-    const promptedWidgetEditor = page.getByRole('region', { name: 'Widget editor' });
-    await expect(promptedWidgetEditor.getByRole('heading', { name: 'Launch risks', level: 2 })).toBeVisible({
+    await widgetPrompt.getByRole('button', { name: 'Go' }).click();
+    const promptedWidget = dashboard.getByRole('article', { name: 'Launch risks widget' });
+    await expect(promptedWidget).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(promptedWidget.getByRole('button', { name: 'Open widget editor for Launch risks' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(promptedWidgetEditor.getByRole('region', { name: 'Live widget preview' })).toContainText(
+    await expect(promptedWidget.getByLabel('Launch risks widget contents')).toContainText(
       'Track launch risks by owner and blocked item',
       { timeout: shellTimeoutMs },
     );
+    await expect(page.getByRole('region', { name: 'Widget editor' })).toHaveCount(0);
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Session summary', exact: true }).click();

@@ -187,6 +187,96 @@ describe('HarnessDashboardPanel', () => {
       col: expect.any(Number),
       row: expect.any(Number),
     }), 'Track launch risks by owner and blocked item');
+
+    fireEvent.contextMenu(canvas, { clientX: 250, clientY: 180 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog', { name: 'Create canvas widget' })).not.toBeInTheDocument();
+  });
+
+  it('renders the json-render add-widget flow as draft cards on the infinite canvas', () => {
+    const onCreateDashboardWidget = vi.fn();
+
+    render(
+      <HarnessDashboardPanel
+        spec={createSpecWithWidgetLayout()}
+        workspaceName="Research"
+        sessions={[]}
+        browserPages={[]}
+        files={[]}
+        knowledge={knowledge}
+        onClose={vi.fn()}
+        onCreateDashboardWidget={onCreateDashboardWidget}
+      />,
+    );
+
+    const canvas = screen.getByLabelText('Infinite session canvas');
+    const addTile = within(canvas).getByRole('article', { name: 'Add dashboard widget' });
+    expect(addTile).toHaveStyle({
+      '--harness-widget-col': '14',
+      '--harness-widget-row': '0',
+    });
+    fireEvent.contextMenu(addTile, { clientX: 260, clientY: 180 });
+    expect(screen.queryByRole('menuitem', { name: 'Create widget' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(addTile).getByRole('button', { name: 'Add Widget' }));
+
+    const draftCard = within(canvas).getByRole('article', { name: 'New Widget' });
+    expect(draftCard).toHaveStyle({
+      '--harness-widget-col': '14',
+      '--harness-widget-row': '0',
+    });
+    expect(within(draftCard).getByText('Try one of these:')).toBeInTheDocument();
+    expect(within(draftCard).getByRole('button', { name: 'Go' })).toBeDisabled();
+    expect(addTile).toHaveStyle({
+      '--harness-widget-col': '19',
+      '--harness-widget-row': '0',
+    });
+
+    fireEvent.click(within(draftCard).getByRole('button', { name: 'Revenue metrics' }));
+
+    expect(onCreateDashboardWidget).toHaveBeenCalledWith({ col: 14, row: 0 }, 'Revenue metrics');
+  });
+
+  it('keeps json-render dashboard behavior available when the canvas starts empty', () => {
+    const onCreateDashboardWidget = vi.fn();
+    const spec = createSpecWithWidgetLayout();
+    spec.elements['main-dashboard'].children = [];
+
+    render(
+      <HarnessDashboardPanel
+        spec={spec}
+        workspaceName="Research"
+        sessions={[]}
+        browserPages={[]}
+        files={[]}
+        knowledge={knowledge}
+        onClose={vi.fn()}
+        onCreateDashboardWidget={onCreateDashboardWidget}
+      />,
+    );
+
+    const canvas = screen.getByLabelText('Infinite session canvas');
+    const addTile = within(canvas).getByRole('article', { name: 'Add dashboard widget' });
+    expect(addTile).toHaveStyle({
+      '--harness-widget-col': '0',
+      '--harness-widget-row': '0',
+    });
+    expect(within(canvas).queryByRole('article', { name: 'No dashboard widgets' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(addTile).getByRole('button', { name: 'Add Widget' }));
+    const draftCard = within(canvas).getByRole('article', { name: 'New Widget' });
+    expect(addTile).toHaveStyle({
+      '--harness-widget-col': '5',
+      '--harness-widget-row': '0',
+    });
+
+    fireEvent.change(within(draftCard).getByPlaceholderText('Describe this widget...'), {
+      target: { value: 'Create customer form' },
+    });
+    fireEvent.click(within(draftCard).getByRole('button', { name: 'Go' }));
+
+    expect(onCreateDashboardWidget).toHaveBeenCalledWith({ col: 0, row: 0 }, 'Create customer form');
   });
 
   it('moves and resizes dashboard widgets by patching widget element props', () => {
@@ -287,6 +377,8 @@ describe('HarnessDashboardPanel', () => {
 
     const minimap = screen.getByLabelText('Canvas minimap');
     fireEvent.pointerDown(minimap, { pointerId: 2, clientX: 190, clientY: 120 });
+    fireEvent.pointerMove(window, { pointerId: 2, clientX: 205, clientY: 132 });
+    fireEvent.pointerUp(window, { pointerId: 2 });
 
     expect(canvas.getAttribute('data-pan-x')).not.toBe('45');
   });

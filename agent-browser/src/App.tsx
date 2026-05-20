@@ -17161,22 +17161,13 @@ function AgentBrowserApp() {
         },
       },
     }));
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      return {
-        ...current,
-        [activeWorkspaceId]: {
-          ...existing,
-          dashboardOpen: false,
-          activeDashboardWidgetId: widgetId,
-          activeSessionIds: [],
-          openTabIds: [],
-          editingFilePath: null,
-          activeArtifactPanel: null,
-          panelOrder: [`widget-editor:${activeWorkspaceId}:${widgetId}`],
-        },
-      };
-    });
+    setWorkspaceViewStateByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: {
+        ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+        dashboardOpen: true,
+      },
+    }));
     setToast({ msg: `${widgetTitle} widget created`, type: 'success' });
   }, [activeWorkspace, activeWorkspaceId, setToast, setWorkspaceViewStateByWorkspace, updateActiveHarnessSpec]);
 
