@@ -1,40 +1,40 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-19
-Baseline: `.features/Summary.md` refreshed from the 2026-05-18 GitHub Copilot-updated corpus.
-Diff type: additive update after Warp feature refresh
+Updated: 2026-05-20
+Baseline: `.features/Summary.md` refreshed from the 2026-05-19 Warp-updated corpus.
+Diff type: additive update after OpenClaw feature refresh
 
 ## Net new normalized features
 
-### Added: Steerable remote runs with local takeover
-- Why now: the refreshed Warp corpus shows a stronger product contract around remote agent supervision, where cloud runs stay open as inspectable sessions and can move back onto a developer machine instead of ending as static transcripts.
+### Added: Queued steering with visible progress drafts
+- Why now: the refreshed OpenClaw corpus makes human steering semantics much more explicit than the older notes captured. The product now has first-class queue modes, turn-boundary steering behavior, and a single visible progress draft for long-running work.
 - Research delta:
-  - Warp's cloud-session viewer exposes commands, logs, context, plans, and outputs while the remote VM is still running
-  - follow-up prompts can be sent into the same remote session after the first task finishes, so background work becomes a live conversational surface
-  - when the remote VM ends, Warp exposes a `Fork to local` path so the same run can continue on the developer's machine without starting over
-  - the same session can be watched from Warp or directly in a browser, which turns remote execution into a shareable and steerable artifact instead of a black-box job
+  - OpenClaw exposes named queue modes like `steer`, `followup`, `collect`, and `steer-backlog`, instead of forcing every extra message through one ambiguous interruption path
+  - steering happens at explicit tool boundaries, while follow-up and collect modes preserve the current run and drain later with debounce and overflow policies
+  - progress drafts create one visible work-in-progress message that updates while the agent reads, plans, calls tools, or waits for approval, instead of flooding the thread with temporary chatter
+  - the same harness links queued steering to durable session state and background-task records, so follow-up behavior is part of the runtime contract rather than just UI sugar
 
 ### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Warp is packaging reusable prompt logic more like runnable infrastructure than like static prompt snippets.
+- Why now: OpenClaw's current product surface goes beyond installable skills and into skill-generation and plugin-authoring infrastructure.
 - Research delta:
-  - Warp can auto-discover repo-defined skills and publish them into the Oz agent catalog
-  - those skills can be launched visually, from the CLI, or through the API
-  - scheduled runs can target a skill directly, which collapses the gap between workflow packaging and background automation
+  - OpenClaw now documents layered skill precedence across workspace, shared, managed, bundled, and plugin-shipped roots
+  - the optional Skill Workshop can synthesize workspace skills from observed reusable procedures
+  - the stable `2026.5.18` release added typed plugin helpers plus `openclaw plugins build`, `validate`, and `init`
 
 ### Expanded: Operator control consoles with blocked-state queues and durable usage ledgers
-- Why now: the Warp refresh adds a clearer operations surface than the older notes captured.
+- Why now: OpenClaw now exposes a stronger operator plane than the previous lightweight corpus captured.
 - Research delta:
-  - the management view now spans interactive conversations and cloud runs in one scannable list
-  - each run exposes source, status, duration, creator, and credit usage before opening the full transcript
-  - the same control plane is available through Warp and the mobile-friendly `oz.warp.dev` web app
+  - the browser dashboard is explicitly an admin surface for chat, config, sessions, nodes, and exec approvals
+  - detached ACP, subagent, cron, and CLI work now lands in durable task records with lifecycle state and requester linkage
+  - the stable `2026.5.18` release highlights faster settings, cleaner chat and session controls, and responsive logs as part of the main product
 
-### Added: Add steerable remote runs with fork-to-local handoff
-- Why now: `agent-browser` already stores session history and artifacts, but it still treats local and remote execution as separate modes rather than one continuable run that a user can inspect live, steer after the initial result, and adopt locally when needed.
+### Added: Add queued steering with progress drafts and turn-boundary control
+- Why now: `agent-browser` already preserves session history, but it still lacks an explicit contract for what happens when the user adds input during a long-running turn. There is no first-class choice between interrupt-now, queue-for-later, coalesce-followups, or steer-now-then-follow-up, and there is no single progress-draft surface that keeps the run visibly alive without spamming the thread.
 - Linear issue:
-  - Pending external publication in this session because the Linear connector did not surface callable tools and no `LINEAR_API_KEY` is available locally
+  - Pending in this session unless Linear issue-creation tools become available; no `LINEAR_API_KEY` is present locally and the Linear connector has not surfaced callable create-issue tools
 - Linear issue title:
-  - `Add steerable remote runs with fork-to-local handoff`
+  - `Add queued steering with progress drafts and turn-boundary control`
 - Suggested problem statement:
-  - `agent-browser` can run work locally and it can preserve transcripts and artifacts, but it does not yet let a long-running background or remote session stay open as a live collaborative surface with follow-up turns, nor can a user adopt that same run into a local workspace when the remote environment is done or blocked. Users still have to reconstruct the state transition by reopening transcripts or restarting the task in another mode, which breaks continuity across supervision, debugging, and final local finishing.`
+  - `agent-browser` can stream output and preserve transcripts, but it does not yet give users explicit in-flight steering semantics for long-running tool-heavy turns. Extra messages currently do not map cleanly to choices like steer at the next tool boundary, queue a follow-up turn, coalesce a backlog, or preserve both an immediate steer and a later follow-up. The UI also lacks a single progress-draft surface that stays visible while the agent reads, plans, calls tools, or waits for approval. Users are left guessing whether their interruption replaced the run, appended to it, or disappeared into the session history.`
 - One-shot instruction for an LLM:
-  - Implement steerable remote-run handoff for `agent-browser` so background, worktree, and remote sessions remain inspectable live, accept follow-up turns after the first result, and can be adopted into a local workspace with the same transcript, artifacts, approvals, and diff context preserved; add an operator-facing session view plus a `fork to local` action that resumes the exact run instead of starting a new thread.
+  - Implement queued steering controls for `agent-browser` so a running session supports explicit per-session modes for steer-now-at-turn-boundary, follow-up-after-completion, coalesced backlog, and steer-plus-backlog; add debounce, queue-cap, and overflow policy handling, persist that mode with the session, and render one visible progress-draft surface that updates during real work and resolves into the final answer without spawning redundant interim assistant messages.
