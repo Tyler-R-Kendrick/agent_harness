@@ -4692,13 +4692,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   height: 8192px;
 }
 .harness-widget-card,
+.harness-draft-widget-card,
 .harness-add-widget-card {
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 8px;
   background: rgba(28, 32, 37, 0.96);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
 }
-.harness-widget-card {
+.harness-widget-card,
+.harness-draft-widget-card,
+.harness-add-widget-card {
   position: absolute;
   left: calc(var(--harness-widget-col) * (var(--harness-cell) + var(--harness-gap)));
   top: calc(var(--harness-widget-row) * (var(--harness-cell) + var(--harness-gap)));
@@ -4709,6 +4712,111 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   min-width: 0;
   overflow: hidden;
   cursor: default;
+}
+.harness-add-widget-card {
+  border: 1px dashed rgba(148, 163, 184, 0.34);
+  background: rgba(17, 24, 39, 0.42);
+  box-shadow: none;
+}
+.harness-add-widget-button {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 100%;
+  border: 0;
+  background: transparent;
+  color: rgba(203, 213, 225, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.harness-add-widget-button span {
+  display: block;
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1;
+}
+.harness-add-widget-button:hover,
+.harness-add-widget-button:focus-visible {
+  background: rgba(14, 116, 144, 0.14);
+  color: #f8fafc;
+}
+.harness-draft-widget-card {
+  background: rgba(28, 32, 37, 0.98);
+}
+.harness-draft-widget-body {
+  flex: 1;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  min-height: 0;
+  padding: 14px;
+  text-align: center;
+}
+.harness-draft-widget-body p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+.harness-draft-widget-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.harness-draft-widget-suggestions button,
+.harness-draft-widget-form button {
+  min-height: 30px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.52);
+  color: #e5e7eb;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.harness-draft-widget-suggestions button:hover,
+.harness-draft-widget-suggestions button:focus-visible,
+.harness-draft-widget-form button:hover,
+.harness-draft-widget-form button:focus-visible {
+  border-color: rgba(125, 211, 252, 0.46);
+  background: rgba(14, 116, 144, 0.24);
+  color: #ecfeff;
+}
+.harness-draft-widget-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+.harness-draft-widget-form input {
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: rgba(8, 13, 18, 0.7);
+  color: #f8fafc;
+  font-size: 12px;
+}
+.harness-draft-widget-form input:focus {
+  outline: 2px solid rgba(34, 211, 238, 0.54);
+  outline-offset: 1px;
+}
+.harness-draft-widget-form button {
+  min-width: 42px;
+  background: rgba(148, 163, 184, 0.48);
+}
+.harness-draft-widget-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 .harness-widget-header {
   min-height: 44px;
@@ -5011,14 +5119,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   margin: 0;
   color: #cbd5e1;
   font-size: 11px;
-}
-.harness-add-widget-card {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 318px;
-  min-height: 136px;
-  overflow: hidden;
 }
 .harness-workspace-surfaces-widget {
   position: absolute;

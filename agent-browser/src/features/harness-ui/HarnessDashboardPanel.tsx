@@ -58,8 +58,20 @@ type MinimapInteraction = {
 
 type DashboardInteraction = WidgetInteraction | PanInteraction | MinimapInteraction;
 type CanvasMenuState = { x: number; y: number; position: WidgetPosition; mode: 'menu' | 'prompt' };
+type DraftWidget = {
+  id: string;
+  layout: WidgetLayout;
+  prompt: string;
+};
 
 const DEFAULT_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 5, rows: 3 });
+const DRAFT_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 4, rows: 3 });
+const ADD_WIDGET_PROMPTS = Object.freeze([
+  'Customer list with delete',
+  'Create customer form',
+  'Invoice summary',
+  'Revenue metrics',
+]);
 const MIN_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 3, rows: 2 });
 const MAX_WIDGET_SIZE: WidgetSize = Object.freeze({ cols: 24, rows: 24 });
 const CELL_PX = 72;
@@ -120,6 +132,25 @@ function buildDefaultWidgetPositions(widgetIds: readonly string[]): Record<strin
       row: Math.floor(index / 2) * 4 - 2,
     },
   ]));
+}
+
+function buildNextCanvasLayout(layouts: readonly WidgetLayout[]): WidgetLayout {
+  if (!layouts.length) {
+    return {
+      position: { col: 0, row: 0 },
+      size: DRAFT_WIDGET_SIZE,
+    };
+  }
+
+  const topRow = Math.min(...layouts.map((layout) => layout.position.row));
+  const rightEdge = Math.max(...layouts.map((layout) => layout.position.col + layout.size.cols));
+  return {
+    position: {
+      col: rightEdge + 1,
+      row: topRow,
+    },
+    size: DRAFT_WIDGET_SIZE,
+  };
 }
 
 function viewportStyle(viewport: ViewportState) {
@@ -198,6 +229,8 @@ export function HarnessDashboardPanel({
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 });
   const [canvasMenu, setCanvasMenu] = useState<CanvasMenuState | null>(null);
   const [canvasWidgetPrompt, setCanvasWidgetPrompt] = useState('');
+  const [draftWidgets, setDraftWidgets] = useState<DraftWidget[]>([]);
+  const draftWidgetIndexRef = useRef(0);
   const interactionRef = useRef<DashboardInteraction | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const minimapRef = useRef<HTMLDivElement>(null);
@@ -219,7 +252,15 @@ export function HarnessDashboardPanel({
       },
     ]));
   }, [defaultPositions, widgets]);
-  const minimapBounds = useMemo(() => computeCanvasBounds(widgetLayouts), [widgetLayouts]);
+  const allCanvasLayouts = useMemo(
+    () => [...Object.values(widgetLayouts), ...draftWidgets.map((draft) => draft.layout)],
+    [draftWidgets, widgetLayouts],
+  );
+  const addWidgetLayout = useMemo(() => buildNextCanvasLayout(allCanvasLayouts), [allCanvasLayouts]);
+  const minimapBounds = useMemo(() => computeCanvasBounds({
+    ...widgetLayouts,
+    ...Object.fromEntries(draftWidgets.map((draft) => [draft.id, draft.layout])),
+  }), [draftWidgets, widgetLayouts]);
   const renderContext = useMemo(() => ({
     workspaceName,
     sessions,
@@ -237,6 +278,17 @@ export function HarnessDashboardPanel({
         size: clampWidgetSize(normalizeWidgetSize(nextLayout.size, DEFAULT_WIDGET_SIZE)),
       },
     });
+  };
+
+  const createWidgetFromPrompt = (position: WidgetPosition, prompt: string, draftId?: string) => {
+    const normalizedPrompt = prompt.trim();
+    if (!normalizedPrompt) return;
+    onCreateDashboardWidget?.(position, normalizedPrompt);
+    if (draftId) {
+      setDraftWidgets((current) => current.filter((draft) => draft.id !== draftId));
+    }
+    setCanvasMenu(null);
+    setCanvasWidgetPrompt('');
   };
 
   const canvasPositionFromClient = (clientX: number, clientY: number): WidgetPosition => {
@@ -330,7 +382,7 @@ export function HarnessDashboardPanel({
   const handleCanvasPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
-    if (target.closest('.harness-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
+    if (target.closest('.harness-widget-card, .harness-draft-widget-card, .harness-add-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
       return;
     }
     setCanvasMenu(null);
@@ -346,7 +398,7 @@ export function HarnessDashboardPanel({
 
   const handleCanvasContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest('.harness-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
+    if (target.closest('.harness-widget-card, .harness-draft-widget-card, .harness-add-widget-card, .harness-dashboard-canvas-heading, .harness-dashboard-context-menu, .harness-dashboard-minimap, button, input, select, textarea')) {
       return;
     }
     event.preventDefault();
@@ -409,6 +461,19 @@ export function HarnessDashboardPanel({
       kind: 'minimap',
       pointerId: event.pointerId,
     };
+  };
+
+  const addDraftWidget = () => {
+    const draftId = `draft-widget-${draftWidgetIndexRef.current + 1}`;
+    draftWidgetIndexRef.current += 1;
+    setDraftWidgets((current) => [
+      ...current,
+      {
+        id: draftId,
+        layout: addWidgetLayout,
+        prompt: '',
+      },
+    ]);
   };
 
   return (
@@ -479,16 +544,69 @@ export function HarnessDashboardPanel({
                   </article>
                 );
               })}
-              {!widgets.length ? (
-                <article className="harness-add-widget-card harness-empty-session-widget-card" aria-label="No dashboard widgets">
+              {draftWidgets.map((draft) => (
+                <article
+                  key={draft.id}
+                  className="harness-draft-widget-card"
+                  aria-label="New Widget"
+                  style={widgetStyle(draft.layout.position, draft.layout.size)}
+                >
                   <header className="harness-widget-header">
-                    <h3>No dashboard widgets</h3>
+                    <h3>New Widget</h3>
                   </header>
-                  <div className="harness-add-widget-body">
-                    <p className="harness-widget-empty">Right-click the canvas to create a widget.</p>
+                  <div className="harness-draft-widget-body">
+                    <p>Try one of these:</p>
+                    <div className="harness-draft-widget-suggestions">
+                      {ADD_WIDGET_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => createWidgetFromPrompt(draft.layout.position, prompt, draft.id)}
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+                  <form
+                    className="harness-draft-widget-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      createWidgetFromPrompt(draft.layout.position, draft.prompt, draft.id);
+                    }}
+                  >
+                    <input
+                      type="text"
+                      aria-label="Widget prompt"
+                      placeholder="Describe this widget..."
+                      value={draft.prompt}
+                      onChange={(event) => {
+                        const nextPrompt = event.target.value;
+                        setDraftWidgets((current) => current.map((entry) => (
+                          entry.id === draft.id ? { ...entry, prompt: nextPrompt } : entry
+                        )));
+                      }}
+                    />
+                    <button type="submit" disabled={!draft.prompt.trim()}>
+                      Go
+                    </button>
+                  </form>
                 </article>
-              ) : null}
+              ))}
+              <article
+                className="harness-add-widget-card"
+                aria-label="Add dashboard widget"
+                style={widgetStyle(addWidgetLayout.position, addWidgetLayout.size)}
+              >
+                <button
+                  type="button"
+                  className="harness-add-widget-button"
+                  onClick={addDraftWidget}
+                >
+                  <span aria-hidden="true">+</span>
+                  Add Widget
+                </button>
+              </article>
             </div>
           </div>
           {canvasMenu?.mode === 'menu' ? (
@@ -520,9 +638,7 @@ export function HarnessDashboardPanel({
                 event.preventDefault();
                 const prompt = canvasWidgetPrompt.trim();
                 if (!prompt) return;
-                onCreateDashboardWidget?.(canvasMenu.position, prompt);
-                setCanvasMenu(null);
-                setCanvasWidgetPrompt('');
+                createWidgetFromPrompt(canvasMenu.position, prompt);
               }}
             >
               <label>
