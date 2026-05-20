@@ -40,6 +40,10 @@ competition/<product-slug>/
 | Playwright MCP | Open-source browser automation MCP | `competition/playwright-mcp` |
 | BrowserMCP | Local browser-control MCP | `competition/browsermcp` |
 | Agent360 Browser MCP | Local browser-control MCP | `competition/agent360-browser-mcp` |
+| SideButton | Browser automation MCP with knowledge packs | `competition/sidebutton` |
+| Browsaur | Real-Chrome MCP and CDP browser infrastructure | `competition/browsaur` |
+| AgentsRoom Browser MCP | Embedded QA browser inside a multi-agent IDE | `competition/agentsroom-browser-mcp` |
+| Scout | Extension-first MCP and CDP browser automation | `competition/scout-browser-automation` |
 | BrowserStack MCP | Enterprise AI testing MCP | `competition/browserstack-mcp` |
 | Scrapybara | Remote computer-use infrastructure | `competition/scrapybara` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
@@ -63,6 +67,7 @@ competition/<product-slug>/
 | Cursor Background Agents | AI coding IDE and remote agents | `competition/cursor-background-agents` |
 | Replit Agent | Prompt-to-app agent workspace | `competition/replit-agent` |
 | GitHub Copilot Cloud Agent | Repository-native coding agent | `competition/github-copilot-cloud-agent` |
+| moonrepo v2 | Developer build toolchain | `competition/moonrepo` |
 | Manus | General-purpose autonomous agent | `competition/manus` |
 | Genspark Super Agent | No-code general agent workspace | `competition/genspark-super-agent` |
 | MultiOn | Autonomous web-agent API | `competition/multion` |
@@ -71,6 +76,7 @@ competition/<product-slug>/
 | n8n AI Agents | Open-source workflow automation and AI agent builder | `competition/n8n-ai-agents` |
 | Zapier Agents | App-integration AI teammate platform | `competition/zapier-agents` |
 | Make AI Agents | Visual workflow AI-agent orchestration platform | `competition/make-ai-agents` |
+| Notion Developer Platform | AI work automation platform | `competition/notion-developer-platform` |
 
 ## Cross-Market Takeaways
 
@@ -99,3 +105,7 @@ competition/<product-slug>/
 - Workflow-agent platforms are absorbing browser tasks into integration canvases. Gumloop, n8n, Zapier, and Make compete less by rendering a browser and more by making web search, app actions, approvals, knowledge sources, and logs feel like durable business automation.
 - Their main advantage is operational fit: triggers, app credentials, reusable agents, quota controls, and team sharing are already shaped for sales, support, marketing, finance, and RevOps. Their weakness is that visual nodes and activity counters can obscure the actual page-level evidence a browser-first agent can preserve.
 - Pricing anxiety is widening from coding agents into automation agents. Credits, activities, workflow executions, model calls, token usage, and per-step task counting all create a UX wedge for `agent-browser` if it can make cost, action history, and failure recovery clearer during long-running work.
+- A new direct-control subcategory is forming around real Chrome plus MCP: SideButton, Browsaur, AgentsRoom Browser MCP, and Scout all sell agents a live browser surface without forcing a remote browser farm.
+- The differentiator is shifting from "can click a page" to the quality of context and recovery: knowledge packs, selector memory, screenshots after every action, CDP events, console logs, short refs, and profile persistence.
+- These products validate `agent-browser`'s evidence-first wedge, but also raise the bar for setup simplicity. Users increasingly expect a browser agent to connect to Claude Code, Codex, Cursor, or Gemini CLI in minutes.
+- The risk in this subcategory is that extension access, authenticated profiles, residential IP claims, wallet/payment tools, and app-specific knowledge packs make privacy and abuse boundaries harder to explain than in a plain local test runner.

@@ -1,0 +1,22 @@
+slug: agentsroom-browser-mcp
+name: AgentsRoom Browser MCP
+vendor: AgentsRoom
+segment: embedded-qa-browser-inside-multi-agent-ide
+product_path: competition/agentsroom-browser-mcp
+design_path: competition/agentsroom-browser-mcp/design
+features_path: competition/agentsroom-browser-mcp/features
+marketing_path: competition/agentsroom-browser-mcp/marketing
+gossip_path: competition/agentsroom-browser-mcp/gossip
+snapshot_date: 2026-05-20
+primary_sources:
+  - https://agentsroom.dev/
+  - https://agentsroom.dev/features/browser-automation
+  - https://agentsroom.dev/features/agentsroom-mcp
+secondary_sources:
+  - https://www.reddit.com/r/ClaudeCoder/comments/1tc1iul
+  - https://www.reddit.com/r/ClaudeNotCode/comments/1tc1iyd
+  - https://www.reddit.com/r/mcp/comments/1rw0egg
+positioning: "Local-first multi-agent IDE where coding agents can drive an embedded Chromium browser through MCP to verify localhost and web app flows."
+customer_model: "Free desktop download with BYOK AI-provider usage; commercial model is not explicit in observed browser-automation pages."
+competitive_threat_level: high
+notes: "Competes on the same evidence story as agent-browser by packaging a visible browser, console logs, screenshots, project isolation, and QA-agent roles inside an agent cockpit."
