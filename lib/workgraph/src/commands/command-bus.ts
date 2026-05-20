@@ -36,6 +36,11 @@ export function createWorkGraph(options: CreateWorkGraphOptions): WorkGraph {
       if (!actorCanDispatch(valid.actor, valid)) {
         throw new WorkGraphCommandError(`Actor ${valid.actor.id} cannot dispatch ${valid.type}`);
       }
+      if (valid.type === 'issue.updateStatus' || valid.type === 'issue.close' || valid.type === 'comment.create') {
+        if (!snapshot.issues[valid.payload.issueId]) {
+          throw new WorkGraphCommandError(`Issue not found: ${valid.payload.issueId}`);
+        }
+      }
       const event = createWorkGraphEventFromCommand(valid, snapshot, ids, now);
       await options.repository.appendEvents([event]);
       return { id: event.id, aggregateId: event.aggregateId };
