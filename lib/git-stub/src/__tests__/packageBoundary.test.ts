@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import * as publicApi from '../index.js';
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 function readPackageJson() {
@@ -37,5 +39,20 @@ describe('git-stub package boundary', () => {
     expect(readme).toContain('## Package boundary');
     expect(readme).toContain("import { createGitStubRepository, executeGitStubCommand } from '@agent-harness/git-stub'");
     expect(readme).toContain('`src/repository.ts` and `src/types.ts` are implementation modules');
+    expect(readme).toContain('### Public API');
+    expect(readme).toContain('`createGitStubRepository`');
+    expect(readme).toContain('`executeGitStubCommand`');
+    expect(readme).toContain('`isGitStubCommand`');
+  });
+
+  it('keeps root exports explicit and limited to the supported runtime API', () => {
+    const indexSource = readFileSync(resolve(packageRoot, 'src/index.ts'), 'utf8');
+
+    expect(indexSource).not.toContain('export * from');
+    expect(Object.keys(publicApi).sort()).toEqual([
+      'createGitStubRepository',
+      'executeGitStubCommand',
+      'isGitStubCommand',
+    ]);
   });
 });

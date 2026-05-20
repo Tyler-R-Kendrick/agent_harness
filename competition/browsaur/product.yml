@@ -1,0 +1,23 @@
+slug: browsaur
+name: Browsaur
+vendor: Browsaur Labs
+segment: real-chrome-mcp-and-cdp-browser-infrastructure
+product_path: competition/browsaur
+design_path: competition/browsaur/design
+features_path: competition/browsaur/features
+marketing_path: competition/browsaur/marketing
+gossip_path: competition/browsaur/gossip
+snapshot_date: 2026-05-20
+primary_sources:
+  - https://browsaur.dev/
+  - https://browsaur.dev/mcp
+  - https://browsaur.dev/pricing
+  - https://github.com/browsaur
+secondary_sources:
+  - https://www.reddit.com/r/mcp/comments/1rw0egg
+  - https://www.reddit.com/r/thewebscrapingclub/comments/1t9qmmo
+  - https://www.reddit.com/r/ClaudeAI/comments/1sc0zsc
+positioning: "Real Google Chrome on residential macOS hardware, exposed through CLI, MCP, CDP, Playwright, Puppeteer, and self-hosted Mac mini deployments."
+customer_model: "Free MIT self-hosting plus paid cloud plans starting at $10/month for browser hours, residential IPs, persistent profiles, and support."
+competitive_threat_level: medium
+notes: "Threatens agent-browser when users care more about stealth, residential IPs, and CDP compatibility than local UI evidence."

@@ -208,4 +208,31 @@ describe('WorkGraph command bus', () => {
       },
     });
   });
+
+  it('rejects issue-targeting commands when the issue does not exist', async () => {
+    const graph = createWorkGraph({
+      repository: createInMemoryWorkGraphRepository(),
+      ids: createSequentialWorkGraphIdFactory('wg'),
+      now: createFixedWorkGraphTimeSource('2026-05-10T12:00:00.000Z'),
+    });
+
+    await expect(graph.dispatch({
+      type: 'issue.updateStatus',
+      actor,
+      payload: { issueId: 'missing-issue', status: 'In Review' },
+    })).rejects.toThrow('Issue not found: missing-issue');
+    await expect(graph.dispatch({
+      type: 'issue.close',
+      actor,
+      payload: { issueId: 'missing-issue', reason: 'not planned' },
+    })).rejects.toThrow(WorkGraphCommandError);
+    await expect(graph.dispatch({
+      type: 'comment.create',
+      actor,
+      payload: { issueId: 'missing-issue', body: 'This should not become an orphan comment.' },
+    })).rejects.toThrow(WorkGraphCommandError);
+
+    expect(graph.getSnapshot().events).toEqual([]);
+    expect(graph.getSnapshot().comments).toEqual({});
+  });
 });

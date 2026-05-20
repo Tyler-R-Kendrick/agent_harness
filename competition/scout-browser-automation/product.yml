@@ -1,0 +1,22 @@
+slug: scout-browser-automation
+name: Scout
+vendor: Scout
+segment: extension-first-mcp-and-cdp-browser-automation
+product_path: competition/scout-browser-automation
+design_path: competition/scout-browser-automation/design
+features_path: competition/scout-browser-automation/features
+marketing_path: competition/scout-browser-automation/marketing
+gossip_path: competition/scout-browser-automation/gossip
+snapshot_date: 2026-05-20
+primary_sources:
+  - https://www.scout.i.ng/
+  - https://www.scout.i.ng/docs
+  - https://github.com/felixgeelhaar/scout
+secondary_sources:
+  - https://www.reddit.com/r/ClaudeAI/comments/1s0wiav
+  - https://www.reddit.com/r/modelcontextprotocol/comments/1s4uoi3
+  - https://www.reddit.com/r/mcp/comments/1teepcd
+positioning: "Chrome extension and MCP server that expose real browser tabs through CDP, accessibility snapshots, DOM extraction, network events, and short refs."
+customer_model: "Free trial credits, Pro at $9.99/month for browser tooling, optional AI inference addons or BYOK, and higher bundles for voice/system/payment surfaces."
+competitive_threat_level: high
+notes: "Competes directly on low-latency local browser access, semantic snapshots, short refs, multi-agent coordination, guardrails, and token reduction."
