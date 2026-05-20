@@ -13,3 +13,13 @@ import { createGitStubRepository, executeGitStubCommand } from '@agent-harness/g
 ```
 
 The package intentionally publishes only `README.md`, `package.json`, and runtime TypeScript source files under `src/`. `src/repository.ts` and `src/types.ts` are implementation modules; consumers should treat the root export in `src/index.ts` as the stable public API and avoid deep imports.
+
+### Public API
+
+The root entry point intentionally exposes only the runtime commands needed by Agent Browser terminal sessions:
+
+- `createGitStubRepository`
+- `executeGitStubCommand`
+- `isGitStubCommand`
+
+The TypeScript interfaces exported from the root entry point describe the filesystem adapter, repository state, and command results that callers need to integrate the stub. Add new root exports only when they are stable consumer contracts.
