@@ -1,0 +1,20 @@
+slug: agentsmith
+name: AgentSmith
+vendor: AgentSmith
+segment: consumer-chrome-browser-agent
+product_path: competition/agentsmith
+design_path: competition/agentsmith/design
+features_path: competition/agentsmith/features
+marketing_path: competition/agentsmith/marketing
+gossip_path: competition/agentsmith/gossip
+snapshot_date: 2026-05-21
+primary_sources:
+  - https://agentsmith.so/
+  - https://chromewebstore.google.com/
+secondary_sources:
+  - https://www.reddit.com/r/aiagents/comments/1rk3m4y/the_hard_part_of_browser_agents_is_not_planning/
+  - https://www.reddit.com/r/automation/comments/1rf100z/most_ai_agent_browser_control_is_just_brittle/
+positioning: "Chrome-extension browser agent for repetitive consumer and operator workflows, with natural-language automation, scraping, replay, local data scratchpad, and optional MCP integration."
+customer_model: "Free daily actions plus paid monthly action plans at $9.99 Starter, $29.99 Pro, and custom team pricing."
+competitive_threat_level: medium
+notes: "Competes below agent-browser by making browser automation feel like a simple extension with transparent action quotas instead of a developer workbench."

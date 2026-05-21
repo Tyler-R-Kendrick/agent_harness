@@ -44,6 +44,10 @@ competition/<product-slug>/
 | Browsaur | Real-Chrome MCP and CDP browser infrastructure | `competition/browsaur` |
 | AgentsRoom Browser MCP | Embedded QA browser inside a multi-agent IDE | `competition/agentsroom-browser-mcp` |
 | Scout | Extension-first MCP and CDP browser automation | `competition/scout-browser-automation` |
+| VulpineOS | Hardened browser-agent runtime | `competition/vulpineos` |
+| AlienMcp | Local real-Chrome MCP bridge | `competition/alien-mcp` |
+| AgentSmith | Consumer Chrome browser agent | `competition/agentsmith` |
+| webact | Token-efficient CDP browser control | `competition/webact` |
 | BrowserStack MCP | Enterprise AI testing MCP | `competition/browserstack-mcp` |
 | Scrapybara | Remote computer-use infrastructure | `competition/scrapybara` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
@@ -109,3 +113,6 @@ competition/<product-slug>/
 - The differentiator is shifting from "can click a page" to the quality of context and recovery: knowledge packs, selector memory, screenshots after every action, CDP events, console logs, short refs, and profile persistence.
 - These products validate `agent-browser`'s evidence-first wedge, but also raise the bar for setup simplicity. Users increasingly expect a browser agent to connect to Claude Code, Codex, Cursor, or Gemini CLI in minutes.
 - The risk in this subcategory is that extension access, authenticated profiles, residential IP claims, wallet/payment tools, and app-specific knowledge packs make privacy and abuse boundaries harder to explain than in a plain local test runner.
+- Browser-agent infrastructure is now splitting by reliability philosophy: VulpineOS pushes safety and determinism into a patched browser runtime, while webact strips the stack down to raw CDP and compact page briefs.
+- Local Chrome bridges such as AlienMcp and webact validate the real-session wedge, but they also raise the importance of visible scoping, durable logs, and permission boundaries around cookies, storage, console, network, and JavaScript execution.
+- Consumer extension products such as AgentSmith show that browser agents can be sold as simple repetitive-work automation with clear action quotas. That packaging may capture mainstream users before developer workbenches do, but it leaves a wedge for stronger evidence, approvals, and replay.
