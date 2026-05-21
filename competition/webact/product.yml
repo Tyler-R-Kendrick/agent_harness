@@ -1,0 +1,20 @@
+slug: webact
+name: webact
+vendor: Kilo Spark
+segment: token-efficient-cdp-browser-control
+product_path: competition/webact
+design_path: competition/webact/design
+features_path: competition/webact/features
+marketing_path: competition/webact/marketing
+gossip_path: competition/webact/gossip
+snapshot_date: 2026-05-21
+primary_sources:
+  - https://webact.space/
+  - https://github.com/kilospark/webact
+secondary_sources:
+  - https://news.ycombinator.com/item?id=47239658
+  - https://www.reddit.com/r/mcp/comments/1r2m7ev/chromes_webmcp_makes_ai_agents_stop_pretending/
+positioning: "Single-binary MCP server and CLI for raw CDP browser control with compact page briefs, minimal dependencies, and real Chrome sessions."
+customer_model: "MIT-licensed open-source distribution; no visible paid tier at snapshot time."
+competitive_threat_level: high
+notes: "Names agent-browser directly in token-efficiency comparisons and attacks Playwright-based browser tools on install size, session realism, and snapshot verbosity."
