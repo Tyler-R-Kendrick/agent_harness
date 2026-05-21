@@ -1,4 +1,4 @@
-import type { ICompletionChecker, IInferenceClient, IVoter } from 'logact';
+import type { IAgentBus, ICompletionChecker, IExecutor, IInferenceClient, IVoter } from 'logact';
 import { browserInferenceEngine } from '../../services/browserInference';
 import { formatBrowserInferenceResult, trimTextForLocalInference } from '../../services/browserInferenceRuntime';
 import { toAiSdkMessages } from '../../services/chatComposition';
@@ -15,6 +15,7 @@ const MAX_CONTEXT_MESSAGES = 7;
 const MAX_CODI_WORKSPACE_CONTEXT_CHARS = 4_000;
 const MAX_CODI_MESSAGE_CHARS = 2_000;
 const MAX_CODI_SYSTEM_PROMPT_CHARS = 5_000;
+type CodiPromptMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
 export function hasCodiModels(installedModels: HFModel[]): boolean {
   return installedModels.length > 0;
@@ -40,14 +41,22 @@ export function buildCodiPrompt({
   loopMessages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   systemPrompt?: string;
   modelId?: string;
-}): Array<{ role: string; content: string }> {
+}): CodiPromptMessage[] {
+  const originalAiMessages = toAiSdkMessages(messages);
   const aiMessages = loopMessages
-    ? loopMessages.map((message, index) => ({
+    ? [
+        ...originalAiMessages.filter((message, index) => {
+          if (index !== originalAiMessages.length - 1) return true;
+          const originalText = message.parts.map((part) => ('text' in part ? String(part.text) : '')).join('');
+          return originalText !== loopMessages.at(-1)?.content;
+        }),
+        ...loopMessages.map((message, index) => ({
       id: `loop-${index}`,
       role: message.role,
       parts: [{ type: 'text', text: message.content }],
-    }))
-    : toAiSdkMessages(messages);
+        })),
+      ]
+    : originalAiMessages;
   const latestText = loopMessages?.at(-1)?.content
     || messages.at(-1)?.streamedContent
     || messages.at(-1)?.content
@@ -79,7 +88,7 @@ export function buildCodiPrompt({
       ].join('\n\n'),
     },
     ...aiMessages.slice(-MAX_CONTEXT_MESSAGES).map((message) => ({
-      role: message.role,
+      role: message.role as CodiPromptMessage['role'],
       content: trimTextForLocalInference(
         message.parts.map((part) => ('text' in part ? String(part.text) : '')).join(''),
         MAX_CODI_MESSAGE_CHARS,
@@ -184,6 +193,9 @@ export async function streamCodiChat(
     completionChecker,
     maxIterations = 5,
     systemPrompt,
+    inferenceClient: providedInferenceClient,
+    executor,
+    bus,
   }: {
     model: HFModel;
     messages: ChatMessage[];
@@ -196,6 +208,9 @@ export async function streamCodiChat(
     completionChecker?: ICompletionChecker;
     maxIterations?: number;
     systemPrompt?: string;
+    inferenceClient?: IInferenceClient;
+    executor?: IExecutor;
+    bus?: IAgentBus;
   },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
@@ -204,20 +219,35 @@ export async function streamCodiChat(
   const effectiveCompletionChecker = completionChecker
     ?? (isExecutionTask(latestInput) ? createHeuristicCompletionChecker(latestInput) : undefined);
   const deferred = effectiveCompletionChecker ? createDeferredAgentCallbacks(callbacks) : null;
-  const inferenceClient = createCodiInferenceClient(
-    model,
-    workspaceName,
-    workspacePromptContext,
-    messages,
-    deferred?.callbacks ?? callbacks,
-    systemPrompt,
-    signal,
-  );
+  const inferenceClient = providedInferenceClient
+    ? {
+        async infer(busMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>) {
+          return providedInferenceClient.infer(buildCodiPrompt({
+            workspaceName,
+            workspacePromptContext,
+            messages,
+            loopMessages: busMessages,
+            systemPrompt,
+            modelId: model.id,
+          }));
+        },
+      }
+    : createCodiInferenceClient(
+      model,
+      workspaceName,
+      workspacePromptContext,
+      messages,
+      deferred?.callbacks ?? callbacks,
+      systemPrompt,
+      signal,
+    );
 
   await runAgentLoop({
     inferenceClient,
     messages,
     voters,
+    bus,
+    executor,
     input: latestInput,
     completionChecker: effectiveCompletionChecker
       ? {
