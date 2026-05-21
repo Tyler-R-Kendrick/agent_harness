@@ -152,6 +152,7 @@ function serialiseBusEntry(entry: Entry): Record<string, unknown> {
   const payload = entry.payload as Record<string, unknown>;
   return {
     position: entry.position,
+    realtimeTs: entry.realtimeTs,
     type: busTypeName(entry.payload.type),
     intentId: payload.intentId,
     voterId: payload.voterId,
@@ -162,6 +163,24 @@ function serialiseBusEntry(entry: Entry): Record<string, unknown> {
     text: payload.text,
     messages: payload.messages,
   };
+}
+
+function entryTimestampMs(entry: Record<string, unknown>): number | undefined {
+  const value = entry.realtimeTs ?? entry.timestamp;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function computeAgentBusDurationMs(entries: Array<Record<string, unknown>>): number {
+  if (entries.length < 2) return 0;
+  const first = entryTimestampMs(entries[0] ?? {});
+  const last = entryTimestampMs(entries.at(-1) ?? {});
+  if (first === undefined || last === undefined) return 0;
+  return Math.max(0, last - first);
 }
 
 async function runCase(testCase: CodiGeneralEvalCase): Promise<{ content: string; toolCalls: EvalToolCall[] }> {
@@ -220,6 +239,7 @@ async function runCase(testCase: CodiGeneralEvalCase): Promise<{ content: string
     inferenceInputs: inferenceClient.inferenceInputs,
   }), 'utf8').toString('base64');
   const timestamp = new Date(0).toISOString();
+  const durationMs = computeAgentBusDurationMs(busEntries);
 
   return {
     content: `${content}\n\n<!-- codi-agent-bus:${embeddedBus} -->`,
@@ -235,7 +255,7 @@ async function runCase(testCase: CodiGeneralEvalCase): Promise<{ content: string
           inferenceInputs: inferenceClient.inferenceInputs,
         },
         timestamp,
-        duration_ms: busEntries.length,
+        duration_ms: durationMs,
       },
     ],
   };
@@ -255,12 +275,13 @@ if (!testCase) {
 }
 
 const result = await runCase(testCase);
+const durationMs = result.toolCalls.reduce((max, toolCall) => Math.max(max, toolCall.duration_ms), 0);
 await writeFile(outputFile, JSON.stringify({
   output: [{
     role: 'assistant',
     content: result.content,
     tool_calls: result.toolCalls,
   }],
-  duration_ms: result.toolCalls.length,
+  duration_ms: durationMs,
   token_usage: { input: Math.max(1, testCase.task.length), output: Math.max(1, result.content.length), cached: 0 },
 }, null, 2));

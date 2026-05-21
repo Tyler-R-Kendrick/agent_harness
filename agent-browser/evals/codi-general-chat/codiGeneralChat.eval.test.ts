@@ -59,6 +59,15 @@ describe('Codi general chat AgentV autoevals', () => {
     expect(verifyScript).toContain("Label = 'chat-loop-evals'");
   });
 
+  it('reports eval runtime duration from AgentBus timestamps instead of entry counts', () => {
+    const runtime = readFileSync(path.resolve(__dirname, '../../scripts/codi-general-eval-target-runtime.ts'), 'utf8');
+
+    expect(runtime).toContain('function computeAgentBusDurationMs');
+    expect(runtime).toContain('entry.realtimeTs');
+    expect(runtime).not.toContain('duration_ms: busEntries.length');
+    expect(runtime).not.toContain('duration_ms: result.toolCalls.length');
+  });
+
   it('keeps general autoeval scenarios checked in with explicit expected outputs', () => {
     const cases = readCases();
     expect(cases.map((testCase) => testCase.id)).toEqual([
