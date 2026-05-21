@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-19
+Updated: 2026-05-21
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -15,7 +15,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 2. Persistent memory plus project instructions
 - Common pattern: harnesses retain repo, workflow, and user preferences across runs.
-- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project memory, Cline Memory Bank, Copilot Memory with repo memory plus portable user preferences, DeerFlow long-term memory, Devin Knowledge with folders, triggers, macros, and suggestions, Gemini CLI layered `GEMINI.md` plus imports plus Auto Memory review inbox, Hermes bounded memory plus progressive `AGENTS.md` or `.hermes.md` discovery, Kimi Claw long-term memory and persona habits, Codex skills and team config, Cursor project rules plus memories plus `AGENTS.md` and commands, Conductor repo-owned `conductor.json` plus `files_to_copy` and `.worktreeinclude` bootstrap, OpenClaw workspace identity and config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
+- Seen in: Claude Code `CLAUDE.md` plus auto memory, ChatGPT project-only memory plus reusable project sources and Memory Sources controls, Cline Memory Bank, Copilot Memory with repo memory plus portable user preferences, DeerFlow long-term memory, Devin Knowledge with folders, triggers, macros, and suggestions, Gemini CLI layered `GEMINI.md` plus imports plus Auto Memory review inbox, Hermes bounded memory plus progressive `AGENTS.md` or `.hermes.md` discovery, Kimi Claw long-term memory and persona habits, Codex skills and team config, Cursor project rules plus memories plus `AGENTS.md` and commands, Conductor repo-owned `conductor.json` plus `files_to_copy` and `.worktreeinclude` bootstrap, OpenClaw workspace identity and config, OpenCode `AGENTS.md` project rules, Pi layered `AGENTS.md` or `CLAUDE.md` plus system-prompt files.
 - Why it matters: repeated steering is turning into the main productivity tax.
 - One-shot build instruction:
   - Add layered memory with explicit scopes (`workspace`, `project`, `user`, `agent`) and clear precedence, plus a memory inspector/editor so users can see, edit, import, disable, and diff what the harness has learned.
@@ -57,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills plus Linear issue delegation, GitHub review, and local Linear MCP connectivity, Claude Code MCP, ChatGPT apps, Cline MCP marketplace and server builder, Copilot MCP plus cloud-agent REST task APIs plus IDE access to Spaces through GitHub MCP, Claude Cowork connectors and plugins, Cursor MCP Apps plus Bugbot MCP plus repo or issue actions, DeerFlow MCP servers, Devin tracker-native Linear and Jira control, Gemini CLI extensions and remote A2A services, Goose extensions and MCP, Hermes runtime plugins and gateways, Mastra MCP client and server roles, OpenClaw plugins, OpenCode MCP and custom tools, Open Design external MCP client support, OpenHands integrations across Git providers, Slack, and Jira, Roomote connected repos, docs, tickets, and logs, Roo Code marketplace MCPs, Space Agent browser or desktop runtime surfaces, T3 Code provider and skill discovery, Warp cloud integrations and MCP server management.
+- Seen in: Codex skills plus Linear issue delegation, GitHub review, and local Linear MCP connectivity, Claude Code MCP, ChatGPT apps plus synced knowledge sources plus upgraded action-capable app variants, Cline MCP marketplace and server builder, Copilot MCP plus cloud-agent REST task APIs plus IDE access to Spaces through GitHub MCP, Claude Cowork connectors and plugins, Cursor MCP Apps plus Bugbot MCP plus repo or issue actions, DeerFlow MCP servers, Devin tracker-native Linear and Jira control, Gemini CLI extensions and remote A2A services, Goose extensions and MCP, Hermes runtime plugins and gateways, Mastra MCP client and server roles, OpenClaw plugins, OpenCode MCP and custom tools, Open Design external MCP client support, OpenHands integrations across Git providers, Slack, and Jira, Roomote connected repos, docs, tickets, and logs, Roo Code marketplace MCPs, Space Agent browser or desktop runtime surfaces, T3 Code provider and skill discovery, Warp cloud integrations and MCP server management.
 - Why it matters: the harness becomes much more valuable once it can turn conclusions into actions in the systems where teams already work.
 - One-shot build instruction:
   - Build third-party connectivity as an action layer, not just a read-only context layer: support issue trackers, chat systems, deployment targets, docs, and MCP-style tool servers with clear permissions and observable results.
@@ -89,3 +89,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: users want the scalability of background or hosted runs without giving up the ability to intervene, resume, or finish locally when the environment changes.
 - One-shot build instruction:
   - Build remote-run handoff so a background, worktree, or cloud session can be opened live, steered with follow-up turns, and adopted into a local workspace with the same transcript, artifacts, approvals, and diff context preserved end to end.
+
+### 13. Inspectable personalization provenance and source-level memory controls
+- Common pattern: memory systems are starting to show users which prior context shaped an answer, then letting them directly adjust that context without digging through hidden settings.
+- Seen in: ChatGPT Memory Sources with source chips for past chats, saved memories, custom instructions, files, and connected Gmail plus relevance feedback and deletion controls.
+- Why it matters: trust in long-lived agent memory improves when users can see why a response was personalized and can immediately correct stale or low-signal context.
+- One-shot build instruction:
+  - Add response-level memory provenance chips that show which project notes, prior runs, instructions, files, or external sources shaped the current answer, and let users mark each source as relevant or not relevant, edit durable memories, or exclude the source from future personalization.
