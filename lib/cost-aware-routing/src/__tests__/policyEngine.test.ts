@@ -39,6 +39,26 @@ describe('cost-aware routing policy', () => {
     expect(decision.features.matchedToolCues).toEqual([]);
   });
 
+  it('ignores blank custom escalation keywords', () => {
+    const decision = routePrompt('Summarize release notes.', {
+      escalationKeywords: ['', '   '],
+    });
+
+    expect(decision.modelId).toBe('gpt-4.1-mini');
+    expect(decision.reasons).toEqual(['lightweight_prompt']);
+    expect(decision.features.matchedEscalationCues).toEqual([]);
+  });
+
+  it('trims custom escalation keywords before matching', () => {
+    const decision = routePrompt('Summarize the customer migration plan.', {
+      escalationKeywords: ['  migration  '],
+    });
+
+    expect(decision.modelId).toBe('gpt-5');
+    expect(decision.reasons).toContain('escalation_keyword');
+    expect(decision.features.matchedEscalationCues).toEqual(['migration']);
+  });
+
   it('applies low-confidence fallback to premium model', () => {
     const decision = routePrompt('Analyze quickly.', { minConfidence: 0.6 });
 
@@ -69,7 +89,6 @@ describe('cost-aware routing policy', () => {
 
     expect(second).toStrictEqual(first);
   });
-
 
   it('detects long prompt length cue', () => {
     const longPrompt = 'x'.repeat(400);
