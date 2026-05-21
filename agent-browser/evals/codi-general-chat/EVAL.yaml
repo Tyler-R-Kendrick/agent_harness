@@ -1,0 +1,25 @@
+name: codi-general-chat
+version: "1.0"
+description: >
+  AgentV suite for Codi general chat behavior. These cases run the Codi chat
+  loop through deterministic inference, LogAct agents, voters, and AgentBus
+  evidence, then grade the results with Braintrust autoevals-compatible
+  deterministic scorers.
+metadata:
+  owner: agent-browser
+  tags: [codi, chat-loop, agent-bus, autoevals, general-chat]
+execution:
+  target: agent-browser-codi-general-chat
+  timeout_seconds: 10
+assertions:
+  - name: codi-chat-loop-agent-bus
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: codi-chat-loop
+  - name: codi-general-autoevals-gate
+    type: code-grader
+    required: true
+    command: ["node", "./graders/codi-general-autoevals-gate.mjs"]
+tests: ./cases.jsonl

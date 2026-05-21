@@ -121,9 +121,9 @@ async function main() {
   assert.match(packageJson, /"verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
   assert.match(packageJson, /"check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
   const verifyAgentBrowserScript = await readScript('scripts/verify-agent-browser.ps1');
+  assert.match(verifyAgentBrowserScript, /chat-loop-evals/);
   assert.doesNotMatch(verifyAgentBrowserScript, /validate-evals/);
   assert.doesNotMatch(verifyAgentBrowserScript, /test-evals/);
-  assert.doesNotMatch(verifyAgentBrowserScript, /eval-workflows/);
   for (const extensionPackagePath of [
     'ext/harness/agent-skills/package.json',
     'ext/harness/agents-md/package.json',
@@ -542,6 +542,7 @@ async function main() {
   const verifyScript = await readScript('scripts/verify-agent-browser.ps1');
   const sourceHygieneIndex = verifyScript.indexOf("Label = 'source-hygiene'");
   const testScriptsIndex = verifyScript.indexOf("Label = 'test-scripts'");
+  const chatLoopEvalsIndex = verifyScript.indexOf("Label = 'chat-loop-evals'");
   const extensionLintIndex = verifyScript.indexOf("Label = 'extension-lint'");
   const extensionCoverageIndex = verifyScript.indexOf("Label = 'extension-coverage'");
   const extensionBuildIndex = verifyScript.indexOf("Label = 'extension-build'");
@@ -549,13 +550,15 @@ async function main() {
   const buildIndex = verifyScript.indexOf("Label = 'build'");
   assert.notEqual(sourceHygieneIndex, -1);
   assert.notEqual(testScriptsIndex, -1);
+  assert.notEqual(chatLoopEvalsIndex, -1);
   assert.notEqual(extensionLintIndex, -1);
   assert.notEqual(extensionCoverageIndex, -1);
   assert.notEqual(extensionBuildIndex, -1);
   assert.notEqual(lintIndex, -1);
   assert.notEqual(buildIndex, -1);
   assert.ok(sourceHygieneIndex < testScriptsIndex);
-  assert.ok(testScriptsIndex < extensionLintIndex);
+  assert.ok(testScriptsIndex < chatLoopEvalsIndex);
+  assert.ok(chatLoopEvalsIndex < extensionLintIndex);
   assert.ok(extensionLintIndex < extensionCoverageIndex);
   assert.ok(extensionCoverageIndex < extensionBuildIndex);
   assert.ok(extensionBuildIndex < lintIndex);

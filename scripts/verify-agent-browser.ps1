@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $steps = @(
   @{ Label = 'source-hygiene'; Args = @('run', 'check:generated-files') }
   @{ Label = 'test-scripts'; Args = @('--workspace', 'agent-browser', 'run', 'test:scripts') }
+  @{ Label = 'chat-loop-evals'; Args = @('--workspace', 'agent-browser', 'run', 'eval:chat-loop') }
   @{ Label = 'extension-lint'; Args = @('run', 'lint:extensions') }
   @{ Label = 'extension-coverage'; Args = @('run', 'test:coverage:extensions') }
   @{ Label = 'extension-build'; Args = @('run', 'build:extensions') }

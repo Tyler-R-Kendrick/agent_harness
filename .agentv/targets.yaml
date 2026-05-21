@@ -1,4 +1,11 @@
 targets:
+  - name: agent-browser-codi-general-chat
+    provider: cli
+    workers: 1
+    timeout_ms: 10
+    command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/codi-general-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
+    cwd: ../../..
+
   - name: agent-browser-tour-guide-agent
     provider: cli
     workers: 1
