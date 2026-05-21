@@ -132,4 +132,3 @@ function requireString(value, field) {
 function optionalString(value) {
     return typeof value === 'string' && value ? value : undefined;
 }
-//# sourceMappingURL=messages.js.map
