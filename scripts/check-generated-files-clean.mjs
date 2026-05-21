@@ -68,6 +68,10 @@ export const GENERATED_ARTIFACT_RULES = [
     label: '.codex-tk26-index-*',
     matches: (filePath) => filePath.startsWith('.codex-tk26-index-'),
   },
+  {
+    label: 'ext/provider/local-model-connector/dist/*.map',
+    matches: (filePath) => /^ext\/provider\/local-model-connector\/dist\/[^/]+\.map$/u.test(filePath),
+  },
 ];
 
 function normalizeGitPath(filePath) {

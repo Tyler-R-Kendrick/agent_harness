@@ -28,4 +28,3 @@ export function failFromUnknown(error, fallbackCode = 'INVALID_REQUEST') {
     }
     return fail('Request could not be completed.', fallbackCode);
 }
-//# sourceMappingURL=types.js.map

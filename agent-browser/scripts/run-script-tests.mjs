@@ -172,6 +172,10 @@ async function main() {
     'main.js',
     'logic.js',
   ]);
+  const localModelConnectorExtensionTsconfig = JSON.parse(
+    await readScript('ext/provider/local-model-connector/tsconfig.extension.json'),
+  );
+  assert.equal(localModelConnectorExtensionTsconfig.compilerOptions.sourceMap, false);
   const vercelConfig = JSON.parse(await readScript('vercel.json'));
   assert.equal(vercelConfig.installCommand, 'node scripts/vercel-install.mjs');
   assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
@@ -626,6 +630,9 @@ async function main() {
     '.codex/environments/environment.toml',
     '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
     '.codex-tk26-index-main/index.json',
+    'ext/provider/local-model-connector/dist/background.js.map',
+    'ext/provider/local-model-connector/dist/background.js',
+    'ext/provider/local-model-connector/dist/local-model-connector-extension.zip',
   ]);
   assert.deepEqual(
     trackedArtifacts.map((artifact) => artifact.path),
@@ -649,6 +656,7 @@ async function main() {
       '.codex/environments/environment.toml',
       '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
       '.codex-tk26-index-main/index.json',
+      'ext/provider/local-model-connector/dist/background.js.map',
     ],
   );
   assert.match(
@@ -666,6 +674,10 @@ async function main() {
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.npm-cache\/_logs/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /_cacache\//);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
+  assert.match(
+    formatTrackedGeneratedArtifactsError(trackedArtifacts),
+    /ext\/provider\/local-model-connector\/dist\/background\.js\.map/,
+  );
   assert.deepEqual(
     buildGitLsFilesInvocation(repoRoot, 'win32'),
     {

@@ -231,4 +231,3 @@ function matchesOriginPattern(sender, pattern) {
     }
     return sender.hostname === hostPattern;
 }
-//# sourceMappingURL=validation.js.map

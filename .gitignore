@@ -35,3 +35,6 @@ output/
 .codex-tk26-objects/
 .codex-tk26-index-*
 .tmp-*
+
+# Local Model Connector packages compiled extension JS, but source maps are regenerated build output.
+ext/provider/local-model-connector/dist/*.map

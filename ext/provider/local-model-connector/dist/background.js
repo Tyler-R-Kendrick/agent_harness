@@ -18,4 +18,3 @@ export function registerLocalModelConnector(chromeApi) {
 if (typeof chrome !== 'undefined' && chrome.runtime) {
     registerLocalModelConnector(chrome);
 }
-//# sourceMappingURL=background.js.map
