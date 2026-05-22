@@ -1,0 +1,20 @@
+slug: oculo
+name: Oculo
+vendor: Oculo
+segment: open-source-mcp-ai-browser
+product_path: competition/oculo
+design_path: competition/oculo/design
+features_path: competition/oculo/features
+marketing_path: competition/oculo/marketing
+gossip_path: competition/oculo/gossip
+snapshot_date: 2026-05-22
+primary_sources:
+  - https://getoculo.com/
+  - https://github.com/xidik12/oculo
+secondary_sources:
+  - https://www.codaone.ai/mcp/servers/oculo
+  - https://www.reddit.com/r/mcp/comments/1s70fao/built_a_browser_with_a_native_mcp_server_and_llm/
+positioning: "Free open-source Chromium browser built for MCP clients, with compact page descriptions, built-in AI panel, and local privacy controls."
+customer_model: "Free MIT-licensed desktop app with no paid tiers, usage limits, subscriptions, or telemetry visible at snapshot time."
+competitive_threat_level: high
+notes: "Competes with agent-browser on MCP-native browser UX, token-minimal perception, daily-browser packaging, and privacy-first local permissions."

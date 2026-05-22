@@ -48,6 +48,11 @@ competition/<product-slug>/
 | AlienMcp | Local real-Chrome MCP bridge | `competition/alien-mcp` |
 | AgentSmith | Consumer Chrome browser agent | `competition/agentsmith` |
 | webact | Token-efficient CDP browser control | `competition/webact` |
+| Tandem Browser | Open-source local-first AI browser | `competition/tandem-browser` |
+| Oculo | Open-source MCP AI browser | `competition/oculo` |
+| BotBro | Consumer local browser automation agent | `competition/botbro` |
+| Vibot | Self-hosted browser automation platform | `competition/vibot` |
+| Rove | Hosted Playwright API for AI agents | `competition/rove` |
 | BrowserStack MCP | Enterprise AI testing MCP | `competition/browserstack-mcp` |
 | Scrapybara | Remote computer-use infrastructure | `competition/scrapybara` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
@@ -116,3 +121,6 @@ competition/<product-slug>/
 - Browser-agent infrastructure is now splitting by reliability philosophy: VulpineOS pushes safety and determinism into a patched browser runtime, while webact strips the stack down to raw CDP and compact page briefs.
 - Local Chrome bridges such as AlienMcp and webact validate the real-session wedge, but they also raise the importance of visible scoping, durable logs, and permission boundaries around cookies, storage, console, network, and JavaScript execution.
 - Consumer extension products such as AgentSmith show that browser agents can be sold as simple repetitive-work automation with clear action quotas. That packaging may capture mainstream users before developer workbenches do, but it leaves a wedge for stronger evidence, approvals, and replay.
+- A newer local-first browser-agent wave is turning MCP into a daily-browser capability rather than a separate test runner. Tandem Browser and Oculo compete directly on real sessions, model-agnostic clients, compact perception, privacy, and explicit permission tiers.
+- The same market is splitting by operator maturity: BotBro makes local browser agents feel like a paid consumer utility, Vibot packages self-hosted workflows and monitoring, and Rove sells hosted Playwright sessions with token-aware accessibility trees and video artifacts.
+- The recurring wedge for `agent-browser` remains evidence quality. Competitors increasingly claim real Chrome, local credentials, compact context, and MCP setup; the differentiator has to be visible run history, clear authority boundaries, screenshots/video/traces, cost transparency, and recovery controls.
