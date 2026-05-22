@@ -1,0 +1,20 @@
+slug: rove
+name: Rove
+vendor: Noncelogic
+segment: hosted-playwright-api-for-ai-agents
+product_path: competition/rove
+design_path: competition/rove/design
+features_path: competition/rove/features
+marketing_path: competition/rove/marketing
+gossip_path: competition/rove/gossip
+snapshot_date: 2026-05-22
+primary_sources:
+  - https://roveapi.com/
+  - https://status.roveapi.com/
+secondary_sources:
+  - https://www.reddit.com/r/LangChain/
+  - https://www.reddit.com/r/MachineLearning/comments/1n3g1p7/
+positioning: "Hosted Playwright API for AI agents that returns accessibility trees, exposes MCP, records sessions, and removes browser fleet management."
+customer_model: "Early-access credits with 100 free credits and one-time Founder Packs at $99, $199, and $349."
+competitive_threat_level: medium
+notes: "Competes with agent-browser on developer browser infrastructure, token-aware perception, MCP integration, and recorded execution artifacts."

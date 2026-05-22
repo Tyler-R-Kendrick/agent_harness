@@ -1,0 +1,21 @@
+slug: tandem-browser
+name: Tandem Browser
+vendor: Tandem Browser
+segment: open-source-local-first-ai-browser
+product_path: competition/tandem-browser
+design_path: competition/tandem-browser/design
+features_path: competition/tandem-browser/features
+marketing_path: competition/tandem-browser/marketing
+gossip_path: competition/tandem-browser/gossip
+snapshot_date: 2026-05-22
+primary_sources:
+  - https://tandembrowser.org/
+  - https://tandembrowser.org/changelog
+  - https://github.com/tandembrowser/tandem
+secondary_sources:
+  - https://www.reddit.com/r/mcp/comments/1s70fao/built_a_browser_with_a_native_mcp_server_and_llm/
+  - https://www.reddit.com/r/AI_Agents/comments/1subsl4/we_spent_3_months_building_an_ai_agent_for/
+positioning: "Open-source, local-first browser where human and AI agents share the same real browser session through MCP and HTTP."
+customer_model: "Free MIT-licensed desktop browser with GitHub sponsorship tiers at $5, $14, and $29 per month."
+competitive_threat_level: high
+notes: "Competes directly with agent-browser on the real-session, inspectable, human-in-the-loop browser-agent workspace."

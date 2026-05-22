@@ -1,0 +1,20 @@
+slug: vibot
+name: Vibot
+vendor: Vibot
+segment: self-hosted-browser-automation-platform
+product_path: competition/vibot
+design_path: competition/vibot/design
+features_path: competition/vibot/features
+marketing_path: competition/vibot/marketing
+gossip_path: competition/vibot/gossip
+snapshot_date: 2026-05-22
+primary_sources:
+  - https://vibot.app/
+  - https://github.com/guytheguytheguy/computer-and-browser-automation
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1subsl4/we_spent_3_months_building_an_ai_agent_for/
+  - https://www.reddit.com/r/vibecoding/comments/1t7blju/browserapi_an_api_for_building_ai_agents_that_can/
+positioning: "Free self-hosted browser automation platform with visual workflows, browser recording, MCP routing, multi-agent orchestration, scheduling, and monitoring."
+customer_model: "Open-source MIT distribution; no hosted pricing visible at snapshot time."
+competitive_threat_level: medium
+notes: "Competes with agent-browser as a self-hosted automation suite that combines visual workflows, CLI, MCP, monitoring, and agent orchestration."
