@@ -46,6 +46,8 @@ import { createWorkGraph } from '@agent-harness/workgraph';
 
 Files under `@agent-harness/workgraph/src/*` are implementation details. Do not deep-import them from consumers; add explicit root exports in `src/index.ts` when a new API needs to be public.
 
+The published package includes the README, package metadata, and runtime TypeScript sources only. Test files, `src/__tests__/`, and `src/testing/` fixtures are excluded from the package artifact.
+
 ## Validation
 
 Run:

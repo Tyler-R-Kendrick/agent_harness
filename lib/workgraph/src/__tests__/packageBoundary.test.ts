@@ -29,6 +29,7 @@ describe('workgraph package boundary', () => {
       'src/**/*.{ts,tsx}',
       '!src/**/*.test.ts',
       '!src/__tests__/**',
+      '!src/testing/**',
     ]);
   });
 
