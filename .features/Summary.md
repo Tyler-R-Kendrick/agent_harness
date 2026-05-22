@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-21
+Updated: 2026-05-22
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -96,3 +96,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: trust in long-lived agent memory improves when users can see why a response was personalized and can immediately correct stale or low-signal context.
 - One-shot build instruction:
   - Add response-level memory provenance chips that show which project notes, prior runs, instructions, files, or external sources shaped the current answer, and let users mark each source as relevant or not relevant, edit durable memories, or exclude the source from future personalization.
+
+### 14. Background session supervisor views with peek-and-reply control
+- Common pattern: long-running coding agents are now supervised through dedicated background-session views instead of forcing users to juggle raw terminals or wait for the final result.
+- Seen in: Claude Code Agent View with active and completed background sessions plus peek and reply controls, Codex automations inbox plus remote follow-through, OpenAI Symphony dashboard detail panels and blocked-session queues, Roomote shared task console with live transcripts and artifacts, Warp centralized agent management plus live browser session supervision.
+- Why it matters: once tasks run longer and split across multiple workers, users need a lightweight way to inspect progress, intervene, and unblock work without fully re-entering each execution environment.
+- One-shot build instruction:
+  - Build a background-session supervisor for `agent-browser` that lists active and completed runs, shows current stage and recent events, supports peek and follow-up reply actions, and exposes explicit blocked or needs-input states so users can steer a run without losing the main workspace context.

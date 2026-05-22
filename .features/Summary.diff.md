@@ -1,41 +1,40 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-21
-Baseline: `.features/Summary.md` refreshed from the 2026-05-19 Warp-updated corpus.
-Diff type: additive update after ChatGPT feature refresh
+Updated: 2026-05-22
+Baseline: `.features/Summary.md` refreshed from the 2026-05-21 ChatGPT-updated corpus.
+Diff type: additive update after Claude Code feature refresh
 
 ## Net new normalized features
 
-### Added: Inspectable personalization provenance and source-level memory controls
-- Why now: the refreshed ChatGPT corpus adds a clearer contract for inspectable personalization, where the product exposes which memories and prior context influenced an answer and lets the user correct or suppress those sources inline.
+### Added: Background session supervisor views with peek-and-reply control
+- Why now: the refreshed Claude Code corpus shows a more explicit background-agent supervision model, where users can inspect active runs, peek into progress, and send follow-up steering without dropping back into each underlying terminal or branch environment.
 - Research delta:
-  - ChatGPT now exposes Memory Sources for personalized responses, including past chats, saved memories, custom instructions, and where eligible, files and connected Gmail
-  - each source can be corrected, deleted, or marked as not relevant directly from the response context instead of through a separate memory admin flow
-  - project memory can be forced into a project-only boundary and reusable sources can be added from Slack, Google Drive, saved chats, or ad-hoc pasted text
-  - synced apps can now feed both immediate answers and longer-lived memory/personalization flows, which makes provenance and suppression controls more important
+  - Claude Code now documents Agent View as a first-class surface for active and completed background sessions with peek and reply controls
+  - Anthropic pairs that supervision layer with git worktree isolation, so concurrent runs stay inspectable without collapsing into one shared branch or shell
+  - the GitHub Actions path extends the same harness into remote CI execution, which increases the need for a single control plane that can surface status and intervention points
+  - remote control docs reinforce that the run should stay steerable across surfaces instead of becoming a fire-and-forget batch job
 
-### Expanded: Persistent memory plus project instructions
-- Why now: the ChatGPT refresh makes its memory system more operationally inspectable and its project knowledge base more intentionally curated than the older corpus captured.
+### Expanded: Multi-surface continuity
+- Why now: the Claude Code refresh makes the continuity story more operational than the older notes captured by threading terminal, web, IDE, remote control, and GitHub Actions into one harness rather than treating them as separate entry points.
 - Research delta:
-  - project-only memory now acts as a hard context boundary for shared work
-  - project sources can be created from apps, chats, and raw pasted text
-  - reusable outputs can be saved back into the project as durable sources
-  - personalization now shows source provenance rather than behaving like a hidden retrieval layer
+  - users can start in a local terminal, supervise through Agent View, and continue from another surface
+  - remote control keeps an active local run open to follow-up instead of forcing a new session on the secondary device
+  - GitHub Actions lets the same harness behavior run inside CI while remaining part of the broader Claude Code workflow
 
-### Expanded: External tool connectivity and actionability
-- Why now: the ChatGPT refresh shows a cleaner bridge from synced external knowledge to action-capable app upgrades and in-place work surfaces.
+### Expanded: Git/PR-native execution
+- Why now: the Claude Code refresh strengthens the repo-native story with worktree-backed parallelism and GitHub Actions automation rather than only terminal-based edits.
 - Research delta:
-  - apps with sync can pre-index external knowledge while respecting existing permissions
-  - upgraded apps can preserve sync while adding new actions
-  - ChatGPT for Excel and Google Sheets carries apps and Skills into a host-native sidebar instead of limiting the harness to the main chat window
+  - concurrent runs are explicitly tied to isolated git worktrees
+  - remote review and automation can happen through GitHub Actions
+  - the same harness model now spans local coding, branch isolation, and remote review loops
 
-### Added: Add memory provenance chips and source-level personalization controls
-- Why now: `agent-browser` already stores transcripts, artifacts, and instructions, but it does not show which durable context actually influenced a given answer, nor does it let the user suppress or correct stale context at the point of use.
+### Added: Add a background session supervisor with peek, reply, and blocked-state control
+- Why now: `agent-browser` has multiple session and automation concepts already, but it still lacks a lightweight control plane that lets users supervise long-running runs, peek at progress, and steer or unblock them without context-switching into every underlying session.
 - Linear issue:
   - Pending external publication in this session if the Linear plugin remains non-callable in this environment; the feature brief below is the canonical issue payload
 - Linear issue title:
-  - `Add memory provenance chips and source-level personalization controls`
+  - `Add a background session supervisor with peek, reply, and blocked-state control`
 - Suggested problem statement:
-  - `agent-browser` keeps durable context in transcripts, memories, instructions, artifacts, and external sources, but users still cannot see which of those sources influenced a specific response. When personalization goes stale or overreaches, the only recovery path is indirect cleanup rather than point-of-use correction. This makes long-lived memory harder to trust, especially once project notes, prior runs, and external synced sources all participate in context assembly.`
+  - `agent-browser` can launch sessions and preserve run history, but it still does not give users a compact supervisor view for active and background work. As runs get longer, move into worktrees or remote environments, or require human follow-up, users need a way to see what is running, what is blocked, and what needs intervention without opening each session in full. Without that control plane, long-running agent work becomes harder to trust, steer, and recover.`
 - One-shot instruction for an LLM:
-  - Implement response-level memory provenance for `agent-browser` so each answer can surface the project notes, prior runs, durable instructions, artifacts, and external sources that materially influenced it; add compact provenance chips plus a detail panel where the user can mark each source relevant or not relevant, exclude it from future personalization, edit durable memories, or jump to the underlying artifact, and wire the suppression feedback into future context assembly rather than only hiding the chip in the current view.
+  - Implement a background session supervisor for `agent-browser` that lists active and completed runs across local, worktree, automation, and remote-capable execution modes; show current stage, recent events, branch or workspace identity, and explicit blocked or needs-input status; support lightweight peek and follow-up reply actions without forcing a full session switch; and preserve the same run transcript, artifacts, approvals, and diff context when the user drills in or takes over locally.
