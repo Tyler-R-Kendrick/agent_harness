@@ -238,6 +238,12 @@ export class MockGitRepository<TContent = unknown> {
     if (!sourceBranch.headCommitId) {
       throw new Error(`Cannot merge empty branch: ${pullRequest.branchName}`);
     }
+    if (pullRequest.draft) {
+      throw new Error(`Cannot merge draft pull request: ${id}`);
+    }
+    if (pullRequest.decision?.decision !== 'approved') {
+      throw new Error(`Cannot merge unapproved pull request: ${id}`);
+    }
     const targetBranch = this.requireBranch(pullRequest.targetBranchName);
     this.checkout(targetBranch.name);
     const sourceCommit = this.requireCommit(sourceBranch.headCommitId);
