@@ -1,0 +1,23 @@
+slug: cloudflare-browser-run
+name: Cloudflare Browser Run
+vendor: Cloudflare
+segment: edge-hosted-browser-automation-primitive
+product_path: competition/cloudflare-browser-run
+design_path: competition/cloudflare-browser-run/design
+features_path: competition/cloudflare-browser-run/features
+marketing_path: competition/cloudflare-browser-run/marketing
+gossip_path: competition/cloudflare-browser-run/gossip
+snapshot_date: 2026-05-23
+primary_sources:
+  - https://www.cloudflare.com/products/browser-rendering/
+  - https://developers.cloudflare.com/browser-run/
+  - https://developers.cloudflare.com/browser-run/cdp/playwright/
+  - https://developers.cloudflare.com/browser-run/pricing/
+  - https://developers.cloudflare.com/browser-run/limits/
+secondary_sources:
+  - https://www.reddit.com/r/CloudFlare/comments/1tbzh30/browser_run_now_running_on_cloudflare_containers/
+  - https://www.reddit.com/r/mcp/comments/1smxa45/cloudflare_just_launched_browser_run_headless/
+positioning: "Headless programmable browsers on Cloudflare's global network for AI agents, screenshots, PDFs, markdown extraction, crawling, and direct Playwright/Puppeteer/CDP sessions."
+customer_model: "Bundled with Workers Free and Paid plans, with daily free browser time, included paid-plan browser hours/concurrency, and usage pricing for additional browser hours and concurrent browsers."
+competitive_threat_level: high
+notes: "Threatens agent-browser as a low-cost global browser primitive from an incumbent cloud/network provider, especially for teams already deploying Workers and agent workloads on Cloudflare."
