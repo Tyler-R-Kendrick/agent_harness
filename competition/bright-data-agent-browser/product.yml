@@ -1,0 +1,22 @@
+slug: bright-data-agent-browser
+name: Bright Data Agent Browser
+vendor: Bright Data
+segment: web-unlocking-browser-infrastructure-for-agents
+product_path: competition/bright-data-agent-browser
+design_path: competition/bright-data-agent-browser/design
+features_path: competition/bright-data-agent-browser/features
+marketing_path: competition/bright-data-agent-browser/marketing
+gossip_path: competition/bright-data-agent-browser/gossip
+snapshot_date: 2026-05-23
+primary_sources:
+  - https://brightdata.com/ai/agent-browser
+  - https://docs.brightdata.com/ai/mcp-server/tools
+  - https://brightdata.com/pricing/mcp-server
+secondary_sources:
+  - https://www.reddit.com/r/mcp/comments/1mvg4hy
+  - https://www.reddit.com/r/mcp/comments/1lb9vbf
+  - https://www.techradar.com/reviews/bright-data
+positioning: "Cloud browser and MCP web-access stack for AI agents that combines browser automation with proxy geography, fingerprinting, CAPTCHA solving, web unlocking, and structured data extraction."
+customer_model: "Free MCP tier with monthly requests, pay-as-you-go usage, deposit matching promotions, and enterprise packages with SLA, account management, SSO, customizations, and audit logs."
+competitive_threat_level: high
+notes: "Threatens agent-browser in data-heavy agent workflows where successful public-web access, CAPTCHA handling, and proxy scale matter more than local inspectability."

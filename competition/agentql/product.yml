@@ -1,0 +1,22 @@
+slug: agentql
+name: AgentQL
+vendor: TinyFish
+segment: natural-language-web-query-and-automation-layer
+product_path: competition/agentql
+design_path: competition/agentql/design
+features_path: competition/agentql/features
+marketing_path: competition/agentql/marketing
+gossip_path: competition/agentql/gossip
+snapshot_date: 2026-05-23
+primary_sources:
+  - https://docs.agentql.com/quick-start
+  - https://docs.agentql.com/scraping
+  - https://docs.agentql.com/integrations/mcp
+  - https://www.agentql.com/pricing
+secondary_sources:
+  - https://github.com/tinyfish-io/agentql/issues
+  - https://www.reddit.com/r/automation/comments/1rrno54/why_is_browser_automation_still_so_fragile/
+positioning: "Query language, SDK, debugger, remote browser, and integrations that let developers identify web elements and extract data using natural-language-shaped contracts."
+customer_model: "Free trial and Starter tier, $99/month Professional plan, per-call and remote-browser usage, and custom enterprise managed/on-prem deployments."
+competitive_threat_level: medium
+notes: "Competes by replacing brittle selectors and raw DOM parsing with semantic queries that can power scraping and browser-agent actions."

@@ -55,6 +55,10 @@ competition/<product-slug>/
 | Rove | Hosted Playwright API for AI agents | `competition/rove` |
 | BrowserStack MCP | Enterprise AI testing MCP | `competition/browserstack-mcp` |
 | Scrapybara | Remote computer-use infrastructure | `competition/scrapybara` |
+| BrowserCat | Hosted headless browser automation API | `competition/browsercat` |
+| AgentQL | Natural-language web query and automation layer | `competition/agentql` |
+| Cloudflare Browser Run | Edge-hosted browser automation primitive | `competition/cloudflare-browser-run` |
+| Bright Data Agent Browser | Web-unlocking browser infrastructure for agents | `competition/bright-data-agent-browser` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
 | Airtop | Cloud browser automation platform | `competition/airtop` |
 | Steel.dev | Open-source browser-agent infrastructure | `competition/steel` |
@@ -124,3 +128,7 @@ competition/<product-slug>/
 - A newer local-first browser-agent wave is turning MCP into a daily-browser capability rather than a separate test runner. Tandem Browser and Oculo compete directly on real sessions, model-agnostic clients, compact perception, privacy, and explicit permission tiers.
 - The same market is splitting by operator maturity: BotBro makes local browser agents feel like a paid consumer utility, Vibot packages self-hosted workflows and monitoring, and Rove sells hosted Playwright sessions with token-aware accessibility trees and video artifacts.
 - The recurring wedge for `agent-browser` remains evidence quality. Competitors increasingly claim real Chrome, local credentials, compact context, and MCP setup; the differentiator has to be visible run history, clear authority boundaries, screenshots/video/traces, cost transparency, and recovery controls.
+- Web-data infrastructure vendors are now explicitly repackaging headless browsers for AI agents. BrowserCat and Cloudflare Browser Run make browser capacity feel like a cheap utility, while Bright Data sells success through unlocking, proxies, CAPTCHAs, and MCP access.
+- AgentQL shows a different wedge: reduce brittle selectors by making natural-language element queries and typed extraction the developer contract. That helps agent builders move faster, but it can hide uncertainty unless query confidence, screenshots, and fallback traces are preserved.
+- Cloudflare's "well-behaved bot" framing is a meaningful design difference from stealth-first scraping vendors. It may win compliance-minded builders, while Bright Data captures buyers who measure success by access to difficult public sites.
+- For `agent-browser`, the competitive answer is not just cheaper browser hours. The product has to make live authority, replayable evidence, local credential boundaries, and failure recovery clearer than generic browser farms and web-scraping stacks.

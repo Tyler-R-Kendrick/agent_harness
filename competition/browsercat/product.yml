@@ -1,0 +1,21 @@
+slug: browsercat
+name: BrowserCat
+vendor: BrowserCat
+segment: hosted-headless-browser-automation-api
+product_path: competition/browsercat
+design_path: competition/browsercat/design
+features_path: competition/browsercat/features
+marketing_path: competition/browsercat/marketing
+gossip_path: competition/browsercat/gossip
+snapshot_date: 2026-05-23
+primary_sources:
+  - https://www.browsercat.com/
+  - https://www.browsercat.com/docs
+  - https://www.browsercat.com/pricing
+secondary_sources:
+  - https://github.com/browsercat
+  - https://www.reddit.com/r/automation/comments/1rrno54/why_is_browser_automation_still_so_fragile/
+positioning: "Hosted browser automation API for developers who want Playwright, Puppeteer, and CDP compatibility without operating their own headless browser fleet."
+customer_model: "Free Hobby tier with included credits, $50/month Business plan with usage credits and overages, and enterprise contact-sales support."
+competitive_threat_level: medium
+notes: "Competes with agent-browser on cheap remote browser capacity, global fleet operations, Playwright compatibility, usage caps, and AI-agent web access positioning."
