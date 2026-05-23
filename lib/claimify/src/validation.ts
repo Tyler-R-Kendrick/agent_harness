@@ -73,7 +73,7 @@ function firstUnresolvedReference(claim: string): string | null {
     return null;
   }
   const withoutBracketedContext = claim.replace(/^\[[^\]]+\]\s*/u, '');
-  const firstWord = withoutBracketedContext.match(/^\p{L}+/u)?.[0];
+  const firstWord = withoutBracketedContext.match(/^[^\p{L}]*([\p{L}]+)/u)?.[1];
   if (!firstWord) {
     return null;
   }

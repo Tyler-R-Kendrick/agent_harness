@@ -37,6 +37,13 @@ describe('claim validation', () => {
     expect(isAcceptableClaim('[Contoso] It reported $12 million in revenue in 2025.')).toBe(true);
   });
 
+  it('rejects bracketed context without a factual claim body', () => {
+    expect(validateClaim('[Contoso] !!!', { strictness: 'recall' })).toMatchObject({
+      acceptable: false,
+      reason: 'Claim is too short',
+    });
+  });
+
   it('covers long, malformed, empty, and non-leading-reference validation paths', () => {
     expect(validateClaim(`${'word '.repeat(80)}.`)).toMatchObject({
       acceptable: false,
@@ -53,8 +60,12 @@ describe('claim validation', () => {
     expect(validateClaim('Contoso said it reported growth in 2025.')).toMatchObject({
       acceptable: true,
     });
-    expect(validateClaim("' reported $12 million in revenue in 2025.")).toMatchObject({
-      acceptable: true,
+  });
+
+  it('rejects unresolved leading references even when they are quoted', () => {
+    expect(validateClaim('"It" reported $12 million in revenue in 2025.')).toMatchObject({
+      acceptable: false,
+      reason: 'Contains unresolved reference: It',
     });
   });
 
