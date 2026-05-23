@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-22
+Updated: 2026-05-23
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -103,3 +103,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: once tasks run longer and split across multiple workers, users need a lightweight way to inspect progress, intervene, and unblock work without fully re-entering each execution environment.
 - One-shot build instruction:
   - Build a background-session supervisor for `agent-browser` that lists active and completed runs, shows current stage and recent events, supports peek and follow-up reply actions, and exposes explicit blocked or needs-input states so users can steer a run without losing the main workspace context.
+
+### 15. Split-trust execution planes with graceful sandbox fallback
+- Common pattern: some harnesses are starting to separate low-risk host-native actions from higher-risk code execution instead of forcing every capability through one runtime boundary.
+- Seen in: Claude Cowork host-native agent loop for file, web, and local plugin actions plus an isolated Linux VM for shell and code execution, with continued file-and-web operation when the VM is unavailable.
+- Why it matters: users and admins want stronger isolation for shell execution without losing the rest of the harness when the sandbox is unavailable or more tightly governed.
+- One-shot build instruction:
+  - Split `agent-browser` execution into explicit action planes: keep chat, file inspection, browser work, and other host-safe actions in a host-native control layer with clear permissions, run shell and code execution in an isolated sandbox or worktree plane with separate network policy, surface which plane each action used, and gracefully degrade to host-safe actions when the sandbox is blocked or unavailable instead of failing the entire run.

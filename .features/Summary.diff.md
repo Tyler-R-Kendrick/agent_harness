@@ -1,40 +1,40 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-22
-Baseline: `.features/Summary.md` refreshed from the 2026-05-21 ChatGPT-updated corpus.
-Diff type: additive update after Claude Code feature refresh
+Updated: 2026-05-23
+Baseline: `.features/Summary.md` refreshed from the 2026-05-22 Claude Code-updated corpus.
+Diff type: additive update after Claude Cowork feature refresh
 
 ## Net new normalized features
 
-### Added: Background session supervisor views with peek-and-reply control
-- Why now: the refreshed Claude Code corpus shows a more explicit background-agent supervision model, where users can inspect active runs, peek into progress, and send follow-up steering without dropping back into each underlying terminal or branch environment.
+### Added: Split-trust execution planes with graceful sandbox fallback
+- Why now: the refreshed Claude Cowork corpus adds a much clearer first-party description of how Anthropic is separating host-native actions from isolated code execution, including what continues working when the VM fails and which policy controls apply to each layer.
 - Research delta:
-  - Claude Code now documents Agent View as a first-class surface for active and completed background sessions with peek and reply controls
-  - Anthropic pairs that supervision layer with git worktree isolation, so concurrent runs stay inspectable without collapsing into one shared branch or shell
-  - the GitHub Actions path extends the same harness into remote CI execution, which increases the need for a single control plane that can surface status and intervention points
-  - remote control docs reinforce that the run should stay steerable across surfaces instead of becoming a fire-and-forget batch job
+  - Cowork now documents two execution environments on-device: a host-native agent loop for conversation, file, web, and local plugin actions, and an isolated Linux VM for shell commands and generated code
+  - Anthropic explicitly says file and web tools can keep working if the VM is unavailable, while shell and code actions surface a workspace-unavailable state
+  - Team and Enterprise admins can independently disable local MCP servers or desktop extension servers on managed devices, which reinforces that Cowork's control surface is not one undifferentiated sandbox
+  - network egress and enterprise policy are described as session-scoped controls for code execution, while browser-style tools and Chrome automation sit on separate paths
 
-### Expanded: Multi-surface continuity
-- Why now: the Claude Code refresh makes the continuity story more operational than the older notes captured by threading terminal, web, IDE, remote control, and GitHub Actions into one harness rather than treating them as separate entry points.
+### Expanded: Persistent memory plus project instructions
+- Why now: the Cowork refresh adds a current project workspace model with local storage, project-specific instructions, project-scoped memory, and project-bound scheduled tasks.
 - Research delta:
-  - users can start in a local terminal, supervise through Agent View, and continue from another surface
-  - remote control keeps an active local run open to follow-up instead of forcing a new session on the secondary device
-  - GitHub Actions lets the same harness behavior run inside CI while remaining part of the broader Claude Code workflow
+  - Cowork projects can be created from scratch, imported from Claude chat projects, or wrapped around local folders
+  - each project now packages files, context, instructions, memory, and scheduled tasks together
+  - project memory is explicitly scoped per workspace rather than shared account-wide
 
-### Expanded: Git/PR-native execution
-- Why now: the Claude Code refresh strengthens the repo-native story with worktree-backed parallelism and GitHub Actions automation rather than only terminal-based edits.
+### Expanded: Enterprise governance and observability
+- Why now: the Cowork refresh broadens the governance picture from "some admin controls" to a fuller analytics and telemetry model.
 - Research delta:
-  - concurrent runs are explicitly tied to isolated git worktrees
-  - remote review and automation can happen through GitHub Actions
-  - the same harness model now spans local coding, branch isolation, and remote review loops
+  - Cowork now has dedicated analytics surfaces and Analytics API coverage
+  - OpenTelemetry exports include prompts, tool and MCP calls, file access, approval decisions, tokens, cost, and errors
+  - Anthropic is explicit that Compliance API coverage still does not include Cowork activity, making OTel the real monitoring path today
 
-### Added: Add a background session supervisor with peek, reply, and blocked-state control
-- Why now: `agent-browser` has multiple session and automation concepts already, but it still lacks a lightweight control plane that lets users supervise long-running runs, peek at progress, and steer or unblock them without context-switching into every underlying session.
+### Added: Add split-trust execution planes with graceful sandbox fallback
+- Why now: `agent-browser` already spans local tools, browser tasks, and code execution, but it still treats execution as too monolithic. The Claude Cowork refresh shows a cleaner model where safer host-native actions can keep working under one permission regime while riskier code or shell execution lives behind stronger isolation and can fail independently without taking down the entire run.
 - Linear issue:
   - Pending external publication in this session if the Linear plugin remains non-callable in this environment; the feature brief below is the canonical issue payload
 - Linear issue title:
-  - `Add a background session supervisor with peek, reply, and blocked-state control`
+  - `Add split-trust execution planes with graceful sandbox fallback`
 - Suggested problem statement:
-  - `agent-browser` can launch sessions and preserve run history, but it still does not give users a compact supervisor view for active and background work. As runs get longer, move into worktrees or remote environments, or require human follow-up, users need a way to see what is running, what is blocked, and what needs intervention without opening each session in full. Without that control plane, long-running agent work becomes harder to trust, steer, and recover.`
+  - `agent-browser` mixes lightweight host actions and higher-risk code execution into one broad execution story, which makes permissions harder to explain, policies harder to enforce, and failures harder to contain. Users and admins need a clearer boundary where browser, file-inspection, and other host-safe actions can keep working under explicit local permissions while shell and code execution run inside a stronger isolation layer with separate network policy. Without that split, a sandbox outage or policy block turns into a whole-session failure instead of a partial degradation the user can still work through.`
 - One-shot instruction for an LLM:
-  - Implement a background session supervisor for `agent-browser` that lists active and completed runs across local, worktree, automation, and remote-capable execution modes; show current stage, recent events, branch or workspace identity, and explicit blocked or needs-input status; support lightweight peek and follow-up reply actions without forcing a full session switch; and preserve the same run transcript, artifacts, approvals, and diff context when the user drills in or takes over locally.
+  - Implement split-trust execution planes for `agent-browser`: keep chat, file inspection, browser work, and other host-safe actions in a host-native control layer with explicit permissions and visible action provenance; run shell commands and generated code in an isolated sandbox or worktree execution plane with separate network policy and status reporting; surface which plane each action used in the transcript and operator views; and when the sandbox is blocked or unavailable, degrade gracefully so host-safe actions continue while code actions show a clear blocked state instead of failing the entire run.
