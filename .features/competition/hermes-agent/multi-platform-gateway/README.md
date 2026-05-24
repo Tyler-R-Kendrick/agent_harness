@@ -1,23 +1,25 @@
 # Multi-Platform Gateway
 
 - Harness: Hermes Agent
-- Sourced: 2026-05-15
+- Sourced: 2026-05-24
 
 ## What it is
-Hermes runs one agent identity across CLI, messaging apps, mobile, and newer platform adapters so the same long-lived runtime can accept work from wherever the user already communicates.
+Hermes runs one long-lived agent runtime across CLI, browser, messaging apps, mobile, and newer adapters, and it now documents explicit thread-preserving handoff between surfaces instead of treating continuity as an informal convention.
 
 ## Evidence
 - Official site: [Hermes Agent](https://hermes-agent.org/)
+- Official docs: [Messaging Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging)
+- Official docs: [Sessions](https://hermes-agent.nousresearch.com/docs/user-guide/sessions/)
 - Official docs: [Features Overview](https://hermes-agent.nousresearch.com/docs/user-guide/features/overview/)
-- Official release: [Hermes Agent v0.9.0](https://github.com/NousResearch/hermes-agent/releases)
+- Official release: [Hermes Agent v0.14.0](https://github.com/NousResearch/hermes-agent/releases)
 - Official release: [Hermes Agent v0.12.0](https://github.com/NousResearch/hermes-agent/releases)
 - First-party details:
-  - the product site calls out Telegram, Discord, Slack, WhatsApp, Signal, and CLI through one gateway process
-  - the docs position the gateway as a long-running router with unified session handling and background cron ticking
-  - the v0.9.0 release added iMessage via BlueBubbles, WeChat and WeCom coverage, and native Termux or Android support
-  - the v0.12.0 release says Hermes reached an 18th messaging platform plus a 19th through a Teams plugin
+  - the messaging docs now list CLI, browser, Telegram, Discord, Slack, WhatsApp, Signal, SMS, email, Home Assistant, Mattermost, Matrix, DingTalk, Feishu or Lark, WeCom, Weixin, BlueBubbles iMessage, QQ, Yuanbao, Microsoft Teams, LINE, and more behind one gateway process
+  - sessions are stored centrally with full message history and FTS-backed search, and `/handoff <platform>` can move a live CLI session into a messaging platform home channel while keeping the same session id and transcript
+  - the gateway handles background cron jobs, voice delivery, and home-channel routing alongside ordinary user chat ingress
+  - the May 16, 2026 release line keeps the gateway in the core product surface rather than splitting continuity features into a separate cloud service
 - Latest development checkpoint:
-  - current first-party materials still frame Hermes as an everywhere agent that lives on user infrastructure and reaches them through many chat surfaces instead of a single local app
+  - the current docs push Hermes beyond "many adapters" into explicit cross-surface session continuity, including handoff and shared-session behavior across authorized users in a destination thread
 
 ## Product signal
-Hermes is optimizing for ambient ingress and continuity, which makes the agent feel like infrastructure that follows the user rather than a tool that must be reopened in one surface.
+Hermes is optimizing for ambient ingress and explicit live handoff, which makes the harness feel like resident infrastructure rather than a session trapped in one UI.
