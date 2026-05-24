@@ -1,15 +1,21 @@
 import type { JsonValue, ToolDefinition, ToolProvider, ToolRuntimeContext } from './types.js';
 
+function assertNonBlankIdentifier(value: string, label: string): void {
+  if (value.trim().length === 0) throw new Error(`${label} must be non-empty`);
+}
+
 export class CoreToolApi {
   private readonly tools = new Map<string, ToolDefinition>();
   private readonly providers = new Map<string, ToolProvider>();
 
   registerTool(tool: ToolDefinition): void {
+    assertNonBlankIdentifier(tool.name, 'Tool name');
     if (this.tools.has(tool.name)) throw new Error(`Tool already registered: ${tool.name}`);
     this.tools.set(tool.name, tool);
   }
 
   registerProvider(provider: ToolProvider): void {
+    assertNonBlankIdentifier(provider.id, 'Provider id');
     if (this.providers.has(provider.id)) throw new Error(`Provider already registered: ${provider.id}`);
     this.providers.set(provider.id, provider);
   }
