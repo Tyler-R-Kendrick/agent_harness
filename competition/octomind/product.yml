@@ -1,0 +1,23 @@
+slug: octomind
+name: Octomind
+vendor: Octomind
+segment: ai-powered-e2e-testing-platform
+product_path: competition/octomind
+design_path: competition/octomind/design
+features_path: competition/octomind/features
+marketing_path: competition/octomind/marketing
+gossip_path: competition/octomind/gossip
+snapshot_date: 2026-05-24
+primary_sources:
+  - https://www.octomind.dev/
+  - https://www.octomind.dev/pricing
+  - https://octomind.dev/product/run-e2e-tests
+  - https://octomind.dev/product/playwright-self-healing/
+  - https://octomind.dev/product/octomind-vs-coding-agents/
+secondary_sources:
+  - https://bug0.com/knowledge-base/octomind-ai-testing-platform-features
+  - https://www.reddit.com/r/devops/comments/1qaeltp/anyone_tried_using_ai_e2e_testing_tools_like/
+positioning: "AI-powered web E2E testing platform that creates, runs, debugs, and self-heals Playwright-style tests with visual history, traces, logs, CI/CD integration, and MCP readiness."
+customer_model: "SaaS subscription by test-case/run capacity, from small-team plans to enterprise, aimed at product, QA, and engineering teams."
+competitive_threat_level: medium
+notes: "Competes with agent-browser where browser agents are used for QA, visual proof, and traceable web workflows; narrower than agent-browser because it is test-platform-first rather than general browser-agent-first."
