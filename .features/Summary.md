@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-23
+Updated: 2026-05-24
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -110,3 +110,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: users and admins want stronger isolation for shell execution without losing the rest of the harness when the sandbox is unavailable or more tightly governed.
 - One-shot build instruction:
   - Split `agent-browser` execution into explicit action planes: keep chat, file inspection, browser work, and other host-safe actions in a host-native control layer with clear permissions, run shell and code execution in an isolated sandbox or worktree plane with separate network policy, surface which plane each action used, and gracefully degrade to host-safe actions when the sandbox is blocked or unavailable instead of failing the entire run.
+
+### 16. Harness-managed subscription proxies and embeddable model endpoints
+- Common pattern: some harnesses are starting to expose their authenticated model access and runtime as reusable local infrastructure for adjacent apps instead of keeping it trapped inside the primary chat UI.
+- Seen in: Hermes subscription proxy for OpenAI-compatible apps with automatic upstream credential refresh, plus Hermes API server exposure for external clients and tool-capable backends.
+- Why it matters: once a harness already owns provider auth, routing, policies, and observability, adjacent tools should be able to reuse that control plane without every app collecting its own keys or reimplementing model plumbing.
+- One-shot build instruction:
+  - Add a local OpenAI-compatible proxy and embeddable agent endpoint for `agent-browser` that can expose configured models or selected agent capabilities to approved external clients, reuse the harness's existing provider credentials and policy checks, refresh upstream auth when needed, and clearly separate "proxy a model" from "invoke the agent runtime" so external apps can integrate without duplicating secrets or execution logic.
