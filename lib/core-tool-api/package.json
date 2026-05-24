@@ -8,6 +8,7 @@
   "files": [
     "README.md",
     "src/**/*.ts",
+    "!src/**/*.test.ts",
     "!src/__tests__/**"
   ],
   "exports": {
