@@ -31,6 +31,7 @@ competition/<product-slug>/
 | Claude Computer Use | Model-provider computer-use API | `competition/claude-computer-use` |
 | BrowserOS | Open-source AI browser | `competition/browseros` |
 | Nanobrowser | Open-source browser-agent extension | `competition/nanobrowser` |
+| Warpsurf | Open-source local AI browser copilot | `competition/warpsurf` |
 | VibeBrowser Co-Pilot | Local browser-agent MCP | `competition/vibebrowser-copilot` |
 | dassi | Consumer browser-agent extension | `competition/dassi` |
 | Browserbase + Stagehand | Developer browser-agent platform | `competition/browserbase-stagehand` |
@@ -54,11 +55,13 @@ competition/<product-slug>/
 | Vibot | Self-hosted browser automation platform | `competition/vibot` |
 | Rove | Hosted Playwright API for AI agents | `competition/rove` |
 | BrowserStack MCP | Enterprise AI testing MCP | `competition/browserstack-mcp` |
+| Octomind | AI-powered E2E testing platform | `competition/octomind` |
 | Scrapybara | Remote computer-use infrastructure | `competition/scrapybara` |
 | BrowserCat | Hosted headless browser automation API | `competition/browsercat` |
 | AgentQL | Natural-language web query and automation layer | `competition/agentql` |
 | Cloudflare Browser Run | Edge-hosted browser automation primitive | `competition/cloudflare-browser-run` |
 | Bright Data Agent Browser | Web-unlocking browser infrastructure for agents | `competition/bright-data-agent-browser` |
+| Firecrawl | Web context and browser data API for agents | `competition/firecrawl` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
 | Airtop | Cloud browser automation platform | `competition/airtop` |
 | Steel.dev | Open-source browser-agent infrastructure | `competition/steel` |
@@ -68,6 +71,7 @@ competition/<product-slug>/
 | Notte | Developer browser-agent platform | `competition/notte` |
 | Anchor Browser | Authenticated browser-agent infrastructure | `competition/anchor-browser` |
 | Simular | Frontier computer-use agent | `competition/simular` |
+| Runner H / Surfer H | Vision-language web agent and orchestration platform | `competition/runner-h` |
 | Fellou | End-user agentic productivity browser | `competition/fellou` |
 | Opera Neon | End-user agentic AI browser | `competition/opera-neon` |
 | Gemini in Chrome | Incumbent browser AI assistant | `competition/gemini-in-chrome` |
@@ -132,3 +136,7 @@ competition/<product-slug>/
 - AgentQL shows a different wedge: reduce brittle selectors by making natural-language element queries and typed extraction the developer contract. That helps agent builders move faster, but it can hide uncertainty unless query confidence, screenshots, and fallback traces are preserved.
 - Cloudflare's "well-behaved bot" framing is a meaningful design difference from stealth-first scraping vendors. It may win compliance-minded builders, while Bright Data captures buyers who measure success by access to difficult public sites.
 - For `agent-browser`, the competitive answer is not just cheaper browser hours. The product has to make live authority, replayable evidence, local credential boundaries, and failure recovery clearer than generic browser farms and web-scraping stacks.
+- Web-context APIs such as Firecrawl are turning browser work into clean Markdown, JSON, MCP tools, and hosted browser sessions. They will capture AI app teams that primarily need information extraction, while leaving a wedge for `agent-browser` where users need visible local authority, approvals, and replayable browser evidence.
+- Specialized action-model vendors such as H Company are competing below the product UI by making web control a VLM/model quality problem. That raises the bar for click accuracy and self-healing, but still leaves room for simpler trace UX, product maturity, and deterministic recovery.
+- AI E2E platforms such as Octomind validate that screenshots, traces, logs, visual diffs, and self-healing selectors are valuable browser-agent artifacts. Their QA focus is narrower than `agent-browser`, but their runtime-evidence design should influence any browser-workflow proof surface.
+- Open-source local copilots such as Warpsurf are converging on `agent-browser`'s strongest wedge: real Chrome, BYO keys, URL firewalls, task estimates, trajectories, and emergency stop controls. The differentiator is shifting toward durable evidence, eval-backed reliability, and authority boundaries rather than merely "can drive my browser."

@@ -1,0 +1,20 @@
+slug: warpsurf
+name: Warpsurf
+vendor: Warpsurf
+segment: open-source-local-ai-browser-copilot
+product_path: competition/warpsurf
+design_path: competition/warpsurf/design
+features_path: competition/warpsurf/features
+marketing_path: competition/warpsurf/marketing
+gossip_path: competition/warpsurf/gossip
+snapshot_date: 2026-05-24
+primary_sources:
+  - https://warpsurf.ai/
+  - https://chromewebstore.google.com/detail/warpsurf/ekmohjijmhcdpgficcolmennloeljhod
+  - https://github.com/warpsurf/warpsurf
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1slc8rj/tested_6_browser_use_agents_for_realworld_tasks/
+positioning: "Open-source Chrome AI browser copilot with local execution, BYO model keys, chat/search/agent routing, voice input, multi-agent orchestration, live monitoring, URL firewall, cost tracking, and task estimation."
+customer_model: "Open-source extension/community adoption with Chrome Web Store distribution and bring-your-own-key economics."
+competitive_threat_level: medium
+notes: "Directly pressures agent-browser on the local real-browser wedge, privacy-first messaging, multi-agent UI, and cost transparency; likely less mature for enterprise policy, eval proof, and durable run artifacts."
