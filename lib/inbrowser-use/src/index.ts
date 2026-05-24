@@ -39,4 +39,20 @@ export { ActionExecutor } from './actionExecutor.js';
 export { Runtime } from './runtime.js';
 export { InAppPage } from './page.js';
 export { InAppLocator, InAppFrameLocator } from './locator.js';
-export * from './errors.js';
+export {
+  ActivationRequiredError,
+  FrameNotCooperativeError,
+  FrameNotFoundError,
+  InAppError,
+  NotAttachedError,
+  NotEditableError,
+  NotEnabledError,
+  NotFoundError,
+  NotVisibleError,
+  ObscuredError,
+  RemoteRPCError,
+  RemoteRPCTimeoutError,
+  StrictModeViolationError,
+  TimeoutError,
+  UnsupportedError,
+} from './errors.js';

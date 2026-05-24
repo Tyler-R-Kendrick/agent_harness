@@ -33,15 +33,12 @@ describe('package boundaries', () => {
       types?: string;
     };
     const indexSource = fs.readFileSync(path.join(packageRoot, 'src/index.ts'), 'utf8');
-    const errorsSource = fs.readFileSync(path.join(packageRoot, 'src/errors.ts'), 'utf8');
 
     expect(packageJson.exports).toEqual({ '.': './src/index.ts' });
     expect(packageJson.main).toBe('./src/index.ts');
     expect(packageJson.types).toBe('./src/index.ts');
-    expect([
-      ...collectNamedExports(indexSource),
-      ...collectNamedExports(errorsSource),
-    ].sort()).toEqual([
+    expect(indexSource).not.toMatch(/export\s+\*\s+from/);
+    expect(collectNamedExports(indexSource)).toEqual([
       'ActionExecutor',
       'ActionabilityEngine',
       'ActivationRequiredError',
