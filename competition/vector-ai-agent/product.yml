@@ -1,0 +1,20 @@
+slug: vector-ai-agent
+name: Vector AI Agent
+vendor: Vector AI Agent
+segment: local-no-code-multi-profile-browser-automation
+product_path: competition/vector-ai-agent
+design_path: competition/vector-ai-agent/design
+features_path: competition/vector-ai-agent/features
+marketing_path: competition/vector-ai-agent/marketing
+gossip_path: competition/vector-ai-agent/gossip
+snapshot_date: 2026-05-26
+primary_sources:
+  - https://vectoragent.io/
+  - https://vectoragent.io/automation/
+secondary_sources:
+  - https://www.trustpilot.com/review/vectoragent.io
+  - https://www.reddit.com/r/AI_Agents/comments/1rv2uqq/tried_building_a_browser_ai_agent_for_work_tasks/
+positioning: "Free Windows browser automation software that controls real Chrome/Edge profiles with natural-language commands, local storage, multi-profile execution, model-provider choice, and crypto wallet automation."
+customer_model: "Free Windows desktop product positioned as open-source/no subscription, with GitHub downloads and broad claims around unlimited local browser profiles."
+competitive_threat_level: medium
+notes: "Competes for nontechnical users and growth/crypto/agency operators who want plain-English local automation at scale, but its aggressive multi-profile and wallet positioning raises trust and policy questions."
