@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-24
+Updated: 2026-05-26
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -117,3 +117,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: once a harness already owns provider auth, routing, policies, and observability, adjacent tools should be able to reuse that control plane without every app collecting its own keys or reimplementing model plumbing.
 - One-shot build instruction:
   - Add a local OpenAI-compatible proxy and embeddable agent endpoint for `agent-browser` that can expose configured models or selected agent capabilities to approved external clients, reuse the harness's existing provider credentials and policy checks, refresh upstream auth when needed, and clearly separate "proxy a model" from "invoke the agent runtime" so external apps can integrate without duplicating secrets or execution logic.
+
+### 17. Extensible provider auth bridges with interactive login choices
+- Common pattern: some harnesses are moving provider auth and model access behind extension-defined adapters instead of hardwiring every provider into the core product.
+- Seen in: Pi extension-registered providers with `/login` choice callbacks, OAuth refresh, auth-file precedence, dynamic model mutation after login, and proxy or gateway overrides that still surface like first-class providers.
+- Why it matters: enterprise gateways, regional deployments, and subscription-backed providers often need custom auth and routing logic, but users still expect one consistent login flow and model-selection surface.
+- One-shot build instruction:
+  - Let `agent-browser` extensions register provider-auth adapters that plug into the main login flow, support browser-vs-device-code selection, token refresh, auth storage, built-in provider overrides, and post-login model shaping so custom gateways or subscription-backed providers behave like first-class built-ins.
