@@ -1,0 +1,19 @@
+slug: surfagent
+name: SurfAgent
+vendor: SurfAgent
+segment: local-dedicated-chrome-for-ai-agents
+product_path: competition/surfagent
+design_path: competition/surfagent/design
+features_path: competition/surfagent/features
+marketing_path: competition/surfagent/marketing
+gossip_path: competition/surfagent/gossip
+snapshot_date: 2026-05-26
+primary_sources:
+  - https://surfagent.app/
+secondary_sources:
+  - https://clawhub.ai/agentossoftware/surfagent
+  - https://www.reddit.com/r/AI_Agents/comments/1slc8rj/tested_6_browser_use_agents_for_realworld_tasks/
+positioning: "A one-time-purchase Windows desktop app that gives any MCP, CDP, or HTTP-capable AI agent its own persistent local Chrome instance with cookies, sessions, screenshots, crash recovery, extraction, crawl, and map APIs."
+customer_model: "Consumer/developer desktop software sold as a $49 lifetime license per device, positioned against subscription cloud browser services."
+competitive_threat_level: high
+notes: "Directly attacks agent-browser's local authority wedge by pairing persistent Chrome with MCP/CDP compatibility, no monthly fee, crash recovery, and Firecrawl-like extract/crawl/map endpoints."

@@ -70,6 +70,10 @@ competition/<product-slug>/
 | Hyperbrowser | Developer browser-agent infrastructure | `competition/hyperbrowser` |
 | Notte | Developer browser-agent platform | `competition/notte` |
 | Anchor Browser | Authenticated browser-agent infrastructure | `competition/anchor-browser` |
+| Reapre | Multi-surface AI automation control plane | `competition/reapre` |
+| SurfAgent | Local dedicated Chrome for AI agents | `competition/surfagent` |
+| LumaBrowser | Programmable browser with native MCP and LLM selector fallback | `competition/lumabrowser` |
+| Vector AI Agent | Local no-code multi-profile browser automation | `competition/vector-ai-agent` |
 | Simular | Frontier computer-use agent | `competition/simular` |
 | Runner H / Surfer H | Vision-language web agent and orchestration platform | `competition/runner-h` |
 | Fellou | End-user agentic productivity browser | `competition/fellou` |
@@ -140,3 +144,6 @@ competition/<product-slug>/
 - Specialized action-model vendors such as H Company are competing below the product UI by making web control a VLM/model quality problem. That raises the bar for click accuracy and self-healing, but still leaves room for simpler trace UX, product maturity, and deterministic recovery.
 - AI E2E platforms such as Octomind validate that screenshots, traces, logs, visual diffs, and self-healing selectors are valuable browser-agent artifacts. Their QA focus is narrower than `agent-browser`, but their runtime-evidence design should influence any browser-workflow proof surface.
 - Open-source local copilots such as Warpsurf are converging on `agent-browser`'s strongest wedge: real Chrome, BYO keys, URL firewalls, task estimates, trajectories, and emergency stop controls. The differentiator is shifting toward durable evidence, eval-backed reliability, and authority boundaries rather than merely "can drive my browser."
+- A new local/runtime-control wave is splitting from hosted browser farms. SurfAgent, LumaBrowser, and Vector AI Agent sell persistent local browser ownership, while Reapre sells one governed command plane across browser, desktop, mobile, and app connectors.
+- Their strongest UX lesson is that agent browsers need more than navigation tools: buyers expect health checks, crash recovery, reusable runs, screenshots, network logs, MCP/CDP/HTTP surfaces, selector recovery, and clear billing or ownership.
+- Their weakness is trust framing. Products that claim bot-detection bypass, wallet automation, thousands of profiles, or broad device control can feel powerful but risky unless they expose narrow permissions, local data boundaries, and replayable evidence better than a generic dashboard.
