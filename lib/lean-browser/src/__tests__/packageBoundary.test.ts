@@ -38,6 +38,7 @@ describe('package boundary', () => {
       'README.md',
       'public/lean/README.md',
       'src/**/*.ts',
+      '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
     expect(packageJson.sideEffects).toBe(false);
