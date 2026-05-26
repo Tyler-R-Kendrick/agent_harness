@@ -140,6 +140,61 @@ describe('harness task manager', () => {
     });
   });
 
+  it('rejects merge approvals before review is requested without changing task state', async () => {
+    const { manager } = createManager();
+    const task = await manager.createTask({
+      title: 'Prevent approval bypass',
+      description: 'A reviewer cannot approve a branch before review starts.',
+    });
+
+    await expect(manager.approveMerge(task.id, {
+      actor: { type: 'user', id: 'local-user' },
+      summary: 'Approve without review.',
+    })).rejects.toThrow('Cannot approve merge for HT-1 from lane ready');
+
+    expect(await manager.listTasks()).toMatchObject([
+      {
+        id: task.id,
+        lane: 'ready',
+        status: 'queued',
+        review: { status: 'none', approvedBy: null },
+        merge: null,
+      },
+    ]);
+  });
+
+  it('rejects completion before merge approval without changing review state', async () => {
+    const { manager } = createManager();
+    const task = await manager.createTask({
+      title: 'Prevent completion bypass',
+      description: 'A task cannot be marked complete before approved merge.',
+    });
+    await manager.dispatchToAgent(task.id, {
+      agentId: 'tests-agent',
+      role: 'tests',
+      worktreeBranch: 'agent/tests-3',
+      worktreePath: '.symphony/workspaces/tests-3',
+    });
+    await manager.requestReview(task.id, {
+      requesterAgentId: 'tests-agent',
+      summary: 'Waiting for review.',
+      changedFiles: ['lib/harness-task-manager/src/manager.ts'],
+    });
+
+    await expect(manager.completeTask(task.id, { mergedBy: 'merge-agent' }))
+      .rejects.toThrow('Cannot complete HT-1 before merge approval');
+
+    expect(await manager.listTasks()).toMatchObject([
+      {
+        id: task.id,
+        lane: 'review',
+        status: 'waiting',
+        review: { status: 'requested', approvedBy: null },
+        merge: null,
+      },
+    ]);
+  });
+
   it('allows user approvals when autopilot is disabled but blocks reviewer-agent approvals', async () => {
     const { manager } = createManager();
     const task = await manager.createTask({
