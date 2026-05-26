@@ -26,6 +26,7 @@ describe('worker-browser package boundary', () => {
     expect(packageJson.files).toEqual([
       'README.md',
       'src/**/*.ts',
+      '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
   });

@@ -49,6 +49,7 @@ describe('package boundaries', () => {
     expect(packageJson.files).toEqual([
       'README.md',
       'src/**/*.ts',
+      '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
   });
