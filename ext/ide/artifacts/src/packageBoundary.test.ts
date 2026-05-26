@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import * as publicApi from './index.js';
+
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function readJson(relativePath: string) {
@@ -37,5 +39,15 @@ describe('package boundary', () => {
     expect(readme).toContain("import manifest from '@agent-harness/ext-artifacts/manifest';");
     expect(readme).toContain('Do not deep-import files under `src/`');
     expect(readme).toContain('Published package contents intentionally include');
+  });
+
+  it('keeps the root runtime value API explicit', () => {
+    expect(Object.keys(publicApi).sort()).toEqual([
+      'ARTIFACT_BUNDLE_MEDIA_TYPE',
+      'ArtifactRenderer',
+      'createArtifactsPlugin',
+      'decodeArtifactBundle',
+      'encodeArtifactBundle',
+    ]);
   });
 });
