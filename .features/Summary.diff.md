@@ -1,40 +1,33 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-24
-Baseline: `.features/Summary.md` refreshed from the 2026-05-23 Claude Cowork-updated corpus.
-Diff type: additive update after Hermes Agent feature refresh
+Updated: 2026-05-26
+Baseline: `.features/Summary.md` refreshed from the 2026-05-24 Hermes Agent-updated corpus.
+Diff type: additive update after Pi feature refresh
 
 ## Net new normalized features
 
-### Added: Harness-managed subscription proxies and embeddable model endpoints
-- Why now: the Hermes refresh adds a new first-party subscription proxy and reinforces that Hermes sees external embedding as part of the harness, not a bolt-on integration hack.
+### Added: Extensible provider auth bridges with interactive login choices
+- Why now: the Pi refresh shows that provider auth is no longer just a static settings page or env-var list. Pi now lets extension-defined providers plug directly into `/login`, choose their own auth path, and mutate the resulting model surface after authentication.
 - Research delta:
-  - Hermes now documents a local subscription proxy that serves OpenAI-compatible clients while attaching and refreshing the real upstream credential itself
-  - the docs explicitly distinguish the subscription proxy from the agent API server, which means Hermes separates "reuse my model subscription" from "call the harness as an agent backend"
-  - the latest feature overview keeps the API server inside the core harness surface, so external embedding is now a first-class product direction rather than a side utility
-  - the same refresh also strengthens Hermes' operator and continuity story through dashboard plugins, explicit session handoff, and richer Kanban supervision, which makes a reusable external endpoint more credible as part of the same control plane
+  - Pi's current `custom-provider.md` lets extensions register new providers or override built-ins with proxy URLs, custom headers, dynamic model discovery, and provider-specific OAuth flows
+  - release `v0.73.1` added interactive OAuth login selection, so a provider can present choices like browser OAuth vs device code from inside the main login flow
+  - the provider docs show a clear auth precedence order across CLI flags, `auth.json`, env vars, and custom-provider sources, which makes extension-defined providers feel like first-class runtime citizens instead of bolt-on hacks
+  - custom providers can also refresh tokens and reshape the visible model catalog after login, for example switching region-specific base URLs based on returned credentials
 
-### Expanded: Multi-surface continuity
-- Why now: the Hermes refresh adds explicit first-party `/handoff <platform>` session transfer instead of leaving continuity implied.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: the Pi package surface has matured from "install a bundle" into a richer distribution and governance layer.
 - Research delta:
-  - Hermes can move a live CLI conversation into a destination messaging platform while keeping the same session id and full role-aware transcript
-  - the gateway surface now covers a larger official platform set, including Microsoft Teams and LINE alongside the earlier chat adapters
-  - sessions remain centrally searchable with full-text history, so handoff does not create a fresh disconnected thread of record
+  - package docs now define gallery preview metadata via `pi.video` and `pi.image`, giving packages a first-class showcase surface instead of only README-driven discovery
+  - package installs support global, project, and ephemeral single-run scopes, while project package entries auto-install on startup
+  - settings-level filters can narrow a package down to exact `extensions`, `skills`, `prompts`, or `themes`, and the docs define deterministic deduplication when the same package exists in both global and project scopes
 
-### Expanded: Operator control consoles with blocked-state queues and durable usage ledgers
-- Why now: the Hermes dashboard now looks more like a local control plane than a thin settings page.
-- Research delta:
-  - the current dashboard exposes status, session search, logs, usage analytics, cron management, config editing, env-key management, and skill toggles through a documented REST surface
-  - Hermes now treats dashboard tabs, themes, and plugin routes as part of the core management story
-  - the Kanban board itself is surfaced as a dashboard plugin with live updates, orchestration controls, and per-task supervision details
-
-### Added: Add a local OpenAI-compatible proxy and embeddable agent endpoint
-- Why now: `agent-browser` already owns provider configuration, tool permissions, and session state, but it does not yet let adjacent apps safely reuse that control plane. The Hermes refresh shows a clearer product split between "proxy my authenticated model access" and "invoke the full agent runtime", which would let external tools integrate without copying secrets or bypassing harness policy.
+### Added: Add extension-defined provider auth flows with interactive login choices
+- Why now: `agent-browser` already owns provider configuration, policy checks, and app-level auth surfaces, but adding a new gateway, enterprise SSO-backed provider, or subscription-restricted model family still tends to require bespoke product work instead of plugging into one consistent runtime contract.
 - Linear issue:
   - Pending external publication in this session if the Linear plugin remains non-callable in this environment; the feature brief below is the canonical issue payload
 - Linear issue title:
-  - `Add a local OpenAI-compatible proxy and embeddable agent endpoint`
+  - `Add extension-defined provider auth flows with interactive login choices`
 - Suggested problem statement:
-  - `agent-browser` already manages provider credentials, tool permissions, and agent session state, but external apps still need their own direct model keys or custom integrations. That duplicates secrets, bypasses the harness's policy layer, and forces downstream tools to rebuild routing and auth refresh logic that the harness already owns. Users need a safe way to let approved local clients reuse configured models or selected agent capabilities through an OpenAI-compatible surface, while keeping the distinction between simple model proxying and full agent execution explicit and auditable.`
+  - `agent-browser` can already store provider configuration and expose built-in model access, but custom gateways, enterprise SSO-backed providers, and subscription-shaped model catalogs still require one-off integration work. That slows down support for new providers, duplicates auth logic across surfaces, and makes it hard for extensions or team-specific runtimes to behave like first-class providers. Users need a unified login and model-selection surface where provider adapters can define browser or device-code auth, token refresh, auth storage, provider overrides, and post-login model shaping without patching the harness core.`
 - One-shot instruction for an LLM:
-  - Implement a local OpenAI-compatible proxy and embeddable agent endpoint for `agent-browser`: expose approved configured models and, separately, selected agent-backed routes to local external clients; reuse the harness's existing provider credentials, auth-refresh logic, policy checks, and observability; make proxy-mode and agent-runtime mode distinct in config, logs, and UX; require explicit client allowlisting and visible permission scopes; and return structured session or request metadata so downstream apps can audit which model or agent path handled each call.
+  - Implement extension-defined provider auth flows for `agent-browser`: let extensions register new providers or override built-ins, plug those providers into the main login UI, support interactive auth-path selection such as browser OAuth vs device code, persist and refresh credentials through the harness auth layer, allow post-login model-list shaping or regional endpoint selection, and surface each provider's auth mode, scopes, and effective model catalog in a first-class settings and runtime UI.
