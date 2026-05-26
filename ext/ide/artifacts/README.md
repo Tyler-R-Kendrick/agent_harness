@@ -18,8 +18,8 @@ Hosts that need plugin metadata should use the manifest export:
 import manifest from '@agent-harness/ext-artifacts/manifest';
 ```
 
-Do not deep-import files under `src/`; those modules are implementation details
-for the root entry point and artifact storage tools.
+The root entry point also exports `ARTIFACT_BUNDLE_MEDIA_TYPE`, `ArtifactRenderer`, `encodeArtifactBundle`, and `decodeArtifactBundle` for extension registration and artifact bundle handling.
 
-Published package contents intentionally include the README, plugin manifest,
-and runtime TypeScript source while excluding source tests and package tooling.
+Do not deep-import files under `src/`; those modules are implementation details for the root entry point and artifact storage tools.
+
+Published package contents intentionally include the README, plugin manifest, and runtime TypeScript source while excluding source tests and package tooling.
