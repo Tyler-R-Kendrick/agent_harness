@@ -1,0 +1,37 @@
+name: codi-staged-search-chat
+version: "1.0"
+description: >
+  AgentV SDK suite for the staged Codi/local-model search chat flow. These
+  cases reproduce nearby movie-theater requests with all Agent Browser tools
+  selected, adversary tool review enabled, and a GHCP tool-calling baseline for
+  trajectory and efficiency comparison.
+metadata:
+  owner: agent-browser
+  tags: [codi, staged-search, agentv-sdk, adversary-tool-review, ghcp-baseline]
+execution:
+  target: agent-browser-codi-staged-search-chat
+  timeout_seconds: 60
+assertions:
+  - name: codi-search-tool-path
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: webmcp:recall_user_context
+      - tool: webmcp:search_web
+      - tool: webmcp:read_web_page
+      - tool: codi-staged-search
+      - tool: ghcp-tool-calling-baseline
+
+  - name: codi-search-bounded-work
+    type: execution-metrics
+    required: true
+    max_tool_calls: 30
+    max_tokens: 4000
+    max_duration_ms: 30000
+
+  - name: codi-staged-search-sdk-gate
+    type: code-grader
+    required: true
+    command: ["node", "./graders/codi-staged-search-quality.mjs"]
+tests: ./cases.jsonl

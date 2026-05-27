@@ -11,6 +11,7 @@
     "eval:local-web-research": "node scripts/run-agentv-local-web-research-eval.mjs",
     "eval:composite-search": "node scripts/run-agentv-composite-search-eval.mjs",
     "eval:codi-general": "node scripts/run-agentv-codi-general-eval.mjs",
+    "eval:codi-staged-search": "node scripts/run-agentv-codi-staged-search-eval.mjs",
     "eval:chat-loop": "npm run eval:codi-general",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
@@ -84,6 +85,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@agentv/eval": "^4.24.1",
     "@anthropic-ai/sdk": "0.95.0",
     "@cucumber/cucumber": "^12.8.0",
     "@playwright/test": "^1.59.1",

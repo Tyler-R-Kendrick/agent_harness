@@ -127,12 +127,12 @@ describe('real AgentEvals workflow gate', () => {
     expect(proofSource).toContain('const port = Number(process.env.AGENT_BROWSER_RUNTIME_PROOF_PORT) || 5174');
     const stalePortFallback = ['|| 51', '73'].join('');
     expect(proofSource).not.toContain(stalePortFallback);
-    expect(proofSource).toContain("page.getByLabel('Chat input').fill('show me theaters near me')");
+    expect(proofSource).toContain("page.getByLabel('Chat input').fill('show me movie theaters near me')");
     expect(proofSource).toContain("page.getByLabel('Chat input').fill('what about bars?')");
     expect(proofSource).toContain("page.getByLabel('Chat input').fill('what about closest bars?')");
     expect(proofSource).toContain("geolocation: { latitude: 42.11713258868569, longitude: -87.9912774939386 }");
     expect(proofSource).toContain("expect(searchQueries[0]).toBe('city state for coordinates 42.12 -87.99')");
-    expect(proofSource).toContain("expect(searchQueries).toContain('nearby theaters Arlington Heights IL')");
+    expect(proofSource).toContain("expect(searchQueries.some((query) => /^nearby (?:movie )?theaters Arlington Heights IL$/.test(query))).toBe(true)");
     expect(proofSource).toContain('AMC Randhurst 12');
     expect(proofSource).toContain("Peggy Kinnane's Irish Restaurant & Pub");
     expect(proofSource).toContain('Moviefone TV');

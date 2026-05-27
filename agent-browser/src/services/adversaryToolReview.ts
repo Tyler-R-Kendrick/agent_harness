@@ -42,6 +42,13 @@ const TOOL_LIST_PATTERNS = [
   /\bTool selection pass \d+:\s*([^\n]+)/i,
 ];
 
+const CREDENTIAL_TERM_PATTERN = '(?:secret|token|api[_-]?key|password|credential|env(?:ironment)? variable)s?';
+const CREDENTIAL_EXPOSURE_VERB_PATTERN = '(?:print|show|expose|send|leak|reveal|dump|echo|display|upload|transmit|exfiltrate|disclose)';
+const CREDENTIAL_EXPOSURE_PATTERNS = [
+  new RegExp(`\\b${CREDENTIAL_EXPOSURE_VERB_PATTERN}\\b[\\s\\S]{0,120}\\b${CREDENTIAL_TERM_PATTERN}\\b`, 'i'),
+  new RegExp(`\\b${CREDENTIAL_TERM_PATTERN}\\b[\\s\\S]{0,120}\\b${CREDENTIAL_EXPOSURE_VERB_PATTERN}\\b`, 'i'),
+];
+
 const TOKEN_STOPWORDS = new Set([
   'and',
   'are',
@@ -120,7 +127,7 @@ export function reviewAdversaryToolAction(input: AdversaryToolReviewInput): Adve
     });
   }
 
-  if (/\b(secret|token|api[_-]?key|password|credential|env(?:ironment)? variable)s?\b/i.test(input.action)) {
+  if (hasCredentialExposureIntent(input.action)) {
     hits.push({
       id: 'credential-exposure',
       severity: 'high',
@@ -206,6 +213,10 @@ function extractDeclaredToolIds(action: string): string[] {
     ids.add(match[1]);
   }
   return [...ids];
+}
+
+function hasCredentialExposureIntent(action: string): boolean {
+  return CREDENTIAL_EXPOSURE_PATTERNS.some((pattern) => pattern.test(action));
 }
 
 function customRuleMatches(rule: string, task: string, action: string, recentContext: readonly string[]): boolean {
