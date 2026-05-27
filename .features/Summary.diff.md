@@ -1,33 +1,43 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-26
-Baseline: `.features/Summary.md` refreshed from the 2026-05-24 Hermes Agent-updated corpus.
-Diff type: additive update after Pi feature refresh
+Updated: 2026-05-27
+Baseline: `.features/Summary.md` refreshed from the 2026-05-26 corpus.
+Diff type: additive update after Kimi AI refresh
 
 ## Net new normalized features
 
-### Added: Extensible provider auth bridges with interactive login choices
-- Why now: the Pi refresh shows that provider auth is no longer just a static settings page or env-var list. Pi now lets extension-defined providers plug directly into `/login`, choose their own auth path, and mutate the resulting model surface after authentication.
+### Added: Artifact-to-skill conversion from finished work
+- Why now: the Kimi AI refresh shows a first-party product flow where strong documents are no longer just references or memory sources. They can be turned into reusable skills and then re-applied in future runs.
 - Research delta:
-  - Pi's current `custom-provider.md` lets extensions register new providers or override built-ins with proxy URLs, custom headers, dynamic model discovery, and provider-specific OAuth flows
-  - release `v0.73.1` added interactive OAuth login selection, so a provider can present choices like browser OAuth vs device code from inside the main login flow
-  - the provider docs show a clear auth precedence order across CLI flags, `auth.json`, env vars, and custom-provider sources, which makes extension-defined providers feel like first-class runtime citizens instead of bolt-on hacks
-  - custom providers can also refresh tokens and reshape the visible model catalog after login, for example switching region-specific base URLs based on returned credentials
+  - the current K2.6 page exposes a `Document to skills` flow from the main product surface rather than burying it in niche docs
+  - the help center says generated skills can bundle methodology, standards, scripts, tools, and references, which is materially richer than a saved prompt
+  - Kimi explicitly positions these artifact-derived skills as reusable across Agent, Kimi Code, and Kimi Claw contexts
+  - Kimi also ties the feature to Agent Swarm, positioning captured skills as a way to improve consistency across large multi-agent runs
 
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: the Pi package surface has matured from "install a bundle" into a richer distribution and governance layer.
+### Expanded: Parallel agent orchestration
+- Why now: Kimi AI is no longer limited to a single orchestrator spawning homogeneous specialists. `Claw Groups` expands the pattern into a shared workspace for mixed humans and agents with different models, tools, and contexts.
 - Research delta:
-  - package docs now define gallery preview metadata via `pi.video` and `pi.image`, giving packages a first-class showcase surface instead of only README-driven discovery
-  - package installs support global, project, and ephemeral single-run scopes, while project package entries auto-install on startup
-  - settings-level filters can narrow a package down to exact `extensions`, `skills`, `prompts`, or `themes`, and the docs define deterministic deduplication when the same package exists in both global and project scopes
+  - the K2.6 product page says users can bring agents with different tools, contexts, and models into one shared space
+  - the coordinator handles task assignment and dependency tracking rather than just sub-agent spawning
+  - the Kimi Claw help center now includes `Claw Group Chat overview` in the navigation, showing that this is becoming a productized surface rather than a research aside
 
-### Added: Add extension-defined provider auth flows with interactive login choices
-- Why now: `agent-browser` already owns provider configuration, policy checks, and app-level auth surfaces, but adding a new gateway, enterprise SSO-backed provider, or subscription-restricted model family still tends to require bespoke product work instead of plugging into one consistent runtime contract.
-- Linear issue:
-  - Pending external publication in this session if the Linear plugin remains non-callable in this environment; the feature brief below is the canonical issue payload
-- Linear issue title:
-  - `Add extension-defined provider auth flows with interactive login choices`
-- Suggested problem statement:
-  - `agent-browser` can already store provider configuration and expose built-in model access, but custom gateways, enterprise SSO-backed providers, and subscription-shaped model catalogs still require one-off integration work. That slows down support for new providers, duplicates auth logic across surfaces, and makes it hard for extensions or team-specific runtimes to behave like first-class providers. Users need a unified login and model-selection surface where provider adapters can define browser or device-code auth, token refresh, auth storage, provider overrides, and post-login model shaping without patching the harness core.`
-- One-shot instruction for an LLM:
-  - Implement extension-defined provider auth flows for `agent-browser`: let extensions register new providers or override built-ins, plug those providers into the main login UI, support interactive auth-path selection such as browser OAuth vs device code, persist and refresh credentials through the harness auth layer, allow post-login model-list shaping or regional endpoint selection, and surface each provider's auth mode, scopes, and effective model catalog in a first-class settings and runtime UI.
+### Expanded: Multi-surface continuity
+- Why now: Kimi's coding surface is now clearly part of the harness family rather than a separate tool line.
+- Research delta:
+  - Kimi Code now spans CLI, VS Code, and third-party coding-agent usage with shared membership-backed access
+  - official clients use OAuth `/login` and extension-side login flows, while third-party tools can reuse Kimi Code through API-key access
+  - the docs explicitly call out compatibility with adjacent coding harnesses such as Claude Code
+
+## Linear-ready feature payload
+
+### Linear issue
+- Pending external publication in this session because the Linear plugin is listed but not exposing callable Linear issue tools in this environment; the feature brief below is the canonical issue payload
+
+### Linear issue title
+- `Add artifact-to-skill generation from documents and examples`
+
+### Suggested problem statement
+- `agent-browser` already supports skills, prompts, and repo instructions, but it still assumes users or developers will author those workflow packages manually. In practice, teams already have high-signal artifacts such as PRDs, reports, templates, playbooks, and gold-standard deliverables that encode the workflow they want the harness to reuse. Today there is no first-class path to ingest those artifacts, extract the stable methodology and output structure, and turn them into a reviewable reusable skill. That keeps valuable process knowledge trapped in static files and makes skill authoring slower, less accessible, and less likely to stay aligned with the real artifacts teams already trust.`
+
+### One-shot instruction for an LLM
+- Implement artifact-to-skill generation for `agent-browser`: add a flow that accepts a strong example document or artifact set, extracts reusable workflow instructions, output structure, and referenced assets, converts that into a first-class skill package with editable metadata and generated instructions, shows a review screen before activation, stores provenance back to the source artifact, and makes the resulting skill available for future task routing across chat, browser, coding, and background-run surfaces.
