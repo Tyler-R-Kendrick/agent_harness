@@ -18,7 +18,11 @@ export function normalizeRequestedScripts(args) {
   if (!args.length) {
     throw new Error('At least one extension script must be provided.');
   }
-  return args;
+  const scripts = args.map((scriptName) => scriptName.trim());
+  if (scripts.some((scriptName) => scriptName.length === 0)) {
+    throw new Error('Extension script names must not be blank.');
+  }
+  return scripts;
 }
 
 export function buildWorkspaceScriptArgs(workspaceName, scriptName) {

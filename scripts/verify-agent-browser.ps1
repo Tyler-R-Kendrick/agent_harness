@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $steps = @(
   @{ Label = 'source-hygiene'; Args = @('run', 'check:generated-files') }
+  @{ Label = 'root-script-tests'; Args = @('run', 'test:root-scripts') }
   @{ Label = 'test-scripts'; Args = @('--workspace', 'agent-browser', 'run', 'test:scripts') }
   @{ Label = 'chat-loop-evals'; Args = @('--workspace', 'agent-browser', 'run', 'eval:chat-loop') }
   @{ Label = 'codi-staged-search-evals'; Args = @('--workspace', 'agent-browser', 'run', 'eval:codi-staged-search') }
