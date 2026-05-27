@@ -112,6 +112,35 @@ async function main() {
 
   const packageJson = await readScript('package.json');
   const rootPackage = JSON.parse(packageJson);
+  const rootReadme = await readScript('README.md');
+  assert.match(rootReadme, /## Workspace packages/);
+  assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
+  assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);
+  for (const packageDirectory of [
+    'agent-browser-mcp',
+    'agent-sandbox',
+    'browser-durable-tasks',
+    'claimify',
+    'core-tool-api',
+    'cost-aware-routing',
+    'git-stub',
+    'harness-task-manager',
+    'inbrowser-use',
+    'lean-browser',
+    'llguidance-wasm',
+    'logact',
+    'logact-loop',
+    'ralph-loop',
+    'recursive-research-agent',
+    'webmcp',
+    'worker',
+    'workgraph',
+  ]) {
+    assert.match(
+      rootReadme,
+      new RegExp(`\\[\`lib/${packageDirectory}/README\\.md\`\\]\\(\\.\\/lib\\/${packageDirectory}\\/README\\.md\\)`),
+    );
+  }
   assert.ok(rootPackage.workspaces.includes('ext/*/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
