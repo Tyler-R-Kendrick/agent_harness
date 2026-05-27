@@ -180,6 +180,26 @@ async function main() {
   assert.equal(vercelConfig.installCommand, 'node scripts/vercel-install.mjs');
   assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
   assert.equal(vercelConfig.outputDirectory, 'agent-browser/dist');
+  const vercelIgnore = await readScript('.vercelignore');
+  for (const requiredPattern of [
+    '.env*',
+    '!.env.example',
+    'node_modules/',
+    '**/node_modules/',
+    '.npm-cache/',
+    'coverage/',
+    '**/coverage/',
+    'playwright-report/',
+    'test-results/',
+    'output/',
+    '.agentv/cache.json',
+    '.codex/environments/',
+    '*.log',
+    '*.tsbuildinfo',
+    'package-lock.json',
+  ]) {
+    assert.match(vercelIgnore, new RegExp(`^${requiredPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+  }
 
   const vercelInstall = await import(pathToFileURL(path.resolve(repoRoot, 'scripts/vercel-install.mjs')).href);
   assert.equal(vercelInstall.getNpmExecutable('win32'), 'npm.cmd');
