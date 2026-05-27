@@ -11,7 +11,10 @@
     "src/**/*.ts",
     "examples/**",
     "!src/**/*.test.ts",
-    "!src/__tests__/**"
+    "!src/__tests__/**",
+    "!examples/**/*.test.ts",
+    "!examples/**/*.test.tsx",
+    "!examples/**/__tests__/**"
   ],
   "exports": {
     ".": "./src/index.ts",
@@ -28,6 +31,7 @@
     "harness-core": "0.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.7",
     "@vitest/coverage-v8": "^4.1.5",
     "typescript": "^5.4.0",
     "vitest": "^4.1.5"
