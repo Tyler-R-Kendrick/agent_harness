@@ -1843,14 +1843,44 @@ async function runStudentDriver(
 
 function formatStudentInstructionContext(instructions: string, priorBusContext?: string): string | null {
   if (!instructions.trim()) return null;
+  const reviewedInstructionContext = formatInstructionContextForReviewedAction(instructions);
   if (!priorBusContext || !containsAdversaryToolReviewRejection(priorBusContext)) {
-    return `Instructions: ${instructions}`;
+    return `Instructions: ${reviewedInstructionContext}`;
   }
-  const sanitized = sanitizeExecutableInstructionContext(instructions);
+  const sanitized = containsToolCatalogInstructionContext(instructions)
+    ? reviewedInstructionContext
+    : sanitizeExecutableInstructionContext(stripToolCatalogInstructionLines(instructions));
   if (sanitized) {
     return `Instructions sanitized after adversary tool review: ${sanitized}`;
   }
   return 'Instructions sanitized after adversary tool review: unsafe inherited instruction text was removed; follow the user task and tool policy only.';
+}
+
+function formatInstructionContextForReviewedAction(instructions: string): string {
+  if (!containsToolCatalogInstructionContext(instructions)) return instructions;
+  return 'Tool catalog and workspace instructions loaded; follow the user task and selected executor tool policy.';
+}
+
+function containsToolCatalogInstructionContext(instructions: string): boolean {
+  return /\b(?:Available Tools|Tool Instructions|Selected tool ids|Selected tool groups|Workspace capability files loaded from browser storage|current available tools listed below)\b/i
+    .test(instructions)
+    || instructions.split(/\r?\n/).some((line) => isToolCatalogInstructionLine(line.trim()));
+}
+
+function stripToolCatalogInstructionLines(instructions: string): string {
+  return instructions
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !isToolCatalogInstructionLine(line))
+    .join('\n');
+}
+
+function isToolCatalogInstructionLine(line: string): boolean {
+  return /^(?:#{1,6}\s*)?(?:Available Tools|Tool Instructions|Output Contract|Selected tool ids|Selected tool groups|Workspace capability files loaded from browser storage):?$/i.test(line)
+    || /^Use only the current available tools listed below\./i.test(line)
+    || /^Selected tool (?:ids|groups):/i.test(line)
+    || /^For Files tools, use locations exactly as shown/i.test(line)
+    || /^-\s*[\w:./-]+\s+\([^)]+\)\s+(?:-|\u2014)\s+/.test(line);
 }
 
 function containsAdversaryToolReviewRejection(priorBusContext: string): boolean {
