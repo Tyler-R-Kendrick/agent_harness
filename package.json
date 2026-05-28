@@ -12,7 +12,7 @@
     "dev:agent-browser": "npm --workspace agent-browser run dev",
     "postinstall": "node scripts/apply-workspace-patches.mjs",
     "check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-generated-files-clean.ps1",
-    "test:root-scripts": "node scripts/run-extension-workspaces.test.mjs",
+    "test:root-scripts": "node scripts/run-extension-workspaces.test.mjs && node scripts/check-package-publish-allowlists.test.mjs",
     "lint:extensions": "node scripts/run-extension-workspaces.mjs lint",
     "build:extensions": "node scripts/run-extension-workspaces.mjs build",
     "build:extension-downloads": "node scripts/package-extension-downloads.mjs",
