@@ -64,16 +64,21 @@ competition/<product-slug>/
 | Firecrawl | Web context and browser data API for agents | `competition/firecrawl` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
 | Airtop | Cloud browser automation platform | `competition/airtop` |
+| Owl Browser | Stealth browser automation engine | `competition/owl-browser` |
+| BrowserCloud | Cloud browser automation infrastructure | `competition/browsercloud` |
 | Steel.dev | Open-source browser-agent infrastructure | `competition/steel` |
 | Kernel | Serverless browser infrastructure | `competition/kernel` |
 | Skyvern | Developer browser-agent workflow platform | `competition/skyvern` |
 | Hyperbrowser | Developer browser-agent infrastructure | `competition/hyperbrowser` |
 | Notte | Developer browser-agent platform | `competition/notte` |
 | Anchor Browser | Authenticated browser-agent infrastructure | `competition/anchor-browser` |
+| Browserbeam | Structured browser API for AI agents | `competition/browserbeam` |
+| Orbit Cloud | Local-to-cloud agentic browser runtime | `competition/orbit-cloud` |
 | Reapre | Multi-surface AI automation control plane | `competition/reapre` |
 | SurfAgent | Local dedicated Chrome for AI agents | `competition/surfagent` |
 | LumaBrowser | Programmable browser with native MCP and LLM selector fallback | `competition/lumabrowser` |
 | Vector AI Agent | Local no-code multi-profile browser automation | `competition/vector-ai-agent` |
+| OpenOwl | Local desktop automation MCP | `competition/openowl` |
 | Simular | Frontier computer-use agent | `competition/simular` |
 | Runner H / Surfer H | Vision-language web agent and orchestration platform | `competition/runner-h` |
 | Fellou | End-user agentic productivity browser | `competition/fellou` |
@@ -147,3 +152,6 @@ competition/<product-slug>/
 - A new local/runtime-control wave is splitting from hosted browser farms. SurfAgent, LumaBrowser, and Vector AI Agent sell persistent local browser ownership, while Reapre sells one governed command plane across browser, desktop, mobile, and app connectors.
 - Their strongest UX lesson is that agent browsers need more than navigation tools: buyers expect health checks, crash recovery, reusable runs, screenshots, network logs, MCP/CDP/HTTP surfaces, selector recovery, and clear billing or ownership.
 - Their weakness is trust framing. Products that claim bot-detection bypass, wallet automation, thousands of profiles, or broad device control can feel powerful but risky unless they expose narrow permissions, local data boundaries, and replayable evidence better than a generic dashboard.
+- Stealth-first browser engines such as Owl Browser and low-cost browser clouds such as BrowserCloud show that AI-browser infrastructure is now being packaged around anti-detection, CAPTCHA solving, concurrency, and proxies as much as agent reasoning. This helps web-data buyers, but it creates a trust and abuse-positioning wedge for products that emphasize scoped authority and auditable evidence.
+- Structured browser APIs such as Browserbeam are attacking token cost and selector drift by returning page state, refs, diffs, and stability signals instead of raw browser access. This validates `agent-browser`'s evidence-first direction, but raises the bar for compact, machine-readable state after every action.
+- Local-to-cloud products such as Orbit Cloud and local desktop MCPs such as OpenOwl are reframing the browser as one surface in a larger automation runtime. They will capture multi-app workflows that browser-only tools miss; `agent-browser` needs clear boundaries, approvals, and durable traces when work crosses tabs, apps, files, and credentials.
