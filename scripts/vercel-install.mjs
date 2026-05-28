@@ -19,6 +19,13 @@ export function usesShellForPlatform(platform = process.platform) {
   return platform === 'win32';
 }
 
+export function buildInstallEnvironment(baseEnv = process.env) {
+  return {
+    ...baseEnv,
+    ONNXRUNTIME_NODE_INSTALL: baseEnv.ONNXRUNTIME_NODE_INSTALL || 'skip',
+  };
+}
+
 export async function getCachedInstallArtifactPaths(rootDir = process.cwd()) {
   const paths = [
     path.join(rootDir, 'package-lock.json'),
@@ -87,7 +94,7 @@ function runStep(command, args, cwd = process.cwd()) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env: process.env,
+      env: buildInstallEnvironment(),
       shell: usesShellForPlatform(),
       stdio: 'inherit',
     });

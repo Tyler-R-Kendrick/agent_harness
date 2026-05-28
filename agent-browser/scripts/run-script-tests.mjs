@@ -259,6 +259,11 @@ async function main() {
   assert.equal(vercelInstall.getNpmExecutable('linux'), 'npm');
   assert.equal(vercelInstall.usesShellForPlatform('win32'), true);
   assert.equal(vercelInstall.usesShellForPlatform('linux'), false);
+  assert.equal(
+    vercelInstall.buildInstallEnvironment({ ONNXRUNTIME_NODE_INSTALL: 'force' }).ONNXRUNTIME_NODE_INSTALL,
+    'force',
+  );
+  assert.equal(vercelInstall.buildInstallEnvironment({}).ONNXRUNTIME_NODE_INSTALL, 'skip');
   assert.deepEqual(vercelInstall.buildInstallSteps('npm'), [
     ['npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--loglevel=error']],
     ['npm', ['ci', '--no-audit', '--loglevel=error']],
