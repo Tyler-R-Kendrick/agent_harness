@@ -1,0 +1,19 @@
+slug: browsercloud
+name: BrowserCloud
+vendor: BrowserCloud
+segment: cloud-browser-automation-infrastructure
+product_path: competition/browsercloud
+design_path: competition/browsercloud/design
+features_path: competition/browsercloud/features
+marketing_path: competition/browsercloud/marketing
+gossip_path: competition/browsercloud/gossip
+snapshot_date: 2026-05-28
+primary_sources:
+  - https://browsercloud.io/
+  - https://browsercloud.io/pricing
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1swsz8s/what_are_people_using_browser_based_agents_for/
+positioning: "Scalable cloud browser automation infrastructure for AI agents, scraping, testing, and automation workflows."
+customer_model: "Usage-credit SaaS with free, hobby, startup, business, and enterprise plans; higher tiers sell concurrency, stealth, proxies, and SLAs."
+competitive_threat_level: medium
+notes: "Competes on price, browser hours, concurrency, stealth, proxies, and session recording rather than a bespoke agent UI."

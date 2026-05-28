@@ -1,0 +1,20 @@
+slug: owl-browser
+name: Owl Browser
+vendor: Olib AI
+segment: stealth-browser-automation-engine
+product_path: competition/owl-browser
+design_path: competition/owl-browser/design
+features_path: competition/owl-browser/features
+marketing_path: competition/owl-browser/marketing
+gossip_path: competition/owl-browser/gossip
+snapshot_date: 2026-05-28
+primary_sources:
+  - https://owlbrowser.net/
+secondary_sources:
+  - https://www.producthunt.com/products/owl-browser
+  - https://news.ycombinator.com/item?id=46875360
+  - https://www.automateed.com/owl-browser-review
+positioning: "Purpose-built browser engine for automation at scale, with source-level fingerprinting, CAPTCHA solving, Tor/proxy control, MCP, and SDKs."
+customer_model: "Developer and enterprise automation product with a low-cost trial, monthly developer plan, and higher-priced self-hosted/OEM plans."
+competitive_threat_level: medium
+notes: "Threatens agent-browser when buyers prioritize bot-detection success, high concurrency, and Playwright migration over local auditability."
