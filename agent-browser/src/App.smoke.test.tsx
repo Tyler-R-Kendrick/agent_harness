@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import {
@@ -31,6 +31,7 @@ const fetchCodexStateMock = vi.fn();
 const streamCodexRuntimeChatMock = vi.fn();
 const fetchGitWorktreeStatusMock = vi.fn();
 const fetchGitWorktreeDiffMock = vi.fn();
+const runStagedToolPipelineMock = vi.fn();
 
 vi.mock('@huggingface/transformers', () => ({
   TextStreamer: class MockTextStreamer {},
@@ -69,6 +70,14 @@ vi.mock('./services/codexApi', () => ({
 vi.mock('./services/gitWorktreeApi', () => ({
   fetchGitWorktreeStatus: (...args: unknown[]) => fetchGitWorktreeStatusMock(...args),
   fetchGitWorktreeDiff: (...args: unknown[]) => fetchGitWorktreeDiffMock(...args),
+}));
+
+vi.mock('./services/stagedToolPipeline', () => ({
+  runStagedToolPipeline: (options: unknown, callbacks: { onDone?: (text: string) => void }) => {
+    runStagedToolPipelineMock(options, callbacks);
+    callbacks.onDone?.('Source-backed answer.');
+    return Promise.resolve({ text: 'Source-backed answer.', steps: 1 });
+  },
 }));
 
 vi.mock('just-bash/browser', () => {
@@ -117,6 +126,7 @@ beforeEach(() => {
   streamCodexRuntimeChatMock.mockReset();
   fetchGitWorktreeStatusMock.mockReset();
   fetchGitWorktreeDiffMock.mockReset();
+  runStagedToolPipelineMock.mockReset();
   searchBrowserModelsMock.mockResolvedValue([]);
   loadModelMock.mockResolvedValue(undefined);
   generateMock.mockResolvedValue(undefined);
@@ -445,6 +455,67 @@ describe('App smoke coverage', () => {
 
     expect(screen.getByLabelText('Qwen3-0.6B-ONNX installed')).toBeInTheDocument();
     expect(screen.getAllByText(/Qwen3-0\.6B-ONNX/i).length).toBeGreaterThan(0);
+  });
+
+  it('keeps Codi selected and backed by local inference for auto-routed research prompts', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      STORAGE_KEYS.installedModels,
+      JSON.stringify([{
+        id: 'onnx-community/Qwen3-0.6B-ONNX',
+        name: 'Qwen3-0.6B-ONNX',
+        author: 'onnx-community',
+        task: 'text-generation',
+        downloads: 5000,
+        likes: 30,
+        tags: ['onnx'],
+        sizeMB: 768,
+        contextWindow: 4096,
+        maxOutputTokens: 512,
+        status: 'installed',
+      }]),
+    );
+    fetchCopilotStateMock.mockResolvedValue({
+      available: true,
+      authenticated: true,
+      models: [{ id: 'gpt-5', name: 'OpenAI GPT-5', reasoning: true, vision: true }],
+      signInCommand: 'copilot login',
+      signInDocsUrl: 'https://docs.github.com/copilot',
+    });
+    generateMock.mockImplementation((_request, callbacks) => {
+      callbacks.onToken?.('Source-backed answer.');
+      callbacks.onDone?.({ generated_text: 'Source-backed answer.' });
+    });
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Session 1' }));
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi'));
+    fireEvent.change(screen.getByLabelText('Chat input'), {
+      target: { value: 'Research current movie theaters near me with citations.' },
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' })).not.toBeDisabled());
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(runStagedToolPipelineMock).toHaveBeenCalled());
+    expect(streamCopilotChatMock).not.toHaveBeenCalled();
+    const stagedOptions = runStagedToolPipelineMock.mock.calls[0][0] as {
+      model: { provider?: string; modelId?: string };
+    };
+    expect(stagedOptions.model).toEqual(expect.objectContaining({
+      provider: 'local',
+      modelId: 'onnx-community/Qwen3-0.6B-ONNX',
+    }));
+    expect(screen.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('codi');
   });
 
   it('renders Models as a minimal installed sidebar plus provider catalog render pane', async () => {

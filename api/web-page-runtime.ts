@@ -1,34 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { JSDOM } from 'jsdom';
-import {
-  DuckDuckGoInstantSearchProvider,
-  PerplexitySearchProvider,
-  SearxngSearchProvider,
-  TavilySearchProvider,
-} from '../src/chat-agents/LocalWebResearch/local-web-research/searchProviders';
-import type {
-  ConfiguredWebSearchProviderId,
-  FetchLike as ResearchFetchLike,
-  SearchProvider as ResearchSearchProvider,
-} from '../src/chat-agents/LocalWebResearch/local-web-research/types';
-
-export interface SearchWebRequest {
-  query: string;
-  limit: number;
-}
-
-export interface SearchWebResultItem {
-  title: string;
-  url: string;
-  snippet: string;
-}
-
-export interface SearchWebResult {
-  status: 'found' | 'empty' | 'unavailable';
-  query: string;
-  results: SearchWebResultItem[];
-  reason?: string;
-}
 
 export interface ReadWebPageRequest {
   url: string;
@@ -67,204 +37,8 @@ export interface ReadWebPageResult {
 }
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
-type SearchBridgeEnv = Partial<Record<string, string | undefined>>;
-type ConfiguredSearchProvider = {
-  id: string;
-  search: (request: { query: string; limit: number; signal?: AbortSignal }) => Promise<SearchWebResultItem[]>;
-};
 
-const SEARCH_PROVIDER_ATTEMPTS = 2;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
-const CONFIGURED_WEB_SEARCH_PROVIDERS: readonly ConfiguredWebSearchProviderId[] = [
-  'searxng',
-  'perplexity',
-  'tavily',
-  'duckduckgo-instant',
-];
-
-export class WebSearchBridge {
-  constructor(
-    private readonly fetchImpl: FetchLike = fetch,
-    private readonly timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
-    private readonly configuredProviders: ConfiguredSearchProvider[] = [],
-  ) {}
-
-  async search(request: SearchWebRequest): Promise<SearchWebResult> {
-    const query = request.query.trim().replace(/\s+/g, ' ');
-    const providers: Array<{
-      url: string;
-      parse: (html: string) => SearchWebResultItem[];
-    }> = [
-      {
-        url: `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-        parse: parseDuckDuckGoHtml,
-      },
-      {
-        url: `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
-        parse: parseBingHtml,
-      },
-    ];
-    const reasons: string[] = [];
-    try {
-      for (const provider of this.configuredProviders) {
-        for (let attempt = 1; attempt <= SEARCH_PROVIDER_ATTEMPTS; attempt += 1) {
-          try {
-            const results = (await provider.search({ query, limit: request.limit })).slice(0, request.limit);
-            if (results.length > 0) {
-              return { status: 'found', query, results };
-            }
-            reasons.push(`${provider.id} returned no search results.`);
-            break;
-          } catch (error) {
-            reasons.push(error instanceof Error ? error.message : String(error));
-            await retryDelay(attempt);
-          }
-        }
-      }
-      for (const provider of providers) {
-        for (let attempt = 1; attempt <= SEARCH_PROVIDER_ATTEMPTS; attempt += 1) {
-          let response: Response;
-          try {
-            response = await fetchWithTimeout(this.fetchImpl, provider.url, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (compatible; agent-browser/0.1; +https://localhost)',
-                Accept: 'text/html,application/xhtml+xml',
-              },
-            }, this.timeoutMs);
-          } catch (error) {
-            reasons.push(error instanceof Error ? error.message : String(error));
-            await retryDelay(attempt);
-            continue;
-          }
-          if (!response.ok) {
-            reasons.push(`Search provider returned ${response.status}.`);
-            await retryDelay(attempt);
-            continue;
-          }
-          const results = provider.parse(await response.text()).slice(0, request.limit);
-          if (results.length > 0) {
-            return { status: 'found', query, results };
-          }
-          reasons.push('No search results found.');
-          break;
-        }
-      }
-      const uniqueReasons = [...new Set(reasons)];
-      return {
-        status: uniqueReasons.some((reason) => /provider returned|fetch failed|network|blocked|timed?\s*out|timeout/i.test(reason)) ? 'unavailable' : 'empty',
-        query,
-        results: [],
-        reason: uniqueReasons.join(' '),
-      };
-    } catch (error) {
-      return {
-        status: 'unavailable',
-        query,
-        reason: error instanceof Error ? error.message : String(error),
-        results: [],
-      };
-    }
-  }
-}
-
-export function createConfiguredWebSearchBridge(
-  env: SearchBridgeEnv = typeof process === 'undefined' ? {} : process.env,
-  fetchImpl: FetchLike = fetch,
-  timeoutMs = readSearchTimeoutMs(env),
-): WebSearchBridge {
-  return new WebSearchBridge(fetchImpl, timeoutMs, createConfiguredSearchProviders(env, fetchImpl, timeoutMs));
-}
-
-function createConfiguredSearchProviders(
-  env: SearchBridgeEnv,
-  fetchImpl: FetchLike,
-  timeoutMs: number,
-): ConfiguredSearchProvider[] {
-  return configuredProviderNames(env)
-    .map((name) => createResearchSearchProvider(name, env, fetchImpl, timeoutMs))
-    .filter((provider): provider is ResearchSearchProvider => Boolean(provider))
-    .map(adaptResearchSearchProvider);
-}
-
-function configuredProviderNames(env: SearchBridgeEnv): ConfiguredWebSearchProviderId[] {
-  const configured = (env.AGENT_BROWSER_WEB_SEARCH_PROVIDERS ?? env.AGENT_BROWSER_WEB_SEARCH_PROVIDER ?? '')
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry): entry is ConfiguredWebSearchProviderId => (
-      CONFIGURED_WEB_SEARCH_PROVIDERS.includes(entry as ConfiguredWebSearchProviderId)
-    ));
-  if (configured.length > 0) return uniqueProviderNames(configured);
-
-  const inferred: ConfiguredWebSearchProviderId[] = [];
-  if (env.AGENT_BROWSER_SEARXNG_BASE_URL || env.SEARXNG_BASE_URL) inferred.push('searxng');
-  if (env.AGENT_BROWSER_TAVILY_API_KEY || env.TAVILY_API_KEY) inferred.push('tavily');
-  if (env.AGENT_BROWSER_PERPLEXITY_API_KEY || env.PERPLEXITY_API_KEY) inferred.push('perplexity');
-  inferred.push('duckduckgo-instant');
-  return inferred;
-}
-
-function createResearchSearchProvider(
-  name: ConfiguredWebSearchProviderId,
-  env: SearchBridgeEnv,
-  fetchImpl: FetchLike,
-  timeoutMs: number,
-): ResearchSearchProvider {
-  switch (name) {
-    case 'searxng':
-      return new SearxngSearchProvider({
-        baseUrl: env.AGENT_BROWSER_SEARXNG_BASE_URL ?? env.SEARXNG_BASE_URL,
-        timeoutMs,
-        fetchImpl: fetchImpl as ResearchFetchLike,
-      });
-    case 'perplexity':
-      return new PerplexitySearchProvider({
-        apiKey: env.AGENT_BROWSER_PERPLEXITY_API_KEY ?? env.PERPLEXITY_API_KEY,
-        timeoutMs,
-        fetchImpl: fetchImpl as ResearchFetchLike,
-      });
-    case 'tavily':
-      return new TavilySearchProvider({
-        apiKey: env.AGENT_BROWSER_TAVILY_API_KEY ?? env.TAVILY_API_KEY,
-      });
-    case 'duckduckgo-instant':
-      return new DuckDuckGoInstantSearchProvider({
-        timeoutMs,
-        fetchImpl: fetchImpl as ResearchFetchLike,
-      });
-    default:
-      return assertNeverSearchProvider(name);
-  }
-}
-
-function adaptResearchSearchProvider(provider: ResearchSearchProvider): ConfiguredSearchProvider {
-  return {
-    id: provider.id,
-    async search({ query, limit, signal }) {
-      const results = await provider.search({ query, maxResults: limit, signal });
-      return results.map((result) => ({
-        title: result.title,
-        url: result.url,
-        snippet: result.snippet ?? '',
-      }));
-    },
-  };
-}
-
-function uniqueProviderNames(names: ConfiguredWebSearchProviderId[]): ConfiguredWebSearchProviderId[] {
-  return names.filter((name, index) => names.indexOf(name) === index);
-}
-
-function readSearchTimeoutMs(env: SearchBridgeEnv): number {
-  const raw = env.AGENT_BROWSER_WEB_SEARCH_TIMEOUT_MS ?? env.SEARCH_TIMEOUT_MS;
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_FETCH_TIMEOUT_MS;
-}
-
-function assertNeverSearchProvider(value: never): never {
-  throw new TypeError(`Unsupported web search provider: ${String(value)}`);
-}
-
-const bridge = createConfiguredWebSearchBridge();
 
 export class WebPageBridge {
   constructor(
@@ -305,14 +79,14 @@ export class WebPageBridge {
           observations: [],
         };
       }
-      const document = parseHtmlDocument(await response.text(), url.toString());
-      const jsonLd = extractJsonLd(document);
-      removeNonContentBlocks(document);
-      const root = document.body ?? document.documentElement;
-      const title = extractTitle(document);
-      const links = extractLinks(root, url);
-      const headings = extractHeadings(root);
-      const text = readableText(root).slice(0, 5000);
+
+      const html = await response.text();
+      const jsonLd = extractJsonLd(html);
+      const contentHtml = removeNonContentBlocks(html);
+      const title = extractTitle(html);
+      const links = extractLinks(contentHtml, url);
+      const headings = extractHeadings(contentHtml);
+      const text = readableText(contentHtml).slice(0, 5000);
       const observations = extractPageObservations({ url: url.toString(), text, links, headings, jsonLd });
       return {
         status: 'read',
@@ -322,7 +96,7 @@ export class WebPageBridge {
         links,
         jsonLd,
         observations,
-        entities: extractPageEntities({ url: url.toString(), title, text, jsonLd }),
+        entities: extractPageEntities({ url: url.toString(), text, jsonLd }),
       };
     } catch (error) {
       return {
@@ -363,79 +137,6 @@ async function fetchWithTimeout(
   }
 }
 
-const htmlDecoder = new JSDOM('').window.document.createElement('textarea');
-
-function parseHtmlDocument(html: string, url: string): Document {
-  return new JSDOM(html, { url, contentType: 'text/html' }).window.document;
-}
-
-function textFromNode(node: Node | null | undefined): string {
-  return normalizeText(node?.textContent ?? '');
-}
-
-function readableText(root: ParentNode): string {
-  const blocks = [...root.querySelectorAll('p, li, h1, h2, h3, h4, h5, h6, article, section, main')]
-    .map((node) => textFromNode(node))
-    .filter(Boolean);
-  const source = blocks.length > 0 ? blocks.join('. ') : root.textContent ?? '';
-  return normalizeText(source)
-    .replace(/\s+\./g, '.')
-    .replace(/\.{2,}/g, '.');
-}
-
-function nextElementWithClass(element: Element, className: string): Element | null {
-  let current = element.nextElementSibling;
-  while (current) {
-    if (current.classList.contains(className)) return current;
-    current = current.nextElementSibling;
-  }
-  return null;
-}
-
-function resolveProviderUrl(value: string, baseUrl: string): string {
-  try {
-    const url = new URL(value, baseUrl);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : value;
-  } catch {
-    return value;
-  }
-}
-
-function parseDuckDuckGoHtml(html: string): SearchWebResultItem[] {
-  const document = parseHtmlDocument(html, 'https://duckduckgo.com/html/');
-  return [...document.querySelectorAll<HTMLAnchorElement>('a.result__a')]
-    .map((anchor) => {
-      const href = anchor.getAttribute('href') ?? anchor.href;
-      const container = anchor.closest('.result, .web-result, .result__body, .results_links')
-        ?? anchor.parentElement
-        ?? document.body;
-      const snippet = container.querySelector('.result__snippet')
-        ?? nextElementWithClass(anchor, 'result__snippet');
-      return {
-        url: normalizeUrl(resolveProviderUrl(href, 'https://duckduckgo.com')),
-        title: textFromNode(anchor),
-        snippet: textFromNode(snippet),
-      };
-    })
-    .filter((item) => item.title && item.url);
-}
-
-function parseBingHtml(html: string): SearchWebResultItem[] {
-  const document = parseHtmlDocument(html, 'https://www.bing.com/search');
-  return [...document.querySelectorAll<HTMLElement>('li.b_algo')]
-    .map((block) => {
-      const link = block.querySelector<HTMLAnchorElement>('h2 a[href], a[href]');
-      if (!link) return null;
-      const snippet = block.querySelector('p') ?? block.querySelector('.b_caption');
-      return {
-        url: normalizeUrl(resolveProviderUrl(link.getAttribute('href') ?? link.href, 'https://www.bing.com')),
-        title: textFromNode(link),
-        snippet: textFromNode(snippet),
-      };
-    })
-    .filter((item): item is SearchWebResultItem => Boolean(item?.title && item.url));
-}
-
 function safeHttpUrl(value: string): URL | null {
   try {
     const url = new URL(value);
@@ -445,42 +146,66 @@ function safeHttpUrl(value: string): URL | null {
   }
 }
 
-function extractTitle(document: Document): string | undefined {
-  const title = textFromNode(document.querySelector('title'));
+function extractTitle(html: string): string | undefined {
+  const match = /<title\b[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  const title = match ? textFromHtml(match[1] ?? '') : '';
   return title || undefined;
 }
 
-function removeNonContentBlocks(document: Document): void {
-  document.querySelectorAll('script:not([type="application/ld+json"]), style, noscript, svg')
-    .forEach((node) => node.remove());
+function removeNonContentBlocks(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, ' ');
 }
 
-function extractLinks(root: ParentNode, baseUrl: URL): WebPageLink[] {
-  const seen = new Set<string>();
-  return [...root.querySelectorAll<HTMLAnchorElement>('a[href]')]
-    .map((anchor) => {
-      const text = textFromNode(anchor);
-      const url = resolveUrl(anchor.getAttribute('href') ?? anchor.href, baseUrl);
-      return text && url ? { text, url } : null;
-    })
-    .filter((item): item is WebPageLink => {
-      if (!item || seen.has(`${item.text}\n${item.url}`)) return false;
-      seen.add(`${item.text}\n${item.url}`);
-      return true;
-    })
-    .slice(0, 80);
+function readableText(html: string): string {
+  const blocks = [...html.matchAll(/<(p|li|h[1-6]|article|section|main)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
+    .map((match) => textFromHtml(match[2] ?? ''))
+    .filter(Boolean);
+  const source = blocks.length > 0 ? blocks.join('. ') : textFromHtml(html);
+  return normalizeText(source)
+    .replace(/\s+\./g, '.')
+    .replace(/\.{2,}/g, '.');
 }
 
-function extractHeadings(root: ParentNode): string[] {
+function extractLinks(html: string, baseUrl: URL): WebPageLink[] {
   const seen = new Set<string>();
-  return [...root.querySelectorAll('h1, h2, h3, h4, h5, h6')]
-    .map((heading) => textFromNode(heading))
-    .filter((heading) => {
-      if (!heading || seen.has(heading)) return false;
-      seen.add(heading);
-      return true;
-    })
-    .slice(0, 40);
+  const links: WebPageLink[] = [];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = readAttribute(match[1] ?? '', 'href');
+    const text = textFromHtml(match[2] ?? '');
+    const url = href ? resolveUrl(href, baseUrl) : null;
+    if (!text || !url) continue;
+    const key = `${text}\n${url}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    links.push({ text, url });
+    if (links.length >= 80) break;
+  }
+  return links;
+}
+
+function extractHeadings(html: string): string[] {
+  const seen = new Set<string>();
+  const headings: string[] = [];
+  for (const match of html.matchAll(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi)) {
+    const heading = textFromHtml(match[1] ?? '');
+    if (!heading || seen.has(heading)) continue;
+    seen.add(heading);
+    headings.push(heading);
+    if (headings.length >= 40) break;
+  }
+  return headings;
+}
+
+function readAttribute(attributes: string, name: string): string | undefined {
+  const pattern = new RegExp(`\\b${escapeRegExp(name)}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const match = pattern.exec(attributes);
+  const value = match?.[1] ?? match?.[2] ?? match?.[3];
+  return value ? decodeHtml(value) : undefined;
 }
 
 function resolveUrl(value: string, baseUrl: URL): string | null {
@@ -492,17 +217,20 @@ function resolveUrl(value: string, baseUrl: URL): string | null {
   }
 }
 
-function extractJsonLd(document: Document): unknown[] {
-  return [...document.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')]
-    .flatMap((match) => {
-      try {
-        const parsed = JSON.parse(match.textContent ?? '');
-        const decoded = decodeJsonLdValue(parsed);
-        return Array.isArray(decoded) ? decoded : [decoded];
-      } catch {
-        return [];
-      }
-    });
+function extractJsonLd(html: string): unknown[] {
+  const results: unknown[] = [];
+  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    const type = readAttribute(match[1] ?? '', 'type') ?? '';
+    if (!/^application\/ld\+json$/i.test(type.trim())) continue;
+    try {
+      const parsed = JSON.parse((match[2] ?? '').trim());
+      const decoded = decodeJsonLdValue(parsed);
+      results.push(...(Array.isArray(decoded) ? decoded : [decoded]));
+    } catch {
+      // Ignore malformed JSON-LD and keep extracting visible page evidence.
+    }
+  }
+  return results;
 }
 
 function decodeJsonLdValue(value: unknown): unknown {
@@ -520,7 +248,6 @@ function extractPageEntities({
   jsonLd,
 }: {
   url: string;
-  title?: string;
   text: string;
   jsonLd: unknown[];
 }): WebPageEntity[] {
@@ -666,7 +393,9 @@ function jsonLdTypes(node: Record<string, unknown>): string[] {
 function isPromotableTextEntity(label: string, localContext: string): boolean {
   const cleaned = cleanEntityName(label);
   if (!cleaned) return false;
-  if (isUiChromeLabel(cleaned) || isLocationOnlyLabel(cleaned) || isContextualLocationOnlyLabel(cleaned, localContext)) return false;
+  if (isUiChromeLabel(cleaned) || isLocationOnlyLabel(cleaned) || isContextualLocationOnlyLabel(cleaned, localContext)) {
+    return false;
+  }
   const normalizedContext = localContext.replace(/\s+/g, ' ').trim();
   if (isMetadataOrChromeContext(normalizedContext)) return false;
   const namePattern = new RegExp(escapeRegExp(cleaned).replace(/\s+/g, '\\s+'), 'i');
@@ -744,6 +473,16 @@ function cleanObservationLabel(value: string): string {
   return cleaned;
 }
 
+function textFromHtml(html: string): string {
+  return decodeHtml(stripTags(html));
+}
+
+function stripTags(value: string): string {
+  return value
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ');
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -758,11 +497,6 @@ function normalizeUrl(url: string): string {
   const bingUrl = decodeBingRedirect(url);
   if (bingUrl) return bingUrl;
   return url;
-}
-
-function retryDelay(attempt: number): Promise<void> {
-  if (attempt >= SEARCH_PROVIDER_ATTEMPTS) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, 150 * attempt));
 }
 
 function decodeDuckDuckGoRedirect(url: string): string | null {
@@ -810,8 +544,25 @@ function decodeBingEncodedUrl(encoded: string): string | null {
 }
 
 function decodeHtml(value: string): string {
-  htmlDecoder.innerHTML = value;
-  return normalizeText(htmlDecoder.value);
+  return value
+    .replace(/&(#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt|nbsp);/gi, (entity, code: string) => {
+      const normalized = code.toLowerCase();
+      if (normalized === 'amp') return '&';
+      if (normalized === 'quot') return '"';
+      if (normalized === 'apos') return "'";
+      if (normalized === 'lt') return '<';
+      if (normalized === 'gt') return '>';
+      if (normalized === 'nbsp') return ' ';
+      try {
+        if (normalized.startsWith('#x')) return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
+        if (normalized.startsWith('#')) return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
+      } catch {
+        return entity;
+      }
+      return entity;
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function normalizeText(value: string): string {
@@ -835,32 +586,8 @@ function writeJson(res: ServerResponse, statusCode: number, body: unknown): void
   res.end(JSON.stringify(body));
 }
 
-function readLimit(value: unknown): number {
-  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
-  return Number.isFinite(parsed) && parsed > 0
-    ? Math.min(10, Math.floor(parsed))
-    : 5;
-}
-
 function requestUrl(rawUrl: string | undefined): URL {
   return new URL(rawUrl || '/', 'http://localhost');
-}
-
-async function readSearchRequest(req: IncomingMessage): Promise<SearchWebRequest> {
-  const url = requestUrl(req.url);
-  if (req.method === 'GET') {
-    return {
-      query: (url.searchParams.get('query') ?? '').trim().replace(/\s+/g, ' '),
-      limit: readLimit(url.searchParams.get('limit')),
-    };
-  }
-  const body = await readJsonBody(req);
-  return {
-    query: typeof (body as { query?: unknown }).query === 'string'
-      ? (body as { query: string }).query.trim().replace(/\s+/g, ' ')
-      : '',
-    limit: readLimit((body as { limit?: unknown }).limit),
-  };
 }
 
 async function readPageRequest(req: IncomingMessage): Promise<ReadWebPageRequest> {
@@ -873,29 +600,6 @@ async function readPageRequest(req: IncomingMessage): Promise<ReadWebPageRequest
     url: typeof (body as { url?: unknown }).url === 'string'
       ? (body as { url: string }).url.trim()
       : '',
-  };
-}
-
-export function createSearchApiMiddleware(searchBridge: WebSearchBridge = bridge) {
-  return async (req: IncomingMessage, res: ServerResponse, next: (error?: Error) => void) => {
-    if (requestUrl(req.url).pathname !== '/api/web-search') {
-      next();
-      return;
-    }
-    try {
-      if (req.method !== 'POST' && req.method !== 'GET') {
-        writeJson(res, 405, { error: 'Method not allowed.' });
-        return;
-      }
-      const searchRequest = await readSearchRequest(req);
-      if (!searchRequest.query) {
-        writeJson(res, 400, { error: 'query is required.' });
-        return;
-      }
-      writeJson(res, 200, await searchBridge.search(searchRequest));
-    } catch (error) {
-      next(error instanceof Error ? error : new Error('Web search middleware failed.'));
-    }
   };
 }
 

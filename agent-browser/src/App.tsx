@@ -2900,6 +2900,38 @@ function selectCompatibleBenchmarkCandidates(
   return candidates;
 }
 
+function shouldPreserveSelectedRuntimeProvider({
+  autoRoute,
+  providerForRequest,
+  selectedProvider,
+  hasCodiModelsReady,
+  hasGhcpModelsReady,
+  hasCursorModelsReady,
+  hasCodexModelsReady,
+}: {
+  autoRoute: boolean | undefined;
+  providerForRequest: AgentProvider;
+  selectedProvider: AgentProvider;
+  hasCodiModelsReady: boolean;
+  hasGhcpModelsReady: boolean;
+  hasCursorModelsReady: boolean;
+  hasCodexModelsReady: boolean;
+}): boolean {
+  if (autoRoute === false || providerForRequest === selectedProvider) return false;
+  switch (selectedProvider) {
+    case 'codi':
+      return hasCodiModelsReady;
+    case 'ghcp':
+      return hasGhcpModelsReady;
+    case 'cursor':
+      return hasCursorModelsReady;
+    case 'codex':
+      return hasCodexModelsReady;
+    default:
+      return false;
+  }
+}
+
 function parseBenchmarkIndexUrlList(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
   if (typeof value !== 'string') return [];
@@ -3288,6 +3320,7 @@ function ChatPanel({
   const hasAvailableCodexModels = hasCodexAccess(codexState);
   const selectedRuntimeProvider = resolveRuntimeAgentProvider({
     provider: selectedProvider,
+    selectedProvider,
     hasCodiModelsReady: Boolean(activeLocalModel),
     hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
     hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
@@ -4176,6 +4209,7 @@ function ChatPanel({
     }
     let runtimeProviderForRequest = resolveRuntimeAgentProvider({
       provider: providerForRequest,
+      selectedProvider,
       hasCodiModelsReady: Boolean(activeLocalModel),
       hasGhcpModelsReady: Boolean(requestGhcpModelId) && hasAvailableCopilotModels,
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
@@ -4197,7 +4231,16 @@ function ChatPanel({
       && benchmarkRoutingSettings.routerMode === 'enforce'
       && rolloutChecksPass
       && !complexityRoutingInShadowMode
-      && complexityRoutingAllowedByTraffic;
+      && complexityRoutingAllowedByTraffic
+      && !shouldPreserveSelectedRuntimeProvider({
+        autoRoute: options.autoRoute,
+        providerForRequest,
+        selectedProvider,
+        hasCodiModelsReady: Boolean(activeLocalModel),
+        hasGhcpModelsReady: Boolean(requestGhcpModelId) && hasAvailableCopilotModels,
+        hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
+        hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
+      });
     if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
@@ -4240,7 +4283,7 @@ function ChatPanel({
         reason: requestBenchmarkRoute.reason,
       });
     }
-    if (providerForRequest !== selectedProvider) {
+    if ((options.autoRoute === false || options.provider !== undefined) && providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
       setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: providerForRequest }));
     }
@@ -5527,6 +5570,8 @@ function ChatPanel({
           appendSharedMessages,
           getSessionBash,
           notifyTerminalFsPathsChanged: onTerminalFsPathsChanged,
+          searchWeb: searchWebFromApi,
+          readWebPage: readWebPageFromApi,
           sessionId: activeSessionId,
           setBashHistoryBySession,
           setCwdBySession,
@@ -15732,6 +15777,7 @@ function AgentBrowserApp() {
     });
     const runtimeProvider = resolveRuntimeAgentProvider({
       provider: selectedProvider,
+      selectedProvider,
       hasCodiModelsReady: Boolean(selectedIds.codiModelId),
       hasGhcpModelsReady: hasGhcpAccess(copilotState) && Boolean(selectedIds.ghcpModelId),
       hasCursorModelsReady: hasCursorAccess(cursorState) && Boolean(selectedIds.cursorModelId),

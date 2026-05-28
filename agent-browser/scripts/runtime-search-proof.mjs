@@ -16,6 +16,20 @@ const screenshotPath = path.resolve(
   process.env.AGENT_BROWSER_RUNTIME_PROOF_SCREENSHOT
     ?? 'output/playwright/agent-browser-runtime-search-proof.png',
 );
+const DEFAULT_SESSION_ID = 'session-1';
+const QWEN_MODEL_ID = 'onnx-community/Qwen3-0.6B-ONNX';
+const STORAGE_KEYS = {
+  installedModels: 'agent-browser.installed-models',
+  selectedProviderBySession: 'agent-browser.session.selected-provider-by-session',
+  selectedCodiModelBySession: 'agent-browser.session.selected-codi-model-by-session',
+  selectedCopilotModelBySession: 'agent-browser.session.selected-copilot-model-by-session',
+};
+
+const BAD_RUNTIME_FAILURE_TEXT = [
+  'Web search returned 404',
+  'Web search returned 500',
+  'Please provide a search source',
+];
 
 const BAD_LABELS = [
   'Moviefone TV',
@@ -72,6 +86,15 @@ const EXPECTED_BARS = [
   'Hey Nonny',
   "Cortland's Garage",
 ];
+
+function parseRuntimeProvider(argv = process.argv.slice(2)) {
+  const index = argv.indexOf('--provider');
+  const provider = index >= 0 ? argv[index + 1] : 'ghcp';
+  if (provider !== 'ghcp' && provider !== 'codi') {
+    throw new Error(`Unsupported runtime search proof provider "${provider}". Use --provider ghcp or --provider codi.`);
+  }
+  return provider;
+}
 
 function fixtureContract() {
   const cases = buildSearchEvalCases();
@@ -219,7 +242,7 @@ function resolveSearchResult(searchResults, query) {
   return best?.result ?? searchResults['*'];
 }
 
-async function installRoutes(page, fixtures, searchQueries) {
+async function installRoutes(page, fixtures, searchQueries, networkState) {
   const queryCounts = new Map();
   await page.route('**/api/copilot/status', (route) => fulfillJson(route, {
     available: true,
@@ -238,9 +261,12 @@ async function installRoutes(page, fixtures, searchQueries) {
     signInDocsUrl: 'https://docs.github.com/copilot/how-tos/copilot-cli',
   }));
 
-  await page.route('**/api/copilot/chat', (route) => fulfillJson(route, {
-    error: 'Runtime search proof should execute through the tool pipeline, not raw Copilot chat.',
-  }, 500));
+  await page.route('**/api/copilot/chat', (route) => {
+    networkState.ghcpChatCalls += 1;
+    return fulfillJson(route, {
+      error: 'Runtime search proof should execute through the tool pipeline, not raw Copilot chat.',
+    }, 500);
+  });
 
   await page.route('**/api/web-search', (route) => {
     const request = parsePostJson(route);
@@ -284,11 +310,57 @@ async function installRoutes(page, fixtures, searchQueries) {
   });
 }
 
-async function seedMemory(page) {
-  await page.addInitScript(() => {
+async function seedMemory(page, provider) {
+  await page.addInitScript(({ keys, sessionId, qwenModelId, selectedProvider }) => {
     window.localStorage.clear();
     window.sessionStorage.clear();
+    window.sessionStorage.setItem(keys.selectedProviderBySession, JSON.stringify({
+      [sessionId]: selectedProvider,
+    }));
+
+    if (selectedProvider === 'codi') {
+      window.localStorage.setItem(keys.installedModels, JSON.stringify([{
+        id: qwenModelId,
+        name: 'Qwen3-0.6B-ONNX',
+        author: 'onnx-community',
+        task: 'text-generation',
+        downloads: 5000,
+        likes: 30,
+        tags: ['onnx', 'transformers.js'],
+        sizeMB: 768,
+        contextWindow: 4096,
+        maxOutputTokens: 512,
+        status: 'installed',
+      }]));
+      window.sessionStorage.setItem(keys.selectedCodiModelBySession, JSON.stringify({
+        [sessionId]: qwenModelId,
+      }));
+    } else {
+      window.sessionStorage.setItem(keys.selectedCopilotModelBySession, JSON.stringify({
+        [sessionId]: 'gpt-4.1',
+      }));
+    }
+  }, {
+    keys: STORAGE_KEYS,
+    sessionId: DEFAULT_SESSION_ID,
+    qwenModelId: QWEN_MODEL_ID,
+    selectedProvider: provider,
   });
+}
+
+async function assertSelectedProvider(page, provider) {
+  await expect(page.getByRole('combobox', { name: 'Agent provider' })).toHaveValue(provider, { timeout: 90_000 });
+  if (provider === 'codi') {
+    await expect(page.getByRole('combobox', { name: 'Codi model' })).toHaveValue(QWEN_MODEL_ID, { timeout: 90_000 });
+  } else {
+    await expect(page.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1', { timeout: 90_000 });
+  }
+}
+
+function assertNoRuntimeFailureText(text) {
+  for (const badText of BAD_RUNTIME_FAILURE_TEXT) {
+    expect(text).not.toContain(badText);
+  }
 }
 
 async function isVisible(locator, timeout = 1_000) {
@@ -320,6 +392,7 @@ async function openChatPanel(page) {
 }
 
 async function runBrowserProof() {
+  const provider = parseRuntimeProvider();
   const fixtures = fixtureContract();
   const shouldStartServer = !(await isPortOpen());
   const server = shouldStartServer ? startServer() : null;
@@ -332,6 +405,7 @@ async function runBrowserProof() {
   let page;
   const pageOutput = [];
   const searchQueries = [];
+  const networkState = { ghcpChatCalls: 0 };
   try {
     await waitForServer(server);
     await mkdir(path.dirname(screenshotPath), { recursive: true });
@@ -344,15 +418,14 @@ async function runBrowserProof() {
     page = await context.newPage();
     page.on('console', (message) => pageOutput.push(`[console:${message.type()}] ${message.text()}`));
     page.on('pageerror', (error) => pageOutput.push(`[pageerror] ${error.message}`));
-    await installRoutes(page, fixtures, searchQueries);
-    await seedMemory(page);
+    await installRoutes(page, fixtures, searchQueries, networkState);
+    await seedMemory(page, provider);
     page.setDefaultTimeout(90_000);
 
     await page.goto(baseURL, { waitUntil: 'commit', timeout: 90_000 });
     await openChatPanel(page);
     await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: 90_000 });
-    await expect(page.getByRole('combobox', { name: 'Agent provider' })).toHaveValue('ghcp', { timeout: 90_000 });
-    await expect(page.getByRole('combobox', { name: 'GHCP model' })).toHaveValue('gpt-4.1', { timeout: 90_000 });
+    await assertSelectedProvider(page, provider);
 
     await page.getByLabel('Chat input').fill('show me movie theaters near me');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -363,6 +436,7 @@ async function runBrowserProof() {
       assistantBubbles.last().locator('a', { hasText: 'AMC Randhurst 12' }),
     ).toBeVisible({ timeout: 90_000 });
     const finalAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    assertNoRuntimeFailureText(finalAnswer);
     const renderedLinkLabels = (await assistantBubbles.last().locator('a').allTextContents())
       .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
 
@@ -379,6 +453,7 @@ async function runBrowserProof() {
     await expect(page.getByText(/Working/i)).toHaveCount(0);
     await expect(page.locator('.stream-cursor')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+    await assertSelectedProvider(page, provider);
 
     await page.getByLabel('Chat input').fill('what about bars?');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -387,6 +462,7 @@ async function runBrowserProof() {
       assistantBubbles.last().locator('a', { hasText: "Peggy Kinnane's Irish Restaurant & Pub" }),
     ).toBeVisible({ timeout: 90_000 });
     const subjectSwitchBarsAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    assertNoRuntimeFailureText(subjectSwitchBarsAnswer);
     const barLinkLabels = (await assistantBubbles.last().locator('a').allTextContents())
       .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
     for (const bar of EXPECTED_BARS) {
@@ -399,6 +475,7 @@ async function runBrowserProof() {
     await expect(page.getByText(/User input needed/i)).toHaveCount(0);
     await expect(page.getByText(/Working/i)).toHaveCount(0);
     await expect(page.locator('.stream-cursor')).toHaveCount(0);
+    await assertSelectedProvider(page, provider);
 
     await page.getByLabel('Chat input').fill('what about closest bars?');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -407,6 +484,7 @@ async function runBrowserProof() {
       assistantBubbles.last().locator('a', { hasText: 'Sports Page Bar & Grill Arlington Heights' }),
     ).toBeVisible({ timeout: 90_000 });
     const barsAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    assertNoRuntimeFailureText(barsAnswer);
     const closestBarLinkLabels = (await assistantBubbles.last().locator('a').allTextContents())
       .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
     expect(barsAnswer).toContain('Sports Page Bar & Grill Arlington Heights');
@@ -416,6 +494,7 @@ async function runBrowserProof() {
     await expect(page.getByText(/User input needed/i)).toHaveCount(0);
     await expect(page.getByText(/Working/i)).toHaveCount(0);
     await expect(page.locator('.stream-cursor')).toHaveCount(0);
+    await assertSelectedProvider(page, provider);
 
     await page.getByLabel('Chat input').fill('show me 3 more');
     await page.getByRole('button', { name: 'Send' }).click();
@@ -424,6 +503,7 @@ async function runBrowserProof() {
       assistantBubbles.last().locator('a', { hasText: "Peggy Kinnane's Irish Restaurant & Pub" }),
     ).toBeVisible({ timeout: 90_000 });
     const followUpAnswer = (await assistantBubbles.last().innerText()).replace(/\s+/g, ' ').trim();
+    assertNoRuntimeFailureText(followUpAnswer);
     const followUpLabels = (await assistantBubbles.last().locator('a').allTextContents())
       .map((label) => label.replace(/\s+/g, ' ').trim().toLocaleLowerCase());
     for (const bar of EXPECTED_BARS) {
@@ -438,9 +518,11 @@ async function runBrowserProof() {
     await expect(page.getByText(/User input needed/i)).toHaveCount(0);
     await expect(page.getByText(/Working/i)).toHaveCount(0);
     await expect(page.locator('.stream-cursor')).toHaveCount(0);
+    await assertSelectedProvider(page, provider);
+    expect(networkState.ghcpChatCalls).toBe(0);
 
     await page.screenshot({ path: screenshotPath, fullPage: true });
-    console.log(`agent-browser runtime search proof passed: ${screenshotPath}`);
+    console.log(`agent-browser runtime search proof passed for ${provider}: ${screenshotPath}`);
     console.log(`runtime search queries: ${JSON.stringify(searchQueries)}`);
     console.log(finalAnswer);
     console.log(subjectSwitchBarsAnswer);

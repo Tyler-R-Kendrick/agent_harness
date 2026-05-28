@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createWebPageApiMiddleware, WebPageBridge } from '../agent-browser/server/searchMiddleware';
+import {
+  createWebPageApiMiddleware,
+  WebPageBridge,
+} from './web-page-runtime';
 
-type WebPageBridgeLike = Pick<WebPageBridge, 'read'>;
+type WebPageBridgeLike = {
+  read: (request: { url: string }) => Promise<unknown>;
+};
 
 function writeError(res: ServerResponse, error: Error): void {
   res.statusCode = 500;
@@ -9,8 +14,8 @@ function writeError(res: ServerResponse, error: Error): void {
   res.end(JSON.stringify({ error: error.message || 'Web page read failed.' }));
 }
 
-export function createWebPageApiHandler(webPageBridge: WebPageBridgeLike = new WebPageBridge()) {
-  const middleware = createWebPageApiMiddleware(webPageBridge as WebPageBridge);
+export function createWebPageApiHandler(webPageBridge?: WebPageBridgeLike) {
+  const middleware = createWebPageApiMiddleware((webPageBridge ?? new WebPageBridge()) as never);
   return async (req: IncomingMessage, res: ServerResponse) => {
     await middleware(req, res, (error?: Error) => {
       if (error) {
