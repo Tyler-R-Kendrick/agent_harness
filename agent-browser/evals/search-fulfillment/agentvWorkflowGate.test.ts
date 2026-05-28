@@ -711,6 +711,81 @@ describe('real AgentEvals workflow gate', () => {
     ]));
   });
 
+  it('still fails acknowledged partial follow-up answers that publish forbidden page chrome labels', () => {
+    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
+    const input = {
+      expected_output: JSON.stringify({
+        expectedResult: 'insufficient-follow-up-count',
+        forbiddenLabels: ['Yelp: Best Bars in Arlington Heights, IL'],
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show me 3 more',
+          constraints: [
+            {
+              id: 'count:min-results',
+              sourceText: 'show me 3 more',
+              type: 'count',
+              operator: 'at_least',
+              target: 'acceptedCandidates',
+              value: 3,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Expected at least 3 accepted result(s).',
+            },
+            {
+              id: 'chrome:no-page-labels',
+              sourceText: 'show me 3 more',
+              type: 'page_chrome',
+              operator: 'rejects_page_chrome',
+              target: 'finalAnswer.labels',
+              value: true,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Page chrome cannot be rendered as results.',
+            },
+          ],
+          evidenceRequirements: [],
+          impossibilityPolicy: { kind: 'none', askUserForHelp: false },
+          clarificationTriggers: [],
+          successSemantics: 'allow-partial-with-acknowledgement',
+          legacyCriteria: [],
+        },
+      }),
+      output: [{
+        role: 'assistant',
+        content: [
+          'I could only verify 1 additional result for bars near Arlington Heights, IL, but you asked for 3.',
+          'The available search evidence did not contain enough additional source-backed entity names with the required subject and location signals.',
+          '',
+          '1. [Yelp: Best Bars in Arlington Heights, IL](https://www.yelp.com/search?cflt=bars&find_loc=Arlington+Heights%2C+IL) - Why: This is a listings page, not a source-backed bar entity.',
+        ].join('\n'),
+      }],
+    };
+
+    const result = spawnSync(process.execPath, [grader], {
+      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: subprocessEnv(),
+    });
+
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as {
+      score: number;
+      assertions: Array<{ text: string; passed: boolean }>;
+    };
+    expect(parsed.score).toBeLessThan(1);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'validation contract chrome:no-page-labels',
+        passed: false,
+      }),
+    ]));
+  });
+
   it('fails AgentV search quality when an arbitrary prefix contract is violated', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
     const input = {
