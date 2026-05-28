@@ -38,6 +38,6 @@ export interface GitStubState {
   currentBranch: string;
   branches: Record<string, GitStubBranch>;
   commits: Record<string, GitStubCommit>;
-  index: Record<string, string>;
+  index: Record<string, string | null>;
   initializedAt: string;
 }

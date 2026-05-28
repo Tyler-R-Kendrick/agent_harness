@@ -210,6 +210,53 @@ describe('git-stub repository', () => {
     });
   });
 
+  it('stages and commits deleted tracked files through git add', async () => {
+    const fs = new MemoryGitStubFileSystem({
+      '/workspace/app.ts': 'export const value = 1;\n',
+      '/workspace/readme.md': 'notes\n',
+    });
+    const repo = createGitStubRepository({ fs, cwd: '/workspace', now: () => new Date('2026-05-09T14:15:00.000Z') });
+
+    await executeGitStubCommand(repo, 'git init');
+    await executeGitStubCommand(repo, 'git add .');
+    await executeGitStubCommand(repo, 'git commit -m baseline');
+    fs.deleteFile('/workspace/app.ts');
+
+    expect(await executeGitStubCommand(repo, 'git add app.ts')).toMatchObject({
+      exitCode: 0,
+      stdout: 'staged app.ts',
+    });
+    expect(await executeGitStubCommand(repo, 'git status --short')).toMatchObject({
+      exitCode: 0,
+      stdout: 'D  app.ts',
+    });
+    expect(await executeGitStubCommand(repo, 'git diff --cached')).toMatchObject({
+      exitCode: 0,
+      stdout: 'deleted app.ts',
+    });
+    await fs.writeFile('/workspace/app.ts', 'export const value = 2;\n');
+    expect(await executeGitStubCommand(repo, 'git status --short')).toMatchObject({
+      exitCode: 0,
+      stdout: 'D  app.ts\n?? app.ts',
+    });
+    fs.deleteFile('/workspace/app.ts');
+
+    expect(await executeGitStubCommand(repo, 'git commit -m "remove app"')).toMatchObject({
+      exitCode: 0,
+      stdout: expect.stringMatching(/^\[main [0-9a-f]{7}\] remove app\n 1 file changed$/),
+    });
+    expect(await executeGitStubCommand(repo, 'git status')).toMatchObject({
+      exitCode: 0,
+      stdout: 'On branch main\nnothing to commit, working tree clean',
+    });
+
+    await fs.writeFile('/workspace/app.ts', 'export const value = 3;\n');
+    expect(await executeGitStubCommand(repo, 'git status --short')).toMatchObject({
+      exitCode: 0,
+      stdout: '?? app.ts',
+    });
+  });
+
   it('handles command parsing, reinitialization, checkout errors, and unsupported commands', async () => {
     expect(isGitStubCommand('git status')).toBe(true);
     expect(isGitStubCommand('git ')).toBe(true);

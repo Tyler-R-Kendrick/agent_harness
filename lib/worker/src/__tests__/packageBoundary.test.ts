@@ -32,6 +32,7 @@ describe('package boundary', () => {
       'README.md',
       'src/**/*.ts',
       '!src/__tests__/**',
+      '!src/**/*.test.ts',
     ]);
   });
 

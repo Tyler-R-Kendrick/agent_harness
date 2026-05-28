@@ -1,0 +1,22 @@
+slug: runner-h
+name: Runner H / Surfer H
+vendor: H Company
+segment: vision-language-web-agent-and-agent-orchestration-platform
+product_path: competition/runner-h
+design_path: competition/runner-h/design
+features_path: competition/runner-h/features
+marketing_path: competition/runner-h/marketing
+gossip_path: competition/runner-h/gossip
+snapshot_date: 2026-05-24
+primary_sources:
+  - https://hcompany.ai/put-ai-to-work-for-you-with-runner-h
+  - https://www.hcompany.ai/runner-h
+  - https://www.hcompany.ai/surfer-h
+  - https://github.com/hcompai/surfer-h-cli
+secondary_sources:
+  - https://arxiv.org/abs/2506.02865
+  - https://agentpowered.io/agents/surfer-h
+positioning: "H Company packages web automation as specialized VLM-powered agents: Runner H for orchestration and app workflows, Studio for review/editing, and Surfer H/Holo models for cost-efficient browser action."
+customer_model: "Beta-led product motion with portal API keys, business sales, open-weight Surfer H distribution, and future enterprise automation/security expansion."
+competitive_threat_level: high
+notes: "Threatens agent-browser on model-native browser-action quality, web-agent benchmarks, and open-weight localizer story; weaker where product maturity, trace UX, and production availability are unclear."

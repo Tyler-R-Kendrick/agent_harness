@@ -1,17 +1,18 @@
 # Git-Native Code Agent
 
 - Harness: Claude Code
-- Sourced: 2026-04-24
+- Sourced: 2026-05-22
 
 ## What it is
-Claude Code is a terminal-native coding agent that plans, edits, verifies, and works directly with git.
+Claude Code treats git-native execution as the default coding path: inspect the repo, edit files, run checks, show diffs, and land changes as commits or pull requests.
 
 ## Evidence
-- Docs: [Claude Code overview](https://docs.anthropic.com/en/docs/claude-code/overview)
-- Claimed behaviors:
-  - build features and fix bugs from plain language
-  - run commands and verify results
-  - create commits and pull requests
+- Docs: [Claude Code overview](https://code.claude.com/docs/en/overview)
+- The official overview frames Claude Code around:
+  - understanding an existing codebase from the terminal
+  - editing files and running commands directly
+  - verifying changes before handoff
+  - creating commits and pull requests as part of the normal flow
 
 ## Product signal
-Anthropic treats branch/commit/PR behavior as core harness functionality, not a plugin.
+Anthropic treats reviewable repository changes as the primary artifact, not a side effect of chat output.

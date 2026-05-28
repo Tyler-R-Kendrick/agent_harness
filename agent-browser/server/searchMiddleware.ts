@@ -1,5 +1,16 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { JSDOM } from 'jsdom';
+import {
+  DuckDuckGoInstantSearchProvider,
+  PerplexitySearchProvider,
+  SearxngSearchProvider,
+  TavilySearchProvider,
+} from '../src/chat-agents/LocalWebResearch/local-web-research/searchProviders';
+import type {
+  ConfiguredWebSearchProviderId,
+  FetchLike as ResearchFetchLike,
+  SearchProvider as ResearchSearchProvider,
+} from '../src/chat-agents/LocalWebResearch/local-web-research/types';
 
 export interface SearchWebRequest {
   query: string;
@@ -56,14 +67,26 @@ export interface ReadWebPageResult {
 }
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type SearchBridgeEnv = Partial<Record<string, string | undefined>>;
+type ConfiguredSearchProvider = {
+  id: string;
+  search: (request: { query: string; limit: number; signal?: AbortSignal }) => Promise<SearchWebResultItem[]>;
+};
 
 const SEARCH_PROVIDER_ATTEMPTS = 2;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const CONFIGURED_WEB_SEARCH_PROVIDERS: readonly ConfiguredWebSearchProviderId[] = [
+  'searxng',
+  'perplexity',
+  'tavily',
+  'duckduckgo-instant',
+];
 
 export class WebSearchBridge {
   constructor(
     private readonly fetchImpl: FetchLike = fetch,
     private readonly timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+    private readonly configuredProviders: ConfiguredSearchProvider[] = [],
   ) {}
 
   async search(request: SearchWebRequest): Promise<SearchWebResult> {
@@ -83,6 +106,21 @@ export class WebSearchBridge {
     ];
     const reasons: string[] = [];
     try {
+      for (const provider of this.configuredProviders) {
+        for (let attempt = 1; attempt <= SEARCH_PROVIDER_ATTEMPTS; attempt += 1) {
+          try {
+            const results = (await provider.search({ query, limit: request.limit })).slice(0, request.limit);
+            if (results.length > 0) {
+              return { status: 'found', query, results };
+            }
+            reasons.push(`${provider.id} returned no search results.`);
+            break;
+          } catch (error) {
+            reasons.push(error instanceof Error ? error.message : String(error));
+            await retryDelay(attempt);
+          }
+        }
+      }
       for (const provider of providers) {
         for (let attempt = 1; attempt <= SEARCH_PROVIDER_ATTEMPTS; attempt += 1) {
           let response: Response;
@@ -129,7 +167,104 @@ export class WebSearchBridge {
   }
 }
 
-const bridge = new WebSearchBridge();
+export function createConfiguredWebSearchBridge(
+  env: SearchBridgeEnv = typeof process === 'undefined' ? {} : process.env,
+  fetchImpl: FetchLike = fetch,
+  timeoutMs = readSearchTimeoutMs(env),
+): WebSearchBridge {
+  return new WebSearchBridge(fetchImpl, timeoutMs, createConfiguredSearchProviders(env, fetchImpl, timeoutMs));
+}
+
+function createConfiguredSearchProviders(
+  env: SearchBridgeEnv,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+): ConfiguredSearchProvider[] {
+  return configuredProviderNames(env)
+    .map((name) => createResearchSearchProvider(name, env, fetchImpl, timeoutMs))
+    .filter((provider): provider is ResearchSearchProvider => Boolean(provider))
+    .map(adaptResearchSearchProvider);
+}
+
+function configuredProviderNames(env: SearchBridgeEnv): ConfiguredWebSearchProviderId[] {
+  const configured = (env.AGENT_BROWSER_WEB_SEARCH_PROVIDERS ?? env.AGENT_BROWSER_WEB_SEARCH_PROVIDER ?? '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry): entry is ConfiguredWebSearchProviderId => (
+      CONFIGURED_WEB_SEARCH_PROVIDERS.includes(entry as ConfiguredWebSearchProviderId)
+    ));
+  if (configured.length > 0) return uniqueProviderNames(configured);
+
+  const inferred: ConfiguredWebSearchProviderId[] = [];
+  if (env.AGENT_BROWSER_SEARXNG_BASE_URL || env.SEARXNG_BASE_URL) inferred.push('searxng');
+  if (env.AGENT_BROWSER_TAVILY_API_KEY || env.TAVILY_API_KEY) inferred.push('tavily');
+  if (env.AGENT_BROWSER_PERPLEXITY_API_KEY || env.PERPLEXITY_API_KEY) inferred.push('perplexity');
+  inferred.push('duckduckgo-instant');
+  return inferred;
+}
+
+function createResearchSearchProvider(
+  name: ConfiguredWebSearchProviderId,
+  env: SearchBridgeEnv,
+  fetchImpl: FetchLike,
+  timeoutMs: number,
+): ResearchSearchProvider {
+  switch (name) {
+    case 'searxng':
+      return new SearxngSearchProvider({
+        baseUrl: env.AGENT_BROWSER_SEARXNG_BASE_URL ?? env.SEARXNG_BASE_URL,
+        timeoutMs,
+        fetchImpl: fetchImpl as ResearchFetchLike,
+      });
+    case 'perplexity':
+      return new PerplexitySearchProvider({
+        apiKey: env.AGENT_BROWSER_PERPLEXITY_API_KEY ?? env.PERPLEXITY_API_KEY,
+        timeoutMs,
+        fetchImpl: fetchImpl as ResearchFetchLike,
+      });
+    case 'tavily':
+      return new TavilySearchProvider({
+        apiKey: env.AGENT_BROWSER_TAVILY_API_KEY ?? env.TAVILY_API_KEY,
+      });
+    case 'duckduckgo-instant':
+      return new DuckDuckGoInstantSearchProvider({
+        timeoutMs,
+        fetchImpl: fetchImpl as ResearchFetchLike,
+      });
+    default:
+      return assertNeverSearchProvider(name);
+  }
+}
+
+function adaptResearchSearchProvider(provider: ResearchSearchProvider): ConfiguredSearchProvider {
+  return {
+    id: provider.id,
+    async search({ query, limit, signal }) {
+      const results = await provider.search({ query, maxResults: limit, signal });
+      return results.map((result) => ({
+        title: result.title,
+        url: result.url,
+        snippet: result.snippet ?? '',
+      }));
+    },
+  };
+}
+
+function uniqueProviderNames(names: ConfiguredWebSearchProviderId[]): ConfiguredWebSearchProviderId[] {
+  return names.filter((name, index) => names.indexOf(name) === index);
+}
+
+function readSearchTimeoutMs(env: SearchBridgeEnv): number {
+  const raw = env.AGENT_BROWSER_WEB_SEARCH_TIMEOUT_MS ?? env.SEARCH_TIMEOUT_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_FETCH_TIMEOUT_MS;
+}
+
+function assertNeverSearchProvider(value: never): never {
+  throw new TypeError(`Unsupported web search provider: ${String(value)}`);
+}
+
+const bridge = createConfiguredWebSearchBridge();
 
 export class WebPageBridge {
   constructor(

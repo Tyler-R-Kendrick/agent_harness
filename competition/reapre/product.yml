@@ -1,0 +1,19 @@
+slug: reapre
+name: Reapre
+vendor: Reapre
+segment: multi-surface-ai-automation-control-plane
+product_path: competition/reapre
+design_path: competition/reapre/design
+features_path: competition/reapre/features
+marketing_path: competition/reapre/marketing
+gossip_path: competition/reapre/gossip
+snapshot_date: 2026-05-26
+primary_sources:
+  - https://reapre.io/
+secondary_sources:
+  - https://www.reddit.com/r/automation/comments/1t4bzkr/what_i_learned_looking_at_20_failed_ai_automation/
+  - https://www.reddit.com/r/automation/comments/1r91xqh/has_ai_automation_actually_worked_for_you/
+positioning: "One control plane for AI automation across browser, computer, Android, and app workflows, exposed through WebSocket, HTTP, MCP, OAuth, dashboard governance, recordings, and webhooks."
+customer_model: "Self-serve SaaS with a free 100-request tier, Pro at $29/month for 10,000 requests, and Enterprise at $99/month for 100,000 requests and more API keys."
+competitive_threat_level: medium
+notes: "Threatens agent-browser where the buyer wants browser control as one governed surface inside broader device/app automation rather than a browser-first workbench."

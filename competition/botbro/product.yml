@@ -1,0 +1,19 @@
+slug: botbro
+name: BotBro
+vendor: Moran Technologies LLC
+segment: consumer-local-browser-automation-agent
+product_path: competition/botbro
+design_path: competition/botbro/design
+features_path: competition/botbro/features
+marketing_path: competition/botbro/marketing
+gossip_path: competition/botbro/gossip
+snapshot_date: 2026-05-22
+primary_sources:
+  - https://www.botbro.io/
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1rv2uqq/tried_building_a_browser_ai_agent_for_work_tasks/
+  - https://www.reddit.com/r/webdev/comments/1shr8sx/most_ai_browser_automation_is_just_glorified/
+positioning: "Consumer-oriented local browser automation agent for plain-English tasks, scheduling, scraping, alerts, and repetitive workflows."
+customer_model: "$25 monthly, $150 annual, or $250 lifetime plan with unlimited automations and included SMS notifications."
+competitive_threat_level: medium
+notes: "Competes below agent-browser by making local browser automation feel like a consumer desktop app with one simple paid plan."

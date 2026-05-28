@@ -164,6 +164,52 @@ describe('InMemoryAgentBus', () => {
     ]);
   });
 
+  it('requires a non-draft approved PR before merging a populated branch', () => {
+    const git = new MockGitRepository<string>({ now: clock(2_500) });
+    const root = git.commit({ content: 'root', message: 'root', authorId: 'system' });
+    git.createBranch('work/review-gate', 'main');
+    git.checkout('work/review-gate');
+    const pr = git.openDraftPullRequest({
+      branchName: 'work/review-gate',
+      targetBranchName: 'main',
+      title: 'Review gated work',
+      authorId: 'planner',
+    });
+    const intent = git.commit({ content: 'intent', message: 'intent behind review gate', authorId: 'planner' });
+
+    expect(() => git.mergePullRequest(pr.id, { authorId: 'decider', message: 'merge draft' }))
+      .toThrow('Cannot merge draft pull request: pr-1');
+
+    git.markPullRequestReady(pr.id);
+    expect(() => git.mergePullRequest(pr.id, { authorId: 'decider', message: 'merge undecided' }))
+      .toThrow('Cannot merge unapproved pull request: pr-1');
+
+    git.decidePullRequest(pr.id, {
+      deciderId: 'decider',
+      decision: 'rejected',
+      reason: 'review failed',
+    });
+    expect(() => git.mergePullRequest(pr.id, { authorId: 'decider', message: 'merge rejected' }))
+      .toThrow('Cannot merge unapproved pull request: pr-1');
+
+    expect(git.getBranch('main').headCommitId).toBe(root.id);
+    expect(git.getOperations().map((operation) => operation.type)).not.toContain('merge-pr');
+
+    git.decidePullRequest(pr.id, {
+      deciderId: 'decider',
+      decision: 'approved',
+      reason: 'review passed',
+    });
+    const merge = git.mergePullRequest(pr.id, { authorId: 'decider', message: 'merge approved' });
+
+    expect(merge.parentIds).toEqual([root.id, intent.id]);
+    expect(git.getPullRequest(pr.id)).toEqual(expect.objectContaining({
+      draft: false,
+      state: 'merged',
+      decision: expect.objectContaining({ decision: 'approved' }),
+    }));
+  });
+
   it('tracks existing branch commits in draft PRs and rejects invalid mock git refs', () => {
     const git = new MockGitRepository<string>({ now: clock(3_000) });
     git.createBranch('work/task-2', 'main');
@@ -236,6 +282,12 @@ describe('InMemoryAgentBus', () => {
       authorId: 'planner',
     });
     git.commit({ content: 'merged-intent', message: 'merged intent', authorId: 'planner' });
+    git.markPullRequestReady(mergedPr.id);
+    git.decidePullRequest(mergedPr.id, {
+      deciderId: 'decider',
+      decision: 'approved',
+      reason: 'approved for merge',
+    });
     git.mergePullRequest(mergedPr.id, { authorId: 'decider', message: 'merge work' });
     git.checkout('main');
     git.commit({ content: 'main-follow-up', message: 'main follow-up', authorId: 'system' });
@@ -258,6 +310,12 @@ describe('InMemoryAgentBus', () => {
       authorId: 'planner',
     });
     const intent = git.commit({ content: 'intent', message: 'intent task-3', authorId: 'planner' });
+    git.markPullRequestReady(pr.id);
+    git.decidePullRequest(pr.id, {
+      deciderId: 'decider',
+      decision: 'approved',
+      reason: 'approved for merge',
+    });
     const merge = git.mergePullRequest(pr.id, { authorId: 'decider', message: 'merge into empty main' });
     expect(merge.parentIds).toEqual([intent.id]);
 
@@ -271,6 +329,12 @@ describe('InMemoryAgentBus', () => {
     });
     (corrupted as unknown as { branches: Map<string, { headCommitId?: string }> })
       .branches.get('work/corrupted')!.headCommitId = 'missing-commit';
+    corrupted.markPullRequestReady(corruptedPr.id);
+    corrupted.decidePullRequest(corruptedPr.id, {
+      deciderId: 'decider',
+      decision: 'approved',
+      reason: 'approved for merge',
+    });
     expect(() => corrupted.mergePullRequest(corruptedPr.id, { authorId: 'decider', message: 'merge corrupted' }))
       .toThrow('Unknown commit');
   });

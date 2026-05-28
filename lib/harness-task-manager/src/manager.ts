@@ -6,10 +6,20 @@ import {
   type HarnessTaskManager,
   type HarnessTaskManagerOptions,
   type HarnessTaskMetadata,
+  type HarnessReviewStatus,
+  type HarnessTaskLane,
   type HarnessTaskReview,
   type HarnessTaskSnapshot,
   type HarnessTaskSummary,
 } from './types.js';
+
+const REVIEW_STATUS_REQUIRED_FOR_APPROVAL: Partial<Record<HarnessTaskLane, HarnessReviewStatus>> = {
+  review: 'requested',
+};
+
+const REVIEW_STATUS_REQUIRED_FOR_COMPLETION: Partial<Record<HarnessTaskLane, HarnessReviewStatus>> = {
+  merge: 'approved',
+};
 
 export function createHarnessTaskManager(options: HarnessTaskManagerOptions): HarnessTaskManager {
   let autopilotEnabled = options.autopilotEnabled ?? true;
@@ -83,19 +93,24 @@ export function createHarnessTaskManager(options: HarnessTaskManagerOptions): Ha
       if (input.actor.type === 'reviewer-agent' && !autopilotEnabled) {
         throw new Error('Reviewer agent approvals require autopilot to be enabled');
       }
-      return updateHarnessTask(options, id, (metadata) => ({
-        lane: 'merge',
-        review: {
-          ...metadata.review,
-          status: 'approved',
-          approvedBy: input.actor,
-          rejectedBy: null,
-          feedback: [],
-          summary: input.summary,
-          decidedAt: now(),
-        },
-        activity: appendActivity(metadata, 'Merge approved', `${input.actor.id}: ${input.summary}`, now()),
-      }), 'waiting');
+      return updateHarnessTask(options, id, (metadata) => {
+        if (REVIEW_STATUS_REQUIRED_FOR_APPROVAL[metadata.lane] !== metadata.review.status) {
+          throw new Error(`Cannot approve merge for ${metadata.identifier} from lane ${metadata.lane}`);
+        }
+        return {
+          lane: 'merge',
+          review: {
+            ...metadata.review,
+            status: 'approved',
+            approvedBy: input.actor,
+            rejectedBy: null,
+            feedback: [],
+            summary: input.summary,
+            decidedAt: now(),
+          },
+          activity: appendActivity(metadata, 'Merge approved', `${input.actor.id}: ${input.summary}`, now()),
+        };
+      }, 'waiting');
     },
     async rejectMerge(id, input) {
       if (input.actor.type === 'reviewer-agent' && input.feedback.length === 0) {
@@ -115,14 +130,19 @@ export function createHarnessTaskManager(options: HarnessTaskManagerOptions): Ha
       }), 'waiting');
     },
     async completeTask(id, input) {
-      return updateHarnessTask(options, id, (metadata) => ({
-        lane: 'done',
-        merge: {
-          mergedBy: input.mergedBy,
-          completedAt: now(),
-        },
-        activity: appendActivity(metadata, 'Task completed', `${input.mergedBy} merged the isolated branch.`, now()),
-      }), 'completed');
+      return updateHarnessTask(options, id, (metadata) => {
+        if (REVIEW_STATUS_REQUIRED_FOR_COMPLETION[metadata.lane] !== metadata.review.status) {
+          throw new Error(`Cannot complete ${metadata.identifier} before merge approval`);
+        }
+        return {
+          lane: 'done',
+          merge: {
+            mergedBy: input.mergedBy,
+            completedAt: now(),
+          },
+          activity: appendActivity(metadata, 'Task completed', `${input.mergedBy} merged the isolated branch.`, now()),
+        };
+      }, 'completed');
     },
     async listTasks() {
       const durableTasks = await options.runtime.listTasks({ type: INTERNAL_TASK_STORE_CONFIG.taskType });

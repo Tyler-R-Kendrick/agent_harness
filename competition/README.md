@@ -31,6 +31,7 @@ competition/<product-slug>/
 | Claude Computer Use | Model-provider computer-use API | `competition/claude-computer-use` |
 | BrowserOS | Open-source AI browser | `competition/browseros` |
 | Nanobrowser | Open-source browser-agent extension | `competition/nanobrowser` |
+| Warpsurf | Open-source local AI browser copilot | `competition/warpsurf` |
 | VibeBrowser Co-Pilot | Local browser-agent MCP | `competition/vibebrowser-copilot` |
 | dassi | Consumer browser-agent extension | `competition/dassi` |
 | Browserbase + Stagehand | Developer browser-agent platform | `competition/browserbase-stagehand` |
@@ -40,8 +41,27 @@ competition/<product-slug>/
 | Playwright MCP | Open-source browser automation MCP | `competition/playwright-mcp` |
 | BrowserMCP | Local browser-control MCP | `competition/browsermcp` |
 | Agent360 Browser MCP | Local browser-control MCP | `competition/agent360-browser-mcp` |
+| SideButton | Browser automation MCP with knowledge packs | `competition/sidebutton` |
+| Browsaur | Real-Chrome MCP and CDP browser infrastructure | `competition/browsaur` |
+| AgentsRoom Browser MCP | Embedded QA browser inside a multi-agent IDE | `competition/agentsroom-browser-mcp` |
+| Scout | Extension-first MCP and CDP browser automation | `competition/scout-browser-automation` |
+| VulpineOS | Hardened browser-agent runtime | `competition/vulpineos` |
+| AlienMcp | Local real-Chrome MCP bridge | `competition/alien-mcp` |
+| AgentSmith | Consumer Chrome browser agent | `competition/agentsmith` |
+| webact | Token-efficient CDP browser control | `competition/webact` |
+| Tandem Browser | Open-source local-first AI browser | `competition/tandem-browser` |
+| Oculo | Open-source MCP AI browser | `competition/oculo` |
+| BotBro | Consumer local browser automation agent | `competition/botbro` |
+| Vibot | Self-hosted browser automation platform | `competition/vibot` |
+| Rove | Hosted Playwright API for AI agents | `competition/rove` |
 | BrowserStack MCP | Enterprise AI testing MCP | `competition/browserstack-mcp` |
+| Octomind | AI-powered E2E testing platform | `competition/octomind` |
 | Scrapybara | Remote computer-use infrastructure | `competition/scrapybara` |
+| BrowserCat | Hosted headless browser automation API | `competition/browsercat` |
+| AgentQL | Natural-language web query and automation layer | `competition/agentql` |
+| Cloudflare Browser Run | Edge-hosted browser automation primitive | `competition/cloudflare-browser-run` |
+| Bright Data Agent Browser | Web-unlocking browser infrastructure for agents | `competition/bright-data-agent-browser` |
+| Firecrawl | Web context and browser data API for agents | `competition/firecrawl` |
 | Apify | Actor marketplace and agent web data platform | `competition/apify` |
 | Airtop | Cloud browser automation platform | `competition/airtop` |
 | Steel.dev | Open-source browser-agent infrastructure | `competition/steel` |
@@ -50,7 +70,12 @@ competition/<product-slug>/
 | Hyperbrowser | Developer browser-agent infrastructure | `competition/hyperbrowser` |
 | Notte | Developer browser-agent platform | `competition/notte` |
 | Anchor Browser | Authenticated browser-agent infrastructure | `competition/anchor-browser` |
+| Reapre | Multi-surface AI automation control plane | `competition/reapre` |
+| SurfAgent | Local dedicated Chrome for AI agents | `competition/surfagent` |
+| LumaBrowser | Programmable browser with native MCP and LLM selector fallback | `competition/lumabrowser` |
+| Vector AI Agent | Local no-code multi-profile browser automation | `competition/vector-ai-agent` |
 | Simular | Frontier computer-use agent | `competition/simular` |
+| Runner H / Surfer H | Vision-language web agent and orchestration platform | `competition/runner-h` |
 | Fellou | End-user agentic productivity browser | `competition/fellou` |
 | Opera Neon | End-user agentic AI browser | `competition/opera-neon` |
 | Gemini in Chrome | Incumbent browser AI assistant | `competition/gemini-in-chrome` |
@@ -63,6 +88,7 @@ competition/<product-slug>/
 | Cursor Background Agents | AI coding IDE and remote agents | `competition/cursor-background-agents` |
 | Replit Agent | Prompt-to-app agent workspace | `competition/replit-agent` |
 | GitHub Copilot Cloud Agent | Repository-native coding agent | `competition/github-copilot-cloud-agent` |
+| moonrepo v2 | Developer build toolchain | `competition/moonrepo` |
 | Manus | General-purpose autonomous agent | `competition/manus` |
 | Genspark Super Agent | No-code general agent workspace | `competition/genspark-super-agent` |
 | MultiOn | Autonomous web-agent API | `competition/multion` |
@@ -71,6 +97,7 @@ competition/<product-slug>/
 | n8n AI Agents | Open-source workflow automation and AI agent builder | `competition/n8n-ai-agents` |
 | Zapier Agents | App-integration AI teammate platform | `competition/zapier-agents` |
 | Make AI Agents | Visual workflow AI-agent orchestration platform | `competition/make-ai-agents` |
+| Notion Developer Platform | AI work automation platform | `competition/notion-developer-platform` |
 
 ## Cross-Market Takeaways
 
@@ -99,3 +126,24 @@ competition/<product-slug>/
 - Workflow-agent platforms are absorbing browser tasks into integration canvases. Gumloop, n8n, Zapier, and Make compete less by rendering a browser and more by making web search, app actions, approvals, knowledge sources, and logs feel like durable business automation.
 - Their main advantage is operational fit: triggers, app credentials, reusable agents, quota controls, and team sharing are already shaped for sales, support, marketing, finance, and RevOps. Their weakness is that visual nodes and activity counters can obscure the actual page-level evidence a browser-first agent can preserve.
 - Pricing anxiety is widening from coding agents into automation agents. Credits, activities, workflow executions, model calls, token usage, and per-step task counting all create a UX wedge for `agent-browser` if it can make cost, action history, and failure recovery clearer during long-running work.
+- A new direct-control subcategory is forming around real Chrome plus MCP: SideButton, Browsaur, AgentsRoom Browser MCP, and Scout all sell agents a live browser surface without forcing a remote browser farm.
+- The differentiator is shifting from "can click a page" to the quality of context and recovery: knowledge packs, selector memory, screenshots after every action, CDP events, console logs, short refs, and profile persistence.
+- These products validate `agent-browser`'s evidence-first wedge, but also raise the bar for setup simplicity. Users increasingly expect a browser agent to connect to Claude Code, Codex, Cursor, or Gemini CLI in minutes.
+- The risk in this subcategory is that extension access, authenticated profiles, residential IP claims, wallet/payment tools, and app-specific knowledge packs make privacy and abuse boundaries harder to explain than in a plain local test runner.
+- Browser-agent infrastructure is now splitting by reliability philosophy: VulpineOS pushes safety and determinism into a patched browser runtime, while webact strips the stack down to raw CDP and compact page briefs.
+- Local Chrome bridges such as AlienMcp and webact validate the real-session wedge, but they also raise the importance of visible scoping, durable logs, and permission boundaries around cookies, storage, console, network, and JavaScript execution.
+- Consumer extension products such as AgentSmith show that browser agents can be sold as simple repetitive-work automation with clear action quotas. That packaging may capture mainstream users before developer workbenches do, but it leaves a wedge for stronger evidence, approvals, and replay.
+- A newer local-first browser-agent wave is turning MCP into a daily-browser capability rather than a separate test runner. Tandem Browser and Oculo compete directly on real sessions, model-agnostic clients, compact perception, privacy, and explicit permission tiers.
+- The same market is splitting by operator maturity: BotBro makes local browser agents feel like a paid consumer utility, Vibot packages self-hosted workflows and monitoring, and Rove sells hosted Playwright sessions with token-aware accessibility trees and video artifacts.
+- The recurring wedge for `agent-browser` remains evidence quality. Competitors increasingly claim real Chrome, local credentials, compact context, and MCP setup; the differentiator has to be visible run history, clear authority boundaries, screenshots/video/traces, cost transparency, and recovery controls.
+- Web-data infrastructure vendors are now explicitly repackaging headless browsers for AI agents. BrowserCat and Cloudflare Browser Run make browser capacity feel like a cheap utility, while Bright Data sells success through unlocking, proxies, CAPTCHAs, and MCP access.
+- AgentQL shows a different wedge: reduce brittle selectors by making natural-language element queries and typed extraction the developer contract. That helps agent builders move faster, but it can hide uncertainty unless query confidence, screenshots, and fallback traces are preserved.
+- Cloudflare's "well-behaved bot" framing is a meaningful design difference from stealth-first scraping vendors. It may win compliance-minded builders, while Bright Data captures buyers who measure success by access to difficult public sites.
+- For `agent-browser`, the competitive answer is not just cheaper browser hours. The product has to make live authority, replayable evidence, local credential boundaries, and failure recovery clearer than generic browser farms and web-scraping stacks.
+- Web-context APIs such as Firecrawl are turning browser work into clean Markdown, JSON, MCP tools, and hosted browser sessions. They will capture AI app teams that primarily need information extraction, while leaving a wedge for `agent-browser` where users need visible local authority, approvals, and replayable browser evidence.
+- Specialized action-model vendors such as H Company are competing below the product UI by making web control a VLM/model quality problem. That raises the bar for click accuracy and self-healing, but still leaves room for simpler trace UX, product maturity, and deterministic recovery.
+- AI E2E platforms such as Octomind validate that screenshots, traces, logs, visual diffs, and self-healing selectors are valuable browser-agent artifacts. Their QA focus is narrower than `agent-browser`, but their runtime-evidence design should influence any browser-workflow proof surface.
+- Open-source local copilots such as Warpsurf are converging on `agent-browser`'s strongest wedge: real Chrome, BYO keys, URL firewalls, task estimates, trajectories, and emergency stop controls. The differentiator is shifting toward durable evidence, eval-backed reliability, and authority boundaries rather than merely "can drive my browser."
+- A new local/runtime-control wave is splitting from hosted browser farms. SurfAgent, LumaBrowser, and Vector AI Agent sell persistent local browser ownership, while Reapre sells one governed command plane across browser, desktop, mobile, and app connectors.
+- Their strongest UX lesson is that agent browsers need more than navigation tools: buyers expect health checks, crash recovery, reusable runs, screenshots, network logs, MCP/CDP/HTTP surfaces, selector recovery, and clear billing or ownership.
+- Their weakness is trust framing. Products that claim bot-detection bypass, wallet automation, thousands of profiles, or broad device control can feel powerful but risky unless they expose narrow permissions, local data boundaries, and replayable evidence better than a generic dashboard.

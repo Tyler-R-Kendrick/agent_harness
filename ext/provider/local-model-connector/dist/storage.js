@@ -42,4 +42,3 @@ function storedString(record, key) {
     const value = record[key];
     return typeof value === 'string' && value.length > 0 ? { [key]: value } : {};
 }
-//# sourceMappingURL=storage.js.map

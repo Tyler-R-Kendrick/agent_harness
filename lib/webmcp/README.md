@@ -21,7 +21,7 @@ import {
 } from '@agent-harness/webmcp';
 ```
 
-The package exports a single public entry point declared in [`package.json`](./package.json). Do not deep-import `src/*`; internal file paths are not a stable contract.
+The package exports a single public entry point declared in [`package.json`](./package.json). That root entry point uses explicit re-exports so the public API changes only when `src/index.ts` is intentionally updated. Do not deep-import `src/*`; internal file paths are not a stable contract.
 
 ## What it provides
 

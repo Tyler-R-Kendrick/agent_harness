@@ -1,4 +1,9 @@
 import type { ModelMessage } from '@ai-sdk/provider-utils';
+import {
+  canAnswerFromSourceResults as canAnswerFromDirectSourceResults,
+  composeSourceResultAnswer as composeDirectSourceResultAnswer,
+  formatUnavailableSearchMessage,
+} from '@agent-harness/search-answering';
 import { PayloadType, type AgentBusPayloadMeta, type IAgentBus } from 'logact';
 import type { ToolPlanningCallbacks, ToolAgentRuntime, ToolPlan } from '../tool-agents/tool-agent';
 import { callTool } from '../tool-agents/tool-agent';
@@ -334,15 +339,12 @@ export async function resolveExecutionRequirements({
       !hasAvailableSearchPath(runtime, allowedToolIds)
       && !hasAvailableLocalWebResearchPath(runtime, allowedToolIds)
     ) {
-      const blocked = await blockForMissingSearch({
-        allowedToolIds,
-        runtime,
-        call,
+      const unavailable = finishWithMissingSearch({
         steps,
         location: context.location,
         intent,
       });
-      return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
+      return { status: 'fulfilled', steps: unavailable.steps, result: unavailable.result, context };
     }
     context.searchQuery = buildSearchQuery(intent, context.location);
     const compositeSearch = await runCompositeSearchProviders({
@@ -379,6 +381,7 @@ export async function resolveExecutionRequirements({
       const text = composeSearchAnswer(context);
       const acceptedCount = acceptedSearchCandidateCount(context);
       const requiredCount = requiredAcceptedCandidateCount(intent);
+      const answeredFromSourceResults = acceptedCount === 0 && canAnswerFromSourceResults(context);
       if (acceptedCount < requiredCount) {
         return {
           status: 'fulfilled',
@@ -386,7 +389,7 @@ export async function resolveExecutionRequirements({
           result: {
             text,
             steps,
-            ...(acceptedCount === 0
+            ...(acceptedCount === 0 && !answeredFromSourceResults
               ? {
                 failed: true,
                 error: `No validated ${intent.answerSubject} candidates were found in the search evidence.`,
@@ -404,16 +407,13 @@ export async function resolveExecutionRequirements({
         context,
       };
     }
-    const blocked = await blockForMissingSearch({
-      allowedToolIds,
-      runtime,
-      call,
+    const unavailable = finishWithMissingSearch({
       steps,
       location: context.location,
       intent,
       reason: mergedSearchResult.reason,
     });
-    return { status: 'blocked', steps: blocked.steps, result: blocked.result, context };
+    return { status: 'fulfilled', steps: unavailable.steps, result: unavailable.result, context };
   }
 
   return { status: 'continue', steps, context };
@@ -555,57 +555,29 @@ async function blockForMissingLocation({
   };
 }
 
-async function blockForMissingSearch({
-  allowedToolIds,
-  runtime,
-  call,
+function finishWithMissingSearch({
   steps,
   location,
   intent,
   reason,
 }: {
-  allowedToolIds: Set<string>;
-  runtime: ToolAgentRuntime;
-  call: (toolId: string, args: unknown) => Promise<unknown>;
   steps: number;
   location?: string;
   intent: ExecutionIntent;
   reason?: string;
-}): Promise<{ steps: number; result: AgentRunResult }> {
-  const prompt = [
-    location
-      ? `I found your location, but web search is unavailable. Please provide a search source or candidate results for ${intent.answerSubject}.`
-      : 'I need a search source or candidate results before I can answer this external-fact request.',
-    reason ? `Search issue: ${reason}` : null,
-  ].filter(Boolean).join('\n');
-  if (isToolAllowedAndAvailable(runtime, allowedToolIds, REQUIREMENT_TOOL_IDS.elicit)) {
-    const elicitation = await call(REQUIREMENT_TOOL_IDS.elicit, {
-      prompt,
-      reason: reason ?? 'Web search could not provide source results for the task.',
-      fields: [{
-        id: 'search-source',
-        label: 'Search source or candidates',
-        required: true,
-        placeholder: `Paste a link, source, or candidates for ${intent.answerSubject}`,
-      }],
-    });
-    return {
-      steps: steps + 1,
-      result: resultFromNeedsUserInput(elicitation, steps + 1) ?? {
-        text: prompt,
-        steps: steps + 1,
-        blocked: true,
-        needsUserInput: true,
-      },
-    };
-  }
+}): { steps: number; result: AgentRunResult } {
+  const text = formatUnavailableSearchMessage({
+    answerSubject: intent.answerSubject,
+    ...(location ? { location: cleanDisplayLocation(location) } : {}),
+    ...(reason ? { reason } : {}),
+  });
   return {
     steps,
     result: {
-      text: prompt,
+      text,
       steps,
-      blocked: true,
-      needsUserInput: true,
+      failed: true,
+      ...(reason ? { error: reason } : {}),
     },
   };
 }
@@ -3198,10 +3170,41 @@ function composeSearchAnswer(context: ResolvedExecutionContext): string {
       )),
     ].join('\n');
   }
+  if (canAnswerFromSourceResults(context)) {
+    return composeSourceResultAnswer(context);
+  }
   return [
     `I could not find enough validated ${intent.answerSubject}${location} to answer confidently.`,
     insufficientEvidenceExplanation(intent),
   ].join('\n');
+}
+
+function canAnswerFromSourceResults(context: ResolvedExecutionContext): boolean {
+  const intent = context.intent;
+  const result = context.searchResult;
+  if (!intent || !result) return false;
+  return canAnswerFromDirectSourceResults({
+    intent: {
+      currentTaskText: intent.currentTaskText,
+      subject: intent.subject,
+      externalSearchRequired: intent.externalSearchRequired,
+      locationRequired: intent.locationRequired,
+      ...(intent.requestedCount ? { requestedCount: intent.requestedCount } : {}),
+      ...(intent.rankingGoal ? { rankingGoal: intent.rankingGoal } : {}),
+      validationConstraints: intent.validationContract.constraints,
+    },
+    searchResult: result,
+  });
+}
+
+function composeSourceResultAnswer(context: ResolvedExecutionContext): string {
+  const intent = context.intent;
+  const result = context.searchResult;
+  if (!intent || !result) return 'I could not find search results for that request.';
+  return composeDirectSourceResultAnswer({
+    subject: intent.subject,
+    results: result.results,
+  });
 }
 
 function insufficientEvidenceExplanation(intent: ExecutionIntent): string {

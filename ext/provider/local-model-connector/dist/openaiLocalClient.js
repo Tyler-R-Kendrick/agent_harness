@@ -127,4 +127,3 @@ function failFromFetchError(error) {
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-//# sourceMappingURL=openaiLocalClient.js.map

@@ -1,15 +1,18 @@
 # Kimi AI
 
 - Harness: Kimi AI
-- Sourced: 2026-05-11
+- Refreshed: 2026-05-27
 
 ## What it is
-Kimi AI is a multimodal agent harness that spans one-shot autonomous task execution, very wide self-organizing swarms, browser control, cloud-deployed companion agents, and specialized document, spreadsheet, slide, research, and website-building surfaces.
+Kimi AI is a multimodal agent harness family spanning autonomous task execution, large-scale swarms, browser control, cloud-deployed companion agents, coding clients, and artifact-specialized document, spreadsheet, slide, research, website, and skill-building surfaces.
 
 ## Researched feature set
 - `autonomous-agent-core`
+- `claw-groups-shared-workspace-for-heterogeneous-agents`
 - `horizontal-agent-swarm-with-context-sharding`
 - `deep-research-text-and-visual-report-pair`
+- `document-to-skills-reusable-workflow-capture`
+- `kimi-code-cli-vscode-and-third-party-agent-portability`
 - `multimodal-vibe-coding-websites`
 - `slides-adaptive-and-visual-generation`
 - `document-agent-create-convert-review-and-compare`
@@ -18,4 +21,4 @@ Kimi AI is a multimodal agent harness that spans one-shot autonomous task execut
 - `webbridge-local-browser-control-for-agents`
 
 ## Product signal
-Kimi is converging consumer-facing productivity agents, swarm orchestration, and coding-adjacent browser control into one product family, with the strongest distinctive signal coming from its move toward self-organizing horizontal swarms instead of manually designed specialist graphs.
+Kimi is converging consumer-facing productivity agents, coding harnesses, reusable skills, browser control, and shared agent teams into one product family. Its strongest current signal is the shift from "one agent with tools" toward portable coding surfaces plus shared multi-agent workspaces and artifact-derived skills.

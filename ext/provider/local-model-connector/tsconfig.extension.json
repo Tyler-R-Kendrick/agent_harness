@@ -9,7 +9,7 @@
     "rootDir": "src/extension",
     "outDir": "dist",
     "declaration": false,
-    "sourceMap": true
+    "sourceMap": false
   },
   "include": ["src/extension/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]

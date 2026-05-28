@@ -798,7 +798,7 @@ describe('App', () => {
     }
   });
 
-  it('creates dashboard widgets from a natural-language canvas prompt and saves live widget-editor JSON', async () => {
+  it('creates dashboard widgets from the json-render canvas add flow and saves live widget-editor JSON', async () => {
     vi.useFakeTimers();
     render(<App />);
     await act(async () => {
@@ -809,17 +809,25 @@ describe('App', () => {
     expect(within(dashboard).queryByRole('button', { name: 'Customize' })).not.toBeInTheDocument();
     expect(within(dashboard).queryByRole('button', { name: 'New session widget' })).not.toBeInTheDocument();
 
-    fireEvent.contextMenu(screen.getByLabelText('Infinite session canvas'), { clientX: 260, clientY: 180 });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Create widget' }));
-    const prompt = screen.getByRole('dialog', { name: 'Create canvas widget' });
-    fireEvent.change(within(prompt).getByLabelText('Widget prompt'), {
-      target: { value: 'Track launch risks by owner and blocked item' },
+    const addTile = within(dashboard).getByRole('article', { name: 'Add dashboard widget' });
+    await act(async () => {
+      fireEvent.click(within(addTile).getByRole('button', { name: 'Add Widget' }));
     });
-    fireEvent.click(within(prompt).getByRole('button', { name: 'Create widget' }));
+    const draftWidget = within(dashboard).getByRole('article', { name: 'New Widget' });
+    expect(within(draftWidget).getByText('Try one of these:')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(within(draftWidget).getByRole('button', { name: 'Revenue metrics' }));
+    });
+
+    const launchRisksWidget = within(dashboard).getByRole('article', { name: 'Revenue metrics widget' });
+    expect(within(launchRisksWidget).getByLabelText('Revenue metrics widget contents')).toHaveTextContent('Revenue metrics');
+    expect(screen.queryByRole('region', { name: 'Widget editor' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(launchRisksWidget).getByRole('button', { name: 'Open widget editor for Revenue metrics' }));
 
     const editor = screen.getByRole('region', { name: 'Widget editor' });
-    expect(within(editor).getByRole('heading', { name: 'Launch risks', level: 2 })).toBeInTheDocument();
-    expect(within(editor).getByRole('region', { name: 'Live widget preview' })).toHaveTextContent('Track launch risks by owner and blocked item');
+    expect(within(editor).getByRole('heading', { name: 'Revenue metrics', level: 2 })).toBeInTheDocument();
+    expect(within(editor).getByRole('region', { name: 'Live widget preview' })).toHaveTextContent('Revenue metrics');
     expect(screen.queryByLabelText('Widget-bound session')).not.toBeInTheDocument();
 
     fireEvent.change(within(editor).getByLabelText('Sample data'), {
@@ -842,14 +850,14 @@ describe('App', () => {
       vi.advanceTimersByTime(150);
     });
 
-    expect(screen.getByRole('treeitem', { name: /Launch risks/ })).toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /Revenue metrics/ })).toBeInTheDocument();
     const persisted = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.harnessSpecsByWorkspace) ?? '{}');
     const persistedElements = Object.values(persisted['ws-research'].elements) as Array<{ type: string; props?: Record<string, unknown> }>;
-    const persistedWidget = persistedElements.find((element) => element.props?.title === 'Launch risks');
+    const persistedWidget = persistedElements.find((element) => element.props?.title === 'Revenue metrics');
     expect(persistedWidget).toMatchObject({
       type: 'SessionConversationSummary',
       props: expect.objectContaining({
-        summary: 'Track launch risks by owner and blocked item',
+        summary: 'Revenue metrics',
         widgetJson: expect.objectContaining({ type: 'Card' }),
         widgetSampleData: expect.objectContaining({ metric: '9 work items' }),
       }),

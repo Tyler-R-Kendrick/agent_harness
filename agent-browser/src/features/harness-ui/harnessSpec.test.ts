@@ -56,6 +56,14 @@ describe('harness app spec', () => {
       editable: true,
       props: expect.objectContaining({ title: 'Research harness' }),
     });
+    expect(spec.elements['session-summary-widget'].props).toMatchObject({
+      position: { col: 0, row: 0 },
+      size: { cols: 6, rows: 3 },
+    });
+    expect(spec.elements['knowledge-widget'].props).toMatchObject({
+      position: { col: 6, row: 0 },
+      size: { cols: 7, rows: 4 },
+    });
     expect(spec.elements['settings-panel']).toMatchObject({
       type: 'SettingsPanel',
       slot: 'app.settings',

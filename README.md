@@ -76,14 +76,29 @@ To print the forwarded preview URL for port `5174`:
 
 ## Workspace packages
 
-| Package | Purpose |
-|---|---|
-| `agent-browser` | Agent Browser application shell and chat-agent runtime. |
-| `lib/inbrowser-use` | Playwright-shaped in-app DOM control runtime. |
-| `lib/logact` | LogAct agentic reliability pattern backed by a shared append-only log. See [`lib/logact/README.md`](./lib/logact/README.md) for the public API, component roles, and local package checks. |
-| `lib/ralph-loop` | Ralph Loop completion heuristics for iterative agent task execution. See [`lib/ralph-loop/README.md`](./lib/ralph-loop/README.md) for the public API, completion-checker behavior, and local package checks. |
-| `lib/agent-browser-mcp` | Agent-browser MCP server tools, resources, prompts, and WebMCP bridge definitions. |
-| `lib/webmcp` | Generic WebMCP polyfill and runtime. See [`lib/webmcp/README.md`](./lib/webmcp/README.md) for the public API, secure-context install rules, and local package checks. |
+The root README is the package index. Use the linked package README for public API details, examples, and focused validation commands.
+
+| Workspace | Import path | Purpose |
+|---|---|---|
+| [`agent-browser/README.md`](./agent-browser/README.md) | `agent-browser` | Primary React + Vite application shell, chat-agent runtime, and browser workspace UI. |
+| [`lib/agent-browser-mcp/README.md`](./lib/agent-browser-mcp/README.md) | `@agent-harness/agent-browser-mcp` | Agent Browser MCP tools, resources, prompts, prompt templates, and WebMCP bridge helpers. |
+| [`lib/agent-sandbox/README.md`](./lib/agent-sandbox/README.md) | `@agent-harness/agent-sandbox` | Capability-based sandbox provider for governed browser agent execution. |
+| [`lib/browser-durable-tasks/README.md`](./lib/browser-durable-tasks/README.md) | `@agent-harness/browser-durable-tasks` | Browser-native durable task state management backed by IndexedDB. |
+| [`lib/claimify/README.md`](./lib/claimify/README.md) | `@agent-harness/claimify` | Browser-local factual claim extraction and evidence normalization utilities. |
+| [`lib/core-tool-api/README.md`](./lib/core-tool-api/README.md) | `@agent-harness/core-tool-api` | Core tool registration and execution API for worker and sandbox integrations. |
+| [`lib/cost-aware-routing/README.md`](./lib/cost-aware-routing/README.md) | `cost-aware-routing` | Deterministic cost-aware model routing helpers. |
+| [`lib/git-stub/README.md`](./lib/git-stub/README.md) | `@agent-harness/git-stub` | Git-style command shim used for browser and just-bash session flows. |
+| [`lib/harness-task-manager/README.md`](./lib/harness-task-manager/README.md) | `@agent-harness/task-manager` | Internal browser task and state manager for harness workflows. |
+| [`lib/inbrowser-use/README.md`](./lib/inbrowser-use/README.md) | `inbrowser-use` | Playwright-shaped in-app DOM control runtime. |
+| [`lib/lean-browser/README.md`](./lib/lean-browser/README.md) | `@agent-harness/lean-browser` | Browser-local Lean-backed validation and reasoning utilities. |
+| [`lib/llguidance-wasm/README.md`](./lib/llguidance-wasm/README.md) | `@agent-harness/llguidance-wasm` | Browser-local constrained decoding utilities compatible with llguidance flows. |
+| [`lib/logact/README.md`](./lib/logact/README.md) | `logact` | LogAct shared-log reliability primitives and execution building blocks. |
+| [`lib/logact-loop/README.md`](./lib/logact-loop/README.md) | `@agent-harness/logact-loop` | LogAct workflow extensions for the generic harness-core agent loop. |
+| [`lib/ralph-loop/README.md`](./lib/ralph-loop/README.md) | `ralph-loop` | Ralph Loop completion heuristics and iterative execution helpers. |
+| [`lib/recursive-research-agent/README.md`](./lib/recursive-research-agent/README.md) | `@agent-harness/recursive-research-agent` | Bounded recursive research crawler controller for agent workflows. |
+| [`lib/webmcp/README.md`](./lib/webmcp/README.md) | `@agent-harness/webmcp` | Spec-faithful WebMCP polyfill, registry helpers, and model-context runtime utilities. |
+| [`lib/worker/README.md`](./lib/worker/README.md) | `@agent-harness/worker` | Extensible provider, worker, sandbox, capability, and evaluation primitives. |
+| [`lib/workgraph/README.md`](./lib/workgraph/README.md) | `@agent-harness/workgraph` | Local-first browser work graph for task, artifact, and dependency orchestration. |
 
 ## Bundled skills
 

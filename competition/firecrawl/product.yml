@@ -1,0 +1,23 @@
+slug: firecrawl
+name: Firecrawl
+vendor: Firecrawl
+segment: web-context-and-browser-data-api-for-agents
+product_path: competition/firecrawl
+design_path: competition/firecrawl/design
+features_path: competition/firecrawl/features
+marketing_path: competition/firecrawl/marketing
+gossip_path: competition/firecrawl/gossip
+snapshot_date: 2026-05-24
+primary_sources:
+  - https://www.firecrawl.dev/
+  - https://docs.firecrawl.dev/features/browser
+  - https://www.firecrawl.dev/blog/firecrawl-101
+  - https://docs.firecrawl.dev/ai-onboarding
+secondary_sources:
+  - https://github.com/firecrawl/firecrawl/issues/2139
+  - https://runwhatworks.com/blog/firecrawl-review
+  - https://www.reddit.com/r/codex/comments/1qw648e/firecrawl_for_ai_agents_skills_vs_mcp_servers_for/
+positioning: "Web context APIs for AI agents: search, scrape, crawl, map, parse, interact, and browser sessions that return clean Markdown, structured JSON, screenshots, metadata, and live browser control."
+customer_model: "Open-source plus hosted subscription/credit model; free monthly credits, paid plans, hosted browser/interact capabilities, and MCP/CLI/SDK adoption through developer workflows."
+competitive_threat_level: high
+notes: "Threatens agent-browser where teams want AI-ready web context and browser sessions without owning a local browser UI; weaker where logged-in local browsing, approvals, and replayable user-facing evidence are central."

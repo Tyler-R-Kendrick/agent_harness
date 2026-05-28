@@ -25,6 +25,14 @@ it('rejects duplicate tool names', () => {
   expect(() => api.registerTool(makeTool())).toThrow('Tool already registered: echo');
 });
 
+it('rejects blank tool names without registering them', () => {
+  const api = new CoreToolApi();
+
+  expect(() => api.registerTool({ ...makeTool(), name: '' })).toThrow('Tool name must be non-empty');
+  expect(() => api.registerTool({ ...makeTool(), name: '   ' })).toThrow('Tool name must be non-empty');
+  expect(api.listToolNames()).toEqual([]);
+});
+
 it('rejects duplicate providers', () => {
   const api = new CoreToolApi();
   const provider: ToolProvider = {
@@ -35,6 +43,21 @@ it('rejects duplicate providers', () => {
   };
   api.registerProvider(provider);
   expect(() => api.registerProvider(provider)).toThrow('Provider already registered: native');
+});
+
+it('rejects blank provider ids without making the provider executable', async () => {
+  const api = new CoreToolApi();
+  api.registerTool(makeTool());
+  const provider: ToolProvider = {
+    id: '',
+    kind: 'native',
+    supports: () => true,
+    invoke: async () => ({ handled: true }),
+  };
+
+  expect(() => api.registerProvider(provider)).toThrow('Provider id must be non-empty');
+  expect(() => api.registerProvider({ ...provider, id: '\t' })).toThrow('Provider id must be non-empty');
+  await expect(api.execute('echo', { ok: true }, context)).rejects.toThrow('No provider registered for tool: echo');
 });
 
 it('throws when tool is missing', async () => {

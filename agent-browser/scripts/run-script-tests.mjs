@@ -112,6 +112,35 @@ async function main() {
 
   const packageJson = await readScript('package.json');
   const rootPackage = JSON.parse(packageJson);
+  const rootReadme = await readScript('README.md');
+  assert.match(rootReadme, /## Workspace packages/);
+  assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
+  assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);
+  for (const packageDirectory of [
+    'agent-browser-mcp',
+    'agent-sandbox',
+    'browser-durable-tasks',
+    'claimify',
+    'core-tool-api',
+    'cost-aware-routing',
+    'git-stub',
+    'harness-task-manager',
+    'inbrowser-use',
+    'lean-browser',
+    'llguidance-wasm',
+    'logact',
+    'logact-loop',
+    'ralph-loop',
+    'recursive-research-agent',
+    'webmcp',
+    'worker',
+    'workgraph',
+  ]) {
+    assert.match(
+      rootReadme,
+      new RegExp(`\\[\`lib/${packageDirectory}/README\\.md\`\\]\\(\\.\\/lib\\/${packageDirectory}\\/README\\.md\\)`),
+    );
+  }
   assert.ok(rootPackage.workspaces.includes('ext/*/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
@@ -121,9 +150,9 @@ async function main() {
   assert.match(packageJson, /"verify:agent-browser": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/verify-agent-browser\.ps1"/);
   assert.match(packageJson, /"check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\/check-generated-files-clean\.ps1"/);
   const verifyAgentBrowserScript = await readScript('scripts/verify-agent-browser.ps1');
+  assert.match(verifyAgentBrowserScript, /chat-loop-evals/);
   assert.doesNotMatch(verifyAgentBrowserScript, /validate-evals/);
   assert.doesNotMatch(verifyAgentBrowserScript, /test-evals/);
-  assert.doesNotMatch(verifyAgentBrowserScript, /eval-workflows/);
   for (const extensionPackagePath of [
     'ext/harness/agent-skills/package.json',
     'ext/harness/agents-md/package.json',
@@ -160,7 +189,31 @@ async function main() {
   assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
   assert.doesNotMatch(agentBrowserPackageJson, /"eval:hf-lighteval-chat"/);
   assert.match(agentBrowserPackageJson, /"smoke:git-stub": "node scripts\/git-stub-smoke\.mjs"/);
+  assert.match(agentBrowserPackageJson, /"smoke:context-manager": "node scripts\/context-manager-smoke\.mjs"/);
+  assert.match(agentBrowserPackageJson, /"smoke:deployed-web-search": "node scripts\/deployed-web-search-smoke\.mjs"/);
   assert.match(agentBrowserPackageJson, /"@agent-harness\/git-stub": "0\.1\.0"/);
+  assert.match(agentBrowserPackageJson, /"@agent-harness\/prompt-budget": "0\.1\.0"/);
+  const deployedWebSearchSmokeScript = await readScript('agent-browser/scripts/deployed-web-search-smoke.mjs');
+  assert.match(deployedWebSearchSmokeScript, /AGENT_BROWSER_BASE_URL/);
+  assert.match(deployedWebSearchSmokeScript, /\/api\/web-search/);
+  assert.match(deployedWebSearchSmokeScript, /\/api\/web-page/);
+  assert.match(deployedWebSearchSmokeScript, /_vercel_share/);
+  assert.match(deployedWebSearchSmokeScript, /set-cookie/);
+  assert.match(deployedWebSearchSmokeScript, /vercel curl/);
+  assert.match(deployedWebSearchSmokeScript, /--data-binary/);
+  assert.match(deployedWebSearchSmokeScript, /AGENT_BROWSER_VERCEL_SCOPE/);
+  assert.match(deployedWebSearchSmokeScript, /content-type/);
+  assert.match(deployedWebSearchSmokeScript, /response\.status === 404 \|\| response\.status >= 500/);
+  const runtimeSearchProofScript = await readScript('agent-browser/scripts/runtime-search-proof.mjs');
+  assert.match(runtimeSearchProofScript, /--provider/);
+  assert.match(runtimeSearchProofScript, /onnx-community\/Qwen3-0\.6B-ONNX/);
+  assert.match(runtimeSearchProofScript, /selected-provider-by-session/);
+  assert.match(runtimeSearchProofScript, /ghcpChatCalls/);
+  assert.match(runtimeSearchProofScript, /Web search returned 404/);
+  assert.match(runtimeSearchProofScript, /Please provide a search source/);
+  const contextManagerSmokeScript = await readScript('agent-browser/scripts/context-manager-smoke.mjs');
+  assert.match(contextManagerSmokeScript, /vite\.config\.ts/);
+  assert.match(contextManagerSmokeScript, /'--config'/);
   const gitStubPackageJson = JSON.parse(await readScript('lib/git-stub/package.json'));
   assert.equal(gitStubPackageJson.name, '@agent-harness/git-stub');
   assert.equal(gitStubPackageJson.scripts.test, 'node ../../scripts/run-package-bin.mjs vitest run');
@@ -172,10 +225,34 @@ async function main() {
     'main.js',
     'logic.js',
   ]);
+  const localModelConnectorExtensionTsconfig = JSON.parse(
+    await readScript('ext/provider/local-model-connector/tsconfig.extension.json'),
+  );
+  assert.equal(localModelConnectorExtensionTsconfig.compilerOptions.sourceMap, false);
   const vercelConfig = JSON.parse(await readScript('vercel.json'));
   assert.equal(vercelConfig.installCommand, 'node scripts/vercel-install.mjs');
   assert.equal(vercelConfig.buildCommand, 'cd agent-browser && npm run build');
   assert.equal(vercelConfig.outputDirectory, 'agent-browser/dist');
+  const vercelIgnore = await readScript('.vercelignore');
+  for (const requiredPattern of [
+    '.env*',
+    '!.env.example',
+    'node_modules/',
+    '**/node_modules/',
+    '.npm-cache/',
+    'coverage/',
+    '**/coverage/',
+    'playwright-report/',
+    'test-results/',
+    'output/',
+    '.agentv/cache.json',
+    '.codex/environments/',
+    '*.log',
+    '*.tsbuildinfo',
+    'package-lock.json',
+  ]) {
+    assert.match(vercelIgnore, new RegExp(`^${requiredPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+  }
 
   const vercelInstall = await import(pathToFileURL(path.resolve(repoRoot, 'scripts/vercel-install.mjs')).href);
   assert.equal(vercelInstall.getNpmExecutable('win32'), 'npm.cmd');
@@ -326,7 +403,8 @@ async function main() {
   assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
   assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
-  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 10/);
+  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 1/);
+  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 12/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchConcurrency/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchSize/);
   assert.match(coverageRunnerScript, /runVitestCommandsConcurrently/);
@@ -336,6 +414,17 @@ async function main() {
     coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '1' }),
     1,
   );
+  const previousCoverageBatchConcurrency = process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY;
+  process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY = '2';
+  try {
+    assert.equal(coverageRunner.resolveCoverageBatchConcurrency(), 2);
+  } finally {
+    if (previousCoverageBatchConcurrency === undefined) {
+      delete process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY;
+    } else {
+      process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY = previousCoverageBatchConcurrency;
+    }
+  }
   assert.equal(
     coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: ' 3 ' }),
     3,
@@ -380,6 +469,17 @@ async function main() {
     coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: '6' }),
     6,
   );
+  const previousCoverageBatchSize = process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE;
+  process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE = '12';
+  try {
+    assert.equal(coverageRunner.resolveCoverageBatchSize(), 12);
+  } finally {
+    if (previousCoverageBatchSize === undefined) {
+      delete process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE;
+    } else {
+      process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE = previousCoverageBatchSize;
+    }
+  }
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: ' 8 ' }),
     8,
@@ -396,11 +496,11 @@ async function main() {
       platform: 'win32',
       env: { AGENT_BROWSER_COVERAGE_BATCH_SIZE: '0' },
     }),
-    10,
+    12,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ platform: 'win32', env: {} }),
-    10,
+    12,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ platform: 'linux', env: {} }),
@@ -542,23 +642,34 @@ async function main() {
   const verifyScript = await readScript('scripts/verify-agent-browser.ps1');
   const sourceHygieneIndex = verifyScript.indexOf("Label = 'source-hygiene'");
   const testScriptsIndex = verifyScript.indexOf("Label = 'test-scripts'");
+  const chatLoopEvalsIndex = verifyScript.indexOf("Label = 'chat-loop-evals'");
   const extensionLintIndex = verifyScript.indexOf("Label = 'extension-lint'");
   const extensionCoverageIndex = verifyScript.indexOf("Label = 'extension-coverage'");
   const extensionBuildIndex = verifyScript.indexOf("Label = 'extension-build'");
+  const promptBudgetCoverageIndex = verifyScript.indexOf("Label = 'prompt-budget-coverage'");
+  const searchAnsweringCoverageIndex = verifyScript.indexOf("Label = 'search-answering-coverage'");
   const lintIndex = verifyScript.indexOf("Label = 'lint'");
   const buildIndex = verifyScript.indexOf("Label = 'build'");
   assert.notEqual(sourceHygieneIndex, -1);
   assert.notEqual(testScriptsIndex, -1);
+  assert.notEqual(chatLoopEvalsIndex, -1);
   assert.notEqual(extensionLintIndex, -1);
   assert.notEqual(extensionCoverageIndex, -1);
   assert.notEqual(extensionBuildIndex, -1);
+  assert.notEqual(promptBudgetCoverageIndex, -1);
+  assert.notEqual(searchAnsweringCoverageIndex, -1);
   assert.notEqual(lintIndex, -1);
   assert.notEqual(buildIndex, -1);
   assert.ok(sourceHygieneIndex < testScriptsIndex);
-  assert.ok(testScriptsIndex < extensionLintIndex);
+  assert.ok(testScriptsIndex < chatLoopEvalsIndex);
+  assert.ok(chatLoopEvalsIndex < extensionLintIndex);
   assert.ok(extensionLintIndex < extensionCoverageIndex);
   assert.ok(extensionCoverageIndex < extensionBuildIndex);
-  assert.ok(extensionBuildIndex < lintIndex);
+  assert.ok(extensionBuildIndex < promptBudgetCoverageIndex);
+  assert.ok(promptBudgetCoverageIndex < searchAnsweringCoverageIndex);
+  assert.ok(searchAnsweringCoverageIndex < lintIndex);
+  assert.match(verifyScript, /@agent-harness\/prompt-budget/);
+  assert.match(verifyScript, /@agent-harness\/search-answering/);
   assert.ok(lintIndex < buildIndex);
   assert.match(verifyScript, /npm warn/i);
   assert.match(verifyScript, /vite:reporter/i);
@@ -623,6 +734,9 @@ async function main() {
     '.codex/environments/environment.toml',
     '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
     '.codex-tk26-index-main/index.json',
+    'ext/provider/local-model-connector/dist/background.js.map',
+    'ext/provider/local-model-connector/dist/background.js',
+    'ext/provider/local-model-connector/dist/local-model-connector-extension.zip',
   ]);
   assert.deepEqual(
     trackedArtifacts.map((artifact) => artifact.path),
@@ -646,6 +760,7 @@ async function main() {
       '.codex/environments/environment.toml',
       '.codex-tk26-objects/0e/6a0096338608df4fcd3f7d80dc0dcc8710d298',
       '.codex-tk26-index-main/index.json',
+      'ext/provider/local-model-connector/dist/background.js.map',
     ],
   );
   assert.match(
@@ -663,6 +778,10 @@ async function main() {
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.npm-cache\/_logs/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /_cacache\//);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
+  assert.match(
+    formatTrackedGeneratedArtifactsError(trackedArtifacts),
+    /ext\/provider\/local-model-connector\/dist\/background\.js\.map/,
+  );
   assert.deepEqual(
     buildGitLsFilesInvocation(repoRoot, 'win32'),
     {

@@ -178,7 +178,8 @@ describe('web search providers', () => {
   });
 
   it('builds providers from config and rejects missing SDK credentials', async () => {
-    expect(createSearchProviderFromConfig({}).id).toBe('searxng');
+    expect(createSearchProviderFromConfig({}).id).toBe('duckduckgo-instant');
+    expect(createSearchProviderFromConfig({ searxngBaseUrl: 'https://search.example.com' }).id).toBe('searxng');
     expect(createSearchProviderFromConfig({ searchProviderName: 'duckduckgo-instant' }).id)
       .toBe('duckduckgo-instant');
 

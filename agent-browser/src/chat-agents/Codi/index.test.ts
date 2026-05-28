@@ -23,7 +23,7 @@ vi.mock('../../services/chatComposition', () => ({
 
 import { buildCodiPrompt, hasCodiModels, resolveCodiModelId, streamCodiChat } from '.';
 import { wrapVoterWithCallbacks } from '../agent-loop';
-import { PayloadType } from 'logact';
+import { InMemoryAgentBus, PayloadType } from 'logact';
 import type { IntentPayload } from 'logact';
 
 describe('Codi', () => {
@@ -68,6 +68,23 @@ describe('Codi', () => {
     });
 
     expect(prompt.at(-1)).toEqual({ role: 'assistant', content: '' });
+  });
+
+  it('preserves prior chat turns when composing LogAct loop prompts', () => {
+    const prompt = buildCodiPrompt({
+      workspaceName: 'Research',
+      workspacePromptContext: 'Use workspace files.',
+      messages: [
+        { id: 'user-1', role: 'user', content: 'We chose Project Aurora.' },
+        { id: 'assistant-1', role: 'assistant', content: 'Noted.' },
+        { id: 'user-2', role: 'user', content: 'What did we choose?' },
+      ],
+      loopMessages: [{ role: 'user', content: 'What did we choose?' }],
+    });
+
+    const content = prompt.map((message) => message.content).join('\n');
+    expect(content).toContain('We chose Project Aurora.');
+    expect(content.match(/What did we choose\?/g)).toHaveLength(1);
   });
 
   it('trims oversized workspace context before sending it to the local model', () => {
@@ -267,6 +284,59 @@ describe('Codi', () => {
     expect(firstPrompt.some((message) => String(message.content).includes('Implement the fix and run the focused test.'))).toBe(true);
     expect(onDone).toHaveBeenCalledTimes(1);
     expect(onDone).toHaveBeenCalledWith('Implemented the patch and verified the focused test.');
+  });
+
+  it('accepts a deterministic inference client and writes the Codi loop to a supplied AgentBus for eval targets', async () => {
+    const bus = new InMemoryAgentBus();
+    const infer = vi.fn().mockResolvedValue('Paris is the capital of France.');
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'What is the capital of France?' }],
+      workspaceName: 'Eval',
+      workspacePromptContext: 'Use checked-in eval fixtures.',
+      inferenceClient: { infer },
+      bus,
+    }, {});
+
+    const entries = await bus.read(0, await bus.tail());
+    expect(infer).toHaveBeenCalledOnce();
+    expect(entries.map((entry) => entry.payload.type)).toEqual(expect.arrayContaining([
+      PayloadType.Mail,
+      PayloadType.InfIn,
+      PayloadType.InfOut,
+      PayloadType.Intent,
+      PayloadType.Commit,
+      PayloadType.Result,
+    ]));
+    expect(entries.find((entry) => entry.payload.type === PayloadType.Result)?.payload).toMatchObject({
+      output: 'Paris is the capital of France.',
+    });
+  });
+
+  it('passes a supplied executor through the Codi loop so registered tools can satisfy the task', async () => {
+    const bus = new InMemoryAgentBus();
+    const infer = vi.fn().mockResolvedValue('tool:workspace.read {"path":"README.md"}');
+    const executor = {
+      tier: 'classic' as const,
+      execute: vi.fn().mockResolvedValue('README.md says: use tools that are registered.'),
+    };
+
+    await streamCodiChat({
+      model: { id: 'model-a', name: 'Model A', author: 'A', task: 'text-generation', downloads: 1, likes: 1, tags: [], sizeMB: 1, status: 'installed' },
+      messages: [{ id: 'user-1', role: 'user', content: 'Use the registered workspace.read tool to read README.md.' }],
+      workspaceName: 'Eval',
+      workspacePromptContext: 'Registered tools:\n- workspace.read: read a workspace file by path.',
+      inferenceClient: { infer },
+      executor,
+      bus,
+    }, {});
+
+    expect(executor.execute).toHaveBeenCalledWith('tool:workspace.read {"path":"README.md"}');
+    const entries = await bus.read(0, await bus.tail());
+    expect(entries.find((entry) => entry.payload.type === PayloadType.Result)?.payload).toMatchObject({
+      output: 'README.md says: use tools that are registered.',
+    });
   });
 });
 

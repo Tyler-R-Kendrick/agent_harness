@@ -1,0 +1,20 @@
+slug: lumabrowser
+name: LumaBrowser
+vendor: Lumabyte
+segment: programmable-browser-with-native-mcp-and-selector-recovery
+product_path: competition/lumabrowser
+design_path: competition/lumabrowser/design
+features_path: competition/lumabrowser/features
+marketing_path: competition/lumabrowser/marketing
+gossip_path: competition/lumabrowser/gossip
+snapshot_date: 2026-05-26
+primary_sources:
+  - https://lumabyte.com/
+  - https://lumabyte.com/apis
+secondary_sources:
+  - https://www.reddit.com/r/mcp/comments/1s70fao/built_a_browser_with_a_native_mcp_server_and_llm/
+  - https://www.reddit.com/r/lowcode/comments/1sio9va/i_got_tired_of_repetitive_web_tasks_so_i_built_a/
+positioning: "A programmable browser for AI agents, QA engineers, and backend developers with REST, native MCP, Selenium, Puppeteer, Playwright/CDP, network watcher, and LLM selector fallback."
+customer_model: "Free beta/developer tool distributed through `npx lumabrowser start` and downloadable builds; monetization is not yet central in the researched pages."
+competitive_threat_level: medium
+notes: "Threatens agent-browser's developer workflow when buyers value local REST/MCP/CDP control and selector resilience more than a richer agent-run evidence workbench."

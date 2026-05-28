@@ -27,7 +27,12 @@ it('publishes runtime source files through the root package entry point', async 
   expect(packageJson.main).toBe('./src/index.ts');
   expect(packageJson.types).toBe('./src/index.ts');
   expect(packageJson.exports).toEqual({ '.': './src/index.ts' });
-  expect(packageJson.files).toEqual(['README.md', 'src/**/*.ts', '!src/__tests__/**']);
+  expect(packageJson.files).toEqual([
+    'README.md',
+    'src/**/*.ts',
+    '!src/**/*.test.ts',
+    '!src/__tests__/**',
+  ]);
 });
 
 it('keeps root exports explicit and preserves the runtime API', async () => {

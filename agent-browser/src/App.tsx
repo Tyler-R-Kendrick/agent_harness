@@ -129,7 +129,7 @@ import {
 import { fetchCopilotState, type CopilotModelSummary, type CopilotRuntimeState } from './services/copilotApi';
 import { fetchCursorState, type CursorModelSummary, type CursorRuntimeState } from './services/cursorApi';
 import { fetchCodexState, type CodexModelSummary, type CodexRuntimeState } from './services/codexApi';
-import { getModelCapabilities, resolveLanguageModel } from './services/agentProvider';
+import { getModelCapabilities, resolveLanguageModel, type ModelCapabilities } from './services/agentProvider';
 import {
   BENCHMARK_TASK_CLASSES,
   DEFAULT_BENCHMARK_EVIDENCE_STATE,
@@ -850,6 +850,67 @@ const EMPTY_CODEX_STATE: CodexRuntimeState = {
   signInCommand: 'codex login',
   signInDocsUrl: 'https://developers.openai.com/codex/auth',
 };
+const DEFAULT_CODEX_CONTEXT_WINDOW = 8_192;
+const DEFAULT_CODEX_MAX_OUTPUT_TOKENS = 1_024;
+
+function pickTokenLimit(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function getRuntimeModelCapabilities({
+  runtimeProvider,
+  sessionId,
+  activeLocalModel,
+  codiModelId,
+  ghcpModelId,
+  cursorModelId,
+  codexModelId,
+  installedModels,
+  copilotState,
+  cursorState,
+  codexState,
+}: {
+  runtimeProvider: ModelBackedAgentProvider;
+  sessionId: string;
+  activeLocalModel?: HFModel;
+  codiModelId: string;
+  ghcpModelId: string;
+  cursorModelId: string;
+  codexModelId: string;
+  installedModels: HFModel[];
+  copilotState: CopilotRuntimeState;
+  cursorState: CursorRuntimeState;
+  codexState: CodexRuntimeState;
+}): ModelCapabilities {
+  if (runtimeProvider === 'ghcp') {
+    return getModelCapabilities(
+      { kind: 'copilot', modelId: ghcpModelId, sessionId },
+      { copilotModels: copilotState.models },
+    );
+  }
+
+  if (runtimeProvider === 'cursor') {
+    return getModelCapabilities(
+      { kind: 'cursor', modelId: cursorModelId, sessionId },
+      { cursorModels: cursorState.models },
+    );
+  }
+
+  if (runtimeProvider === 'codex') {
+    const model = codexState.models.find((candidate) => candidate.id === codexModelId);
+    return {
+      provider: 'codex',
+      contextWindow: pickTokenLimit(model?.contextWindow, DEFAULT_CODEX_CONTEXT_WINDOW),
+      maxOutputTokens: pickTokenLimit(model?.maxOutputTokens, DEFAULT_CODEX_MAX_OUTPUT_TOKENS),
+      supportsNativeToolCalls: false,
+    };
+  }
+
+  return getModelCapabilities(
+    { kind: 'local', modelId: activeLocalModel?.id ?? codiModelId, task: activeLocalModel?.task ?? 'text-generation' },
+    { installedModels },
+  );
+}
 
 const NEW_TAB_NAME_LENGTH = 32;
 const DEFAULT_NEW_TAB_MEMORY_MB = 96;
@@ -2839,6 +2900,38 @@ function selectCompatibleBenchmarkCandidates(
   return candidates;
 }
 
+function shouldPreserveSelectedRuntimeProvider({
+  autoRoute,
+  providerForRequest,
+  selectedProvider,
+  hasCodiModelsReady,
+  hasGhcpModelsReady,
+  hasCursorModelsReady,
+  hasCodexModelsReady,
+}: {
+  autoRoute: boolean | undefined;
+  providerForRequest: AgentProvider;
+  selectedProvider: AgentProvider;
+  hasCodiModelsReady: boolean;
+  hasGhcpModelsReady: boolean;
+  hasCursorModelsReady: boolean;
+  hasCodexModelsReady: boolean;
+}): boolean {
+  if (autoRoute === false || providerForRequest === selectedProvider) return false;
+  switch (selectedProvider) {
+    case 'codi':
+      return hasCodiModelsReady;
+    case 'ghcp':
+      return hasGhcpModelsReady;
+    case 'cursor':
+      return hasCursorModelsReady;
+    case 'codex':
+      return hasCodexModelsReady;
+    default:
+      return false;
+  }
+}
+
 function parseBenchmarkIndexUrlList(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
   if (typeof value !== 'string') return [];
@@ -3191,14 +3284,6 @@ function ChatPanel({
     }),
     [activeChatSessionId, messages, sessionChapterState],
   );
-  const contextManagerSnapshot = useMemo(
-    () => buildContextManagerSnapshot({
-      state: sessionChapterState,
-      sessionId: activeChatSessionId,
-      messages,
-    }),
-    [activeChatSessionId, messages, sessionChapterState],
-  );
   const activeSharedSessionCandidates = sharedSessionControlState.activeSessions.filter(
     (session) => session.status !== 'ended',
   );
@@ -3235,11 +3320,50 @@ function ChatPanel({
   const hasAvailableCodexModels = hasCodexAccess(codexState);
   const selectedRuntimeProvider = resolveRuntimeAgentProvider({
     provider: selectedProvider,
+    selectedProvider,
     hasCodiModelsReady: Boolean(activeLocalModel),
     hasGhcpModelsReady: Boolean(effectiveSelectedCopilotModelId) && hasAvailableCopilotModels,
     hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
     hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
   });
+  const contextManagerModelCapabilities = useMemo(
+    () => getRuntimeModelCapabilities({
+      runtimeProvider: selectedRuntimeProvider,
+      sessionId: activeChatSessionId,
+      activeLocalModel,
+      codiModelId: effectiveSelectedModelId,
+      ghcpModelId: effectiveSelectedCopilotModelId,
+      cursorModelId: effectiveSelectedCursorModelId,
+      codexModelId: effectiveSelectedCodexModelId,
+      installedModels,
+      copilotState,
+      cursorState,
+      codexState,
+    }),
+    [
+      activeChatSessionId,
+      activeLocalModel,
+      codexState,
+      copilotState,
+      cursorState,
+      effectiveSelectedCodexModelId,
+      effectiveSelectedCopilotModelId,
+      effectiveSelectedCursorModelId,
+      effectiveSelectedModelId,
+      installedModels,
+      selectedRuntimeProvider,
+    ],
+  );
+  const contextManagerSnapshot = useMemo(
+    () => buildContextManagerSnapshot({
+      state: sessionChapterState,
+      sessionId: activeChatSessionId,
+      messages,
+      contextWindow: contextManagerModelCapabilities.contextWindow,
+      maxOutputTokens: contextManagerModelCapabilities.maxOutputTokens,
+    }),
+    [activeChatSessionId, contextManagerModelCapabilities, messages, sessionChapterState],
+  );
   const hasActiveGeneration = activeGenerationSessionId !== null;
   const isActiveSessionGenerating = activeGenerationSessionId === activeChatSessionId;
   const toolDescriptors = useMemo(
@@ -4085,6 +4209,7 @@ function ChatPanel({
     }
     let runtimeProviderForRequest = resolveRuntimeAgentProvider({
       provider: providerForRequest,
+      selectedProvider,
       hasCodiModelsReady: Boolean(activeLocalModel),
       hasGhcpModelsReady: Boolean(requestGhcpModelId) && hasAvailableCopilotModels,
       hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
@@ -4106,7 +4231,16 @@ function ChatPanel({
       && benchmarkRoutingSettings.routerMode === 'enforce'
       && rolloutChecksPass
       && !complexityRoutingInShadowMode
-      && complexityRoutingAllowedByTraffic;
+      && complexityRoutingAllowedByTraffic
+      && !shouldPreserveSelectedRuntimeProvider({
+        autoRoute: options.autoRoute,
+        providerForRequest,
+        selectedProvider,
+        hasCodiModelsReady: Boolean(activeLocalModel),
+        hasGhcpModelsReady: Boolean(requestGhcpModelId) && hasAvailableCopilotModels,
+        hasCursorModelsReady: Boolean(effectiveSelectedCursorModelId) && hasAvailableCursorModels,
+        hasCodexModelsReady: Boolean(effectiveSelectedCodexModelId) && hasAvailableCodexModels,
+      });
     if (shouldEnforceBenchmarkRouting && requestBenchmarkRoute) {
       const routed = requestBenchmarkRoute.candidate;
       if (providerForRequest === 'planner' || providerForRequest === 'context-manager' || providerForRequest === 'researcher' || providerForRequest === 'debugger' || providerForRequest === 'security' || providerForRequest === 'steering' || providerForRequest === 'media' || providerForRequest === 'swarm') {
@@ -4149,7 +4283,7 @@ function ChatPanel({
         reason: requestBenchmarkRoute.reason,
       });
     }
-    if (providerForRequest !== selectedProvider) {
+    if ((options.autoRoute === false || options.provider !== undefined) && providerForRequest !== selectedProvider) {
       selectedProviderRef.current = providerForRequest;
       setSelectedProviderBySession((current) => ({ ...current, [activeChatSessionId]: providerForRequest }));
     }
@@ -4292,6 +4426,19 @@ function ChatPanel({
       })),
       buildRuntimePluginPromptContext(requestRuntimePluginRuntime),
     ].filter((section): section is string => Boolean(section)).join('\n\n');
+    const requestModelCapabilities = getRuntimeModelCapabilities({
+      runtimeProvider: runtimeProviderForRequest,
+      sessionId: activeChatSessionId,
+      activeLocalModel: requestLocalModel,
+      codiModelId: requestCodiModelId,
+      ghcpModelId: requestGhcpModelId,
+      cursorModelId: effectiveSelectedCursorModelId,
+      codexModelId: effectiveSelectedCodexModelId,
+      installedModels,
+      copilotState,
+      cursorState,
+      codexState,
+    });
 
     const requestToolsEnabled = options.useTools ?? toolsEnabled;
     if (requestToolsEnabled && providerForRequest !== 'tour-guide' && providerForRequest !== 'codex') {
@@ -5418,15 +5565,13 @@ function ChatPanel({
               },
             ) as unknown as ReturnType<typeof resolveLanguageModel>)
           : resolveLanguageModel(modelConfig);
-        const capabilities = getModelCapabilities(modelConfig, {
-          installedModels,
-          copilotModels: copilotState.models,
-          cursorModels: cursorState.models,
-        });
+        const capabilities = requestModelCapabilities;
         const allTools = createDefaultTools({
           appendSharedMessages,
           getSessionBash,
           notifyTerminalFsPathsChanged: onTerminalFsPathsChanged,
+          searchWeb: searchWebFromApi,
+          readWebPage: readWebPageFromApi,
           sessionId: activeSessionId,
           setBashHistoryBySession,
           setCwdBySession,
@@ -5492,6 +5637,8 @@ function ChatPanel({
           state: sessionChapterState,
           sessionId: activeChatSessionId,
           messages: nextMessages,
+          contextWindow: capabilities.contextWindow,
+          maxOutputTokens: capabilities.maxOutputTokens,
         });
         const inputMessages: ModelMessage[] = managedNextMessages
           .filter((message) => message.id !== assistantId)
@@ -6408,6 +6555,8 @@ function ChatPanel({
           state: sessionChapterState,
           sessionId: activeChatSessionId,
           messages: nextMessages,
+          contextWindow: requestModelCapabilities.contextWindow,
+          maxOutputTokens: requestModelCapabilities.maxOutputTokens,
         }),
         workspaceName,
         workspacePromptContext: requestWorkspacePromptContext,
@@ -15628,6 +15777,7 @@ function AgentBrowserApp() {
     });
     const runtimeProvider = resolveRuntimeAgentProvider({
       provider: selectedProvider,
+      selectedProvider,
       hasCodiModelsReady: Boolean(selectedIds.codiModelId),
       hasGhcpModelsReady: hasGhcpAccess(copilotState) && Boolean(selectedIds.ghcpModelId),
       hasCursorModelsReady: hasCursorAccess(cursorState) && Boolean(selectedIds.cursorModelId),
@@ -17161,22 +17311,13 @@ function AgentBrowserApp() {
         },
       },
     }));
-    setWorkspaceViewStateByWorkspace((current) => {
-      const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
-      return {
-        ...current,
-        [activeWorkspaceId]: {
-          ...existing,
-          dashboardOpen: false,
-          activeDashboardWidgetId: widgetId,
-          activeSessionIds: [],
-          openTabIds: [],
-          editingFilePath: null,
-          activeArtifactPanel: null,
-          panelOrder: [`widget-editor:${activeWorkspaceId}:${widgetId}`],
-        },
-      };
-    });
+    setWorkspaceViewStateByWorkspace((current) => ({
+      ...current,
+      [activeWorkspaceId]: {
+        ...(current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace)),
+        dashboardOpen: true,
+      },
+    }));
     setToast({ msg: `${widgetTitle} widget created`, type: 'success' });
   }, [activeWorkspace, activeWorkspaceId, setToast, setWorkspaceViewStateByWorkspace, updateActiveHarnessSpec]);
 

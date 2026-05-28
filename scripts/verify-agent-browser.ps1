@@ -2,10 +2,15 @@ $ErrorActionPreference = 'Stop'
 
 $steps = @(
   @{ Label = 'source-hygiene'; Args = @('run', 'check:generated-files') }
+  @{ Label = 'root-script-tests'; Args = @('run', 'test:root-scripts') }
   @{ Label = 'test-scripts'; Args = @('--workspace', 'agent-browser', 'run', 'test:scripts') }
+  @{ Label = 'chat-loop-evals'; Args = @('--workspace', 'agent-browser', 'run', 'eval:chat-loop') }
+  @{ Label = 'codi-staged-search-evals'; Args = @('--workspace', 'agent-browser', 'run', 'eval:codi-staged-search') }
   @{ Label = 'extension-lint'; Args = @('run', 'lint:extensions') }
   @{ Label = 'extension-coverage'; Args = @('run', 'test:coverage:extensions') }
   @{ Label = 'extension-build'; Args = @('run', 'build:extensions') }
+  @{ Label = 'prompt-budget-coverage'; Args = @('--workspace', '@agent-harness/prompt-budget', 'run', 'test:coverage') }
+  @{ Label = 'search-answering-coverage'; Args = @('--workspace', '@agent-harness/search-answering', 'run', 'test:coverage') }
   @{ Label = 'lint'; Args = @('--workspace', 'agent-browser', 'run', 'lint') }
   @{ Label = 'coverage'; Args = @('--workspace', 'agent-browser', 'run', 'test:coverage') }
   @{ Label = 'build'; Args = @('--workspace', 'agent-browser', 'run', 'build') }

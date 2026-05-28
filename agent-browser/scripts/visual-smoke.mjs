@@ -186,6 +186,34 @@ async function assertDashboardCanvasVisible(page, timeoutMs) {
   }
 }
 
+async function isVisible(locator, timeoutMs = 1_000) {
+  try {
+    await expect(locator).toBeVisible({ timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function openChatPanel(page, timeoutMs, sessionNamePattern) {
+  const chatPanel = page.getByRole('region', { name: 'Chat panel' });
+  if (await isVisible(chatPanel)) return;
+
+  const projectsButton = page.getByRole('button', { name: 'Projects', exact: true });
+  if (await isVisible(projectsButton)) {
+    await projectsButton.click();
+  }
+
+  const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
+  await expect(workspaceTree).toBeVisible({ timeout: timeoutMs });
+  const sessionButton = workspaceTree
+    .getByRole('button', { name: sessionNamePattern ?? /Session 1|SYM-\d|Show Movie Theaters Near/ })
+    .first();
+  await expect(sessionButton).toBeVisible({ timeout: timeoutMs });
+  await sessionButton.click();
+  await expect(chatPanel).toBeVisible({ timeout: timeoutMs });
+}
+
 async function captureDashboardCanvasViewportMatrix(page, timeoutMs) {
   for (const { name, viewport, outputPath: viewportOutputPath } of dashboardCanvasViewportOutputPaths) {
     await page.setViewportSize(viewport);
@@ -1072,24 +1100,28 @@ async function main() {
     });
     await captureDashboardCanvasViewportMatrix(page, shellTimeoutMs);
     await page.setViewportSize({ width: 1280, height: 820 });
-    const canvas = page.getByLabel('Infinite session canvas');
-    await canvas.click({ button: 'right', position: { x: 520, y: 620 } });
-    await page.getByRole('menuitem', { name: 'Create widget' }).click();
-    const widgetPrompt = page.getByRole('dialog', { name: 'Create canvas widget' });
+    const dashboard = page.getByRole('region', { name: 'Harness dashboard' });
+    const addWidgetTile = dashboard.getByRole('article', { name: 'Add dashboard widget' });
+    await expect(addWidgetTile).toBeVisible({ timeout: shellTimeoutMs });
+    await addWidgetTile.getByRole('button', { name: 'Add Widget' }).click();
+    const widgetPrompt = dashboard.getByRole('article', { name: 'New Widget' });
     await expect(widgetPrompt).toBeVisible({ timeout: shellTimeoutMs });
-    await expect(widgetPrompt.getByRole('button', { name: 'Create widget' })).toBeDisabled({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByText('Try one of these:')).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByRole('button', { name: 'Go' })).toBeDisabled({ timeout: shellTimeoutMs });
     await widgetPrompt.getByLabel('Widget prompt').fill('Track launch risks by owner and blocked item');
-    await expect(widgetPrompt.getByRole('button', { name: 'Create widget' })).toBeEnabled({ timeout: shellTimeoutMs });
+    await expect(widgetPrompt.getByRole('button', { name: 'Go' })).toBeEnabled({ timeout: shellTimeoutMs });
     await page.screenshot({ path: widgetPromptOutputPath, fullPage: true });
-    await widgetPrompt.getByRole('button', { name: 'Create widget' }).click();
-    const promptedWidgetEditor = page.getByRole('region', { name: 'Widget editor' });
-    await expect(promptedWidgetEditor.getByRole('heading', { name: 'Launch risks', level: 2 })).toBeVisible({
+    await widgetPrompt.getByRole('button', { name: 'Go' }).click();
+    const promptedWidget = dashboard.getByRole('article', { name: 'Launch risks widget' });
+    await expect(promptedWidget).toBeVisible({ timeout: shellTimeoutMs });
+    await expect(promptedWidget.getByRole('button', { name: 'Open widget editor for Launch risks' })).toBeVisible({
       timeout: shellTimeoutMs,
     });
-    await expect(promptedWidgetEditor.getByRole('region', { name: 'Live widget preview' })).toContainText(
+    await expect(promptedWidget.getByLabel('Launch risks widget contents')).toContainText(
       'Track launch risks by owner and blocked item',
       { timeout: shellTimeoutMs },
     );
+    await expect(page.getByRole('region', { name: 'Widget editor' })).toHaveCount(0);
     const workspaceTree = page.getByRole('tree', { name: 'Workspace tree' });
     await expect(workspaceTree).toBeVisible({ timeout: shellTimeoutMs });
     await workspaceTree.getByRole('button', { name: 'Session summary', exact: true }).click();
@@ -1506,7 +1538,7 @@ async function main() {
 
     await symphonyApp.getByLabel('Symphony task request').fill('parallelize frontend, tests, and documentation work');
     await symphonyApp.getByRole('button', { name: 'Start Symphony task' }).click();
-    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await openChatPanel(page, shellTimeoutMs, /SYM-003|Documentation branch/);
     await expect(page.getByRole('treeitem', { name: /SYM-003/ })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     await expect(symphonyApp.getByRole('navigation', { name: 'Symphony projects' })).toContainText('Projects', {
@@ -1519,7 +1551,7 @@ async function main() {
     await expect(symphonyQueue).toContainText('Work queue', { timeout: shellTimeoutMs });
     await symphonyQueue.getByLabel('New task title').fill('Add smoke proof');
     await symphonyQueue.getByRole('button', { name: 'Create Symphony task' }).click();
-    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await openChatPanel(page, shellTimeoutMs, /SYM-004|Add smoke proof/);
     await expect(page.getByRole('treeitem', { name: /SYM-004/ })).toBeVisible({ timeout: shellTimeoutMs });
     await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     await expect(symphonyQueue.getByRole('button', { name: 'Open task SYM-004 Add smoke proof' })).toBeVisible({
@@ -1548,7 +1580,7 @@ async function main() {
       timeout: shellTimeoutMs,
     });
     await symphonyApp.getByRole('button', { name: 'Start agent session for agent/research/frontend-1' }).click();
-    await expect(page.getByRole('region', { name: 'Chat panel' })).toBeVisible({ timeout: shellTimeoutMs });
+    await openChatPanel(page, shellTimeoutMs, /SYM-001|Frontend branch/);
     await page.getByRole('button', { name: 'Symphony', exact: true }).click();
     await expect(symphonyApp.getByRole('button', { name: 'Stop agent session for agent/research/frontend-1' })).toBeVisible({
       timeout: shellTimeoutMs,

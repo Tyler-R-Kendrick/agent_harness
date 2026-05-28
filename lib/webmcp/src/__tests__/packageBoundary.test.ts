@@ -9,6 +9,12 @@ const testDir = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(testDir, '../..');
 
 describe('package boundaries', () => {
+  it('keeps the root entry point explicit', () => {
+    const indexSource = fs.readFileSync(path.join(packageRoot, 'src/index.ts'), 'utf8');
+
+    expect(indexSource).not.toMatch(/export\s+\*/);
+  });
+
   it('exposes the documented package entry point', () => {
     expect(Object.keys(publicApi).sort()).toEqual([
       'MODEL_CONTEXT_PROMPT_REGISTRY_SYMBOL',
@@ -43,6 +49,7 @@ describe('package boundaries', () => {
     expect(packageJson.files).toEqual([
       'README.md',
       'src/**/*.ts',
+      '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
   });

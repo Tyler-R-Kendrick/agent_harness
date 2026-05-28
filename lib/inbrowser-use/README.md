@@ -45,7 +45,8 @@ The root entry point exposes:
 - package error classes
 
 Deep imports into `src/*` are internal implementation details. Add new stable
-exports through `src/index.ts` and protect them with a package-boundary test.
+exports through explicit re-exports in `src/index.ts` and protect them with a
+package-boundary test.
 
 ## Package Contents
 

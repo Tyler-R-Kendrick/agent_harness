@@ -107,7 +107,8 @@ async function addPaths(
   }
 
   const workingFiles = await readWorkingFiles(repo);
-  const selectedPaths = expandPathspecs(repo, workingFiles, rawPaths);
+  const headFiles = getHeadFiles(state);
+  const selectedPaths = expandPathspecs(repo, workingFiles, rawPaths, headFiles);
   if (!selectedPaths.length) {
     return failure(repo, 'pathspec did not match any files', 1);
   }
@@ -117,7 +118,9 @@ async function addPaths(
     index: { ...state.index },
   };
   for (const path of selectedPaths) {
-    nextState.index[path] = workingFiles[path]!;
+    nextState.index[path] = Object.prototype.hasOwnProperty.call(workingFiles, path)
+      ? workingFiles[path]!
+      : null;
   }
   await writeState(repo, nextState);
 
@@ -139,10 +142,14 @@ async function commit(
 
   const parentId = state.branches[state.currentBranch]?.head ?? null;
   const parentFiles = getHeadFiles(state);
-  const files = {
-    ...parentFiles,
-    ...state.index,
-  };
+  const files = { ...parentFiles };
+  for (const [path, content] of Object.entries(state.index)) {
+    if (content === null) {
+      delete files[path];
+    } else {
+      files[path] = content;
+    }
+  }
   const id = createCommitId(state, state.currentBranch, message, files);
   const commitEntry: GitStubCommit = {
     id,
@@ -285,6 +292,10 @@ async function getStatus(repo: GitStubRepository, state: GitStubState) {
   const unstaged: StatusEntry[] = [];
 
   for (const path of Object.keys(workingFiles).sort()) {
+    if (state.index[path] === null) {
+      untracked.push(path);
+      continue;
+    }
     if (!Object.prototype.hasOwnProperty.call(headFiles, path) && !Object.prototype.hasOwnProperty.call(state.index, path)) {
       untracked.push(path);
       continue;
@@ -298,6 +309,9 @@ async function getStatus(repo: GitStubRepository, state: GitStubState) {
   const trackedPaths = new Set([...Object.keys(headFiles), ...Object.keys(state.index)]);
   for (const path of [...trackedPaths].sort((left, right) => left.localeCompare(right))) {
     if (Object.prototype.hasOwnProperty.call(workingFiles, path)) {
+      continue;
+    }
+    if (state.index[path] === null) {
       continue;
     }
     unstaged.push({ path, kind: 'deleted' });
@@ -317,7 +331,9 @@ function getStagedEntries(state: GitStubState): StatusEntry[] {
     .filter((path) => state.index[path] !== headFiles[path])
     .map((path) => ({
       path,
-      kind: Object.prototype.hasOwnProperty.call(headFiles, path) ? 'modified' : 'added',
+      kind: state.index[path] === null
+        ? 'deleted'
+        : Object.prototype.hasOwnProperty.call(headFiles, path) ? 'modified' : 'added',
     }));
 }
 
@@ -361,17 +377,19 @@ function expandPathspecs(
   repo: GitStubRepository,
   workingFiles: Record<string, string>,
   rawPaths: string[],
+  headFiles: Record<string, string> = {},
 ): string[] {
   const selected = new Set<string>();
+  const candidatePaths = new Set([...Object.keys(workingFiles), ...Object.keys(headFiles)]);
   for (const rawPath of rawPaths) {
     const pathspec = normalizePathspec(repo, rawPath);
     if (pathspec === '.') {
-      for (const path of Object.keys(workingFiles)) {
+      for (const path of candidatePaths) {
         selected.add(path);
       }
       continue;
     }
-    for (const path of Object.keys(workingFiles)) {
+    for (const path of candidatePaths) {
       if (path === pathspec || path.startsWith(`${pathspec}/`)) {
         selected.add(path);
       }
@@ -412,7 +430,7 @@ function isGitStubState(value: unknown): value is GitStubState {
     && typeof state.currentBranch === 'string'
     && isRecord(state.branches)
     && isRecord(state.commits)
-    && isStringRecord(state.index)
+    && isIndexRecord(state.index)
     && typeof state.initializedAt === 'string';
 }
 
@@ -512,8 +530,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
+function isIndexRecord(value: unknown): value is Record<string, string | null> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string' || entry === null);
 }
 
 function success(repo: GitStubRepository, stdout: string): GitStubCommandResult {

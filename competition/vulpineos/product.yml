@@ -1,0 +1,22 @@
+slug: vulpineos
+name: VulpineOS
+vendor: VulpineOS
+segment: hardened-browser-agent-runtime
+product_path: competition/vulpineos
+design_path: competition/vulpineos/design
+features_path: competition/vulpineos/features
+marketing_path: competition/vulpineos/marketing
+gossip_path: competition/vulpineos/gossip
+snapshot_date: 2026-05-21
+primary_sources:
+  - https://vulpineos.com/
+  - https://docs.vulpineos.com/
+  - https://github.com/VulpineOS/VulpineOS
+secondary_sources:
+  - https://www.reddit.com/r/automation/comments/1rf100z/most_ai_agent_browser_control_is_just_brittle/
+  - https://www.reddit.com/r/AI_Agents/comments/1r2ng93/hitting_limits_with_our_AI_driven_web_automation/
+  - https://arxiv.org/abs/2512.12594
+positioning: "Open-source operator system for browser agents with hardened Camoufox/Firefox runtime patches, MCP tools, token-optimized DOM export, orchestration, cost controls, and self-host deployment."
+customer_model: "Open-source self-hosting wedge with managed extraction/API positioning and likely commercial support for teams operating browser-agent fleets."
+competitive_threat_level: high
+notes: "Competes with agent-browser by moving reliability, injection filtering, page freezing, and token compression below the agent loop and into the browser runtime."
