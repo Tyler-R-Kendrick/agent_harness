@@ -485,6 +485,7 @@ import {
   createMultitaskProject,
   createMultitaskSubagentState,
   isMultitaskSubagentState,
+  isMultitaskSubagentStateRecord,
   promoteMultitaskBranch,
   reconcileMultitaskBranchSessionCompletions,
   reconcileMultitaskSubagentRuns,
@@ -15656,6 +15657,12 @@ function AgentBrowserApp() {
     isMultitaskSubagentState,
     DEFAULT_MULTITASK_SUBAGENT_STATE,
   );
+  const [multitaskSubagentStateByWorkspace, setMultitaskSubagentStateByWorkspace] = useStoredState<Record<string, MultitaskSubagentState>>(
+    localStorageBackend,
+    STORAGE_KEYS.multitaskSubagentStateByWorkspace,
+    isMultitaskSubagentStateRecord,
+    {},
+  );
   const [symphonyAutopilotSettings, setSymphonyAutopilotSettings] = useStoredState<SymphonyAutopilotSettings>(
     localStorageBackend,
     STORAGE_KEYS.symphonyAutopilotSettings,
@@ -15981,15 +15988,38 @@ function AgentBrowserApp() {
     },
   }), [activeWorkspace.name, harnessEvolutionSettings]);
   const activeMultitaskSubagentState = useMemo(
-    () => multitaskSubagentState.enabled && multitaskSubagentState.workspaceId === activeWorkspaceId
-      ? multitaskSubagentState
-      : {
+    () => {
+      const storedWorkspaceState = multitaskSubagentStateByWorkspace[activeWorkspaceId];
+      if (storedWorkspaceState?.workspaceId === activeWorkspaceId) return storedWorkspaceState;
+      if (multitaskSubagentState.workspaceId === activeWorkspaceId && (multitaskSubagentState.enabled || multitaskSubagentState.branches.length > 0)) {
+        return multitaskSubagentState;
+      }
+      return {
         ...DEFAULT_MULTITASK_SUBAGENT_STATE,
         workspaceId: activeWorkspaceId,
         workspaceName: activeWorkspace.name,
-      },
-    [activeWorkspace.name, activeWorkspaceId, multitaskSubagentState],
+      };
+    },
+    [activeWorkspace.name, activeWorkspaceId, multitaskSubagentState, multitaskSubagentStateByWorkspace],
   );
+  const persistActiveMultitaskSubagentState = useCallback((nextState: MultitaskSubagentState) => {
+    const workspaceId = nextState.workspaceId || activeWorkspaceId;
+    setMultitaskSubagentStateByWorkspace((current) => ({
+      ...current,
+      [workspaceId]: nextState,
+    }));
+    setMultitaskSubagentState(nextState);
+  }, [activeWorkspaceId, setMultitaskSubagentState, setMultitaskSubagentStateByWorkspace]);
+  useEffect(() => {
+    if (!multitaskSubagentState.workspaceId || !multitaskSubagentState.enabled) return;
+    setMultitaskSubagentStateByWorkspace((current) => {
+      if (current[multitaskSubagentState.workspaceId]) return current;
+      return {
+        ...current,
+        [multitaskSubagentState.workspaceId]: multitaskSubagentState,
+      };
+    });
+  }, [multitaskSubagentState, setMultitaskSubagentStateByWorkspace]);
   const hasRunningSymphonyTasks = activeMultitaskSubagentState.branches.some((branch) => branch.status === 'running');
   const [symphonyRuntimeNowMs, setSymphonyRuntimeNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -15999,7 +16029,7 @@ function AgentBrowserApp() {
     return () => window.clearInterval(timer);
   }, [activePanel, hasRunningSymphonyTasks]);
   const startMultitaskSubagents = useCallback((request: string, options?: { openPanel?: boolean }) => {
-    setMultitaskSubagentState(createMultitaskSubagentState({
+    persistActiveMultitaskSubagentState(createMultitaskSubagentState({
       workspaceId: activeWorkspaceId,
       workspaceName: activeWorkspace.name,
       request,
@@ -16007,71 +16037,46 @@ function AgentBrowserApp() {
     if (options?.openPanel !== false) {
       setActivePanel('symphony');
     }
-  }, [activeWorkspace.name, activeWorkspaceId, setActivePanel, setMultitaskSubagentState]);
+  }, [activeWorkspace.name, activeWorkspaceId, persistActiveMultitaskSubagentState, setActivePanel]);
   const promoteActiveMultitaskBranch = useCallback((branchId: string, actor: MultitaskApprovalActor = 'user') => {
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      return promoteMultitaskBranch(source, branchId, actor);
-    });
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+    persistActiveMultitaskSubagentState(promoteMultitaskBranch(activeMultitaskSubagentState, branchId, actor));
+  }, [activeMultitaskSubagentState, persistActiveMultitaskSubagentState]);
   const manageActiveMultitaskBranch = useCallback((branchId: string, action: MultitaskBranchLifecycleAction) => {
     const dispatches: MultitaskBranchDispatch[] = [];
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      const next = action === 'retry'
-        ? reduceMultitaskBranchLifecycle(reduceMultitaskBranchLifecycle(source, branchId, 'retry'), branchId, 'start')
-        : reduceMultitaskBranchLifecycle(source, branchId, action);
-      if (action === 'start' || action === 'retry') {
-        const branchIndex = next.branches.findIndex((branch) => branch.id === branchId);
-        const branch = branchIndex >= 0 ? next.branches[branchIndex] : null;
-        if (branch?.status === 'running') {
-          dispatches.push(buildMultitaskBranchDispatch(next, branch, branchIndex, action === 'retry' ? 'self-heal' : 'manual'));
-        }
+    const next = action === 'retry'
+      ? reduceMultitaskBranchLifecycle(reduceMultitaskBranchLifecycle(activeMultitaskSubagentState, branchId, 'retry'), branchId, 'start')
+      : reduceMultitaskBranchLifecycle(activeMultitaskSubagentState, branchId, action);
+    if (action === 'start' || action === 'retry') {
+      const branchIndex = next.branches.findIndex((branch) => branch.id === branchId);
+      const branch = branchIndex >= 0 ? next.branches[branchIndex] : null;
+      if (branch?.status === 'running') {
+        dispatches.push(buildMultitaskBranchDispatch(next, branch, branchIndex, action === 'retry' ? 'self-heal' : 'manual'));
       }
-      return next;
-    });
+    }
+    persistActiveMultitaskSubagentState(next);
     if (dispatches.length > 0) {
       setPendingSymphonyDispatches((current) => [...current, ...dispatches]);
     }
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState, setPendingSymphonyDispatches]);
+  }, [activeMultitaskSubagentState, persistActiveMultitaskSubagentState, setPendingSymphonyDispatches]);
   const createActiveMultitaskProject = useCallback((name: string) => {
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      return createMultitaskProject(source, name);
-    });
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+    persistActiveMultitaskSubagentState(createMultitaskProject(activeMultitaskSubagentState, name));
+  }, [activeMultitaskSubagentState, persistActiveMultitaskSubagentState]);
   const createActiveMultitaskTask = useCallback((title: string, projectId: string | null) => {
     const withTask = addMultitaskTask(activeMultitaskSubagentState, { title, projectId });
     if (withTask !== activeMultitaskSubagentState) {
       const reconciliation = reconcileMultitaskSubagentRuns(withTask);
-      setMultitaskSubagentState(reconciliation.state);
+      persistActiveMultitaskSubagentState(reconciliation.state);
     }
   }, [
     activeMultitaskSubagentState,
-    setMultitaskSubagentState,
+    persistActiveMultitaskSubagentState,
   ]);
   const selectActiveMultitaskProject = useCallback((projectId: string) => {
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      return selectMultitaskProject(source, projectId);
-    });
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+    persistActiveMultitaskSubagentState(selectMultitaskProject(activeMultitaskSubagentState, projectId));
+  }, [activeMultitaskSubagentState, persistActiveMultitaskSubagentState]);
   const selectActiveMultitaskTask = useCallback((branchId: string) => {
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      return selectMultitaskTask(source, branchId);
-    });
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState]);
+    persistActiveMultitaskSubagentState(selectMultitaskTask(activeMultitaskSubagentState, branchId));
+  }, [activeMultitaskSubagentState, persistActiveMultitaskSubagentState]);
   const activeConversationBranchingState = useMemo(
     () => conversationBranchingState.enabled && conversationBranchingState.workspaceId === activeWorkspaceId
       ? conversationBranchingState
@@ -16182,21 +16187,16 @@ function AgentBrowserApp() {
       now: new Date(symphonyRuntimeNowMs),
     });
     if (nextReconciliation.state === activeMultitaskSubagentState) return;
-    setMultitaskSubagentState((current) => (
-      current.enabled && current.workspaceId === activeWorkspaceId
-        ? nextReconciliation.state
-        : current
-    ));
+    persistActiveMultitaskSubagentState(nextReconciliation.state);
     if (nextReconciliation.dispatches.length > 0) {
       setPendingSymphonyDispatches((current) => [...current, ...nextReconciliation.dispatches]);
     }
   }, [
     activeMultitaskSubagentState,
     activeSymphonySnapshot.orchestrator.maxConcurrentAgents,
-    activeWorkspaceId,
     harnessCoreState.sessions,
     localStorageBackend,
-    setMultitaskSubagentState,
+    persistActiveMultitaskSubagentState,
     setPendingSymphonyDispatches,
     symphonyRuntimeNowMs,
   ]);
@@ -16239,18 +16239,18 @@ function AgentBrowserApp() {
         ? activeWorkspaceSessions.find((session) => session.name === branch.sessionName) ?? null
         : null))
       .find((session): session is { id: string; name: string; isOpen: boolean } => Boolean(session)) ?? null;
-    setMultitaskSubagentState((current) => {
-      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
-      return current.branches.reduce((next, branch) => {
-        if (branch.status !== 'running' || !branch.sessionId?.startsWith('symphony:') || !branch.sessionName) {
-          return next;
-        }
-        const session = activeWorkspaceSessions.find((candidate) => candidate.name === branch.sessionName);
-        return session
-          ? attachMultitaskBranchSession(next, branch.id, { sessionId: session.id, sessionName: branch.sessionName })
-          : next;
-      }, current);
-    });
+    const nextMultitaskState = activeMultitaskSubagentState.branches.reduce((next, branch) => {
+      if (branch.status !== 'running' || !branch.sessionId?.startsWith('symphony:') || !branch.sessionName) {
+        return next;
+      }
+      const session = activeWorkspaceSessions.find((candidate) => candidate.name === branch.sessionName);
+      return session
+        ? attachMultitaskBranchSession(next, branch.id, { sessionId: session.id, sessionName: branch.sessionName })
+        : next;
+    }, activeMultitaskSubagentState);
+    if (nextMultitaskState !== activeMultitaskSubagentState) {
+      persistActiveMultitaskSubagentState(nextMultitaskState);
+    }
     if (attachableSession) {
       setWorkspaceViewStateByWorkspace((current) => {
         const existing = current[activeWorkspaceId] ?? createWorkspaceViewEntry(activeWorkspace);
@@ -16272,11 +16272,11 @@ function AgentBrowserApp() {
   }, [
     activeWorkspace,
     activePanel,
-    activeMultitaskSubagentState.enabled,
+    activeMultitaskSubagentState,
     activeWorkspaceId,
     activeWorkspaceSessions,
+    persistActiveMultitaskSubagentState,
     setActivePanel,
-    setMultitaskSubagentState,
     setWorkspaceViewStateByWorkspace,
   ]);
   useEffect(() => {
@@ -16285,16 +16285,15 @@ function AgentBrowserApp() {
       ? loadJson<Record<string, ChatMessage[]>>(localStorageBackend, STORAGE_KEYS.chatMessagesBySession, isChatMessagesBySession, {})
       : {};
     const sessionMessagesById = buildMultitaskSessionMessagesById(durableMessagesBySession, harnessCoreState.sessions);
-    setMultitaskSubagentState((current) => {
-      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
-      return reconcileMultitaskBranchSessionCompletions(current, sessionMessagesById);
-    });
+    const nextState = reconcileMultitaskBranchSessionCompletions(activeMultitaskSubagentState, sessionMessagesById);
+    if (nextState !== activeMultitaskSubagentState) {
+      persistActiveMultitaskSubagentState(nextState);
+    }
   }, [
-    activeMultitaskSubagentState.enabled,
-    activeWorkspaceId,
+    activeMultitaskSubagentState,
     harnessCoreState.sessions,
     localStorageBackend,
-    setMultitaskSubagentState,
+    persistActiveMultitaskSubagentState,
   ]);
   const workspaceActionSnapshot = useMemo<WorkspaceActionSnapshot>(() => {
     const chapterIds = Object.values(sessionChapterState.sessions)
@@ -19868,13 +19867,13 @@ function AgentBrowserApp() {
       return;
     }
     switchSidebarPanel('workspaces');
-    setMultitaskSubagentState((current) => {
-      if (!current.enabled || current.workspaceId !== activeWorkspaceId) return current;
-      return attachMultitaskBranchSession(current, dispatch.branchId, {
-        sessionId: session.id,
-        sessionName: dispatch.sessionName,
-      });
+    const nextMultitaskState = attachMultitaskBranchSession(activeMultitaskSubagentState, dispatch.branchId, {
+      sessionId: session.id,
+      sessionName: dispatch.sessionName,
     });
+    if (nextMultitaskState !== activeMultitaskSubagentState) {
+      persistActiveMultitaskSubagentState(nextMultitaskState);
+    }
     setPendingReviewFollowUps((current) => [...current, { sessionId: session.id, prompt: dispatch.prompt }]);
     setToast({
       msg: dispatch.reason === 'self-heal'
@@ -19882,7 +19881,7 @@ function AgentBrowserApp() {
         : `Queued Symphony agent run ${dispatch.sessionName}`,
       type: 'info',
     });
-  }, [activeWorkspaceId, addSessionToWorkspace, setMultitaskSubagentState, setToast, switchSidebarPanel]);
+  }, [activeMultitaskSubagentState, activeWorkspaceId, addSessionToWorkspace, persistActiveMultitaskSubagentState, setToast, switchSidebarPanel]);
 
   useEffect(() => {
     if (pendingSymphonyDispatches.length === 0) return;
@@ -19892,14 +19891,9 @@ function AgentBrowserApp() {
   }, [pendingSymphonyDispatches, queueSymphonyDispatch, setPendingSymphonyDispatches]);
 
   const requestActiveMultitaskChanges = useCallback((branchId: string, prompt: string) => {
-    setMultitaskSubagentState((current) => {
-      const source = current.enabled && current.workspaceId === activeWorkspaceId
-        ? current
-        : activeMultitaskSubagentState;
-      return requestMultitaskBranchChanges(source, branchId, prompt.split('\n'));
-    });
+    persistActiveMultitaskSubagentState(requestMultitaskBranchChanges(activeMultitaskSubagentState, branchId, prompt.split('\n')));
     startReviewFollowUp(prompt);
-  }, [activeMultitaskSubagentState, activeWorkspaceId, setMultitaskSubagentState, startReviewFollowUp]);
+  }, [activeMultitaskSubagentState, persistActiveMultitaskSubagentState, startReviewFollowUp]);
 
   const refreshRepoWiki = useCallback(() => {
     const snapshot = buildRepoWikiSnapshot({
