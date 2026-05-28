@@ -235,4 +235,62 @@ describe('WorkGraph command bus', () => {
     expect(graph.getSnapshot().events).toEqual([]);
     expect(graph.getSnapshot().comments).toEqual({});
   });
+
+  it('rejects agent issue proposals with missing parents without recording orphan issues', async () => {
+    const graph = createWorkGraph({
+      repository: createInMemoryWorkGraphRepository(),
+      ids: createSequentialWorkGraphIdFactory('wg'),
+      now: createFixedWorkGraphTimeSource('2026-05-10T12:00:00.000Z'),
+    });
+
+    const proposal = createAgentIssueProposal({
+      workspaceId: 'missing-workspace',
+      teamId: 'missing-team',
+      title: 'Investigate orphan work',
+      description: 'Agent proposals must not create issues detached from a workspace.',
+      branchName: 'agent/workgraph/orphan-issue',
+      requestedBy: { id: 'planner-agent' },
+      validation: ['npm.cmd --workspace @agent-harness/workgraph run test:coverage'],
+    });
+
+    await expect(applyAgentIssueProposal(graph, proposal)).rejects.toThrow('Workspace not found: missing-workspace');
+    expect(graph.getSnapshot().issues).toEqual({});
+    expect(graph.getSnapshot().events).toEqual([]);
+
+    const workspace = await graph.dispatch({
+      type: 'workspace.create',
+      actor,
+      payload: { name: 'Bounded workspace', key: 'BND' },
+    });
+
+    await expect(applyAgentIssueProposal(graph, {
+      ...proposal,
+      workspaceId: workspace.aggregateId,
+    })).rejects.toThrow('Team not found: missing-team');
+    expect(graph.getSnapshot().issues).toEqual({});
+    expect(graph.getSnapshot().events.map((event) => event.type)).toEqual(['workspace.created']);
+
+    const team = await graph.dispatch({
+      type: 'team.create',
+      actor,
+      payload: { workspaceId: workspace.aggregateId, name: 'Agents', key: 'AGT' },
+    });
+    const otherWorkspace = await graph.dispatch({
+      type: 'workspace.create',
+      actor,
+      payload: { name: 'Other workspace', key: 'OTH' },
+    });
+
+    await expect(applyAgentIssueProposal(graph, {
+      ...proposal,
+      workspaceId: otherWorkspace.aggregateId,
+      teamId: team.aggregateId,
+    })).rejects.toThrow(`Team ${team.aggregateId} does not belong to workspace ${otherWorkspace.aggregateId}`);
+    expect(graph.getSnapshot().issues).toEqual({});
+    expect(graph.getSnapshot().events.map((event) => event.type)).toEqual([
+      'workspace.created',
+      'team.created',
+      'workspace.created',
+    ]);
+  });
 });

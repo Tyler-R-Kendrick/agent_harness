@@ -165,12 +165,17 @@ describe('WorkGraph edge contracts', () => {
       actor,
       payload: { name: 'Other workspace', key: 'OTH' },
     });
+    const otherTeam = await graph.dispatch({
+      type: 'team.create',
+      actor,
+      payload: { workspaceId: otherWorkspace.aggregateId, name: 'Other team', key: 'OTH' },
+    });
     await graph.dispatch({
       type: 'issue.create',
       actor,
       payload: {
         workspaceId: otherWorkspace.aggregateId,
-        teamId: team.aggregateId,
+        teamId: otherTeam.aggregateId,
         projectId: project.aggregateId,
         cycleId: cycle.aggregateId,
         labelIds: [label.aggregateId],
