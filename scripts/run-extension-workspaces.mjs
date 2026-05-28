@@ -10,8 +10,34 @@ function repoRootFromScript() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 }
 
-function npmExecutable() {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+function npmExecutable(platform = process.platform) {
+  return platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+export function resolveNpmInvocation({
+  platform = process.platform,
+  npmExecPath = process.env.npm_execpath,
+  nodeExecPath = process.execPath,
+  comSpec = process.env.ComSpec,
+} = {}) {
+  if (npmExecPath) {
+    return {
+      command: nodeExecPath,
+      argsPrefix: [npmExecPath],
+    };
+  }
+
+  if (platform === 'win32') {
+    return {
+      command: comSpec || 'cmd.exe',
+      argsPrefix: ['/d', '/s', '/c', npmExecutable(platform)],
+    };
+  }
+
+  return {
+    command: 'npm',
+    argsPrefix: [],
+  };
 }
 
 export function normalizeRequestedScripts(args) {
@@ -27,6 +53,13 @@ export function normalizeRequestedScripts(args) {
 
 export function buildWorkspaceScriptArgs(workspaceName, scriptName) {
   return ['--workspace', workspaceName, 'run', scriptName];
+}
+
+export function buildWorkspaceSpawnOptions(cwd) {
+  return {
+    cwd,
+    stdio: 'inherit',
+  };
 }
 
 export async function discoverExtensionWorkspaces(repoRoot = repoRootFromScript()) {
@@ -67,15 +100,15 @@ export async function discoverExtensionWorkspaces(repoRoot = repoRootFromScript(
 }
 
 async function runWorkspaceScript(workspaceName, scriptName, cwd) {
-  const command = npmExecutable();
+  const npmInvocation = resolveNpmInvocation();
   const args = buildWorkspaceScriptArgs(workspaceName, scriptName);
   console.log(`extension ${workspaceName}: npm ${args.join(' ')}`);
   const startedAt = Date.now();
-  const child = spawn(command, args, {
-    cwd,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  });
+  const child = spawn(
+    npmInvocation.command,
+    [...npmInvocation.argsPrefix, ...args],
+    buildWorkspaceSpawnOptions(cwd),
+  );
   const exitCode = await new Promise((resolve, reject) => {
     child.on('error', reject);
     child.on('exit', (code, signal) => {

@@ -259,6 +259,11 @@ async function main() {
   assert.equal(vercelInstall.getNpmExecutable('linux'), 'npm');
   assert.equal(vercelInstall.usesShellForPlatform('win32'), true);
   assert.equal(vercelInstall.usesShellForPlatform('linux'), false);
+  assert.equal(
+    vercelInstall.buildInstallEnvironment({ ONNXRUNTIME_NODE_INSTALL: 'force' }).ONNXRUNTIME_NODE_INSTALL,
+    'force',
+  );
+  assert.equal(vercelInstall.buildInstallEnvironment({}).ONNXRUNTIME_NODE_INSTALL, 'skip');
   assert.deepEqual(vercelInstall.buildInstallSteps('npm'), [
     ['npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--loglevel=error']],
     ['npm', ['ci', '--no-audit', '--loglevel=error']],
@@ -403,7 +408,7 @@ async function main() {
   assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
   assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
-  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 2/);
+  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 1/);
   assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 12/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchConcurrency/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchSize/);
@@ -445,7 +450,7 @@ async function main() {
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchConcurrency({ platform: 'win32', env: {} }),
-    2,
+    1,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchConcurrency({ platform: 'linux', env: {} }),
@@ -463,7 +468,7 @@ async function main() {
       platform: 'win32',
       env: { AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '0' },
     }),
-    2,
+    1,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: '6' }),

@@ -22,7 +22,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 3. Skills, plugins, and reusable workflow packaging
 - Common pattern: vendors are productizing repeatable agent behaviors as installable units.
-- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation plus Curator lifecycle management plus runtime plugins and hooks, Kimi AI document-to-skills conversion plus open-source skill hubs plus reusable skill application across Agent, Kimi Code, and Kimi Claw, Mastra versioned skills and publish flow, Conductor personalities, skills, and repo-owned mode/config packaging, OpenClaw skills and plugins, OpenCode custom commands and agent definitions, Open Design cross-agent `SKILL.md` compatibility plus typed skill metadata and live parameter controls, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions, skills, prompts, and themes, Roo Code marketplace MCPs plus modes plus on-demand skills, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery, Warp Drive workflows plus repo-discovered skills that become schedulable cloud agents.
+- Seen in: Codex skills, Claude Cowork plugin marketplace, Claude Code custom commands, Cline skills and workflows, Copilot custom agents plus Agent Skills plus prompt files, Cursor commands plus plugin marketplaces, DeerFlow skills and Claude Code bridge, Devin Playbooks with macros, community sharing, and version history, Gemini CLI extensions packaging commands, prompts, tools, hooks, MCP config, subagents, themes, and policy, Goose recipes, subrecipes, recipe deeplinks, and recipe generator tooling, Hermes automated skill creation plus Curator lifecycle management plus runtime plugins and hooks, Kimi AI document-to-skills conversion plus open-source skill hubs plus reusable skill application across Agent, Kimi Code, and Kimi Claw, Mastra versioned skills and publish flow, Conductor personalities, skills, and repo-owned mode/config packaging, OpenClaw layered skill roots plus Skill Workshop plus typed plugin SDK tooling, OpenCode custom commands and agent definitions, Open Design cross-agent `SKILL.md` compatibility plus typed skill metadata and live parameter controls, OpenHands `AGENTS.md` plus `SKILL.md` progressive disclosure plus slash-menu discovery, Pi packages plus extensions, skills, prompts, and themes, Roo Code marketplace MCPs plus modes plus on-demand skills, Space Agent self-extending `SKILL.md` capabilities, T3 Code provider skill discovery, Warp Drive workflows plus repo-discovered skills that become schedulable cloud agents.
 - Why it matters: durable workflows outperform ad hoc prompting for team adoption.
 - One-shot build instruction:
   - Create a first-class workflow package format with metadata, prompts, scripts, permissions, test hooks, and share/install UX; include auto-suggestion of relevant skills during task intake.
@@ -36,24 +36,17 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 5. Browser use and computer control
 - Common pattern: harnesses are expanding from code and text to direct web and desktop action.
-- Seen in: Codex in-app browser with visual comments, Browser plugin, and Computer Use plugin with per-app approvals, ChatGPT agent mode, Claude in Chrome, Claude Cowork computer use, Cline web tools and browser automation, Cursor browser controls plus layout editor plus debug mode, DeerFlow AIO sandbox, Devin interactive browser inside the progress workspace, Goose Computer Controller with web interaction and desktop GUI control, Hermes browser and web control, GitHub Copilot integrated browser tab sharing plus open-terminal control, Kimi WebBridge local browser control, Mastra browser providers with live Studio supervision, OpenClaw browser automation, Space Agent registered browser surfaces across popup and inline runtime widgets.
+- Seen in: Codex in-app browser with visual comments, Browser plugin, and Computer Use plugin with per-app approvals, ChatGPT agent mode, Claude in Chrome, Claude Cowork computer use, Cline web tools and browser automation, Cursor browser controls plus layout editor plus debug mode, DeerFlow AIO sandbox, Devin interactive browser inside the progress workspace, Goose Computer Controller with web interaction and desktop GUI control, Hermes browser and web control, GitHub Copilot integrated browser tab sharing plus open-terminal control, Kimi WebBridge local browser control, Mastra browser providers with live Studio supervision, OpenClaw managed browser profiles plus real-user-profile attachment and dialog-aware actions, Space Agent registered browser surfaces across popup and inline runtime widgets.
 - Why it matters: many valuable workflows still terminate in websites or GUI tools rather than APIs.
 - One-shot build instruction:
   - Ship a browser or desktop action layer that can inspect DOM, screenshots, console and network state, request confirmation for risky actions, and feed captured evidence back into the agent thread.
 
 ### 6. Multi-surface continuity
 - Common pattern: users start in one surface and continue elsewhere.
-- Seen in: Codex app + CLI + IDE + cloud + ChatGPT mobile remote host control, Claude Code terminal + web + JetBrains, ChatGPT web, mobile, desktop, and Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code with `/remote on` session continuity, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile or Telegram remote access, Hermes chat apps + CLI + Android or Termux + local dashboard + ACP editors, Kimi web + mobile + desktop + Kimi Code CLI + VS Code + Claw chat channels + linked OpenClaw instances + third-party coding-agent reuse, OpenClaw any messenger + local runtime, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Roo Code IDE + web dashboard + GitHub + Slack, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve, Warp terminal + desktop app + browser-shared sessions + mobile-friendly Oz supervision.
+- Seen in: Codex app + CLI + IDE + cloud + ChatGPT mobile remote host control, Claude Code terminal + web + JetBrains, ChatGPT web, mobile, desktop, and Slack, Claude Cowork desktop + phone thread, Cline editor + CLI, Copilot terminal + GitHub + mobile + Raycast + agents tab + VS Code with `/remote on` session continuity, Cursor desktop + web + mobile + Slack + cloud agents, DeerFlow IM channels, Goose desktop + CLI + API + ACP clients + mobile or Telegram remote access, Hermes chat apps + CLI + Android or Termux + local dashboard + ACP editors, Kimi web + mobile + desktop + Kimi Code CLI + VS Code + Claw chat channels + linked OpenClaw instances + third-party coding-agent reuse, OpenClaw any messenger + local runtime plus browser dashboard, WebChat, remote SSH clients, and macOS/iOS/Android nodes, OpenCode terminal + desktop + IDE, Roomote Slack + web dashboard + Linear assignment + GitHub mentions, Roo Code IDE + web dashboard + GitHub + Slack, Space Agent browser runtime + native desktop app + self-hosted server, T3 Code remote pairing plus headless serve, Warp terminal + desktop app + browser-shared sessions + mobile-friendly Oz supervision.
 - Why it matters: agents are becoming ambient systems, not point tools.
 - One-shot build instruction:
   - Unify state across terminal, browser, desktop, mobile, and collaboration surfaces so the same run can be viewed, steered, and resumed anywhere without losing logs, artifacts, or permissions state.
-
-### 18. Artifact-to-skill conversion from finished work
-- Common pattern: some harnesses are starting to convert finished artifacts into reusable agent behaviors instead of treating outputs as dead ends.
-- Seen in: Kimi AI `Document to skills`, where documents can be uploaded and converted into reusable skills that capture structure, style, and workflow expectations for future runs.
-- Why it matters: teams already have strong examples in PRDs, reports, playbooks, and templates; turning those artifacts into executable skills is a faster path to reusable automation than writing every workflow package from scratch.
-- One-shot build instruction:
-  - Add an artifact-to-skill flow that ingests a strong example document or repo artifact, extracts reusable workflow rules and output structure, turns them into a first-class skill package, lets a user review the generated instructions and linked assets, and makes the resulting skill available for future task routing across local, browser, and background agent surfaces.
 
 ### 7. Git/PR-native execution
 - Common pattern: successful coding harnesses end in branches, diffs, and PRs rather than plain text.
@@ -64,7 +57,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 8. External tool connectivity and actionability
 - Common pattern: harnesses increasingly connect to third-party tools, apps, or MCP servers.
-- Seen in: Codex skills plus Linear issue delegation, GitHub review, and local Linear MCP connectivity, Claude Code MCP, ChatGPT apps plus synced knowledge sources plus upgraded action-capable app variants, Cline MCP marketplace and server builder, Copilot MCP plus cloud-agent REST task APIs plus IDE access to Spaces through GitHub MCP, Claude Cowork connectors and plugins, Cursor MCP Apps plus Bugbot MCP plus repo or issue actions, DeerFlow MCP servers, Devin tracker-native Linear and Jira control, Gemini CLI extensions and remote A2A services, Goose extensions and MCP, Hermes runtime plugins and gateways, Mastra MCP client and server roles, OpenClaw plugins, OpenCode MCP and custom tools, Open Design external MCP client support, OpenHands integrations across Git providers, Slack, and Jira, Roomote connected repos, docs, tickets, and logs, Roo Code marketplace MCPs, Space Agent browser or desktop runtime surfaces, T3 Code provider and skill discovery, Warp cloud integrations and MCP server management.
+- Seen in: Codex skills plus Linear issue delegation, GitHub review, and local Linear MCP connectivity, Claude Code MCP, ChatGPT apps plus synced knowledge sources plus upgraded action-capable app variants, Cline MCP marketplace and server builder, Copilot MCP plus cloud-agent REST task APIs plus IDE access to Spaces through GitHub MCP, Claude Cowork connectors and plugins, Cursor MCP Apps plus Bugbot MCP plus repo or issue actions, DeerFlow MCP servers, Devin tracker-native Linear and Jira control, Gemini CLI extensions and remote A2A services, Goose extensions and MCP, Hermes runtime plugins and gateways, Mastra MCP client and server roles, OpenClaw plugins plus ACP harness adapters and typed tool-plugin helpers, OpenCode MCP and custom tools, Open Design external MCP client support, OpenHands integrations across Git providers, Slack, and Jira, Roomote connected repos, docs, tickets, and logs, Roo Code marketplace MCPs, Space Agent browser or desktop runtime surfaces, T3 Code provider and skill discovery, Warp cloud integrations and MCP server management.
 - Why it matters: the harness becomes much more valuable once it can turn conclusions into actions in the systems where teams already work.
 - One-shot build instruction:
   - Build third-party connectivity as an action layer, not just a read-only context layer: support issue trackers, chat systems, deployment targets, docs, and MCP-style tool servers with clear permissions and observable results.
@@ -78,7 +71,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 10. Operator control consoles with blocked-state queues and durable usage ledgers
 - Common pattern: long-running harnesses are turning live supervision into a first-class product surface instead of leaving operations buried in logs.
-- Seen in: OpenAI Symphony dashboard detail panel, blocked-session surfacing, and per-issue token ledger API; Mastra Cloud dashboard plus observability and OTel-ready tracing; Roomote shared task console with transcript, diff, logs, and artifacts; T3 Code local trace observability; Kilo Code team analytics and adoption scoring; Warp agent session sharing, centralized management view, mobile Oz supervision, and per-run credit usage surfaces.
+- Seen in: OpenAI Symphony dashboard detail panel, blocked-session surfacing, and per-issue token ledger API; OpenClaw Control UI plus dashboard session and config surfaces plus durable background task records; Mastra Cloud dashboard plus observability and OTel-ready tracing; Roomote shared task console with transcript, diff, logs, and artifacts; T3 Code local trace observability; Kilo Code team analytics and adoption scoring; Warp agent session sharing, centralized management view, mobile Oz supervision, and per-run credit usage surfaces.
 - Why it matters: once agents run for long periods, teams need to see what is running, what is blocked, what it is costing, and what needs human intervention without reconstructing the story from transcripts.
 - One-shot build instruction:
   - Build an operator console that shows running and blocked sessions, current stage, checklist progress, recent events, and durable per-run token or cost ledgers; treat human-input blockers as a visible queue with explicit unblock actions instead of generic retries or hidden failures.
@@ -97,42 +90,56 @@ Method: current-product research from first-party product pages, help centers, d
 - One-shot build instruction:
   - Build remote-run handoff so a background, worktree, or cloud session can be opened live, steered with follow-up turns, and adopted into a local workspace with the same transcript, artifacts, approvals, and diff context preserved end to end.
 
-### 13. Inspectable personalization provenance and source-level memory controls
+### 13. Queued steering with visible progress drafts
+- Common pattern: newer harnesses are making interruption and follow-up semantics explicit instead of leaving users to guess how a running turn will absorb new input.
+- Seen in: OpenClaw queue modes plus progress drafts, Space Agent queued steering at the turn boundary, Roo Code queued steering and context condensing, and Warp live follow-up prompts into still-running or still-open remote sessions.
+- Why it matters: once runs are longer, more tool-heavy, or more remote, the product needs a precise contract for when human input interrupts, queues, coalesces, or simply annotates the active work.
+- One-shot build instruction:
+  - Add explicit in-flight steering controls with per-session queue modes, turn-boundary interrupt semantics, debounce and overflow policies, and one visible progress-draft surface that updates during real work instead of spamming transient status messages.
+
+### 14. Inspectable personalization provenance and source-level memory controls
 - Common pattern: memory systems are starting to show users which prior context shaped an answer, then letting them directly adjust that context without digging through hidden settings.
 - Seen in: ChatGPT Memory Sources with source chips for past chats, saved memories, custom instructions, files, and connected Gmail plus relevance feedback and deletion controls.
 - Why it matters: trust in long-lived agent memory improves when users can see why a response was personalized and can immediately correct stale or low-signal context.
 - One-shot build instruction:
   - Add response-level memory provenance chips that show which project notes, prior runs, instructions, files, or external sources shaped the current answer, and let users mark each source as relevant or not relevant, edit durable memories, or exclude the source from future personalization.
 
-### 14. Background session supervisor views with peek-and-reply control
+### 15. Background session supervisor views with peek-and-reply control
 - Common pattern: long-running coding agents are now supervised through dedicated background-session views instead of forcing users to juggle raw terminals or wait for the final result.
 - Seen in: Claude Code Agent View with active and completed background sessions plus peek and reply controls, Codex automations inbox plus remote follow-through, OpenAI Symphony dashboard detail panels and blocked-session queues, Roomote shared task console with live transcripts and artifacts, Warp centralized agent management plus live browser session supervision.
 - Why it matters: once tasks run longer and split across multiple workers, users need a lightweight way to inspect progress, intervene, and unblock work without fully re-entering each execution environment.
 - One-shot build instruction:
   - Build a background-session supervisor for `agent-browser` that lists active and completed runs, shows current stage and recent events, supports peek and follow-up reply actions, and exposes explicit blocked or needs-input states so users can steer a run without losing the main workspace context.
 
-### 15. Split-trust execution planes with graceful sandbox fallback
+### 16. Split-trust execution planes with graceful sandbox fallback
 - Common pattern: some harnesses are starting to separate low-risk host-native actions from higher-risk code execution instead of forcing every capability through one runtime boundary.
 - Seen in: Claude Cowork host-native agent loop for file, web, and local plugin actions plus an isolated Linux VM for shell and code execution, with continued file-and-web operation when the VM is unavailable.
 - Why it matters: users and admins want stronger isolation for shell execution without losing the rest of the harness when the sandbox is unavailable or more tightly governed.
 - One-shot build instruction:
   - Split `agent-browser` execution into explicit action planes: keep chat, file inspection, browser work, and other host-safe actions in a host-native control layer with clear permissions, run shell and code execution in an isolated sandbox or worktree plane with separate network policy, surface which plane each action used, and gracefully degrade to host-safe actions when the sandbox is blocked or unavailable instead of failing the entire run.
 
-### 16. Harness-managed subscription proxies and embeddable model endpoints
+### 17. Harness-managed subscription proxies and embeddable model endpoints
 - Common pattern: some harnesses are starting to expose their authenticated model access and runtime as reusable local infrastructure for adjacent apps instead of keeping it trapped inside the primary chat UI.
 - Seen in: Hermes subscription proxy for OpenAI-compatible apps with automatic upstream credential refresh, plus Hermes API server exposure for external clients and tool-capable backends.
 - Why it matters: once a harness already owns provider auth, routing, policies, and observability, adjacent tools should be able to reuse that control plane without every app collecting its own keys or reimplementing model plumbing.
 - One-shot build instruction:
   - Add a local OpenAI-compatible proxy and embeddable agent endpoint for `agent-browser` that can expose configured models or selected agent capabilities to approved external clients, reuse the harness's existing provider credentials and policy checks, refresh upstream auth when needed, and clearly separate "proxy a model" from "invoke the agent runtime" so external apps can integrate without duplicating secrets or execution logic.
 
-### 17. Extensible provider auth bridges with interactive login choices
+### 18. Extensible provider auth bridges with interactive login choices
 - Common pattern: some harnesses are moving provider auth and model access behind extension-defined adapters instead of hardwiring every provider into the core product.
 - Seen in: Pi extension-registered providers with `/login` choice callbacks, OAuth refresh, auth-file precedence, dynamic model mutation after login, and proxy or gateway overrides that still surface like first-class providers.
 - Why it matters: enterprise gateways, regional deployments, and subscription-backed providers often need custom auth and routing logic, but users still expect one consistent login flow and model-selection surface.
 - One-shot build instruction:
   - Let `agent-browser` extensions register provider-auth adapters that plug into the main login flow, support browser-vs-device-code selection, token refresh, auth storage, built-in provider overrides, and post-login model shaping so custom gateways or subscription-backed providers behave like first-class built-ins.
 
-### 19. Explicit writable-root policies that preserve the active issue workspace
+### 19. Artifact-to-skill conversion from finished work
+- Common pattern: some harnesses are starting to convert finished artifacts into reusable agent behaviors instead of treating outputs as dead ends.
+- Seen in: Kimi AI `Document to skills`, where documents can be uploaded and converted into reusable skills that capture structure, style, and workflow expectations for future runs.
+- Why it matters: teams already have strong examples in PRDs, reports, playbooks, and templates; turning those artifacts into executable skills is a faster path to reusable automation than writing every workflow package from scratch.
+- One-shot build instruction:
+  - Add an artifact-to-skill flow that ingests a strong example document or repo artifact, extracts reusable workflow rules and output structure, turns them into a first-class skill package, lets a user review the generated instructions and linked assets, and makes the resulting skill available for future task routing across local, browser, and background agent surfaces.
+
+### 20. Explicit writable-root policies that preserve the active issue workspace
 - Common pattern: least-privilege sandboxing is becoming more precise, but harnesses still need to keep the current task workspace writable when users or workflows add extra roots.
 - Seen in: OpenAI Symphony runtime composition for explicit `workspaceWrite` policies, where the current issue workspace is prepended automatically so linked-worktree `.git` metadata or other extra writable roots can be added without dropping normal write access.
 - Why it matters: explicit writable-root overrides are easy to get wrong; if they replace the active workspace instead of extending it, agents lose the ability to edit the task they were launched to complete.

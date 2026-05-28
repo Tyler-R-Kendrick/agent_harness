@@ -7,7 +7,7 @@ import { resolvePackageBin } from './search-eval-target.mjs';
 
 const DEFAULT_COVERAGE_SHARD_COUNT = 8;
 const DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4;
-const DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 2;
+const DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 1;
 const DEFAULT_COVERAGE_BATCH_SIZE = 25;
 const DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 12;
 const APP_TEST_FILES = ['src/App.integration.test.tsx', 'src/App.smoke.test.tsx'];

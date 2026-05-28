@@ -1,18 +1,22 @@
 # Full System Access And Self-Hosting
 
 - Harness: OpenClaw
-- Sourced: 2026-04-24
+- Sourced: 2026-05-20
 
 ## What it is
-OpenClaw emphasizes self-hosting plus file, script, shell, and integration access.
+OpenClaw is built as a self-hosted gateway that owns sessions, auth, channels, and tool execution on hardware the user controls, while still supporting remote supervision over SSH or tailnet access.
 
 ## Evidence
-- Official site: [Open Claw Agent](https://agentopenclaw.io/)
-- The site calls out:
-  - self-hosted privacy-first runtime
-  - any OS support
-  - shell/script execution
-  - many integrations and local model support
+- Official docs: [OpenClaw overview](https://docs.openclaw.ai/)
+- Official docs: [Remote access](https://docs.openclaw.ai/gateway/remote)
+- GitHub repo: [openclaw/openclaw](https://github.com/openclaw/openclaw)
+- First-party details:
+  - OpenClaw is explicitly described as a self-hosted gateway that runs on the user's own machine or server
+  - the gateway host owns sessions, auth profiles, channels, and state, while clients and nodes connect to it remotely
+  - SSH tunneling is documented as the universal remote fallback, and Tailscale Serve is the preferred path when identity-aware HTTPS is available
+  - the repo README still positions the gateway as the control plane and the assistant as the product
+- Latest development checkpoint:
+  - current docs and the stable `2026.5.18` release continue to reinforce self-hosting and remote-gateway operation as the default architecture rather than a community-maintained side path
 
 ## Product signal
-OpenClaw positions sovereignty and broad local action as differentiators.
+OpenClaw is competing on sovereignty and portability: keep the agent on infrastructure you control, then bring operator surfaces and devices to that gateway as needed.
