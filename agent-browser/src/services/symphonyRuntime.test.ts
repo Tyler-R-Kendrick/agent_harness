@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   addMultitaskTask,
+  createMultitaskProject,
   createMultitaskSubagentState,
   disposeMultitaskBranch,
   promoteMultitaskBranch,
   reconcileMultitaskSubagentRuns,
+  selectMultitaskProject,
 } from './multitaskSubagents';
 import { buildPullRequestReview, createSamplePullRequestReviewInput } from './prReviewUnderstanding';
 import {
@@ -225,6 +227,35 @@ describe('symphonyRuntime', () => {
       issueId: 'multitask:ws-research:add-smoke-proof-4',
       branchName: 'agent/research-lab/add-smoke-proof-4',
     });
+  });
+
+  it('keeps the selected issue inside the active project', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-product',
+      workspaceName: 'Product Lab',
+      request: 'parallelize frontend and tests work',
+      now: new Date('2026-05-10T13:00:00.000Z'),
+    });
+    const withEmptyProject = createMultitaskProject(initial, 'Backlog grooming', new Date('2026-05-10T14:00:00.000Z'));
+    const emptyProjectId = withEmptyProject.projects[1].id;
+    const report = buildPullRequestReview(createSamplePullRequestReviewInput('Product Lab'));
+
+    const emptyProjectSnapshot = createSymphonyRuntimeSnapshot({
+      state: {
+        ...withEmptyProject,
+        activeProjectId: emptyProjectId,
+        selectedBranchId: initial.branches[0].id,
+      },
+      report,
+    });
+    const originalProjectSnapshot = createSymphonyRuntimeSnapshot({
+      state: selectMultitaskProject(withEmptyProject, initial.projects[0].id),
+      report,
+    });
+
+    expect(emptyProjectSnapshot.activeProjectId).toBe(emptyProjectId);
+    expect(emptyProjectSnapshot.selectedIssueId).toBeNull();
+    expect(originalProjectSnapshot.selectedIssueId).toBe(initial.branches[0].id);
   });
 
   it('surfaces retry, approval, and completed runtime summary state', () => {

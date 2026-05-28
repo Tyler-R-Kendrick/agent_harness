@@ -111,6 +111,32 @@ describe('multitaskSubagents', () => {
     expect(selectMultitaskTask(withTask, 'missing-task')).toBe(withTask);
   });
 
+  it('clears selected tasks when switching to an empty project', () => {
+    const initial = createMultitaskSubagentState({
+      workspaceId: 'ws-product',
+      workspaceName: 'Product Lab',
+      request: 'parallelize frontend and tests work',
+      now: new Date('2026-05-10T13:00:00.000Z'),
+    });
+
+    const withEmptyProject = createMultitaskProject(initial, 'Backlog grooming', new Date('2026-05-10T14:00:00.000Z'));
+    const emptyProjectId = withEmptyProject.projects[1].id;
+
+    expect(withEmptyProject).toMatchObject({
+      activeProjectId: emptyProjectId,
+      selectedBranchId: null,
+    });
+
+    const selectedOriginalProject = selectMultitaskProject(withEmptyProject, initial.projects[0].id);
+    expect(selectedOriginalProject.selectedBranchId).toBe(initial.branches[0].id);
+
+    const reselectedEmptyProject = selectMultitaskProject(selectedOriginalProject, emptyProjectId);
+    expect(reselectedEmptyProject).toMatchObject({
+      activeProjectId: emptyProjectId,
+      selectedBranchId: null,
+    });
+  });
+
   it('turns rejected review feedback into a queued branch rework task', () => {
     const initial = createMultitaskSubagentState({
       workspaceId: 'ws-review',

@@ -303,6 +303,8 @@ export function createSymphonyRuntimeSnapshot({
     .filter((branch) => branch.status === 'ready' || branch.status === 'promoted' || branch.status === 'cancelled')
     .map((branch) => branch.id);
   const notPassingValidationCount = countNotPassingValidations(report.validations);
+  const activeProjectId = state.activeProjectId ?? projects[0]?.id ?? null;
+  const selectedIssueId = selectedIssueIdForProject(state, activeProjectId, projects.length);
 
   return {
     workflow: createWorkflowSnapshot(state, effectiveNow, notPassingValidationCount),
@@ -312,8 +314,8 @@ export function createSymphonyRuntimeSnapshot({
       issueCount: state.branches.filter((branch) => branch.projectId === project.id).length,
       openIssueCount: state.branches.filter((branch) => branch.projectId === project.id && branch.status !== 'promoted' && branch.status !== 'cancelled').length,
     })),
-    activeProjectId: state.activeProjectId ?? projects[0]?.id ?? null,
-    selectedIssueId: state.selectedBranchId ?? state.branches[0]?.id ?? null,
+    activeProjectId,
+    selectedIssueId,
     issues,
     workspaces,
     runAttempts,
@@ -484,6 +486,29 @@ function createIssue(branch: MultitaskSubagentBranch, index: number, now: Date):
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
+}
+
+function selectedIssueIdForProject(
+  state: MultitaskSubagentState,
+  activeProjectId: string | null,
+  projectCount: number,
+): string | null {
+  if (!activeProjectId) return state.selectedBranchId ?? state.branches[0]?.id ?? null;
+  const selectedBranch = state.selectedBranchId
+    ? state.branches.find((branch) => branch.id === state.selectedBranchId) ?? null
+    : null;
+  if (selectedBranch && isBranchVisibleForProject(selectedBranch, activeProjectId, projectCount)) {
+    return selectedBranch.id;
+  }
+  return state.branches.find((branch) => isBranchVisibleForProject(branch, activeProjectId, projectCount))?.id ?? null;
+}
+
+function isBranchVisibleForProject(
+  branch: MultitaskSubagentBranch,
+  activeProjectId: string,
+  projectCount: number,
+): boolean {
+  return branch.projectId === activeProjectId || (!branch.projectId && projectCount <= 1);
 }
 
 function createWorkspace(branch: MultitaskSubagentBranch, index: number): SymphonyWorkspace {

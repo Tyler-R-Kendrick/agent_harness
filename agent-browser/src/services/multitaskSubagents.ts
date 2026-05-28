@@ -302,7 +302,7 @@ export function createMultitaskProject(
     request: state.request || projectName,
     createdAt: state.createdAt || createdAt,
     activeProjectId: project.id,
-    selectedBranchId: state.selectedBranchId ?? state.branches[0]?.id ?? null,
+    selectedBranchId: firstBranchIdForProject(state.branches, project.id),
     projects: [...projects, project],
   };
 }
@@ -379,7 +379,7 @@ export function selectMultitaskProject(state: MultitaskSubagentState, projectId:
   return {
     ...state,
     activeProjectId: projectId,
-    selectedBranchId: firstBranch?.id ?? state.selectedBranchId,
+    selectedBranchId: firstBranch?.id ?? null,
     projects,
   };
 }
@@ -1079,6 +1079,10 @@ function projectsForState(state: MultitaskSubagentState): MultitaskProject[] {
     description: state.request,
     createdAt,
   }];
+}
+
+function firstBranchIdForProject(branches: MultitaskSubagentBranch[], projectId: string): string | null {
+  return branches.find((branch) => branch.projectId === projectId)?.id ?? null;
 }
 
 function projectIdFor(workspaceId: string, name: string): string {
