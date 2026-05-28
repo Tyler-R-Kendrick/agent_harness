@@ -36,6 +36,18 @@ export function createWorkGraph(options: CreateWorkGraphOptions): WorkGraph {
       if (!actorCanDispatch(valid.actor, valid)) {
         throw new WorkGraphCommandError(`Actor ${valid.actor.id} cannot dispatch ${valid.type}`);
       }
+      if (valid.type === 'issue.create') {
+        if (!snapshot.workspaces[valid.payload.workspaceId]) {
+          throw new WorkGraphCommandError(`Workspace not found: ${valid.payload.workspaceId}`);
+        }
+        const team = snapshot.teams[valid.payload.teamId];
+        if (!team) {
+          throw new WorkGraphCommandError(`Team not found: ${valid.payload.teamId}`);
+        }
+        if (team.workspaceId !== valid.payload.workspaceId) {
+          throw new WorkGraphCommandError(`Team ${valid.payload.teamId} does not belong to workspace ${valid.payload.workspaceId}`);
+        }
+      }
       if (valid.type === 'issue.updateStatus' || valid.type === 'issue.close' || valid.type === 'comment.create') {
         if (!snapshot.issues[valid.payload.issueId]) {
           throw new WorkGraphCommandError(`Issue not found: ${valid.payload.issueId}`);
