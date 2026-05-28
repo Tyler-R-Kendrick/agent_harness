@@ -118,13 +118,15 @@ function answerAcknowledgesShortfall(value, validationContract = {}) {
 
 function contractConstraintAssertions(validationContract, answer, labels, expectedContract) {
   if (!validationContract || !Array.isArray(validationContract.constraints)) return [];
-  const allowAcknowledgedPartial = validationContract.successSemantics === 'allow-partial-with-acknowledgement'
+  const allowAcknowledgedPartialCount = validationContract.successSemantics === 'allow-partial-with-acknowledgement'
     && answerAcknowledgesShortfall(answer, validationContract);
   const assertions = [];
   const addConstraint = (constraint, passed, evidence) => {
+    const acknowledgedShortfallPassesConstraint = allowAcknowledgedPartialCount
+      && constraint.type === 'count';
     assertions.push({
       text: `validation contract ${constraint.id}`,
-      passed: passed || allowAcknowledgedPartial,
+      passed: passed || acknowledgedShortfallPassesConstraint,
       evidence,
     });
   };
