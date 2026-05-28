@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-27
+Updated: 2026-05-28
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -131,3 +131,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: enterprise gateways, regional deployments, and subscription-backed providers often need custom auth and routing logic, but users still expect one consistent login flow and model-selection surface.
 - One-shot build instruction:
   - Let `agent-browser` extensions register provider-auth adapters that plug into the main login flow, support browser-vs-device-code selection, token refresh, auth storage, built-in provider overrides, and post-login model shaping so custom gateways or subscription-backed providers behave like first-class built-ins.
+
+### 19. Explicit writable-root policies that preserve the active issue workspace
+- Common pattern: least-privilege sandboxing is becoming more precise, but harnesses still need to keep the current task workspace writable when users or workflows add extra roots.
+- Seen in: OpenAI Symphony runtime composition for explicit `workspaceWrite` policies, where the current issue workspace is prepended automatically so linked-worktree `.git` metadata or other extra writable roots can be added without dropping normal write access.
+- Why it matters: explicit writable-root overrides are easy to get wrong; if they replace the active workspace instead of extending it, agents lose the ability to edit the task they were launched to complete.
+- One-shot build instruction:
+  - When a run supplies explicit writable roots, automatically retain the current issue or worktree root, show the effective writable-root set to the operator, keep non-filesystem sandbox policies unchanged, and cover the composition contract with config, runtime, and app-server tests.
