@@ -16,6 +16,7 @@ import {
 } from './index.js';
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const repositoryRoot = dirname(dirname(dirname(packageRoot)));
 const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
   exports: Record<string, string>;
   files: string[];
@@ -52,7 +53,7 @@ describe('design.md package boundary', () => {
 
   it('exposes the documented root runtime API from the root entry point', async () => {
     const module = await import('./index.js');
-    const packageRootRelative = relative(process.cwd(), packageRoot).replaceAll('\\', '/');
+    const packageRootRelative = relative(repositoryRoot, packageRoot).replaceAll('\\', '/');
 
     expect(Object.keys(module).sort()).toEqual([
       'DESIGN_MD_SUBSTITUTION_PLAN_SCHEMA',
