@@ -1,0 +1,20 @@
+slug: openowl
+name: OpenOwl
+vendor: OpenOwl
+segment: local-desktop-automation-mcp
+product_path: competition/openowl
+design_path: competition/openowl/design
+features_path: competition/openowl/features
+marketing_path: competition/openowl/marketing
+gossip_path: competition/openowl/gossip
+snapshot_date: 2026-05-28
+primary_sources:
+  - https://openowl.dev/
+  - https://github.com/mihir-kanzariya/openowl
+secondary_sources:
+  - https://www.reddit.com/r/openowl/comments/1ska6c3/challenge_me_ill_automate_anything_on_your/
+  - https://chatgate.ai/post/openowl
+positioning: "Local MCP desktop automation that lets Claude, Codex, and other assistants see the screen, click, type, and automate apps or browser tabs."
+customer_model: "Open-source self-hosted product with a low-price hosted/pro subscription for managed usage and support."
+competitive_threat_level: medium
+notes: "Competes against browser-only agents by expanding the automation surface to the whole desktop while emphasizing local privacy."

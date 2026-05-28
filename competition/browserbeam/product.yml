@@ -1,0 +1,20 @@
+slug: browserbeam
+name: Browserbeam
+vendor: Browserbeam
+segment: structured-browser-api-for-ai-agents
+product_path: competition/browserbeam
+design_path: competition/browserbeam/design
+features_path: competition/browserbeam/features
+marketing_path: competition/browserbeam/marketing
+gossip_path: competition/browserbeam/gossip
+snapshot_date: 2026-05-28
+primary_sources:
+  - https://browserbeam.com/
+  - https://browserbeam.com/docs
+secondary_sources:
+  - https://www.indiehackers.com/post/i-just-launched-a-browser-api-built-for-ai-agents-and-llms-9e5ca95745
+  - https://www.reddit.com/r/AI_Agents/comments/1tnfgel/cut_my_browseragent_cost_50x_by_not_using_an/
+positioning: "REST browser API that gives AI agents structured page state, element refs, action diffs, stability detection, and browser actions."
+customer_model: "Credit-pool SaaS with free trial and monthly Starter, Pro, and Scale plans."
+competitive_threat_level: high
+notes: "Threatens agent-browser's developer surface by turning compact state, refs, diffs, and stability into the core API contract."

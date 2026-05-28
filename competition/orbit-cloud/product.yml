@@ -1,0 +1,18 @@
+slug: orbit-cloud
+name: Orbit Cloud
+vendor: Olostep
+segment: local-to-cloud-agentic-browser-runtime
+product_path: competition/orbit-cloud
+design_path: competition/orbit-cloud/design
+features_path: competition/orbit-cloud/features
+marketing_path: competition/orbit-cloud/marketing
+gossip_path: competition/orbit-cloud/gossip
+snapshot_date: 2026-05-28
+primary_sources:
+  - https://www.olostep.com/orbit/cloud
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1swsz8s/what_are_people_using_browser_based_agents_for/
+positioning: "Develop browser automations locally in Orbit, then deploy the same agentic runtime to cloud browsers with autoscaling, schedules, webhooks, and observability."
+customer_model: "Enterprise/cloud sales motion with tailored pricing, shared cloud, dedicated clusters, and private/VPC deployment options."
+competitive_threat_level: medium
+notes: "Competes by combining local development, cloud runtime parity, orchestration, auth helpers, and audit artifacts."
