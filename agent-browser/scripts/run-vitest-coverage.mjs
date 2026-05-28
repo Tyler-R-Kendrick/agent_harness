@@ -7,8 +7,9 @@ import { resolvePackageBin } from './search-eval-target.mjs';
 
 const DEFAULT_COVERAGE_SHARD_COUNT = 8;
 const DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4;
+const DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 2;
 const DEFAULT_COVERAGE_BATCH_SIZE = 25;
-const DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 10;
+const DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 12;
 const APP_TEST_FILES = ['src/App.integration.test.tsx', 'src/App.smoke.test.tsx'];
 const COVERAGE_TEST_ROOTS = ['src', 'server'];
 const TEST_FILE_PATTERN = /\.test\.(?:ts|tsx)$/;
@@ -100,10 +101,12 @@ export function isVitestCoverageTmpCleanupRace({ exitCode, output }) {
     || coverageReporterCrash;
 }
 
-export function resolveCoverageBatchConcurrency(options = {}) {
-  const hasOptionShape = 'platform' in options || 'env' in options;
-  const platform = hasOptionShape ? options.platform ?? process.platform : process.platform;
-  const env = hasOptionShape ? options.env ?? process.env : options;
+export function resolveCoverageBatchConcurrency(options) {
+  const hasExplicitOptions = options !== undefined;
+  const resolvedOptions = hasExplicitOptions ? options : process.env;
+  const hasOptionShape = 'platform' in resolvedOptions || 'env' in resolvedOptions;
+  const platform = hasOptionShape ? resolvedOptions.platform ?? process.platform : process.platform;
+  const env = hasOptionShape ? resolvedOptions.env ?? process.env : resolvedOptions;
   const configured = env[COVERAGE_BATCH_CONCURRENCY_ENV];
   if (configured) {
     const parsed = Number.parseInt(configured, 10);
@@ -111,13 +114,15 @@ export function resolveCoverageBatchConcurrency(options = {}) {
       return parsed;
     }
   }
-  return platform === 'win32' ? 1 : DEFAULT_COVERAGE_BATCH_CONCURRENCY;
+  return platform === 'win32' ? DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY : DEFAULT_COVERAGE_BATCH_CONCURRENCY;
 }
 
-export function resolveCoverageBatchSize(options = {}) {
-  const hasOptionShape = 'platform' in options || 'env' in options;
-  const platform = hasOptionShape ? options.platform ?? process.platform : process.platform;
-  const env = hasOptionShape ? options.env ?? process.env : options;
+export function resolveCoverageBatchSize(options) {
+  const hasExplicitOptions = options !== undefined;
+  const resolvedOptions = hasExplicitOptions ? options : process.env;
+  const hasOptionShape = 'platform' in resolvedOptions || 'env' in resolvedOptions;
+  const platform = hasOptionShape ? resolvedOptions.platform ?? process.platform : process.platform;
+  const env = hasOptionShape ? resolvedOptions.env ?? process.env : resolvedOptions;
   const configured = env[COVERAGE_BATCH_SIZE_ENV];
   if (configured) {
     const parsed = Number.parseInt(configured, 10);

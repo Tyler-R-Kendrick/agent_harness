@@ -9,6 +9,8 @@ $steps = @(
   @{ Label = 'extension-lint'; Args = @('run', 'lint:extensions') }
   @{ Label = 'extension-coverage'; Args = @('run', 'test:coverage:extensions') }
   @{ Label = 'extension-build'; Args = @('run', 'build:extensions') }
+  @{ Label = 'prompt-budget-coverage'; Args = @('--workspace', '@agent-harness/prompt-budget', 'run', 'test:coverage') }
+  @{ Label = 'search-answering-coverage'; Args = @('--workspace', '@agent-harness/search-answering', 'run', 'test:coverage') }
   @{ Label = 'lint'; Args = @('--workspace', 'agent-browser', 'run', 'lint') }
   @{ Label = 'coverage'; Args = @('--workspace', 'agent-browser', 'run', 'test:coverage') }
   @{ Label = 'build'; Args = @('--workspace', 'agent-browser', 'run', 'build') }

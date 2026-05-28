@@ -66,6 +66,32 @@ Use `provider:model` refs when selecting models; the model id itself may contain
 slashes. Secret values stay outside the catalog and are supplied by the host
 through the `harness-core` secret resolver.
 
+## Web search deployment
+
+The `webmcp:search_web` and `webmcp:read_web_page` tools are backed by
+same-origin `/api/web-search` and `/api/web-page` routes. Local Vite dev and
+preview use the in-process middleware; Vercel deployments use the checked-in
+root `api/` functions.
+
+By default, web search tries public DuckDuckGo HTML and Bing HTML providers. For
+deployments where those providers are blocked or where a managed provider is
+preferred, set one or more provider names with:
+
+```bash
+AGENT_BROWSER_WEB_SEARCH_PROVIDERS=searxng,tavily,perplexity,duckduckgo-instant
+```
+
+Provider-specific configuration:
+
+- `AGENT_BROWSER_SEARXNG_BASE_URL` or `SEARXNG_BASE_URL`
+- `AGENT_BROWSER_TAVILY_API_KEY` or `TAVILY_API_KEY`
+- `AGENT_BROWSER_PERPLEXITY_API_KEY` or `PERPLEXITY_API_KEY`
+- `AGENT_BROWSER_WEB_SEARCH_TIMEOUT_MS` to override the default 10000 ms timeout
+
+If no provider list is set, Agent Browser infers configured providers from the
+SearXNG URL or API key environment variables, then falls back to the public HTML
+providers when configured providers return no usable results.
+
 ## Hot reload in Codespaces
 
 Opening the repository in VS Code should start the Vite dev server automatically through `.vscode/tasks.json`. In Codespaces, the workspace also installs a small local helper extension that opens VS Code Simple Browser to the forwarded URL for port `5174`.

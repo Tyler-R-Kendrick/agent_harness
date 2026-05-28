@@ -14,6 +14,8 @@ const alias = {
   '@agent-harness/ext-workflow-canvas': path.resolve(__dirname, '../ext/ide/workflow-canvas/src/index.ts'),
   '@agent-harness/ext-local-model-connector': path.resolve(__dirname, '../ext/provider/local-model-connector/src/index.ts'),
   '@agent-harness/agent-sandbox': path.resolve(__dirname, '../lib/agent-sandbox/src/index.ts'),
+  '@agent-harness/prompt-budget': path.resolve(__dirname, '../lib/prompt-budget/src/index.ts'),
+  '@agent-harness/search-answering': path.resolve(__dirname, '../lib/search-answering/src/index.ts'),
   logact: path.resolve(__dirname, '../lib/logact/src/index.ts'),
   'harness-core': path.resolve(__dirname, '../harness-core/src/index.ts'),
   'ralph-loop': path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),

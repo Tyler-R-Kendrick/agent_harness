@@ -189,7 +189,12 @@ async function main() {
   assert.match(agentBrowserPackageJson, /"test:eval-workflows": "node \.\.\/scripts\/run-package-bin\.mjs vitest run --config vitest\.evals\.config\.ts"/);
   assert.doesNotMatch(agentBrowserPackageJson, /"eval:hf-lighteval-chat"/);
   assert.match(agentBrowserPackageJson, /"smoke:git-stub": "node scripts\/git-stub-smoke\.mjs"/);
+  assert.match(agentBrowserPackageJson, /"smoke:context-manager": "node scripts\/context-manager-smoke\.mjs"/);
   assert.match(agentBrowserPackageJson, /"@agent-harness\/git-stub": "0\.1\.0"/);
+  assert.match(agentBrowserPackageJson, /"@agent-harness\/prompt-budget": "0\.1\.0"/);
+  const contextManagerSmokeScript = await readScript('agent-browser/scripts/context-manager-smoke.mjs');
+  assert.match(contextManagerSmokeScript, /vite\.config\.ts/);
+  assert.match(contextManagerSmokeScript, /'--config'/);
   const gitStubPackageJson = JSON.parse(await readScript('lib/git-stub/package.json'));
   assert.equal(gitStubPackageJson.name, '@agent-harness/git-stub');
   assert.equal(gitStubPackageJson.scripts.test, 'node ../../scripts/run-package-bin.mjs vitest run');
@@ -379,7 +384,8 @@ async function main() {
   assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
   assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
-  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 10/);
+  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 2/);
+  assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_SIZE = 12/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchConcurrency/);
   assert.match(coverageRunnerScript, /resolveCoverageBatchSize/);
   assert.match(coverageRunnerScript, /runVitestCommandsConcurrently/);
@@ -389,6 +395,17 @@ async function main() {
     coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '1' }),
     1,
   );
+  const previousCoverageBatchConcurrency = process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY;
+  process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY = '2';
+  try {
+    assert.equal(coverageRunner.resolveCoverageBatchConcurrency(), 2);
+  } finally {
+    if (previousCoverageBatchConcurrency === undefined) {
+      delete process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY;
+    } else {
+      process.env.AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY = previousCoverageBatchConcurrency;
+    }
+  }
   assert.equal(
     coverageRunner.resolveCoverageBatchConcurrency({ AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: ' 3 ' }),
     3,
@@ -409,7 +426,7 @@ async function main() {
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchConcurrency({ platform: 'win32', env: {} }),
-    1,
+    2,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchConcurrency({ platform: 'linux', env: {} }),
@@ -427,12 +444,23 @@ async function main() {
       platform: 'win32',
       env: { AGENT_BROWSER_COVERAGE_BATCH_CONCURRENCY: '0' },
     }),
-    1,
+    2,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: '6' }),
     6,
   );
+  const previousCoverageBatchSize = process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE;
+  process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE = '12';
+  try {
+    assert.equal(coverageRunner.resolveCoverageBatchSize(), 12);
+  } finally {
+    if (previousCoverageBatchSize === undefined) {
+      delete process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE;
+    } else {
+      process.env.AGENT_BROWSER_COVERAGE_BATCH_SIZE = previousCoverageBatchSize;
+    }
+  }
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ AGENT_BROWSER_COVERAGE_BATCH_SIZE: ' 8 ' }),
     8,
@@ -449,11 +477,11 @@ async function main() {
       platform: 'win32',
       env: { AGENT_BROWSER_COVERAGE_BATCH_SIZE: '0' },
     }),
-    10,
+    12,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ platform: 'win32', env: {} }),
-    10,
+    12,
   );
   assert.equal(
     coverageRunner.resolveCoverageBatchSize({ platform: 'linux', env: {} }),
@@ -599,6 +627,8 @@ async function main() {
   const extensionLintIndex = verifyScript.indexOf("Label = 'extension-lint'");
   const extensionCoverageIndex = verifyScript.indexOf("Label = 'extension-coverage'");
   const extensionBuildIndex = verifyScript.indexOf("Label = 'extension-build'");
+  const promptBudgetCoverageIndex = verifyScript.indexOf("Label = 'prompt-budget-coverage'");
+  const searchAnsweringCoverageIndex = verifyScript.indexOf("Label = 'search-answering-coverage'");
   const lintIndex = verifyScript.indexOf("Label = 'lint'");
   const buildIndex = verifyScript.indexOf("Label = 'build'");
   assert.notEqual(sourceHygieneIndex, -1);
@@ -607,6 +637,8 @@ async function main() {
   assert.notEqual(extensionLintIndex, -1);
   assert.notEqual(extensionCoverageIndex, -1);
   assert.notEqual(extensionBuildIndex, -1);
+  assert.notEqual(promptBudgetCoverageIndex, -1);
+  assert.notEqual(searchAnsweringCoverageIndex, -1);
   assert.notEqual(lintIndex, -1);
   assert.notEqual(buildIndex, -1);
   assert.ok(sourceHygieneIndex < testScriptsIndex);
@@ -614,7 +646,11 @@ async function main() {
   assert.ok(chatLoopEvalsIndex < extensionLintIndex);
   assert.ok(extensionLintIndex < extensionCoverageIndex);
   assert.ok(extensionCoverageIndex < extensionBuildIndex);
-  assert.ok(extensionBuildIndex < lintIndex);
+  assert.ok(extensionBuildIndex < promptBudgetCoverageIndex);
+  assert.ok(promptBudgetCoverageIndex < searchAnsweringCoverageIndex);
+  assert.ok(searchAnsweringCoverageIndex < lintIndex);
+  assert.match(verifyScript, /@agent-harness\/prompt-budget/);
+  assert.match(verifyScript, /@agent-harness\/search-answering/);
   assert.ok(lintIndex < buildIndex);
   assert.match(verifyScript, /npm warn/i);
   assert.match(verifyScript, /vite:reporter/i);

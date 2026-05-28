@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPromptBudget, estimateTokenCount, fitMessagesToBudget, fitTextToTokenBudget, normalizeModelMessage } from './promptBudget';
+import { createPromptBudget, estimateTokenCount, fitMessagesToBudget, fitTextToTokenBudget, normalizeModelMessage } from '../index';
 
 describe('promptBudget', () => {
   it('creates prompt budgets from model capabilities', () => {

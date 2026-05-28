@@ -46,6 +46,85 @@ function plan(selectedToolIds = descriptors.map((descriptor) => descriptor.id)):
 }
 
 describe('resolveExecutionRequirements composite search provider fallback', () => {
+  it.each([
+    {
+      prompt: 'latest OpenAI Responses API tool calling docs',
+      query: 'current openai responses api tool calling docs',
+      title: 'OpenAI Responses API tool calling guide',
+      url: 'https://platform.openai.com/docs/guides/tools',
+      snippet: 'The OpenAI Responses API tool calling guide explains how current tool calls are configured and returned.',
+      expectedText: 'OpenAI Responses API tool calling guide',
+    },
+    {
+      prompt: 'current NASA Mars Sample Return mission update',
+      query: 'current nasa mars sample return mission updates',
+      title: 'NASA Mars Sample Return Program update',
+      url: 'https://www.nasa.gov/missions/mars-sample-return/',
+      snippet: 'NASA publishes current Mars Sample Return Program updates and mission planning information.',
+      expectedText: 'NASA Mars Sample Return Program update',
+    },
+  ])('answers random external search topic "$prompt" without user feedback', async ({
+    prompt,
+    query,
+    title,
+    url,
+    snippet,
+    expectedText,
+  }) => {
+    const search = vi.fn(async ({ query: actualQuery }) => ({
+      status: 'found',
+      query: actualQuery,
+      results: [{ title, url, snippet }],
+    }));
+    const elicit = vi.fn();
+    const toolDescriptors: ToolDescriptor[] = [
+      ...descriptors.filter((descriptor) => descriptor.id !== 'cli'),
+      {
+        id: 'webmcp:elicit_user_input',
+        label: 'Elicit user input',
+        description: 'Ask the user for missing input.',
+        group: 'built-in',
+        groupLabel: 'Built-In',
+      },
+    ];
+    const selectedToolIds = toolDescriptors.map((descriptor) => descriptor.id);
+    const runtime: ToolAgentRuntime = {
+      descriptors: toolDescriptors,
+      tools: {
+        'webmcp:search_web': { execute: search },
+        'webmcp:read_web_page': { execute: vi.fn() },
+        'webmcp:elicit_user_input': { execute: elicit },
+      } as unknown as ToolSet,
+    };
+
+    const result = await resolveExecutionRequirements({
+      runtime,
+      plan: plan(selectedToolIds),
+      messages: [{ role: 'user', content: prompt }],
+      executionContext: {
+        toolPolicy: {
+          allowedToolIds: selectedToolIds,
+          assignments: {
+            executor: selectedToolIds,
+            'web-search-agent': selectedToolIds,
+          },
+        },
+      },
+      callbacks: {},
+    });
+
+    expect(search).toHaveBeenCalledWith({ query, limit: 3 });
+    expect(elicit).not.toHaveBeenCalled();
+    expect(result.status).toBe('fulfilled');
+    if (result.status !== 'fulfilled') {
+      throw new Error(`Expected fulfilled search answer, got ${result.status}.`);
+    }
+    expect(result.result.needsUserInput).not.toBe(true);
+    expect(result.result.failed).not.toBe(true);
+    expect(result.result.text).toContain(expectedText);
+    expect(result.result.text).not.toMatch(/please provide|could not find enough validated/i);
+  });
+
   it('continues through registered providers instead of generating a shell HTML parser when web search is unavailable', async () => {
     const search = vi.fn(async ({ query }) => ({
       status: 'unavailable',

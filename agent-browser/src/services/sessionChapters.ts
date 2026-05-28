@@ -102,6 +102,8 @@ export interface BuildContextManagedMessagesInput {
   state: ChapteredSessionState;
   sessionId: string;
   messages: ChatMessage[];
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 export type ContextManagedTranscriptItem =
@@ -118,10 +120,7 @@ export type ContextManagedTranscriptItem =
     toolOutputRefs: string[];
   };
 
-export interface BuildContextManagerSnapshotInput extends BuildContextManagedMessagesInput {
-  contextWindow?: number;
-  maxOutputTokens?: number;
-}
+export interface BuildContextManagerSnapshotInput extends BuildContextManagedMessagesInput {}
 
 export interface ContextManagerSnapshot {
   status: 'ok' | 'warning' | 'critical';
@@ -152,6 +151,7 @@ export const DEFAULT_SESSION_CHAPTER_POLICY: SessionChapterPolicy = {
     cacheRoot: '.agent-browser/context-cache',
   },
 };
+const MIN_NON_SYSTEM_PROMPT_TOKENS = 32;
 
 export const DEFAULT_SESSION_CHAPTER_STATE: ChapteredSessionState = {
   enabled: true,
@@ -328,9 +328,11 @@ export function buildContextManagedMessages({
   state,
   sessionId,
   messages,
+  contextWindow,
+  maxOutputTokens,
 }: BuildContextManagedMessagesInput): ChatMessage[] {
   const items = buildContextManagedTranscriptItems({ state, sessionId, messages });
-  return items.flatMap((item) => {
+  const managedMessages = items.flatMap((item) => {
     if (item.kind === 'message') return [item.message];
     return [{
       id: `context-summary:${item.chapterId}`,
@@ -347,6 +349,7 @@ export function buildContextManagedMessages({
       ].filter(Boolean).join('\n'),
     }];
   });
+  return fitContextManagedMessagesToBudget(managedMessages, { contextWindow, maxOutputTokens });
 }
 
 export function buildContextManagedTranscriptItems({
@@ -412,6 +415,75 @@ export function buildContextManagedTranscriptItems({
   return items;
 }
 
+function fitContextManagedMessagesToBudget(
+  messages: ChatMessage[],
+  {
+    contextWindow,
+    maxOutputTokens,
+  }: Pick<BuildContextManagedMessagesInput, 'contextWindow' | 'maxOutputTokens'>,
+): ChatMessage[] {
+  if (!Number.isFinite(contextWindow) || !Number.isFinite(maxOutputTokens)) return messages;
+  const budget = createPromptBudget({ contextWindow: contextWindow!, maxOutputTokens: maxOutputTokens! });
+  let remainingTokens = budget.maxInputTokens;
+  const systemMessage = messages.find((message) => message.role === 'system');
+  const nonSystemMessages = messages.filter((message) => message !== systemMessage);
+  const fittedSystemMessages: ChatMessage[] = [];
+
+  if (systemMessage) {
+    const systemText = getPromptText(systemMessage);
+    const nonSystemReserve = nonSystemMessages.length > 0
+      ? Math.min(MIN_NON_SYSTEM_PROMPT_TOKENS, Math.max(0, remainingTokens - 1))
+      : 0;
+    const allocatedTokens = Math.min(
+      Math.max(0, remainingTokens - nonSystemReserve),
+      Math.max(32, Math.floor(budget.maxInputTokens * 0.35)),
+    );
+    const fittedSystemText = fitTextToTokenBudget(systemText, allocatedTokens);
+    if (fittedSystemText) {
+      fittedSystemMessages.push(toPromptOnlyChatMessage(systemMessage, fittedSystemText));
+      remainingTokens = Math.max(nonSystemReserve, remainingTokens - estimateTokenCount(fittedSystemText));
+    }
+  }
+
+  const reversedMessages: ChatMessage[] = [];
+  for (let index = nonSystemMessages.length - 1; index >= 0; index -= 1) {
+    const message = nonSystemMessages[index]!;
+    const promptText = getPromptText(message);
+    const messageTokens = estimateTokenCount(promptText);
+
+    if (messageTokens <= remainingTokens) {
+      reversedMessages.push(toPromptOnlyChatMessage(message, promptText));
+      remainingTokens -= messageTokens;
+      continue;
+    }
+
+    const fittedText = fitTextToTokenBudget(promptText, remainingTokens);
+    if (fittedText) {
+      reversedMessages.push(toPromptOnlyChatMessage(message, fittedText));
+    }
+    break;
+  }
+
+  return [...fittedSystemMessages, ...reversedMessages.reverse()];
+}
+
+function getPromptText(message: ChatMessage): string {
+  return message.streamedContent || message.content;
+}
+
+function toPromptOnlyChatMessage(message: ChatMessage, content: string): ChatMessage {
+  return {
+    ...message,
+    content,
+    streamedContent: undefined,
+    cards: undefined,
+    processEntries: undefined,
+    reasoningSteps: undefined,
+    voterSteps: undefined,
+    busEntries: undefined,
+  };
+}
+
 export function buildContextManagerSnapshot({
   state,
   sessionId,
@@ -419,7 +491,7 @@ export function buildContextManagerSnapshot({
   contextWindow = state.policy.targetTokenBudget + 1024,
   maxOutputTokens = 512,
 }: BuildContextManagerSnapshotInput): ContextManagerSnapshot {
-  const managedMessages = buildContextManagedMessages({ state, sessionId, messages });
+  const managedMessages = buildContextManagedMessages({ state, sessionId, messages, contextWindow, maxOutputTokens });
   const originalTokenEstimate = estimateMessagesTokenCount(messages);
   const managedTokenEstimate = estimateMessagesTokenCount(managedMessages);
   const budget = createPromptBudget({ contextWindow, maxOutputTokens });
@@ -503,7 +575,11 @@ function buildChapters({
     const validationRefs = uniqueStrings(group.flatMap(collectValidationRefs));
     const summary = summarizeMessages(group);
     const carryForward = buildCarryForward(group, evidenceRefs, validationRefs, toolOutputRefs);
-    const status: SessionChapter['status'] = group.length >= policy.compressAfterMessageCount && policy.automaticCompression ? 'compressed' : 'active';
+    const groupTokenEstimate = estimateMessagesTokenCount(group);
+    const status: SessionChapter['status'] = policy.automaticCompression && (
+      group.length >= policy.compressAfterMessageCount
+      || groupTokenEstimate >= policy.targetTokenBudget
+    ) ? 'compressed' : 'active';
     return {
       id: `chapter:${sessionId}:${index + 1}`,
       sessionId,
