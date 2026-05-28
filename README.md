@@ -96,6 +96,7 @@ The root README is the package index. Use the linked package README for public A
 | [`lib/logact-loop/README.md`](./lib/logact-loop/README.md) | `@agent-harness/logact-loop` | LogAct workflow extensions for the generic harness-core agent loop. |
 | [`lib/ralph-loop/README.md`](./lib/ralph-loop/README.md) | `ralph-loop` | Ralph Loop completion heuristics and iterative execution helpers. |
 | [`lib/recursive-research-agent/README.md`](./lib/recursive-research-agent/README.md) | `@agent-harness/recursive-research-agent` | Bounded recursive research crawler controller for agent workflows. |
+| [`lib/search-answering/README.md`](./lib/search-answering/README.md) | `@agent-harness/search-answering` | Deterministic direct-source answer gating and markdown result formatting helpers. |
 | [`lib/webmcp/README.md`](./lib/webmcp/README.md) | `@agent-harness/webmcp` | Spec-faithful WebMCP polyfill, registry helpers, and model-context runtime utilities. |
 | [`lib/worker/README.md`](./lib/worker/README.md) | `@agent-harness/worker` | Extensible provider, worker, sandbox, capability, and evaluation primitives. |
 | [`lib/workgraph/README.md`](./lib/workgraph/README.md) | `@agent-harness/workgraph` | Local-first browser work graph for task, artifact, and dependency orchestration. |

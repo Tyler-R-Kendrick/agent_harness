@@ -1,8 +1,8 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-27
-Baseline: `.features/Summary.md` refreshed from the 2026-05-26 corpus.
-Diff type: additive updates after OpenClaw and Kimi AI refreshes
+Updated: 2026-05-28
+Baseline: `.features/Summary.md` refreshed from the 2026-05-26 and 2026-05-27 corpora.
+Diff type: additive updates after OpenClaw, Kimi AI, and OpenAI Symphony refreshes
 
 ## Net new normalized features
 
@@ -21,6 +21,14 @@ Diff type: additive updates after OpenClaw and Kimi AI refreshes
   - the help center says generated skills can bundle methodology, standards, scripts, tools, and references, which is materially richer than a saved prompt
   - Kimi explicitly positions these artifact-derived skills as reusable across Agent, Kimi Code, and Kimi Claw contexts
   - Kimi also ties the feature to Agent Swarm, positioning captured skills as a way to improve consistency across large multi-agent runs
+
+### Added: Explicit writable-root policies that preserve the active issue workspace
+- Why now: the OpenAI Symphony refresh surfaced a first-party hardening pattern for issue-scoped workspaces. Explicit `workspaceWrite` roots should extend the active issue workspace, not replace it.
+- Research delta:
+  - PR `#58` says Symphony should keep the current issue workspace writable even when operators or workflows pass explicit `workspaceWrite` roots for linked-worktree `.git` metadata or other extra writable paths
+  - the PR summary says the runtime prepends the current issue workspace to explicit `workspaceWrite` policies and leaves non-`workspaceWrite` policies unchanged
+  - the public spec already treats the per-issue workspace path as a safety invariant for `cwd`, which makes this an important contract-composition fix rather than a convenience tweak
+  - the Elixir reference validates real local and SSH worker runs inside per-issue workspaces, so preserving that root in the effective writable set matters for real transport-backed orchestration
 
 ## Expanded normalized features
 
@@ -73,3 +81,12 @@ Diff type: additive updates after OpenClaw and Kimi AI refreshes
   - `agent-browser` already supports skills, prompts, and repo instructions, but it still assumes users or developers will author those workflow packages manually. In practice, teams already have high-signal artifacts such as PRDs, reports, templates, playbooks, and gold-standard deliverables that encode the workflow they want the harness to reuse. Today there is no first-class path to ingest those artifacts, extract the stable methodology and output structure, and turn them into a reviewable reusable skill. That keeps valuable process knowledge trapped in static files and makes skill authoring slower, less accessible, and less likely to stay aligned with the real artifacts teams already trust.`
 - One-shot instruction for an LLM:
   - Implement artifact-to-skill generation for `agent-browser`: add a flow that accepts a strong example document or artifact set, extracts reusable workflow instructions, output structure, and referenced assets, converts that into a first-class skill package with editable metadata and generated instructions, shows a review screen before activation, stores provenance back to the source artifact, and makes the resulting skill available for future task routing across chat, browser, coding, and background-run surfaces.
+
+### Proposed Linear feature: Add explicit writable-root policies that preserve the active issue workspace
+- Linear issue title:
+  - `Add explicit writable-root policies that preserve the active issue workspace`
+- Suggested problem statement:
+  - `agent-browser` already supports sandbox and worktree-oriented execution, but explicit writable-root configuration is fragile. When users, workflows, or runtime helpers add extra writable roots such as linked-worktree `.git` metadata, cache directories, or other task-adjacent paths, it is too easy for that explicit list to replace the current issue or worktree root instead of extending it. That breaks ordinary editing in subtle ways and forces operators to over-broaden filesystem permissions just to keep the active task writable. The harness needs a clear composition rule where the current task workspace remains writable by default and extra roots are additive, inspectable, and test-covered.`
+
+- One-shot instruction for an LLM:
+  - Implement explicit writable-root policy composition for `agent-browser`: when a run, workflow, or integration supplies extra writable roots, automatically retain the current issue or worktree root in the effective writable set, keep non-filesystem sandbox policies unchanged, surface the final writable-root list in the run UI or logs, support extra roots such as linked-worktree `.git` metadata and cache directories without broadening to the whole repo, and cover the contract with config, runtime, and app-server regression tests.

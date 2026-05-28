@@ -1,7 +1,7 @@
 # OpenAI Symphony
 
 - Harness: OpenAI Symphony
-- Refreshed: 2026-05-17
+- Refreshed: 2026-05-28
 
 ## Current feature map
 - `linear-control-plane-orchestration`: Linear board as the scheduler and dispatch surface.
@@ -16,6 +16,7 @@
 - `retries-continuations-and-blocker-aware-execution`: bounded retries, continuation turns, and dependency-aware dispatch.
 - `workflow-md-contract-and-live-reload`: repo-owned workflow policy with guarded reload.
 - `workflow-scoped-network-access-for-package-installs`: turn-level network access can be granted where bootstrap requires it.
+- `workspacewrite-policies-retain-issue-workspace-roots`: explicit writable-root policies keep the active issue workspace writable while allowing extra roots.
 - `workspace-hooks-and-bootstrap-automation`: lifecycle hooks for repo setup and cleanup.
 
 ## First-party sources used in this refresh
@@ -23,4 +24,4 @@
 - [Repository README](https://github.com/openai/symphony/blob/main/README.md)
 - [Service spec](https://github.com/openai/symphony/blob/main/SPEC.md)
 - [Elixir reference README](https://github.com/openai/symphony/blob/main/elixir/README.md)
-- Open PRs: [#68](https://github.com/openai/symphony/pull/68), [#66](https://github.com/openai/symphony/pull/66), [#65](https://github.com/openai/symphony/pull/65), [#60](https://github.com/openai/symphony/pull/60)
+- Recent PRs: [#68](https://github.com/openai/symphony/pull/68), [#66](https://github.com/openai/symphony/pull/66), [#65](https://github.com/openai/symphony/pull/65), [#60](https://github.com/openai/symphony/pull/60), [#58](https://github.com/openai/symphony/pull/58)
