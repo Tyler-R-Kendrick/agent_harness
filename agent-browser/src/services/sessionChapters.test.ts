@@ -402,6 +402,32 @@ describe('sessionChapters', () => {
     expect(managedMessages[0]?.content).not.toContain('needs trimming '.repeat(80));
   });
 
+  it('reserves prompt budget for the latest non-system turn', () => {
+    const managedMessages = buildContextManagedMessages({
+      state: DEFAULT_SESSION_CHAPTER_STATE,
+      sessionId: 'session-with-long-system',
+      messages: [
+        {
+          id: 'system-large',
+          role: 'system',
+          status: 'complete',
+          content: `system instructions ${'fill context '.repeat(120)}`,
+        },
+        {
+          id: 'user-latest',
+          role: 'user',
+          status: 'complete',
+          content: 'latest turn must survive',
+        },
+      ],
+      contextWindow: 160,
+      maxOutputTokens: 80,
+    });
+
+    expect(managedMessages[0]?.role).toBe('system');
+    expect(managedMessages.at(-1)?.content).toContain('latest turn must survive');
+  });
+
   it('adds caveman mode and tool-output cache refs without inlining large raw outputs', () => {
     const longToolOutput = Array.from({ length: 260 }, (_, index) => `LOG_LINE_${index}: expensive trace payload`).join('\n');
     const largeOutputMessages: ChatMessage[] = [

@@ -151,6 +151,7 @@ export const DEFAULT_SESSION_CHAPTER_POLICY: SessionChapterPolicy = {
     cacheRoot: '.agent-browser/context-cache',
   },
 };
+const MIN_NON_SYSTEM_PROMPT_TOKENS = 32;
 
 export const DEFAULT_SESSION_CHAPTER_STATE: ChapteredSessionState = {
   enabled: true,
@@ -425,19 +426,25 @@ function fitContextManagedMessagesToBudget(
   const budget = createPromptBudget({ contextWindow: contextWindow!, maxOutputTokens: maxOutputTokens! });
   let remainingTokens = budget.maxInputTokens;
   const systemMessage = messages.find((message) => message.role === 'system');
+  const nonSystemMessages = messages.filter((message) => message !== systemMessage);
   const fittedSystemMessages: ChatMessage[] = [];
 
   if (systemMessage) {
     const systemText = getPromptText(systemMessage);
-    const allocatedTokens = Math.min(remainingTokens, Math.max(32, Math.floor(budget.maxInputTokens * 0.35)));
+    const nonSystemReserve = nonSystemMessages.length > 0
+      ? Math.min(MIN_NON_SYSTEM_PROMPT_TOKENS, Math.max(0, remainingTokens - 1))
+      : 0;
+    const allocatedTokens = Math.min(
+      Math.max(0, remainingTokens - nonSystemReserve),
+      Math.max(32, Math.floor(budget.maxInputTokens * 0.35)),
+    );
     const fittedSystemText = fitTextToTokenBudget(systemText, allocatedTokens);
     if (fittedSystemText) {
       fittedSystemMessages.push(toPromptOnlyChatMessage(systemMessage, fittedSystemText));
-      remainingTokens = Math.max(0, remainingTokens - estimateTokenCount(fittedSystemText));
+      remainingTokens = Math.max(nonSystemReserve, remainingTokens - estimateTokenCount(fittedSystemText));
     }
   }
 
-  const nonSystemMessages = messages.filter((message) => message !== systemMessage);
   const reversedMessages: ChatMessage[] = [];
   for (let index = nonSystemMessages.length - 1; index >= 0; index -= 1) {
     const message = nonSystemMessages[index]!;

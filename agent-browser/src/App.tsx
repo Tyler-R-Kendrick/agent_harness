@@ -854,7 +854,7 @@ const DEFAULT_CODEX_CONTEXT_WINDOW = 8_192;
 const DEFAULT_CODEX_MAX_OUTPUT_TOKENS = 1_024;
 
 function pickTokenLimit(value: number | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
 }
 
 function getRuntimeModelCapabilities({

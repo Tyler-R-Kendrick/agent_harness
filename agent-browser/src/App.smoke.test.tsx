@@ -9,6 +9,7 @@ import {
   startMultitaskBranchRun,
 } from './services/multitaskSubagents';
 import { STORAGE_KEYS } from './services/sessionState';
+import { createPromptBudget } from './services/promptBudget';
 import { DEFAULT_SESSION_CHAPTER_STATE } from './services/sessionChapters';
 import {
   appendWorkspaceFileCrdtDiff,
@@ -1930,7 +1931,8 @@ describe('App smoke coverage', () => {
 
     fireEvent.click(screen.getByLabelText('Add session to Research'));
 
-    expect(screen.getByLabelText('Chaptered session compression')).toHaveTextContent('/3520 tokens');
+    const expectedBudget = createPromptBudget({ contextWindow: 4096, maxOutputTokens: 512 }).maxInputTokens;
+    expect(screen.getByLabelText('Chaptered session compression')).toHaveTextContent(`/${expectedBudget} tokens`);
     expect(screen.getByLabelText('Chaptered session compression')).not.toHaveTextContent('/1648 tokens');
   });
 

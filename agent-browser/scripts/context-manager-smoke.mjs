@@ -21,4 +21,7 @@ const node = spawnSync(process.execPath, [
 
 process.stdout.write(node.stdout);
 process.stderr.write(node.stderr);
-process.exit(node.status ?? 0);
+if (node.error) {
+  throw node.error;
+}
+process.exit(node.status ?? 1);

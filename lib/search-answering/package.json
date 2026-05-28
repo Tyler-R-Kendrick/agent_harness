@@ -13,8 +13,14 @@
     "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
     "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
   },
+  "peerDependencies": {
+    "@ai-sdk/openai": "^1.0.0",
+    "ai": "^6.0.0"
+  },
   "devDependencies": {
+    "@ai-sdk/openai": "^1.0.0",
     "@vitest/coverage-v8": "^4.1.5",
+    "ai": "^6.0.153",
     "typescript": "^5.4.0",
     "vitest": "^4.1.5"
   }
