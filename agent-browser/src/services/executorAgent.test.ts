@@ -2143,7 +2143,7 @@ describe('runConfiguredExecutorAgent', () => {
     expect(theaterResult.text).not.toMatch(/indian|restaurant/i);
   });
 
-  it('pauses for user input when location is known but web search is unavailable', async () => {
+  it('reports search unavailability without asking the user for search sources', async () => {
     const toolCalls: string[] = [];
     const userContextDescriptors: ToolDescriptor[] = [
       {
@@ -2237,16 +2237,16 @@ describe('runConfiguredExecutorAgent', () => {
     expect(toolCalls).toEqual([
       'webmcp:recall_user_context',
       'webmcp:search_web',
-      'webmcp:elicit_user_input',
     ]);
     expect(runToolAgentMock).not.toHaveBeenCalled();
     expect(result).toMatchObject({
-      blocked: true,
-      needsUserInput: true,
-      text: 'I found your location, but web search is unavailable. Please provide a search source or candidate results for restaurants.\nSearch issue: Search provider unavailable.',
-      steps: 3,
+      failed: true,
+      text: 'Web search is unavailable for restaurants near Arlington Heights, IL.\nSearch issue: Search provider unavailable.',
+      steps: 2,
     });
-    expect(result.failed).toBeUndefined();
+    expect(result.blocked).not.toBe(true);
+    expect(result.needsUserInput).not.toBe(true);
+    expect(runtime.tools['webmcp:elicit_user_input'].execute).not.toHaveBeenCalled();
   });
 
   it('reuses an explicit prior chat location for a closest-bars follow-up instead of eliciting again', async () => {

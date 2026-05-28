@@ -131,6 +131,14 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../lib/agent-sandbox/src/index.ts'),
       },
       {
+        find: '@agent-harness/prompt-budget',
+        replacement: path.resolve(__dirname, '../lib/prompt-budget/src/index.ts'),
+      },
+      {
+        find: '@agent-harness/search-answering',
+        replacement: path.resolve(__dirname, '../lib/search-answering/src/index.ts'),
+      },
+      {
         find: 'ralph-loop',
         replacement: path.resolve(__dirname, '../lib/ralph-loop/src/index.ts'),
       },

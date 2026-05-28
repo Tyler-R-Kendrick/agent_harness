@@ -87,6 +87,25 @@ describe('sessionChapters', () => {
       ...DEFAULT_SESSION_CHAPTER_STATE,
       policy: { ...DEFAULT_SESSION_CHAPTER_STATE.policy, targetTokenBudget: -1 },
     })).toBe(false);
+    expect(isChapteredSessionState({
+      ...DEFAULT_SESSION_CHAPTER_STATE,
+      sessions: { broken: null },
+    })).toBe(false);
+
+    const visualSession = DEFAULT_SESSION_CHAPTER_STATE.sessions['visual-eval-session']!;
+    expect(isChapteredSessionState({
+      ...DEFAULT_SESSION_CHAPTER_STATE,
+      sessions: {
+        broken: {
+          ...visualSession,
+          chapters: [{ ...visualSession.chapters[0]!, compressedContext: null }],
+        },
+      },
+    })).toBe(false);
+    expect(isChapteredSessionState({
+      ...DEFAULT_SESSION_CHAPTER_STATE,
+      audit: [null],
+    })).toBe(false);
   });
 
   it('projects chat messages into inspectable chapters with evidence and validation refs', () => {
@@ -205,6 +224,25 @@ describe('sessionChapters', () => {
     expect(items.some((item) => item.kind === 'message' && item.message.id === 'assistant-2')).toBe(true);
   });
 
+  it('leaves transcript items untouched when compression is disabled or no session is projected', () => {
+    const disabledState = {
+      ...DEFAULT_SESSION_CHAPTER_STATE,
+      enabled: false,
+    };
+
+    expect(buildContextManagedTranscriptItems({
+      state: disabledState,
+      sessionId: 'session-checkout',
+      messages,
+    })).toEqual(messages.map((message) => ({ kind: 'message', message })));
+
+    expect(buildContextManagedTranscriptItems({
+      state: DEFAULT_SESSION_CHAPTER_STATE,
+      sessionId: 'session-without-chapters',
+      messages,
+    })).toEqual(messages.map((message) => ({ kind: 'message', message })));
+  });
+
   it('monitors token usage and reports savings from context management', () => {
     const noisyMessages = messages.map((message) => (
       message.id === 'assistant-1'
@@ -248,6 +286,120 @@ describe('sessionChapters', () => {
     expect(snapshot.originalTokenEstimate).toBeGreaterThan(snapshot.managedTokenEstimate);
     expect(snapshot.droppedOriginalMessageCount).toBe(2);
     expect(snapshot.latestSummary).toContain('patched');
+  });
+
+  it('compresses oversized turns before they hit the message-count threshold', () => {
+    const oversizedMessages: ChatMessage[] = [
+      messages[0]!,
+      {
+        id: 'user-oversized',
+        role: 'user',
+        status: 'complete',
+        content: `Keep investigating without losing context.\n${'large context payload '.repeat(400)}`,
+      },
+    ];
+    const state = updateSessionChapterPolicy(DEFAULT_SESSION_CHAPTER_STATE, {
+      compressAfterMessageCount: 100,
+      targetTokenBudget: 512,
+    });
+
+    const projected = projectSessionChapters({
+      state,
+      sessionId: 'session-oversized',
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      messages: oversizedMessages,
+      now: '2026-05-08T04:00:00.000Z',
+    });
+
+    expect(projected.sessions['session-oversized']?.chapters[0]?.status).toBe('compressed');
+  });
+
+  it('builds budgeted managed messages that cannot exceed the selected model input window', () => {
+    const rawTrace = Array.from({ length: 480 }, (_, index) => `TRACE_${index}: browser process transcript payload`).join('\n');
+    const oversizedTraceMessages: ChatMessage[] = [
+      ...messages,
+      {
+        id: 'assistant-noisy-process',
+        role: 'assistant',
+        status: 'complete',
+        content: 'Collected a very large browser/process transcript and summarized the useful finding.',
+        processEntries: [
+          {
+            id: 'proc-noisy',
+            position: 4,
+            ts: 500,
+            kind: 'result',
+            actor: 'browser',
+            summary: 'Large browser process trace',
+            transcript: rawTrace,
+            status: 'done',
+          },
+        ],
+      },
+      {
+        id: 'user-latest',
+        role: 'user',
+        status: 'complete',
+        content: 'Now apply the fix without blowing the context budget.',
+      },
+    ];
+    const state = updateSessionChapterPolicy(DEFAULT_SESSION_CHAPTER_STATE, {
+      compressAfterMessageCount: 2,
+      retainRecentMessageCount: 4,
+      renderCompressedMessages: true,
+      targetTokenBudget: 512,
+    });
+    const projected = projectSessionChapters({
+      state,
+      sessionId: 'session-budgeted',
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      messages: oversizedTraceMessages,
+      now: '2026-05-08T04:00:00.000Z',
+    });
+
+    const snapshot = buildContextManagerSnapshot({
+      state: projected,
+      sessionId: 'session-budgeted',
+      messages: oversizedTraceMessages,
+      contextWindow: 1200,
+      maxOutputTokens: 120,
+    });
+    const managedMessages = buildContextManagedMessages({
+      state: projected,
+      sessionId: 'session-budgeted',
+      messages: oversizedTraceMessages,
+      contextWindow: 1200,
+      maxOutputTokens: 120,
+    });
+
+    expect(snapshot.managedTokenEstimate).toBeLessThanOrEqual(snapshot.maxInputTokens);
+    expect(managedMessages.at(-1)?.content).toContain('without blowing the context budget');
+    expect(managedMessages.some((message) => message.processEntries?.some((entry) => entry.transcript?.includes('TRACE_479')))).toBe(false);
+  });
+
+  it('truncates the latest prompt message when the selected model window is tiny', () => {
+    const tinyWindowMessages: ChatMessage[] = [
+      {
+        id: 'user-large-latest',
+        role: 'user',
+        status: 'complete',
+        content: `latest request ${'needs trimming '.repeat(80)}`,
+      },
+    ];
+
+    const managedMessages = buildContextManagedMessages({
+      state: DEFAULT_SESSION_CHAPTER_STATE,
+      sessionId: 'session-without-chapters',
+      messages: tinyWindowMessages,
+      contextWindow: 16,
+      maxOutputTokens: 4,
+    });
+
+    expect(managedMessages).toHaveLength(1);
+    expect(managedMessages[0]?.content).toContain('...');
+    expect(managedMessages[0]?.content).not.toContain('needs trimming '.repeat(80));
   });
 
   it('adds caveman mode and tool-output cache refs without inlining large raw outputs', () => {

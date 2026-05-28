@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSearchApiMiddleware, createWebPageApiMiddleware, WebPageBridge, WebSearchBridge } from './searchMiddleware';
+import {
+  createConfiguredWebSearchBridge,
+  createSearchApiMiddleware,
+  createWebPageApiMiddleware,
+  WebPageBridge,
+  WebSearchBridge,
+} from './searchMiddleware';
 
 function jsonRequest({
   method = 'POST',
@@ -231,6 +237,32 @@ describe('WebSearchBridge', () => {
         snippet: 'Best Cafes in Arlington Heights, IL - Two Libras Cafe, Jelly Cafe, Altea Viet Coffee & Boba.',
       }],
     });
+  });
+
+  it('uses a configured credential-free provider before public HTML scraping', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      Results: [
+        {
+          Text: 'AMC Randhurst 12 - Movie theater in Mount Prospect near Arlington Heights.',
+          FirstURL: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+        },
+      ],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const bridge = createConfiguredWebSearchBridge({
+      AGENT_BROWSER_WEB_SEARCH_PROVIDER: 'duckduckgo-instant',
+    }, fetchImpl, 1_000);
+
+    await expect(bridge.search({ query: 'movie theaters near Arlington Heights IL', limit: 3 })).resolves.toEqual({
+      status: 'found',
+      query: 'movie theaters near Arlington Heights IL',
+      results: [{
+        title: 'AMC Randhurst 12',
+        url: 'https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12',
+        snippet: 'AMC Randhurst 12 - Movie theater in Mount Prospect near Arlington Heights.',
+      }],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('api.duckduckgo.com');
   });
 });
 

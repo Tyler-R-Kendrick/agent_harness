@@ -1902,6 +1902,38 @@ describe('App smoke coverage', () => {
     expect(screen.getByText('1 session · 1 chapter · 1 audit event')).toBeInTheDocument();
   });
 
+  it('uses the selected model context window in chat context chrome', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      STORAGE_KEYS.installedModels,
+      JSON.stringify([{
+        id: 'onnx-community/Qwen3-0.6B-ONNX',
+        name: 'Qwen3-0.6B-ONNX',
+        author: 'onnx-community',
+        task: 'text-generation',
+        downloads: 5000,
+        likes: 30,
+        tags: ['onnx'],
+        sizeMB: 768,
+        contextWindow: 4096,
+        maxOutputTokens: 512,
+        status: 'installed',
+      }]),
+    );
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByLabelText('Add session to Research'));
+
+    expect(screen.getByLabelText('Chaptered session compression')).toHaveTextContent('/3520 tokens');
+    expect(screen.getByLabelText('Chaptered session compression')).not.toHaveTextContent('/1648 tokens');
+  });
+
   it('renders History as a workspace git graph with session squashes and inspectable branch commits', async () => {
     vi.useFakeTimers();
     window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('history'));

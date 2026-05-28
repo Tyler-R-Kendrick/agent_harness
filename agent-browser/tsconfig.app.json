@@ -28,6 +28,8 @@
       "@agent-harness/ext-local-model-connector": ["../ext/provider/local-model-connector/src/index.ts"],
       "@agent-harness/agent-sandbox": ["../lib/agent-sandbox/src/index.ts"],
       "@agent-harness/git-stub": ["../lib/git-stub/src/index.ts"],
+      "@agent-harness/prompt-budget": ["../lib/prompt-budget/src/index.ts"],
+      "@agent-harness/search-answering": ["../lib/search-answering/src/index.ts"],
       "inbrowser-use": ["../lib/inbrowser-use/src/index.ts"],
       "logact": ["../lib/logact/src/index.ts"],
       "harness-core": ["../harness-core/src/index.ts"],
