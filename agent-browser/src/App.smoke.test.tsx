@@ -894,6 +894,52 @@ describe('App smoke coverage', () => {
     });
   });
 
+  it('keeps Symphony boards durable per workspace when another workspace starts work', async () => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(STORAGE_KEYS.activePanel, JSON.stringify('symphony'));
+    window.sessionStorage.setItem(STORAGE_KEYS.activeWorkspaceId, JSON.stringify('ws-build'));
+    const researchState = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize research work',
+      now: new Date('2026-05-07T10:00:00.000Z'),
+    });
+    window.localStorage.setItem(STORAGE_KEYS.multitaskSubagentStateByWorkspace, JSON.stringify({
+      'ws-research': researchState,
+    }));
+
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+    });
+
+    const app = await returnToSymphonyPanel();
+    fireEvent.change(within(app).getByLabelText('Symphony task request'), {
+      target: { value: 'parallelize build validation work' },
+    });
+    fireEvent.click(within(app).getByRole('button', { name: 'Start Symphony task' }));
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+
+    const boards = JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentStateByWorkspace) ?? '{}');
+    expect(boards['ws-research']).toMatchObject({
+      workspaceId: 'ws-research',
+      request: 'parallelize research work',
+    });
+    expect(boards['ws-build']).toMatchObject({
+      enabled: true,
+      workspaceId: 'ws-build',
+      request: 'parallelize build validation work',
+    });
+    expect(boards['ws-build'].branches.length).toBeGreaterThan(0);
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEYS.multitaskSubagentState) ?? '{}')).toMatchObject({
+      workspaceId: 'ws-build',
+      request: 'parallelize build validation work',
+    });
+  });
+
   it('completes no-tool Symphony tasks from durable chat output instead of leaving them stalled', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-12T14:44:08.000Z'));

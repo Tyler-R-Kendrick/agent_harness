@@ -9,6 +9,7 @@ import {
   createMultitaskProject,
   createMultitaskSubagentState,
   disposeMultitaskBranch,
+  isMultitaskSubagentStateRecord,
   isMultitaskSubagentState,
   promoteMultitaskBranch,
   reconcileMultitaskSubagentRuns,
@@ -547,5 +548,27 @@ describe('multitaskSubagents', () => {
       ...state,
       branches: [[state.branches[0]]],
     })).toBe(false);
+  });
+
+  it('validates workspace-keyed durable Symphony board state', () => {
+    const research = createMultitaskSubagentState({
+      workspaceId: 'ws-research',
+      workspaceName: 'Research',
+      request: 'parallelize research work',
+    });
+    const build = createMultitaskSubagentState({
+      workspaceId: 'ws-build',
+      workspaceName: 'Build',
+      request: 'parallelize build work',
+    });
+
+    expect(isMultitaskSubagentStateRecord({
+      'ws-research': research,
+      'ws-build': build,
+    })).toBe(true);
+    expect(isMultitaskSubagentStateRecord({
+      'ws-research': { ...research, enabled: 'yes' },
+    })).toBe(false);
+    expect(isMultitaskSubagentStateRecord([research])).toBe(false);
   });
 });

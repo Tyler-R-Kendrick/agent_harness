@@ -880,6 +880,10 @@ export function isMultitaskSubagentState(value: unknown): value is MultitaskSuba
   );
 }
 
+export function isMultitaskSubagentStateRecord(value: unknown): value is Record<string, MultitaskSubagentState> {
+  return isRecord(value) && Object.values(value).every(isMultitaskSubagentState);
+}
+
 function isMultitaskApprovalActor(value: unknown): value is MultitaskApprovalActor {
   return value === 'user' || value === 'reviewer-agent';
 }
