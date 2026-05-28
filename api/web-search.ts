@@ -3,7 +3,7 @@ import {
   createConfiguredWebSearchBridge,
   createSearchApiMiddleware,
   WebSearchBridge,
-} from '../agent-browser/server/searchMiddleware';
+} from './web-search-runtime';
 
 type SearchBridgeLike = Pick<WebSearchBridge, 'search'>;
 

@@ -314,17 +314,33 @@ describe('agent helpers', () => {
 
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
+      selectedProvider: 'codi',
+      hasCodiModelsReady: true,
+      hasGhcpModelsReady: true,
+    })).toBe('codi');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'researcher',
+      selectedProvider: 'ghcp',
       hasCodiModelsReady: true,
       hasGhcpModelsReady: true,
     })).toBe('ghcp');
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
+      selectedProvider: 'codi',
+      hasCodiModelsReady: true,
+      hasGhcpModelsReady: false,
+      hasCursorModelsReady: true,
+    })).toBe('codi');
+    expect(resolveRuntimeAgentProvider({
+      provider: 'researcher',
+      selectedProvider: 'cursor',
       hasCodiModelsReady: true,
       hasGhcpModelsReady: false,
       hasCursorModelsReady: true,
     })).toBe('cursor');
     expect(resolveRuntimeAgentProvider({
       provider: 'researcher',
+      selectedProvider: 'codi',
       hasCodiModelsReady: true,
       hasGhcpModelsReady: false,
     })).toBe('codi');

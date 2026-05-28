@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const executeCliCommandMock = vi.fn();
 const runLocalWebResearchAgentMock = vi.fn();
@@ -32,7 +32,36 @@ function createContext(): TerminalExecutorContext {
   } as unknown as TerminalExecutorContext;
 }
 
+function createWebResearchContext(): TerminalExecutorContext {
+  return {
+    ...createContext(),
+    searchWeb: vi.fn(async () => ({
+      status: 'found' as const,
+      query: 'local web search agents',
+      results: [{
+        title: 'Agent Browser Search',
+        url: 'https://example.com/search',
+        snippet: 'Agent Browser has app-backed web search.',
+      }],
+    })),
+    readWebPage: vi.fn(async () => ({
+      status: 'read' as const,
+      url: 'https://example.com/search',
+      title: 'Agent Browser Search',
+      text: 'Agent Browser has app-backed web search and page extraction evidence.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    })),
+  } as unknown as TerminalExecutorContext;
+}
+
 describe('default tools', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('builds tool instructions for the active workspace', () => {
     const instructions = buildDefaultToolInstructions({
       workspaceName: 'Research',
@@ -83,6 +112,27 @@ describe('default tools', () => {
       searchProviderName: 'perplexity',
       perplexityApiKey: 'secret-ref://local/perplexity-key',
     });
+  });
+
+  it('backs local web research with the app web-search and page-read providers by default', async () => {
+    const context = createWebResearchContext();
+    const tools = createDefaultTools(context);
+
+    runLocalWebResearchAgentMock.mockResolvedValueOnce({ searchResults: [], evidence: [], citations: [], errors: [] });
+    await tools['webmcp:local_web_research'].execute?.({
+      question: 'local web search agents',
+      maxSearchResults: 3,
+      maxPagesToExtract: 1,
+      synthesize: false,
+    }, {} as never);
+
+    expect(runLocalWebResearchAgentMock).toHaveBeenCalledWith('local web search agents', expect.objectContaining({
+      maxSearchResults: 3,
+      maxPagesToExtract: 1,
+      synthesize: false,
+      searchProvider: expect.objectContaining({ id: 'app-web-search' }),
+      extractor: expect.objectContaining({ extract: expect.any(Function) }),
+    }));
   });
 
   it('filters tool sets and descriptors by selected ids', () => {

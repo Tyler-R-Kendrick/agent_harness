@@ -893,22 +893,64 @@ export function resolveAgentProviderForTask({
 
 export function resolveRuntimeAgentProvider({
   provider,
+  selectedProvider,
   hasCodiModelsReady,
   hasGhcpModelsReady,
   hasCursorModelsReady = false,
   hasCodexModelsReady = false,
 }: {
   provider: AgentProvider;
+  selectedProvider?: AgentProvider;
   hasCodiModelsReady: boolean;
   hasGhcpModelsReady: boolean;
   hasCursorModelsReady?: boolean;
   hasCodexModelsReady?: boolean;
 }): ModelBackedAgentProvider {
-  if (provider !== 'researcher' && provider !== 'debugger' && provider !== 'planner' && provider !== 'context-manager' && provider !== 'security' && provider !== 'steering' && provider !== 'adversary' && provider !== 'media' && provider !== 'swarm' && provider !== 'tour-guide') return provider;
+  if (isModelBackedAgentProvider(provider)) return provider;
+  if (selectedProvider && isModelBackedAgentProvider(selectedProvider) && isRuntimeProviderReady({
+    provider: selectedProvider,
+    hasCodiModelsReady,
+    hasGhcpModelsReady,
+    hasCursorModelsReady,
+    hasCodexModelsReady,
+  })) {
+    return selectedProvider;
+  }
   if (hasGhcpModelsReady) return 'ghcp';
   if (hasCursorModelsReady) return 'cursor';
-  void hasCodexModelsReady;
+  if (hasCodexModelsReady) return 'codex';
   return hasCodiModelsReady ? 'codi' : 'ghcp';
+}
+
+function isModelBackedAgentProvider(provider: AgentProvider): provider is ModelBackedAgentProvider {
+  return provider === 'codi' || provider === 'ghcp' || provider === 'cursor' || provider === 'codex';
+}
+
+function isRuntimeProviderReady({
+  provider,
+  hasCodiModelsReady,
+  hasGhcpModelsReady,
+  hasCursorModelsReady,
+  hasCodexModelsReady,
+}: {
+  provider: ModelBackedAgentProvider;
+  hasCodiModelsReady: boolean;
+  hasGhcpModelsReady: boolean;
+  hasCursorModelsReady: boolean;
+  hasCodexModelsReady: boolean;
+}): boolean {
+  switch (provider) {
+    case 'codi':
+      return hasCodiModelsReady;
+    case 'ghcp':
+      return hasGhcpModelsReady;
+    case 'cursor':
+      return hasCursorModelsReady;
+    case 'codex':
+      return hasCodexModelsReady;
+    default:
+      return false;
+  }
 }
 
 export function resolveAgentModelIds({

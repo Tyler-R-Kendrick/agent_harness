@@ -245,7 +245,11 @@ export class DuckDuckGoInstantSearchProvider implements SearchProvider {
 }
 
 export function createSearchProviderFromConfig(config: WebResearchAgentConfig = {}): SearchProvider {
-  const providerName = config.searchProviderName ?? 'searxng';
+  const providerName = config.searchProviderName
+    ?? (config.searxngBaseUrl ? 'searxng' : undefined)
+    ?? (config.perplexityApiKey ? 'perplexity' : undefined)
+    ?? (config.tavilyApiKey ? 'tavily' : undefined)
+    ?? 'duckduckgo-instant';
   switch (providerName) {
     case 'searxng':
       return new SearxngSearchProvider({
