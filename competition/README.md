@@ -103,6 +103,11 @@ competition/<product-slug>/
 | Zapier Agents | App-integration AI teammate platform | `competition/zapier-agents` |
 | Make AI Agents | Visual workflow AI-agent orchestration platform | `competition/make-ai-agents` |
 | Notion Developer Platform | AI work automation platform | `competition/notion-developer-platform` |
+| Bytebot | Self-hosted desktop agent | `competition/bytebot` |
+| QWebBridge | Local browser bridge for AI agents | `competition/qwebbridge` |
+| Chrome DevTools MCP | Official browser debugging MCP | `competition/chrome-devtools-mcp` |
+| Agent Browser | Token-efficient browser-agent library | `competition/agent-browser-io` |
+| Browser for AI Agent | Browser extension MCP agent host | `competition/browser-for-ai-agent` |
 
 ## Cross-Market Takeaways
 
@@ -155,3 +160,7 @@ competition/<product-slug>/
 - Stealth-first browser engines such as Owl Browser and low-cost browser clouds such as BrowserCloud show that AI-browser infrastructure is now being packaged around anti-detection, CAPTCHA solving, concurrency, and proxies as much as agent reasoning. This helps web-data buyers, but it creates a trust and abuse-positioning wedge for products that emphasize scoped authority and auditable evidence.
 - Structured browser APIs such as Browserbeam are attacking token cost and selector drift by returning page state, refs, diffs, and stability signals instead of raw browser access. This validates `agent-browser`'s evidence-first direction, but raises the bar for compact, machine-readable state after every action.
 - Local-to-cloud products such as Orbit Cloud and local desktop MCPs such as OpenOwl are reframing the browser as one surface in a larger automation runtime. They will capture multi-app workflows that browser-only tools miss; `agent-browser` needs clear boundaries, approvals, and durable traces when work crosses tabs, apps, files, and credentials.
+- Desktop agents such as Bytebot are expanding the competitive frame from tab automation to full virtual computers with files, password managers, office apps, terminals, browser sessions, logs, and manual takeover. That broad compatibility is compelling, but it makes scope, approvals, redaction, and evidence even more important.
+- Local Chrome bridges such as QWebBridge and Browser for AI Agent show that MCP users increasingly expect agents to use real authenticated tabs through extensions, native hosts, skills, and localhost daemons. The wedge is privacy and context reuse; the risk is prompt injection, cookie/storage exposure, and fragile extension health.
+- Official browser tooling is entering the agent loop. Chrome DevTools MCP can become a default browser-control surface for coding agents because it carries DevTools depth, official trust, and many client install paths, but it still leaves product-level workflow history and approvals to the host agent.
+- Token-efficient libraries such as Agent Browser are competing on page-state representation rather than browser hosting. ASCII wireframes and numeric refs can reduce context cost, but `agent-browser` should pair compact machine-readable state with screenshots, video, and durable human review artifacts.
