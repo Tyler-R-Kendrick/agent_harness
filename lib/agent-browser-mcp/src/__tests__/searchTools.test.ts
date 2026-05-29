@@ -242,6 +242,164 @@ describe('registerSearchTools', () => {
     expect(onReadWebPage).not.toHaveBeenCalled();
   });
 
+  it('rejects loopback and private-network web page URLs before provider calls', async () => {
+    const modelContext = new ModelContext();
+    const onReadWebPage = vi.fn();
+    (registerWorkspaceTools as (context: ModelContext, options: Record<string, unknown>) => void)(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      onReadWebPage,
+    });
+
+    const webmcpTool = createWebMcpTool(modelContext);
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://localhost:4173/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://api.localhost/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'https://127.0.0.1:8443/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://10.0.0.8/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://100.64.0.8/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://172.20.0.8/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://192.168.1.50/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://198.18.0.8/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://198.19.0.8/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://169.254.169.254/latest/meta-data' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://0.0.0.0/internal' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[::1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[fe80::1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[fd00::1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[::ffff:127.0.0.1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'https://user:pass@example.com/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must not include embedded credentials.');
+    expect(onReadWebPage).not.toHaveBeenCalled();
+  });
+
+  it('allows public IPv6 web page URLs', async () => {
+    const modelContext = new ModelContext();
+    const onReadWebPage = vi.fn(async ({ url }: { url: string }) => ({
+      status: 'read' as const,
+      url,
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    }));
+    (registerWorkspaceTools as (context: ModelContext, options: Record<string, unknown>) => void)(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      onReadWebPage,
+    });
+
+    const webmcpTool = createWebMcpTool(modelContext);
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'https://[2606:4700:4700::1111]/dns-query' },
+    }, {} as never)).resolves.toEqual({
+      status: 'read',
+      url: 'https://[2606:4700:4700::1111]/dns-query',
+      title: undefined,
+      text: undefined,
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(onReadWebPage).toHaveBeenCalledWith({ url: 'https://[2606:4700:4700::1111]/dns-query' });
+
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'https://[2001:db8:1:2:3:4:5:6]/dns-query' },
+    }, {} as never)).resolves.toEqual({
+      status: 'read',
+      url: 'https://[2001:db8:1:2:3:4:5:6]/dns-query',
+      title: undefined,
+      text: undefined,
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(onReadWebPage).toHaveBeenCalledWith({ url: 'https://[2001:db8:1:2:3:4:5:6]/dns-query' });
+  });
+
+  it('allows public IPv4 web page URLs', async () => {
+    const modelContext = new ModelContext();
+    const onReadWebPage = vi.fn(async ({ url }: { url: string }) => ({
+      status: 'read' as const,
+      url,
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    }));
+    (registerWorkspaceTools as (context: ModelContext, options: Record<string, unknown>) => void)(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      onReadWebPage,
+    });
+
+    const webmcpTool = createWebMcpTool(modelContext);
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'https://8.8.8.8/dns-query' },
+    }, {} as never)).resolves.toEqual({
+      status: 'read',
+      url: 'https://8.8.8.8/dns-query',
+      title: undefined,
+      text: undefined,
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(onReadWebPage).toHaveBeenCalledWith({ url: 'https://8.8.8.8/dns-query' });
+  });
+
   it('normalizes sparse read_web_page provider results', async () => {
     const modelContext = new ModelContext();
     const onReadWebPage = vi.fn(async () => ({
