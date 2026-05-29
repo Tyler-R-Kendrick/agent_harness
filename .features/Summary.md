@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-28
+Updated: 2026-05-29
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -145,3 +145,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: explicit writable-root overrides are easy to get wrong; if they replace the active workspace instead of extending it, agents lose the ability to edit the task they were launched to complete.
 - One-shot build instruction:
   - When a run supplies explicit writable roots, automatically retain the current issue or worktree root, show the effective writable-root set to the operator, keep non-filesystem sandbox policies unchanged, and cover the composition contract with config, runtime, and app-server tests.
+
+### 21. Runtime-editable agent configs with draft, publish, compare, and rollback
+- Common pattern: some harnesses are moving agent tuning out of code-only loops and into governed runtime editors so teams can improve behavior without waiting on a full edit, commit, deploy cycle.
+- Seen in: Mastra Agent Editor with Studio-side edits for instructions, tools, MCP clients, variables, display conditions, draft or publish versioning, side-by-side comparison, rollback, and a programmatic editor API.
+- Why it matters: once an agent is in production, the people closest to prompt quality, tool selection, and UX regressions are often not the people who own deploy rights or repo access.
+- One-shot build instruction:
+  - Add a runtime agent editor for `agent-browser` that lets authorized users draft, compare, test, publish, and roll back changes to agent instructions, tool assignments, variables, and conditional behavior, while preserving a code-defined baseline, version history, and role-aware publish permissions.
