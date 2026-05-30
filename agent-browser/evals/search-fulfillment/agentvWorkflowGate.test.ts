@@ -711,6 +711,64 @@ describe('real AgentEvals workflow gate', () => {
     ]));
   });
 
+  it('fails insufficient no-publish answers that still render linked entity candidates', () => {
+    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
+    const input = {
+      expected_output: JSON.stringify({
+        expectedResult: 'insufficient-evidence-no-publish',
+        subject: 'websites',
+        location: 'Middle Earth',
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show 10 websites located in middle earth that rhyme with cat',
+          constraints: [
+            {
+              id: 'count:min-results',
+              type: 'count',
+              value: 10,
+              required: true,
+              failureMessage: 'Expected at least 10 accepted result(s).',
+            },
+          ],
+          evidenceRequirements: [],
+          impossibilityPolicy: { kind: 'likely-impossible', askUserForHelp: false },
+          clarificationTriggers: [],
+          successSemantics: 'allow-partial-with-acknowledgement',
+          legacyCriteria: [],
+        },
+      }),
+      output: [{
+        role: 'assistant',
+        content: [
+          'I could not verify 10 websites located in Middle Earth that rhyme with cat.',
+          'The requested rhyme and location constraints appear under-evidenced.',
+          '',
+          '1. [ShireCat Directory](https://fixtures.agent-browser.test/shire-cat-directory) - Why: This looks plausible, but it is not sufficiently verified.',
+        ].join('\n'),
+      }],
+    };
+
+    const result = spawnSync(process.execPath, [grader], {
+      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: subprocessEnv(),
+    });
+
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as {
+      score: number;
+      assertions: Array<{ text: string; passed: boolean }>;
+    };
+    expect(parsed.score).toBeLessThan(1);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'insufficient-evidence cases must not publish a fabricated entity list',
+        passed: false,
+      }),
+    ]));
+  });
   it('still fails acknowledged partial follow-up answers that publish forbidden page chrome labels', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
     const input = {
