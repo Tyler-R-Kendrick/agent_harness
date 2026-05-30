@@ -2,6 +2,14 @@
 .env*
 !.env.example
 
+# OS, editor, and scratch files.
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+*~
+
 # Dependency installs and package-manager caches.
 node_modules/
 **/node_modules/

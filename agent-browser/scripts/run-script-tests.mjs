@@ -237,6 +237,9 @@ async function main() {
   for (const requiredPattern of [
     '.env*',
     '!.env.example',
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini',
     'node_modules/',
     '**/node_modules/',
     '.npm-cache/',
@@ -249,9 +252,24 @@ async function main() {
     '.codex/environments/',
     '*.log',
     '*.tsbuildinfo',
+    '*.tmp',
+    '*.bak',
+    '*~',
     'package-lock.json',
   ]) {
     assert.match(vercelIgnore, new RegExp(`^${requiredPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+  }
+
+  const gitIgnore = await readScript('.gitignore');
+  for (const requiredPattern of [
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini',
+    '*.tmp',
+    '*.bak',
+    '*~',
+  ]) {
+    assert.match(gitIgnore, new RegExp(`^${requiredPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
   }
 
   const vercelInstall = await import(pathToFileURL(path.resolve(repoRoot, 'scripts/vercel-install.mjs')).href);
@@ -728,6 +746,10 @@ async function main() {
     'test-results/.last-run.json',
     'agent-browser/tsconfig.tsbuildinfo',
     'agent-browser-debug.log',
+    'notes.tmp',
+    'README.md~',
+    'Thumbs.db',
+    '.DS_Store',
     'output/evals/search-fulfillment-agentv/timing.json',
     'output/dev-server/agent-browser-5174.out.log',
     '.patches-JtbPSD/guidance-ts+1.0.0.patch',
@@ -754,6 +776,10 @@ async function main() {
       'test-results/.last-run.json',
       'agent-browser/tsconfig.tsbuildinfo',
       'agent-browser-debug.log',
+      'notes.tmp',
+      'README.md~',
+      'Thumbs.db',
+      '.DS_Store',
       'output/evals/search-fulfillment-agentv/timing.json',
       'output/dev-server/agent-browser-5174.out.log',
       '.patches-JtbPSD/guidance-ts+1.0.0.patch',
@@ -780,6 +806,10 @@ async function main() {
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /test-results\/\.last-run\.json/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/tsconfig\.tsbuildinfo/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser-debug\.log/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /notes\.tmp/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /README\.md~/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /Thumbs\.db/);
+  assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.DS_Store/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.npm-cache\/_logs/);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /_cacache\//);
   assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.agentv\/cache\.json/);
