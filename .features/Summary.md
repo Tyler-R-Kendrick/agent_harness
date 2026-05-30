@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-29
+Updated: 2026-05-30
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -152,3 +152,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: once an agent is in production, the people closest to prompt quality, tool selection, and UX regressions are often not the people who own deploy rights or repo access.
 - One-shot build instruction:
   - Add a runtime agent editor for `agent-browser` that lets authorized users draft, compare, test, publish, and roll back changes to agent instructions, tool assignments, variables, and conditional behavior, while preserving a code-defined baseline, version history, and role-aware publish permissions.
+
+### 22. Repository-scoped memory governance with guided forgetting
+- Common pattern: persistent memory is becoming a governed subsystem with admin-level enablement rules, repository-level review surfaces, and explicit deletion paths instead of a hidden always-on cache.
+- Seen in: GitHub Copilot Memory with enterprise and organization policy controls, repository-level fact review and deletion, repository-level disablement, user preference curation, CLI memory controls, and guided forgetting flows when a user asks Copilot to forget something.
+- Why it matters: teams will not trust long-lived agent memory at scale unless they can inspect what was stored, bound where it applies, and disable or delete it without turning off the whole harness.
+- One-shot build instruction:
+  - Add memory governance to `agent-browser`: support explicit enablement by scope (`workspace`, `project`, `repo`, `org`, `user`), repository-level memory review and deletion, guided forgetting flows from chat, policy-aware kill switches, and clear UI that shows when a memory was learned, why it was used, and who can remove or disable it.
