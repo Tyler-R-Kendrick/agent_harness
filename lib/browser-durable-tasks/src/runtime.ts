@@ -1,4 +1,5 @@
 import { errorToRecord } from './clone.js';
+import { transitionDurableTaskStatus } from './machine.js';
 import type {
   DurableTaskDefinition,
   DurableTaskListFilter,
@@ -81,7 +82,7 @@ export function createDurableTaskRuntime(options: DurableTaskRuntimeOptions): Du
     async cancel(id, cancelledBy) {
       const now = currentTime();
       const updated = await options.store.updateTask(id, (task) => ({
-        status: 'cancelled',
+        status: assertRuntimeTransition(task, 'CANCEL', 'cancel'),
         cancelledAt: now,
         lockOwner: null,
         lockedUntil: null,
@@ -97,8 +98,8 @@ export function createDurableTaskRuntime(options: DurableTaskRuntimeOptions): Du
     },
     async retry(id) {
       const now = currentTime();
-      const updated = await options.store.updateTask(id, () => ({
-        status: 'queued',
+      const updated = await options.store.updateTask(id, (task) => ({
+        status: assertRuntimeTransition(task, 'RETRY', 'retry'),
         error: null,
         lockOwner: null,
         lockedUntil: null,
@@ -208,4 +209,16 @@ function definitionFor(type: string, definitions: Map<string, DurableTaskDefinit
   const definition = definitions.get(type);
   if (!definition) throw new Error(`No durable task definition registered for ${type}`);
   return definition;
+}
+
+function assertRuntimeTransition(
+  task: DurableTaskRecord,
+  eventType: 'CANCEL' | 'RETRY',
+  action: 'cancel' | 'retry',
+): DurableTaskRecord['status'] {
+  const nextStatus = transitionDurableTaskStatus(task.status, eventType);
+  if (nextStatus === task.status) {
+    throw new Error(`Cannot ${action} durable task ${task.id} from ${task.status}`);
+  }
+  return nextStatus;
 }
