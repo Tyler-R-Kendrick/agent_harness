@@ -3,6 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SKIPPED_DIRS = new Set(['.git', '.npm-cache', 'coverage', 'node_modules']);
+const TEST_FILE_DENYLISTS_BY_EXTENSION = new Map([
+  ['ts', '!src/**/*.test.ts'],
+  ['tsx', '!src/**/*.test.tsx'],
+]);
+const SOURCE_TEST_DIRECTORY_DENYLIST = '!src/__tests__/**';
 
 function normalizePath(filePath) {
   return filePath.replace(/\\/g, '/');
@@ -56,6 +61,69 @@ export function findPublishablePackagesWithoutFiles(packages) {
     }));
 }
 
+function recursiveSrcPatternExtensions(files) {
+  const extensions = new Set();
+
+  for (const pattern of files) {
+    const normalized = normalizePath(pattern);
+    if (normalized.startsWith('!') || !normalized.startsWith('src/**/')) continue;
+
+    const basenamePattern = normalized.slice('src/**/'.length);
+    if (!basenamePattern.startsWith('*.')) continue;
+
+    const extensionPattern = basenamePattern.slice(2);
+    if (TEST_FILE_DENYLISTS_BY_EXTENSION.has(extensionPattern)) {
+      extensions.add(extensionPattern);
+      continue;
+    }
+
+    if (extensionPattern.startsWith('{') && extensionPattern.endsWith('}')) {
+      for (const extension of extensionPattern
+        .slice(1, -1)
+        .split(',')
+        .map((value) => value.trim())) {
+        if (TEST_FILE_DENYLISTS_BY_EXTENSION.has(extension)) {
+          extensions.add(extension);
+        }
+      }
+    }
+  }
+
+  return extensions;
+}
+
+export function findPackagePublishAllowlistIssues(packages) {
+  return packages
+    .filter(({ manifest }) => manifest.private !== true)
+    .map(({ path: packagePath, manifest }) => {
+      const files = Array.isArray(manifest.files) ? manifest.files.map(String) : [];
+      const issues = [];
+
+      if (files.length === 0) {
+        issues.push('missing package.json files allowlist');
+      }
+
+      const recursiveExtensions = recursiveSrcPatternExtensions(files);
+      for (const extension of recursiveExtensions) {
+        const denylist = TEST_FILE_DENYLISTS_BY_EXTENSION.get(extension);
+        if (!files.includes(denylist)) {
+          issues.push(`missing ${denylist} for recursive src ${extension} publish pattern`);
+        }
+      }
+
+      if (recursiveExtensions.size > 0 && !files.includes(SOURCE_TEST_DIRECTORY_DENYLIST)) {
+        issues.push(`missing ${SOURCE_TEST_DIRECTORY_DENYLIST} for recursive src publish pattern`);
+      }
+
+      return {
+        name: manifest.name ?? '(unnamed package)',
+        path: normalizePath(packagePath),
+        issues,
+      };
+    })
+    .filter((pkg) => pkg.issues.length > 0);
+}
+
 export function readWorkspacePackages(root = repoRoot()) {
   const rootManifest = readJson(path.join(root, 'package.json'));
   const workspacePatterns = Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : [];
@@ -80,12 +148,22 @@ export function formatMissingAllowlists(packages) {
   ].join('\n');
 }
 
+export function formatPublishAllowlistIssues(packages) {
+  return [
+    'Publishable workspace packages must keep package.json files allowlists explicit and test-free:',
+    ...packages.flatMap((pkg) => [
+      `- ${pkg.path} (${pkg.name})`,
+      ...pkg.issues.map((issue) => `  - ${issue}`),
+    ]),
+  ].join('\n');
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const missing = findPublishablePackagesWithoutFiles(readWorkspacePackages());
-  if (missing.length > 0) {
-    process.stderr.write(`${formatMissingAllowlists(missing)}\n`);
+  const issues = findPackagePublishAllowlistIssues(readWorkspacePackages());
+  if (issues.length > 0) {
+    process.stderr.write(`${formatPublishAllowlistIssues(issues)}\n`);
     process.exit(1);
   }
 
-  process.stdout.write('All publishable workspace packages declare package files allowlists.\n');
+  process.stdout.write('All publishable workspace packages declare explicit, test-free files allowlists.\n');
 }
