@@ -50,9 +50,18 @@ describe('HyperFrames extension', () => {
 
     expect(context.renderers.list().map((renderer) => renderer.id)).toContain('hyperframes.artifact-preview');
     const tool = context.tools.get('hyperframes.generate');
+    expect(tool?.execute).toBeDefined();
+    if (!tool?.execute) {
+      throw new Error('Expected hyperframes.generate tool to be executable');
+    }
     const generated = await tool.execute({ title: 'Storyboard', style: 'editorial' });
     const defaultNamed = await tool.execute({});
 
+    expect(isHyperframesArtifact(generated)).toBe(true);
+    expect(isHyperframesArtifact(defaultNamed)).toBe(true);
+    if (!isHyperframesArtifact(generated) || !isHyperframesArtifact(defaultNamed)) {
+      throw new Error('Expected generated tool results to be HyperFrames artifacts');
+    }
     expect(generated.title).toBe('Storyboard');
     expect(generated.config.style).toBe('editorial');
     expect(defaultNamed.title).toBe('Untitled HyperFrame');
@@ -60,3 +69,10 @@ describe('HyperFrames extension', () => {
     expect(HyperframesPreviewRenderer()).toBeNull();
   });
 });
+
+function isHyperframesArtifact(value: unknown): value is ReturnType<typeof createHyperframesArtifact> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return (value as { kind?: unknown }).kind === 'hyperframe';
+}
