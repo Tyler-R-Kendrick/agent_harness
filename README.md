@@ -95,6 +95,7 @@ The root README is the package index. Use the linked package README for public A
 | [`lib/llguidance-wasm/README.md`](./lib/llguidance-wasm/README.md) | `@agent-harness/llguidance-wasm` | Browser-local constrained decoding utilities compatible with llguidance flows. |
 | [`lib/logact/README.md`](./lib/logact/README.md) | `logact` | LogAct shared-log reliability primitives and execution building blocks. |
 | [`lib/logact-loop/README.md`](./lib/logact-loop/README.md) | `@agent-harness/logact-loop` | LogAct workflow extensions for the generic harness-core agent loop. |
+| [`lib/prompt-budget/README.md`](./lib/prompt-budget/README.md) | `@agent-harness/prompt-budget` | Prompt budgeting helpers for fitting model messages into a known context window. |
 | [`lib/ralph-loop/README.md`](./lib/ralph-loop/README.md) | `ralph-loop` | Ralph Loop completion heuristics and iterative execution helpers. |
 | [`lib/recursive-research-agent/README.md`](./lib/recursive-research-agent/README.md) | `@agent-harness/recursive-research-agent` | Bounded recursive research crawler controller for agent workflows. |
 | [`lib/search-answering/README.md`](./lib/search-answering/README.md) | `@agent-harness/search-answering` | Deterministic direct-source answer gating and markdown result formatting helpers. |
