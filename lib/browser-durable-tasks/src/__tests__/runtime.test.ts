@@ -170,6 +170,46 @@ describe('durable browser task runtime', () => {
     });
   });
 
+  it('rejects runtime operations that would reopen terminal task states', async () => {
+    const now = Date.parse('2026-05-09T14:30:00.000Z');
+    const runtime = createDurableTaskRuntime({
+      store: createMemoryDurableTaskStore(),
+      lockOwner: 'tab-terminal',
+      now: () => now,
+    });
+    runtime.defineTask({ type: 'noop', run: async () => 'done' });
+
+    const completedTask = await runtime.enqueue('noop', {});
+    await runtime.tick();
+    const cancelledTask = await runtime.enqueue('noop', {});
+    await runtime.cancel(cancelledTask.id, 'user');
+
+    await expect(runtime.retry(completedTask.id)).rejects.toThrow(
+      `Cannot retry durable task ${completedTask.id} from completed`,
+    );
+    await expect(runtime.cancel(completedTask.id)).rejects.toThrow(
+      `Cannot cancel durable task ${completedTask.id} from completed`,
+    );
+    await expect(runtime.retry(cancelledTask.id)).rejects.toThrow(
+      `Cannot retry durable task ${cancelledTask.id} from cancelled`,
+    );
+    await expect(runtime.cancel(cancelledTask.id)).rejects.toThrow(
+      `Cannot cancel durable task ${cancelledTask.id} from cancelled`,
+    );
+
+    expect(await runtime.getTask(completedTask.id)).toMatchObject({
+      status: 'completed',
+      output: 'done',
+      completedAt: now,
+      cancelledAt: null,
+    });
+    expect(await runtime.getTask(cancelledTask.id)).toMatchObject({
+      status: 'cancelled',
+      cancelledAt: now,
+      metadata: { cancelledBy: 'user' },
+    });
+  });
+
   it('throws clear errors for unknown task definitions and missing task ids', async () => {
     const runtime = createDurableTaskRuntime({
       store: createMemoryDurableTaskStore(),
