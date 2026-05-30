@@ -111,4 +111,41 @@ describe('promptBudget', () => {
     expect(result.usedTokens).toBeLessThanOrEqual(budget.maxInputTokens);
     expect(result.droppedMessages).toBe(1);
   });
+
+  it('keeps a latest user fragment when a large system message would consume a tiny budget', () => {
+    const budget = createPromptBudget({ contextWindow: 3, maxOutputTokens: 1 }, 1);
+    const result = fitMessagesToBudget([
+      { role: 'system', content: 'System:' + 's'.repeat(120) },
+      { role: 'assistant', content: 'older:' + 'a'.repeat(120) },
+      { role: 'user', content: 'latest:' + 'c'.repeat(120) },
+    ], budget);
+
+    expect(result.messages).toEqual([
+      { role: 'user', content: expect.stringContaining('...') },
+    ]);
+    expect(result.messages[0]?.content).toContain('l');
+    expect(result.usedTokens).toBeLessThanOrEqual(budget.maxInputTokens);
+    expect(result.droppedMessages).toBe(2);
+  });
+
+  it('drops older messages when the latest message exactly fills the available budget', () => {
+    const budget = createPromptBudget({ contextWindow: 3, maxOutputTokens: 1 }, 1);
+    const result = fitMessagesToBudget([
+      { role: 'user', content: 'old:' + 'o'.repeat(80) },
+      { role: 'assistant', content: 'done' },
+    ], budget);
+
+    expect(result.messages).toEqual([{ role: 'assistant', content: 'done' }]);
+    expect(result.usedTokens).toBe(1);
+    expect(result.droppedMessages).toBe(1);
+  });
+
+  it('uses the whole input budget for a lone system message', () => {
+    const budget = createPromptBudget({ contextWindow: 3, maxOutputTokens: 1 }, 1);
+    const result = fitMessagesToBudget([{ role: 'system', content: 'System:' + 's'.repeat(120) }], budget);
+
+    expect(result.messages).toEqual([{ role: 'system', content: expect.stringContaining('...') }]);
+    expect(result.usedTokens).toBeLessThanOrEqual(budget.maxInputTokens);
+    expect(result.droppedMessages).toBe(0);
+  });
 });
