@@ -28,6 +28,7 @@ describe('workgraph package boundary', () => {
       'README.md',
       'src/**/*.{ts,tsx}',
       '!src/**/*.test.ts',
+      '!src/**/*.test.tsx',
       '!src/__tests__/**',
       '!src/testing/**',
     ]);
