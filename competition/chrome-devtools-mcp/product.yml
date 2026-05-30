@@ -1,0 +1,18 @@
+slug: chrome-devtools-mcp
+name: Chrome DevTools MCP
+vendor: Chrome DevTools
+segment: official-browser-debugging-mcp
+product_path: competition/chrome-devtools-mcp
+design_path: competition/chrome-devtools-mcp/design
+features_path: competition/chrome-devtools-mcp/features
+marketing_path: competition/chrome-devtools-mcp/marketing
+gossip_path: competition/chrome-devtools-mcp/gossip
+snapshot_date: 2026-05-29
+primary_sources:
+  - https://github.com/ChromeDevTools/chrome-devtools-mcp
+secondary_sources:
+  - https://www.reddit.com/r/nextjs/comments/1qbz5sf/vercels_agentbrowser_an_alternative_to/
+positioning: "Official Chrome DevTools MCP server that lets coding agents control and inspect a live Chrome browser for automation, debugging, and performance analysis."
+customer_model: "Open-source developer tooling distributed through npm, MCP client setup, and agent plugins/skills."
+competitive_threat_level: high
+notes: "Threatens browser-agent tooling because it can become the default trusted browser MCP for coding agents through Chrome's brand, DevTools depth, and one-command install paths."

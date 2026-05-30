@@ -9,7 +9,7 @@ This repository is most useful for contributors working on the `agent-browser` p
 - `agent-browser/`: React + Vite prototype for the in-browser agent workspace
 - `skills/`: canonical bundled skill sources checked into the repo
 - `lib/`: shared TypeScript libraries used by the workspace
-- `lib/workers/`: nested worker-provider packages for browser and daemon-backed execution
+- `lib/workers/`: specialized worker-provider packages layered on top of `@agent-harness/worker`
 - `docs/`: focused project docs and implementation plans
 - `reference_impl/`: deeper feature research, architecture notes, and exploratory docs
 
@@ -95,12 +95,15 @@ The root README is the package index. Use the linked package README for public A
 | [`lib/llguidance-wasm/README.md`](./lib/llguidance-wasm/README.md) | `@agent-harness/llguidance-wasm` | Browser-local constrained decoding utilities compatible with llguidance flows. |
 | [`lib/logact/README.md`](./lib/logact/README.md) | `logact` | LogAct shared-log reliability primitives and execution building blocks. |
 | [`lib/logact-loop/README.md`](./lib/logact-loop/README.md) | `@agent-harness/logact-loop` | LogAct workflow extensions for the generic harness-core agent loop. |
+| [`lib/prompt-budget/README.md`](./lib/prompt-budget/README.md) | `@agent-harness/prompt-budget` | Prompt budgeting helpers for fitting model messages into a known context window. |
 | [`lib/ralph-loop/README.md`](./lib/ralph-loop/README.md) | `ralph-loop` | Ralph Loop completion heuristics and iterative execution helpers. |
 | [`lib/recursive-research-agent/README.md`](./lib/recursive-research-agent/README.md) | `@agent-harness/recursive-research-agent` | Bounded recursive research crawler controller for agent workflows. |
 | [`lib/search-answering/README.md`](./lib/search-answering/README.md) | `@agent-harness/search-answering` | Deterministic direct-source answer gating and markdown result formatting helpers. |
 | [`lib/webmcp/README.md`](./lib/webmcp/README.md) | `@agent-harness/webmcp` | Spec-faithful WebMCP polyfill, registry helpers, and model-context runtime utilities. |
 | [`lib/worker/README.md`](./lib/worker/README.md) | `@agent-harness/worker` | Extensible provider, worker, sandbox, capability, and evaluation primitives. |
-| [`lib/workers/README.md`](./lib/workers/README.md) | `workspace index` | Discovery index for the nested `@agent-harness/worker-browser` and `@agent-harness/worker-daemon` packages. |
+| [`lib/workers/README.md`](./lib/workers/README.md) | `lib/workers/*` | Workspace index for the browser and daemon worker-provider packages. |
+| [`lib/workers/browser/README.md`](./lib/workers/browser/README.md) | `@agent-harness/worker-browser` | Browser orchestration worker provider that requests sandbox access and runs conventional seeded jobs. |
+| [`lib/workers/daemon/README.md`](./lib/workers/daemon/README.md) | `@agent-harness/worker-daemon` | Daemon-backed worker provider that adapts message-oriented daemon actions into generic worker jobs. |
 | [`lib/workgraph/README.md`](./lib/workgraph/README.md) | `@agent-harness/workgraph` | Local-first browser work graph for task, artifact, and dependency orchestration. |
 
 ## Bundled skills

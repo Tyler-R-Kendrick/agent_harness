@@ -1,0 +1,18 @@
+slug: browser-for-ai-agent
+name: Browser for AI Agent
+vendor: mantou132
+segment: browser-extension-mcp-agent-host
+product_path: competition/browser-for-ai-agent
+design_path: competition/browser-for-ai-agent/design
+features_path: competition/browser-for-ai-agent/features
+marketing_path: competition/browser-for-ai-agent/marketing
+gossip_path: competition/browser-for-ai-agent/gossip
+snapshot_date: 2026-05-29
+primary_sources:
+  - https://github.com/mantou132/browser4agent
+secondary_sources:
+  - https://www.reddit.com/r/mcp/comments/1toe13v/i_built_a_browser_extension_that_lets_claude_and/
+positioning: "Open-source browser extension and native MCP host that exposes tab reading, browser control, cookies/localStorage, screenshots, and WebMCP/page tools to user-configured agents."
+customer_model: "Open-source extension and native-host project with release downloads while store listings are pending."
+competitive_threat_level: medium
+notes: "Threatens local browser agents by combining extension control, local MCP hosting, WebMCP page tools, and explicit privacy/security warnings."

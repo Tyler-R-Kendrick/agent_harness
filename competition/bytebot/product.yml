@@ -1,0 +1,20 @@
+slug: bytebot
+name: Bytebot
+vendor: Bytebot
+segment: self-hosted-desktop-agent
+product_path: competition/bytebot
+design_path: competition/bytebot/design
+features_path: competition/bytebot/features
+marketing_path: competition/bytebot/marketing
+gossip_path: competition/bytebot/gossip
+snapshot_date: 2026-05-29
+primary_sources:
+  - https://www.bytebot.ai/
+  - https://docs.bytebot.ai/quickstart
+  - https://github.com/bytebot-ai/bytebot
+secondary_sources:
+  - https://moge.ai/product/bytebot
+positioning: "Open-source desktop agent that operates a complete containerized Linux computer through natural-language tasks."
+customer_model: "Open-source/self-hosted adoption with deployment paths for local Docker, Railway, and cloud infrastructure."
+competitive_threat_level: medium
+notes: "Threatens browser-only products when customers need files, apps, password managers, terminal, browser, and manual takeover inside one auditable remote desktop."

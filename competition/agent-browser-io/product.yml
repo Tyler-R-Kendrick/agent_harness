@@ -1,0 +1,19 @@
+slug: agent-browser-io
+name: Agent Browser
+vendor: agent-browser.io
+segment: token-efficient-browser-agent-library
+product_path: competition/agent-browser-io
+design_path: competition/agent-browser-io/design
+features_path: competition/agent-browser-io/features
+marketing_path: competition/agent-browser-io/marketing
+gossip_path: competition/agent-browser-io/gossip
+snapshot_date: 2026-05-29
+primary_sources:
+  - https://agent-browser.io/
+  - https://github.com/vustagc/agent-browser
+secondary_sources:
+  - https://www.reddit.com/r/nextjs/comments/1qbz5sf/vercels_agentbrowser_an_alternative_to/
+positioning: "Token-efficient browser automation library, CLI, MCP server, and Vercel AI SDK toolset using ASCII wireframes and numeric element references."
+customer_model: "Open-source/npm developer package for MCP clients and AI SDK applications."
+competitive_threat_level: medium
+notes: "Directly competes on token-efficient browser state representation and simple MCP/SDK installation, but lacks a broader product workspace in the current snapshot."
