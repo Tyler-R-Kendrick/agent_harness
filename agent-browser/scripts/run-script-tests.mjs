@@ -260,6 +260,33 @@ async function main() {
     assert.match(vercelIgnore, new RegExp(`^${requiredPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
   }
 
+  const dockerIgnore = await readScript('.dockerignore');
+  for (const requiredPattern of [
+    '.env*',
+    '!.env.example',
+    '.git/',
+    '.DS_Store',
+    'Thumbs.db',
+    'desktop.ini',
+    'node_modules/',
+    '**/node_modules/',
+    '.npm-cache/',
+    'coverage/',
+    '**/coverage/',
+    'playwright-report/',
+    'test-results/',
+    'output/',
+    '.agentv/cache.json',
+    '.codex/environments/',
+    '*.log',
+    '*.tsbuildinfo',
+    '*.tmp',
+    '*.bak',
+    '*~',
+    'package-lock.json',
+  ]) {
+    assert.match(dockerIgnore, new RegExp(`^${requiredPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+  }
   const gitIgnore = await readScript('.gitignore');
   for (const requiredPattern of [
     '.DS_Store',

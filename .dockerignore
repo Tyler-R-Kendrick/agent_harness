@@ -1,0 +1,40 @@
+# Secrets and local environment files.
+.env*
+!.env.example
+.git/
+
+# OS, editor, and scratch files.
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+*~
+
+# Dependency installs and package-manager caches.
+node_modules/
+**/node_modules/
+.npm-cache/
+_cacache/
+_logs/
+_update-notifier-last-checked
+package-lock.json
+
+# Generated reports, build caches, and run output.
+coverage/
+**/coverage/
+playwright-report/
+test-results/
+output/
+*.tsbuildinfo
+*.log
+
+# Local automation/runtime state.
+.playwright-mcp/
+.agentv/cache.json
+.codex/environments/
+.codex-verify-*/
+.patches-*/
+.tmp-*
+.codex-tk26-objects/
+.codex-tk26-index-*
