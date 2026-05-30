@@ -21,6 +21,20 @@ import type {
 } from '@agent-harness/search-answering';
 ```
 
+## Package Boundary
+
+`@agent-harness/search-answering` exposes one stable public import path:
+`@agent-harness/search-answering`. Package consumers should import values and
+types from that root entry point instead of reaching into implementation files.
+
+Source files under `@agent-harness/search-answering/src/*` are private package
+internals. They are shipped only because this workspace consumes TypeScript
+source directly through the package export map, not because deep imports are a
+supported API.
+
+Published package artifacts are intentionally limited to README.md, package.json, and runtime source files.
+Tests, coverage output, local configs, and package-internal fixtures are excluded from the npm package.
+
 ### `isDirectSourceSearchIntent(intent)`
 
 Returns `true` only for direct source lookups that should be answered with current web results instead of entity-ranking or location-aware search flows.
