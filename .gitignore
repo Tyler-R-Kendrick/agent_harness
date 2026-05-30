@@ -2,6 +2,14 @@
 .env.*
 !.env.example
 
+# OS, editor, and scratch files.
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+*~
+
 .playwright-mcp/
 .agentv/cache.json
 .codex/environments/

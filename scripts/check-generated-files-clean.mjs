@@ -29,6 +29,30 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath.endsWith('.log'),
   },
   {
+    label: '*.tmp',
+    matches: (filePath) => filePath.endsWith('.tmp'),
+  },
+  {
+    label: '*.bak',
+    matches: (filePath) => filePath.endsWith('.bak'),
+  },
+  {
+    label: '*~',
+    matches: (filePath) => filePath.endsWith('~'),
+  },
+  {
+    label: '.DS_Store',
+    matches: (filePath) => filePath === '.DS_Store' || filePath.endsWith('/.DS_Store'),
+  },
+  {
+    label: 'Thumbs.db',
+    matches: (filePath) => filePath === 'Thumbs.db' || filePath.endsWith('/Thumbs.db'),
+  },
+  {
+    label: 'desktop.ini',
+    matches: (filePath) => filePath === 'desktop.ini' || filePath.endsWith('/desktop.ini'),
+  },
+  {
     label: '.npm-cache/',
     matches: (filePath) => filePath === '.npm-cache' || filePath.startsWith('.npm-cache/'),
   },
