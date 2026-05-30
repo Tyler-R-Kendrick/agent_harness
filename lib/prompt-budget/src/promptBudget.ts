@@ -100,14 +100,20 @@ export function fitMessagesToBudget(messages: BudgetedMessage[], budget: PromptB
   let droppedMessages = 0;
 
   const systemMessage = messages.find((message) => message.role === 'system');
+  const nonSystemMessages = messages.filter((message) => message !== systemMessage);
   if (systemMessage) {
     const allocated = Math.max(32, Math.floor(budget.maxInputTokens * 0.35));
-    const fittedContent = fitTextToTokenBudget(systemMessage.content, Math.min(allocated, remaining));
-    kept.push({ role: systemMessage.role, content: fittedContent });
-    remaining = Math.max(0, remaining - estimateTokenCount(fittedContent));
+    const reserveForLatest = nonSystemMessages.length > 0 ? 1 : 0;
+    const availableForSystem = Math.max(0, remaining - reserveForLatest);
+    const fittedContent = fitTextToTokenBudget(systemMessage.content, Math.min(allocated, availableForSystem));
+    if (fittedContent) {
+      kept.push({ role: systemMessage.role, content: fittedContent });
+      remaining = Math.max(0, remaining - estimateTokenCount(fittedContent));
+    } else {
+      droppedMessages += 1;
+    }
   }
 
-  const nonSystemMessages = messages.filter((message) => message !== systemMessage);
   const reversed: BudgetedMessage[] = [];
   for (let index = nonSystemMessages.length - 1; index >= 0; index -= 1) {
     const message = nonSystemMessages[index];
