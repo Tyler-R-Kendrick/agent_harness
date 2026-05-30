@@ -249,6 +249,8 @@ const expectedSequence = semanticInsufficientEvidence
 
 const expectsInsufficientEvidence = !semanticOnly
   && /insufficient|blocked|no-publish/i.test(String(contract.expectedResult ?? ''));
+const forbidsEntityPublication = !semanticOnly
+  && /blocked|no-publish/i.test(String(contract.expectedResult ?? ''));
 const requestedEntityCount = Number.isFinite(Number(contract.minimumAcceptedEntities))
   ? Number(contract.minimumAcceptedEntities)
   : Number.isFinite(Number(contract.requestedCount))
@@ -293,9 +295,10 @@ if (semanticOnly) {
     }
   }
 } else if (expectsInsufficientEvidence) {
+  const labels = renderedEntityLabels(answer);
   add(
     'insufficient-evidence cases must not publish a fabricated entity list',
-    isInsufficientEvidenceAnswer(answer),
+    isInsufficientEvidenceAnswer(answer) && (!forbidsEntityPublication || labels.length === 0),
     answer,
   );
 } else {
