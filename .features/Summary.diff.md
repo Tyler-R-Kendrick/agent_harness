@@ -1,55 +1,55 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-05-29
-Baseline: `.features/Summary.md` refreshed through the 2026-05-28 OpenAI Symphony corpus.
-Diff type: additive updates after the Mastra refresh
+Updated: 2026-05-30
+Baseline: `.features/Summary.md` refreshed through the 2026-05-29 Mastra corpus.
+Diff type: additive updates after the GitHub Copilot refresh
 
 ## Net new normalized features
 
-### Added: Runtime-editable agent configs with draft, publish, compare, and rollback
-- Why now: the Mastra refresh surfaced a mature runtime editor rather than another static prompt file or hidden admin form. Agent behavior can now be changed from the harness control plane with a real lifecycle.
+### Added: Repository-scoped memory governance with guided forgetting
+- Why now: the refreshed GitHub Copilot corpus shows memory becoming an administered system rather than a quiet personalization layer. The current product line now exposes scope-aware enablement, review, deletion, and disablement controls across both UI and CLI surfaces.
 - Research delta:
-  - Mastra Agent Editor lets teams update instructions, tools, MCP clients, variables, and display conditions from Studio without editing code or redeploying
-  - changes are stored separately from the code-defined agent and move through draft and publish states with comparison history and rollback
-  - the same surface is exposed programmatically through `mastra.getEditor()` and `/api/stored/agents`, so the editor is part of the platform contract rather than a UI-only shortcut
-  - Mastra ties the editor to Studio Auth and role-aware access, which makes publish rights and read-only access governable in the same place as observability and evals
+  - GitHub Copilot Memory now spans repository facts and user preferences, and those memories can be reused across cloud agent, code review, and Copilot CLI
+  - enterprise owners can force enablement, force disablement, or delegate the decision to organization owners, while repository owners can review and delete stored facts
+  - the May 26, 2026 release adds clearer forgetting guidance, a repository-level off switch, and more CLI memory controls instead of leaving deletion buried in web-only settings
+  - current docs show repository, organization, enterprise, and user controls as separate levers, which is a stronger governance model than a single global toggle
 
 ## Expanded normalized features
 
 ### Expanded: Parallel agent orchestration
-- Why now: Mastra is moving from internal supervisor-only coordination toward interoperable agent fabrics.
+- Why now: GitHub Copilot now has a dedicated desktop app that treats parallel branch-isolated sessions as a first-class operations surface instead of a side effect of separate terminals.
 - Research delta:
-  - the current feature line includes explicit Agent-to-Agent support for cross-framework multi-agent systems
-  - recent releases say ACP-compatible coding agents can be used anywhere Mastra accepts a `SubAgent`, including supervisor delegation and workflow steps
-  - this extends Mastra beyond same-runtime routing and into open heterogeneous coordination
+  - the Copilot app runs multiple isolated sessions at the same time, each with a dedicated git worktree and branch
+  - session modes are explicit in the app: `Interactive`, `Plan`, and `Autopilot`
+  - the same app positions the user as a director of multiple concurrent workstreams rather than a passenger in one terminal
 
 ### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: Mastra now treats stored agents and skills as discoverable catalog objects, not just persisted blobs.
+- Why now: GitHub has moved skills and MCP settings into the Copilot app itself instead of keeping them trapped in the CLI or repo file layer.
 - Research delta:
-  - the May 15, 2026 release adds a `favorites` storage domain for agents and skills
-  - stored agents and skills now carry `visibility` and `favoriteCount` fields for filtering, ranking, and public or private curation
-  - the same release wires the feature across major storage adapters, making the catalog behavior portable rather than backend-specific
+  - current Copilot app docs say repo or CLI-configured skills are automatically available in the app
+  - global instructions now apply across all app sessions
+  - MCP servers can be managed from app settings, including popular catalog servers and custom servers
 
 ### Expanded: Multi-surface continuity
-- Why now: Mastra's current harness can accept work from external chat surfaces without cloning agent logic.
+- Why now: GitHub Copilot's remote-control and app work now covers more execution origins and more follow-through surfaces than the prior snapshot.
 - Research delta:
-  - Channels let one agent respond across Slack, Discord, Telegram, and similar surfaces through adapter-based ingress
-  - each adapter gets a first-party webhook endpoint while the same agent remains testable and observable in Studio
-  - Mastra explicitly positions channels as additive surfaces rather than a forked per-platform bot architecture
+  - remote control for Copilot CLI is now generally available across mobile, web, VS Code, and JetBrains
+  - remote sessions now support non-GitHub repositories and plain directories, reducing the dependency on GitHub-hosted repos for follow-through
+  - the new Copilot app adds another GitHub-native control surface without forking the underlying CLI agent model
 
-### Expanded: Queued steering with visible progress drafts
-- Why now: Mastra's May 2026 background-task work strengthens the argument that long-running turns need explicit visible progress rather than silent blocking.
+### Expanded: Git/PR-native execution
+- Why now: the Copilot app makes GitHub issue intake and PR landing a single local workflow instead of a sequence of IDE, browser, and terminal hops.
 - Research delta:
-  - the feature line now includes `Introducing Background Tasks for Mastra Agents`, focused on progress feedback during long-running tool calls
-  - that sits on top of Mastra's existing background process handles, workflow suspend/resume continuity, and Studio observability
-  - the combined signal is that progress visibility is becoming a runtime expectation, not a polish feature
+  - users can browse issues, pick one up, let the agent create a branch, run tests, and then review, open, and merge the PR from the same app
+  - scheduled workflows are now part of the app surface, so recurring issue-to-agent execution is no longer limited to cloud-only or hidden automation flows
+  - this turns GitHub-native agent work into a purpose-built desktop loop rather than a thin wrapper around chat or pull requests
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add a runtime agent editor with draft, publish, compare, and rollback
+### Proposed Linear feature: Add repository-scoped memory governance with guided forgetting
 - Linear issue title:
-  - `Add a runtime agent editor with draft, publish, compare, and rollback`
+  - `Add repository-scoped memory governance with guided forgetting`
 - Suggested problem statement:
-  - `agent-browser` supports configurable agents, repo instructions, and skills, but production tuning is still too code-centric. Changing instructions, tool assignment, or conditional behavior generally requires editing files, opening a PR, and redeploying before non-engineering stakeholders can evaluate the result. That slows iteration, keeps high-signal product and operations feedback outside the harness, and makes it harder to compare candidate configurations or roll back a bad change cleanly. The harness needs a governed runtime editing surface that preserves the code-defined baseline while letting authorized users draft, test, compare, publish, and revert agent configuration changes without treating every prompt or tool tweak like a source-code release.`
+  - `agent-browser` already depends on long-lived instructions, run history, and durable context, but its memory behavior is still too implicit. Teams need stronger trust controls before they will allow the harness to accumulate repository facts, user preferences, or operational heuristics over time. Without explicit scope-aware policies, repository owners cannot review or delete stale entries, admins cannot disable memory without disabling the rest of the harness, and users cannot confidently ask the system to forget something and know what actually changed. The harness needs a governed memory subsystem with review, deletion, disablement, and guided-forgetting flows that work across local, browser, and background agent experiences.`
 - One-shot instruction for an LLM:
-  - Implement a runtime configuration editor for `agent-browser`: let authorized users create draft edits to agent instructions, tool assignments, MCP connections, variables, and conditional behaviors; preserve a code-defined baseline plus version history; support compare, test, publish, and rollback actions; expose the same lifecycle through a programmatic API; and apply role-aware access controls so viewing, drafting, and publishing can be governed separately.
+  - Implement memory governance for `agent-browser`: add explicit memory scopes for workspace, project, repository, organization, and user context; persist provenance for every learned memory; let repository owners and authorized operators review, delete, disable, and re-enable stored memories from the UI and API; support guided forgetting directly from chat so a user can ask the harness to forget something and be taken to the exact entry or entries involved; enforce scope-aware policies and kill switches without disabling unrelated harness features; and surface why a memory was used, when it was validated, and who can remove it.
