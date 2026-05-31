@@ -7,6 +7,7 @@ This repository is most useful for contributors working on the `agent-browser` p
 ## Repository layout
 
 - `agent-browser/`: React + Vite prototype for the in-browser agent workspace
+- `harness-core/`: reusable TypeScript agent-loop runtime, command, storage, and plugin-manifest primitives
 - `skills/`: canonical bundled skill sources checked into the repo
 - `lib/`: shared TypeScript libraries used by the workspace
 - `lib/workers/`: specialized worker-provider packages layered on top of `@agent-harness/worker`
@@ -82,6 +83,7 @@ The root README is the package index. Use the linked package README for public A
 | Workspace | Import path | Purpose |
 |---|---|---|
 | [`agent-browser/README.md`](./agent-browser/README.md) | `agent-browser` | Primary React + Vite application shell, chat-agent runtime, and browser workspace UI. |
+| [`harness-core/README.md`](./harness-core/README.md) | `harness-core` | Reusable agent-loop runtime, command, storage, constrained-decoding, and plugin-manifest primitives. |
 | [`lib/agent-browser-mcp/README.md`](./lib/agent-browser-mcp/README.md) | `@agent-harness/agent-browser-mcp` | Agent Browser MCP tools, resources, prompts, prompt templates, and WebMCP bridge helpers. |
 | [`lib/agent-sandbox/README.md`](./lib/agent-sandbox/README.md) | `@agent-harness/agent-sandbox` | Capability-based sandbox provider for governed browser agent execution. |
 | [`lib/browser-durable-tasks/README.md`](./lib/browser-durable-tasks/README.md) | `@agent-harness/browser-durable-tasks` | Browser-native durable task state management backed by IndexedDB. |
