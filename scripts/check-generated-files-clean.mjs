@@ -37,6 +37,10 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath.endsWith('.bak'),
   },
   {
+    label: '*.tgz',
+    matches: (filePath) => filePath.endsWith('.tgz'),
+  },
+  {
     label: '*~',
     matches: (filePath) => filePath.endsWith('~'),
   },
