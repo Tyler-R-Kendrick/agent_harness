@@ -1,0 +1,24 @@
+slug: magnitude
+name: Magnitude
+vendor: Magnitude
+segment: vision-first-browser-agent-library
+product_path: competition/magnitude
+design_path: competition/magnitude/design
+features_path: competition/magnitude/features
+marketing_path: competition/magnitude/marketing
+gossip_path: competition/magnitude/gossip
+snapshot_date: 2026-05-31
+primary_sources:
+  - https://magnitude.run/
+  - https://docs.magnitude.run/reference/browser-agent
+  - https://docs.magnitude.run/core-concepts/browser-interaction
+  - https://docs.magnitude.run/core-concepts/data-extraction
+  - https://docs.magnitude.run/core-concepts/agent-options
+secondary_sources:
+  - https://github.com/magnitudedev/magnitude
+  - https://www.reddit.com/r/AI_Agents/comments/1rq0xhc/what_techniques_actually_move_the_needle_for_browser_or_cua_agents/
+  - https://www.reddit.com/r/AI_Agents/comments/1slc8rj/tested_6_browser_use_agents_for_realworld_tasks_heres_an_honest_breakdown_looking_for_recommendations/
+positioning: "Open-source, vision-first browser agent for natural-language browser actions, structured extraction, and visual test assertions."
+customer_model: "Open-source developer library with documentation/community-led adoption; cloud or paid model was not prominent at snapshot time."
+competitive_threat_level: high
+notes: "Threatens agent-browser where developers want a Playwright-compatible vision layer with act/extract/test primitives instead of a full browser workspace."
