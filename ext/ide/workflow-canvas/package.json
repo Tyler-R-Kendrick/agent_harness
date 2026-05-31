@@ -21,7 +21,7 @@
   "scripts": {
     "lint": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('workflow-canvas tests are isolated in @agent-harness/ext-workflow-canvas-tests')\"",
+    "test": "node ../../../scripts/run-package-bin.mjs vitest run src/packageBoundary.test.ts --config vitest.config.ts",
     "test:watch": "node -e \"console.log('workflow-canvas tests are isolated in @agent-harness/ext-workflow-canvas-tests')\"",
     "test:coverage": "node -e \"console.log('workflow-canvas coverage is enforced by @agent-harness/ext-workflow-canvas-tests')\""
   },
