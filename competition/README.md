@@ -108,6 +108,9 @@ competition/<product-slug>/
 | Chrome DevTools MCP | Official browser debugging MCP | `competition/chrome-devtools-mcp` |
 | Agent Browser | Token-efficient browser-agent library | `competition/agent-browser-io` |
 | Browser for AI Agent | Browser extension MCP agent host | `competition/browser-for-ai-agent` |
+| Magnitude | Vision-first browser-agent library | `competition/magnitude` |
+| LaVague | Open-source web-agent and QA generation framework | `competition/lavague` |
+| Midscene.js | Vision-driven cross-platform UI automation | `competition/midscene` |
 
 ## Cross-Market Takeaways
 
@@ -164,3 +167,5 @@ competition/<product-slug>/
 - Local Chrome bridges such as QWebBridge and Browser for AI Agent show that MCP users increasingly expect agents to use real authenticated tabs through extensions, native hosts, skills, and localhost daemons. The wedge is privacy and context reuse; the risk is prompt injection, cookie/storage exposure, and fragile extension health.
 - Official browser tooling is entering the agent loop. Chrome DevTools MCP can become a default browser-control surface for coding agents because it carries DevTools depth, official trust, and many client install paths, but it still leaves product-level workflow history and approvals to the host agent.
 - Token-efficient libraries such as Agent Browser are competing on page-state representation rather than browser hosting. ASCII wireframes and numeric refs can reduce context cost, but `agent-browser` should pair compact machine-readable state with screenshots, video, and durable human review artifacts.
+- Vision-first automation libraries such as Magnitude and Midscene are pushing the opposite direction from compact DOM snapshots: they make screenshots the primary action substrate and keep Playwright or MCP as integration surfaces. This validates visual fallback and canvas/mobile coverage, but it also makes latency, model cost, replay reports, and mis-click review core UX requirements.
+- BDD-to-agent frameworks such as LaVague show that browser agents can enter through the QA artifact pipeline rather than the browser UI. `agent-browser` should preserve Gherkin/scenario/run evidence cleanly enough that test-generation and browser-operation workflows can share the same trace language.
