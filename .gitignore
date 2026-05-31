@@ -9,6 +9,7 @@ desktop.ini
 *.tmp
 *.bak
 *~
+*.tgz
 
 .playwright-mcp/
 .agentv/cache.json
