@@ -1,10 +1,13 @@
 # Warp
 
 - Harness: Warp
-- Refreshed: 2026-05-19
+- Refreshed: 2026-05-31
 
 ## Current feature map
 - `agent-mode-conversations-and-context`: dedicated agent conversations alongside the terminal, with mode switching and reusable context.
+- `bring-your-own-inference-and-openai-compatible-endpoints`: BYOK on the free plan plus OpenAI-compatible custom endpoints for routers, gateways, and self-hosted inference.
+- `multi-harness-cloud-control-plane-and-cross-harness-memory`: Oz now orchestrates Claude Code, Codex, and Warp Agent under one cloud control plane with shared governance and research-preview Agent Memory.
+- `open-source-issue-to-pr-contribution-loop`: Warp now runs its own public issue-to-PR workflow in the open, with agent-triaged GitHub issues as the system of record.
 - `full-terminal-use-in-live-interactive-programs`: agents can attach to running PTY apps and steer interactive shells, debuggers, editors, and long-lived processes.
 - `profiles-permissions-and-run-until-completion`: reusable policy profiles, MCP and command controls, and a denylist-bypassing auto-approve mode.
 - `mcp-server-management`: first-class MCP configuration for local and cloud agents, including synced server configs and explicit secret handling.
@@ -30,9 +33,12 @@
 - [Skills as agents](https://docs.warp.dev/agent-platform/cloud-agents/skills-as-agents)
 - [GitHub Actions integration](https://docs.warp.dev/agent-platform/cloud-agents/integrations/github-actions)
 - [MCP servers reference](https://docs.warp.dev/reference/cli/mcp-servers)
+- [A single pane of glass for managing all of your cloud agents](https://www.warp.dev/blog/multi-harness-cloud-agent-orchestration)
+- [Bring your own inference to Warp](https://www.warp.dev/blog/bring-your-own-inference-to-warp)
+- [Warp Open-Sources Its Agentic Development Environment](https://www.warp.dev/newsroom/2026/4/28/warp-open-sources-its-agentic-development-environment)
 
 ## Screenshots and demos
-- Official visuals and demos are embedded directly in Warp's docs for management view, cloud session sharing, GitHub Actions automation, workflow editing, and run-until-completion controls.
+- Official visuals and demos are embedded directly in Warp's docs and blog posts for the multi-harness Oz control plane, BYOK and custom endpoint setup, management view, cloud session sharing, GitHub Actions automation, workflow editing, and run-until-completion controls.
 
 ## Product signal
-Warp is no longer just an AI terminal. The current product direction is a terminal-native harness that can launch work locally or in the cloud, expose remote runs as live shared sessions, and hand that work back to a developer's local environment without resetting the thread.
+Warp is no longer just an AI terminal. The current product direction is a terminal-native harness that can sit above multiple agent runtimes, govern them from one cloud control plane, and let teams choose the model and harness stack behind the interface instead of locking them into one execution path.
