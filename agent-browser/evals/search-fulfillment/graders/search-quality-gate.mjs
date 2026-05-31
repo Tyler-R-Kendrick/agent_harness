@@ -68,6 +68,27 @@ function renderedEntityLabels(answer) {
   return [...new Set([...markdownLabels, ...listLabels])];
 }
 
+function renderedEntityRows(answer) {
+  return answer
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^(?:[-*]|\d+[.)])\s+/.test(line))
+    .map((line) => {
+      const content = line.replace(/^(?:[-*]|\d+[.)])\s+/, '').trim();
+      const markdownMatch = content.match(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/);
+      const label = markdownMatch?.[1]?.trim()
+        ?? content.split(/\s+-\s+|\s+[.]\s+|\s+Why:/i)[0]?.replace(/\[|\]|\([^)]*\)/g, '').trim()
+        ?? '';
+      return {
+        raw: line,
+        label,
+        hasLink: /\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(content),
+        hasEvidence: /\b(?:why|source|evidence|listed|found|verified|location evidence)\b/i.test(content),
+      };
+    })
+    .filter((row) => row.label.length > 0);
+}
+
 function labelLooksLikePageChrome(label, forbiddenLabels = [], contract = {}) {
   if (forbiddenLabels.some((forbidden) => String(forbidden).toLowerCase() === label.toLowerCase())) return true;
   if ((contract.badLabels ?? []).some((forbidden) => String(forbidden).toLowerCase() === label.toLowerCase())) return true;
@@ -179,18 +200,30 @@ function contractConstraintAssertions(validationContract, answer, labels, expect
         );
         break;
       case 'entity_link':
-        addConstraint(
-          constraint,
-          labels.length > 0 && /\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(answer),
-          answer,
-        );
+        {
+          const rows = renderedEntityRows(answer);
+          const unlinkedRows = rows.filter((row) => !row.hasLink);
+          const passed = rows.length > 0
+            ? unlinkedRows.length === 0
+            : labels.length > 0 && /\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(answer);
+          const evidence = rows.length > 0
+            ? unlinkedRows.map((row) => row.label).join(', ') || rows.map((row) => row.label).join(', ')
+            : answer;
+          addConstraint(constraint, passed, evidence);
+        }
         break;
       case 'source_evidence':
-        addConstraint(
-          constraint,
-          labels.length > 0 && /\b(?:why|source|evidence|listed|found|verified|location evidence)\b/i.test(answer),
-          answer,
-        );
+        {
+          const rows = renderedEntityRows(answer);
+          const unsupportedRows = rows.filter((row) => !row.hasEvidence);
+          const passed = rows.length > 0
+            ? unsupportedRows.length === 0
+            : labels.length > 0 && /\b(?:why|source|evidence|listed|found|verified|location evidence)\b/i.test(answer);
+          const evidence = rows.length > 0
+            ? unsupportedRows.map((row) => row.label).join(', ') || rows.map((row) => row.label).join(', ')
+            : answer;
+          addConstraint(constraint, passed, evidence);
+        }
         break;
       case 'page_chrome': {
         const badLabels = labels.filter((label) => labelLooksLikePageChrome(label, expectedContract.forbiddenLabels ?? [], expectedContract));
@@ -312,7 +345,7 @@ if (semanticOnly) {
   }
   for (const entity of contract.expectedEntities ?? []) {
     add(`answer contains expected entity ${entity}`, includesInsensitive(answer, entity), answer);
-    add(`answer links expected entity ${entity}`, new RegExp(`\\[${entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\(https?://`, 'i').test(answer), answer);
+    add(`answer links expected entity ${entity}`, new RegExp(`\\[${entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\(https?://`, 'i').test(answer), answer);
   }
 }
 if (!expectsInsufficientEvidence) {
