@@ -8,6 +8,7 @@ const TEST_FILE_DENYLISTS_BY_EXTENSION = new Map([
   ['tsx', '!src/**/*.test.tsx'],
 ]);
 const SOURCE_TEST_DIRECTORY_DENYLIST = '!src/__tests__/**';
+const DIST_SOURCE_MAP_DENYLIST = '!dist/**/*.map';
 
 function normalizePath(filePath) {
   return filePath.replace(/\\/g, '/');
@@ -92,11 +93,19 @@ function recursiveSrcPatternExtensions(files) {
   return extensions;
 }
 
+function includesRecursiveDistPattern(files) {
+  return files.some((pattern) => {
+    const normalized = normalizePath(pattern);
+    return !normalized.startsWith('!') && (normalized === 'dist/**' || normalized === 'dist/**/*');
+  });
+}
+
 export function findPackagePublishAllowlistIssues(packages) {
   return packages
     .filter(({ manifest }) => manifest.private !== true)
     .map(({ path: packagePath, manifest }) => {
       const files = Array.isArray(manifest.files) ? manifest.files.map(String) : [];
+      const normalizedFiles = files.map(normalizePath);
       const issues = [];
 
       if (files.length === 0) {
@@ -106,13 +115,17 @@ export function findPackagePublishAllowlistIssues(packages) {
       const recursiveExtensions = recursiveSrcPatternExtensions(files);
       for (const extension of recursiveExtensions) {
         const denylist = TEST_FILE_DENYLISTS_BY_EXTENSION.get(extension);
-        if (!files.includes(denylist)) {
+        if (!normalizedFiles.includes(denylist)) {
           issues.push(`missing ${denylist} for recursive src ${extension} publish pattern`);
         }
       }
 
-      if (recursiveExtensions.size > 0 && !files.includes(SOURCE_TEST_DIRECTORY_DENYLIST)) {
+      if (recursiveExtensions.size > 0 && !normalizedFiles.includes(SOURCE_TEST_DIRECTORY_DENYLIST)) {
         issues.push(`missing ${SOURCE_TEST_DIRECTORY_DENYLIST} for recursive src publish pattern`);
+      }
+
+      if (includesRecursiveDistPattern(files) && !normalizedFiles.includes(DIST_SOURCE_MAP_DENYLIST)) {
+        issues.push(`missing ${DIST_SOURCE_MAP_DENYLIST} for recursive dist publish pattern`);
       }
 
       return {
@@ -158,12 +171,23 @@ export function formatPublishAllowlistIssues(packages) {
   ].join('\n');
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const issues = findPackagePublishAllowlistIssues(readWorkspacePackages());
+export function runPackagePublishAllowlistCli({
+  packages = readWorkspacePackages(),
+  stdout = process.stdout,
+  stderr = process.stderr,
+} = {}) {
+  const issues = findPackagePublishAllowlistIssues(packages);
   if (issues.length > 0) {
-    process.stderr.write(`${formatPublishAllowlistIssues(issues)}\n`);
-    process.exit(1);
+    stderr.write(`${formatPublishAllowlistIssues(issues)}\n`);
+    return 1;
   }
 
-  process.stdout.write('All publishable workspace packages declare explicit, test-free files allowlists.\n');
+  stdout.write('All publishable workspace packages declare explicit, test-free files allowlists.\n');
+  return 0;
 }
+
+/* node:coverage disable */
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.exitCode = runPackagePublishAllowlistCli();
+}
+/* node:coverage enable */
