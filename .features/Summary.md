@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-30
+Updated: 2026-05-31
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -159,3 +159,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: teams will not trust long-lived agent memory at scale unless they can inspect what was stored, bound where it applies, and disable or delete it without turning off the whole harness.
 - One-shot build instruction:
   - Add memory governance to `agent-browser`: support explicit enablement by scope (`workspace`, `project`, `repo`, `org`, `user`), repository-level memory review and deletion, guided forgetting flows from chat, policy-aware kill switches, and clear UI that shows when a memory was learned, why it was used, and who can remove or disable it.
+
+### 23. Multi-harness cloud control planes with shared memory and least-privilege governance
+- Common pattern: the harness layer is starting to sit above individual agent runtimes so teams can launch different harnesses under one operator console, one policy model, and one long-term knowledge layer.
+- Seen in: Warp Oz multi-harness orchestration for Claude Code, Codex, and Warp Agent, with cross-harness Agent Memory, per-team billing, individual credit caps, least-privilege internal-service access, and self-hosted execution choices under the same control plane.
+- Why it matters: organizations increasingly want optionality at the harness layer without losing supervision, memory, cost controls, or auditability every time they swap runtimes.
+- One-shot build instruction:
+  - Build a multi-harness control plane for `agent-browser` that can launch approved external harnesses under one operator surface, apply shared policies and usage ledgers across them, maintain a cross-harness memory layer with source provenance, and preserve least-privilege access controls and handoff history regardless of which runtime did the work.
