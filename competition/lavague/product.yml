@@ -1,0 +1,24 @@
+slug: lavague
+name: LaVague
+vendor: LaVague
+segment: open-source-web-agent-framework
+product_path: competition/lavague
+design_path: competition/lavague/design
+features_path: competition/lavague/features
+marketing_path: competition/lavague/marketing
+gossip_path: competition/lavague/gossip
+snapshot_date: 2026-05-31
+primary_sources:
+  - https://www.lavague.ai/
+  - https://github.com/lavague-ai/LaVague
+  - https://docs.lavague.ai/en/latest/docs/lavague-qa/usage/
+  - https://docs.lavague.ai/en/docs-updates/docs/examples/qa-automation/
+  - https://docs.lavague.ai/en/latest/docs/get-started/token-usage/
+secondary_sources:
+  - https://www.reddit.com/r/LocalLLaMA/comments/1b5k1gp
+  - https://www.reddit.com/r/developersIndia/comments/1ellnyd
+  - https://www.reddit.com/r/AI_Agents/comments/1tbeior/browser_based_agents/
+positioning: "Open-source Large Action Model framework for web agents, with a QA product path that turns Gherkin into Pytest/Selenium tests."
+customer_model: "Open-source framework plus community/support funnel; enterprise contact is visible for QA/process-automation buyers."
+competitive_threat_level: medium
+notes: "Threatens agent-browser where QA teams want natural-language/Gherkin-to-test automation more than a browser workspace."
