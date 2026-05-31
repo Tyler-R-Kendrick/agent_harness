@@ -4,6 +4,7 @@ import {
   StrictModeViolationError,
   TimeoutError,
   NotFoundError,
+  NotEditableError,
   UnsupportedError,
 } from '../errors.js';
 
@@ -151,6 +152,15 @@ describe('Locator', () => {
       const page = makePage();
       await page.locator('[contenteditable]').fill('editable');
       expect(document.querySelector('[contenteditable]')!.textContent).toBe('editable');
+    });
+
+    it('rejects readonly inputs without mutating their value', async () => {
+      setup('<input type="text" value="locked" readonly />');
+      const page = makePage();
+      const input = document.querySelector('input') as HTMLInputElement;
+
+      await expect(page.locator('input').fill('changed')).rejects.toThrow(NotEditableError);
+      expect(input.value).toBe('locked');
     });
   });
 

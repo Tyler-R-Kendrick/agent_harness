@@ -251,7 +251,7 @@ export class InAppLocator implements PlaywrightLikeLocator {
         this._description,
         timeout,
       );
-      this._runtime.actionability.ensureActionable(node.element, { force: options?.force });
+      this._runtime.actionability.ensureEditable(node.element, { force: options?.force });
       await this._runtime.executor.fill(node.element, value, options);
     }, timeout);
   }
