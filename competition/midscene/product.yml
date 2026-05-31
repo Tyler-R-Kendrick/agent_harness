@@ -1,0 +1,21 @@
+slug: midscene
+name: Midscene.js
+vendor: web-infra-dev
+segment: vision-driven-ui-automation
+product_path: competition/midscene
+design_path: competition/midscene/design
+features_path: competition/midscene/features
+marketing_path: competition/midscene/marketing
+gossip_path: competition/midscene/gossip
+snapshot_date: 2026-05-31
+primary_sources:
+  - https://midscenejs.com/
+  - https://github.com/web-infra-dev/midscene
+  - https://midscenejs.com/web-api-reference
+secondary_sources:
+  - https://www.reddit.com/r/softwaretesting/comments/1t3dkpu/is_anyone_actually_using_midscene_in_real/
+  - https://www.reddit.com/r/softwaretesting/comments/1tawtt0/would_you_trust_aibased_locator_resolution_in/
+positioning: "Vision-driven UI automation for web, mobile, desktop, and canvas surfaces, with SDK, YAML, MCP, Chrome extension, replay reports, and cache."
+customer_model: "MIT-licensed open-source project with community adoption; monetization was not prominent at snapshot time."
+competitive_threat_level: high
+notes: "Threatens agent-browser by making pure-vision UI control, MCP tools, cross-platform automation, and replay reports available as an embeddable developer package."
