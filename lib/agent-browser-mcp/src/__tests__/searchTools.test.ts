@@ -314,6 +314,30 @@ describe('registerSearchTools', () => {
     }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
     await expect(webmcpTool.execute?.({
       tool: 'read_web_page',
+      args: { url: 'http://[::127.0.0.1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[::a00:1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[64:ff9b::7f00:1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[64:ff9b::a00:1]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[2002:7f00:1::]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://[2002:a00:1::]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
       args: { url: 'https://user:pass@example.com/private' },
     }, {} as never)).rejects.toThrow('Web page URL must not include embedded credentials.');
     expect(onReadWebPage).not.toHaveBeenCalled();
@@ -365,6 +389,21 @@ describe('registerSearchTools', () => {
       observations: [],
     });
     expect(onReadWebPage).toHaveBeenCalledWith({ url: 'https://[2001:db8:1:2:3:4:5:6]/dns-query' });
+
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'https://[64:ff9b::808:808]/dns-query' },
+    }, {} as never)).resolves.toEqual({
+      status: 'read',
+      url: 'https://[64:ff9b::808:808]/dns-query',
+      title: undefined,
+      text: undefined,
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(onReadWebPage).toHaveBeenCalledWith({ url: 'https://[64:ff9b::808:808]/dns-query' });
   });
 
   it('allows public IPv4 web page URLs', async () => {

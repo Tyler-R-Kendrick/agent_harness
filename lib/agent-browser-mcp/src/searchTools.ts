@@ -86,6 +86,46 @@ function parseIpv6Segments(hostname: string): number[] | null {
   return [...left, ...Array.from({ length: zeroFillCount }, () => 0), ...right];
 }
 
+function extractEmbeddedIpv4SegmentsFromIpv6(hostname: string): number[] | null {
+  const segments = parseIpv6Segments(hostname);
+  if (!segments || segments.length !== 8) {
+    return null;
+  }
+
+  const lastIpv4Segments = [
+    (segments[6]! >> 8) & 0xff,
+    segments[6]! & 0xff,
+    (segments[7]! >> 8) & 0xff,
+    segments[7]! & 0xff,
+  ];
+
+  const isIpv4Compatible = segments.slice(0, 6).every((segment) => segment === 0);
+  if (isIpv4Compatible) {
+    return lastIpv4Segments;
+  }
+
+  const isIpv4Mapped = segments.slice(0, 5).every((segment) => segment === 0) && segments[5] === 0xffff;
+  if (isIpv4Mapped) {
+    return lastIpv4Segments;
+  }
+
+  const isWellKnownNat64 = segments[0] === 0x64 && segments[1] === 0xff9b && segments[2] === 0 && segments[3] === 0 && segments[4] === 0 && segments[5] === 0;
+  if (isWellKnownNat64) {
+    return lastIpv4Segments;
+  }
+
+  if (segments[0] === 0x2002) {
+    return [
+      (segments[1]! >> 8) & 0xff,
+      segments[1]! & 0xff,
+      (segments[2]! >> 8) & 0xff,
+      segments[2]! & 0xff,
+    ];
+  }
+
+  return null;
+}
+
 function isPrivateIpv6Hostname(hostname: string): boolean {
   const segments = parseIpv6Segments(hostname);
   if (!segments) {
@@ -104,15 +144,9 @@ function isPrivateIpv6Hostname(hostname: string): boolean {
     return true;
   }
 
-  const isIpv4Mapped = segments.slice(0, 5).every((segment) => segment === 0) && segments[5] === 0xffff;
-  if (isIpv4Mapped) {
-    const ipv4Segments = [
-      (segments[6]! >> 8) & 0xff,
-      segments[6]! & 0xff,
-      (segments[7]! >> 8) & 0xff,
-      segments[7]! & 0xff,
-    ];
-    return isPrivateIpv4Hostname(ipv4Segments.join('.'));
+  const embeddedIpv4Segments = extractEmbeddedIpv4SegmentsFromIpv6(hostname);
+  if (embeddedIpv4Segments) {
+    return isPrivateIpv4Hostname(embeddedIpv4Segments.join('.'));
   }
 
   return false;
