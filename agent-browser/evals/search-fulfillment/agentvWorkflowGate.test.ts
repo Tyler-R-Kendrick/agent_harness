@@ -844,6 +844,109 @@ describe('real AgentEvals workflow gate', () => {
     ]));
   });
 
+  it('fails validation-contract answers when any rendered entity is missing its own source-backed link or evidence', () => {
+    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
+    const input = {
+      expected_output: JSON.stringify({
+        expectedLocations: ['Arlington Heights, IL'],
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show me 2 bars near me',
+          constraints: [
+            {
+              id: 'count:min-results',
+              sourceText: 'show me 2 bars near me',
+              type: 'count',
+              operator: 'at_least',
+              target: 'acceptedCandidates',
+              value: 2,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Expected at least 2 accepted result(s).',
+            },
+            {
+              id: 'link:entity-specific',
+              sourceText: 'show me 2 bars near me',
+              type: 'entity_link',
+              operator: 'has_safe_entity_link',
+              target: 'acceptedCandidates.entityLink',
+              value: true,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Each rendered result needs a safe source-backed entity link.',
+            },
+            {
+              id: 'source:evidence',
+              sourceText: 'show me 2 bars near me',
+              type: 'source_evidence',
+              operator: 'has_evidence',
+              target: 'acceptedCandidates.sourceEvidence',
+              value: true,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Each rendered result needs source evidence.',
+            },
+          ],
+          evidenceRequirements: [
+            {
+              id: 'evidence:entity-link',
+              description: 'Evidence must include a safe source-backed entity link.',
+              required: true,
+              target: 'acceptedCandidates.entityLink',
+            },
+            {
+              id: 'evidence:subject-instance',
+              description: 'Evidence must show each result is an instance of the requested subject.',
+              required: true,
+              target: 'acceptedCandidates.subjectEvidence',
+            },
+          ],
+          impossibilityPolicy: { kind: 'none', askUserForHelp: false },
+          clarificationTriggers: [],
+          successSemantics: 'all-required',
+          legacyCriteria: [],
+        },
+      }),
+      output: [{
+        role: 'assistant',
+        content: [
+          'Here are bars near Arlington Heights, IL:',
+          '',
+          "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: Peggy Kinnane's is a bar in Arlington Heights, IL.",
+          '2. Cortland\'s Garage',
+        ].join('\n'),
+      }],
+    };
+
+    const result = spawnSync(process.execPath, [grader], {
+      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: subprocessEnv(),
+    });
+
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as {
+      score: number;
+      assertions: Array<{ text: string; passed: boolean }>;
+    };
+    expect(parsed.score).toBeLessThan(1);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'validation contract link:entity-specific',
+        passed: false,
+      }),
+      expect.objectContaining({
+        text: 'validation contract source:evidence',
+        passed: false,
+      }),
+    ]));
+  });
+
   it('fails AgentV search quality when an arbitrary prefix contract is violated', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
     const input = {
