@@ -76,15 +76,14 @@ function serializedCandidates(grammar: unknown): string[] {
 }
 
 function regexCandidates(regex: string): string[] {
-  const trimmed = regex.replace(/^\^/, '').replace(/\$$/, '').trim();
-  const match = /^\(([^()[\]]+)\)$/.exec(trimmed) ?? /^([^()[\]]+)$/.exec(trimmed);
+  const unanchored = regex.replace(/^\^/, '').replace(/\$$/, '');
+  const match = /^\(([^()[\]]+)\)$/.exec(unanchored) ?? /^([^()[\]]+)$/.exec(unanchored);
   if (!match) {
     throw new Error(`Unsupported regex grammar. Only finite literal alternatives are supported: ${regex}`);
   }
 
   return match[1]
     .split('|')
-    .map((candidate) => candidate.trim())
     .filter((candidate) => candidate.length > 0);
 }
 
