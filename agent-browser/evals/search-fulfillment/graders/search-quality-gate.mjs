@@ -59,7 +59,25 @@ function includesInsensitive(value, expected) {
   return value.toLowerCase().includes(String(expected).toLowerCase());
 }
 
+function supportLinkLabel(label) {
+  return /^(?:source|website|site|link|listing|evidence|details?)$/i.test(String(label ?? '').trim());
+}
+
+function extractMarkdownLinkLabels(content) {
+  return [...content.matchAll(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g)]
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+}
+
+function escapeRegExp(value) {
+  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function renderedEntityLabels(answer) {
+  const rows = renderedEntityRows(answer);
+  if (rows.length > 0) {
+    return [...new Set(rows.map((row) => row.label))];
+  }
   const markdownLabels = [...answer.matchAll(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g)]
     .map((match) => match[1].trim());
   const listLabels = [...answer.matchAll(/^\s*\d+[.)]\s+([^-\n]+?)(?:\s+-|\n|$)/gm)]
@@ -75,14 +93,17 @@ function renderedEntityRows(answer) {
     .filter((line) => /^(?:[-*]|\d+[.)])\s+/.test(line))
     .map((line) => {
       const content = line.replace(/^(?:[-*]|\d+[.)])\s+/, '').trim();
-      const markdownMatch = content.match(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/);
-      const label = markdownMatch?.[1]?.trim()
-        ?? content.split(/\s+-\s+|\s+[.]\s+|\s+Why:/i)[0]?.replace(/\[|\]|\([^)]*\)/g, '').trim()
-        ?? '';
+      const markdownLabels = extractMarkdownLinkLabels(content);
+      const prefix = content.split(/\s+-\s+|\s+[.]\s+|\s+Why:/i)[0]?.trim() ?? '';
+      const cleanedPrefix = prefix.replace(/\[|\]|\([^)]*\)/g, '').trim();
+      const label = cleanedPrefix
+        || markdownLabels.find((candidate) => !supportLinkLabel(candidate))
+        || markdownLabels[0]
+        || '';
       return {
         raw: line,
         label,
-        hasLink: /\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(content),
+        hasLink: markdownLabels.some((candidate) => normalizeComparable(candidate) === normalizeComparable(label)),
         hasEvidence: /\b(?:why|source|evidence|listed|found|verified|location evidence)\b/i.test(content),
       };
     })
@@ -345,7 +366,7 @@ if (semanticOnly) {
   }
   for (const entity of contract.expectedEntities ?? []) {
     add(`answer contains expected entity ${entity}`, includesInsensitive(answer, entity), answer);
-    add(`answer links expected entity ${entity}`, new RegExp(`\\[${entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\(https?://`, 'i').test(answer), answer);
+    add(`answer links expected entity ${entity}`, new RegExp(`\\[${escapeRegExp(entity)}\\]\\(https?:\\/\\/`, 'i').test(answer), answer);
   }
 }
 if (!expectsInsufficientEvidence) {
