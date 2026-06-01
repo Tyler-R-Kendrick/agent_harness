@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-05-31
+Updated: 2026-06-01
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -71,7 +71,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 10. Operator control consoles with blocked-state queues and durable usage ledgers
 - Common pattern: long-running harnesses are turning live supervision into a first-class product surface instead of leaving operations buried in logs.
-- Seen in: OpenAI Symphony dashboard detail panel, blocked-session surfacing, and per-issue token ledger API; OpenClaw Control UI plus dashboard session and config surfaces plus durable background task records; Mastra Cloud dashboard plus observability and OTel-ready tracing; Roomote shared task console with transcript, diff, logs, and artifacts; T3 Code local trace observability; Kilo Code team analytics and adoption scoring; Warp agent session sharing, centralized management view, mobile Oz supervision, and per-run credit usage surfaces.
+- Seen in: OpenAI Symphony dashboard detail panel, blocked-session surfacing, and per-issue token ledger API; OpenClaw Control UI plus dashboard session and config surfaces plus durable background task records and a Workboard card layer linked to tasks, sessions, proof, and worker dispatch; Mastra Cloud dashboard plus observability and OTel-ready tracing; Roomote shared task console with transcript, diff, logs, and artifacts; T3 Code local trace observability; Kilo Code team analytics and adoption scoring; Warp agent session sharing, centralized management view, mobile Oz supervision, and per-run credit usage surfaces.
 - Why it matters: once agents run for long periods, teams need to see what is running, what is blocked, what it is costing, and what needs human intervention without reconstructing the story from transcripts.
 - One-shot build instruction:
   - Build an operator console that shows running and blocked sessions, current stage, checklist progress, recent events, and durable per-run token or cost ledgers; treat human-input blockers as a visible queue with explicit unblock actions instead of generic retries or hidden failures.
@@ -166,3 +166,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: organizations increasingly want optionality at the harness layer without losing supervision, memory, cost controls, or auditability every time they swap runtimes.
 - One-shot build instruction:
   - Build a multi-harness control plane for `agent-browser` that can launch approved external harnesses under one operator surface, apply shared policies and usage ledgers across them, maintain a cross-harness memory layer with source provenance, and preserve least-privilege access controls and handoff history regardless of which runtime did the work.
+
+### 24. Install-time skill provenance cards and security scan gates
+- Common pattern: skill and plugin ecosystems are starting to expose provenance and scanner evidence before install instead of asking users to trust opaque prompt bundles.
+- Seen in: OpenClaw ClawHub Skill Cards, trust-envelope verification, and preinstall scan summaries with detail pages for VirusTotal, ClawScan, and static analysis.
+- Why it matters: reusable workflow packages become much easier to adopt in teams when install-time trust is inspectable, reviewable, and separated from the skill instructions themselves.
+- One-shot build instruction:
+  - Add install-time trust surfaces for `agent-browser` skills and plugins: generate a human-readable provenance card for each package, show source and version metadata plus scanner results before install, fail closed on blocked verification states, separate trust metadata from executable prompt content, and provide explicit override or rescan flows for authorized operators.
