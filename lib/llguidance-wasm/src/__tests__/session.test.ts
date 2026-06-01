@@ -116,6 +116,20 @@ describe('LlguidanceSession', () => {
     expect(() => session.createMatcher({ kind: 'regex', regex: '[' })).toThrow(/unsupported regex/i);
   });
 
+  it('preserves literal whitespace alternatives in finite regex matchers', async () => {
+    await initLlguidanceWasm();
+    const session = new LlguidanceSession(tokenizerJson);
+    const matcher = session.createMatcher({ kind: 'regex', regex: '^( |red)$' });
+
+    expect([...session.computeMask(matcher)]).toEqual([4, 10]);
+    expect(session.commitToken(matcher, 10)).toEqual({
+      stopped: true,
+      stopReason: 'matched',
+      ffTokens: [],
+      temperature: undefined
+    });
+  });
+
   it('derives finite candidates from every supported grammar fallback', async () => {
     await initLlguidanceWasm();
     const session = new LlguidanceSession(tokenizerJson);
