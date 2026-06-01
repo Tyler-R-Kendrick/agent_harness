@@ -54,7 +54,7 @@ describe('design-studio package boundary', () => {
     expect(readme).toContain("import { createDesignStudioPlugin } from '@agent-harness/ext-design-studio';");
     expect(readme).toContain("import manifest from '@agent-harness/ext-design-studio/manifest';");
     expect(readme).toContain('Do not import from `@agent-harness/ext-design-studio/src/*`');
-    expect(readme).toContain('Published package contents');
+    expect(readme).toContain('Published Package Contents');
   });
 
   it('exposes the documented root runtime API from the root entry point', async () => {
