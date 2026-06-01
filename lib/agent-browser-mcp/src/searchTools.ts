@@ -16,7 +16,7 @@ type ReadWebPageInput = {
 };
 
 function normalizeHostname(hostname: string): string {
-  return hostname.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return hostname.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/g, '');
 }
 
 function isIpv4Hostname(hostname: string): boolean {
@@ -67,28 +67,41 @@ function parseIpv6Segments(hostname: string): number[] | null {
   }
 
   const parts = normalized.split('::');
-  const parsePart = (part: string): number[] => {
+  if (parts.length > 2) {
+    return null;
+  }
+
+  const parsePart = (part: string): number[] | null => {
     if (!part) {
       return [];
     }
 
-    return part.split(':').map((token) => Number.parseInt(token, 16));
+    const segments = part.split(':').map((token) => Number.parseInt(token, 16));
+    return segments.every((segment) => Number.isInteger(segment) && segment >= 0 && segment <= 0xffff)
+      ? segments
+      : null;
   };
 
   const left = parsePart(parts[0] || '');
   const right = parsePart(parts[1] || '');
+  if (!left || !right) {
+    return null;
+  }
 
   if (parts.length === 1) {
-    return left;
+    return left.length === 8 ? left : null;
   }
 
   const zeroFillCount = 8 - (left.length + right.length);
+  if (zeroFillCount < 1) {
+    return null;
+  }
   return [...left, ...Array.from({ length: zeroFillCount }, () => 0), ...right];
 }
 
 function extractEmbeddedIpv4SegmentsFromIpv6(hostname: string): number[] | null {
   const segments = parseIpv6Segments(hostname);
-  if (!segments || segments.length !== 8) {
+  if (!segments) {
     return null;
   }
 
@@ -152,9 +165,35 @@ function isPrivateIpv6Hostname(hostname: string): boolean {
   return false;
 }
 
+const LOOPBACK_DNS_SUFFIXES = ['nip.io', 'sslip.io', 'xip.io'] as const;
+
+function isLoopbackDnsHostname(hostname: string): boolean {
+  const normalized = normalizeHostname(hostname);
+  for (const suffix of LOOPBACK_DNS_SUFFIXES) {
+    if (!normalized.endsWith(`.${suffix}`)) {
+      continue;
+    }
+
+    const candidate = normalized.slice(0, -(suffix.length + 1)).replace(/-/g, '.');
+    if (candidate === 'localhost' || candidate.endsWith('.localhost')) {
+      return true;
+    }
+
+    if (isPrivateIpv4Hostname(candidate)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function isPublicWebHostname(hostname: string): boolean {
   const normalized = normalizeHostname(hostname);
   if (normalized === 'localhost' || normalized.endsWith('.localhost')) {
+    return false;
+  }
+
+  if (isLoopbackDnsHostname(normalized)) {
     return false;
   }
 
@@ -252,6 +291,12 @@ function normalizePageResult(result: WorkspaceMcpReadWebPageResult, url: string)
     ...(result.reason?.trim() ? { reason: result.reason.trim() } : {}),
   };
 }
+
+export const __testOnlySearchTools = {
+  parseIpv6Segments,
+  extractEmbeddedIpv4SegmentsFromIpv6,
+  isLoopbackDnsHostname,
+};
 
 export function registerSearchTools(modelContext: ModelContext, options: RegisterWorkspaceToolsOptions): void {
   const { onSearchWeb, onReadWebPage, signal } = options;

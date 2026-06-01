@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ModelContext } from '../../../webmcp/src/index';
 
+import { __testOnlySearchTools } from '../searchTools';
 import { createWebMcpTool } from '../tool';
 import { registerWorkspaceTools } from '../workspaceTools';
 
@@ -262,6 +263,10 @@ describe('registerSearchTools', () => {
     }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
     await expect(webmcpTool.execute?.({
       tool: 'read_web_page',
+      args: { url: 'http://localhost./private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
       args: { url: 'https://127.0.0.1:8443/private' },
     }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
     await expect(webmcpTool.execute?.({
@@ -335,6 +340,18 @@ describe('registerSearchTools', () => {
     await expect(webmcpTool.execute?.({
       tool: 'read_web_page',
       args: { url: 'http://[2002:a00:1::]/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://127.0.0.1.nip.io/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://localhost.nip.io/private' },
+    }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
+    await expect(webmcpTool.execute?.({
+      tool: 'read_web_page',
+      args: { url: 'http://127.0.0.1.sslip.io/private' },
     }, {} as never)).rejects.toThrow('Web page URL must target a public web host.');
     await expect(webmcpTool.execute?.({
       tool: 'read_web_page',
@@ -530,5 +547,15 @@ describe('registerSearchTools', () => {
       entities: [],
       observations: [],
     });
+  });
+
+  it('rejects malformed IPv6 helpers and recognizes loopback wildcard DNS hostnames', () => {
+    expect(__testOnlySearchTools.parseIpv6Segments('2001::1::1')).toBeNull();
+    expect(__testOnlySearchTools.parseIpv6Segments('100000::1')).toBeNull();
+    expect(__testOnlySearchTools.parseIpv6Segments('2001:db8:1:2:3:4:5')).toBeNull();
+    expect(__testOnlySearchTools.parseIpv6Segments('1:2:3:4:5:6:7:8::1')).toBeNull();
+    expect(__testOnlySearchTools.extractEmbeddedIpv4SegmentsFromIpv6('2001::1::1')).toBeNull();
+    expect(__testOnlySearchTools.isLoopbackDnsHostname('localhost.nip.io')).toBe(true);
+    expect(__testOnlySearchTools.isLoopbackDnsHostname('8.8.8.8.nip.io')).toBe(false);
   });
 });
