@@ -41,6 +41,46 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath.endsWith('.tgz'),
   },
   {
+    label: '__pycache__/',
+    matches: (filePath) => filePath === '__pycache__' || filePath.includes('/__pycache__/'),
+  },
+  {
+    label: '*.pyc',
+    matches: (filePath) => filePath.endsWith('.pyc'),
+  },
+  {
+    label: '*.pyo',
+    matches: (filePath) => filePath.endsWith('.pyo'),
+  },
+  {
+    label: '.pytest_cache/',
+    matches: (filePath) => filePath === '.pytest_cache' || filePath.startsWith('.pytest_cache/'),
+  },
+  {
+    label: '.ruff_cache/',
+    matches: (filePath) => filePath === '.ruff_cache' || filePath.startsWith('.ruff_cache/'),
+  },
+  {
+    label: '.mypy_cache/',
+    matches: (filePath) => filePath === '.mypy_cache' || filePath.startsWith('.mypy_cache/'),
+  },
+  {
+    label: '.coverage',
+    matches: (filePath) => filePath === '.coverage' || filePath.startsWith('.coverage.'),
+  },
+  {
+    label: 'htmlcov/',
+    matches: (filePath) => filePath === 'htmlcov' || filePath.startsWith('htmlcov/'),
+  },
+  {
+    label: '.venv/',
+    matches: (filePath) => filePath === '.venv' || filePath.startsWith('.venv/'),
+  },
+  {
+    label: 'venv/',
+    matches: (filePath) => filePath === 'venv' || filePath.startsWith('venv/'),
+  },
+  {
     label: '*~',
     matches: (filePath) => filePath.endsWith('~'),
   },
