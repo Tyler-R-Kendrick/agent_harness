@@ -12,6 +12,20 @@ desktop.ini
 *~
 *.tgz
 
+# Python caches and local virtual environments.
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+
 # Dependency installs and package-manager caches.
 node_modules/
 **/node_modules/
