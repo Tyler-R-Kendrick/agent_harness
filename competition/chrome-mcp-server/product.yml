@@ -1,0 +1,21 @@
+slug: chrome-mcp-server
+name: Chrome MCP Server
+vendor: hangwin
+segment: open-source-local-browser-mcp
+product_path: competition/chrome-mcp-server
+design_path: competition/chrome-mcp-server/design
+features_path: competition/chrome-mcp-server/features
+marketing_path: competition/chrome-mcp-server/marketing
+gossip_path: competition/chrome-mcp-server/gossip
+snapshot_date: 2026-06-01
+primary_sources:
+  - https://github.com/hangwin/mcp-chrome
+secondary_sources:
+  - https://playbooks.com/mcp/hangwin-chrome
+  - https://deepwiki.com/hangwin/mcp-chrome
+  - https://github.com/hangwin/mcp-chrome/issues/181
+  - https://www.reddit.com/r/ClaudeAI/comments/1t3k7rq/cowork_cant_connect_to_chrome_mcp_since_last/
+positioning: "Open-source Chrome extension plus MCP server that lets AI assistants use the user's existing Chrome browser, tabs, login state, semantic search, and browser tools."
+customer_model: "Open-source MIT project with community adoption through GitHub, npm/package installs, and MCP registry listings."
+competitive_threat_level: high
+notes: "Threatens agent-browser in developer adoption because it is popular, local, model-agnostic, and directly aligned with MCP clients."

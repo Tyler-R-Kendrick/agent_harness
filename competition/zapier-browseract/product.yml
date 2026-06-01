@@ -1,0 +1,20 @@
+slug: zapier-browseract
+name: Zapier BrowserAct
+vendor: Zapier
+segment: workflow-browser-automation-mcp
+product_path: competition/zapier-browseract
+design_path: competition/zapier-browseract/design
+features_path: competition/zapier-browseract/features
+marketing_path: competition/zapier-browseract/marketing
+gossip_path: competition/zapier-browseract/gossip
+snapshot_date: 2026-06-01
+primary_sources:
+  - https://zapier.com/mcp/browseract
+secondary_sources:
+  - https://www.reddit.com/r/AI_Agents/comments/1s59fli/the_just_use_zapier_advice_is_getting_outdated/
+  - https://www.reddit.com/r/AiAutomations/comments/1t8eqit/i_replaced_about_half_my_zapier_zaps_with_an/
+  - https://www.reddit.com/r/automation/comments/1p62skd/what_are_you_actually_using_browser_automation/
+positioning: "Browser automation workflows exposed through Zapier MCP, with no-code Zapier Agents or any MCP-compatible AI client."
+customer_model: "Zapier account and task-quota model; each MCP call consumes plan tasks, with developer adoption through secure dynamic MCP URLs."
+competitive_threat_level: medium
+notes: "Competes by distributing browser actions through Zapier's huge integration network rather than by owning the browser runtime."
