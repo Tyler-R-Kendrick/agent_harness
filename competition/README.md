@@ -111,6 +111,9 @@ competition/<product-slug>/
 | Magnitude | Vision-first browser-agent library | `competition/magnitude` |
 | LaVague | Open-source web-agent and QA generation framework | `competition/lavague` |
 | Midscene.js | Vision-driven cross-platform UI automation | `competition/midscene` |
+| Sigil Browser | Enterprise secure browser agent | `competition/sigil-browser` |
+| Zapier BrowserAct | Workflow browser automation MCP | `competition/zapier-browseract` |
+| Chrome MCP Server | Open-source local browser MCP | `competition/chrome-mcp-server` |
 
 ## Cross-Market Takeaways
 
@@ -169,3 +172,6 @@ competition/<product-slug>/
 - Token-efficient libraries such as Agent Browser are competing on page-state representation rather than browser hosting. ASCII wireframes and numeric refs can reduce context cost, but `agent-browser` should pair compact machine-readable state with screenshots, video, and durable human review artifacts.
 - Vision-first automation libraries such as Magnitude and Midscene are pushing the opposite direction from compact DOM snapshots: they make screenshots the primary action substrate and keep Playwright or MCP as integration surfaces. This validates visual fallback and canvas/mobile coverage, but it also makes latency, model cost, replay reports, and mis-click review core UX requirements.
 - BDD-to-agent frameworks such as LaVague show that browser agents can enter through the QA artifact pipeline rather than the browser UI. `agent-browser` should preserve Gherkin/scenario/run evidence cleanly enough that test-generation and browser-operation workflows can share the same trace language.
+- Enterprise guardrail products such as Sigil show that local real-Chrome control is moving from hobby MCP servers into security-led buying language. Network-level policy, semantic snapshots, and audit logs validate `agent-browser`'s authority-boundary wedge, but raise expectations for policy feedback and recovery when an agent is blocked.
+- Zapier BrowserAct shows another distribution path: browser work can be exposed as a scoped MCP action inside a large workflow ecosystem. That can capture operators who already trust Zapier for app plumbing, while leaving a browser-first opening around page-level evidence, screenshots, replay, and silent-failure detection.
+- Popular open-source projects such as Chrome MCP Server make real-session browser control easy to copy into developer workflows. The threat is adoption speed; the weakness is connection health, setup complexity, and the lack of a packaged audit/recovery product layer.
