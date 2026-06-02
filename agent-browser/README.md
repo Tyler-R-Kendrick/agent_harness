@@ -33,6 +33,20 @@ From the repository root:
 
 Prefer the repo-root wrapper scripts for contributor onboarding, CI parity, and repeatable validation.
 
+## Local inference modes
+
+Agent Browser currently has two different local-inference surfaces in Settings:
+
+- **Built-in local inference** powers `Codi` with browser-resident ONNX models. It does not require a localhost sidecar once the model is cached in the browser. See [`src/services/localInferenceReadiness.ts`](./src/services/localInferenceReadiness.ts) for the exact readiness labels and constraints surfaced in the UI.
+- **Local OpenAI-compatible endpoint** connects the app to a separate user-managed runtime such as LM Studio, Ollama's OpenAI-compatible API, or Foundry Local.
+
+Use the browser-native path when you want an offline, browser-only local model for `Codi`. Use the endpoint path when you want Agent Browser to talk to an existing loopback OpenAI-compatible server instead.
+
+Related docs:
+
+- [`../agent-daemon/README.md`](../agent-daemon/README.md) for the optional local inference daemon compile, packaging, and service install flow.
+- [`../ext/provider/local-model-connector/README.md`](../ext/provider/local-model-connector/README.md) for the extension that bridges approved hosted PWAs to loopback `/v1` endpoints without requiring CORS changes on the local runtime.
+
 ## Custom providers
 
 Agent Browser consumes config-backed custom providers through `harness-core`.
