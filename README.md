@@ -7,6 +7,7 @@ This repository is most useful for contributors working on the `agent-browser` p
 ## Repository layout
 
 - `agent-browser/`: React + Vite prototype for the in-browser agent workspace
+- `agent-daemon/`: optional local inference companion service for OpenAI-compatible loopback endpoints
 - `harness-core/`: reusable TypeScript agent-loop runtime, command, storage, and plugin-manifest primitives
 - `skills/`: canonical bundled skill sources checked into the repo
 - `lib/`: shared TypeScript libraries used by the workspace
@@ -70,9 +71,19 @@ To print the forwarded preview URL for port `5174`:
 ./skills/agent-harness-context/scripts/codespaces-uri.sh 5174
 ```
 
+## Local inference paths
+
+Agent Harness currently exposes two distinct local-inference setup paths:
+
+- **Built-in local inference (Codi)** runs a browser-compatible ONNX text-generation model directly inside `agent-browser` with no localhost sidecar.
+- **Local OpenAI-compatible endpoint** keeps inference in a user-managed local runtime such as LM Studio or Ollama and connects through the installable Local Model Connector extension.
+
+If you need the companion service that packages or runs the local inference daemon, start with [`agent-daemon/README.md`](./agent-daemon/README.md). If you need the browser extension path for approved hosted PWAs, start with [`ext/provider/local-model-connector/README.md`](./ext/provider/local-model-connector/README.md).
+
 ## Where To Go Next
 
 - [`agent-browser/README.md`](./agent-browser/README.md): app-specific commands, hot reload behavior, and Codespaces notes
+- [`agent-daemon/README.md`](./agent-daemon/README.md): local inference daemon packaging, compile targets, and service install flow
 - [`agent-browser/docs/features.md`](./agent-browser/docs/features.md): visual feature guide and interaction walkthroughs
 - [`reference_impl/README.md`](./reference_impl/README.md): research and reference designs
 - [`AGENTS.md`](./AGENTS.md): repository-specific implementation and verification rules for coding agents
