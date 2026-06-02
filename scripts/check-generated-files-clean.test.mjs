@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 import {
   findTrackedGeneratedArtifacts,
   formatTrackedGeneratedArtifactsError,
+  runGeneratedFilesCleanCli,
 } from './check-generated-files-clean.mjs';
 
 const requiredLocalArtifactIgnorePatterns = [
@@ -65,5 +69,29 @@ assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.idea\/wo
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /__pycache__/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.pytest_cache/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.venv/);
+
+const cleanStdoutWrites = [];
+const cleanStderrWrites = [];
+assert.equal(runGeneratedFilesCleanCli({
+  trackedFiles: ['src/index.ts'],
+  cwd: process.cwd(),
+  stdout: { write: (value) => cleanStdoutWrites.push(value) },
+  stderr: { write: (value) => cleanStderrWrites.push(value) },
+}), 0);
+assert.deepEqual(cleanStdoutWrites, ['No tracked generated artifacts found.\n']);
+assert.deepEqual(cleanStderrWrites, []);
+
+const dirtyStdoutWrites = [];
+const dirtyStderrWrites = [];
+const dirtyFixture = await mkdtemp(path.join(tmpdir(), 'generated-file-hygiene-'));
+await writeFile(path.join(dirtyFixture, 'agent-harness-0.1.0.tgz'), '');
+assert.equal(runGeneratedFilesCleanCli({
+  trackedFiles: ['agent-harness-0.1.0.tgz'],
+  cwd: dirtyFixture,
+  stdout: { write: (value) => dirtyStdoutWrites.push(value) },
+  stderr: { write: (value) => dirtyStderrWrites.push(value) },
+}), 1);
+assert.deepEqual(dirtyStdoutWrites, []);
+assert.match(dirtyStderrWrites.join(''), /agent-harness-0\.1\.0\.tgz/);
 
 console.log('generated file hygiene regression checks passed');
