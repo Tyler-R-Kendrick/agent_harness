@@ -88,10 +88,12 @@ function formatMarkdownLink(title: string, url: string): string {
   return `[${escapeMarkdownLinkLabel(title)}](${formatMarkdownLinkDestination(url)})`;
 }
 
+// Escape characters that would otherwise break the surrounding markdown link label.
 function escapeMarkdownLinkLabel(value: string): string {
   return value.replace(/([\\[\]])/g, '\\$1');
 }
 
+// Encode angle brackets before wrapping destinations that CommonMark cannot parse bare.
 function formatMarkdownLinkDestination(value: string): string {
   const escaped = value.replace(/</g, '%3C').replace(/>/g, '%3E');
   return /[\s()]/.test(escaped) || escaped !== value ? `<${escaped}>` : escaped;
