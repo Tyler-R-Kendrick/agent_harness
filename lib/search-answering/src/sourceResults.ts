@@ -72,13 +72,27 @@ function formatSourceResultLine(
   maxSnippetLength: number,
 ): string {
   const snippet = truncateAnswerSnippet(item.snippet, maxSnippetLength);
+  const link = formatMarkdownLink(item.title, item.url);
   return snippet
-    ? `${index + 1}. [${item.title}](${item.url}) - ${snippet}`
-    : `${index + 1}. [${item.title}](${item.url})`;
+    ? `${index + 1}. ${link} - ${snippet}`
+    : `${index + 1}. ${link}`;
 }
 
 function truncateAnswerSnippet(value: string, maxLength: number): string {
   const compact = value.replace(/\s+/g, ' ').trim();
   if (compact.length <= maxLength) return compact;
   return `${compact.slice(0, Math.max(0, maxLength - 3)).trim()}...`;
+}
+
+function formatMarkdownLink(title: string, url: string): string {
+  return `[${escapeMarkdownLinkLabel(title)}](${formatMarkdownLinkDestination(url)})`;
+}
+
+function escapeMarkdownLinkLabel(value: string): string {
+  return value.replace(/([\\[\]])/g, '\\$1');
+}
+
+function formatMarkdownLinkDestination(value: string): string {
+  const escaped = value.replace(/</g, '%3C').replace(/>/g, '%3E');
+  return /[\s()]/.test(escaped) || escaped !== value ? `<${escaped}>` : escaped;
 }
