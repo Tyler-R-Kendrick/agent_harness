@@ -140,6 +140,20 @@ describe('composeSourceResultAnswer', () => {
       + '1. [OpenAI \\[beta\\] docs](<https://example.test/search?q=tools(v2)&ref=docs>) - Updated docs with line breaks.',
     );
   });
+
+  it('escapes backslashes in labels and encodes angle brackets in wrapped URLs', () => {
+    expect(composeSourceResultAnswer({
+      subject: 'local docs',
+      results: [{
+        title: 'C:\\Tools [preview]',
+        url: 'https://example.test/path with spaces?q=<tag>',
+        snippet: 'Local tool reference.',
+      }],
+    })).toBe(
+      'Here are web results for local docs:\n\n'
+      + '1. [C:\\\\Tools \\[preview\\]](<https://example.test/path with spaces?q=%3Ctag%3E>) - Local tool reference.',
+    );
+  });
 });
 
 describe('formatUnavailableSearchMessage', () => {
