@@ -85,6 +85,30 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath.endsWith('~'),
   },
   {
+    label: '*.orig',
+    matches: (filePath) => filePath.endsWith('.orig'),
+  },
+  {
+    label: '*.rej',
+    matches: (filePath) => filePath.endsWith('.rej'),
+  },
+  {
+    label: '*.swp',
+    matches: (filePath) => filePath.endsWith('.swp'),
+  },
+  {
+    label: '*.swo',
+    matches: (filePath) => filePath.endsWith('.swo'),
+  },
+  {
+    label: '*.sublime-workspace',
+    matches: (filePath) => filePath.endsWith('.sublime-workspace'),
+  },
+  {
+    label: '.idea/',
+    matches: (filePath) => filePath === '.idea' || filePath.startsWith('.idea/'),
+  },
+  {
     label: '.DS_Store',
     matches: (filePath) => filePath === '.DS_Store' || filePath.endsWith('/.DS_Store'),
   },

@@ -10,6 +10,12 @@ desktop.ini
 *.tmp
 *.bak
 *~
+*.orig
+*.rej
+*.swp
+*.swo
+*.sublime-workspace
+.idea/
 *.tgz
 
 # Python caches and local virtual environments.
