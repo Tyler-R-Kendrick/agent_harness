@@ -1,0 +1,23 @@
+slug: claude-code
+name: Claude Code
+vendor: Anthropic
+segment: terminal-coding-agent
+product_path: competition/claude-code
+design_path: competition/claude-code/design
+features_path: competition/claude-code/features
+marketing_path: competition/claude-code/marketing
+gossip_path: competition/claude-code/gossip
+snapshot_date: 2026-06-02
+primary_sources:
+  - https://code.claude.com/docs/en/how-claude-code-works
+  - https://code.claude.com/docs/en/features-overview
+  - https://code.claude.com/docs/en/sub-agents
+  - https://support.claude.com/en/articles/14552983-models-usage-and-limits-in-claude-code
+secondary_sources:
+  - https://www.reddit.com/r/ClaudeCode/
+  - https://www.macrumors.com/2026/03/26/claude-code-users-rapid-rate-limit-drain-bug/
+  - https://venturebeat.com/technology/is-anthropic-nerfing-claude-users-increasingly-report-performance/
+positioning: "Terminal-native agentic coding assistant with project memory, tools, MCP, skills, subagents, hooks, browser interaction, and GitHub/CI integration."
+customer_model: "Seat-based Anthropic plans and pay-as-you-go API/cloud billing, with usage limits, model choice, and enterprise deployment options."
+competitive_threat_level: high
+notes: "Threatens agent-browser by setting developer expectations for repo instructions, memory, skills, subagents, hooks, MCP, and permissioned terminal/browser tool use."

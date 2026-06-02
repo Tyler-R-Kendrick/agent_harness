@@ -1,0 +1,23 @@
+slug: openai-codex
+name: OpenAI Codex
+vendor: OpenAI
+segment: coding-agent-command-center
+product_path: competition/openai-codex
+design_path: competition/openai-codex/design
+features_path: competition/openai-codex/features
+marketing_path: competition/openai-codex/marketing
+gossip_path: competition/openai-codex/gossip
+snapshot_date: 2026-06-02
+primary_sources:
+  - https://openai.com/index/introducing-the-codex-app/
+  - https://openai.com/index/introducing-codex/
+  - https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
+  - https://help.openai.com/en/articles/20001106-codex-rate-card
+secondary_sources:
+  - https://www.reddit.com/r/codex/
+  - https://www.reddit.com/r/ChatGPTCoding/
+  - https://www.axios.com/2026/06/02/openai-codex-knowledge-workers
+positioning: "ChatGPT-connected coding agent across cloud, CLI, IDE, app, GitHub review, and multi-agent desktop supervision."
+customer_model: "Included across ChatGPT consumer and business plans with workspace controls, usage limits, credits, and enterprise administration."
+competitive_threat_level: high
+notes: "Threatens agent-browser by making multi-agent delegation, diff review, browser screenshots, GitHub review comments, and cross-surface task handoff part of a model-owner workflow."
