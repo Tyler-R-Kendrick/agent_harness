@@ -126,6 +126,20 @@ describe('composeSourceResultAnswer', () => {
     expect(composeSourceResultAnswer({ subject: 'NASA updates', results: [] }))
       .toBe('I could not find search results for NASA updates.');
   });
+
+  it('escapes markdown delimiters in source result labels and preserves URL parentheses', () => {
+    expect(composeSourceResultAnswer({
+      subject: 'OpenAI docs',
+      results: [{
+        title: 'OpenAI [beta] docs',
+        url: 'https://example.test/search?q=tools(v2)&ref=docs',
+        snippet: 'Updated docs with\nline breaks.',
+      }],
+    })).toBe(
+      'Here are web results for OpenAI docs:\n\n'
+      + '1. [OpenAI \\[beta\\] docs](<https://example.test/search?q=tools(v2)&ref=docs>) - Updated docs with line breaks.',
+    );
+  });
 });
 
 describe('formatUnavailableSearchMessage', () => {
