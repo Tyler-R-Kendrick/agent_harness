@@ -319,18 +319,29 @@ function defaultRepoRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 }
 
+export function runGeneratedFilesCleanCli({
+  cwd = defaultRepoRoot(),
+  trackedFiles = readTrackedFiles(cwd),
+  stdout = process.stdout,
+  stderr = process.stderr,
+} = {}) {
+  const artifacts = findTrackedGeneratedArtifacts(filterExistingTrackedFiles(trackedFiles, cwd));
+  if (artifacts.length > 0) {
+    stderr.write(`${formatTrackedGeneratedArtifactsError(artifacts)}\n`);
+    return 1;
+  }
+
+  stdout.write('No tracked generated artifacts found.\n');
+  return 0;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const trackedFiles = process.argv.includes('--stdin-lines')
-      ? readTrackedFilesFromLineInput(readFileSync(0, 'utf8'))
-      : readTrackedFiles(defaultRepoRoot());
-    const artifacts = findTrackedGeneratedArtifacts(filterExistingTrackedFiles(trackedFiles, defaultRepoRoot()));
-    if (artifacts.length > 0) {
-      process.stderr.write(`${formatTrackedGeneratedArtifactsError(artifacts)}\n`);
-      process.exit(1);
-    }
-
-    process.stdout.write('No tracked generated artifacts found.\n');
+    process.exitCode = runGeneratedFilesCleanCli({
+      trackedFiles: process.argv.includes('--stdin-lines')
+        ? readTrackedFilesFromLineInput(readFileSync(0, 'utf8'))
+        : undefined,
+    });
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
     process.exit(1);
