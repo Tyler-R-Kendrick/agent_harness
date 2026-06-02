@@ -9,8 +9,9 @@ test-only dependencies or fixtures in the extension package itself.
 
 ## Package Boundary
 
-Do not publish this package. It is marked `private` and intentionally has no
-`files` allowlist because it is not a distribution artifact.
+Do not publish this package. It is marked `private`, has a `prepack` guard that
+fails any package dry-run, and intentionally has no `files` allowlist because it
+is not a distribution artifact.
 
 Use the extension package for runtime imports:
 
