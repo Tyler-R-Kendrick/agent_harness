@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prepack": "node -e \"throw new Error('@agent-harness/ext-workflow-canvas-tests is a private test harness and must not be packed')\"",
     "lint": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json --noEmit",
     "dev": "node ../../../scripts/run-package-bin.mjs vite",

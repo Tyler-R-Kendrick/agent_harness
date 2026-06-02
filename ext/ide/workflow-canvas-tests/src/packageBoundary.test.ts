@@ -25,6 +25,7 @@ describe('workflow canvas test harness package boundary', () => {
     expect(packageJson.private).toBe(true);
     expect(packageJson.files).toBeUndefined();
     expect(packageJson.scripts).toMatchObject({
+      prepack: 'node -e "throw new Error(\'@agent-harness/ext-workflow-canvas-tests is a private test harness and must not be packed\')"',
       test: 'npm run test:unit',
       'test:coverage': 'node ../../../scripts/run-package-bin.mjs vitest run --coverage --config vitest.config.ts',
       'test:e2e': 'node ../../../scripts/run-package-bin.mjs playwright test --config playwright.config.ts',
