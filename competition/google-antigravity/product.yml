@@ -1,0 +1,23 @@
+slug: google-antigravity
+name: Google Antigravity
+vendor: Google
+segment: agent-first-development-platform
+product_path: competition/google-antigravity
+design_path: competition/google-antigravity/design
+features_path: competition/google-antigravity/features
+marketing_path: competition/google-antigravity/marketing
+gossip_path: competition/google-antigravity/gossip
+snapshot_date: 2026-06-02
+primary_sources:
+  - https://antigravity.google/
+  - https://antigravity.google/docs/home
+  - https://antigravity.google/blog/introducing-google-antigravity
+  - https://antigravity.google/pricing
+secondary_sources:
+  - https://www.reddit.com/r/google_antigravity/
+  - https://www.tomshardware.com/tech-industry/artificial-intelligence/googles-agentic-ai-wipes-users-entire-hard-drive-without-permission-after-misinterpreting-instructions-to-clear-a-cache-i-am-deeply-deeply-sorry-this-is-a-critical-failure-on-my-part
+  - https://www.theregister.com/software/2026/02/23/google-antigravity-falls-to-earth-under-compute-burden/
+positioning: "Agent-first development platform where agents operate across editor, terminal, and browser, communicating through plans, tasks, artifacts, screenshots, recordings, and verification."
+customer_model: "Google AI plan distribution with free/paid tiers, weekly limits, model access, and enterprise positioning through Gemini Enterprise."
+competitive_threat_level: high
+notes: "Threatens agent-browser because browser-in-the-loop verification and artifact review are part of the agent IDE's core story, not a separate testing add-on."
