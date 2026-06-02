@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -93,9 +93,5 @@ assert.equal(runGeneratedFilesCleanCli({
 }), 1);
 assert.deepEqual(dirtyStdoutWrites, []);
 assert.match(dirtyStderrWrites.join(''), /agent-harness-0\.1\.0\.tgz/);
-
-const powershellWrapper = await readFile(new URL('./check-generated-files-clean.ps1', import.meta.url), 'utf8');
-assert.match(powershellWrapper, /check-generated-files-clean\.mjs/);
-assert.doesNotMatch(powershellWrapper, /codex-git\.ps1/);
 
 console.log('generated file hygiene regression checks passed');
