@@ -13,7 +13,11 @@ This repository is most useful for contributors working on the `agent-browser` p
 - `lib/`: shared TypeScript libraries used by the workspace
 - `lib/workers/`: specialized worker-provider packages layered on top of `@agent-harness/worker`
 - `ext/`: installable extension packages for IDE, harness, and provider features
+- `plugins/`: repo-local plugin projects and plugin-scaffold experiments
+- `dev-evals/`: dev-time eval suites kept outside the product verification path
 - `docs/`: focused project docs and implementation plans
+- `competition/`: structured competitor dossiers for browser, agent, and automation products
+- `research/`: paper-by-paper research packets and implementation notes
 - `reference_impl/`: deeper feature research, architecture notes, and exploratory docs
 
 ## Quickstart
@@ -85,8 +89,22 @@ If you need the companion service that packages or runs the local inference daem
 - [`agent-browser/README.md`](./agent-browser/README.md): app-specific commands, hot reload behavior, and Codespaces notes
 - [`agent-daemon/README.md`](./agent-daemon/README.md): local inference daemon packaging, compile targets, and service install flow
 - [`agent-browser/docs/features.md`](./agent-browser/docs/features.md): visual feature guide and interaction walkthroughs
+- [`competition/README.md`](./competition/README.md): competitor dossier index and cross-market takeaways
+- [`dev-evals/agent-chat/README.md`](./dev-evals/agent-chat/README.md): opt-in dev eval runners for chat self-improvement work
+- [`plugins/deep-research-harness-ide/README.md`](./plugins/deep-research-harness-ide/README.md): repo-local IDE plugin prototype for deep research workflows
+- [`research/README.md`](./research/README.md): research packet index and per-paper directory contract
 - [`reference_impl/README.md`](./reference_impl/README.md): research and reference designs
 - [`AGENTS.md`](./AGENTS.md): repository-specific implementation and verification rules for coding agents
+
+## Other maintained surfaces
+
+These directories are intentionally outside the workspace package table, but they are still active parts of the repository:
+
+- [`competition/README.md`](./competition/README.md): parseable competitor dossiers for market tracking and product positioning
+- [`dev-evals/agent-chat/README.md`](./dev-evals/agent-chat/README.md): local-only heuristic evals that should not be wired into CI
+- [`plugins/deep-research-harness-ide/README.md`](./plugins/deep-research-harness-ide/README.md): experimental runtime plugin work derived from the repo's plugin standards
+- [`research/README.md`](./research/README.md): research packet workspace for papers, experiments, and integration notes
+- [`docs/plugin-standards.md`](./docs/plugin-standards.md): canonical plugin package and marketplace manifest contract
 
 ## Workspace packages
 
