@@ -1,0 +1,24 @@
+slug: factory-droids
+name: Factory Droids
+vendor: Factory AI
+segment: multi-surface-coding-agent-platform
+product_path: competition/factory-droids
+design_path: competition/factory-droids/design
+features_path: competition/factory-droids/features
+marketing_path: competition/factory-droids/marketing
+gossip_path: competition/factory-droids/gossip
+snapshot_date: 2026-06-03
+primary_sources:
+  - https://factory.ai/product/droids
+  - https://docs.factory.ai/pricing
+  - https://docs.factory.ai/cli/features/missions
+  - https://docs.factory.ai/cli/features/droid-control
+  - https://docs.factory.ai/enterprise
+secondary_sources:
+  - https://www.reddit.com/r/FactoryAi/comments/1s5fru1/is_there_a_reason_the_interface_is_always_laggy/
+  - https://www.reddit.com/r/FactoryAi/comments/1tdq8zg/usage_limits/
+  - https://www.reddit.com/r/FactoryAi/comments/1o69z6f
+positioning: "AI coding agents that work across terminal, IDE, browser, Slack, local and cloud computers, with one prompt to PR and governed enterprise deployment."
+customer_model: "Individual Pro/Plus/Max subscriptions with rolling usage limits; Teams and Enterprise plans for regulated engineering organizations, SSO, audit logging, ZDR, on-prem or airgapped deployment."
+competitive_threat_level: high
+notes: "Threatens agent-browser by combining multi-surface agent orchestration, cloud/local computers, and video evidence; weakens when pricing, quotas, model behavior, or desktop responsiveness feel unpredictable."
