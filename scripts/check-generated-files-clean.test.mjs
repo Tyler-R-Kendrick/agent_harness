@@ -1,14 +1,96 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import {
+  buildGitLsFilesInvocation,
+  checkGeneratedFilesClean,
+  filterExistingTrackedFiles,
   findTrackedGeneratedArtifacts,
   formatTrackedGeneratedArtifactsError,
+  readTrackedFiles,
+  readTrackedFilesFromGitIndex,
+  readTrackedFilesFromLineInput,
   runGeneratedFilesCleanCli,
 } from './check-generated-files-clean.mjs';
+
+function createGitIndex(entries, { version = 2 } = {}) {
+  const header = createGitIndexHeader(version, entries.length);
+  let previousV4Path = '';
+  const entryBuffers = entries.map((entry) => {
+    const entryConfig = typeof entry === 'string' ? { path: entry } : entry;
+    const pathBuffer = Buffer.from(entryConfig.path, 'utf8');
+    const metadata = Buffer.alloc(62);
+    const flags = (entryConfig.extended ? 0x4000 : 0) | Math.min(pathBuffer.length, 0xfff);
+    metadata.writeUInt16BE(flags, 60);
+    const extendedFlags = entryConfig.extended ? Buffer.alloc(2) : Buffer.alloc(0);
+
+    if (version === 4) {
+      const prefixLength = sharedPrefixLength(previousV4Path, entryConfig.path);
+      const removeCount = previousV4Path.length - prefixLength;
+      const suffix = entryConfig.path.slice(prefixLength);
+      previousV4Path = entryConfig.path;
+      return Buffer.concat([
+        metadata,
+        extendedFlags,
+        encodeGitIndexV4RemoveCount(removeCount),
+        Buffer.from(suffix, 'utf8'),
+        Buffer.from([0]),
+      ]);
+    }
+
+    const unpadded = Buffer.concat([metadata, extendedFlags, pathBuffer, Buffer.from([0])]);
+    const padding = Buffer.alloc((8 - (unpadded.length % 8)) % 8);
+    return Buffer.concat([unpadded, padding]);
+  });
+
+  return Buffer.concat([header, ...entryBuffers]);
+}
+
+function createGitIndexHeader(version, entryCount) {
+  const header = Buffer.alloc(12);
+  header.write('DIRC', 0, 'ascii');
+  header.writeUInt32BE(version, 4);
+  header.writeUInt32BE(entryCount, 8);
+  return header;
+}
+
+function sharedPrefixLength(left, right) {
+  let index = 0;
+  while (index < left.length && index < right.length && left[index] === right[index]) {
+    index += 1;
+  }
+  return index;
+}
+
+function encodeGitIndexV4RemoveCount(value) {
+  const bytes = [value & 0x7f];
+  let remaining = value >> 7;
+  while (remaining > 0) {
+    remaining -= 1;
+    bytes.unshift(0x80 | (remaining & 0x7f));
+    remaining >>= 7;
+  }
+  return Buffer.from(bytes);
+}
+
+async function writeGitDirIndex(indexBuffer) {
+  const fixture = await mkdtemp(path.join(tmpdir(), 'generated-file-git-index-'));
+  await mkdir(path.join(fixture, '.git'), { recursive: true });
+  await writeFile(path.join(fixture, '.git', 'index'), indexBuffer);
+  return fixture;
+}
+
+async function writeGitFileIndex(indexBuffer) {
+  const fixture = await mkdtemp(path.join(tmpdir(), 'generated-file-git-file-'));
+  const gitDir = path.join(fixture, 'actual-git-dir');
+  await mkdir(gitDir, { recursive: true });
+  await writeFile(path.join(gitDir, 'index'), indexBuffer);
+  await writeFile(path.join(fixture, '.git'), `gitdir: ${gitDir}`);
+  return fixture;
+}
 
 const requiredLocalArtifactIgnorePatterns = [
   '.vite/',
@@ -94,6 +176,156 @@ assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /__pycache_
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.pytest_cache/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.venv/);
 
+assert.deepEqual(readTrackedFilesFromLineInput('src/index.ts\r\n  spaced file.tmp  \n\n'), [
+  'src/index.ts',
+  '  spaced file.tmp  ',
+]);
+
+assert.deepEqual(buildGitLsFilesInvocation('/repo', 'linux'), {
+  command: 'git',
+  args: ['ls-files', '-z'],
+});
+assert.deepEqual(buildGitLsFilesInvocation('/repo', 'win32'), {
+  command: 'powershell',
+  args: [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    path.join('/repo', 'scripts', 'codex-git.ps1'),
+    'ls-files',
+    '-z',
+  ],
+});
+
+const gitIndexFixture = await writeGitDirIndex(createGitIndex([
+  'src/index.ts',
+  { path: 'coverage/lcov.info', extended: true },
+]));
+assert.deepEqual(readTrackedFilesFromGitIndex(gitIndexFixture), [
+  'src/index.ts',
+  'coverage/lcov.info',
+]);
+
+const gitFileFixture = await writeGitFileIndex(createGitIndex(['src/from-git-file.ts'], { version: 3 }));
+assert.deepEqual(readTrackedFilesFromGitIndex(gitFileFixture), ['src/from-git-file.ts']);
+
+const longV4Path = `${'a'.repeat(130)}/first.ts`;
+const gitIndexV4Fixture = await writeGitDirIndex(createGitIndex([
+  longV4Path,
+  { path: 'z.ts', extended: true },
+  'zebra.ts',
+], { version: 4 }));
+assert.deepEqual(readTrackedFilesFromGitIndex(gitIndexV4Fixture), [
+  longV4Path,
+  'z.ts',
+  'zebra.ts',
+]);
+
+const missingGitFixture = await mkdtemp(path.join(tmpdir(), 'generated-file-no-git-'));
+assert.throws(() => readTrackedFilesFromGitIndex(missingGitFixture), /No \.git path found/);
+
+const unsupportedGitFixture = await mkdtemp(path.join(tmpdir(), 'generated-file-unsupported-git-'));
+await writeFile(path.join(unsupportedGitFixture, '.git'), 'not a gitdir file');
+assert.throws(() => readTrackedFilesFromGitIndex(unsupportedGitFixture), /Unsupported \.git file format/);
+
+const badSignatureFixture = await writeGitDirIndex(Buffer.from('NOPE'));
+assert.throws(
+  () => readTrackedFilesFromGitIndex(badSignatureFixture),
+  /unexpected signature/,
+);
+
+const unsupportedVersionIndex = Buffer.alloc(12);
+unsupportedVersionIndex.write('DIRC', 0, 'ascii');
+unsupportedVersionIndex.writeUInt32BE(5, 4);
+const unsupportedVersionFixture = await writeGitDirIndex(unsupportedVersionIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(unsupportedVersionFixture),
+  /Unsupported git index version 5/,
+);
+
+const invalidV4PrefixIndex = Buffer.concat([
+  createGitIndexHeader(4, 1),
+  Buffer.alloc(62),
+  Buffer.from([1]),
+  Buffer.from('src/index.ts'),
+  Buffer.from([0]),
+]);
+const invalidV4PrefixFixture = await writeGitDirIndex(invalidV4PrefixIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(invalidV4PrefixFixture),
+  /removes more path bytes/,
+);
+
+const missingV4PrefixIndex = Buffer.concat([
+  createGitIndexHeader(4, 1),
+  Buffer.alloc(62),
+]);
+const missingV4PrefixFixture = await writeGitDirIndex(missingV4PrefixIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(missingV4PrefixFixture),
+  /missing a path prefix length/,
+);
+
+const truncatedEntryIndex = Buffer.alloc(12);
+truncatedEntryIndex.write('DIRC', 0, 'ascii');
+truncatedEntryIndex.writeUInt32BE(2, 4);
+truncatedEntryIndex.writeUInt32BE(1, 8);
+const truncatedEntryFixture = await writeGitDirIndex(truncatedEntryIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(truncatedEntryFixture),
+  /ended before all entries/,
+);
+
+const unterminatedPathIndex = Buffer.concat([truncatedEntryIndex, Buffer.alloc(62), Buffer.from('src/index.ts')]);
+const unterminatedPathFixture = await writeGitDirIndex(unterminatedPathIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(unterminatedPathFixture),
+  /missing a path terminator/,
+);
+
+assert.deepEqual(readTrackedFiles('/repo', () => ({
+  status: 0,
+  stdout: Buffer.from('src/index.ts\0README.md\0'),
+  stderr: Buffer.alloc(0),
+})), ['src/index.ts', 'README.md']);
+
+const eperm = new Error('spawn blocked');
+eperm.code = 'EPERM';
+assert.deepEqual(readTrackedFiles(gitIndexFixture, () => ({ error: eperm })), [
+  'src/index.ts',
+  'coverage/lcov.info',
+]);
+
+const enoent = new Error('missing command');
+enoent.code = 'ENOENT';
+assert.throws(() => readTrackedFiles('/repo', () => ({ error: enoent })), /missing command/);
+assert.throws(() => readTrackedFiles('/repo', () => ({
+  status: 2,
+  stdout: Buffer.alloc(0),
+  stderr: Buffer.from('fatal: not a git repository\n'),
+})), /fatal: not a git repository/);
+assert.throws(() => readTrackedFiles('/repo', () => ({
+  status: 2,
+  stdout: Buffer.alloc(0),
+  stderr: Buffer.alloc(0),
+})), /git ls-files failed with exit code 2/);
+
+const filterFixture = await mkdtemp(path.join(tmpdir(), 'generated-file-filter-'));
+await writeFile(path.join(filterFixture, 'existing.tmp'), '');
+await mkdir(path.join(filterFixture, 'nested'), { recursive: true });
+await writeFile(path.join(filterFixture, 'nested', 'existing.log'), '');
+assert.deepEqual(filterExistingTrackedFiles([
+  'existing.tmp',
+  'missing.tmp',
+  '.\\nested\\existing.log',
+], filterFixture), [
+  'existing.tmp',
+  '.\\nested\\existing.log',
+]);
+
+assert.deepEqual(checkGeneratedFilesClean(process.cwd()), []);
+
 const cleanStdoutWrites = [];
 const cleanStderrWrites = [];
 assert.equal(runGeneratedFilesCleanCli({
@@ -117,5 +349,14 @@ assert.equal(runGeneratedFilesCleanCli({
 }), 1);
 assert.deepEqual(dirtyStdoutWrites, []);
 assert.match(dirtyStderrWrites.join(''), /agent-harness-0\.1\.0\.tgz/);
+
+const liveStdoutWrites = [];
+const liveStderrWrites = [];
+assert.equal(runGeneratedFilesCleanCli({
+  stdout: { write: (value) => liveStdoutWrites.push(value) },
+  stderr: { write: (value) => liveStderrWrites.push(value) },
+}), 0);
+assert.deepEqual(liveStdoutWrites, ['No tracked generated artifacts found.\n']);
+assert.deepEqual(liveStderrWrites, []);
 
 console.log('generated file hygiene regression checks passed');
