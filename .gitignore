@@ -36,6 +36,7 @@ venv/
 .codex-verify-*/
 node_modules/
 .npm-cache/
+.pnpm-store/
 _cacache/
 _logs/
 _update-notifier-last-checked
@@ -48,6 +49,11 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 *.log
+.vite/
+.vitest/
+.turbo/
+.parcel-cache/
+.eslintcache
 
 agent-browser-running.png
 agent-browser-chat-ui-validation.png
