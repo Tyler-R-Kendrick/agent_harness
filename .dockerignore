@@ -36,6 +36,7 @@ venv/
 node_modules/
 **/node_modules/
 .npm-cache/
+.pnpm-store/
 _cacache/
 _logs/
 _update-notifier-last-checked
@@ -49,6 +50,16 @@ test-results/
 output/
 *.tsbuildinfo
 *.log
+.vite/
+**/.vite/
+.vitest/
+**/.vitest/
+.turbo/
+**/.turbo/
+.parcel-cache/
+**/.parcel-cache/
+.eslintcache
+**/.eslintcache
 
 # Local automation/runtime state.
 .playwright-mcp/
