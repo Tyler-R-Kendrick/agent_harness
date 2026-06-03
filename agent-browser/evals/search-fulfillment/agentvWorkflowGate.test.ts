@@ -1027,6 +1027,89 @@ describe('real AgentEvals workflow gate', () => {
     expect(linkAssertion?.evidence).toBe("Peggy Kinnane's Irish Restaurant & Pub, Cortland's Garage");
   });
 
+  it('fails validation-contract answers when any rendered entity lacks Arlington Heights location evidence', () => {
+    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
+    const input = {
+      expected_output: JSON.stringify({
+        expectedLocations: ['Arlington Heights, IL'],
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show me 2 bars near me',
+          constraints: [
+            {
+              id: 'count:min-results',
+              sourceText: 'show me 2 bars near me',
+              type: 'count',
+              operator: 'at_least',
+              target: 'acceptedCandidates',
+              value: 2,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Expected at least 2 accepted result(s).',
+            },
+            {
+              id: 'location:nearby',
+              sourceText: 'show me 2 bars near me',
+              type: 'location',
+              operator: 'near',
+              target: 'acceptedCandidates.locationEvidence',
+              value: 'Arlington Heights, IL',
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Each rendered result needs Arlington Heights location evidence.',
+            },
+          ],
+          evidenceRequirements: [
+            {
+              id: 'evidence:location',
+              description: 'Evidence must tie each result to Arlington Heights, IL or nearby proximity.',
+              required: true,
+              target: 'acceptedCandidates.locationEvidence',
+            },
+          ],
+          impossibilityPolicy: { kind: 'none', askUserForHelp: false },
+          clarificationTriggers: [],
+          successSemantics: 'all-required',
+          legacyCriteria: [],
+        },
+      }),
+      output: [{
+        role: 'assistant',
+        content: [
+          'Here are bars near Arlington Heights, IL:',
+          '',
+          "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: Peggy Kinnane's is a bar in Arlington Heights, IL.",
+          "2. [Celtic Knot Public House](https://www.celticknotpublichouse.com/) - Why: Celtic Knot Public House is a bar in Evanston, IL.",
+        ].join('\n'),
+      }],
+    };
+
+    const result = spawnSync(process.execPath, [grader], {
+      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: subprocessEnv(),
+    });
+
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as {
+      score: number;
+      assertions: Array<{ text: string; passed: boolean; evidence?: string }>;
+    };
+    expect(parsed.score).toBeLessThan(1);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'validation contract location:nearby',
+        passed: false,
+      }),
+    ]));
+    const locationAssertion = parsed.assertions.find((assertion) => assertion.text === 'validation contract location:nearby');
+    expect(locationAssertion?.evidence).toBe('Celtic Knot Public House');
+  });
+
   it('fails AgentV search quality when an arbitrary prefix contract is violated', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
     const input = {
