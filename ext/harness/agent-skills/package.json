@@ -10,6 +10,8 @@
     "agent-harness.plugin.json",
     "src/**/*.ts",
     "examples/**",
+    "!examples/**/*.test.ts",
+    "!examples/**/__tests__/**",
     "!src/**/*.test.ts",
     "!src/__tests__/**"
   ],

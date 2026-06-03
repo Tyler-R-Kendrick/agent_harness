@@ -28,6 +28,8 @@ describe('package boundary', () => {
       'agent-harness.plugin.json',
       'src/**/*.ts',
       'examples/**',
+      '!examples/**/*.test.ts',
+      '!examples/**/__tests__/**',
       '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
@@ -39,6 +41,7 @@ describe('package boundary', () => {
     expect(readme).toContain("import { createAgentSkillsPlugin } from '@agent-harness/ext-agent-skills';");
     expect(readme).toContain("import manifest from '@agent-harness/ext-agent-skills/manifest';");
     expect(readme).toContain('examples/default-workspace-skills/');
+    expect(readme).toContain('example validation tests are excluded from published package artifacts');
     expect(readme).toContain('Do not deep-import files under `src/`');
   });
 
