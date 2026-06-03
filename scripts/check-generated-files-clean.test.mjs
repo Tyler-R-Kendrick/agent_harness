@@ -11,6 +11,12 @@ import {
 } from './check-generated-files-clean.mjs';
 
 const requiredLocalArtifactIgnorePatterns = [
+  '.vite/',
+  '.vitest/',
+  '.turbo/',
+  '.parcel-cache/',
+  '.eslintcache',
+  '.pnpm-store/',
   '*.orig',
   '*.rej',
   '*.swp',
@@ -28,6 +34,12 @@ for (const ignoreFilePath of ['.gitignore', '.dockerignore', '.vercelignore']) {
 
 const trackedArtifacts = findTrackedGeneratedArtifacts([
   'src/index.ts',
+  'agent-browser/.vite/deps/_metadata.json',
+  'agent-browser/.vitest/results.json',
+  '.turbo/runs/last.json',
+  '.parcel-cache/data.mdb',
+  '.eslintcache',
+  '.pnpm-store/v3/files/index.json',
   'agent-harness-0.1.0.tgz',
   'lib/webmcp/agent-harness-webmcp-0.1.0.tgz',
   'README.md.orig',
@@ -42,6 +54,12 @@ const trackedArtifacts = findTrackedGeneratedArtifacts([
 ]);
 
 assert.deepEqual(trackedArtifacts, [
+  { path: 'agent-browser/.vite/deps/_metadata.json', rule: '.vite/' },
+  { path: 'agent-browser/.vitest/results.json', rule: '.vitest/' },
+  { path: '.turbo/runs/last.json', rule: '.turbo/' },
+  { path: '.parcel-cache/data.mdb', rule: '.parcel-cache/' },
+  { path: '.eslintcache', rule: '.eslintcache' },
+  { path: '.pnpm-store/v3/files/index.json', rule: '.pnpm-store/' },
   { path: 'agent-harness-0.1.0.tgz', rule: '*.tgz' },
   { path: 'lib/webmcp/agent-harness-webmcp-0.1.0.tgz', rule: '*.tgz' },
   { path: 'README.md.orig', rule: '*.orig' },
@@ -59,6 +77,12 @@ assert.deepEqual(trackedArtifacts, [
 ]);
 
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-harness-0\.1\.0\.tgz/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/\.vite\/deps\/_metadata\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/\.vitest\/results\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.turbo\/runs\/last\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.parcel-cache\/data\.mdb/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.eslintcache/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.pnpm-store\/v3\/files\/index\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /lib\/webmcp\/agent-harness-webmcp-0\.1\.0\.tgz/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /README\.md\.orig/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /patches\/local-change\.rej/);
