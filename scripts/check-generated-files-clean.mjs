@@ -125,6 +125,10 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === '.npm-cache' || filePath.startsWith('.npm-cache/'),
   },
   {
+    label: '.pnpm-store/',
+    matches: (filePath) => filePath === '.pnpm-store' || filePath.startsWith('.pnpm-store/'),
+  },
+  {
     label: '_cacache/',
     matches: (filePath) => filePath === '_cacache' || filePath.startsWith('_cacache/'),
   },
@@ -135,6 +139,26 @@ export const GENERATED_ARTIFACT_RULES = [
   {
     label: '_update-notifier-last-checked',
     matches: (filePath) => filePath === '_update-notifier-last-checked',
+  },
+  {
+    label: '.vite/',
+    matches: (filePath) => filePath === '.vite' || filePath.includes('/.vite/'),
+  },
+  {
+    label: '.vitest/',
+    matches: (filePath) => filePath === '.vitest' || filePath.includes('/.vitest/'),
+  },
+  {
+    label: '.turbo/',
+    matches: (filePath) => filePath === '.turbo' || filePath.startsWith('.turbo/') || filePath.includes('/.turbo/'),
+  },
+  {
+    label: '.parcel-cache/',
+    matches: (filePath) => filePath === '.parcel-cache' || filePath.startsWith('.parcel-cache/') || filePath.includes('/.parcel-cache/'),
+  },
+  {
+    label: '.eslintcache',
+    matches: (filePath) => filePath === '.eslintcache' || filePath.endsWith('/.eslintcache'),
   },
   {
     label: 'output/',
