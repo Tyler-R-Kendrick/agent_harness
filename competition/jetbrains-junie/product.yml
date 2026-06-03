@@ -1,0 +1,26 @@
+slug: jetbrains-junie
+name: JetBrains Junie
+vendor: JetBrains
+segment: ide-native-and-cli-coding-agent
+product_path: competition/jetbrains-junie
+design_path: competition/jetbrains-junie/design
+features_path: competition/jetbrains-junie/features
+marketing_path: competition/jetbrains-junie/marketing
+gossip_path: competition/jetbrains-junie/gossip
+snapshot_date: 2026-06-03
+primary_sources:
+  - https://www.jetbrains.com/help/ai-assistant/junie-agent.html
+  - https://junie.jetbrains.com/
+  - https://junie.jetbrains.com/docs/junie-cli.html
+  - https://junie.jetbrains.com/docs/junie-cli-usage.html
+  - https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html
+  - https://www.jetbrains.com/help/ai-assistant/licensing-and-subscriptions.html
+secondary_sources:
+  - https://www.reddit.com/r/Jetbrains/comments/1szy04v/so_what_is_the_cheapest_way_for_using_junie/
+  - https://www.reddit.com/r/Jetbrains/comments/1qadf8j/the_ai_credits_for_the_jetbrains_ai_pro/
+  - https://www.reddit.com/r/Jetbrains/comments/1rwgr5d/jetbrains_ai_confused_with_all_the_options/
+  - https://www.reddit.com/r/Jetbrains/comments/1sugsw9/ai_assistant_credits_junie_add_context_files/
+positioning: "JetBrains-native coding agent for IDE and CLI workflows, with deep project context, model choice, MCP, skills, subagents, ACP, and JetBrains AI licensing."
+customer_model: "AI Free/Pro/Ultimate/Enterprise credit tiers layered onto JetBrains IDE subscriptions, plus Junie CLI BYOK and top-up credits."
+competitive_threat_level: high
+notes: "Threatens agent-browser wherever JetBrains users want coding-agent planning, review, debugger, MCP, and IDE context; weakens around credit anxiety, WSL limitations, and less browser-session evidence."
