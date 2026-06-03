@@ -225,4 +225,30 @@ describe('Vercel web search API functions', () => {
       })],
     });
   });
+
+  it('blocks localhost and private-network URLs in the deployed web-page runtime before fetching', async () => {
+    const { WebPageBridge } = await import('../../api/web-page-runtime');
+    const fetchPage = vi.fn();
+    const bridge = new WebPageBridge(fetchPage as never);
+
+    await expect(bridge.read({ url: 'http://localhost:4173/private' })).resolves.toEqual({
+      status: 'blocked',
+      url: 'http://localhost:4173/private',
+      reason: 'Web page URL must target a public web host.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    await expect(bridge.read({ url: 'http://127.0.0.1.nip.io/private' })).resolves.toEqual({
+      status: 'blocked',
+      url: 'http://127.0.0.1.nip.io/private',
+      reason: 'Web page URL must target a public web host.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(fetchPage).not.toHaveBeenCalled();
+  });
 });
