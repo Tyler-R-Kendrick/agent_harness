@@ -1,0 +1,26 @@
+slug: windsurf-cascade
+name: Windsurf Cascade
+vendor: Cognition / Windsurf
+segment: ai-coding-ide-and-cloud-agent
+product_path: competition/windsurf-cascade
+design_path: competition/windsurf-cascade/design
+features_path: competition/windsurf-cascade/features
+marketing_path: competition/windsurf-cascade/marketing
+gossip_path: competition/windsurf-cascade/gossip
+snapshot_date: 2026-06-03
+primary_sources:
+  - https://windsurf.com/
+  - https://windsurf.com/enterprise
+  - https://docs.windsurf.com/windsurf/cascade
+  - https://docs.windsurf.com/windsurf/cascade/memories
+  - https://docs.windsurf.com/windsurf/cascade/app-deploys
+  - https://docs.windsurf.com/windsurf/accounts/usage
+secondary_sources:
+  - https://www.reddit.com/r/windsurf/comments/1q3cq8x/windsurf_is_actually_great/
+  - https://www.reddit.com/r/windsurf/comments/1s7aaim/windsurf_pricing_is_straight_up_antiuser_bullshit/
+  - https://www.reddit.com/r/windsurf/comments/1qbt6d9/cascade_not_loading_anymore_after_starting/
+  - https://www.reddit.com/r/windsurf/comments/1ow8t66
+positioning: "AI IDE where Cascade provides real-time codebase-aware agent work locally, while Devin cloud agents handle delegated tasks from the same editor."
+customer_model: "Free, Pro, Max, Teams, and Enterprise plans with usage-based model costs, centralized billing, admin dashboards, SSO/RBAC, ZDR, and hybrid enterprise deployment."
+competitive_threat_level: high
+notes: "Threatens agent-browser by combining polished editor UX, memories/rules/workflows, app deploys, and cloud handoff; weakens under pricing backlash, Cascade reliability complaints, and limited browser-specific evidence."
