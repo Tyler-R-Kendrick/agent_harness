@@ -17,11 +17,8 @@ import {
 } from './check-generated-files-clean.mjs';
 
 function createGitIndex(entries, { version = 2 } = {}) {
-  const header = Buffer.alloc(12);
-  header.write('DIRC', 0, 'ascii');
-  header.writeUInt32BE(version, 4);
-  header.writeUInt32BE(entries.length, 8);
-
+  const header = createGitIndexHeader(version, entries.length);
+  let previousV4Path = '';
   const entryBuffers = entries.map((entry) => {
     const entryConfig = typeof entry === 'string' ? { path: entry } : entry;
     const pathBuffer = Buffer.from(entryConfig.path, 'utf8');
@@ -29,12 +26,54 @@ function createGitIndex(entries, { version = 2 } = {}) {
     const flags = (entryConfig.extended ? 0x4000 : 0) | Math.min(pathBuffer.length, 0xfff);
     metadata.writeUInt16BE(flags, 60);
     const extendedFlags = entryConfig.extended ? Buffer.alloc(2) : Buffer.alloc(0);
+
+    if (version === 4) {
+      const prefixLength = sharedPrefixLength(previousV4Path, entryConfig.path);
+      const removeCount = previousV4Path.length - prefixLength;
+      const suffix = entryConfig.path.slice(prefixLength);
+      previousV4Path = entryConfig.path;
+      return Buffer.concat([
+        metadata,
+        extendedFlags,
+        encodeGitIndexV4RemoveCount(removeCount),
+        Buffer.from(suffix, 'utf8'),
+        Buffer.from([0]),
+      ]);
+    }
+
     const unpadded = Buffer.concat([metadata, extendedFlags, pathBuffer, Buffer.from([0])]);
     const padding = Buffer.alloc((8 - (unpadded.length % 8)) % 8);
     return Buffer.concat([unpadded, padding]);
   });
 
   return Buffer.concat([header, ...entryBuffers]);
+}
+
+function createGitIndexHeader(version, entryCount) {
+  const header = Buffer.alloc(12);
+  header.write('DIRC', 0, 'ascii');
+  header.writeUInt32BE(version, 4);
+  header.writeUInt32BE(entryCount, 8);
+  return header;
+}
+
+function sharedPrefixLength(left, right) {
+  let index = 0;
+  while (index < left.length && index < right.length && left[index] === right[index]) {
+    index += 1;
+  }
+  return index;
+}
+
+function encodeGitIndexV4RemoveCount(value) {
+  const bytes = [value & 0x7f];
+  let remaining = value >> 7;
+  while (remaining > 0) {
+    remaining -= 1;
+    bytes.unshift(0x80 | (remaining & 0x7f));
+    remaining >>= 7;
+  }
+  return Buffer.from(bytes);
 }
 
 async function writeGitDirIndex(indexBuffer) {
@@ -147,6 +186,18 @@ assert.deepEqual(readTrackedFilesFromGitIndex(gitIndexFixture), [
 const gitFileFixture = await writeGitFileIndex(createGitIndex(['src/from-git-file.ts'], { version: 3 }));
 assert.deepEqual(readTrackedFilesFromGitIndex(gitFileFixture), ['src/from-git-file.ts']);
 
+const longV4Path = `${'a'.repeat(130)}/first.ts`;
+const gitIndexV4Fixture = await writeGitDirIndex(createGitIndex([
+  longV4Path,
+  { path: 'z.ts', extended: true },
+  'zebra.ts',
+], { version: 4 }));
+assert.deepEqual(readTrackedFilesFromGitIndex(gitIndexV4Fixture), [
+  longV4Path,
+  'z.ts',
+  'zebra.ts',
+]);
+
 const missingGitFixture = await mkdtemp(path.join(tmpdir(), 'generated-file-no-git-'));
 assert.throws(() => readTrackedFilesFromGitIndex(missingGitFixture), /No \.git path found/);
 
@@ -162,11 +213,34 @@ assert.throws(
 
 const unsupportedVersionIndex = Buffer.alloc(12);
 unsupportedVersionIndex.write('DIRC', 0, 'ascii');
-unsupportedVersionIndex.writeUInt32BE(4, 4);
+unsupportedVersionIndex.writeUInt32BE(5, 4);
 const unsupportedVersionFixture = await writeGitDirIndex(unsupportedVersionIndex);
 assert.throws(
   () => readTrackedFilesFromGitIndex(unsupportedVersionFixture),
-  /Unsupported git index version 4/,
+  /Unsupported git index version 5/,
+);
+
+const invalidV4PrefixIndex = Buffer.concat([
+  createGitIndexHeader(4, 1),
+  Buffer.alloc(62),
+  Buffer.from([1]),
+  Buffer.from('src/index.ts'),
+  Buffer.from([0]),
+]);
+const invalidV4PrefixFixture = await writeGitDirIndex(invalidV4PrefixIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(invalidV4PrefixFixture),
+  /removes more path bytes/,
+);
+
+const missingV4PrefixIndex = Buffer.concat([
+  createGitIndexHeader(4, 1),
+  Buffer.alloc(62),
+]);
+const missingV4PrefixFixture = await writeGitDirIndex(missingV4PrefixIndex);
+assert.throws(
+  () => readTrackedFilesFromGitIndex(missingV4PrefixFixture),
+  /missing a path prefix length/,
 );
 
 const truncatedEntryIndex = Buffer.alloc(12);
