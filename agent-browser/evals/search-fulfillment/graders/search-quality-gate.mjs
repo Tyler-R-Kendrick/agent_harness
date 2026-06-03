@@ -110,6 +110,22 @@ function renderedEntityRows(answer) {
     .filter((row) => row.label.length > 0);
 }
 
+function locationAliases(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return [];
+  const aliases = [text];
+  const cityOnly = text.split(',')[0]?.trim();
+  if (cityOnly && cityOnly.toLowerCase() !== text.toLowerCase()) aliases.push(cityOnly);
+  return [...new Set(aliases)];
+}
+
+function rowHasLocationEvidence(row, target) {
+  const content = String(row?.raw ?? '').toLowerCase();
+  return locationAliases(target)
+    .map((alias) => alias.toLowerCase())
+    .some((alias) => content.includes(alias));
+}
+
 function labelLooksLikePageChrome(label, forbiddenLabels = [], contract = {}) {
   if (forbiddenLabels.some((forbidden) => String(forbidden).toLowerCase() === label.toLowerCase())) return true;
   if ((contract.badLabels ?? []).some((forbidden) => String(forbidden).toLowerCase() === label.toLowerCase())) return true;
@@ -214,11 +230,17 @@ function contractConstraintAssertions(validationContract, answer, labels, expect
         break;
       }
       case 'location':
-        addConstraint(
-          constraint,
-          !value || includesInsensitive(answer, value),
-          answer,
-        );
+        {
+          const rows = renderedEntityRows(answer);
+          const missingLocationRows = rows.filter((row) => !rowHasLocationEvidence(row, value));
+          const passed = rows.length > 0
+            ? missingLocationRows.length === 0
+            : !value || includesInsensitive(answer, value);
+          const evidence = rows.length > 0
+            ? missingLocationRows.map((row) => row.label).join(', ') || rows.map((row) => row.label).join(', ')
+            : answer;
+          addConstraint(constraint, passed, evidence);
+        }
         break;
       case 'entity_link':
         {
