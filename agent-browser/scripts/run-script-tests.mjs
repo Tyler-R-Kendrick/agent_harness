@@ -116,6 +116,12 @@ async function main() {
   assert.match(rootReadme, /## Workspace packages/);
   assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
   assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);
+  assert.match(rootReadme, /## Other maintained surfaces/);
+  assert.match(rootReadme, /\[`competition\/README\.md`\]\(\.\/competition\/README\.md\)/);
+  assert.match(rootReadme, /\[`dev-evals\/agent-chat\/README\.md`\]\(\.\/dev-evals\/agent-chat\/README\.md\)/);
+  assert.match(rootReadme, /\[`plugins\/deep-research-harness-ide\/README\.md`\]\(\.\/plugins\/deep-research-harness-ide\/README\.md\)/);
+  assert.match(rootReadme, /\[`research\/README\.md`\]\(\.\/research\/README\.md\)/);
+  assert.match(rootReadme, /\[`docs\/plugin-standards\.md`\]\(\.\/docs\/plugin-standards\.md\)/);
   for (const packageDirectory of [
     'agent-browser-mcp',
     'agent-sandbox',
@@ -138,7 +144,7 @@ async function main() {
   ]) {
     assert.match(
       rootReadme,
-      new RegExp(`\\[\`lib/${packageDirectory}/README\\.md\`\\]\\(\\.\\/lib\\/${packageDirectory}\\/README\\.md\\)`),
+      new RegExp(`\\[\`lib/${packageDirectory}/README\\.md\`\\]\(\\.\\/lib\\/${packageDirectory}\\/README\\.md\\)`),
     );
   }
   assert.ok(rootPackage.workspaces.includes('ext/*/*'));
