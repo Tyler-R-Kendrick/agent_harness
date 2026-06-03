@@ -24,6 +24,25 @@ describe('external message handling', () => {
     });
   });
 
+  it('rejects localhost senders on ports outside the configured allowlist', async () => {
+    const handler = createExternalMessageHandler({
+      allowedSenderPatterns: ['http://localhost:5174/*'],
+      permissions: fakePermissions(),
+      storage: fakeStorage(),
+      fetchImpl: vi.fn(),
+    });
+
+    await expect(handler({ type: 'ping' }, { origin: 'http://localhost:3000' })).resolves.toEqual({
+      ok: false,
+      error: 'Sender origin is not allowed.',
+      code: 'SENDER_ORIGIN_NOT_ALLOWED',
+    });
+    await expect(handler({ type: 'ping' }, { origin: 'http://localhost:5174' })).resolves.toEqual({
+      ok: true,
+      data: { name: 'Local Model Connector', version: '0.1.0' },
+    });
+  });
+
   it('returns ping metadata and rejects unknown or malformed messages', async () => {
     const handler = createExternalMessageHandler({
       allowedSenderPatterns: ['https://app.example.com/*'],

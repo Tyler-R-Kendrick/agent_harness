@@ -243,14 +243,24 @@ function parseUrl(value: string, message: string): URL {
 }
 
 function matchesOriginPattern(sender: URL, pattern: string): boolean {
-  const match = /^(https?|\*):\/\/([^/]+)\/\*$/.exec(pattern);
+  const match = /^(https?|\*):\/\/(\*|\*\.[^/:]+|[^/:]+)(?::(\*|\d+))?\/\*$/.exec(pattern);
   if (!match) return false;
-  const [, scheme, hostPattern] = match;
+  const [, scheme, hostPattern, portPattern] = match;
   if (scheme !== '*' && `${scheme}:` !== sender.protocol) return false;
+  if (portPattern) {
+    const senderPort = sender.port || defaultPortForProtocol(sender.protocol);
+    if (portPattern !== '*' && senderPort !== portPattern) return false;
+  }
   if (hostPattern === '*') return true;
   if (hostPattern.startsWith('*.')) {
     const suffix = hostPattern.slice(1);
     return sender.hostname.endsWith(suffix) && sender.hostname !== hostPattern.slice(2);
   }
   return sender.hostname === hostPattern;
+}
+
+function defaultPortForProtocol(protocol: string): string {
+  if (protocol === 'http:') return '80';
+  if (protocol === 'https:') return '443';
+  return '';
 }

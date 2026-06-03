@@ -74,7 +74,7 @@ Configure allowed PWA origins at build time:
 LOCAL_MODEL_CONNECTOR_ALLOWED_ORIGINS="https://app.example.com/*,https://app-dev.example.com/*" npm --workspace @agent-harness/ext-local-model-connector run build
 ```
 
-For local Agent Browser development, the default manifest also allows `http://localhost/*` and `http://127.0.0.1/*`; the service worker validates the sender origin again before handling messages.
+For local Agent Browser development, the default manifest allows only `http://localhost:5174/*` and `http://127.0.0.1:5174/*`; the service worker also validates the exact sender origin before handling messages.
 
 Set the extension ID in the PWA:
 

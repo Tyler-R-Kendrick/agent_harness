@@ -59,18 +59,20 @@ describe('local model connector validation', () => {
     const patterns = [
       'https://app.example.com/*',
       'https://app-dev.example.com/*',
-      'http://localhost/*',
+      'http://localhost:5174/*',
     ];
 
     expect(isAllowedSenderOrigin('https://app.example.com', patterns)).toBe(true);
     expect(isAllowedSenderOrigin('https://app-dev.example.com', patterns)).toBe(true);
     expect(isAllowedSenderOrigin('http://localhost:5174', patterns)).toBe(true);
+    expect(isAllowedSenderOrigin('http://localhost:3000', patterns)).toBe(false);
     expect(isAllowedSenderOrigin('https://evil.example.com', patterns)).toBe(false);
     expect(isAllowedSenderOrigin('http://127.0.0.1:5174', patterns)).toBe(false);
     expect(isAllowedSenderOrigin('not-a-url', patterns)).toBe(false);
     expect(isAllowedSenderOrigin('https://team.example.com', ['*://*.example.com/*'])).toBe(true);
     expect(isAllowedSenderOrigin('http://team.example.com', ['https://*.example.com/*'])).toBe(false);
     expect(isAllowedSenderOrigin('http://anything.test', ['*://*/*'])).toBe(true);
+    expect(isAllowedSenderOrigin('https://app.example.com:443', ['https://app.example.com:443/*'])).toBe(true);
     expect(isAllowedSenderOrigin('https://app.example.com', ['not-a-pattern'])).toBe(false);
   });
 
