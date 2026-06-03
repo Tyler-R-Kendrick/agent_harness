@@ -620,6 +620,31 @@ describe('WebPageBridge', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('blocks localhost and private-network URLs before fetching', async () => {
+    const fetchImpl = vi.fn();
+    const bridge = new WebPageBridge(fetchImpl);
+
+    await expect(bridge.read({ url: 'http://localhost:4173/private' })).resolves.toEqual({
+      status: 'blocked',
+      url: 'http://localhost:4173/private',
+      reason: 'Web page URL must target a public web host.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    await expect(bridge.read({ url: 'http://169.254.169.254/latest/meta-data' })).resolves.toEqual({
+      status: 'blocked',
+      url: 'http://169.254.169.254/latest/meta-data',
+      reason: 'Web page URL must target a public web host.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('returns unavailable instead of hanging when a page read does not respond', async () => {
     const fetchImpl = vi.fn(() => new Promise<Response>(() => {}));
     const bridge = new WebPageBridge(fetchImpl, 1);
