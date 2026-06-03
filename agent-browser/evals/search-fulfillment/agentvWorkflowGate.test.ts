@@ -485,25 +485,21 @@ describe('real AgentEvals workflow gate', () => {
     const input = {
       expected_output: JSON.stringify({
         semanticOnly: true,
-        expectedResult: 'semantic-entities-or-insufficient-evidence',
-        subject: 'gyms',
+        minEntities: 2,
         location: 'Arlington Heights, IL',
-        minEntities: 1,
-        forbiddenLabels: ['At Home', 'Movie Charts', 'Sign In/Join'],
+        forbiddenLabels: ['Yelp: Best Bars in Arlington Heights, IL'],
       }),
       output: [{
         role: 'assistant',
-        content: [
-          'I found your location, but web search is unavailable. Please provide a search source or candidate results for open now gyms.',
-          'Search issue: No search results found.',
-        ].join('\n'),
         tool_calls: [
-          { id: 'call-1', tool: 'validation-agent', input: {} },
-          { id: 'call-2', tool: 'webmcp:recall_user_context', input: {} },
-          { id: 'call-3', tool: 'validation-agent', input: {} },
-          { id: 'call-4', tool: 'webmcp:search_web', input: { query: 'open now gyms Arlington Heights IL' } },
-          { id: 'call-5', tool: 'validation-agent', input: {} },
+          { tool: 'webmcp:recall_user_context' },
+          { tool: 'webmcp:search_web' },
+          { tool: 'validation-agent' },
         ],
+        content: [
+          'I could not verify enough source-backed bars near Arlington Heights, IL from the available search results.',
+          'The current evidence is insufficient to safely publish entities.',
+        ].join('\n'),
       }],
     };
 
@@ -520,127 +516,43 @@ describe('real AgentEvals workflow gate', () => {
       assertions: Array<{ text: string; passed: boolean }>;
     };
     expect(parsed.score).toBe(1);
-    expect(parsed.assertions.some((assertion) => assertion.text.includes('webmcp:read_web_page') && !assertion.passed)).toBe(false);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'semantic live output may report insufficient evidence instead of fabricating entities',
+        passed: true,
+      }),
+      expect.objectContaining({
+        text: 'semantic live insufficient-evidence output does not publish page chrome labels',
+        passed: true,
+      }),
+    ]));
+    expect(parsed.assertions.some((assertion) => assertion.text === 'tool trajectory includes webmcp:read_web_page')).toBe(false);
   });
 
-  it('scores live semantic unavailable answers as valid insufficient evidence in the AgentV LLM judge', () => {
-    const judge = path.join(repoRoot, 'agent-browser/scripts/search-eval-llm-judge.mjs');
-    const outputDir = mkdtempSync(path.join(tmpdir(), 'agentv-live-insufficient-judge-'));
-    try {
-      const promptPath = path.join(outputDir, 'prompt.md');
-      const judgeOutputPath = path.join(outputDir, 'judge-output.json');
-      writeFileSync(promptPath, [
-        '[[ ## expected_output ## ]]',
-        JSON.stringify({
-          semanticOnly: true,
-          expectedResult: 'semantic-entities-or-insufficient-evidence',
-          subject: 'gyms',
-          location: 'Arlington Heights, IL',
-        }),
-        '',
-        '[[ ## answer ## ]]',
-        'I found your location, but web search is unavailable. Please provide a search source or candidate results for open now gyms.',
-        'Search issue: No search results found.',
-      ].join('\n'));
-
-      const result = spawnSync(process.execPath, [
-        judge,
-        '--prompt-file',
-        promptPath,
-        '--out',
-        judgeOutputPath,
-      ], {
-        cwd: repoRoot,
-        encoding: 'utf8',
-        env: subprocessEnv(),
-      });
-
-      expect(result.status).toBe(0);
-      const judgePayload = JSON.parse(readFileSync(judgeOutputPath, 'utf8')) as { text: string };
-      expect(JSON.parse(judgePayload.text)).toMatchObject({ score: 1 });
-    } finally {
-      rmSync(outputDir, { recursive: true, force: true });
-    }
-  });
-
-  it('scores AgentV file-backed output payloads for large tool trajectories', () => {
-    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
-    const outputDir = mkdtempSync(path.join(tmpdir(), 'agentv-file-backed-output-'));
-    try {
-      const outputPath = path.join(outputDir, 'output.json');
-      writeFileSync(outputPath, JSON.stringify([{
-        role: 'assistant',
-        content: [
-          'Here are movie theaters near Arlington Heights, IL:',
-          '',
-          '1. [AMC Randhurst 12](https://www.amctheatres.com/movie-theatres/chicago/amc-randhurst-12) - Why: AMC Randhurst 12 is a movie theater with location evidence in Mount Prospect near Arlington Heights.',
-        ].join('\n'),
-        tool_calls: [
-          'webmcp:recall_user_context',
-          'webmcp:search_web',
-          'search-analyzer',
-          'webmcp:read_web_page',
-          'validation-agent',
-          'post-processor',
-          'verification-agent',
-          ...new Array(43).fill('validation-agent'),
-        ].map((tool, index) => ({
-          id: `call-${index}`,
-          tool,
-          input: {},
-        })),
-      }]));
-      const input = {
-        expected_output: JSON.stringify({
-          expectedEntities: ['AMC Randhurst 12'],
-          expectedLocations: ['Mount Prospect near Arlington Heights'],
-          forbiddenLabels: ['Moviefone TV', 'Sign In/Join', 'FanClub'],
-        }),
-        output: null,
-        output_path: outputPath,
-      };
-
-      const result = spawnSync(process.execPath, [grader], {
-        cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
-        input: JSON.stringify(input),
-        encoding: 'utf8',
-        env: subprocessEnv(),
-      });
-
-      expect(result.status).toBe(0);
-      const parsed = JSON.parse(result.stdout) as {
-        score: number;
-        assertions: Array<{ text: string; passed: boolean }>;
-      };
-      expect(parsed.score).toBe(1);
-      expect(parsed.assertions).toEqual(expect.arrayContaining([
-        expect.objectContaining({ text: 'answer contains expected entity AMC Randhurst 12', passed: true }),
-        expect.objectContaining({ text: 'forbidden page chrome Moviefone TV is not rendered as an entity', passed: true }),
-      ]));
-    } finally {
-      rmSync(outputDir, { recursive: true, force: true });
-    }
-  });
-
-  it('fails AgentV search quality when a follow-up asks for three more but one entity is rendered as complete success', () => {
+  it('fails validation-contract count checks even when the answer acknowledges a shortfall without enough results', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
     const input = {
       expected_output: JSON.stringify({
-        expectedEntities: [
-          "Peggy Kinnane's Irish Restaurant & Pub",
-          'Hey Nonny',
-          "Cortland's Garage",
-        ],
-        expectedLocations: ['Arlington Heights, IL'],
-        forbiddenLabels: ['Yelp: Best Bars in Arlington Heights, IL'],
-        requestedCount: 3,
-        minimumAcceptedEntities: 3,
-        excludedCandidates: ['Sports Page Bar & Grill Arlington Heights'],
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show me 3 bars near me',
+          constraints: [
+            {
+              id: 'count:min-results',
+              type: 'count',
+              value: 3,
+              required: true,
+              failureMessage: 'Expected at least 3 accepted result(s).',
+            },
+          ],
+          successSemantics: 'all-required',
+        },
       }),
       output: [{
         role: 'assistant',
         content: [
-          'Here are bars near Arlington Heights, IL:',
+          'I could only verify 1 additional result for bars near Arlington Heights, IL, but you asked for 3.',
           '',
           "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: Peggy Kinnane's is a bar in Arlington Heights, IL.",
         ].join('\n'),
@@ -662,7 +574,7 @@ describe('real AgentEvals workflow gate', () => {
     expect(parsed.score).toBeLessThan(1);
     expect(parsed.assertions).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        text: 'answer renders at least 3 requested entities',
+        text: 'validation contract count:min-results',
         passed: false,
       }),
     ]));
@@ -1108,6 +1020,89 @@ describe('real AgentEvals workflow gate', () => {
     ]));
     const locationAssertion = parsed.assertions.find((assertion) => assertion.text === 'validation contract location:nearby');
     expect(locationAssertion?.evidence).toBe('Celtic Knot Public House');
+  });
+
+  it('fails validation-contract answers when any rendered entity lacks subject-instance evidence', () => {
+    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
+    const input = {
+      expected_output: JSON.stringify({
+        expectedLocations: ['Arlington Heights, IL'],
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show me 2 bars near me',
+          constraints: [
+            {
+              id: 'count:min-results',
+              sourceText: 'show me 2 bars near me',
+              type: 'count',
+              operator: 'at_least',
+              target: 'acceptedCandidates',
+              value: 2,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Expected at least 2 accepted result(s).',
+            },
+            {
+              id: 'subject:instance',
+              sourceText: 'show me 2 bars near me',
+              type: 'subject',
+              operator: 'matches_requested_subject',
+              target: 'acceptedCandidates.subjectEvidence',
+              value: 'bar',
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Each rendered result needs evidence that it is a bar.',
+            },
+          ],
+          evidenceRequirements: [
+            {
+              id: 'evidence:subject-instance',
+              description: 'Evidence must show each result is an instance of the requested subject.',
+              required: true,
+              target: 'acceptedCandidates.subjectEvidence',
+            },
+          ],
+          impossibilityPolicy: { kind: 'none', askUserForHelp: false },
+          clarificationTriggers: [],
+          successSemantics: 'all-required',
+          legacyCriteria: [],
+        },
+      }),
+      output: [{
+        role: 'assistant',
+        content: [
+          'Here are bars near Arlington Heights, IL:',
+          '',
+          "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: Peggy Kinnane's is a bar in Arlington Heights, IL.",
+          "2. [Walker Bros. Original Pancake House](https://www.walkerbros.net/) - Why: Walker Bros. Original Pancake House is a breakfast restaurant in Arlington Heights, IL.",
+        ].join('\n'),
+      }],
+    };
+
+    const result = spawnSync(process.execPath, [grader], {
+      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: subprocessEnv(),
+    });
+
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as {
+      score: number;
+      assertions: Array<{ text: string; passed: boolean; evidence?: string }>;
+    };
+    expect(parsed.score).toBeLessThan(1);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'validation contract subject:instance',
+        passed: false,
+      }),
+    ]));
+    const subjectAssertion = parsed.assertions.find((assertion) => assertion.text === 'validation contract subject:instance');
+    expect(subjectAssertion?.evidence).toBe('Walker Bros. Original Pancake House');
   });
 
   it('fails AgentV search quality when an arbitrary prefix contract is violated', () => {
