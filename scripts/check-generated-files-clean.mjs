@@ -214,9 +214,9 @@ export function buildGitLsFilesInvocation(cwd, platform = process.platform) {
   };
 }
 
-export function readTrackedFiles(cwd) {
+export function readTrackedFiles(cwd, spawnSyncImpl = spawnSync) {
   const invocation = buildGitLsFilesInvocation(cwd);
-  const result = spawnSync(invocation.command, invocation.args, {
+  const result = spawnSyncImpl(invocation.command, invocation.args, {
     cwd,
     encoding: 'buffer',
   });
@@ -307,8 +307,7 @@ export function checkGeneratedFilesClean(cwd) {
 export function readTrackedFilesFromLineInput(input) {
   return input
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line.length > 0);
 }
 
 export function filterExistingTrackedFiles(trackedFiles, cwd) {
@@ -335,6 +334,7 @@ export function runGeneratedFilesCleanCli({
   return 0;
 }
 
+/* node:coverage disable */
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     process.exitCode = runGeneratedFilesCleanCli({
@@ -347,3 +347,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exit(1);
   }
 }
+/* node:coverage enable */
