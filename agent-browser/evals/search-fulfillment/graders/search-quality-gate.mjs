@@ -126,6 +126,24 @@ function rowHasLocationEvidence(row, target) {
     .some((alias) => content.includes(alias));
 }
 
+function subjectAliases(value) {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) return [];
+  const aliases = new Set([text]);
+  if (text.endsWith('ies') && text.length > 3) aliases.add(`${text.slice(0, -3)}y`);
+  if (text.endsWith('s') && !text.endsWith('ss')) aliases.add(text.slice(0, -1));
+  if (!text.endsWith('s')) aliases.add(`${text}s`);
+  return [...aliases];
+}
+
+function rowHasSubjectEvidence(row, target) {
+  const content = String(row?.raw ?? '').toLowerCase();
+  return subjectAliases(target).some((alias) => {
+    const pattern = new RegExp(`\\b${escapeRegExp(alias)}\\b`, 'i');
+    return pattern.test(content);
+  });
+}
+
 function labelLooksLikePageChrome(label, forbiddenLabels = [], contract = {}) {
   if (forbiddenLabels.some((forbidden) => String(forbidden).toLowerCase() === label.toLowerCase())) return true;
   if ((contract.badLabels ?? []).some((forbidden) => String(forbidden).toLowerCase() === label.toLowerCase())) return true;
@@ -274,11 +292,17 @@ function contractConstraintAssertions(validationContract, answer, labels, expect
         break;
       }
       case 'subject':
-        addConstraint(
-          constraint,
-          labels.length > 0 && (!value || includesInsensitive(answer, value)),
-          answer,
-        );
+        {
+          const rows = renderedEntityRows(answer);
+          const unsupportedRows = rows.filter((row) => !rowHasSubjectEvidence(row, value));
+          const passed = rows.length > 0
+            ? unsupportedRows.length === 0
+            : labels.length > 0 && (!value || includesInsensitive(answer, value));
+          const evidence = rows.length > 0
+            ? unsupportedRows.map((row) => row.label).join(', ') || rows.map((row) => row.label).join(', ')
+            : answer;
+          addConstraint(constraint, passed, evidence);
+        }
         break;
       default:
         addConstraint(constraint, true, 'No deterministic checker for this constraint type; deferred to AgentV rubric/llm-grader.');
