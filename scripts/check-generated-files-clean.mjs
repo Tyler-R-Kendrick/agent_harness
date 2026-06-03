@@ -247,13 +247,14 @@ export function readTrackedFilesFromGitIndex(cwd) {
   }
 
   const version = index.readUInt32BE(4);
-  if (version !== 2 && version !== 3) {
+  if (version !== 2 && version !== 3 && version !== 4) {
     throw new Error(`Unsupported git index version ${version}.`);
   }
 
   const entryCount = index.readUInt32BE(8);
   let offset = 12;
   const files = [];
+  let previousPath = '';
 
   for (let entry = 0; entry < entryCount; entry += 1) {
     const entryStart = offset;
@@ -266,19 +267,62 @@ export function readTrackedFilesFromGitIndex(cwd) {
     let pathStart = entryStart + 62;
     if (hasExtendedFlags) pathStart += 2;
 
-    let pathEnd = pathStart;
-    while (pathEnd < index.length && index[pathEnd] !== 0) {
-      pathEnd += 1;
-    }
-    if (pathEnd >= index.length) {
-      throw new Error('Git index entry is missing a path terminator.');
+    if (version === 4) {
+      const pathPrefix = readGitIndexV4RemoveCount(index, pathStart);
+      pathStart = pathPrefix.offset;
+      const pathEnd = findGitIndexPathTerminator(index, pathStart);
+      if (pathPrefix.value > previousPath.length) {
+        throw new Error('Git index entry removes more path bytes than the previous path contains.');
+      }
+
+      const retainedPrefix = previousPath.slice(0, previousPath.length - pathPrefix.value);
+      const pathSuffix = index.toString('utf8', pathStart, pathEnd);
+      const filePath = `${retainedPrefix}${pathSuffix}`;
+      files.push(filePath);
+      previousPath = filePath;
+      offset = pathEnd + 1;
+      continue;
     }
 
+    const pathEnd = findGitIndexPathTerminator(index, pathStart);
     files.push(index.toString('utf8', pathStart, pathEnd));
     offset = entryStart + Math.ceil((pathEnd + 1 - entryStart) / 8) * 8;
   }
 
   return files;
+}
+
+function readGitIndexV4RemoveCount(index, offset) {
+  let value = 0;
+  let cursor = offset;
+
+  while (true) {
+    if (cursor >= index.length) {
+      throw new Error('Git index entry is missing a path prefix length.');
+    }
+
+    const byte = index[cursor];
+    cursor += 1;
+    value = (value << 7) + (byte & 0x7f);
+
+    if ((byte & 0x80) === 0) {
+      return { value, offset: cursor };
+    }
+
+    value += 1;
+  }
+}
+
+function findGitIndexPathTerminator(index, pathStart) {
+  let pathEnd = pathStart;
+  while (pathEnd < index.length && index[pathEnd] !== 0) {
+    pathEnd += 1;
+  }
+  if (pathEnd >= index.length) {
+    throw new Error('Git index entry is missing a path terminator.');
+  }
+
+  return pathEnd;
 }
 
 function resolveGitIndexPath(cwd) {
