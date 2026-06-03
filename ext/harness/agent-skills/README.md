@@ -24,7 +24,8 @@ host needs to inspect the plugin manifest before loading the extension.
 
 `examples/default-workspace-skills/` is published as example source material for
 hosts that want to inspect or copy the former bundled skills. It is not runtime
-code and should not be treated as a default workspace seed.
+code and should not be treated as a default workspace seed. The runnable example
+source is included, but example validation tests are excluded from published package artifacts.
 
 Do not deep-import files under `src/`; those files are implementation details of
 the root package entry point.
