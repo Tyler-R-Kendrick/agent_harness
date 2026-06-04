@@ -9,6 +9,11 @@ const TEST_FILE_DENYLISTS_BY_EXTENSION = new Map([
 ]);
 const SOURCE_TEST_DIRECTORY_DENYLIST = '!src/__tests__/**';
 const DIST_SOURCE_MAP_DENYLIST = '!dist/**/*.map';
+const EXAMPLE_TEST_DENYLISTS = [
+  '!examples/**/*.test.ts',
+  '!examples/**/*.test.tsx',
+  '!examples/**/__tests__/**',
+];
 
 function normalizePath(filePath) {
   return filePath.replace(/\\/g, '/');
@@ -100,6 +105,13 @@ function includesRecursiveDistPattern(files) {
   });
 }
 
+function includesRecursiveExamplesPattern(files) {
+  return files.some((pattern) => {
+    const normalized = normalizePath(pattern);
+    return !normalized.startsWith('!') && (normalized === 'examples/**' || normalized === 'examples/**/*');
+  });
+}
+
 export function findPackagePublishAllowlistIssues(packages) {
   return packages
     .filter(({ manifest }) => manifest.private !== true)
@@ -126,6 +138,14 @@ export function findPackagePublishAllowlistIssues(packages) {
 
       if (includesRecursiveDistPattern(files) && !normalizedFiles.includes(DIST_SOURCE_MAP_DENYLIST)) {
         issues.push(`missing ${DIST_SOURCE_MAP_DENYLIST} for recursive dist publish pattern`);
+      }
+
+      if (includesRecursiveExamplesPattern(files)) {
+        for (const denylist of EXAMPLE_TEST_DENYLISTS) {
+          if (!normalizedFiles.includes(denylist)) {
+            issues.push(`missing ${denylist} for recursive examples publish pattern`);
+          }
+        }
       }
 
       return {
