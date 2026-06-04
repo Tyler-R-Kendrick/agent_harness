@@ -12,7 +12,7 @@ This repository is most useful for contributors working on the `agent-browser` p
 - `skills/`: canonical bundled skill sources checked into the repo
 - `lib/`: shared TypeScript libraries used by the workspace
 - `lib/workers/`: specialized worker-provider packages layered on top of `@agent-harness/worker`
-- `ext/`: installable extension packages for IDE, harness, and provider features
+- `ext/`: installable extension packages for IDE, harness, provider, and worker features
 - `plugins/`: repo-local plugin projects and plugin-scaffold experiments
 - `dev-evals/`: dev-time eval suites kept outside the product verification path
 - `docs/`: focused project docs and implementation plans
@@ -113,7 +113,7 @@ The root README is the package index. Use the linked package README for public A
 | Workspace | Import path | Purpose |
 |---|---|---|
 | [`agent-browser/README.md`](./agent-browser/README.md) | `agent-browser` | Primary React + Vite application shell, chat-agent runtime, and browser workspace UI. |
-| [`ext/README.md`](./ext/README.md) | `ext/*/*` | Workspace index for the public IDE, harness, and provider extension packages. |
+| [`ext/README.md`](./ext/README.md) | `ext/*/*` | Workspace index for the public IDE, harness, provider, and worker extension packages. |
 | [`harness-core/README.md`](./harness-core/README.md) | `harness-core` | Reusable agent-loop runtime, command, storage, constrained-decoding, and plugin-manifest primitives. |
 | [`lib/agent-browser-mcp/README.md`](./lib/agent-browser-mcp/README.md) | `@agent-harness/agent-browser-mcp` | Agent Browser MCP tools, resources, prompts, prompt templates, and WebMCP bridge helpers. |
 | [`lib/agent-sandbox/README.md`](./lib/agent-sandbox/README.md) | `@agent-harness/agent-sandbox` | Capability-based sandbox provider for governed browser agent execution. |
