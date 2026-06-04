@@ -377,6 +377,29 @@ describe('repair helpers and storage', () => {
     expect(regionImproved({ ...trace, steps: [failed] }, { ...trace, steps: [] }, failed)).toBe(false);
   });
 
+  it('replaces a multi-step failed region once while preserving surrounding steps', () => {
+    const trace = makeTrace();
+    const before = { ...trace.steps[0], step_id: 'before', text: 'accepted before', status: 'accepted' as const };
+    const firstFailed = { ...trace.steps[0], step_id: 'failed-1', text: 'first failed', status: 'failed' as const };
+    const secondFailed = { ...trace.steps[0], step_id: 'failed-2', text: 'second failed', status: 'failed' as const };
+    const after = { ...trace.steps[0], step_id: 'after', text: 'accepted after', status: 'accepted' as const };
+    const firstRepaired = { ...firstFailed, step_id: 'repaired-1', text: 'first repaired', status: 'repaired' as const };
+    const secondRepaired = { ...secondFailed, step_id: 'repaired-2', text: 'second repaired', status: 'repaired' as const };
+
+    const spliced = spliceRepairedSteps(
+      { ...trace, steps: [before, firstFailed, secondFailed, after] },
+      [firstFailed, secondFailed],
+      [firstRepaired, secondRepaired],
+    );
+
+    expect(spliced.steps.map((step) => step.step_id)).toEqual([
+      'before',
+      'repaired-1',
+      'repaired-2',
+      'after',
+    ]);
+  });
+
   it('stores artifacts only after explicit creation', async () => {
     const store = await createArtifactStore();
     const trace = makeTrace();
