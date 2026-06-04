@@ -69,6 +69,15 @@ function extractMarkdownLinkLabels(content) {
     .filter(Boolean);
 }
 
+function extractMarkdownLinks(content) {
+  return [...content.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)]
+    .map((match) => ({
+      label: match[1].trim(),
+      url: match[2].trim(),
+    }))
+    .filter((link) => link.label.length > 0 && link.url.length > 0);
+}
+
 function escapeRegExp(value) {
   return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -93,21 +102,43 @@ function renderedEntityRows(answer) {
     .filter((line) => /^(?:[-*]|\d+[.)])\s+/.test(line))
     .map((line) => {
       const content = line.replace(/^(?:[-*]|\d+[.)])\s+/, '').trim();
-      const markdownLabels = extractMarkdownLinkLabels(content);
+      const markdownLinks = extractMarkdownLinks(content);
+      const markdownLabels = markdownLinks.map((link) => link.label);
       const prefix = content.split(/\s+-\s+|\s+[.]\s+|\s+Why:/i)[0]?.trim() ?? '';
       const cleanedPrefix = prefix.replace(/\[|\]|\([^)]*\)/g, '').trim();
       const label = cleanedPrefix
         || markdownLabels.find((candidate) => !supportLinkLabel(candidate))
         || markdownLabels[0]
         || '';
+      const matchingLink = markdownLinks.find((candidate) => normalizeComparable(candidate.label) === normalizeComparable(label));
       return {
         raw: line,
         label,
-        hasLink: markdownLabels.some((candidate) => normalizeComparable(candidate) === normalizeComparable(label)),
+        linkUrl: matchingLink?.url ?? '',
+        hasLink: Boolean(matchingLink),
         hasEvidence: /\b(?:why|source|evidence|listed|found|verified|location evidence)\b/i.test(content),
       };
     })
     .filter((row) => row.label.length > 0);
+}
+
+function urlLooksEntitySpecific(rawUrl, label) {
+  try {
+    const url = new URL(String(rawUrl ?? ''));
+    if (!/^https?:$/i.test(url.protocol)) return false;
+    const pathname = url.pathname.toLowerCase();
+    const searchParams = [...url.searchParams.keys()].map((key) => key.toLowerCase());
+    const hasSearchIntent = searchParams.some((key) => /^(?:q|query|search|find_desc|find_loc|term|keyword|near|location)$/.test(key));
+    if (/\/(?:search|results?|listings?|directory)(?:\/|$)/i.test(pathname)) return false;
+    if (hasSearchIntent && /\/(?:search|find|lookup|categories?|showtimes?)(?:\/|$)/i.test(pathname)) return false;
+    if (pathname === '/' || pathname === '') return !hasSearchIntent;
+    const slug = pathname.split('/').filter(Boolean).at(-1) ?? '';
+    if (!slug || /^(?:search|results?|listings?|directory|categories?|showtimes?)$/i.test(slug)) return false;
+    if (supportLinkLabel(label)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function locationAliases(value) {
@@ -263,7 +294,7 @@ function contractConstraintAssertions(validationContract, answer, labels, expect
       case 'entity_link':
         {
           const rows = renderedEntityRows(answer);
-          const unlinkedRows = rows.filter((row) => !row.hasLink);
+          const unlinkedRows = rows.filter((row) => !(row.hasLink && urlLooksEntitySpecific(row.linkUrl, row.label)));
           const passed = rows.length > 0
             ? unlinkedRows.length === 0
             : labels.length > 0 && /\[[^\]]+\]\(https?:\/\/[^)]+\)/.test(answer);
@@ -412,7 +443,7 @@ if (semanticOnly) {
   }
   for (const entity of contract.expectedEntities ?? []) {
     add(`answer contains expected entity ${entity}`, includesInsensitive(answer, entity), answer);
-    add(`answer links expected entity ${entity}`, new RegExp(`\\[${escapeRegExp(entity)}\\]\\(https?:\\/\\/`, 'i').test(answer), answer);
+    add(`answer links expected entity ${entity}`, new RegExp(`\\[${escapeRegExp(entity)}\\]\(https?:\\/\\/`, 'i').test(answer), answer);
   }
 }
 if (!expectsInsufficientEvidence) {
