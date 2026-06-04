@@ -113,6 +113,7 @@ async function main() {
   const packageJson = await readScript('package.json');
   const rootPackage = JSON.parse(packageJson);
   const rootReadme = await readScript('README.md');
+  const extReadme = await readScript('ext/README.md');
   assert.match(rootReadme, /## Workspace packages/);
   assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
   assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);
@@ -122,6 +123,16 @@ async function main() {
   assert.match(rootReadme, /\[`plugins\/deep-research-harness-ide\/README\.md`\]\(\.\/plugins\/deep-research-harness-ide\/README\.md\)/);
   assert.match(rootReadme, /\[`research\/README\.md`\]\(\.\/research\/README\.md\)/);
   assert.match(rootReadme, /\[`docs\/plugin-standards\.md`\]\(\.\/docs\/plugin-standards\.md\)/);
+  assert.match(rootReadme, /installable extension packages for IDE, harness, provider, and worker features/);
+  assert.match(
+    rootReadme,
+    /\[`ext\/README\.md`\]\(\.\/ext\/README\.md\) \| `ext\/\*\/\*` \| Workspace index for the public IDE, harness, provider, and worker extension packages\./,
+  );
+  assert.match(extReadme, /## Worker extensions/);
+  assert.match(
+    extReadme,
+    /\[`ext\/worker\/local-inference-worker\/README\.md`\]\(\.\/worker\/local-inference-worker\/README\.md\) `local-inference-worker`/,
+  );
   for (const packageDirectory of [
     'agent-browser-mcp',
     'agent-sandbox',
