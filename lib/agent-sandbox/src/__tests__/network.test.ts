@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SandboxFetchPolicy } from '../network';
+import { __testOnlySandboxFetchPolicy, SandboxFetchPolicy } from '../network';
 
 describe('SandboxFetchPolicy', () => {
   afterEach(() => {
@@ -28,6 +28,84 @@ describe('SandboxFetchPolicy', () => {
     await expect(localhostPolicy.fetch('http://localhost:5174/data')).resolves.toMatchObject({
       bodyText: 'local',
     });
+  });
+
+  it('blocks private, loopback, metadata, and wildcard-dns internal hosts before fetch', async () => {
+    const fetchImplementation = vi.fn(async () => new Response('ok'));
+    const policy = new SandboxFetchPolicy({
+      enabled: true,
+      fetchImplementation,
+    });
+
+    await expect(policy.fetch('https://169.254.169.254/latest/meta-data')).rejects.toThrow(/public web host/i);
+    await expect(policy.fetch('https://10.0.0.8/private')).rejects.toThrow(/public web host/i);
+    await expect(policy.fetch('https://[::1]/private')).rejects.toThrow(/public web host/i);
+    await expect(policy.fetch('https://127.0.0.1.nip.io/private')).rejects.toThrow(/public web host/i);
+    await expect(policy.fetch('https://localhost./private')).rejects.toThrow(/public web host/i);
+    await expect(policy.fetch('https://8.8.8.8.nip.io/public')).resolves.toMatchObject({
+      bodyText: 'ok',
+    });
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    expect(fetchImplementation).toHaveBeenCalledWith('https://8.8.8.8.nip.io/public', expect.any(Object));
+  });
+
+  it('blocks additional reserved network ranges and preserves public ipv6 access', async () => {
+    const fetchImplementation = vi.fn(async () => new Response('ok'));
+    const policy = new SandboxFetchPolicy({
+      enabled: true,
+      fetchImplementation,
+    });
+
+    const blockedUrls = [
+      'https://0.1.2.3/bootstrap',
+      'https://100.64.0.8/shared-address-space',
+      'https://172.16.4.20/private',
+      'https://192.168.1.5/private',
+      'https://198.18.0.1/benchmark',
+      'https://198.19.0.1/benchmark',
+      'https://[fe80::1]/link-local',
+      'https://[fc00::1]/unique-local',
+      'https://[::ffff:10.0.0.8]/mapped-private',
+      'https://[64:ff9b::0a00:0008]/nat64-private',
+      'https://[2002:0a00:0008::1]/6to4-private',
+      'https://localhost.nip.io/private',
+      'https://app.localhost.nip.io/private',
+    ];
+
+    for (const url of blockedUrls) {
+      await expect(policy.fetch(url)).rejects.toThrow(/public web host/i);
+    }
+
+    await expect(policy.fetch('https://[2001:4860:4860::8888]/dns-query')).resolves.toMatchObject({
+      bodyText: 'ok',
+    });
+
+    expect(fetchImplementation).toHaveBeenCalledTimes(1);
+    expect(fetchImplementation).toHaveBeenCalledWith('https://[2001:4860:4860::8888]/dns-query', expect.any(Object));
+  });
+
+  it('covers ipv6 parser and hostname helper edge cases', () => {
+    expect(__testOnlySandboxFetchPolicy.normalizeHostname('[LOCALHOST.]')).toBe('localhost');
+    expect(__testOnlySandboxFetchPolicy.isLocalhost('[::1]')).toBe(true);
+    expect(__testOnlySandboxFetchPolicy.isPrivateIpv4Hostname('203.0.113.10')).toBe(false);
+
+    expect(__testOnlySandboxFetchPolicy.parseIpv6Segments('2001:0db8:0000:0001:0002:0003:0004:0005')).toEqual([
+      0x2001, 0x0db8, 0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
+    ]);
+    expect(__testOnlySandboxFetchPolicy.parseIpv6Segments('2001:db8:0:1:2:3:4')).toBeNull();
+    expect(__testOnlySandboxFetchPolicy.parseIpv6Segments('1:2:3:4:5:6:7::8:9')).toBeNull();
+    expect(__testOnlySandboxFetchPolicy.parseIpv6Segments('2001::db8::1')).toBeNull();
+    expect(__testOnlySandboxFetchPolicy.parseIpv6Segments('gggg::1')).toBeNull();
+
+    expect(__testOnlySandboxFetchPolicy.extractEmbeddedIpv4SegmentsFromIpv6('not-ipv6')).toBeNull();
+    expect(__testOnlySandboxFetchPolicy.extractEmbeddedIpv4SegmentsFromIpv6('::0a00:0008')).toEqual([10, 0, 0, 8]);
+    expect(__testOnlySandboxFetchPolicy.extractEmbeddedIpv4SegmentsFromIpv6('2001:4860:4860::8888')).toBeNull();
+
+    expect(__testOnlySandboxFetchPolicy.isPrivateIpv6Hostname('2001:4860:4860::8888')).toBe(false);
+    expect(__testOnlySandboxFetchPolicy.isLoopbackDnsHostname('public.example.test')).toBe(false);
+    expect(__testOnlySandboxFetchPolicy.isPublicWebHostname('localhost')).toBe(false);
+    expect(__testOnlySandboxFetchPolicy.isPublicWebHostname('8.8.8.8.nip.io')).toBe(true);
   });
 
   it('allows only configured origins and strips credential-bearing request state', async () => {

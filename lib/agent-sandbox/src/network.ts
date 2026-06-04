@@ -54,7 +54,193 @@ function normalizeMethod(method: unknown): string {
 }
 
 function isLocalhost(hostname: string): boolean {
-  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+  const normalized = normalizeHostname(hostname);
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+}
+
+function normalizeHostname(hostname: string): string {
+  return hostname.trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/g, '');
+}
+
+function isIpv4Hostname(hostname: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+function parseIpv4Segments(hostname: string): number[] | null {
+  if (!isIpv4Hostname(hostname)) {
+    return null;
+  }
+
+  return hostname.split('.').map((segment) => Number.parseInt(segment, 10));
+}
+
+function isPrivateIpv4Hostname(hostname: string): boolean {
+  const segments = parseIpv4Segments(hostname);
+  if (!segments) {
+    return false;
+  }
+
+  const [first, second] = segments;
+  if (first === 0 || first === 10 || first === 127) {
+    return true;
+  }
+  if (first === 100 && second >= 64 && second <= 127) {
+    return true;
+  }
+  if (first === 169 && second === 254) {
+    return true;
+  }
+  if (first === 172 && second >= 16 && second <= 31) {
+    return true;
+  }
+  if (first === 192 && second === 168) {
+    return true;
+  }
+  if (first === 198 && (second === 18 || second === 19)) {
+    return true;
+  }
+
+  return false;
+}
+
+function parseIpv6Segments(hostname: string): number[] | null {
+  const normalized = normalizeHostname(hostname);
+  if (!normalized.includes(':')) {
+    return null;
+  }
+
+  const parts = normalized.split('::');
+  if (parts.length > 2) {
+    return null;
+  }
+
+  const parsePart = (part: string): number[] | null => {
+    if (!part) {
+      return [];
+    }
+
+    const segments = part.split(':').map((token) => Number.parseInt(token, 16));
+    return segments.every((segment) => Number.isInteger(segment) && segment >= 0 && segment <= 0xffff)
+      ? segments
+      : null;
+  };
+
+  const left = parsePart(parts[0] || '');
+  const right = parsePart(parts[1] || '');
+  if (!left || !right) {
+    return null;
+  }
+
+  if (parts.length === 1) {
+    return left.length === 8 ? left : null;
+  }
+
+  const zeroFillCount = 8 - (left.length + right.length);
+  if (zeroFillCount < 1) {
+    return null;
+  }
+  return [...left, ...Array.from({ length: zeroFillCount }, () => 0), ...right];
+}
+
+function extractEmbeddedIpv4SegmentsFromIpv6(hostname: string): number[] | null {
+  const segments = parseIpv6Segments(hostname);
+  if (!segments) {
+    return null;
+  }
+
+  const lastIpv4Segments = [
+    (segments[6]! >> 8) & 0xff,
+    segments[6]! & 0xff,
+    (segments[7]! >> 8) & 0xff,
+    segments[7]! & 0xff,
+  ];
+
+  const isIpv4Compatible = segments.slice(0, 6).every((segment) => segment === 0);
+  if (isIpv4Compatible) {
+    return lastIpv4Segments;
+  }
+
+  const isIpv4Mapped = segments.slice(0, 5).every((segment) => segment === 0) && segments[5] === 0xffff;
+  if (isIpv4Mapped) {
+    return lastIpv4Segments;
+  }
+
+  const isWellKnownNat64 = segments[0] === 0x64 && segments[1] === 0xff9b && segments[2] === 0 && segments[3] === 0 && segments[4] === 0 && segments[5] === 0;
+  if (isWellKnownNat64) {
+    return lastIpv4Segments;
+  }
+
+  if (segments[0] === 0x2002) {
+    return [
+      (segments[1]! >> 8) & 0xff,
+      segments[1]! & 0xff,
+      (segments[2]! >> 8) & 0xff,
+      segments[2]! & 0xff,
+    ];
+  }
+
+  return null;
+}
+
+function isPrivateIpv6Hostname(hostname: string): boolean {
+  const segments = parseIpv6Segments(hostname);
+  if (!segments) {
+    return false;
+  }
+
+  if (segments.every((segment) => segment === 0) || segments.every((segment, index) => segment === (index === 7 ? 1 : 0))) {
+    return true;
+  }
+
+  if ((segments[0]! & 0xffc0) === 0xfe80) {
+    return true;
+  }
+
+  if ((segments[0]! & 0xfe00) === 0xfc00) {
+    return true;
+  }
+
+  const embeddedIpv4Segments = extractEmbeddedIpv4SegmentsFromIpv6(hostname);
+  if (embeddedIpv4Segments) {
+    return isPrivateIpv4Hostname(embeddedIpv4Segments.join('.'));
+  }
+
+  return false;
+}
+
+const LOOPBACK_DNS_SUFFIXES = ['nip.io', 'sslip.io', 'xip.io'] as const;
+
+function isLoopbackDnsHostname(hostname: string): boolean {
+  const normalized = normalizeHostname(hostname);
+  for (const suffix of LOOPBACK_DNS_SUFFIXES) {
+    if (!normalized.endsWith(`.${suffix}`)) {
+      continue;
+    }
+
+    const candidate = normalized.slice(0, -(suffix.length + 1)).replace(/-/g, '.');
+    if (candidate === 'localhost' || candidate.endsWith('.localhost')) {
+      return true;
+    }
+
+    if (isPrivateIpv4Hostname(candidate)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isPublicWebHostname(hostname: string): boolean {
+  const normalized = normalizeHostname(hostname);
+  if (normalized === 'localhost' || normalized.endsWith('.localhost')) {
+    return false;
+  }
+
+  if (isLoopbackDnsHostname(normalized)) {
+    return false;
+  }
+
+  return !isPrivateIpv4Hostname(normalized) && !isPrivateIpv6Hostname(normalized);
 }
 
 function originAllowed(origin: string, allowedOrigins: string[] | undefined): boolean {
@@ -177,6 +363,7 @@ export class SandboxFetchPolicy {
     }
 
     const url = new URL(input);
+    const normalizedHostname = normalizeHostname(url.hostname);
     if (url.protocol === 'http:' && !isLocalhost(url.hostname)) {
       throw new SandboxExecutionError('Sandbox fetch requires HTTPS for non-localhost URLs.');
     }
@@ -185,6 +372,10 @@ export class SandboxFetchPolicy {
     }
     if (url.protocol !== 'https:' && url.protocol !== 'http:') {
       throw new SandboxExecutionError('Sandbox fetch only supports HTTP(S) URLs.');
+    }
+    const allowExplicitLocalhostHttp = url.protocol === 'http:' && isLocalhost(normalizedHostname) && this.options.allowLocalhostHttp;
+    if (!allowExplicitLocalhostHttp && !isPublicWebHostname(normalizedHostname)) {
+      throw new SandboxExecutionError('Sandbox fetch URL must target a public web host.');
     }
     if (!originAllowed(url.origin, this.options.allowedOrigins)) {
       throw new SandboxExecutionError(`Sandbox fetch origin is not allowed: ${url.origin}`);
@@ -242,3 +433,14 @@ export class SandboxFetchPolicy {
     }
   }
 }
+
+export const __testOnlySandboxFetchPolicy = {
+  normalizeHostname,
+  isLocalhost,
+  isPrivateIpv4Hostname,
+  parseIpv6Segments,
+  extractEmbeddedIpv4SegmentsFromIpv6,
+  isPrivateIpv6Hostname,
+  isLoopbackDnsHostname,
+  isPublicWebHostname,
+};
