@@ -1,0 +1,23 @@
+slug: microsoft-copilot-studio
+name: Microsoft Copilot Studio
+vendor: Microsoft
+segment: enterprise-agent-builder
+product_path: competition/microsoft-copilot-studio
+design_path: competition/microsoft-copilot-studio/design
+features_path: competition/microsoft-copilot-studio/features
+marketing_path: competition/microsoft-copilot-studio/marketing
+gossip_path: competition/microsoft-copilot-studio/gossip
+snapshot_date: 2026-06-04
+primary_sources:
+  - https://learn.microsoft.com/en-us/microsoft-365-copilot/extensibility/copilot-studio-agent-builder-build
+  - https://learn.microsoft.com/en-us/microsoft-copilot-studio/authoring-create-edit-topics
+  - https://learn.microsoft.com/en-us/microsoft-copilot-studio/requirements-messages-management
+  - https://developer.microsoft.com/en-us/agents
+secondary_sources:
+  - https://www.reddit.com/r/microsoft_365_copilot/comments/1tc5bx0/lessons_learned_deploying_m365_copilot_agents_the/
+  - https://www.reddit.com/r/copilotstudio/comments/1tpge5m/agent_licensing_question/
+  - https://www.reddit.com/r/microsoft_365_copilot/comments/1rv70mg/copilot_studio_orchestration_is_it_actually/
+positioning: "Enterprise agent builder for Microsoft 365 and Power Platform that lets teams create lightweight Copilot agents or governed full Copilot Studio agents with topics, tools, knowledge, and connectors."
+customer_model: "Microsoft 365 Copilot-seat expansion for employee-facing agents, plus Copilot Studio consumption and Azure/Power Platform licensing for external channels, autonomous triggers, and richer tool use."
+competitive_threat_level: high
+notes: "Threatens agent-browser through Microsoft 365 distribution, Graph grounding, Teams/Office surfaces, and admin trust controls rather than browser-specific evidence."
