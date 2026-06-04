@@ -1,0 +1,23 @@
+slug: salesforce-agentforce
+name: Salesforce Agentforce
+vendor: Salesforce
+segment: enterprise-agent-builder
+product_path: competition/salesforce-agentforce
+design_path: competition/salesforce-agentforce/design
+features_path: competition/salesforce-agentforce/features
+marketing_path: competition/salesforce-agentforce/marketing
+gossip_path: competition/salesforce-agentforce/gossip
+snapshot_date: 2026-06-04
+primary_sources:
+  - https://developer.salesforce.com/docs/ai/agentforce/guide/get-started.html
+  - https://www.salesforce.com/platform/agentforce-platform/
+  - https://architect.salesforce.com/docs/architect/fundamentals/guide/agentic-patterns.html
+  - https://www.salesforce.com/news/press-releases/2025/03/04/agentexchange-announcement/
+secondary_sources:
+  - https://www.reddit.com/r/salesforce/comments/1sezf2a/agentforce_how_is_there_still_any_hype/
+  - https://www.reddit.com/r/salesforce/comments/1ra15e3/agentforce_pricing/
+  - https://www.reddit.com/r/salesforce/comments/1tccdjo/what_is_this_salesforce_product_actually_called/
+positioning: "CRM-native digital labor platform for building trusted agents over Salesforce data, metadata, topics, actions, Data 360, Slack, and the AgentExchange ecosystem."
+customer_model: "Salesforce platform expansion through Agentforce 360, Data 360, Flex Credits or conversation/action consumption, packaged sales/service agents, and marketplace partner distribution."
+competitive_threat_level: high
+notes: "Threatens agent-browser where browser work is part of CRM/service/sales workflows, but leaves a wedge around non-Salesforce browser evidence and local authority controls."
