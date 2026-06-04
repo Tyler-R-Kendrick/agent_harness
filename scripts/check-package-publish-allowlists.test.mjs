@@ -90,6 +90,35 @@ const allowlistPolicyPackages = [
     },
   },
   {
+    path: 'ext/harness/example-assets/package.json',
+    manifest: {
+      name: '@agent-harness/example-assets',
+      files: [
+        'README.md',
+        'src/**/*.ts',
+        'examples/**',
+        '!src/**/*.test.ts',
+        '!src/__tests__/**',
+      ],
+    },
+  },
+  {
+    path: 'ext/harness/hardened-example-assets/package.json',
+    manifest: {
+      name: '@agent-harness/hardened-example-assets',
+      files: [
+        'README.md',
+        'src/**/*.ts',
+        'examples/**',
+        '!examples/**/*.test.ts',
+        '!examples/**/*.test.tsx',
+        '!examples/**/__tests__/**',
+        '!src/**/*.test.ts',
+        '!src/__tests__/**',
+      ],
+    },
+  },
+  {
     path: 'ext/provider/dist-package/package.json',
     manifest: {
       name: '@agent-harness/dist-package',
@@ -150,6 +179,15 @@ assert.deepEqual(findPackagePublishAllowlistIssues(allowlistPolicyPackages), [
     issues: ['missing !src/**/*.test.tsx for recursive src tsx publish pattern'],
   },
   {
+    name: '@agent-harness/example-assets',
+    path: 'ext/harness/example-assets/package.json',
+    issues: [
+      'missing !examples/**/*.test.ts for recursive examples publish pattern',
+      'missing !examples/**/*.test.tsx for recursive examples publish pattern',
+      'missing !examples/**/__tests__/** for recursive examples publish pattern',
+    ],
+  },
+  {
     name: '@agent-harness/dist-package',
     path: 'ext/provider/dist-package/package.json',
     issues: ['missing !dist/**/*.map for recursive dist publish pattern'],
@@ -177,6 +215,10 @@ assert.equal(
     'Publishable workspace packages must keep package.json files allowlists explicit and test-free:',
     '- lib/tsx-source/package.json (@agent-harness/tsx-source)',
     '  - missing !src/**/*.test.tsx for recursive src tsx publish pattern',
+    '- ext/harness/example-assets/package.json (@agent-harness/example-assets)',
+    '  - missing !examples/**/*.test.ts for recursive examples publish pattern',
+    '  - missing !examples/**/*.test.tsx for recursive examples publish pattern',
+    '  - missing !examples/**/__tests__/** for recursive examples publish pattern',
     '- ext/provider/dist-package/package.json (@agent-harness/dist-package)',
     '  - missing !dist/**/*.map for recursive dist publish pattern',
     '- lib/missing-source-directory-denylist/package.json (@agent-harness/missing-source-directory-denylist)',
