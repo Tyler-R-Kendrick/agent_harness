@@ -1,0 +1,23 @@
+slug: servicenow-ai-agents
+name: ServiceNow AI Agents
+vendor: ServiceNow
+segment: enterprise-agent-orchestration
+product_path: competition/servicenow-ai-agents
+design_path: competition/servicenow-ai-agents/design
+features_path: competition/servicenow-ai-agents/features
+marketing_path: competition/servicenow-ai-agents/marketing
+gossip_path: competition/servicenow-ai-agents/gossip
+snapshot_date: 2026-06-04
+primary_sources:
+  - https://www.servicenow.com/products/ai-agents.html
+  - https://www.servicenow.com/docs/r/intelligent-experiences/ai-control-tower/ai-control-tower-landing.html
+  - https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Build-Agent-now-works-inside-every-major-AI-coding-tool-governed-by-default/default.aspx
+  - https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-expands-AI-Control-Tower-to-discover-observe-govern-secure-and-measure-AI-deployed-across-any-system-in-the-enterprise/default.aspx
+secondary_sources:
+  - https://www.reddit.com/r/servicenow/comments/1tcwwcl/came_back_from_servicenow_knowledge_2026_and_i/
+  - https://www.reddit.com/r/servicenow/comments/1t4q5as/attended_servicenow_knowledge_2026_day_1_keynote/
+  - https://www.reddit.com/r/servicenow/comments/1oe5meh/servicenow_ai_agents/
+positioning: "ServiceNow positions AI Agents, AI Agent Studio, AI Agent Orchestrator, Build Agent, and AI Control Tower as a governed autonomous workforce for enterprise workflows."
+customer_model: "Sales-led ServiceNow platform expansion for IT, customer service, HR, security, risk, CRM, App Engine, and enterprise AI governance buyers."
+competitive_threat_level: high
+notes: "Threatens agent-browser where buyers prioritize governed workflow execution, agent sprawl control, and ServiceNow-native records over standalone browser automation."
