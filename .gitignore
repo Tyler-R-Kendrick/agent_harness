@@ -47,6 +47,8 @@ coverage/
 lib/*/coverage/
 playwright-report/
 test-results/
+.vercel/
+.next/
 *.tsbuildinfo
 *.log
 .vite/
@@ -71,4 +73,3 @@ output/
 
 # Local Model Connector packages compiled extension JS, but source maps are regenerated build output.
 ext/provider/local-model-connector/dist/*.map
-.vercel

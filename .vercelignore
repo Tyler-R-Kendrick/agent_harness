@@ -47,6 +47,9 @@ coverage/
 playwright-report/
 test-results/
 output/
+.vercel/
+.next/
+**/.next/
 *.tsbuildinfo
 *.log
 .vite/
