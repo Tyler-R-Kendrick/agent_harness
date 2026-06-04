@@ -1,18 +1,19 @@
 # Planning And Sub-Tasking
 
 - Harness: DeerFlow
-- Sourced: 2026-04-26
+- Sourced: 2026-06-04
 
 ## What it is
-DeerFlow plans ahead, decomposes complex work, and spawns scoped sub-agents that can execute sequentially or in parallel.
+DeerFlow plans ahead, decomposes complex work, and spawns scoped subagents that can execute in parallel across built-in workers, custom DeerFlow agents, or external ACP-wrapped coding agents.
 
 ## Evidence
-- Official site: [DeerFlow](https://deerflow.tech/)
-- GitHub README: [DeerFlow - 2.0](https://github.com/bytedance/deer-flow/blob/main/README.md)
+- DeerFlow docs: [Subagents](https://deerflow.tech/en/docs/harness/subagents)
 - First-party details:
-  - the site highlights "Planning and Sub-tasking" as a DeerFlow 2.0 capability
-  - execution modes include `flash`, `standard`, `pro`, and `ultra`, with `ultra` tied to sub-agents
-  - the README says sub-agents have scoped context, tools, and termination conditions and run in parallel when possible
+  - DeerFlow ships built-in `general-purpose` and `bash` subagents, each with their own timeout and max-turn controls
+  - the Lead Agent delegates through the `task` tool, and `max_concurrent_subagents` caps how many parallel subagents can launch in one turn
+  - subagents run with isolated context so they only see the task-specific working set they need
+  - external agents can join through the Agent Connect Protocol, with first-party examples for Claude Code and Codex ACP adapters
+  - custom agents created in the DeerFlow App can also be invoked as subagents, which turns UI-defined specialists into reusable workers
 
 ## Product signal
-DeerFlow treats decomposition as a user-facing mode of operation rather than a hidden planner implementation.
+DeerFlow treats decomposition as an explicit runtime topology that operators can tune across built-in, app-defined, and third-party agent workers.

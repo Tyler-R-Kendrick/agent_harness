@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-03
+Updated: 2026-06-04
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -187,3 +187,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: teams already do planning and debugging in spoken sessions; converting that raw discussion directly into reusable agent context reduces transcription work and preserves decisions that would otherwise be lost.
 - One-shot build instruction:
   - Add a meeting-capture workflow to `agent-browser` that records or ingests live audio, produces an editable transcript plus structured notes, turns those notes into follow-up artifacts like plans, tickets, or starter code, lets users control whether past recordings can shape future runs, and gives workspace owners policy controls over retention, reuse, and disablement.
+
+### 27. Visible plan-mode task lists with durable artifact and usage context
+- Common pattern: some harnesses are moving beyond plain streaming transcripts by exposing a live execution plan, artifact shelf, and token-usage context inside the main workspace while the run is still active.
+- Seen in: DeerFlow Workspace Usage with input-bar Plan Mode, real-time todo states, inline tool and subagent events, an artifacts panel, and separate thread-level versus per-turn token usage summaries.
+- Why it matters: long-running tasks become easier to trust and steer when the operator can see the current plan, inspect outputs, and understand usage without reconstructing the run from raw logs after the fact.
+- One-shot build instruction:
+  - Add a visible plan-mode workspace to `agent-browser` that can enable a task-list middleware per run, render the live task list with explicit `pending`, `in_progress`, and `completed` states, surface tool and subagent activity inline, keep generated artifacts in a dedicated panel, and show both durable run-level usage totals and the currently visible per-turn usage context so operators can supervise long tasks without leaving the main thread view.

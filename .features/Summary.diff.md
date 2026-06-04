@@ -1,44 +1,44 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-03
-Baseline: `.features/Summary.md` refreshed through the 2026-06-02 Codex corpus.
-Diff type: additive updates after the 2026-06-03 ChatGPT refresh
+Updated: 2026-06-04
+Baseline: `.features/Summary.md` refreshed through the 2026-06-03 ChatGPT corpus.
+Diff type: additive updates after the 2026-06-04 DeerFlow refresh
 
 ## Net new normalized features
 
-### Added: Meeting capture that turns recordings into reusable plans and code
-- Why now: the refreshed ChatGPT corpus shows the harness absorbing live spoken work sessions directly into durable agent context instead of treating meetings and voice notes as out-of-band input.
+### Added: Visible plan-mode task lists with durable artifact and usage context
+- Why now: the refreshed DeerFlow corpus adds a more explicit application-layer supervision surface for long-running work instead of leaving planning, artifacts, and usage buried in raw transcripts or separate logs.
 - Research delta:
-  - ChatGPT Record now transcribes and summarizes meetings, brainstorms, and voice notes into durable notes or canvases
-  - those notes can be rewritten into emails, project plans, or even code scaffolds instead of stopping at plain transcripts
-  - `Reference record history` lets past recordings inform later conversations, which turns one meeting into reusable context for future agent work
-  - workspace owners can disable Record and `Reference record history`, which means this is already framed as a governed workspace capability rather than a consumer-only convenience
-  - current OpenAI positioning treats spoken planning sessions as an intake surface that can feed downstream execution artifacts
+  - DeerFlow Workspace Usage now documents an input-bar Plan Mode that enables todo-list middleware and keeps a visible task list updated in real time
+  - the same workspace surfaces inline tool calls, tool results, thinking blocks, and subagent output during the active run
+  - generated files are promoted into a dedicated artifacts panel with previews and downloads instead of being treated as hidden side effects
+  - DeerFlow distinguishes a persisted conversation-level token ledger from optional per-turn or debug usage summaries, which gives the operator both durable and in-context usage views
+  - backend docs tie the UI back to an explicit runtime contract through `is_plan_mode` and the `write_todos` tool, so the visible plan is part of the execution model rather than a decorative frontend checklist
 
 ## Expanded normalized features
 
-### Expanded: External tool connectivity and actionability
-- Why now: the refreshed ChatGPT corpus pushes apps from simple connected sources toward governed read/write action surfaces with workspace-level policy controls.
+### Expanded: Parallel agent orchestration
+- Why now: the refreshed DeerFlow subagent docs make the worker topology more explicit and more open than the older local slice captured.
 - Research delta:
-  - updated Box, Notion, Linear, and Dropbox apps add newer action surfaces in ChatGPT, including write capabilities where supported
-  - Google and Microsoft app write actions remain disabled by default until workspace admins explicitly enable them
-  - Business workspaces now support a simplified app-action model with `all actions`, `read actions only`, or custom action controls, plus policy for how future actions are treated
-  - the product is making app-action governance explicit instead of leaving write enablement implicit in the connection step
+  - DeerFlow now documents built-in `general-purpose` and `bash` subagents with independent timeout and max-turn settings
+  - it exposes `max_concurrent_subagents` as a first-class limit instead of leaving parallelism implicit
+  - custom DeerFlow agents created in the app can themselves be invoked as subagents
+  - ACP-wrapped external agents such as Claude Code and Codex are now documented as first-party examples of delegated workers
 
-### Expanded: Operator control consoles with blocked-state queues and durable usage ledgers
-- Why now: ChatGPT now exposes a global admin console that combines workspace analytics with an inspectable registry of shared agents.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: the refreshed DeerFlow skills docs now show runtime governance and optional agent-managed skill creation rather than only static skill packaging.
 - Research delta:
-  - the new `Analytics` area shows active-user and message trends plus drilldowns for GPTs, projects, skills, tool interactions, connector interactions, and workspace health
-  - the new `Agents` area lets admins inspect Agent ID, recent activity, connected apps, memory files, schedules, and unique users or runs over time
-  - admins can jump from that registry into Builder to edit the selected agent
-  - the dedicated analytics help article adds project and skill usage trends, task insights, benchmarks, impact surveys, and CSV exports, which confirms OpenAI is treating agent operations as an admin surface rather than hidden telemetry
+  - DeerFlow can enable or disable skills live through `extensions_config.json`, the App UI, or Gateway API endpoints without a restart
+  - skill content is security-scanned before loading
+  - custom agents can be limited to named skill subsets
+  - optional `skill_evolution` allows trusted runs to create or improve skills in `skills/custom/`
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add meeting capture that turns recordings into reusable plans and code
+### Proposed Linear feature: Add visible plan mode with real-time task tracking and artifact context
 - Linear issue title:
-  - `Add meeting capture that turns recordings into reusable plans and code`
+  - `Add visible plan mode with real-time task tracking and artifact context`
 - Suggested problem statement:
-  - `agent-browser` already handles typed instructions, files, and browser state well, but a large amount of planning, debugging, and coordination still happens in spoken meetings, brainstorms, and voice notes outside the harness. Competitors are beginning to capture those sessions directly, turn them into durable notes, and then reuse that material to generate plans, follow-ups, and even code. Without a meeting-capture path, teams lose high-signal context after calls, manually rewrite decisions into prompts or tickets, and break continuity between discussion and execution. The product needs a governed recording-to-artifact workflow that converts spoken sessions into reusable agent context with explicit retention and reuse controls.`
+  - `agent-browser` already streams responses and can surface tool activity, but it still lacks a first-class plan-mode contract that makes long tasks inspectable while they are running. Competitors are starting to show an explicit live task list, a stable artifact shelf, and durable run-level usage context inside the main workspace rather than forcing users to infer progress from transcript fragments. Without that execution view, users have to reconstruct the plan manually, hunt through the thread for intermediate outputs, and lose confidence about where time and tokens are going during long runs. The product needs a visible plan-mode workspace that turns long-horizon execution into something users can supervise, steer, and audit in one place.`
 - One-shot instruction for an LLM:
-  - Implement meeting capture for `agent-browser`: let a user start or import a live recording from a desktop session, generate an editable transcript plus structured notes, save the resulting artifact as durable thread context separate from ordinary chat text, support transformations into follow-up emails, implementation plans, tickets, and starter code, allow optional cross-session reuse of past recordings through an explicit history toggle, and add workspace-owner controls for enablement, retention, deletion, and whether prior recording artifacts may inform future runs.
+  - Implement visible plan mode for `agent-browser`: add a per-run plan-mode toggle that enables task-list middleware, give the runtime a structured todo tool or equivalent state contract with one task `in_progress` at a time, render the live task list directly in the main workspace with explicit `pending`, `in_progress`, and `completed` states, stream tool and subagent events inline with the active run, promote generated files into a dedicated artifacts panel with previews and download affordances, and show both durable run-level usage totals and the currently visible per-turn usage context so operators can supervise long-running work without leaving the thread.
