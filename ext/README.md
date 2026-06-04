@@ -1,7 +1,7 @@
 # Extension Packages
 
 `ext/` contains installable extension packages that layer optional IDE, harness,
-and provider behaviors onto the core Agent Harness runtime.
+provider, and worker behaviors onto the core Agent Harness runtime.
 
 Use the package README linked below for the public API surface, setup details,
 and focused validation commands for each extension.
@@ -31,6 +31,12 @@ and focused validation commands for each extension.
 | Package | Purpose |
 |---|---|
 | [`ext/provider/local-model-connector/README.md`](./provider/local-model-connector/README.md) `@agent-harness/ext-local-model-connector` | Browser extension and PWA client assets for approved local OpenAI-compatible endpoints. |
+
+## Worker extensions
+
+| Package | Purpose |
+|---|---|
+| [`ext/worker/local-inference-worker/README.md`](./worker/local-inference-worker/README.md) `local-inference-worker` | Downloadable Local Inference Daemon bundle metadata for Agent Browser installs. |
 
 ## Notes
 
