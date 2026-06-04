@@ -29,6 +29,7 @@ describe('package boundary', () => {
       'src/**/*.ts',
       'examples/**',
       '!examples/**/*.test.ts',
+      '!examples/**/*.test.tsx',
       '!examples/**/__tests__/**',
       '!src/**/*.test.ts',
       '!src/__tests__/**',
