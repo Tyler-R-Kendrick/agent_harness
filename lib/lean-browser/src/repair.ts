@@ -6,9 +6,19 @@ export function spliceRepairedSteps(
   repairedSteps: ReasoningStep[],
 ): ReasoningTrace {
   const failedIds = new Set(failedSteps.map((step) => step.step_id));
+  let insertedRepair = false;
   return {
     ...trace,
-    steps: trace.steps.flatMap((step) => (failedIds.has(step.step_id) ? repairedSteps : [step])),
+    steps: trace.steps.flatMap((step) => {
+      if (!failedIds.has(step.step_id)) {
+        return [step];
+      }
+      if (insertedRepair) {
+        return [];
+      }
+      insertedRepair = true;
+      return repairedSteps;
+    }),
   };
 }
 
