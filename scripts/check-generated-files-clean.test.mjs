@@ -93,6 +93,8 @@ async function writeGitFileIndex(indexBuffer) {
 }
 
 const requiredLocalArtifactIgnorePatterns = [
+  '.vercel/',
+  '.next/',
   '.vite/',
   '.vitest/',
   '.turbo/',
@@ -116,6 +118,8 @@ for (const ignoreFilePath of ['.gitignore', '.dockerignore', '.vercelignore']) {
 
 const trackedArtifacts = findTrackedGeneratedArtifacts([
   'src/index.ts',
+  '.vercel/project.json',
+  'agent-browser/.next/server/app.js',
   'agent-browser/.vite/deps/_metadata.json',
   'agent-browser/.vitest/results.json',
   '.turbo/runs/last.json',
@@ -136,6 +140,8 @@ const trackedArtifacts = findTrackedGeneratedArtifacts([
 ]);
 
 assert.deepEqual(trackedArtifacts, [
+  { path: '.vercel/project.json', rule: '.vercel/' },
+  { path: 'agent-browser/.next/server/app.js', rule: '.next/' },
   { path: 'agent-browser/.vite/deps/_metadata.json', rule: '.vite/' },
   { path: 'agent-browser/.vitest/results.json', rule: '.vitest/' },
   { path: '.turbo/runs/last.json', rule: '.turbo/' },
@@ -159,6 +165,8 @@ assert.deepEqual(trackedArtifacts, [
 ]);
 
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-harness-0\.1\.0\.tgz/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.vercel\/project\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/\.next\/server\/app\.js/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/\.vite\/deps\/_metadata\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/\.vitest\/results\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.turbo\/runs\/last\.json/);

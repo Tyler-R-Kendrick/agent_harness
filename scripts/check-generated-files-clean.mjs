@@ -165,6 +165,14 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === 'output' || filePath.startsWith('output/'),
   },
   {
+    label: '.vercel/',
+    matches: (filePath) => filePath === '.vercel' || filePath.startsWith('.vercel/'),
+  },
+  {
+    label: '.next/',
+    matches: (filePath) => filePath === '.next' || filePath.startsWith('.next/') || filePath.includes('/.next/'),
+  },
+  {
     label: '.patches-*/',
     matches: (filePath) => /^\.patches-[^/]+(?:\/|$)/u.test(filePath),
   },
