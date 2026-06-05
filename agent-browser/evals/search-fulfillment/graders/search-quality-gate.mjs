@@ -78,6 +78,13 @@ function extractMarkdownLinks(content) {
     .filter((link) => link.label.length > 0 && link.url.length > 0);
 }
 
+function markdownLinkUrlsForLabel(content, label) {
+  const target = normalizeComparable(label);
+  return extractMarkdownLinks(content)
+    .filter((link) => normalizeComparable(link.label) === target)
+    .map((link) => link.url);
+}
+
 function escapeRegExp(value) {
   return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -442,8 +449,17 @@ if (semanticOnly) {
     );
   }
   for (const entity of contract.expectedEntities ?? []) {
+    const entityUrls = markdownLinkUrlsForLabel(answer, entity);
     add(`answer contains expected entity ${entity}`, includesInsensitive(answer, entity), answer);
-    add(`answer links expected entity ${entity}`, new RegExp(`\\[${escapeRegExp(entity)}\\]\(https?:\\/\\/`, 'i').test(answer), answer);
+    add(`answer links expected entity ${entity}`, entityUrls.length > 0, answer);
+  }
+  for (const [entity, expectedUrl] of Object.entries(contract.expectedEntityLinks ?? {})) {
+    const entityUrls = markdownLinkUrlsForLabel(answer, entity);
+    add(
+      `answer links expected entity ${entity} to expected URL`,
+      entityUrls.some((url) => url === expectedUrl),
+      entityUrls.join(', ') || answer,
+    );
   }
 }
 if (!expectsInsufficientEvidence) {
