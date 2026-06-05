@@ -13,7 +13,7 @@ import {
   type HarnessTaskSummary,
 } from './types.js';
 
-const REVIEW_STATUS_REQUIRED_FOR_APPROVAL: Partial<Record<HarnessTaskLane, HarnessReviewStatus>> = {
+const REVIEW_STATUS_REQUIRED_FOR_DECISION: Partial<Record<HarnessTaskLane, HarnessReviewStatus>> = {
   review: 'requested',
 };
 
@@ -94,7 +94,7 @@ export function createHarnessTaskManager(options: HarnessTaskManagerOptions): Ha
         throw new Error('Reviewer agent approvals require autopilot to be enabled');
       }
       return updateHarnessTask(options, id, (metadata) => {
-        if (REVIEW_STATUS_REQUIRED_FOR_APPROVAL[metadata.lane] !== metadata.review.status) {
+        if (REVIEW_STATUS_REQUIRED_FOR_DECISION[metadata.lane] !== metadata.review.status) {
           throw new Error(`Cannot approve merge for ${metadata.identifier} from lane ${metadata.lane}`);
         }
         return {
@@ -116,18 +116,23 @@ export function createHarnessTaskManager(options: HarnessTaskManagerOptions): Ha
       if (input.actor.type === 'reviewer-agent' && input.feedback.length === 0) {
         throw new Error('Reviewer agent rejections require actionable feedback');
       }
-      return updateHarnessTask(options, id, (metadata) => ({
-        lane: 'rework',
-        review: {
-          ...metadata.review,
-          status: 'rejected',
-          rejectedBy: input.actor,
-          approvedBy: null,
-          feedback: input.feedback,
-          decidedAt: now(),
-        },
-        activity: appendActivity(metadata, 'Review rejected', input.feedback.join(' '), now()),
-      }), 'waiting');
+      return updateHarnessTask(options, id, (metadata) => {
+        if (REVIEW_STATUS_REQUIRED_FOR_DECISION[metadata.lane] !== metadata.review.status) {
+          throw new Error(`Cannot reject merge for ${metadata.identifier} from lane ${metadata.lane}`);
+        }
+        return {
+          lane: 'rework',
+          review: {
+            ...metadata.review,
+            status: 'rejected',
+            rejectedBy: input.actor,
+            approvedBy: null,
+            feedback: input.feedback,
+            decidedAt: now(),
+          },
+          activity: appendActivity(metadata, 'Review rejected', input.feedback.join(' '), now()),
+        };
+      }, 'waiting');
     },
     async completeTask(id, input) {
       return updateHarnessTask(options, id, (metadata) => {
