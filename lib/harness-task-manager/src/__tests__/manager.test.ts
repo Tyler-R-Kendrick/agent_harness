@@ -163,6 +163,29 @@ describe('harness task manager', () => {
     ]);
   });
 
+  it('rejects merge rejections before review is requested without changing task state', async () => {
+    const { manager } = createManager();
+    const task = await manager.createTask({
+      title: 'Prevent rejection bypass',
+      description: 'A reviewer cannot send a task to rework before review starts.',
+    });
+
+    await expect(manager.rejectMerge(task.id, {
+      actor: { type: 'reviewer-agent', id: 'reviewer-1' },
+      feedback: ['Open a review before requesting rework.'],
+    })).rejects.toThrow('Cannot reject merge for HT-1 from lane ready');
+
+    expect(await manager.listTasks()).toMatchObject([
+      {
+        id: task.id,
+        lane: 'ready',
+        status: 'queued',
+        review: { status: 'none', rejectedBy: null, feedback: [] },
+        merge: null,
+      },
+    ]);
+  });
+
   it('rejects completion before merge approval without changing review state', async () => {
     const { manager } = createManager();
     const task = await manager.createTask({
