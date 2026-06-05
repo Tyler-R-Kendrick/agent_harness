@@ -1,0 +1,20 @@
+slug: browserize
+name: Browserize
+vendor: Browserize
+segment: developer-browser-agent-infrastructure
+product_path: competition/browserize
+design_path: competition/browserize/design
+features_path: competition/browserize/features
+marketing_path: competition/browserize/marketing
+gossip_path: competition/browserize/gossip
+snapshot_date: 2026-06-05
+primary_sources:
+  - https://www.browserize.com/
+secondary_sources:
+  - https://www.reddit.com/r/mcp/comments/1spvkrz/microsoft_recommends_cli_over_mcp_for_playwright/
+  - https://www.reddit.com/r/mcp/comments/1sx45zv/browser_mcp_or_playwright_mcp/
+  - https://www.reddit.com/r/AI_Agents/comments/1swsz8s/what_are_people_using_browser_based_agents_for/
+positioning: "AI-first virtual browser infrastructure with preconfigured MCP, CDP, and NoVNC access at usage-based hourly pricing."
+customer_model: "Developer infrastructure buyer: free development time, pay-as-you-go browser hours, and production virtual browsers for teams that already own the agent loop."
+competitive_threat_level: medium
+notes: "Threatens agent-browser on cheap, disposable browser capacity and Playwright MCP readiness; weaker where buyers need local authority boundaries and durable product-level run history."

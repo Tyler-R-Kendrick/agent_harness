@@ -1,0 +1,21 @@
+slug: agentic-workflow
+name: Agentic WorkFlow
+vendor: Agentic WorkFlow
+segment: local-browser-native-workflow-automation
+product_path: competition/agentic-workflow
+design_path: competition/agentic-workflow/design
+features_path: competition/agentic-workflow/features
+marketing_path: competition/agentic-workflow/marketing
+gossip_path: competition/agentic-workflow/gossip
+snapshot_date: 2026-06-05
+primary_sources:
+  - https://awflow.io/
+  - https://docs.awflow.io/
+secondary_sources:
+  - https://www.reddit.com/r/nocode/comments/1reqyj9/agentic_workflow_extension_for_browsernative/
+  - https://www.reddit.com/r/chrome_extensions/comments/1sh2hzi/i_got_tired_of_repetitive_web_tasks_so_i_built_a/
+  - https://www.reddit.com/r/automation/comments/1rqnw5h/how_do_you_even_automate_web_apps_anymore_without/
+positioning: "Local Chrome and Firefox extension for visual browser-native workflows that read pages, transform data, call services, and use AI nodes."
+customer_model: "Free extension and community/template-led adoption for no-code operators, browser power users, and technical automators who prefer local execution."
+competitive_threat_level: medium
+notes: "Validates local browser context and visual workflow composition; weaker for always-on cloud execution, team governance, and durable browser-session evidence."
