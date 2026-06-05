@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -23,6 +23,48 @@ async function readScript(relativePath) {
 
 async function writeJson(filePath, value) {
   await writeFile(filePath, JSON.stringify(value, null, 2));
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function pathExists(targetPath) {
+  try {
+    await stat(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function discoverPublicExtensionDocs(rootDir) {
+  const extensionRoot = path.join(rootDir, 'ext');
+  const extensionKinds = await readdir(extensionRoot, { withFileTypes: true });
+  const extensionDocs = [];
+
+  for (const kind of extensionKinds) {
+    if (!kind.isDirectory()) continue;
+    const kindDirectory = path.join(extensionRoot, kind.name);
+    const packages = await readdir(kindDirectory, { withFileTypes: true });
+    for (const pkg of packages) {
+      if (!pkg.isDirectory()) continue;
+      const packageDirectory = path.join(kindDirectory, pkg.name);
+      const packageJsonPath = path.join(packageDirectory, 'package.json');
+      const readmePath = path.join(packageDirectory, 'README.md');
+      if (!(await pathExists(packageJsonPath)) || !(await pathExists(readmePath))) continue;
+
+      const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+      if (packageJson.private) continue;
+
+      extensionDocs.push({
+        packageName: packageJson.name,
+        readmePath: path.relative(rootDir, readmePath).replaceAll('\\', '/'),
+      });
+    }
+  }
+
+  return extensionDocs.sort((left, right) => left.readmePath.localeCompare(right.readmePath));
 }
 
 async function createPackageFixture(rootDir, packageName, packageJson) {
@@ -133,6 +175,16 @@ async function main() {
     extReadme,
     /\[`ext\/worker\/local-inference-worker\/README\.md`\]\(\.\/worker\/local-inference-worker\/README\.md\) `local-inference-worker`/,
   );
+  const publicExtensionDocs = await discoverPublicExtensionDocs(repoRoot);
+  for (const extensionDoc of publicExtensionDocs) {
+    assert.match(
+      extReadme,
+      new RegExp(
+        String.raw`\[\`${escapeRegExp(extensionDoc.readmePath)}\`\]\(\.\/${escapeRegExp(extensionDoc.readmePath.replace(/^ext\//, ''))}\)\s+\`${escapeRegExp(extensionDoc.packageName)}\``,
+      ),
+    );
+  }
+  assert.doesNotMatch(extReadme, /ext\/ide\/workflow-canvas-tests\/README\.md/);
   for (const packageDirectory of [
     'agent-browser-mcp',
     'agent-sandbox',
@@ -155,7 +207,9 @@ async function main() {
   ]) {
     assert.match(
       rootReadme,
-      new RegExp(`\\[\`lib/${packageDirectory}/README\\.md\`\\]\(\\.\\/lib\\/${packageDirectory}\\/README\\.md\\)`),
+      new RegExp(
+        escapeRegExp(`[\`lib/${packageDirectory}/README.md\`](./lib/${packageDirectory}/README.md)`),
+      ),
     );
   }
   assert.ok(rootPackage.workspaces.includes('ext/*/*'));
