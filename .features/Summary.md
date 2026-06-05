@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-04
+Updated: 2026-06-05
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -8,7 +8,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 1. Parallel agent orchestration
 - Common pattern: users supervise multiple isolated workers instead of a single chat thread.
-- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Conductor parallel agents across isolated or shared workspaces, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents plus explicit orchestrator roles, Kimi AI Agent Swarm with a commander plus runtime-created specialists and Claw Groups shared workspaces for heterogeneous agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, Roo Code built-in Orchestrator plus cloud agent team, T3 Code worktree-aware thread spawning.
+- Seen in: Codex app multi-agent threads and worktrees, Claude Code subagents plus agent teams plus worktree-backed parallel sessions, Claude Cowork parallel workstreams, Cline subagents and parallel worktrees, Conductor parallel agents across isolated or shared workspaces, Cursor `/multitask` async subagents plus tiled agent management, DeerFlow planning and sub-tasking, Devin managed child sessions plus Advanced Mode parallel Devins, Gemini CLI subagents plus remote A2A delegation plus worktree-isolated sessions, Goose internal and external subagents with sequential and parallel execution, Hermes parallel sub-agents plus explicit orchestrator roles, Kimi AI Agent Swarm with a commander plus runtime-created specialists and Claw Groups shared workspaces for heterogeneous agents, Mastra supervisor coordination, OpenAI Symphony issue-to-agent orchestration, OpenClaw multi-agent workspaces, GitHub Copilot custom agents as subagents plus cloud agent plus third-party agents, OpenCode multi-session agents, Roo Code built-in Orchestrator plus cloud agent team, T3 Code worktree-aware thread spawning.
 - Why it matters: once agent quality is acceptable, the UX bottleneck becomes coordination, not raw generation.
 - One-shot build instruction:
   - Build a workspace-level orchestration surface that can launch multiple isolated agent runs against the same repo or task bundle, show per-agent state, preserve context separately, and support human steering, pause/resume, and compare/merge of outputs.
@@ -194,3 +194,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: long-running tasks become easier to trust and steer when the operator can see the current plan, inspect outputs, and understand usage without reconstructing the run from raw logs after the fact.
 - One-shot build instruction:
   - Add a visible plan-mode workspace to `agent-browser` that can enable a task-list middleware per run, render the live task list with explicit `pending`, `in_progress`, and `completed` states, surface tool and subagent activity inline, keep generated artifacts in a dedicated panel, and show both durable run-level usage totals and the currently visible per-turn usage context so operators can supervise long tasks without leaving the main thread view.
+
+### 28. Condition-bound autonomous goals with explicit success evaluation
+- Common pattern: some harnesses are starting to treat long-running execution as a declared goal with a verifiable completion condition instead of a chain of manually prompted follow-ups.
+- Seen in: Claude Code `/goal`, where a session keeps working across turns until a stated condition holds and a fast evaluator confirms completion after each turn.
+- Why it matters: users can hand off substantial work more safely when the runtime knows the target condition, can decide whether more turns are needed, and stops automatically once the goal is satisfied.
+- One-shot build instruction:
+  - Add goal-bound autonomy to `agent-browser`: let users declare a durable completion condition for a run, evaluate that condition after each turn with a lightweight checker, automatically continue when the condition is still unmet, show the active goal and evaluation status in the run UI, and support goal-aware interactive, background, and remote sessions without forcing users to restate the objective every turn.
