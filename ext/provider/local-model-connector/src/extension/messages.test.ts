@@ -86,13 +86,14 @@ describe('external message handling', () => {
       ok: true,
       data: { granted: true },
     });
-    expect(request).toHaveBeenCalledWith({ origins: ['http://127.0.0.1/*'] });
+    expect(request).toHaveBeenCalledWith({ origins: ['http://127.0.0.1:11434/*'] });
   });
 
   it('requires host permission before proxying model and chat requests', async () => {
+    const contains = vi.fn(async () => false);
     const handler = createExternalMessageHandler({
       allowedSenderPatterns: ['https://app.example.com/*'],
-      permissions: fakePermissions({ contains: vi.fn(async () => false) }),
+      permissions: fakePermissions({ contains }),
       storage: fakeStorage(),
       fetchImpl: vi.fn(),
     });
@@ -101,6 +102,7 @@ describe('external message handling', () => {
       ok: false,
       code: 'HOST_PERMISSION_REQUIRED',
     });
+    expect(contains).toHaveBeenCalledWith({ origins: ['http://127.0.0.1:11434/*'] });
   });
 
   it('proxies model and chat requests after host permission is present', async () => {
