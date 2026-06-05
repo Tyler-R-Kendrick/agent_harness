@@ -140,6 +140,18 @@ const allowlistPolicyPackages = [
     },
   },
   {
+    path: 'lib/spaced-allowlist/package.json',
+    manifest: {
+      name: '@agent-harness/spaced-allowlist',
+      files: [
+        'README.md',
+        ' src/**/*.ts',
+        '!src/**/*.test.ts ',
+        '!src/__tests__/**',
+      ],
+    },
+  },
+  {
     path: 'lib/missing-source-directory-denylist/package.json',
     manifest: {
       name: '@agent-harness/missing-source-directory-denylist',
@@ -193,6 +205,14 @@ assert.deepEqual(findPackagePublishAllowlistIssues(allowlistPolicyPackages), [
     issues: ['missing !dist/**/*.map for recursive dist publish pattern'],
   },
   {
+    name: '@agent-harness/spaced-allowlist',
+    path: 'lib/spaced-allowlist/package.json',
+    issues: [
+      'files entries must not include leading or trailing whitespace:  src/**/*.ts',
+      'files entries must not include leading or trailing whitespace: !src/**/*.test.ts ',
+    ],
+  },
+  {
     name: '@agent-harness/missing-source-directory-denylist',
     path: 'lib/missing-source-directory-denylist/package.json',
     issues: ['missing !src/__tests__/** for recursive src publish pattern'],
@@ -221,6 +241,9 @@ assert.equal(
     '  - missing !examples/**/__tests__/** for recursive examples publish pattern',
     '- ext/provider/dist-package/package.json (@agent-harness/dist-package)',
     '  - missing !dist/**/*.map for recursive dist publish pattern',
+    '- lib/spaced-allowlist/package.json (@agent-harness/spaced-allowlist)',
+    '  - files entries must not include leading or trailing whitespace:  src/**/*.ts',
+    '  - files entries must not include leading or trailing whitespace: !src/**/*.test.ts ',
     '- lib/missing-source-directory-denylist/package.json (@agent-harness/missing-source-directory-denylist)',
     '  - missing !src/__tests__/** for recursive src publish pattern',
     '- lib/no-files/package.json (@agent-harness/no-files)',
