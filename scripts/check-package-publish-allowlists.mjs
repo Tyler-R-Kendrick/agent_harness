@@ -112,6 +112,10 @@ function includesRecursiveExamplesPattern(files) {
   });
 }
 
+function findWhitespaceDamagedFilePatterns(files) {
+  return files.filter((pattern) => pattern !== pattern.trim());
+}
+
 export function findPackagePublishAllowlistIssues(packages) {
   return packages
     .filter(({ manifest }) => manifest.private !== true)
@@ -122,6 +126,10 @@ export function findPackagePublishAllowlistIssues(packages) {
 
       if (files.length === 0) {
         issues.push('missing package.json files allowlist');
+      }
+
+      for (const pattern of findWhitespaceDamagedFilePatterns(files)) {
+        issues.push(`files entries must not include leading or trailing whitespace: ${pattern}`);
       }
 
       const recursiveExtensions = recursiveSrcPatternExtensions(files);
