@@ -1,0 +1,23 @@
+slug: prozio-ai
+name: Prozio AI
+vendor: Berqier Ltd
+segment: no-code-ai-browser-automation
+product_path: competition/prozio-ai
+design_path: competition/prozio-ai/design
+features_path: competition/prozio-ai/features
+marketing_path: competition/prozio-ai/marketing
+gossip_path: competition/prozio-ai/gossip
+snapshot_date: 2026-06-05
+primary_sources:
+  - https://prozio.ai/
+  - https://prozio.ai/documentation/
+  - https://prozio.ai/pricing/
+  - https://chromewebstore.google.com/detail/prozio-ai-bridge/hebbfdofdnpdkilpkaednaicaalagbbd
+secondary_sources:
+  - https://www.reddit.com/r/automation/comments/1rqnw5h/how_do_you_even_automate_web_apps_anymore_without/
+  - https://www.reddit.com/r/AI_Agents/comments/1subsl4/we_spent_3_months_building_an_ai_agent_for/
+  - https://www.reddit.com/r/automation/comments/1s3cylz/anyone_else_moving_from_browser_scripts_to_ai/
+positioning: "No-code AI web agents and automation workflows that navigate real browsers, use saved profiles, protect sensitive info, and send results to apps."
+customer_model: "Self-serve subscription with free plan, run quotas, BYOK OpenAI usage, and higher tiers for larger automation and playground limits."
+competitive_threat_level: medium
+notes: "Competes for operators who want prompt-plus-node browser automation without code; weaker where deterministic evidence, enterprise governance, or local-first inspectability matter most."
