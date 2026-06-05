@@ -43,15 +43,15 @@ describe('local model connector validation', () => {
     }
   });
 
-  it('validates local origins and derives Chrome host-permission patterns without preserving ports', () => {
+  it('validates local origins and derives Chrome host-permission patterns with explicit ports', () => {
     expect(isAllowedLocalOrigin('http://127.0.0.1:11434')).toBe(true);
     expect(isAllowedLocalOrigin('http://localhost:1234')).toBe(true);
     expect(isAllowedLocalOrigin('http://127.0.0.1')).toBe(false);
     expect(isAllowedLocalOrigin('https://localhost:1234')).toBe(false);
     expect(isAllowedLocalOrigin('http://192.168.1.2:1234')).toBe(false);
     expect(isAllowedLocalOrigin('not a url')).toBe(false);
-    expect(hostPermissionPatternForOrigin('http://127.0.0.1:11434')).toBe('http://127.0.0.1/*');
-    expect(hostPermissionPatternForOrigin('http://localhost:1234')).toBe('http://localhost/*');
+    expect(hostPermissionPatternForOrigin('http://127.0.0.1:11434')).toBe('http://127.0.0.1:11434/*');
+    expect(hostPermissionPatternForOrigin('http://localhost:1234')).toBe('http://localhost:1234/*');
     expect(() => assertAllowedLocalOrigin('http://localhost')).toThrow();
   });
 
