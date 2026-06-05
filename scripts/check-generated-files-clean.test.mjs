@@ -99,6 +99,7 @@ const requiredLocalArtifactIgnorePatterns = [
   '.vitest/',
   '.turbo/',
   '.parcel-cache/',
+  '.cache/',
   '.eslintcache',
   '.pnpm-store/',
   '*.orig',
@@ -124,6 +125,7 @@ const trackedArtifacts = findTrackedGeneratedArtifacts([
   'agent-browser/.vitest/results.json',
   '.turbo/runs/last.json',
   '.parcel-cache/data.mdb',
+  '.cache/rollup/index.json',
   '.eslintcache',
   '.pnpm-store/v3/files/index.json',
   'agent-harness-0.1.0.tgz',
@@ -146,6 +148,7 @@ assert.deepEqual(trackedArtifacts, [
   { path: 'agent-browser/.vitest/results.json', rule: '.vitest/' },
   { path: '.turbo/runs/last.json', rule: '.turbo/' },
   { path: '.parcel-cache/data.mdb', rule: '.parcel-cache/' },
+  { path: '.cache/rollup/index.json', rule: '.cache/' },
   { path: '.eslintcache', rule: '.eslintcache' },
   { path: '.pnpm-store/v3/files/index.json', rule: '.pnpm-store/' },
   { path: 'agent-harness-0.1.0.tgz', rule: '*.tgz' },
@@ -171,6 +174,7 @@ assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-brow
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/\.vitest\/results\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.turbo\/runs\/last\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.parcel-cache\/data\.mdb/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.cache\/rollup\/index\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.eslintcache/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.pnpm-store\/v3\/files\/index\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /lib\/webmcp\/agent-harness-webmcp-0\.1\.0\.tgz/);
