@@ -1,44 +1,44 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-04
-Baseline: `.features/Summary.md` refreshed through the 2026-06-03 ChatGPT corpus.
-Diff type: additive updates after the 2026-06-04 DeerFlow refresh
+Updated: 2026-06-05
+Baseline: `.features/Summary.md` refreshed through the 2026-06-04 DeerFlow corpus.
+Diff type: additive updates after the 2026-06-05 Claude Code refresh
 
 ## Net new normalized features
 
-### Added: Visible plan-mode task lists with durable artifact and usage context
-- Why now: the refreshed DeerFlow corpus adds a more explicit application-layer supervision surface for long-running work instead of leaving planning, artifacts, and usage buried in raw transcripts or separate logs.
+### Added: Condition-bound autonomous goals with explicit success evaluation
+- Why now: the refreshed Claude Code corpus adds a first-party goal contract where the runtime owns the completion condition and decides whether another turn is required.
 - Research delta:
-  - DeerFlow Workspace Usage now documents an input-bar Plan Mode that enables todo-list middleware and keeps a visible task list updated in real time
-  - the same workspace surfaces inline tool calls, tool results, thinking blocks, and subagent output during the active run
-  - generated files are promoted into a dedicated artifacts panel with previews and downloads instead of being treated as hidden side effects
-  - DeerFlow distinguishes a persisted conversation-level token ledger from optional per-turn or debug usage summaries, which gives the operator both durable and in-context usage views
-  - backend docs tie the UI back to an explicit runtime contract through `is_plan_mode` and the `write_todos` tool, so the visible plan is part of the execution model rather than a decorative frontend checklist
+  - Claude Code now documents `/goal` as a completion condition that keeps a session working across turns until the condition holds
+  - after each turn, a small fast model evaluates whether the goal condition is satisfied and triggers another turn when it is not
+  - Anthropic explicitly frames the feature around verifiable end states such as passing tests, satisfying acceptance criteria, reducing file size budgets, or clearing labeled backlogs
+  - the same goal contract is documented across interactive sessions, non-interactive `-p` runs, and Remote Control
+  - the public docs turn long-running autonomy from an implicit loop into an inspectable success-criteria primitive
 
 ## Expanded normalized features
 
 ### Expanded: Parallel agent orchestration
-- Why now: the refreshed DeerFlow subagent docs make the worker topology more explicit and more open than the older local slice captured.
+- Why now: the refreshed Claude Code corpus now distinguishes multiple parallelism modes instead of flattening everything into subagents.
 - Research delta:
-  - DeerFlow now documents built-in `general-purpose` and `bash` subagents with independent timeout and max-turn settings
-  - it exposes `max_concurrent_subagents` as a first-class limit instead of leaving parallelism implicit
-  - custom DeerFlow agents created in the app can themselves be invoked as subagents
-  - ACP-wrapped external agents such as Claude Code and Codex are now documented as first-party examples of delegated workers
+  - Claude Code now documents `agent teams` as a separate lead-worker orchestration model with direct teammate interaction
+  - the docs explicitly contrast teams with subagents, which stay inside one session and only report back to the main agent
+  - team members run in separate context windows and can message one another directly
+  - this makes the product’s parallel execution model more differentiated: subagents, agent teams, agent view, and worktree-backed sessions are separate choices with different tradeoffs
 
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: the refreshed DeerFlow skills docs now show runtime governance and optional agent-managed skill creation rather than only static skill packaging.
+### Expanded: Background session supervisor views with peek-and-reply control
+- Why now: the refreshed Claude Code agent-view docs are more explicit about the control-plane mechanics than the older local slice captured.
 - Research delta:
-  - DeerFlow can enable or disable skills live through `extensions_config.json`, the App UI, or Gateway API endpoints without a restart
-  - skill content is security-scanned before loading
-  - custom agents can be limited to named skill subsets
-  - optional `skill_evolution` allows trusted runs to create or improve skills in `skills/custom/`
+  - Agent View now documents grouped `Needs input`, `Working`, and `Completed` states instead of only a generic background-session list
+  - users can peek the latest output, reply from the peek panel, and send an existing session into the background with `/bg`
+  - `--cwd` can scope the session list to one project
+  - settings, plugins, MCP servers, and added directories can be passed through to every session dispatched from the supervisor surface
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add visible plan mode with real-time task tracking and artifact context
+### Proposed Linear feature: Add condition-bound goals with explicit success criteria and auto-continue
 - Linear issue title:
-  - `Add visible plan mode with real-time task tracking and artifact context`
+  - `Add condition-bound goals with explicit success criteria and auto-continue`
 - Suggested problem statement:
-  - `agent-browser` already streams responses and can surface tool activity, but it still lacks a first-class plan-mode contract that makes long tasks inspectable while they are running. Competitors are starting to show an explicit live task list, a stable artifact shelf, and durable run-level usage context inside the main workspace rather than forcing users to infer progress from transcript fragments. Without that execution view, users have to reconstruct the plan manually, hunt through the thread for intermediate outputs, and lose confidence about where time and tokens are going during long runs. The product needs a visible plan-mode workspace that turns long-horizon execution into something users can supervise, steer, and audit in one place.`
+  - `agent-browser` can already carry out multi-step work, but it still treats long tasks as open-ended chat turns unless the user manually nudges the run forward. Competitors are starting to expose a stronger contract: the operator states a completion condition, the runtime evaluates whether it has been met after each turn, and the session keeps going automatically until the condition is satisfied or blocked. Without that contract, users have to restate the objective, decide manually whether more turns are needed, and infer whether the run actually reached the intended end state. The product needs goal-bound autonomy with explicit success evaluation so long-running work can continue safely and stop for the right reason.`
 - One-shot instruction for an LLM:
-  - Implement visible plan mode for `agent-browser`: add a per-run plan-mode toggle that enables task-list middleware, give the runtime a structured todo tool or equivalent state contract with one task `in_progress` at a time, render the live task list directly in the main workspace with explicit `pending`, `in_progress`, and `completed` states, stream tool and subagent events inline with the active run, promote generated files into a dedicated artifacts panel with previews and download affordances, and show both durable run-level usage totals and the currently visible per-turn usage context so operators can supervise long-running work without leaving the thread.
+  - Implement goal-bound autonomy for `agent-browser`: let a user set a durable completion condition on a run, store that goal as structured run state, evaluate the condition after each turn with a lightweight success checker, automatically continue into another turn when the condition is still unmet, stop and clear the goal when it passes, and show the goal text plus the latest evaluation outcome in the app so interactive, background, and remote sessions can keep working toward a verifiable end state without the user restating the objective every step.
