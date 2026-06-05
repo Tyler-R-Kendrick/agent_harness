@@ -15,12 +15,16 @@ function readPackageFile(path: string): string {
 describe('prompt-budget package boundary', () => {
   it('publishes only runtime TypeScript sources and README', () => {
     const packageJson = JSON.parse(readPackageFile('package.json')) as {
+      description: string;
+      license: string;
       main: string;
       types: string;
       exports: Record<string, string>;
       files: string[];
     };
 
+    expect(packageJson.description).toBe('Prompt budgeting utilities for fitting model messages into bounded context windows.');
+    expect(packageJson.license).toBe('MIT');
     expect(packageJson.main).toBe('./src/index.ts');
     expect(packageJson.types).toBe('./src/index.ts');
     expect(packageJson.exports).toEqual({ '.': './src/index.ts' });
