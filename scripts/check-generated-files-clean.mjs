@@ -157,6 +157,10 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === '.parcel-cache' || filePath.startsWith('.parcel-cache/') || filePath.includes('/.parcel-cache/'),
   },
   {
+    label: '.cache/',
+    matches: (filePath) => filePath === '.cache' || filePath.startsWith('.cache/') || filePath.includes('/.cache/'),
+  },
+  {
     label: '.eslintcache',
     matches: (filePath) => filePath === '.eslintcache' || filePath.endsWith('/.eslintcache'),
   },

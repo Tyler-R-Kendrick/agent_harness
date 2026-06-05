@@ -55,6 +55,7 @@ test-results/
 .vitest/
 .turbo/
 .parcel-cache/
+.cache/
 .eslintcache
 
 agent-browser-running.png

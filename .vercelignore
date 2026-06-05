@@ -60,6 +60,8 @@ output/
 **/.turbo/
 .parcel-cache/
 **/.parcel-cache/
+.cache/
+**/.cache/
 .eslintcache
 **/.eslintcache
 
