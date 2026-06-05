@@ -81,7 +81,11 @@ export function assertAllowedLocalOrigin(origin: string): URL {
 
 export function hostPermissionPatternForOrigin(origin: string): string {
   const url = assertAllowedLocalOrigin(origin);
-  return `http://${url.hostname}/*`;
+  const port = url.port || defaultPortForProtocol(url.protocol);
+  if (!port) {
+    throw new ConnectorError('Only localhost or 127.0.0.1 HTTP origins with explicit ports are allowed.', 'TARGET_ORIGIN_NOT_ALLOWED');
+  }
+  return `http://${url.hostname}:${port}/*`;
 }
 
 export function isAllowedSenderOrigin(origin: string, allowedPatterns: readonly string[]): boolean {
