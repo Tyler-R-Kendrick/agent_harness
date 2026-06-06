@@ -1,0 +1,23 @@
+slug: open-browser-use
+name: Open Browser Use
+vendor: iFurySt
+segment: local-real-chrome-mcp-runtime
+product_path: competition/open-browser-use
+design_path: competition/open-browser-use/design
+features_path: competition/open-browser-use/features
+marketing_path: competition/open-browser-use/marketing
+gossip_path: competition/open-browser-use/gossip
+snapshot_date: 2026-06-06
+primary_sources:
+  - https://github.com/iFurySt/open-browser-use
+  - https://www.producthunt.com/products/open-browser-use
+  - https://mcpservers.org/ko/servers/ifuryst/open-codex-browser-use
+  - https://www.ifuryst.com/en/blog/2026/open-browser-use/
+secondary_sources:
+  - https://www.reddit.com/r/ClaudeCode/comments/1ti8c2q/i_built_a_local_browser_handle_for_agent_workflows/
+  - https://www.reddit.com/r/mcp/comments/1sfd1es/showcase_i_built_an_mcp_server_that_lets_agents/
+  - https://www.reddit.com/r/opencodeCLI/comments/1qsrxqs/browser_automation_with_my_active_profile/
+positioning: "Open-source, platform-neutral browser automation layer for local AI agents, pairing a Chrome extension, native host, CLI, MCP server, and JS/Python/Go SDKs."
+customer_model: "MIT-licensed open-source project; adoption through npm/Homebrew CLI install, Chrome extension setup, SDKs, MCP configs, and agent skills rather than a hosted SaaS plan."
+competitive_threat_level: high
+notes: "Directly targets agent-browser's local real-Chrome and agent-runtime integration wedge with a simple open-source MCP/SDK package."
