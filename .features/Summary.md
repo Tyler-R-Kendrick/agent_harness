@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-05
+Updated: 2026-06-06
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -201,3 +201,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: users can hand off substantial work more safely when the runtime knows the target condition, can decide whether more turns are needed, and stops automatically once the goal is satisfied.
 - One-shot build instruction:
   - Add goal-bound autonomy to `agent-browser`: let users declare a durable completion condition for a run, evaluate that condition after each turn with a lightweight checker, automatically continue when the condition is still unmet, show the active goal and evaluation status in the run UI, and support goal-aware interactive, background, and remote sessions without forcing users to restate the objective every turn.
+
+### 29. Browser-native runtime administration for channels, MCP, credentials, and memory
+- Common pattern: some harnesses are moving operational wiring out of config files and into governed browser consoles that can both observe and reconfigure the live runtime.
+- Seen in: Hermes web dashboard admin pages for messaging channels, MCP catalog, credentials, webhooks, memory, gateway controls, and pluggable login; OpenClaw Control UI and dashboard config surfaces; Mastra Studio and Agent Editor; ChatGPT workspace and admin surfaces for governed agent and app configuration.
+- Why it matters: once an agent stack gains channels, tools, credentials, and memory policies, teams need a safe control plane for changing that wiring without shell access or direct file edits.
+- One-shot build instruction:
+  - Add a browser-native runtime administration console to `agent-browser` that lets authorized operators inspect and change messaging or ingress channels, MCP servers and catalog entries, runtime credentials and webhooks, memory policies, and auth providers from one governed UI, with role-aware permissions, explicit change history, and clear separation between observability views and destructive configuration actions.
