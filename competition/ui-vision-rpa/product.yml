@@ -1,0 +1,25 @@
+slug: ui-vision-rpa
+name: Ui.Vision RPA
+vendor: Ui.Vision
+segment: visual-rpa-browser-extension
+product_path: competition/ui-vision-rpa
+design_path: competition/ui-vision-rpa/design
+features_path: competition/ui-vision-rpa/features
+marketing_path: competition/ui-vision-rpa/marketing
+gossip_path: competition/ui-vision-rpa/gossip
+snapshot_date: 2026-06-06
+primary_sources:
+  - https://ui.vision/
+  - https://ui.vision/rpa/docs/
+  - https://ui.vision/rpa/docs/ocr
+  - https://ui.vision/rpa/x
+  - https://ui.vision/rpa/x/pricing
+  - https://chromewebstore.google.com/detail/uivision/gcbalfbdmfieckjlnblleoemohcganoc
+secondary_sources:
+  - https://www.reddit.com/r/rpa/comments/o9ydy1/xmodule_realuser_not_installed/
+  - https://www.reddit.com/r/rpa/comments/g7mbm0/your_opinion_on_kantu_uivision_rpa_as_a_rpa/
+  - https://www.reddit.com/r/rpa/comments/r820v9/do_any_of_you_use_uivision_in_your_automation/
+positioning: "Open-source RPA extension combining Selenium-style browser macros, computer vision, OCR, desktop automation modules, command-line control, and AI computer-use positioning."
+customer_model: "Free open-source extension with paid XModules/pro and enterprise support around native modules, OCR server, update control, and critical automation needs."
+competitive_threat_level: medium
+notes: "An older but durable competitor for local visual automation; it validates browser-plus-desktop workflows and screenshot/OCR actions before modern AI agents."
