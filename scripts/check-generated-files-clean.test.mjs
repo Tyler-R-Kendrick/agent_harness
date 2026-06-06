@@ -101,6 +101,9 @@ const requiredLocalArtifactIgnorePatterns = [
   '.parcel-cache/',
   '.cache/',
   '.eslintcache',
+  'blob-report/',
+  'junit.xml',
+  'test-results.xml',
   '.pnpm-store/',
   '*.orig',
   '*.rej',
@@ -127,6 +130,9 @@ const trackedArtifacts = findTrackedGeneratedArtifacts([
   '.parcel-cache/data.mdb',
   '.cache/rollup/index.json',
   '.eslintcache',
+  'blob-report/report.zip',
+  'junit.xml',
+  'agent-browser/test-results.xml',
   '.pnpm-store/v3/files/index.json',
   'agent-harness-0.1.0.tgz',
   'lib/webmcp/agent-harness-webmcp-0.1.0.tgz',
@@ -150,6 +156,9 @@ assert.deepEqual(trackedArtifacts, [
   { path: '.parcel-cache/data.mdb', rule: '.parcel-cache/' },
   { path: '.cache/rollup/index.json', rule: '.cache/' },
   { path: '.eslintcache', rule: '.eslintcache' },
+  { path: 'blob-report/report.zip', rule: 'blob-report/' },
+  { path: 'junit.xml', rule: 'junit.xml' },
+  { path: 'agent-browser/test-results.xml', rule: 'test-results.xml' },
   { path: '.pnpm-store/v3/files/index.json', rule: '.pnpm-store/' },
   { path: 'agent-harness-0.1.0.tgz', rule: '*.tgz' },
   { path: 'lib/webmcp/agent-harness-webmcp-0.1.0.tgz', rule: '*.tgz' },
@@ -176,6 +185,9 @@ assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.turbo\/r
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.parcel-cache\/data\.mdb/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.cache\/rollup\/index\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.eslintcache/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /blob-report\/report\.zip/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /junit\.xml/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/test-results\.xml/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.pnpm-store\/v3\/files\/index\.json/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /lib\/webmcp\/agent-harness-webmcp-0\.1\.0\.tgz/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /README\.md\.orig/);
