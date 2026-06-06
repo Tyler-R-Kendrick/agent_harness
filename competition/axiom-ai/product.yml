@@ -1,0 +1,24 @@
+slug: axiom-ai
+name: Axiom.ai
+vendor: Axiom.ai
+segment: no-code-browser-automation-extension
+product_path: competition/axiom-ai
+design_path: competition/axiom-ai/design
+features_path: competition/axiom-ai/features
+marketing_path: competition/axiom-ai/marketing
+gossip_path: competition/axiom-ai/gossip
+snapshot_date: 2026-06-06
+primary_sources:
+  - https://axiom.ai/
+  - https://axiom.ai/docs/
+  - https://axiom.ai/pricing
+  - https://axiom.ai/steps
+  - https://chromewebstore.google.com/detail/axiom-browser-automation/cpgamigjcbffkaiciiepndmonbfdimbb
+secondary_sources:
+  - https://www.reddit.com/r/axiom_ai/comments/1prl8w6/google_chrome_memory_issues/
+  - https://www.reddit.com/r/axiom_ai/comments/1srl8k7/long_bot_runs_crashing_your_browser_add_a_restart/
+  - https://www.reddit.com/r/automation/comments/1pqdlvs/browser_automation_gets_messy_faster_than_expected/
+positioning: "No-code browser automation and scraping for Chrome users, with local desktop runs, cloud runs, scheduling, webhooks, Sheets, Zapier, Make, and AI extraction steps."
+customer_model: "Runtime-metered SaaS: free trial runtime, monthly paid tiers, local desktop concurrency, cloud run limits, and team sharing on higher plans."
+competitive_threat_level: medium
+notes: "Threatens agent-browser where operators want repeatable no-code browser bots more than agent traces or developer-owned browser state."
