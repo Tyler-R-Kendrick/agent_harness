@@ -83,6 +83,7 @@ export function normalizeWorkspaceFilePath(path: string): string {
     throw new TypeError('Workspace file path must not be empty.');
   }
 
+  assertSafeWorkspaceFilePath(normalized);
   return normalized;
 }
 
@@ -682,4 +683,18 @@ export function resolveWorkspaceFilePath(input: WorkspaceFileInput): string {
   }
 
   return normalizeWorkspaceFilePath(decodeURIComponent(url.pathname));
+}
+
+function assertSafeWorkspaceFilePath(path: string): void {
+  if (path.includes('\\')) {
+    throw new TypeError('Workspace file path must not contain backslashes.');
+  }
+
+  const segments = path.split('/');
+  if (segments.some((segment) => segment.length === 0)) {
+    throw new TypeError('Workspace file path must not contain empty path segments.');
+  }
+  if (segments.some((segment) => segment === '.' || segment === '..')) {
+    throw new TypeError('Workspace file path must not contain dot path segments.');
+  }
 }
