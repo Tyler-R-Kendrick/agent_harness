@@ -485,21 +485,18 @@ describe('real AgentEvals workflow gate', () => {
     const input = {
       expected_output: JSON.stringify({
         semanticOnly: true,
-        minEntities: 2,
+        minEntities: 3,
+        subject: 'bars',
         location: 'Arlington Heights, IL',
-        forbiddenLabels: ['Yelp: Best Bars in Arlington Heights, IL'],
       }),
       output: [{
         role: 'assistant',
+        content: 'I could not verify enough bars near Arlington Heights, IL from the available evidence.',
         tool_calls: [
           { tool: 'webmcp:recall_user_context' },
           { tool: 'webmcp:search_web' },
           { tool: 'validation-agent' },
         ],
-        content: [
-          'I could not verify enough source-backed bars near Arlington Heights, IL from the available search results.',
-          'The current evidence is insufficient to safely publish entities.',
-        ].join('\n'),
       }],
     };
 
@@ -522,124 +519,33 @@ describe('real AgentEvals workflow gate', () => {
         passed: true,
       }),
       expect.objectContaining({
-        text: 'semantic live insufficient-evidence output does not publish page chrome labels',
+        text: 'tool trajectory includes validation-agent',
         passed: true,
       }),
     ]));
     expect(parsed.assertions.some((assertion) => assertion.text === 'tool trajectory includes webmcp:read_web_page')).toBe(false);
   });
 
-  it('fails validation-contract count checks even when the answer acknowledges a shortfall without enough results', () => {
-    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
-    const input = {
-      expected_output: JSON.stringify({
-        validationContract: {
-          type: 'validation-contract',
-          version: 1,
-          taskGoal: 'show me 3 bars near me',
-          constraints: [
-            {
-              id: 'count:min-results',
-              type: 'count',
-              value: 3,
-              required: true,
-              failureMessage: 'Expected at least 3 accepted result(s).',
-            },
-          ],
-          successSemantics: 'all-required',
-        },
-      }),
-      output: [{
-        role: 'assistant',
-        content: [
-          'I could only verify 1 additional result for bars near Arlington Heights, IL, but you asked for 3.',
-          '',
-          "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: Peggy Kinnane's is a bar in Arlington Heights, IL.",
-        ].join('\n'),
-      }],
-    };
-
-    const result = spawnSync(process.execPath, [grader], {
-      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
-      input: JSON.stringify(input),
-      encoding: 'utf8',
-      env: subprocessEnv(),
-    });
-
-    expect(result.status).toBe(0);
-    const parsed = JSON.parse(result.stdout) as {
-      score: number;
-      assertions: Array<{ text: string; passed: boolean }>;
-    };
-    expect(parsed.score).toBeLessThan(1);
-    expect(parsed.assertions).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        text: 'validation contract count:min-results',
-        passed: false,
-      }),
-    ]));
-  });
-
-  it('accepts a verified partial follow-up answer only when it acknowledges the requested-count shortfall', () => {
-    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
-    const input = {
-      expected_output: JSON.stringify({
-        expectedResult: 'insufficient-follow-up-count',
-        expectedLocations: ['Arlington Heights, IL'],
-        forbiddenLabels: ['Yelp: Best Bars in Arlington Heights, IL'],
-        requestedCount: 3,
-        minimumAcceptedEntities: 3,
-        excludedCandidates: ['Sports Page Bar & Grill Arlington Heights'],
-      }),
-      output: [{
-        role: 'assistant',
-        content: [
-          'I could only verify 1 additional result for bars near Arlington Heights, IL, but you asked for 3.',
-          'The available search evidence did not contain enough additional source-backed entity names with the required subject and location signals.',
-          '',
-          "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: Peggy Kinnane's is a bar in Arlington Heights, IL.",
-        ].join('\n'),
-      }],
-    };
-
-    const result = spawnSync(process.execPath, [grader], {
-      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
-      input: JSON.stringify(input),
-      encoding: 'utf8',
-      env: subprocessEnv(),
-    });
-
-    expect(result.status).toBe(0);
-    const parsed = JSON.parse(result.stdout) as {
-      score: number;
-      assertions: Array<{ text: string; passed: boolean }>;
-    };
-    expect(parsed.score).toBe(1);
-    expect(parsed.assertions).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        text: 'insufficient-evidence cases must not publish a fabricated entity list',
-        passed: true,
-      }),
-    ]));
-  });
-
-  it('fails insufficient no-publish answers that still render linked entity candidates', () => {
+  it('fails no-publish insufficient-evidence cases that still render fabricated entity rows', () => {
     const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
     const input = {
       expected_output: JSON.stringify({
         expectedResult: 'insufficient-evidence-no-publish',
-        subject: 'websites',
-        location: 'Middle Earth',
         validationContract: {
           type: 'validation-contract',
           version: 1,
-          taskGoal: 'show 10 websites located in middle earth that rhyme with cat',
+          taskGoal: 'show 10 websites that rhyme with cat located in middle earth',
           constraints: [
             {
               id: 'count:min-results',
+              sourceText: 'show 10 websites that rhyme with cat located in middle earth',
               type: 'count',
+              operator: 'at_least',
+              target: 'acceptedCandidates',
               value: 10,
               required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
               failureMessage: 'Expected at least 10 accepted result(s).',
             },
           ],
@@ -857,6 +763,89 @@ describe('real AgentEvals workflow gate', () => {
         passed: false,
       }),
     ]));
+  });
+
+  it('fails validation-contract answers that use placeholder source text instead of substantive evidence', () => {
+    const grader = path.join(repoRoot, 'agent-browser/evals/search-fulfillment/graders/search-quality-gate.mjs');
+    const input = {
+      expected_output: JSON.stringify({
+        expectedLocations: ['Arlington Heights, IL'],
+        validationContract: {
+          type: 'validation-contract',
+          version: 1,
+          taskGoal: 'show me 2 bars near me',
+          constraints: [
+            {
+              id: 'count:min-results',
+              sourceText: 'show me 2 bars near me',
+              type: 'count',
+              operator: 'at_least',
+              target: 'acceptedCandidates',
+              value: 2,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Expected at least 2 accepted result(s).',
+            },
+            {
+              id: 'source:evidence',
+              sourceText: 'show me 2 bars near me',
+              type: 'source_evidence',
+              operator: 'has_evidence',
+              target: 'acceptedCandidates.sourceEvidence',
+              value: true,
+              required: true,
+              confidence: 0.9,
+              validationMethod: 'structured-candidate',
+              failureMessage: 'Each rendered result needs source evidence.',
+            },
+          ],
+          evidenceRequirements: [
+            {
+              id: 'evidence:entity-link',
+              description: 'Evidence must include a source-backed explanation for each rendered result.',
+              required: true,
+              target: 'acceptedCandidates.sourceEvidence',
+            },
+          ],
+          impossibilityPolicy: { kind: 'none', askUserForHelp: false },
+          clarificationTriggers: [],
+          successSemantics: 'all-required',
+          legacyCriteria: [],
+        },
+      }),
+      output: [{
+        role: 'assistant',
+        content: [
+          'Here are bars near Arlington Heights, IL:',
+          '',
+          "1. [Peggy Kinnane's Irish Restaurant & Pub](https://www.peggykinnanes.com/) - Why: official website",
+          "2. [Cortland's Garage](https://www.cortlandsgarage.com/) - Why: see source",
+        ].join('\n'),
+      }],
+    };
+
+    const result = spawnSync(process.execPath, [grader], {
+      cwd: path.join(repoRoot, 'agent-browser/evals/search-fulfillment'),
+      input: JSON.stringify(input),
+      encoding: 'utf8',
+      env: subprocessEnv(),
+    });
+
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as {
+      score: number;
+      assertions: Array<{ text: string; passed: boolean; evidence?: string }>;
+    };
+    expect(parsed.score).toBeLessThan(1);
+    expect(parsed.assertions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        text: 'validation contract source:evidence',
+        passed: false,
+      }),
+    ]));
+    const evidenceAssertion = parsed.assertions.find((assertion) => assertion.text === 'validation contract source:evidence');
+    expect(evidenceAssertion?.evidence).toBe("Peggy Kinnane's Irish Restaurant & Pub, Cortland's Garage");
   });
 
   it('fails validation-contract answers that only attach generic source links to plain-text entity rows', () => {
