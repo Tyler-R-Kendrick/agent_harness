@@ -78,6 +78,10 @@ function extractMarkdownLinks(content) {
     .filter((link) => link.label.length > 0 && link.url.length > 0);
 }
 
+function stripMarkdownLinks(content) {
+  return String(content ?? '').replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1');
+}
+
 function markdownLinkUrlsForLabel(content, label) {
   const target = normalizeComparable(label);
   return extractMarkdownLinks(content)
@@ -118,15 +122,36 @@ function renderedEntityRows(answer) {
         || markdownLabels[0]
         || '';
       const matchingLink = markdownLinks.find((candidate) => normalizeComparable(candidate.label) === normalizeComparable(label));
+      const evidenceSegment = content.match(/\b(?:why|source evidence|evidence|because|verified)\s*:\s*(.+)$/i)?.[1]?.trim() ?? '';
       return {
         raw: line,
         label,
         linkUrl: matchingLink?.url ?? '',
         hasLink: Boolean(matchingLink),
-        hasEvidence: /\b(?:why|source|evidence|listed|found|verified|location evidence)\b/i.test(content),
+        evidenceText: evidenceSegment,
+        hasEvidence: rowHasSubstantiveEvidence(content, evidenceSegment),
       };
     })
     .filter((row) => row.label.length > 0);
+}
+
+function rowHasSubstantiveEvidence(content, evidenceSegment) {
+  const normalizedEvidence = stripMarkdownLinks(evidenceSegment)
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  if (!normalizedEvidence) return false;
+  if (/^(?:see|view|check|visit|open|review)\s+(?:the\s+)?(?:source|link|website|site|listing|details?)$/i.test(normalizedEvidence)) {
+    return false;
+  }
+  if (/^(?:official\s+)?(?:website|site|homepage|listing|directory|source|link|details?)$/i.test(normalizedEvidence)) {
+    return false;
+  }
+  const tokens = normalizedEvidence.split(/\s+/).filter(Boolean);
+  if (tokens.length < 3) return false;
+  return /\b(?:listed|located|verified|shows|states|serves|features|describes|identifies|calls|notes|confirms|bar|pub|restaurant|theater|theatre|cinema|shop|museum|park|cafe|coffee|bookstore|gym|venue|arlington|heights|il)\b/i.test(normalizedEvidence)
+    || /\b\d{5}(?:-\d{4})?\b/.test(content);
 }
 
 function urlLooksEntitySpecific(rawUrl, label) {
