@@ -1,44 +1,41 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-05
-Baseline: `.features/Summary.md` refreshed through the 2026-06-04 DeerFlow corpus.
-Diff type: additive updates after the 2026-06-05 Claude Code refresh
+Updated: 2026-06-06
+Baseline: `.features/Summary.md` refreshed through the 2026-06-05 Claude Code corpus.
+Diff type: additive updates after the 2026-06-06 Hermes Agent refresh
 
 ## Net new normalized features
 
-### Added: Condition-bound autonomous goals with explicit success evaluation
-- Why now: the refreshed Claude Code corpus adds a first-party goal contract where the runtime owns the completion condition and decides whether another turn is required.
+### Added: Browser-native runtime administration for channels, MCP, credentials, and memory
+- Why now: the refreshed Hermes Agent corpus adds a first-party browser admin surface that goes well beyond session viewing and starts owning live runtime configuration.
 - Research delta:
-  - Claude Code now documents `/goal` as a completion condition that keeps a session working across turns until the condition holds
-  - after each turn, a small fast model evaluates whether the goal condition is satisfied and triggers another turn when it is not
-  - Anthropic explicitly frames the feature around verifiable end states such as passing tests, satisfying acceptance criteria, reducing file size budgets, or clearing labeled backlogs
-  - the same goal contract is documented across interactive sessions, non-interactive `-p` runs, and Remote Control
-  - the public docs turn long-running autonomy from an implicit loop into an inspectable success-criteria primitive
+  - Hermes `v0.16.0` says the web dashboard now includes browser pages for messaging channels, MCP catalog administration, credentials, webhooks, memory, gateway controls, and a system page
+  - the same release adds pluggable OIDC and username-password login for that browser surface, making it a governed control plane instead of an unauthenticated localhost convenience view
+  - the dashboard docs still preserve the existing session, logs, config, and analytics surfaces, so the new admin pages layer live configuration on top of runtime observability
+  - across the competitor set, this pushes a recurring idea into sharper focus: operators want to wire and govern the harness from the browser, not by editing config files on the host
 
 ## Expanded normalized features
 
-### Expanded: Parallel agent orchestration
-- Why now: the refreshed Claude Code corpus now distinguishes multiple parallelism modes instead of flattening everything into subagents.
+### Expanded: Multi-surface continuity
+- Why now: the refreshed Hermes Agent corpus now includes a first-party native desktop app that can steer local or remote Hermes runtimes without breaking session continuity.
 - Research delta:
-  - Claude Code now documents `agent teams` as a separate lead-worker orchestration model with direct teammate interaction
-  - the docs explicitly contrast teams with subagents, which stay inside one session and only report back to the main agent
-  - team members run in separate context windows and can message one another directly
-  - this makes the product’s parallel execution model more differentiated: subagents, agent teams, agent view, and worktree-backed sessions are separate choices with different tradeoffs
+  - Hermes now documents a native desktop app for macOS, Windows, and Linux rather than only CLI, dashboard, mobile, and messaging surfaces
+  - the `v0.16.0` release says each desktop profile can target a different remote Hermes gateway over OAuth or username/password while still sharing session links inside one window
+  - the desktop docs keep the same sessions, skills, memory, and config across desktop, CLI, and gateway surfaces, which makes the new GUI a true continuation surface rather than a separate product
 
-### Expanded: Background session supervisor views with peek-and-reply control
-- Why now: the refreshed Claude Code agent-view docs are more explicit about the control-plane mechanics than the older local slice captured.
+### Expanded: Operator control consoles with blocked-state queues and durable usage ledgers
+- Why now: the refreshed Hermes Agent corpus adds a stronger distinction between observability and live administration in the same browser control plane.
 - Research delta:
-  - Agent View now documents grouped `Needs input`, `Working`, and `Completed` states instead of only a generic background-session list
-  - users can peek the latest output, reply from the peek panel, and send an existing session into the background with `/bg`
-  - `--cwd` can scope the session list to one project
-  - settings, plugins, MCP servers, and added directories can be passed through to every session dispatched from the supervisor surface
+  - Hermes now pairs its existing dashboard status, sessions, logs, and analytics pages with new admin pages for channels, MCP, credentials, webhooks, memory, and gateway controls
+  - this makes the browser surface responsible for both seeing runtime state and reconfiguring the infrastructure that shapes future runs
+  - the release effectively upgrades Hermes from "operator console" to "operator console plus runtime admin console"
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add condition-bound goals with explicit success criteria and auto-continue
+### Proposed Linear feature: Add browser-native runtime administration for channels, MCP, credentials, and memory
 - Linear issue title:
-  - `Add condition-bound goals with explicit success criteria and auto-continue`
+  - `Add browser-native runtime administration for channels, MCP, credentials, and memory`
 - Suggested problem statement:
-  - `agent-browser` can already carry out multi-step work, but it still treats long tasks as open-ended chat turns unless the user manually nudges the run forward. Competitors are starting to expose a stronger contract: the operator states a completion condition, the runtime evaluates whether it has been met after each turn, and the session keeps going automatically until the condition is satisfied or blocked. Without that contract, users have to restate the objective, decide manually whether more turns are needed, and infer whether the run actually reached the intended end state. The product needs goal-bound autonomy with explicit success evaluation so long-running work can continue safely and stop for the right reason.`
+  - `agent-browser` already has runtime state, tools, and operator surfaces, but the harness still depends too heavily on file edits, local setup knowledge, or ad hoc scripting when an operator needs to rewire channels, MCP servers, credentials, webhooks, memory policy, or auth settings. Competitors are moving this wiring into governed browser consoles so teams can inspect the current runtime, make targeted configuration changes, and keep operating without shell access to the host. Without that control plane, the product is harder to administer, harder to delegate safely, and more brittle in shared or hosted environments. The product needs a browser-native runtime administration surface that separates observability from destructive edits while making the harness configurable by authorized operators in one place.`
 - One-shot instruction for an LLM:
-  - Implement goal-bound autonomy for `agent-browser`: let a user set a durable completion condition on a run, store that goal as structured run state, evaluate the condition after each turn with a lightweight success checker, automatically continue into another turn when the condition is still unmet, stop and clear the goal when it passes, and show the goal text plus the latest evaluation outcome in the app so interactive, background, and remote sessions can keep working toward a verifiable end state without the user restating the objective every step.
+  - Implement a browser-native runtime administration console for `agent-browser`: add a governed operator UI that can inspect and update messaging or ingress channels, MCP server registrations and catalog entries, runtime credentials and webhooks, memory policy controls, and auth-provider wiring; preserve a clear split between read-only observability views and destructive configuration actions; require role-aware permissions and confirmation for risky edits; and store durable audit history so operators can see what changed, who changed it, and how that change affects future local, background, and remote runs.
