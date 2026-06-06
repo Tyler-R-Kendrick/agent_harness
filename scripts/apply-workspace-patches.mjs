@@ -32,11 +32,25 @@ export function resolvePatchWorkingDirectory(rootDir, cwd, packagePath) {
   return path.relative(workspaceDirectory, packagePath).startsWith('..') ? rootDir : workspaceDirectory;
 }
 
-export function applyWorkspacePatches(rootDir = repoRoot) {
-  for (const patchTarget of workspacePatches) {
+function normalizeApplyWorkspacePatchesOptions(options) {
+  return typeof options === 'string' ? { rootDir: options } : options;
+}
+
+export function applyWorkspacePatches(options = {}) {
+  const {
+    rootDir = repoRoot,
+    patchTargets = workspacePatches,
+    spawnSyncImpl = spawnSync,
+    log = console.log,
+    error = console.error,
+    env = process.env,
+    nodeExecPath = process.execPath,
+  } = normalizeApplyWorkspacePatchesOptions(options);
+
+  for (const patchTarget of patchTargets) {
     const packagePath = resolveInstalledPackagePath(rootDir, patchTarget.cwd, patchTarget.packagePath);
     if (!packagePath) {
-      console.log(`Skipping ${patchTarget.patchFiles.join(', ')} because ${patchTarget.packagePath} is not installed.`);
+      log(`Skipping ${patchTarget.patchFiles.join(', ')} because ${patchTarget.packagePath} is not installed.`);
       continue;
     }
 
@@ -53,8 +67,8 @@ export function applyWorkspacePatches(rootDir = repoRoot) {
         copyFileSync(path.join(rootDir, 'patches', patchFile), path.join(patchDir, patchFile));
       }
 
-      const result = spawnSync(
-        process.execPath,
+      const result = spawnSyncImpl(
+        nodeExecPath,
         [
           patchPackageBin,
           'patch-package',
@@ -63,26 +77,30 @@ export function applyWorkspacePatches(rootDir = repoRoot) {
         ],
         {
           cwd,
-          env: process.env,
+          env,
           stdio: 'inherit',
         },
       );
 
       if (result.error) {
-        console.error(`Failed to apply package patches in ${patchTarget.cwd}`);
-        console.error(result.error.message);
-        process.exit(1);
+        error(`Failed to apply package patches in ${patchTarget.cwd}`);
+        error(result.error.message);
+        return 1;
       }
 
       if (result.status !== 0) {
-        process.exit(result.status ?? 1);
+        return result.status ?? 1;
       }
     } finally {
       rmSync(patchDir, { force: true, recursive: true });
     }
   }
+
+  return 0;
 }
 
+/* node:coverage disable */
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  applyWorkspacePatches();
+  process.exitCode = applyWorkspacePatches();
 }
+/* node:coverage enable */
