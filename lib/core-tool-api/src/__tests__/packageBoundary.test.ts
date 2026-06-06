@@ -14,16 +14,30 @@ it('documents the stable root import and private source boundary', async () => {
   expect(readme).toContain("import { CoreToolApi } from '@agent-harness/core-tool-api'");
   expect(readme).toContain('@agent-harness/core-tool-api/src/*');
   expect(readme).toContain('private implementation paths');
+  expect(readme).toContain('License: MIT');
+  expect(readme).toContain('Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/lib/core-tool-api');
 });
 
 it('publishes runtime source files through the root package entry point', async () => {
   const packageJson = JSON.parse(await readPackageFile('package.json')) as {
     exports: Record<string, string>;
     files: string[];
+    license: string;
     main: string;
+    repository: {
+      directory: string;
+      type: string;
+      url: string;
+    };
     types: string;
   };
 
+  expect(packageJson.license).toBe('MIT');
+  expect(packageJson.repository).toEqual({
+    type: 'git',
+    url: 'git+https://github.com/Tyler-R-Kendrick/agent_harness.git',
+    directory: 'lib/core-tool-api',
+  });
   expect(packageJson.main).toBe('./src/index.ts');
   expect(packageJson.types).toBe('./src/index.ts');
   expect(packageJson.exports).toEqual({ '.': './src/index.ts' });
