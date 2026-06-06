@@ -396,6 +396,7 @@ describe('BrowserWorkerProvider', () => {
   it('rejects invalid required ssh tunnel fields', async () => {
     const worker = await new BrowserWorkerProvider().createWorker?.({}, createContext(new RecordingSandboxBroker()));
     const invalidInputs = [
+      { port: 70000, expected: 'port' },
       { user: 'bad user', expected: 'user' },
       { localPort: 70000, expected: 'localPort' },
       { remotePort: 0, expected: 'remotePort' },
