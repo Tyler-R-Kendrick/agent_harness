@@ -206,12 +206,8 @@ async function main() {
     'worker',
     'workgraph',
   ]) {
-    assert.match(
-      rootReadme,
-      new RegExp(
-        escapeRegExp(`[ lib/${packageDirectory}/README.md ](./lib/${packageDirectory}/README.md)`),
-      ),
-    );
+    assert.match(rootReadme, new RegExp(escapeRegExp(`lib/${packageDirectory}/README.md`)));
+    assert.match(rootReadme, new RegExp(escapeRegExp(`(./lib/${packageDirectory}/README.md)`)));
   }
   assert.match(workerReadme, /## Core building blocks/);
   assert.match(workerReadme, /## Minimal worker and sandbox flow/);
