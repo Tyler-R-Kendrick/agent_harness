@@ -46,7 +46,10 @@ package-lock.json
 coverage/
 **/coverage/
 playwright-report/
+blob-report/
 test-results/
+junit.xml
+test-results.xml
 output/
 .vercel/
 .next/
