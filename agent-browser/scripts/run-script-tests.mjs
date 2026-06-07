@@ -156,7 +156,6 @@ async function main() {
   const rootPackage = JSON.parse(packageJson);
   const rootReadme = await readScript('README.md');
   const extReadme = await readScript('ext/README.md');
-  const workerReadme = await readScript('lib/worker/README.md');
   assert.match(rootReadme, /## Workspace packages/);
   assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
   assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);
@@ -171,6 +170,17 @@ async function main() {
     rootReadme,
     /\[`ext\/README\.md`\]\(\.\/ext\/README\.md\) \| `ext\/\*\/\*` \| Workspace index for the public IDE, harness, provider, and worker extension packages\./,
   );
+  const browserWorkerReadme = await readScript('lib/workers/browser/README.md');
+  assert.match(browserWorkerReadme, /## Public surface/);
+  assert.match(browserWorkerReadme, /BrowserWorkerProviderId/);
+  assert.match(browserWorkerReadme, /CapWorkerJobSkillCreate/);
+  assert.match(browserWorkerReadme, /CapWorkerSandboxOrchestration/);
+  assert.match(browserWorkerReadme, /## Minimal flow/);
+  assert.match(browserWorkerReadme, /context\.sandboxBroker\.createSandbox/);
+  assert.match(browserWorkerReadme, /## Secure SSH tunnel jobs/);
+  assert.match(browserWorkerReadme, /strictHostKeyChecking: true/);
+  assert.match(browserWorkerReadme, /## Failure modes/);
+  assert.match(browserWorkerReadme, /npm --workspace @agent-harness\/worker-browser run test:coverage/);
   assert.match(extReadme, /## Worker extensions/);
   assert.match(
     extReadme,
@@ -206,16 +216,13 @@ async function main() {
     'worker',
     'workgraph',
   ]) {
-    assert.match(rootReadme, new RegExp(escapeRegExp(`lib/${packageDirectory}/README.md`)));
-    assert.match(rootReadme, new RegExp(escapeRegExp(`(./lib/${packageDirectory}/README.md)`)));
+    assert.match(
+      rootReadme,
+      new RegExp(
+        escapeRegExp(`[\`lib/${packageDirectory}/README.md\`](./lib/${packageDirectory}/README.md)`),
+      ),
+    );
   }
-  assert.match(workerReadme, /## Core building blocks/);
-  assert.match(workerReadme, /## Minimal worker and sandbox flow/);
-  assert.match(workerReadme, /## Capability and policy contracts/);
-  assert.match(workerReadme, /## Provider descriptors and artifacts/);
-  assert.match(workerReadme, /`createSandbox\(\)` returns a `SandboxLease`/);
-  assert.match(workerReadme, /DefaultPolicyEngine` is deny-by-default/);
-  assert.match(workerReadme, /npm --workspace @agent-harness\/worker run test:coverage/);
   assert.ok(rootPackage.workspaces.includes('ext/*/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
