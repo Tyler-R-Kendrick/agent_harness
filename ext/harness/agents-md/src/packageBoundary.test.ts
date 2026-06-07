@@ -40,7 +40,9 @@ describe('package boundary', () => {
     const readme = readText('README.md');
 
     expect(readme).toContain('License: MIT');
-    expect(readme).toContain('Source: `ext/harness/agents-md`');
+    expect(readme).toContain(
+      'Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/ext/harness/agents-md',
+    );
     expect(readme).toContain("import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';");
     expect(readme).toContain("import manifest from '@agent-harness/ext-agents-md/manifest';");
     expect(readme).toContain('Do not deep-import files under `src/`');
