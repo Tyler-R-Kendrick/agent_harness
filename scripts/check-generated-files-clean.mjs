@@ -177,6 +177,18 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === '.eslintcache' || filePath.endsWith('/.eslintcache'),
   },
   {
+    label: '*.cpuprofile',
+    matches: (filePath) => filePath.endsWith('.cpuprofile'),
+  },
+  {
+    label: '*.heapprofile',
+    matches: (filePath) => filePath.endsWith('.heapprofile'),
+  },
+  {
+    label: '*.heapsnapshot',
+    matches: (filePath) => filePath.endsWith('.heapsnapshot'),
+  },
+  {
     label: 'output/',
     matches: (filePath) => filePath === 'output' || filePath.startsWith('output/'),
   },
