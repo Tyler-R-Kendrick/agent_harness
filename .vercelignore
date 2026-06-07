@@ -67,6 +67,9 @@ output/
 **/.cache/
 .eslintcache
 **/.eslintcache
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
 
 # Local automation/runtime state.
 .playwright-mcp/

@@ -60,6 +60,9 @@ test-results.xml
 .parcel-cache/
 .cache/
 .eslintcache
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
 
 agent-browser-running.png
 agent-browser-chat-ui-validation.png
