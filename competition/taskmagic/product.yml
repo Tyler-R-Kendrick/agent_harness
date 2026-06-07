@@ -1,0 +1,24 @@
+slug: taskmagic
+name: TaskMagic
+vendor: TaskMagic, Inc.
+segment: local-no-code-browser-automation
+product_path: competition/taskmagic
+design_path: competition/taskmagic/design
+features_path: competition/taskmagic/features
+marketing_path: competition/taskmagic/marketing
+gossip_path: competition/taskmagic/gossip
+snapshot_date: 2026-06-07
+primary_sources:
+  - https://www.taskmagic.com/automate/browser-automation
+  - https://help.taskmagic.com/browser/recording/ai-agent
+  - https://help.taskmagic.com/browser/getting-started/desktop-app
+  - https://help.taskmagic.com/apps/use-in-browser
+secondary_sources:
+  - https://www.reddit.com/r/appsumo/comments/1s5cbi8/taskmagic_needs_to_make_this_right_for_appsumo/
+  - https://www.reddit.com/r/appsumo/comments/1dfqer6/taskmagic_and_appsumo_banned_my_account_honest/
+  - https://www.reddit.com/r/appsumo/comments/1i4zrvx/zerowork_vs_taskmagic_vs_rtila_after_using/
+  - https://www.reddit.com/r/automation/comments/1pqdlvs/browser_automation_gets_messy_faster_than_expected/
+positioning: "No-code desktop browser recording that clones manual web work, then runs it headed, headless, scheduled, or connected to app workflows."
+customer_model: "Free and low monthly tiers emphasize unlimited flows/runs/steps, with browser runtime, apps, cloud hours, and team permissions as conversion levers."
+competitive_threat_level: medium
+notes: "Threatens agent-browser on approachable recording, desktop profile continuity, and unlimited-workflow messaging; weaker on deterministic developer contracts, selector transparency, and enterprise governance."

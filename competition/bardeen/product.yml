@@ -1,0 +1,24 @@
+slug: bardeen
+name: Bardeen
+vendor: Bardeen Inc
+segment: browser-native-no-code-automation
+product_path: competition/bardeen
+design_path: competition/bardeen/design
+features_path: competition/bardeen/features
+marketing_path: competition/bardeen/marketing
+gossip_path: competition/bardeen/gossip
+snapshot_date: 2026-06-07
+primary_sources:
+  - https://chromewebstore.google.com/detail/bardeen-automate-browser/ihhkmalpkhkoedlmcnilbbhhbhnicjga
+  - https://support.bardeen.ai/hc/en-us/articles/23925126983053-Creating-Playbooks
+  - https://support.bardeen.ai/hc/en-us/articles/23991504641165-Is-There-a-Free-Version-of-Bardeen-ai
+  - https://support.bardeen.ai/hc/en-us/articles/23925152357901-Browser-compatibility-of-Bardeen
+secondary_sources:
+  - https://automationatlas.io/answers/bardeen-review-2026/
+  - https://agent-finder.co/reviews/bardeen-review
+  - https://www.reddit.com/r/automation/comments/1nuhrew/whats_the_best_nocode_tool_to_automate_repetitive/
+  - https://www.reddit.com/r/SaaS/comments/1q56thd/why_aibased_chrome_extensions_are_the_next/
+positioning: "Chrome-first AI workflow automation for sales, recruiting, research, and productivity users who want browser playbooks without code."
+customer_model: "Freemium extension with monthly credits, paid tiers for heavier production runs and premium integrations, and a catalog-led adoption loop."
+competitive_threat_level: medium
+notes: "Threatens agent-browser on low-friction browser-context automation and template depth; weaker for developer-owned agent orchestration, deterministic evidence, and cross-browser/runtime control."
