@@ -23,8 +23,8 @@ import { domainFromUrl, isLikelyAuthorityUrl, isSameDomain } from '../utils/doma
 import { normalizeUrl } from '../utils/normalizeUrl';
 import { makeEvidence, makeState, makeTarget, makeTask } from './helpers';
 
-describe('coverage edge cases', () => {
-  it('covers utility normalization, domains, graph de-duplication, and concurrency ordering', async () => {
+describe('recursive research edge behavior contracts', () => {
+  it('normalizes crawl utility inputs before scoring and deduplication', () => {
     expect(clamp(Number.NaN, 0.2)).toBe(0.2);
     expect(clamp(5, 0, 3)).toBe(3);
     expect(clamp(-1)).toBe(0);
@@ -36,7 +36,9 @@ describe('coverage edge cases', () => {
     expect(isLikelyAuthorityUrl('https://example.gov/reference')).toBe(true);
     expect(isLikelyAuthorityUrl('https://plain.example.com/about')).toBe(false);
     expect(isLikelyAuthorityUrl('not a url with /docs')).toBe(true);
+  });
 
+  it('deduplicates research graph nodes and edges by stable identifiers', () => {
     const graph = new MutableResearchGraph();
     graph.addNode({ id: 'a', type: 'task', value: 'Task' });
     graph.addNode({ id: 'a', type: 'task', value: 'Duplicate ignored' });
@@ -44,12 +46,31 @@ describe('coverage edge cases', () => {
     graph.addEdge({ from: 'a', to: 'b', type: 'spawned' });
     expect(graph.toJSON().nodes).toHaveLength(1);
     expect(graph.toJSON().edges).toHaveLength(1);
-
-    await expect(mapWithConcurrency([], 0, async (item: number) => item)).resolves.toEqual([]);
-    await expect(mapWithConcurrency([3, 1, 2], 1.2, async (item) => item * 2)).resolves.toEqual([6, 2, 4]);
   });
 
-  it('covers frontier, target scoring, scope, and initial target edge cases', () => {
+  it('preserves input order for bounded concurrent maps even when tasks finish out of order', async () => {
+    await expect(mapWithConcurrency([], 0, async (item: number) => item)).resolves.toEqual([]);
+    await expect(mapWithConcurrency([3, 1, 2], 1.2, async (item) => item * 2)).resolves.toEqual([6, 2, 4]);
+
+    const startedIndexes: number[] = [];
+    const completions = new Map<number, (value: number) => void>();
+    const ordered = mapWithConcurrency([1, 2, 3], 3, async (item, index) => {
+      startedIndexes.push(index);
+      return new Promise<number>((resolve) => {
+        completions.set(item, resolve);
+      });
+    });
+
+    expect(startedIndexes).toEqual([0, 1, 2]);
+    expect(completions.size).toBe(3);
+    completions.get(3)?.(30);
+    completions.get(1)?.(10);
+    completions.get(2)?.(20);
+
+    await expect(ordered).resolves.toEqual([10, 20, 30]);
+  });
+
+  it('enforces frontier scope, budget, and target-priority contracts', () => {
     const queue = new FrontierQueue({ maxSize: 1 });
     expect(queue.add(makeTarget({ priority: 0 }))).toBe(false);
     expect(queue.nextBatch(-1)).toEqual([]);
@@ -116,7 +137,7 @@ describe('coverage edge cases', () => {
     expect(fillerTargets).toHaveLength(1);
   });
 
-  it('covers state initialization, ingestion shapes, finalization, and gap analyzers', async () => {
+  it('normalizes state initialization, evidence ingestion, finalization, and gap analysis', async () => {
     expect(() => initializeState({ question: '   ' })).toThrow(/non-empty/);
     const state = initializeState({
       question: '  Compare tools  ',
@@ -256,7 +277,7 @@ describe('coverage edge cases', () => {
     expect(noHighPriorityGaps.gaps.filter((gap) => gap.priority >= 0.6)).toHaveLength(0);
   });
 
-  it('covers link extraction, candidate scoring, follow-up target variants, and decisions', () => {
+  it('scores candidate links and selects follow-up crawl decisions', () => {
     const links = extractCandidateLinks({
       pageUrl: 'https://example.com/base/page',
       html: '<a href="/docs">Docs</a><a href="https://github.com/org/repo">Repo</a>',
@@ -334,7 +355,7 @@ describe('coverage edge cases', () => {
     expect(shouldStop(redundant).reason).toContain('redundant');
   });
 
-  it('covers agent target execution for optional tools, skips, gap errors, and disabled synthesis', async () => {
+  it('executes optional target tooling and records safe failure outcomes', async () => {
     const baseRun = vi.fn(async ({ question }) => ({
       evidence: [{ url: `https://web.example.com/${encodeURIComponent(question)}`, text: `web evidence ${question}` }],
     }));
@@ -432,7 +453,7 @@ describe('coverage edge cases', () => {
     expect((await gapError.run({ question: 'gap error' })).errors.some((error) => error.message === 'gap error')).toBe(true);
   });
 
-  it('covers private target variants without exposing them publicly', async () => {
+  it('keeps private target variants executable through internal dispatch only', async () => {
     const webResearchAgent: WebResearchTool = {
       run: vi.fn(async ({ question }) => ({ evidence: [{ url: `https://web.example.com/${question}`, text: question }] })),
       extract: vi.fn(async (url) => ({ url, text: 'extract fallback' })),
