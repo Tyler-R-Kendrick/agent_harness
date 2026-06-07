@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import {
   buildWebSearchAgentPrompt,
@@ -71,6 +71,35 @@ function descriptorFor(toolId: string): ToolDescriptor {
 }
 
 describe('web-search-agent evals', () => {
+  it('declares a real AgentV target and npm runner for the static policy suite', async () => {
+    const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const targetsYaml = readFileSync(path.resolve(__dirname, '../../../.agentv/targets.yaml'), 'utf8');
+    const evalYaml = readFileSync(path.resolve(__dirname, 'EVAL.yaml'), 'utf8');
+    const { buildAgentvWebSearchEvalCommand } = await import(
+      pathToFileURL(path.resolve(__dirname, '../../scripts/run-agentv-web-search-eval.mjs')).href
+    );
+    const command = buildAgentvWebSearchEvalCommand();
+
+    expect(packageJson.scripts['eval:web-search']).toBe('node scripts/run-agentv-web-search-eval.mjs');
+    expect(targetsYaml).toContain('name: agent-browser-web-search-agent');
+    expect(targetsYaml).toContain('web-search-agent-eval-target-runtime.ts');
+    expect(evalYaml).toContain('target: agent-browser-web-search-agent');
+    expect(evalYaml).toContain('type: tool-trajectory');
+    expect(evalYaml).toContain('type: rubric');
+    expect(command.packageName).toBe('agentv');
+    expect(command.args).toEqual(expect.arrayContaining([
+      'eval',
+      'run',
+      'agent-browser/evals/web-search-agent/EVAL.yaml',
+      '--target',
+      'agent-browser-web-search-agent',
+      '--threshold',
+      '0.85',
+    ]));
+  });
+
   for (const evalCase of readCases()) {
     it(`passes ${evalCase.id}`, () => {
       const descriptors = evalCase.availableToolIds.map(descriptorFor);
