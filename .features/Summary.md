@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-06
+Updated: 2026-06-07
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -208,3 +208,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: once an agent stack gains channels, tools, credentials, and memory policies, teams need a safe control plane for changing that wiring without shell access or direct file edits.
 - One-shot build instruction:
   - Add a browser-native runtime administration console to `agent-browser` that lets authorized operators inspect and change messaging or ingress channels, MCP servers and catalog entries, runtime credentials and webhooks, memory policies, and auth providers from one governed UI, with role-aware permissions, explicit change history, and clear separation between observability views and destructive configuration actions.
+
+### 30. Tracker-backed claim leases with heartbeat expiry and restart recovery
+- Common pattern: issue-driven harnesses are starting to persist worker ownership back into the tracker so restarts, retries, and multiple schedulers do not duplicate active work.
+- Seen in: OpenAI Symphony claim lease markers for active, retrying, and blocked runs, plus lease expiry recovery surfaced in the dashboard and JSON API, and Jira comment-marker upserts that extend the same lease model beyond Linear without comment spam.
+- Why it matters: once an agent system runs as a daemon, safe recovery depends on durable ownership state rather than in-memory claims that disappear on restart.
+- One-shot build instruction:
+  - Add tracker-backed claim leases to `agent-browser`: persist per-task worker ownership with worker id, workspace path, attempt, heartbeat, expiry, and blocked or retry state; publish that lease to the task tracker and operator UI; honor unexpired external leases during dispatch; recover expired leases by requeueing or handing off work safely; and keep the lease model portable across tracker adapters instead of hard-coding it to one provider.
