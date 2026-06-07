@@ -1,5 +1,6 @@
 import { approveAll, CopilotClient, type ModelInfo } from '@github/copilot-sdk';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { isJsonBodyError, readJsonBody } from './jsonBody';
 
 const SIGN_IN_COMMAND = 'copilot login';
 const SIGN_IN_DOCS_URL = 'https://docs.github.com/copilot/how-tos/copilot-cli';
@@ -267,15 +268,6 @@ function toCopilotModelSummary(model: ModelInfo): CopilotModelSummary | null {
   };
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-}
-
 function writeJson(res: ServerResponse, statusCode: number, body: unknown) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -345,6 +337,10 @@ export function createCopilotApiMiddleware() {
 
       writeJson(res, 405, { error: 'Method not allowed.' });
     } catch (error) {
+      if (isJsonBodyError(error)) {
+        writeJson(res, error.statusCode, { error: error.message });
+        return;
+      }
       next(error instanceof Error ? error : new Error('GitHub Copilot middleware failed.'));
     }
   };

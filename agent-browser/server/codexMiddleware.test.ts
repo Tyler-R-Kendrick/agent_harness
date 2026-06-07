@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { CodexBridge } from './codexMiddleware';
+import { CodexBridge, createCodexApiMiddleware } from './codexMiddleware';
 
 function createMockProcess() {
   const process = new EventEmitter() as EventEmitter & {
@@ -15,6 +15,20 @@ function createMockProcess() {
   process.stdin = { end: vi.fn() };
   process.kill = vi.fn();
   return process;
+}
+
+function jsonResponse() {
+  return {
+    statusCode: 0,
+    body: '',
+    setHeader() {},
+    end(value?: string) {
+      this.body = value ?? '';
+    },
+    json() {
+      return JSON.parse(this.body);
+    },
+  };
 }
 
 describe('CodexBridge', () => {
@@ -133,5 +147,25 @@ describe('CodexBridge', () => {
     await streamPromise;
 
     expect(execProcess.kill).toHaveBeenCalled();
+  });
+
+  it('returns 413 for oversized chat request bodies before spawning Codex', async () => {
+    const middleware = createCodexApiMiddleware();
+    const req = {
+      method: 'POST',
+      url: '/api/codex/chat',
+      headers: { 'content-length': '1000001' },
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('{"modelId":"codex-default"}');
+      },
+    };
+    const res = jsonResponse();
+    const next = vi.fn();
+
+    await middleware(req as never, res as never, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toEqual({ error: 'Request body exceeds 1000000 bytes.' });
   });
 });

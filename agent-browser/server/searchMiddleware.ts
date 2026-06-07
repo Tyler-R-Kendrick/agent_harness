@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { JSDOM } from 'jsdom';
+import { isJsonBodyError, readJsonBody } from './jsonBody';
 import {
   DuckDuckGoInstantSearchProvider,
   PerplexitySearchProvider,
@@ -1012,15 +1013,6 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  if (!chunks.length) return {};
-  return JSON.parse(Buffer.concat(chunks).toString('utf-8'));
-}
-
 function writeJson(res: ServerResponse, statusCode: number, body: unknown): void {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1086,6 +1078,10 @@ export function createSearchApiMiddleware(searchBridge: WebSearchBridge = bridge
       }
       writeJson(res, 200, await searchBridge.search(searchRequest));
     } catch (error) {
+      if (isJsonBodyError(error)) {
+        writeJson(res, error.statusCode, { error: error.message });
+        return;
+      }
       next(error instanceof Error ? error : new Error('Web search middleware failed.'));
     }
   };
@@ -1109,6 +1105,10 @@ export function createWebPageApiMiddleware(webPageBridge: WebPageBridge = pageBr
       }
       writeJson(res, 200, await webPageBridge.read(pageRequest));
     } catch (error) {
+      if (isJsonBodyError(error)) {
+        writeJson(res, error.statusCode, { error: error.message });
+        return;
+      }
       next(error instanceof Error ? error : new Error('Web page middleware failed.'));
     }
   };
