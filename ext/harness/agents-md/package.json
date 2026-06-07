@@ -2,6 +2,12 @@
   "name": "@agent-harness/ext-agents-md",
   "version": "0.1.0",
   "description": "Optional Agent Harness plugin for AGENTS.md workspace instruction assets.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tyler-R-Kendrick/agent_harness.git",
+    "directory": "ext/harness/agents-md"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

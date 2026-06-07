@@ -17,6 +17,12 @@ describe('package boundary', () => {
   it('publishes only runtime plugin files', () => {
     const packageJson = readJson('package.json');
 
+    expect(packageJson.license).toBe('MIT');
+    expect(packageJson.repository).toEqual({
+      type: 'git',
+      url: 'https://github.com/Tyler-R-Kendrick/agent_harness.git',
+      directory: 'ext/harness/agents-md',
+    });
     expect(packageJson.exports).toEqual({
       '.': './src/index.ts',
       './manifest': './agent-harness.plugin.json',
@@ -33,6 +39,10 @@ describe('package boundary', () => {
   it('documents the stable import and manifest boundary', () => {
     const readme = readText('README.md');
 
+    expect(readme).toContain('License: MIT');
+    expect(readme).toContain(
+      'Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/ext/harness/agents-md',
+    );
     expect(readme).toContain("import { createAgentsMdHookPlugin } from '@agent-harness/ext-agents-md';");
     expect(readme).toContain("import manifest from '@agent-harness/ext-agents-md/manifest';");
     expect(readme).toContain('Do not deep-import files under `src/`');
