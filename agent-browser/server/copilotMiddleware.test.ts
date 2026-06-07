@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CopilotBridge } from './copilotMiddleware';
+import { CopilotBridge, createCopilotApiMiddleware } from './copilotMiddleware';
 
 type SessionEventHandler = (event: { data: Record<string, unknown> }) => void;
 
@@ -216,5 +216,33 @@ describe('CopilotBridge', () => {
     expect(client.createSession).toHaveBeenCalledTimes(1);
     expect(session.setModel).toHaveBeenCalledWith('claude-sonnet-4.6');
     expect(session.send).toHaveBeenNthCalledWith(2, { prompt: 'Second prompt' });
+  });
+
+  it('returns 413 for oversized Copilot chat request bodies', async () => {
+    const middleware = createCopilotApiMiddleware();
+    const req = {
+      method: 'POST',
+      url: '/api/copilot/chat',
+      headers: { 'content-length': '1000001' },
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('{"modelId":"gpt-4.1"}');
+      },
+    };
+    const res = {
+      statusCode: 0,
+      body: '',
+      setHeader() {},
+      end(value?: string) {
+        this.body = value ?? '';
+      },
+      json() {
+        return JSON.parse(this.body);
+      },
+    };
+
+    await middleware(req as never, res as never, vi.fn());
+
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toEqual({ error: 'Request body exceeds 1000000 bytes.' });
   });
 });
