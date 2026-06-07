@@ -1,41 +1,34 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-06
-Baseline: `.features/Summary.md` refreshed through the 2026-06-05 Claude Code corpus.
-Diff type: additive updates after the 2026-06-06 Hermes Agent refresh
+Updated: 2026-06-07
+Baseline: `.features/Summary.md` refreshed through the 2026-06-06 Hermes Agent corpus.
+Diff type: additive updates after the 2026-06-07 OpenAI Symphony refresh
 
 ## Net new normalized features
 
-### Added: Browser-native runtime administration for channels, MCP, credentials, and memory
-- Why now: the refreshed Hermes Agent corpus adds a first-party browser admin surface that goes well beyond session viewing and starts owning live runtime configuration.
+### Added: Tracker-backed claim leases with heartbeat expiry and restart recovery
+- Why now: the refreshed OpenAI Symphony corpus adds a first-party lease layer that persists worker ownership in the tracker and then extends that model into Jira.
 - Research delta:
-  - Hermes `v0.16.0` says the web dashboard now includes browser pages for messaging channels, MCP catalog administration, credentials, webhooks, memory, gateway controls, and a system page
-  - the same release adds pluggable OIDC and username-password login for that browser surface, making it a governed control plane instead of an unauthenticated localhost convenience view
-  - the dashboard docs still preserve the existing session, logs, config, and analytics surfaces, so the new admin pages layer live configuration on top of runtime observability
-  - across the competitor set, this pushes a recurring idea into sharper focus: operators want to wire and govern the harness from the browser, not by editing config files on the host
+  - Symphony PR #82 adds claim lease state with worker id, workspace path, retry attempt, heartbeat timestamp, expiry, and operator-visible recovery events
+  - the same PR publishes active, retrying, and blocked lease markers back to the tracker and surfaces that state in the JSON API and LiveView dashboard
+  - Symphony PR #83 adds Jira support for reading and upserting those lease markers by editing existing comments instead of appending unbounded heartbeat spam
+  - together, the two PRs turn safe restart recovery from an in-memory orchestration detail into a durable tracker contract that can survive daemon restarts and cross-tracker deployments
 
 ## Expanded normalized features
 
-### Expanded: Multi-surface continuity
-- Why now: the refreshed Hermes Agent corpus now includes a first-party native desktop app that can steer local or remote Hermes runtimes without breaking session continuity.
+### Expanded: Issue-tracker control planes
+- Why now: the refreshed OpenAI Symphony corpus shows the tracker evolving from intake queue into durable runtime coordination surface.
 - Research delta:
-  - Hermes now documents a native desktop app for macOS, Windows, and Linux rather than only CLI, dashboard, mobile, and messaging surfaces
-  - the `v0.16.0` release says each desktop profile can target a different remote Hermes gateway over OAuth or username/password while still sharing session links inside one window
-  - the desktop docs keep the same sessions, skills, memory, and config across desktop, CLI, and gateway surfaces, which makes the new GUI a true continuation surface rather than a separate product
-
-### Expanded: Operator control consoles with blocked-state queues and durable usage ledgers
-- Why now: the refreshed Hermes Agent corpus adds a stronger distinction between observability and live administration in the same browser control plane.
-- Research delta:
-  - Hermes now pairs its existing dashboard status, sessions, logs, and analytics pages with new admin pages for channels, MCP, credentials, webhooks, memory, and gateway controls
-  - this makes the browser surface responsible for both seeing runtime state and reconfiguring the infrastructure that shapes future runs
-  - the release effectively upgrades Hermes from "operator console" to "operator console plus runtime admin console"
+  - Symphony no longer treats tracker state as just task metadata; it now writes lease ownership and recovery state back into tracker comments
+  - Jira support means the same runtime coordination contract is being designed to survive beyond one tracker adapter
+  - this pushes the broader control-plane idea toward tracker-native ownership, heartbeat, and handoff semantics instead of relying only on local orchestrator memory
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add browser-native runtime administration for channels, MCP, credentials, and memory
+### Proposed Linear feature: Add tracker-backed claim leases with heartbeat expiry and restart recovery
 - Linear issue title:
-  - `Add browser-native runtime administration for channels, MCP, credentials, and memory`
+  - `Add tracker-backed claim leases with heartbeat expiry and restart recovery`
 - Suggested problem statement:
-  - `agent-browser` already has runtime state, tools, and operator surfaces, but the harness still depends too heavily on file edits, local setup knowledge, or ad hoc scripting when an operator needs to rewire channels, MCP servers, credentials, webhooks, memory policy, or auth settings. Competitors are moving this wiring into governed browser consoles so teams can inspect the current runtime, make targeted configuration changes, and keep operating without shell access to the host. Without that control plane, the product is harder to administer, harder to delegate safely, and more brittle in shared or hosted environments. The product needs a browser-native runtime administration surface that separates observability from destructive edits while making the harness configurable by authorized operators in one place.`
+  - `agent-browser` can run long-lived and background work, but it still lacks a durable ownership contract that survives orchestrator restarts, multiple runners, and tracker reconnects. Competitors are starting to persist worker leases back into the issue tracker with heartbeat, expiry, blocked, and retry state so dispatch recovery does not duplicate live work or silently strand tasks after host failure. Without a tracker-backed lease model, restart recovery stays fragile, operator trust stays low, and multi-runner orchestration cannot scale safely across tracker adapters. The product needs explicit claim leases that are visible in both the tracker and operator UI, portable across tracker providers, and capable of safe handoff when leases expire.`
 - One-shot instruction for an LLM:
-  - Implement a browser-native runtime administration console for `agent-browser`: add a governed operator UI that can inspect and update messaging or ingress channels, MCP server registrations and catalog entries, runtime credentials and webhooks, memory policy controls, and auth-provider wiring; preserve a clear split between read-only observability views and destructive configuration actions; require role-aware permissions and confirmation for risky edits; and store durable audit history so operators can see what changed, who changed it, and how that change affects future local, background, and remote runs.
+  - Implement tracker-backed claim leases for `agent-browser`: whenever a task is claimed, persist a durable lease record containing worker id, workspace path, attempt number, heartbeat timestamp, expiry, and blocked or retry state; surface the lease in the operator UI and the tracker itself; refuse duplicate dispatch when an unexpired external lease already exists; recover expired or dead-worker leases by requeueing or handing off the task safely; update existing tracker markers in place when possible to avoid comment spam; and keep the lease abstraction portable so Linear, Jira, and future tracker adapters can share the same ownership and recovery contract.

@@ -15,6 +15,11 @@ import type { ToolDefinition, ToolProvider } from '@agent-harness/core-tool-api'
 - Standards-aligned tool definitions (`mcp`, `openapi`, `json-schema`).
 - Provider abstraction that supports native and WASI-backed WASM runtimes.
 
+## Package Metadata
+
+- License: MIT
+- Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/lib/core-tool-api
+
 ## Package Boundary
 
 Use `@agent-harness/core-tool-api` as the stable public import path. The root entry point intentionally exports `CoreToolApi` plus the tool definition, provider, runtime context, JSON value, convention, and WASI binding types.

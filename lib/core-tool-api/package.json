@@ -2,6 +2,12 @@
   "name": "@agent-harness/core-tool-api",
   "version": "0.1.0",
   "description": "Core tool registration and execution API with WASI-capable provider support.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tyler-R-Kendrick/agent_harness.git",
+    "directory": "lib/core-tool-api"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

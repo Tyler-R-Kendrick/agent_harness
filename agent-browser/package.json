@@ -17,6 +17,7 @@
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
     "eval:self-reflection": "node scripts/run-agentv-self-reflection-eval.mjs",
     "eval:tour-guide": "node scripts/run-agentv-tour-guide-eval.mjs",
+    "eval:web-search": "node scripts/run-agentv-web-search-eval.mjs",
     "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit",
     "preview": "node ../scripts/run-package-bin.mjs vite preview",
     "preview:cucumber": "NODE_OPTIONS=--max-old-space-size=4096 npm run build && node ../scripts/run-package-bin.mjs vite preview --host 127.0.0.1 --port 4173",

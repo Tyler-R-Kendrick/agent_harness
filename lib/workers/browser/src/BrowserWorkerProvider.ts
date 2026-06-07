@@ -128,7 +128,11 @@ function buildSshTunnelCommand(input: SshTunnelInput): { command?: string; error
   if (!keyPath || !SAFE_PATH.test(keyPath)) return { error: 'Invalid sshTunnel configuration: keyPath must be an absolute safe path.' };
   if (input.strictHostKeyChecking !== true) return { error: 'Invalid sshTunnel configuration: strictHostKeyChecking must be true.' };
 
-  const port = Number.isInteger(input.port) && input.port > 0 && input.port <= 65535 ? input.port : 22;
+  if (input.port !== undefined && (!Number.isInteger(input.port) || input.port < 1 || input.port > 65535)) {
+    return { error: 'Invalid sshTunnel configuration: port must be 1-65535.' };
+  }
+
+  const port = input.port ?? 22;
   const knownHosts = input.knownHostsPath?.trim();
   const proxyCommand = input.proxyCommand?.trim();
 

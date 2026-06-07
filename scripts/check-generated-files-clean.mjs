@@ -17,8 +17,20 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === 'playwright-report' || filePath.startsWith('playwright-report/'),
   },
   {
+    label: 'blob-report/',
+    matches: (filePath) => filePath === 'blob-report' || filePath.startsWith('blob-report/'),
+  },
+  {
     label: 'test-results/',
     matches: (filePath) => filePath === 'test-results' || filePath.startsWith('test-results/'),
+  },
+  {
+    label: 'junit.xml',
+    matches: (filePath) => filePath === 'junit.xml' || filePath.endsWith('/junit.xml'),
+  },
+  {
+    label: 'test-results.xml',
+    matches: (filePath) => filePath === 'test-results.xml' || filePath.endsWith('/test-results.xml'),
   },
   {
     label: '*.tsbuildinfo',

@@ -32,6 +32,7 @@ describe('workspaceTools', () => {
     expect(() => resolveWorkspaceFilePath({ path: '   ' })).toThrow('must not be empty');
     expect(() => resolveWorkspaceFilePath({ uri: 'https://example.com/AGENTS.md' })).toThrow('files://workspace/ scheme');
     expect(() => resolveWorkspaceFilePath({ uri: 'files://other-host/AGENTS.md' })).toThrow('files://workspace/ scheme');
+    expect(() => resolveWorkspaceFilePath({ uri: 'files://workspace/%2e%2e%2fsecret.txt' })).toThrow('dot path segments');
   });
 
   it('registers only workspace session summaries when no session state reader is available', () => {
@@ -279,6 +280,30 @@ describe('workspaceTools', () => {
       });
   });
 
+  it('rejects workspace-file traversal before invoking write callbacks', async () => {
+    const modelContext = new ModelContext();
+    const onCreateWorkspaceFile = vi.fn(async ({ path, content }: { path: string; content: string }) => ({
+      path,
+      content,
+      updatedAt: '2026-04-18T04:00:00.000Z',
+    }));
+
+    registerWorkspaceTools(modelContext, {
+      workspaceName: 'Research',
+      workspaceFiles: [],
+      sessions: [],
+      sessionTools: [],
+      onCreateWorkspaceFile,
+    });
+
+    const webmcpTool = createWebMcpTool(modelContext);
+    await expect(webmcpTool.execute?.({
+      tool: 'add_filesystem_entry',
+      args: { action: 'create', targetType: 'workspace-file', kind: 'file', path: '../secret.txt', content: 'nope' },
+    }, {} as never)).rejects.toThrow('dot path segments');
+    expect(onCreateWorkspaceFile).not.toHaveBeenCalled();
+  });
+
   it('registers empty-workspace prompts and no-file resources', async () => {
     const modelContext = new ModelContext();
 
@@ -520,304 +545,7 @@ describe('workspaceTools', () => {
         { role: 'user' as const, content: message ?? 'Summarize the plan.' },
       ],
     }));
-    const onCreateWorkspaceFile = vi.fn(async ({ path, content }: { path: string; content: string }) => ({
-      path,
-      content,
-      updatedAt: '2026-04-19T00:00:00.000Z',
-    }));
-    const onMoveWorkspaceFile = vi.fn(async ({ targetPath }: { path: string; targetPath: string }) => ({
-      path: targetPath,
-      content: '# Workspace agent instructions',
-      updatedAt: '2026-04-19T00:30:00.000Z',
-    }));
-    const onDuplicateWorkspaceFile = vi.fn(async ({ targetPath }: { path: string; targetPath: string }) => ({
-      path: targetPath,
-      content: '# Workspace agent instructions',
-      updatedAt: '2026-04-19T00:45:00.000Z',
-    }));
-    const onSymlinkWorkspaceFile = vi.fn(async ({ path, targetPath }: { path: string; targetPath: string }) => ({
-      path: targetPath,
-      content: `-> ${path}`,
-      updatedAt: '2026-04-19T00:50:00.000Z',
-    }));
-    const onWriteWorkspaceFile = vi.fn(async ({ path, content }: { path: string; content: string }) => ({
-      path,
-      content,
-      updatedAt: '2026-04-19T01:00:00.000Z',
-    }));
-    const onDeleteWorkspaceFile = vi.fn(async ({ path }: { path: string }) => ({
-      path,
-      deleted: true,
-    }));
-    const onMountSessionDrive = vi.fn(async (sessionId: string) => ({
-      sessionId,
-      label: 'Session 1',
-      mounted: true,
-    }));
-    const onUnmountSessionDrive = vi.fn(async (sessionId: string) => ({
-      sessionId,
-      label: 'Session 1',
-      mounted: false,
-    }));
-    const onCreateSessionFsEntry = vi.fn(async (
-      { sessionId, path, kind, content }: { sessionId: string; path: string; kind: 'file' | 'folder'; content?: string },
-    ) => ({ sessionId, path, kind, content: content ?? null }));
-    const onReadSessionFsFile = vi.fn(async ({ sessionId, path }: { sessionId: string; path: string }) => ({
-      sessionId,
-      path,
-      kind: 'file' as const,
-      content: 'terminal notes',
-    }));
-    const onWriteSessionFsFile = vi.fn(async ({ sessionId, path, content }: { sessionId: string; path: string; content: string }) => ({
-      sessionId,
-      path,
-      kind: 'file' as const,
-      content,
-    }));
-    const onDeleteSessionFsEntry = vi.fn(async ({ sessionId, path }: { sessionId: string; path: string }) => ({
-      sessionId,
-      path,
-      deleted: true,
-    }));
-    const onRenameSessionFsEntry = vi.fn(async ({
-      sessionId,
-      path,
-      newPath,
-    }: {
-      sessionId: string;
-      path: string;
-      newPath: string;
-    }) => ({
-      sessionId,
-      path: newPath,
-      previousPath: path,
-    }));
-    const onScaffoldSessionFsEntry = vi.fn(async ({
-      sessionId,
-      basePath,
-      template,
-    }: {
-      sessionId: string;
-      basePath: string;
-      template: 'hook';
-    }) => ({
-      sessionId,
-      path: `${basePath}/${template}.txt`,
-      template,
-    }));
-    const getWorktreeContextActions = vi.fn(({ itemId, itemType }: { itemId: string; itemType: string }) => (
-      itemType === 'browser-page'
-        ? [{ id: 'bookmark', label: 'Bookmark', description: `Bookmark ${itemId}` }]
-        : [{ id: 'properties', label: 'Properties', description: `Properties for ${itemType}` }]
-    ));
-    const getWorktreeRenderPaneState = vi.fn(({ itemId, itemType }: { itemId: string; itemType: string }) => ({
-      itemId,
-      itemType,
-      isOpen: itemType === 'session',
-      supported: itemType !== 'clipboard',
-    }));
-    const onToggleWorktreeRenderPane = vi.fn(async ({ itemId, itemType }: { itemId: string; itemType: string }) => ({
-      itemId,
-      itemType,
-      isOpen: true,
-      supported: itemType !== 'clipboard',
-    }));
-    const getWorktreeContextMenuState = vi.fn(({ itemId, itemType }: { itemId: string; itemType: string }) => ({
-      itemId,
-      itemType,
-      isOpen: itemType === 'browser-page',
-      supported: true,
-    }));
-    const onToggleWorktreeContextMenu = vi.fn(async ({ itemId, itemType }: { itemId: string; itemType: string }) => ({
-      itemId,
-      itemType,
-      isOpen: false,
-      supported: true,
-    }));
-    const onInvokeWorktreeContextAction = vi.fn(async ({
-      itemId,
-      itemType,
-      actionId,
-      args,
-    }: {
-      itemId: string;
-      itemType: string;
-      actionId: string;
-      args: Record<string, unknown>;
-    }) => ({
-      itemId,
-      itemType,
-      actionId,
-      args,
-      ok: true,
-    }));
-    const workspaceOptions: any = {
-      workspaceName: 'Research',
-      workspaceFiles: [{ path: 'AGENTS.md', content: '# Rules', updatedAt: '2026-04-18T00:00:00.000Z' }],
-      browserPages: [{
-        id: 'page-1',
-        title: 'Docs',
-        url: 'https://example.com/docs',
-        isOpen: false,
-        persisted: true,
-        muted: false,
-        memoryTier: 'hot',
-        memoryMB: 96,
-      }],
-      sessions: [{ id: 'session-1', name: 'Session 1', isOpen: true }],
-      sessionDrives: [{ sessionId: 'session-1', label: '//session-1-fs', mounted: true }],
-      sessionTools,
-      getBrowserPageHistory,
-      getSessionState,
-      sessionFsEntries: [
-        { sessionId: 'session-1', path: '/workspace', kind: 'folder', isRoot: true },
-        { sessionId: 'session-1', path: '/workspace/docs', kind: 'folder' },
-        { sessionId: 'session-1', path: '/workspace/notes.md', kind: 'file' },
-      ],
-      worktreeItems: [
-        { id: 'page-1', itemType: 'browser-page', label: 'Docs', url: 'https://example.com/docs' },
-        { id: 'session-1', itemType: 'session', label: 'Session 1' },
-        { id: 'AGENTS.md', itemType: 'workspace-file', label: 'AGENTS.md', path: 'AGENTS.md' },
-        { id: 'vfs:session-1:/workspace', itemType: 'session-fs-entry', label: '/workspace', path: '/workspace', sessionId: 'session-1' },
-      ],
-      onCreateBrowserPage,
-      onNavigateBrowserPage,
-      onNavigateBrowserPageHistory,
-      onRefreshBrowserPage,
-      onCreateSession,
-      onWriteSession,
-      onCreateWorkspaceFile,
-      onMoveWorkspaceFile,
-      onDuplicateWorkspaceFile,
-      onSymlinkWorkspaceFile,
-      onWriteWorkspaceFile,
-      onDeleteWorkspaceFile,
-      onMountSessionDrive,
-      onUnmountSessionDrive,
-      onCreateSessionFsEntry,
-      onReadSessionFsFile,
-      onWriteSessionFsFile,
-      onDeleteSessionFsEntry,
-      onRenameSessionFsEntry,
-      getFilesystemHistory: vi.fn((input: { targetType: string; path?: string; sessionId?: string }) => ({
-        targetType: input.targetType,
-        ...(typeof input.path === 'string' ? { path: input.path } : {}),
-        ...(typeof input.sessionId === 'string' ? { sessionId: input.sessionId } : {}),
-        records: [
-          { id: 'rev-2', label: 'Updated', timestamp: 2, isCurrent: true, canRollback: true },
-          { id: 'rev-1', label: 'Imported', timestamp: 1, isCurrent: false, canRollback: true },
-        ],
-      })),
-      onRollbackFilesystemHistory: vi.fn(async (input: { targetType: string; path?: string; sessionId?: string; recordId: string }) => ({
-        targetType: input.targetType,
-        ...(typeof input.path === 'string' ? { path: input.path } : {}),
-        ...(typeof input.sessionId === 'string' ? { sessionId: input.sessionId } : {}),
-        rolledBackToId: input.recordId,
-        records: [
-          { id: input.recordId, label: 'Imported', timestamp: 1, isCurrent: true, canRollback: true },
-          { id: 'rev-2', label: 'Updated', timestamp: 2, isCurrent: false, canRollback: true },
-        ],
-      })),
-      getFilesystemProperties: vi.fn((input: { targetType: string; sessionId?: string }) => (
-        input.targetType === 'session-drive'
-          ? {
-              targetType: 'session-drive',
-              kind: 'drive',
-              sessionId: input.sessionId,
-              label: 'Session 1',
-              mounted: true,
-              childCount: 3,
-            }
-          : undefined
-      )),
-      getWorktreeRenderPaneState,
-      onToggleWorktreeRenderPane,
-      getWorktreeContextMenuState,
-      onToggleWorktreeContextMenu,
-      getWorktreeContextActions,
-      onInvokeWorktreeContextAction,
-    };
-
-    registerWorkspaceTools(modelContext, workspaceOptions);
-
-    const webmcpTool = createWebMcpTool(modelContext);
-
-    expect(
-      getModelContextRegistry(modelContext)
-        .list()
-        .map(({ name, readOnlyHint }) => ({ name, readOnlyHint })),
-    ).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'list_browser_pages', readOnlyHint: true }),
-      expect.objectContaining({ name: 'read_browser_page', readOnlyHint: true }),
-      expect.objectContaining({ name: 'read_browser_page_history', readOnlyHint: true }),
-      expect.objectContaining({ name: 'create_browser_page', readOnlyHint: false }),
-      expect.objectContaining({ name: 'navigate_browser_page', readOnlyHint: false }),
-      expect.objectContaining({ name: 'navigate_browser_page_history', readOnlyHint: false }),
-      expect.objectContaining({ name: 'refresh_browser_page', readOnlyHint: false }),
-      expect.objectContaining({ name: 'list_sessions', readOnlyHint: true }),
-      expect.objectContaining({ name: 'read_session', readOnlyHint: true }),
-      expect.objectContaining({ name: 'create_session', readOnlyHint: false }),
-      expect.objectContaining({ name: 'submit_session_message', readOnlyHint: false }),
-      expect.objectContaining({ name: 'change_session_model', readOnlyHint: false }),
-      expect.objectContaining({ name: 'switch_session_mode', readOnlyHint: false }),
-      expect.objectContaining({ name: 'change_session_tools', readOnlyHint: false }),
-      expect.objectContaining({ name: 'list_session_tools', readOnlyHint: true }),
-      expect.objectContaining({ name: 'list_filesystem_entries', readOnlyHint: true }),
-      expect.objectContaining({ name: 'read_filesystem_properties', readOnlyHint: true }),
-      expect.objectContaining({ name: 'read_filesystem_history', readOnlyHint: true }),
-      expect.objectContaining({ name: 'change_filesystem_mount', readOnlyHint: false }),
-      expect.objectContaining({ name: 'add_filesystem_entry', readOnlyHint: false }),
-      expect.objectContaining({ name: 'update_filesystem_entry', readOnlyHint: false }),
-      expect.objectContaining({ name: 'remove_filesystem_entry', readOnlyHint: false }),
-      expect.objectContaining({ name: 'rollback_filesystem_history', readOnlyHint: false }),
-      expect.objectContaining({ name: 'list_worktree_context_actions', readOnlyHint: true }),
-      expect.objectContaining({ name: 'invoke_worktree_context_action', readOnlyHint: false }),
-    ]));
-
-    await expect(webmcpTool.execute?.({ tool: 'list_browser_pages' }, {} as never)).resolves.toEqual([
-      {
-        id: 'page-1',
-        title: 'Docs',
-        url: 'https://example.com/docs',
-        isOpen: false,
-        persisted: true,
-        muted: false,
-        memoryTier: 'hot',
-        memoryMB: 96,
-      },
-    ]);
-
-    await expect(webmcpTool.execute?.({
-      tool: 'list_browser_pages',
-      args: { titleQuery: 'current' },
-    }, {} as never)).resolves.toEqual([]);
-
-    await expect(webmcpTool.execute?.({
-      tool: 'read_browser_page_history',
-      args: { pageId: 'page-1' },
-    }, {} as never)).resolves.toEqual({
-      pageId: 'page-1',
-      currentIndex: 1,
-      entries: [
-        { url: 'https://example.com/docs', title: 'Docs', timestamp: 1 },
-        { url: 'https://example.com/docs/current', title: 'Docs current', timestamp: 2 },
-      ],
-    });
-
-    await expect(webmcpTool.execute?.({
-      tool: 'create_browser_page',
-      args: { url: 'https://example.com/new', title: 'New page' },
-    }, {} as never)).resolves.toEqual({
-      id: 'page-2',
-      title: 'New page',
-      url: 'https://example.com/new',
-      isOpen: true,
-      persisted: false,
-      muted: false,
-      memoryTier: 'hot',
-      memoryMB: 96,
-    });
-    expect(onCreateBrowserPage).toHaveBeenCalledWith({ url: 'https://example.com/new', title: 'New page' });
+    const onCreateWorkspaceFile = vi.fn(async ({ path, content }: { path: string; content: strin…2957 tokens truncated…tle: 'New page' });
 
     await expect(webmcpTool.execute?.({
       tool: 'navigate_browser_page',

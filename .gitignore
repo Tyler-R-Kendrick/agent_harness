@@ -46,7 +46,10 @@ lib/*/node_modules/
 coverage/
 lib/*/coverage/
 playwright-report/
+blob-report/
 test-results/
+junit.xml
+test-results.xml
 .vercel/
 .next/
 *.tsbuildinfo

@@ -1,0 +1,23 @@
+slug: automa
+name: Automa
+vendor: AutomaApp / Yingdao
+segment: open-source-low-code-browser-automation
+product_path: competition/automa
+design_path: competition/automa/design
+features_path: competition/automa/features
+marketing_path: competition/automa/marketing
+gossip_path: competition/automa/gossip
+snapshot_date: 2026-06-07
+primary_sources:
+  - https://docs.extension.automa.site/
+  - https://chromewebstore.google.com/detail/automa/infppggnoaenmfagbfknfkancpbljcca
+  - https://github.com/AutomaApp/automa
+  - https://github.com/AutomaApp/automa/issues
+secondary_sources:
+  - https://www.reddit.com/r/automation/comments/1mil67o/using_automa_beginner_question/
+  - https://www.reddit.com/r/automation/comments/1pqdlvs/browser_automation_gets_messy_faster_than_expected/
+  - https://chrome-stats.com/d/infppggnoaenmfagbfknfkancpbljcca/reviews
+positioning: "Open-source low-code/no-code browser extension for block-based web task automation, scraping, screenshots, scheduling, and data flow."
+customer_model: "Free/open-source extension distribution through Chrome Web Store and GitHub, with broad adoption driven by local visual workflows rather than managed cloud runtime."
+competitive_threat_level: medium
+notes: "Threatens agent-browser on free local adoption, block catalog breadth, and open-source credibility; weaker on AI-agent orchestration, first-class MCP, and maintained enterprise support."

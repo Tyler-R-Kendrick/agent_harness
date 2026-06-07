@@ -9,7 +9,7 @@ metadata:
   owner: agent-browser
   tags: [web-search-agent, tool-use, fallback, prompt-eval]
 execution:
-  target: web-search-agent-static-policy
+  target: agent-browser-web-search-agent
   timeout_seconds: 10
 assertions:
   - name: registered-search-first

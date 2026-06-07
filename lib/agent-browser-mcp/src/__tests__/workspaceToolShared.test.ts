@@ -60,6 +60,14 @@ describe('workspaceToolShared helpers', () => {
       expect(() => normalizeWorkspaceFilePath('/')).toThrow('must not be empty');
       expect(() => normalizeWorkspaceFilePath('   ')).toThrow('must not be empty');
     });
+
+    it('rejects traversal, empty internal segments, and backslashes', () => {
+      expect(() => normalizeWorkspaceFilePath('../secret.txt')).toThrow('dot path segments');
+      expect(() => normalizeWorkspaceFilePath('docs/../secret.txt')).toThrow('dot path segments');
+      expect(() => normalizeWorkspaceFilePath('./secret.txt')).toThrow('dot path segments');
+      expect(() => normalizeWorkspaceFilePath('docs//secret.txt')).toThrow('empty path segments');
+      expect(() => normalizeWorkspaceFilePath('docs\\secret.txt')).toThrow('backslashes');
+    });
   });
 
   describe('resolveSessionFsLocationPath', () => {
